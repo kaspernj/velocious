@@ -1,10 +1,37 @@
+const {EventEmitter} = require("events")
+
 module.exports = class VelociousHttpServerClientRequestParser {
-  constructor(data) {
-    this.data = data
+  constructor() {
+    this.data = []
+    this.events = new EventEmitter()
+    this.headers = []
+    this.headersByName = {}
+    this.state = "status"
+  }
+
+  addHeader(name, value) {
+    console.log("addHeader", {name, value})
+
+    this.headers.push({name, value})
+
+    const formattedName = name.toLowerCase().trim()
+
+    this.headersByName[formattedName] = value
   }
 
   feed(data) {
-    this.data += data
+    if (this.state == "status" || this.state == "headers") {
+      for (const char of data) {
+        this.data.push(char)
+
+        if (char == 10) {
+          const line = String.fromCharCode.apply(null, this.data)
+
+          this.data = []
+          this.parse(line)
+        }
+      }
+    }
   }
 
   matchAndRemove(regex) {
@@ -19,53 +46,43 @@ module.exports = class VelociousHttpServerClientRequestParser {
     return match
   }
 
-  parseHeaders() {
-    console.log("parseHeaders")
+  parse(line) {
+    if (this.state == "status") {
+      this.parseStatusLine(line)
+    } else if (this.state == "headers") {
+      this.parseHeader(line)
+    } else {
+      throw new Error(`Unknown state: ${this.state}`)
+    }
+  }
 
-    const headers = []
+  parseHeader(line) {
+    let match
 
-    while (true) {
-      if (this.parseHeadersEnded()) {
-        break
+    if (match = line.match(/^(.+): (.+)\r\n/)) {
+      const name = match[1]
+      const value = match[2]
+
+      this.addHeader(name, value)
+    } else if (line == "\r\n") {
+      if (this.httpMethod.toUpperCase() == "GET") {
+        this.state = "done"
+        this.events.emit("done")
+      } else {
+        throw new Error(`Unknown HTTP method: ${this.httpMethod}`)
       }
-
-      const header = this.parseHeader()
-
-      headers.push(header)
     }
-
-    return headers
   }
 
-  parseHeader() {
-    const match = this.matchAndRemove(/^(.+): (.+)\r\n/)
+  parseStatusLine(line) {
+    const match = line.match(/^(GET|POST) (.+?) HTTP\/1\.1\r\n/)
 
     if (!match) {
-      throw new Error(`Couldn't match header from: ${this.data}`)
+      throw new Error(`Couldn't match status line from: ${line}`)
     }
 
-    const name = match[1]
-    const value = match[2]
-
-    return {name, value}
-  }
-
-  parseHeadersEnded() {
-    if (this.matchAndRemove(/^\r\n/)) {
-      return true
-    }
-  }
-
-  parseStatusLine() {
-    const match = this.matchAndRemove(/^(GET|POST) (.+) HTTP\/1\.1\r\n/)
-
-    if (!match) {
-      throw new Error(`Couldn't match status line from: ${this.data}`)
-    }
-
-    const httpMethod = match[1]
-    const path = match[2]
-
-    return {httpMethod, path}
+    this.httpMethod = match[1]
+    this.path = match[2]
+    this.state = "headers"
   }
 }

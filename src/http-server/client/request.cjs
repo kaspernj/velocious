@@ -1,26 +1,24 @@
+const {digg} = require("@kaspernj/object-digger")
 const RequestParser = require("./request-parser.cjs")
 
 module.exports = class VelociousHttpServerClientRequest {
-  constructor(data) {
-    this.requestParser = new RequestParser(data)
-    this.state = "statusLine"
-    this.parse()
+  constructor() {
+    this.requestParser = new RequestParser()
   }
 
   feed(data) {
     this.requestParser.feed(data)
   }
 
-  parse() {
-    if (this.state == "statusLine") {
-      this.status = this.requestParser.parseStatusLine()
-      this.headers = this.requestParser.parseHeaders()
+  httpMethod() {
+    return digg(this, "requestParser", "httpMethod")
+  }
 
-      console.log("Done with status and headers")
+  host() {
+    return digg(this, "requestParser", "headersByName", "host")
+  }
 
-      this.executeRequest()
-    } else {
-      throw new Error(`Unknown state: ${this.state}`)
-    }
+  path() {
+    return digg(this, "requestParser", "path")
   }
 }

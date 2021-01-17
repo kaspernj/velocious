@@ -1,11 +1,16 @@
+const Application = require("../../src/application.cjs")
 const fetch = require("node-fetch")
-const HttpServer = require("../../src/http-server/index.cjs")
+const path = require("path")
 
 describe("HttpServer", () => {
-  it("handles get requests", async () => {
-    const httpServer = new HttpServer({port: 3006})
+  fit("handles get requests", async () => {
+    const dummyDirectory = path.join(__dirname, "../../dummy")
 
-    await httpServer.start()
+    const application = new Application({
+      directory: dummyDirectory,
+      httpServer: {port: 3006}
+    })
+    await application.start()
 
     const response = await fetch("http://localhost:3006")
   })

@@ -26,6 +26,10 @@ module.exports = class VelociousHttpServerWorkerHandlerWorkerThread {
       const {clientCount} = digs(data, "clientCount")
       const client = new Client({clientCount})
 
+      client.events.on("output", (output) => {
+        this.parentPort.postMessage({command: "clientOutput", clientCount, output})
+      })
+
       this.clients[clientCount] = client
     } else if (command == "clientWrite") {
       const {chunk, clientCount} = digs(data, "chunk", "clientCount")
