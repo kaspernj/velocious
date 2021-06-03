@@ -1,3 +1,5 @@
+const logger = require("../../logger.cjs")
+
 module.exports = class VelociousHttpServerWorkerHandlerSocketHandler {
   constructor({socket, clientCount, worker}) {
     this.socket = socket
@@ -9,7 +11,7 @@ module.exports = class VelociousHttpServerWorkerHandlerSocketHandler {
   }
 
   onSocketData(chunk) {
-    console.log(`Socket ${this.clientCount}: ${chunk}`)
+    logger(this, `Socket ${this.clientCount}: ${chunk}`)
 
     this.worker.postMessage({
       command: "clientWrite",
@@ -19,10 +21,12 @@ module.exports = class VelociousHttpServerWorkerHandlerSocketHandler {
   }
 
   onSocketEnd() {
-    console.log(`Socket ${this.clientCount} end`)
+    logger(this, `Socket ${this.clientCount} end`)
   }
 
   send(data) {
+    logger(this, "Send", data)
+
     this.socket.write(data)
   }
 }

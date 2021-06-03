@@ -1,4 +1,5 @@
 const {EventEmitter} = require("events")
+const logger = require("../../logger.cjs")
 
 module.exports = class VelociousHttpServerClientRequestParser {
   constructor() {
@@ -10,7 +11,7 @@ module.exports = class VelociousHttpServerClientRequestParser {
   }
 
   addHeader(name, value) {
-    console.log("addHeader", {name, value})
+    logger(this, "addHeader", {name, value})
 
     this.headers.push({name, value})
 

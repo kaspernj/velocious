@@ -1,9 +1,11 @@
 const {digs} = require("@kaspernj/object-digger")
+const logger = require("../../logger.cjs")
 const SocketHandler = require("./socket-handler.cjs")
 const {Worker} = require("worker_threads")
 
 module.exports = class VelociousHttpServerWorker {
-  constructor({workerCount}) {
+  constructor({debug, workerCount}) {
+    this.debug = debug
     this.socketHandlers = {}
     this.workerCount = workerCount
   }
@@ -13,6 +15,7 @@ module.exports = class VelociousHttpServerWorker {
       this.onStartCallback = resolve
       this.worker = new Worker("./src/http-server/worker-handler/worker-script.cjs", {
         workerData: {
+          debug: this.debug,
           workerCount: this.workerCount
         }
       })
@@ -24,7 +27,7 @@ module.exports = class VelociousHttpServerWorker {
 
   addSocketConnection({socket, clientCount}) {
     socket.on("end", () => {
-      console.log(`Removing ${clientCount} from socketHandlers`)
+      logger(this, `Removing ${clientCount} from socketHandlers`)
       delete this.socketHandlers[clientCount]
     })
 
@@ -49,7 +52,7 @@ module.exports = class VelociousHttpServerWorker {
   }
 
   onWorkerMessage(data) {
-    console.log(`Worker message`, data)
+    logger(this, `Worker message`, data)
 
     const {command} = digs(data, "command")
 
@@ -57,9 +60,11 @@ module.exports = class VelociousHttpServerWorker {
       this.onStartCallback()
       this.onStartCallback = null
     } else if (command == "clientOutput") {
+      logger(this, "CLIENT OUTPUT", data)
+
       const {clientCount, output} = digs(data, "clientCount", "output")
 
-      console.log("CLIENT OUTPUT", data)
+      logger(this, "CLIENT OUTPUT", data)
 
       this.socketHandlers[clientCount].send(output)
     } else {

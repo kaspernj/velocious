@@ -1,8 +1,10 @@
+const logger = require("../logger.cjs")
 const Net = require("net")
 const WorkerHandler = require("./worker-handler/index.cjs")
 
 module.exports = class VelociousHttpServer {
-  constructor({host, maxWorkers, port}) {
+  constructor({debug, host, maxWorkers, port}) {
+    this.debug = debug
     this.host = host
     this.port = port
     this.clientCount = 0
@@ -18,24 +20,22 @@ module.exports = class VelociousHttpServer {
     }
 
     this.netServer = new Net.Server()
-
     this.netServer.on("connection", (socket) => this.onConnection(socket))
-
     this.netServer.listen(this.port, () => {
-      console.log(`Velocious listening on ${this.host}:${this.port}`)
+      logger(this, `Velocious listening on ${this.host}:${this.port}`)
     })
   }
 
   onConnection(socket) {
     const clientCount = this.clientCount
 
-    console.log(`New client ${clientCount}`)
+    logger(this, `New client ${clientCount}`)
 
     this.clientCount++
 
     const workerHandler = this.workerHandlerToUse()
 
-    console.log(`Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
+    logger(this, `Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
 
     workerHandler.addSocketConnection({
       socket,
@@ -48,14 +48,17 @@ module.exports = class VelociousHttpServer {
 
     this.workerCount++
 
-    const workerHandler = new WorkerHandler({workerCount})
+    const workerHandler = new WorkerHandler({
+      debug: this.debug,
+      workerCount
+    })
 
     await workerHandler.start()
     this.workerHandlers.push(workerHandler)
   }
 
   workerHandlerToUse() {
-    console.log(`Worker handlers length: ${this.workerHandlers.length}`)
+    logger(this, `Worker handlers length: ${this.workerHandlers.length}`)
 
     const randomWorkerNumber = parseInt(Math.random() * this.workerHandlers.length)
     const workerHandler = this.workerHandlers[randomWorkerNumber]

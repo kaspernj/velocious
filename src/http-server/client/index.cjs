@@ -1,5 +1,6 @@
 const {digg} = require("@kaspernj/object-digger")
 const {EventEmitter} = require("events")
+const logger = require("../../logger.cjs")
 const Request = require("./request.cjs")
 const RequestRunner = require("./request-runner.cjs")
 
@@ -7,17 +8,21 @@ module.exports = class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
 
-  constructor({clientCount, onExecuteRequest}) {
+  constructor({clientCount, debug, onExecuteRequest}) {
     this.clientCount = clientCount
+    this.debug = debug
     this.onExecuteRequest = onExecuteRequest
   }
 
   executeCurrentRequest() {
-    console.log("executeCurrentRequest")
+    logger(this, "executeCurrentRequest")
 
     this.state = "response"
 
-    const requestRunner = new RequestRunner(this.currentRequest)
+    const requestRunner = new RequestRunner({
+      debug: this.debug,
+      require: this.currentRequest
+    })
 
     requestRunner.events.on("done", (requestRunner) => this.sendResponse(requestRunner))
     requestRunner.run()
@@ -25,7 +30,9 @@ module.exports = class VeoliciousHttpServerClient {
 
   onWrite(data) {
     if (this.state == "initial") {
-      this.currentRequest = new Request()
+      this.currentRequest = new Request({
+        debug: this.debug
+      })
       this.currentRequest.requestParser.events.on("done", () => this.executeCurrentRequest())
       this.currentRequest.feed(data)
       this.state = "requestStarted"
@@ -55,6 +62,8 @@ module.exports = class VeoliciousHttpServerClient {
         headers += `${headerKey}: ${headerValue}\r\n`
       }
     }
+
+    headers += "\r\n"
 
     this.events.emit("output", headers)
     this.events.emit("output", body)

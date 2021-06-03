@@ -2,6 +2,10 @@ module.exports = class VelociousHttpServerClientResponse {
   body = undefined
   headers = {}
 
+  constructor({debug}) {
+    this.debug = debug
+  }
+
   addHeader(key, value) {
     if (!(key in this.headers)) {
       this.headers[key] = []
