@@ -39,16 +39,16 @@ module.exports = class VeoliciousHttpServerClient {
   sendResponse(requestRunner) {
     const response = digg(requestRunner, "response")
     const body = response.getBody()
+    const date = new Date()
 
-    console.log("send response")
+    response.addHeader("Connection", "keep-alive")
+    response.addHeader("Content-Length", response.body.length)
+    response.addHeader("Date", date.toUTCString())
+    response.addHeader("Server", "Velocious")
 
     let headers = ""
 
     headers += "HTTP/1.1 200 OK\r\n"
-
-    if (body) {
-      headers += `Content-Length: ${response.body.length}\r\n`
-    }
 
     for (const headerKey in response.headers) {
       for (const headerValue of response.headers[headerKey]) {
