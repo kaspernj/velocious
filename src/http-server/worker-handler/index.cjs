@@ -56,6 +56,12 @@ module.exports = class VelociousHttpServerWorker {
     if (command == "started") {
       this.onStartCallback()
       this.onStartCallback = null
+    } else if (command == "clientOutput") {
+      const {clientCount, output} = digs(data, "clientCount", "output")
+
+      console.log("CLIENT OUTPUT", data)
+
+      this.socketHandlers[clientCount].send(output)
     } else {
       throw new Error(`Unknown command: ${command}`)
     }

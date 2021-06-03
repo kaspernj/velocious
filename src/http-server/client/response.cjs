@@ -10,6 +10,14 @@ module.exports = class VelociousHttpServerClientResponse {
     this.headers[key].push(value)
   }
 
+  getBody() {
+    if (this.body) {
+      return this.body
+    }
+
+    throw new Error("No body has been set")
+  }
+
   setBody(value) {
     this.body = value
   }

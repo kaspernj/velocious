@@ -21,4 +21,8 @@ module.exports = class VelociousHttpServerWorkerHandlerSocketHandler {
   onSocketEnd() {
     console.log(`Socket ${this.clientCount} end`)
   }
+
+  send(data) {
+    this.socket.write(data)
+  }
 }
