@@ -27,12 +27,6 @@ module.exports = class Dummy {
       httpServer: {port: 3006}
     })
 
-    this.application.routes().draw((routes) => {
-      routes.resources("tasks", () => {
-        routes.get("users")
-      })
-    })
-
     await this.application.start()
   }
 

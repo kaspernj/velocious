@@ -1,4 +1,3 @@
-const Application = require("../../src/application.cjs")
 const fetch = require("node-fetch")
 const Dummy = require("../dummy/index.cjs")
 

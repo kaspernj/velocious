@@ -1,7 +1,7 @@
 const EventEmitter = require("events")
-const Response = require("./response.cjs")
-
 const logger = require("../../logger.cjs")
+const Response = require("./response.cjs")
+const RoutesResolver = require("../../routes/resolver.cjs")
 
 module.exports = class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
@@ -13,6 +13,13 @@ module.exports = class VelociousHttpServerClientRequestRunner {
   }
 
   run() {
+    const routesResolver = new RoutesResolver({
+      request: this.request,
+      response: this.response
+    })
+
+    routesResolver.resolve()
+
     this.response.addHeader("Content-Type", "application/json")
     this.response.setBody(JSON.stringify({firstName: "Kasper"}))
 

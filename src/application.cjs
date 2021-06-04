@@ -1,18 +1,12 @@
 const {digs} = require("@kaspernj/object-digger")
 const logger = require("./logger.cjs")
 const HttpServer = require("./http-server/index.cjs")
-const Routes = require("./routes.cjs")
 
 module.exports = class VelociousApplication {
   constructor({debug, directory, httpServer}) {
     this.debug = debug ?? false
     this.directory = directory
     this.httpServerConfiguration = httpServer ?? {}
-    this._routes = new Routes()
-  }
-
-  routes() {
-    return this._routes
   }
 
   async run(callback) {
