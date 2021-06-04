@@ -1,3 +1,4 @@
+const Configuration = require("../../configuration.cjs")
 const {digg} = require("@kaspernj/object-digger")
 const {EventEmitter} = require("events")
 const logger = require("../../logger.cjs")
@@ -8,9 +9,11 @@ module.exports = class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
 
-  constructor({clientCount, debug, onExecuteRequest}) {
+  constructor({clientCount, configuration, onExecuteRequest}) {
+    if (!configuration) throw new Error("No configuration given")
+
     this.clientCount = clientCount
-    this.debug = debug
+    this.configuration = configuration
     this.onExecuteRequest = onExecuteRequest
   }
 
@@ -20,8 +23,9 @@ module.exports = class VeoliciousHttpServerClient {
     this.state = "response"
 
     const requestRunner = new RequestRunner({
-      debug: this.debug,
-      require: this.currentRequest
+      configuration: this.configuration,
+      request: this.currentRequest,
+      routes: this.routes
     })
 
     requestRunner.events.on("done", (requestRunner) => this.sendResponse(requestRunner))
@@ -31,7 +35,7 @@ module.exports = class VeoliciousHttpServerClient {
   onWrite(data) {
     if (this.state == "initial") {
       this.currentRequest = new Request({
-        debug: this.debug
+        configuration: this.configuration
       })
       this.currentRequest.requestParser.events.on("done", () => this.executeCurrentRequest())
       this.currentRequest.feed(data)

@@ -3,8 +3,8 @@ const Net = require("net")
 const WorkerHandler = require("./worker-handler/index.cjs")
 
 module.exports = class VelociousHttpServer {
-  constructor({debug, host, maxWorkers, port}) {
-    this.debug = debug
+  constructor({configuration, host, maxWorkers, port}) {
+    this.configuration = configuration
     this.host = host
     this.port = port
     this.clientCount = 0
@@ -23,6 +23,12 @@ module.exports = class VelociousHttpServer {
     this.netServer.on("connection", (socket) => this.onConnection(socket))
     this.netServer.listen(this.port, () => {
       logger(this, `Velocious listening on ${this.host}:${this.port}`)
+    })
+  }
+
+  stop() {
+    return new Promise((resolve) => {
+      this.netServer?.close(() => resolve())
     })
   }
 
@@ -49,7 +55,7 @@ module.exports = class VelociousHttpServer {
     this.workerCount++
 
     const workerHandler = new WorkerHandler({
-      debug: this.debug,
+      configuration: this.configuration,
       workerCount
     })
 

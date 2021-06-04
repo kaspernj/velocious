@@ -1,14 +1,21 @@
 const Client = require("../../src/http-server/client/index.cjs")
+const Configuration = require("../../src/configuration.cjs")
 const {digg} = require("@kaspernj/object-digger")
+const path = require("path")
 
 describe("http server - client", () => {
   it("spawns a request for each that it is fed", () => {
+    const dummyDirectory = path.join(__dirname, "../dummy")
+    const configuration = new Configuration({
+      directory: dummyDirectory
+    })
     const client = new Client({
-      clientCount: 0
+      clientCount: 0,
+      configuration
     })
 
     const strings = [
-      "GET /test-path",
+      "GET /tasks",
       " HTTP/1.1",
       "\r\n",
       "Host: www.example.com\r\n",
@@ -23,6 +30,6 @@ describe("http server - client", () => {
 
     expect(currentRequest.httpMethod()).toBe("GET")
     expect(currentRequest.host()).toBe("www.example.com")
-    expect(currentRequest.path()).toBe("/test-path")
+    expect(currentRequest.path()).toBe("/tasks")
   })
 })

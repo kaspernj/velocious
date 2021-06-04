@@ -4,18 +4,21 @@ const SocketHandler = require("./socket-handler.cjs")
 const {Worker} = require("worker_threads")
 
 module.exports = class VelociousHttpServerWorker {
-  constructor({debug, workerCount}) {
-    this.debug = debug
+  constructor({configuration, workerCount}) {
+    this.configuration = configuration
     this.socketHandlers = {}
     this.workerCount = workerCount
   }
 
   async start() {
     return new Promise((resolve) => {
+      const {debug, directory} = digs(this.configuration, "debug", "directory")
+
       this.onStartCallback = resolve
       this.worker = new Worker("./src/http-server/worker-handler/worker-script.cjs", {
         workerData: {
-          debug: this.debug,
+          debug,
+          directory,
           workerCount: this.workerCount
         }
       })
@@ -32,6 +35,7 @@ module.exports = class VelociousHttpServerWorker {
     })
 
     const socketHandler = new SocketHandler({
+      configuration: this.configuration,
       socket,
       clientCount,
       worker: this.worker
