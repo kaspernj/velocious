@@ -1,7 +1,9 @@
-const HttpServer = require("./src/http-server")
-const Routes = require("./src/routes")
+const Application = require("./src/application.cjs")
+const Controller = require("./src/controller.cjs")
+const HttpServer = require("./src/http-server/index.cjs")
 
 module.exports = {
-  HttpServer,
-  Routes
+  Application,
+  Controller,
+  HttpServer
 }

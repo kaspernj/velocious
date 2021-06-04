@@ -26,6 +26,10 @@ module.exports = class VelociousHttpServer {
     })
   }
 
+  stop() {
+    this.netServer?.stop()
+  }
+
   onConnection(socket) {
     const clientCount = this.clientCount
 
