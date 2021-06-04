@@ -2,9 +2,9 @@ const {digg} = require("@kaspernj/object-digger")
 const RequestParser = require("./request-parser.cjs")
 
 module.exports = class VelociousHttpServerClientRequest {
-  constructor({debug}) {
-    this.debug = debug
-    this.requestParser = new RequestParser()
+  constructor({configuration}) {
+    this.configuration = configuration
+    this.requestParser = new RequestParser({configuration})
   }
 
   feed(data) {

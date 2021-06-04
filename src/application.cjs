@@ -1,11 +1,11 @@
 const {digs} = require("@kaspernj/object-digger")
+const Configuration = require("./configuration.cjs")
 const logger = require("./logger.cjs")
 const HttpServer = require("./http-server/index.cjs")
 
 module.exports = class VelociousApplication {
   constructor({debug, directory, httpServer}) {
-    this.debug = debug ?? false
-    this.directory = directory
+    this.configuration = new Configuration({debug, directory})
     this.httpServerConfiguration = httpServer ?? {}
   }
 
@@ -20,12 +20,12 @@ module.exports = class VelociousApplication {
   }
 
   async start() {
-    const {debug, httpServerConfiguration} = digs(this, "debug", "httpServerConfiguration")
+    const {configuration, httpServerConfiguration} = digs(this, "configuration", "httpServerConfiguration")
     const port = httpServerConfiguration.port || 3006
 
     logger(this, `Starting server on port ${port}`)
 
-    this.httpServer = new HttpServer({debug, port})
+    this.httpServer = new HttpServer({configuration, port})
 
     await this.httpServer.start()
   }

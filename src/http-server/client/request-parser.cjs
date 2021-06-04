@@ -2,7 +2,10 @@ const {EventEmitter} = require("events")
 const logger = require("../../logger.cjs")
 
 module.exports = class VelociousHttpServerClientRequestParser {
-  constructor() {
+  constructor({configuration}) {
+    if (!configuration) throw new Error("No configuration given")
+
+    this.configuration = configuration
     this.data = []
     this.events = new EventEmitter()
     this.headers = []

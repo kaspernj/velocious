@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@kaspernj/object-digger": "^1.0.2",
-    "ejs": "^3.1.6"
+    "ejs": "^3.1.6",
+    "escape-string-regexp": "^1.0.5"
   }
 }

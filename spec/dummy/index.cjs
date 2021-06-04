@@ -1,11 +1,10 @@
 const {Application} = require("../../index.cjs")
-const path = require("path")
 
 module.exports = class Dummy {
-  static run(callback) {
+  static async run(callback) {
     const dummy = new Dummy()
 
-    dummy.run(callback)
+    await dummy.run(callback)
   }
 
   async run(callback) {
@@ -19,11 +18,9 @@ module.exports = class Dummy {
   }
 
   async start() {
-    const dummyDirectory = path.join(__dirname, "../../dummy")
-
     this.application = new Application({
       debug: false,
-      directory: dummyDirectory,
+      directory: __dirname,
       httpServer: {port: 3006}
     })
 

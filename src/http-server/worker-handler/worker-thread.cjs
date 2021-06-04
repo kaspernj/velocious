@@ -1,14 +1,15 @@
 const Client = require("../client/index.cjs")
+const Configuration = require("../../configuration.cjs")
 const {digg, digs} = require("@kaspernj/object-digger")
 const errorLogger = require("../../error-logger")
 const logger = require("../../logger.cjs")
 
 module.exports = class VelociousHttpServerWorkerHandlerWorkerThread {
   constructor({parentPort, workerData}) {
-    const {workerCount} = digs(workerData, "workerCount")
+    const {debug, directory, workerCount} = digs(workerData, "debug", "directory", "workerCount")
 
     this.clients = {}
-    this.debug = workerData.debug
+    this.configuration = new Configuration({debug, directory})
     this.parentPort = parentPort
     this.workerCount = workerCount
 
@@ -28,7 +29,7 @@ module.exports = class VelociousHttpServerWorkerHandlerWorkerThread {
       const {clientCount} = digs(data, "clientCount")
       const client = new Client({
         clientCount,
-        debug: this.debug
+        configuration: this.configuration
       })
 
       client.events.on("output", (output) => {

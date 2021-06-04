@@ -1,3 +1,4 @@
+const Configuration = require("../../configuration.cjs")
 const {digg} = require("@kaspernj/object-digger")
 const {EventEmitter} = require("events")
 const logger = require("../../logger.cjs")
@@ -8,17 +9,12 @@ module.exports = class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
 
-  constructor({clientCount, debug, directory, onExecuteRequest}) {
-    if (!directory) throw new Error("No directory given")
-
-    // Every client need to make their own routes because they probably can't be shared across different worker threads
-    const {routes} = require(`${directory}/src/routes.cjs`)
+  constructor({clientCount, configuration, onExecuteRequest}) {
+    if (!configuration) throw new Error("No configuration given")
 
     this.clientCount = clientCount
-    this.debug = debug
-    this.directory = directory
+    this.configuration = configuration
     this.onExecuteRequest = onExecuteRequest
-    this.routes = routes
   }
 
   executeCurrentRequest() {
@@ -27,7 +23,7 @@ module.exports = class VeoliciousHttpServerClient {
     this.state = "response"
 
     const requestRunner = new RequestRunner({
-      debug: this.debug,
+      configuration: this.configuration,
       request: this.currentRequest,
       routes: this.routes
     })
@@ -39,7 +35,7 @@ module.exports = class VeoliciousHttpServerClient {
   onWrite(data) {
     if (this.state == "initial") {
       this.currentRequest = new Request({
-        debug: this.debug
+        configuration: this.configuration
       })
       this.currentRequest.requestParser.events.on("done", () => this.executeCurrentRequest())
       this.currentRequest.feed(data)

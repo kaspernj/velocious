@@ -5,9 +5,9 @@ describe("HttpServer", () => {
   it("handles get requests", async () => {
     await Dummy.run(async () => {
       const response = await fetch("http://localhost:3006/tasks")
-      const data = await response.json()
+      const text = await response.text()
 
-      expect(data).toEqual({firstName: "Kasper"})
+      expect(text).toEqual("1, 2, 3, 4, 5\n")
     })
   })
 })

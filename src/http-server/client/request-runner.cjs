@@ -1,39 +1,32 @@
 const EventEmitter = require("events")
 const logger = require("../../logger.cjs")
 const Response = require("./response.cjs")
-const Routes = require("../../routes/index.cjs")
 const RoutesResolver = require("../../routes/resolver.cjs")
 
 module.exports = class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
-  constructor({debug, request, routes}) {
+  constructor({configuration, request}) {
+    if (!configuration) throw new Error("No configuration given")
     if (!request) throw new Error("No request given")
-    if (!routes) throw new Error("No routes given")
-    if (!(routes instanceof Routes)) throw new Error(`Given routes wasn't an instance of Routes: ${routes.constructor.name}`)
 
-    this.debug = debug
+    this.configuration = configuration
     this.request = request
-    this.response = new Response({debug})
-    this.routes = routes
+    this.response = new Response({configuration})
   }
 
-  run() {
+  async run() {
     if (!this.request) throw new Error("No request?")
 
+    logger(this, "Run request")
+
     const routesResolver = new RoutesResolver({
+      configuration: this.configuration,
       request: this.request,
-      response: this.response,
-      routes: this.routes
+      response: this.response
     })
 
-    routesResolver.resolve()
-
-    this.response.addHeader("Content-Type", "application/json")
-    this.response.setBody(JSON.stringify({firstName: "Kasper"}))
-
-    logger(this, "Run request :-)")
-
+    await routesResolver.resolve()
     this.events.emit("done", this)
   }
 }

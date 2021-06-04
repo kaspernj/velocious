@@ -2,8 +2,8 @@ module.exports = class VelociousHttpServerClientResponse {
   body = undefined
   headers = {}
 
-  constructor({debug}) {
-    this.debug = debug
+  constructor({configuration}) {
+    this.configuration = configuration
   }
 
   addHeader(key, value) {

@@ -1,7 +1,10 @@
 const logger = require("../../logger.cjs")
 
 module.exports = class VelociousHttpServerWorkerHandlerSocketHandler {
-  constructor({socket, clientCount, worker}) {
+  constructor({configuration, socket, clientCount, worker}) {
+    if (!configuration) throw new Error("No configuration given")
+
+    this.configuration = configuration
     this.socket = socket
     this.clientCount = clientCount
     this.worker = worker
