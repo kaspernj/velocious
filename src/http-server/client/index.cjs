@@ -8,10 +8,17 @@ module.exports = class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
 
-  constructor({clientCount, debug, onExecuteRequest}) {
+  constructor({clientCount, debug, directory, onExecuteRequest}) {
+    if (!directory) throw new Error("No directory given")
+
+    // Every client need to make their own routes because they probably can't be shared across different worker threads
+    const {routes} = require(`${directory}/src/routes.cjs`)
+
     this.clientCount = clientCount
     this.debug = debug
+    this.directory = directory
     this.onExecuteRequest = onExecuteRequest
+    this.routes = routes
   }
 
   executeCurrentRequest() {
@@ -21,7 +28,8 @@ module.exports = class VeoliciousHttpServerClient {
 
     const requestRunner = new RequestRunner({
       debug: this.debug,
-      require: this.currentRequest
+      request: this.currentRequest,
+      routes: this.routes
     })
 
     requestRunner.events.on("done", (requestRunner) => this.sendResponse(requestRunner))

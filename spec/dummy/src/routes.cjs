@@ -1,4 +1,4 @@
-const Routes = require("./routes/index.cjs")
+const Routes = require("../../../src/routes/index.cjs")
 const routes = new Routes()
 
 routes.draw((route) => {

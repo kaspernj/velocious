@@ -1,10 +1,13 @@
 const Client = require("../../src/http-server/client/index.cjs")
 const {digg} = require("@kaspernj/object-digger")
+const path = require("path")
 
 describe("http server - client", () => {
   it("spawns a request for each that it is fed", () => {
+    const dummyDirectory = path.join(__dirname, "../dummy")
     const client = new Client({
-      clientCount: 0
+      clientCount: 0,
+      directory: dummyDirectory
     })
 
     const strings = [
