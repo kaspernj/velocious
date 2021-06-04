@@ -1,4 +1,5 @@
 before_script:
+  - cp spec/dummy/config/databases.peakflow.json spec/dummy/config/databases.json
   - npm install
   - wait-for-it mysql:3306
 services:
