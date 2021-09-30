@@ -1,4 +1,4 @@
-const {digg} = require("@kaspernj/object-digger")
+const {digg} = require("diggerize")
 const RequestParser = require("./request-parser.cjs")
 
 module.exports = class VelociousHttpServerClientRequest {

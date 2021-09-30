@@ -1,4 +1,4 @@
-const {digg} = require("@kaspernj/object-digger")
+const {digg} = require("diggerize")
 
 module.exports = function log(object, ...messages) {
   if (!object.configuration) console.error(`No configuration on ${object.constructor.name}`)

@@ -1,6 +1,6 @@
 const Client = require("../../src/http-server/client/index.cjs")
 const Configuration = require("../../src/configuration.cjs")
-const {digg} = require("@kaspernj/object-digger")
+const {digg} = require("diggerize")
 const path = require("path")
 
 describe("http server - client", () => {

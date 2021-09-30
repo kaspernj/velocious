@@ -1,4 +1,4 @@
-const {digs} = require("@kaspernj/object-digger")
+const {digs} = require("diggerize")
 const Configuration = require("./configuration.cjs")
 const logger = require("./logger.cjs")
 const HttpServer = require("./http-server/index.cjs")
