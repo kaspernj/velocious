@@ -17,7 +17,7 @@
   "homepage": "https://github.com/kaspernj/velocious#readme",
   "description": "",
   "devDependencies": {
-    "jasmine": "^3.6.3",
+    "jasmine": "^3.9.0",
     "node-fetch": "^2.6.1"
   },
   "dependencies": {
