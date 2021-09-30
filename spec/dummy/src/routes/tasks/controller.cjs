@@ -1,5 +1,5 @@
 const Controller = require("../../../../../src/controller.cjs")
-const {digg} = require("@kaspernj/object-digger")
+const {digg} = require("diggerize")
 const Task = require("../../models/task.cjs")
 
 module.exports = class TasksController extends Controller {

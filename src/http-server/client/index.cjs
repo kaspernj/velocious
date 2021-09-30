@@ -1,5 +1,5 @@
 const Configuration = require("../../configuration.cjs")
-const {digg} = require("@kaspernj/object-digger")
+const {digg} = require("diggerize")
 const {EventEmitter} = require("events")
 const logger = require("../../logger.cjs")
 const Request = require("./request.cjs")

@@ -1,6 +1,6 @@
 const Client = require("../client/index.cjs")
 const Configuration = require("../../configuration.cjs")
-const {digg, digs} = require("@kaspernj/object-digger")
+const {digg, digs} = require("diggerize")
 const errorLogger = require("../../error-logger")
 const logger = require("../../logger.cjs")
 

@@ -1,4 +1,4 @@
-const {digs} = require("@kaspernj/object-digger")
+const {digs} = require("diggerize")
 const logger = require("../../logger.cjs")
 const SocketHandler = require("./socket-handler.cjs")
 const {Worker} = require("worker_threads")
