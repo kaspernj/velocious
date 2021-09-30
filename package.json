@@ -18,7 +18,7 @@
   "description": "",
   "devDependencies": {
     "jasmine": "^3.9.0",
-    "node-fetch": "^2.6.1"
+    "node-fetch": "^3.0.0"
   },
   "dependencies": {
     "diggerize": "^1.0.3",
