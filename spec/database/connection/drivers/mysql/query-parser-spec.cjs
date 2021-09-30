@@ -1,4 +1,4 @@
-const Query = require("../../../../../src/database/query/index.cjs")
+const {Database: {Handler, Query}} = require("../../../../../index.cjs")
 const MysqlQueryParser = require("../../../../../src/database/connection/drivers/mysql/query-parser.cjs")
 
 describe("database - connection - drivers - mysql - query parser", () => {
@@ -6,10 +6,11 @@ describe("database - connection - drivers - mysql - query parser", () => {
     const handler = new Handler()
     const query = new Query({handler})
       .select(["tasks.id", "tasks.name"])
+      .from("tasks")
       .joins("LEFT JOIN projects ON projects.id = tasks.project_id")
 
     const sql = new MysqlQueryParser({query}).toSql()
 
-    expect(sql).toEqual("asd")
+    expect(sql).toEqual("SELECT tasks.id,tasks.name FROM tasks LEFT JOIN projects ON projects.id = tasks.project_id")
   })
 })

@@ -11,7 +11,7 @@ module.exports = class VelociousDatabaseQueryParserSelectParser {
 
     let sql = ""
 
-    sql << "SELECT"
+    sql += "SELECT"
 
     if (pretty) {
       sql += "\n"
@@ -28,7 +28,7 @@ module.exports = class VelociousDatabaseQueryParserSelectParser {
         sql += ","
 
         if (pretty) {
-
+          sql += "  "
         }
       }
     }
