@@ -1,4 +1,4 @@
-const Record = require("../../../../src/database/record/index.cjs")
+const {Database: {Record}} = require("../../../../index.cjs")
 
 module.exports = class Task extends Record {
 }
