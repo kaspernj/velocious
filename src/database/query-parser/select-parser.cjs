@@ -1,4 +1,4 @@
-const {digs} = require("@kaspernj/object-digger")
+const {digs} = require("diggerize")
 
 module.exports = class VelociousDatabaseQueryParserSelectParser {
   constructor({pretty, query}) {
