@@ -1,14 +1,7 @@
 #!/usr/bin/node
 
-console.log("Hello", process.argv)
-
+const {Cli} = require("../index.cjs")
+const cli = new Cli()
 const args = process.argv.slice(2)
 
-console.log(args)
-
-if (args[0] == "g" && args[1] == "migration") {
-  const migrationName = args[2]
-  const date = new Date()
-
-  console.log({ migrationName, date })
-}
+cli.execute(...args)
