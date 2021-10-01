@@ -1,15 +1,16 @@
 before_script:
+  - cp spec/support/mysql.peakflow.json spec/support/mysql.json
   - cp spec/dummy/config/databases.peakflow.json spec/dummy/config/databases.json
   - npm install
   - wait-for-it mysql:3306
 services:
-  mysql:
+  mariadb:
     environment:
-      MYSQL_USER: peakflow
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: velocious_test
-    image: mysql:8.0.22
+      MARIADB_USER: peakflow
+      MARIADB_PASSWORD: password
+      MARIADB_ROOT_PASSWORD: password
+      MARIADB_DATABASE: velocious_test
+    image: mariadb:10.6.4
     expose:
       - 3306
     mem_limit: 2048m

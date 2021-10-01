@@ -1,2 +1,3 @@
 node_modules
 spec/dummy/databases.json
+spec/support/mysql.json
