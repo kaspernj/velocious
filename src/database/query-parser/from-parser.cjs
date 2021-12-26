@@ -1,9 +1,10 @@
 const {digs} = require("diggerize")
 
 module.exports = class VelociousDatabaseQueryParserFromParser {
-  constructor({pretty, query}) {
+  constructor({pretty, query, queryParserOptions}) {
     this.pretty = pretty
     this.query = query
+    this.queryParserOptions = queryParserOptions
   }
 
   toSql() {
