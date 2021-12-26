@@ -15,6 +15,8 @@ module.exports = class VelociousDatabaseQueryParserFromParser {
     for (const fromKey in query._froms) {
       const from = query._froms[fromKey]
 
+      from.setOptions(this.queryParserOptions)
+
       if (fromKey > 0) {
         sql += ","
       }
@@ -25,7 +27,7 @@ module.exports = class VelociousDatabaseQueryParserFromParser {
         sql += " "
       }
 
-      sql += from
+      sql += from.toSql()
     }
 
     return sql

@@ -1,9 +1,10 @@
 const {digs} = require("diggerize")
 
 module.exports = class VelociousDatabaseQueryParserSelectParser {
-  constructor({pretty, query}) {
+  constructor({pretty, query, queryParserOptions}) {
     this.pretty = pretty
     this.query = query
+    this.queryParserOptions = queryParserOptions
   }
 
   toSql() {
@@ -22,13 +23,16 @@ module.exports = class VelociousDatabaseQueryParserSelectParser {
     for (const selectKey in query._selects) {
       const selectValue = query._selects[selectKey]
 
-      sql += selectValue
+      selectValue.setOptions(this.queryParserOptions)
+
+      sql += selectValue.toSql()
 
       if (selectKey + 1 < query._selects.length) {
-        sql += ","
-
         if (pretty) {
+          sql += ","
           sql += "  "
+        } else {
+          sql += ", "
         }
       }
     }
