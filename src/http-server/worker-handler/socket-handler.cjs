@@ -9,11 +9,11 @@ module.exports = class VelociousHttpServerWorkerHandlerSocketHandler {
     this.clientCount = clientCount
     this.worker = worker
 
-    socket.on("data", (chunk) => this.onSocketData(chunk))
-    socket.on("end", () => this.onSocketEnd())
+    socket.on("data", this.onSocketData)
+    socket.on("end", this.onSocketEnd)
   }
 
-  onSocketData(chunk) {
+  onSocketData = (chunk) => {
     logger(this, `Socket ${this.clientCount}: ${chunk}`)
 
     this.worker.postMessage({
@@ -23,7 +23,7 @@ module.exports = class VelociousHttpServerWorkerHandlerSocketHandler {
     })
   }
 
-  onSocketEnd() {
+  onSocketEnd = () => {
     logger(this, `Socket ${this.clientCount} end`)
   }
 

@@ -22,9 +22,9 @@ module.exports = class VelociousHttpServerWorker {
           workerCount: this.workerCount
         }
       })
-      this.worker.on("error", (error) => this.onWorkerError(error))
-      this.worker.on("exit", (code) => this.onWorkerExit(code))
-      this.worker.on("message", (message) => this.onWorkerMessage(message))
+      this.worker.on("error", this.onWorkerError)
+      this.worker.on("exit", this.onWorkerExit)
+      this.worker.on("message", this.onWorkerMessage)
     })
   }
 
@@ -45,17 +45,17 @@ module.exports = class VelociousHttpServerWorker {
     this.worker.postMessage({command: "newClient", clientCount})
   }
 
-  onWorkerError(error) {
+  onWorkerError = (error) => {
     throw new Error(`Worker error: ${error}`)
   }
 
-  onWorkerExit(code) {
+  onWorkerExit = (code) => {
     if (code !== 0) {
       throw new Error(`Client worker stopped with exit code ${code}`)
     }
   }
 
-  onWorkerMessage(data) {
+  onWorkerMessage = (data) => {
     logger(this, `Worker message`, data)
 
     const {command} = digs(data, "command")

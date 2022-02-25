@@ -20,7 +20,7 @@ module.exports = class VelociousHttpServer {
     }
 
     this.netServer = new Net.Server()
-    this.netServer.on("connection", (socket) => this.onConnection(socket))
+    this.netServer.on("connection", this.onConnection)
     this.netServer.listen(this.port, () => {
       logger(this, `Velocious listening on ${this.host}:${this.port}`)
     })
@@ -32,7 +32,7 @@ module.exports = class VelociousHttpServer {
     })
   }
 
-  onConnection(socket) {
+  onConnection = (socket) => {
     const clientCount = this.clientCount
 
     logger(this, `New client ${clientCount}`)
