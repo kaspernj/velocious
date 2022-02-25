@@ -6,11 +6,11 @@ before_script:
 services:
   mariadb:
     environment:
-      MARIADB_USER: peakflow
-      MARIADB_PASSWORD: password
-      MARIADB_ROOT_PASSWORD: password
-      MARIADB_DATABASE: velocious_test
-    image: mariadb:10.6.4
+      MYSQL_USER: peakflow
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: velocious_test
+    image: mariadb:latest
     expose:
       - 3306
     mem_limit: 2048m
