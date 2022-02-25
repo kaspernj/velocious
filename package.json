@@ -1,7 +1,7 @@
 {
   "name": "velocious",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.cjs",
   "scripts": {
     "test": "jasmine"
   },
