@@ -14,5 +14,6 @@ services:
     expose:
       - 3306
     mem_limit: 2048m
+    restart_policy: on-failure
 script:
   - npm test
