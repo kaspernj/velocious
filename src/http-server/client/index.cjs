@@ -17,7 +17,7 @@ module.exports = class VeoliciousHttpServerClient {
     this.onExecuteRequest = onExecuteRequest
   }
 
-  executeCurrentRequest() {
+  executeCurrentRequest = () => {
     logger(this, "executeCurrentRequest")
 
     this.state = "response"
@@ -28,7 +28,7 @@ module.exports = class VeoliciousHttpServerClient {
       routes: this.routes
     })
 
-    requestRunner.events.on("done", (requestRunner) => this.sendResponse(requestRunner))
+    requestRunner.events.on("done", this.sendResponse)
     requestRunner.run()
   }
 
@@ -37,7 +37,7 @@ module.exports = class VeoliciousHttpServerClient {
       this.currentRequest = new Request({
         configuration: this.configuration
       })
-      this.currentRequest.requestParser.events.on("done", () => this.executeCurrentRequest())
+      this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
       this.currentRequest.feed(data)
       this.state = "requestStarted"
     } else if (this.state == "requestStarted") {
@@ -47,7 +47,7 @@ module.exports = class VeoliciousHttpServerClient {
     }
   }
 
-  sendResponse(requestRunner) {
+  sendResponse = (requestRunner) => {
     const response = digg(requestRunner, "response")
     const body = response.getBody()
     const date = new Date()

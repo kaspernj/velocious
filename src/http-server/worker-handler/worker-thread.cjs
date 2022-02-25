@@ -13,14 +13,14 @@ module.exports = class VelociousHttpServerWorkerHandlerWorkerThread {
     this.parentPort = parentPort
     this.workerCount = workerCount
 
-    parentPort.on("message", errorLogger((data) => this.onCommand(data)))
+    parentPort.on("message", errorLogger(this.onCommand))
 
     logger(this, `Worker ${workerCount} started`)
 
     parentPort.postMessage({command: "started"})
   }
 
-  onCommand(data) {
+  onCommand = (data) => {
     logger(this, `Worker ${this.workerCount} received command`, data)
 
     const {command} = data

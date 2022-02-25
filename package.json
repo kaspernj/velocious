@@ -1,7 +1,7 @@
 {
   "name": "velocious",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "1.0.1",
+  "main": "index.cjs",
   "scripts": {
     "test": "jasmine"
   },
@@ -17,7 +17,7 @@
   "homepage": "https://github.com/kaspernj/velocious#readme",
   "description": "",
   "devDependencies": {
-    "jasmine": "^3.9.0",
+    "jasmine": "^4.0.2",
     "mysql": "^2.18.1",
     "node-fetch": "^2.6.1"
   },
@@ -25,6 +25,6 @@
     "diggerize": "^1.0.3",
     "ejs": "^3.1.6",
     "escape-string-regexp": "^1.0.5",
-    "inflection": "^1.13.1"
+    "inflection": "^1.13.2"
   }
 }

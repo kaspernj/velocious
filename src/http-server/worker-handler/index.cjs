@@ -15,16 +15,16 @@ module.exports = class VelociousHttpServerWorker {
       const {debug, directory} = digs(this.configuration, "debug", "directory")
 
       this.onStartCallback = resolve
-      this.worker = new Worker("./src/http-server/worker-handler/worker-script.cjs", {
+      this.worker = new Worker(`${__dirname}/worker-script.cjs`, {
         workerData: {
           debug,
           directory,
           workerCount: this.workerCount
         }
       })
-      this.worker.on("error", (error) => this.onWorkerError(error))
-      this.worker.on("exit", (code) => this.onWorkerExit(code))
-      this.worker.on("message", (message) => this.onWorkerMessage(message))
+      this.worker.on("error", this.onWorkerError)
+      this.worker.on("exit", this.onWorkerExit)
+      this.worker.on("message", this.onWorkerMessage)
     })
   }
 
@@ -45,17 +45,17 @@ module.exports = class VelociousHttpServerWorker {
     this.worker.postMessage({command: "newClient", clientCount})
   }
 
-  onWorkerError(error) {
+  onWorkerError = (error) => {
     throw new Error(`Worker error: ${error}`)
   }
 
-  onWorkerExit(code) {
+  onWorkerExit = (code) => {
     if (code !== 0) {
       throw new Error(`Client worker stopped with exit code ${code}`)
     }
   }
 
-  onWorkerMessage(data) {
+  onWorkerMessage = (data) => {
     logger(this, `Worker message`, data)
 
     const {command} = digs(data, "command")
