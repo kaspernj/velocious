@@ -15,7 +15,7 @@ module.exports = class VelociousHttpServerWorker {
       const {debug, directory} = digs(this.configuration, "debug", "directory")
 
       this.onStartCallback = resolve
-      this.worker = new Worker("./src/http-server/worker-handler/worker-script.cjs", {
+      this.worker = new Worker(`${__dirname}/worker-script.cjs`, {
         workerData: {
           debug,
           directory,
