@@ -13,7 +13,7 @@ services:
     image: mariadb:latest
     expose:
       - 3306
-    mem_limit: 2048m
+    mem_limit: 4096m
     restart_policy: on-failure
 script:
   - npm test
