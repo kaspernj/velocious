@@ -1,10 +1,17 @@
 const {Application} = require("../../index.cjs")
 
 module.exports = class Dummy {
-  static async run(callback) {
-    const dummy = new Dummy()
+  static current() {
+    if (!global.velociousDummy) {
+      global.velociousDummy = new Dummy()
+      global.velociousDummy.start()
+    }
 
-    await dummy.run(callback)
+    return global.velociousDummy
+  }
+
+  static async run(callback) {
+    await this.current().run(callback)
   }
 
   async run(callback) {
@@ -32,6 +39,8 @@ module.exports = class Dummy {
     })
 
     await this.application.start()
+
+    this.started = true
   }
 
   stop() {

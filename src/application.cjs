@@ -10,9 +10,6 @@ module.exports = class VelociousApplication {
 
     this.configuration = new Configuration({debug, directory})
     this.httpServerConfiguration = httpServer ?? {}
-
-    global.velociousApplication = this
-    global.velociousConfiguration = this.configuration
   }
 
   async run(callback) {
@@ -34,9 +31,15 @@ module.exports = class VelociousApplication {
     this.httpServer = new HttpServer({configuration, port})
 
     await this.httpServer.start()
+
+    global.velociousApplication = this
+    global.velociousConfiguration = this.configuration
   }
 
   stop() {
     this.httpServer.stop()
+
+    global.velociousApplication = undefined
+    global.velociousConfiguration = undefined
   }
 }
