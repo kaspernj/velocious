@@ -36,8 +36,8 @@ module.exports = class VelociousApplication {
     global.velociousConfiguration = this.configuration
   }
 
-  stop() {
-    this.httpServer.stop()
+  async stop() {
+    await this.httpServer.stop()
 
     global.velociousApplication = undefined
     global.velociousConfiguration = undefined

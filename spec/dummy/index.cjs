@@ -43,7 +43,7 @@ module.exports = class Dummy {
     this.started = true
   }
 
-  stop() {
-    this.application.stop()
+  async stop() {
+    await this.application.stop()
   }
 }
