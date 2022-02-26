@@ -1,10 +1,16 @@
+const DatabasePool = require("../pool/index.cjs")
+
 module.exports = class VelociousDatabaseRecord {
   static connection() {
-    throw new Error("connection")
+    return DatabasePool.current().singleConnection()
   }
 
   static find(recordId) {
     throw new Error("stub")
+  }
+
+  static primaryKey() {
+    return "id"
   }
 
   async save() {
@@ -15,12 +21,26 @@ module.exports = class VelociousDatabaseRecord {
     }
   }
 
-  constructor(recordData = {}) {
-    this._recordData = recordData
+  constructor(attributes = {}) {
+    this._attributes = attributes
+    this._changes = {}
+  }
+
+  attributes() {
+    return Object.assign({}, this._attributes, this._changes)
+  }
+
+  readAttribute(attributeName) {
+    if (attributeName in this._changes) return this._changes[attributeName]
+
+    return this._attributes[attributeName]
   }
 
   async _createNewRecord() {
-    let sql = `INSERT INTO ${this.constructor.connection().options().quoteTableName(this.constructor.getTableName())} (asd) VALUES ('asd')`
+    const sql = this.constructor.connection().insertSql({
+      tableName: this.constructor.tableName(),
+      data: this.attributes()
+    })
 
     await this.databaseDriver.execute(sql)
     await this.reload()
@@ -31,9 +51,7 @@ module.exports = class VelociousDatabaseRecord {
   }
 
   id() {
-    if (this._recordData["id"]) return true
-
-    return false
+    return this.readAttribute(this.constructor.primaryKey())
   }
 
   isPersisted() {

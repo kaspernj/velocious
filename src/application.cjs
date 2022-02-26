@@ -5,8 +5,14 @@ const HttpServer = require("./http-server/index.cjs")
 
 module.exports = class VelociousApplication {
   constructor({debug, directory, httpServer}) {
+    if (global.velociousApplication) throw new Error("A Velocious application is already running")
+    if (global.velociousConfiguration) throw new Error("A Velocious configuration has already been set")
+
     this.configuration = new Configuration({debug, directory})
     this.httpServerConfiguration = httpServer ?? {}
+
+    global.velociousApplication = this
+    global.velociousConfiguration = this.configuration
   }
 
   async run(callback) {
