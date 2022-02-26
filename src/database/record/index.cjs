@@ -1,4 +1,5 @@
 const DatabasePool = require("../pool/index.cjs")
+const inflection = require("inflection")
 
 module.exports = class VelociousDatabaseRecord {
   static connection() {
@@ -19,6 +20,10 @@ module.exports = class VelociousDatabaseRecord {
     } else {
       return await this._createNewRecord()
     }
+  }
+
+  static tableName() {
+    return inflection.underscore(inflection.pluralize(this.name))
   }
 
   constructor(attributes = {}) {

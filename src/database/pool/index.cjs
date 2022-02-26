@@ -20,7 +20,7 @@ module.exports = class VelociousDatabasePool {
   }
 
   singleConnection() {
-    if (!this.connection) this.spawnConnection()
+    if (!this.connection) this.connection = this.spawnConnection()
 
     return this.connection
   }
@@ -29,9 +29,10 @@ module.exports = class VelociousDatabasePool {
     const databaseConfigPath = `${Configuration.current().directory}/src/config/database.cjs`
     const {databaseConfiguration} = require(databaseConfigPath)
     const config = databaseConfiguration()
-    const driverPath = `../drivers/${digg(config, "type")}/index.cjs`
+    const defaultConfig = digg(config, "default", "master")
+    const driverPath = `../drivers/${digg(defaultConfig, "type")}/index.cjs`
     const DriverClass = require(driverPath)
-    const connection = new DriverClass(config)
+    const connection = new DriverClass(defaultConfig)
 
     return connection
   }

@@ -1,4 +1,4 @@
-module.exports = () => {
+const databaseConfiguration = () => {
   return {
     "default": {
       "master": {
@@ -11,3 +11,5 @@ module.exports = () => {
     }
   }
 }
+
+module.exports = {databaseConfiguration}
