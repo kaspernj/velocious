@@ -32,22 +32,20 @@ module.exports = class VelociousDatabaseDriversMysql extends Base{
     return connectArgs
   }
 
-  escape(string) {
+  quote(string) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
     return this.connection.escape(string)
   }
 
   insertSql({tableName, data}) {
-    const insert = new Insert({tableName, data})
-    insert.setOptions(this.options())
+    const insert = new Insert({driver: this, tableName, data})
+
     return insert.toSql()
   }
 
   options() {
     if (!this._options) {
-      if (!this.connection) throw new Error("Can't set options before connected to a database")
-
       this._options = new Options({driver: this})
     }
 

@@ -1,12 +1,6 @@
 module.exports = class VelociousDatabaseQuerySelectBase {
   getOptions() {
-    if (!this._options) throw new Error("Options hasn't been set")
-
-    return this._options
-  }
-
-  setOptions(options) {
-    this._options = options
+    return this.query.driver.options()
   }
 
   toSql() {

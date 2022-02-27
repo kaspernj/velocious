@@ -7,6 +7,7 @@ module.exports = class VelociousDatabaseConnectionDriversMysqlSqlInsert extends 
 
     for (let columnName in this.data) {
       if (count > 0) sql += ", "
+
       sql += this.getOptions().quoteColumnName(columnName)
       count++
     }
@@ -16,9 +17,12 @@ module.exports = class VelociousDatabaseConnectionDriversMysqlSqlInsert extends 
 
     for (let columnName in this.data) {
       if (count > 0) sql += ", "
-      sql += this.getOptions().quoteValue(this.data[columnName])
+
+      sql += this.getOptions().quote(this.data[columnName])
       count++
     }
+
+    sql += ")"
 
     return sql
   }

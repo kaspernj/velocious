@@ -1,17 +1,12 @@
 module.exports = class VelociousDatabaseQueryInsert {
-  constructor({tableName, data}) {
+  constructor({driver, tableName, data}) {
     this.data = data
+    this.driver = driver
     this.tableName = tableName
   }
 
   getOptions() {
-    if (!this._options) throw new Error("Options hasn't been set")
-
-    return this._options
-  }
-
-  setOptions(options) {
-    this._options = options
+    return this.driver.options()
   }
 
   toSql() {

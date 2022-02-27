@@ -22,11 +22,7 @@ module.exports = class VelociousDatabaseQueryParserOptions {
     return `${this.tableQuote}${tableName}${this.tableQuote}`
   }
 
-  quoteString(value) {
-    return `${this.stringQuote}${this.escapeString(value)}${this.stringQuote}`
-  }
-
-  quoteValue(value) {
+  quote(value) {
     if (typeof value == "number")
       return value
 

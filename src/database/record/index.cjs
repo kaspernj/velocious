@@ -39,6 +39,18 @@ module.exports = class VelociousDatabaseRecord {
     return Object.assign({}, this._attributes, this._changes)
   }
 
+  _connection() {
+    if (this.__connection) return this.__connection
+
+    return this.constructor.connection()
+  }
+
+  _tableName() {
+    if (this.__tableName) return this.__tableName
+
+    return this.constructor.tableName()
+  }
+
   readAttribute(attributeName) {
     if (attributeName in this._changes) return this._changes[attributeName]
 
@@ -50,12 +62,12 @@ module.exports = class VelociousDatabaseRecord {
       throw new Error(`No insertSql on ${this.constructor.connection().constructor.name}`)
     }
 
-    const sql = this.constructor.connection().insertSql({
-      tableName: this.constructor.tableName(),
+    const sql = this._connection().insertSql({
+      tableName: this._tableName(),
       data: this.attributes()
     })
 
-    await this.constructor.connection().query(sql)
+    await this._connection().query(sql)
     await this.reload()
   }
 

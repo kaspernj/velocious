@@ -1,8 +1,8 @@
 const SelectBase = require("./select-base.cjs")
 
 module.exports = class VelociousDatabaseQuerySelectTableAndColumn extends SelectBase {
-  constructor({tableName, columnName}) {
-    super()
+  constructor({query, tableName, columnName}) {
+    super({query})
     this.columnName = columnName
     this.tableName = tableName
   }
