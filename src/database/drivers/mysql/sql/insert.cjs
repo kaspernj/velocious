@@ -1,11 +1,11 @@
-const InsertBase = require("../../../../query/insert-base.cjs")
+const InsertBase = require("../../../query/insert-base.cjs")
 
-export default class VelociousDatabaseConnectionDriversMysqlSqlInsert extends InsertBase {
+module.exports = class VelociousDatabaseConnectionDriversMysqlSqlInsert extends InsertBase {
   toSql() {
-    let sql = `INSERT INTO ${this.getOptions.quoteTableName(this.tableName)} (`
+    let sql = `INSERT INTO ${this.getOptions().quoteTableName(this.tableName)} (`
     let count = 0
 
-    for (let columnName of this.data) {
+    for (let columnName in this.data) {
       if (count > 0) sql += ", "
       sql += this.getOptions().quoteColumnName(columnName)
       count++
@@ -14,7 +14,7 @@ export default class VelociousDatabaseConnectionDriversMysqlSqlInsert extends In
     sql += ") VALUES ("
     count = 0
 
-    for (let columnName of this.data) {
+    for (let columnName in this.data) {
       if (count > 0) sql += ", "
       sql += this.getOptions().quoteValue(this.data[columnName])
       count++

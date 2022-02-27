@@ -3,7 +3,9 @@ const inflection = require("inflection")
 
 module.exports = class VelociousDatabaseRecord {
   static connection() {
-    return DatabasePool.current().singleConnection()
+    const connection = DatabasePool.current().singleConnection()
+    if (!connection) throw new Error("No connection?")
+    return connection
   }
 
   static find(recordId) {
@@ -42,6 +44,10 @@ module.exports = class VelociousDatabaseRecord {
   }
 
   async _createNewRecord() {
+    if (!this.constructor.connection()["insertSql"]) {
+      throw new Error(`No insertSql on ${this.constructor.connection().constructor.name}`)
+    }
+
     const sql = this.constructor.connection().insertSql({
       tableName: this.constructor.tableName(),
       data: this.attributes()

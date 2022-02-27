@@ -1,5 +1,5 @@
 const {Database: {Handler, Query}} = require("../../../../../index.cjs")
-const MysqlQueryParser = require("../../../../../src/database/connection/drivers/mysql/query-parser.cjs")
+const MysqlQueryParser = require("../../../../../src/database/drivers/mysql/query-parser.cjs")
 
 const FromTable = require("../../../../../src/database/query/from-table.cjs")
 const SelectTableAndColumn = require("../../../../../src/database/query/select-table-and-column.cjs")

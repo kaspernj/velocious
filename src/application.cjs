@@ -5,11 +5,12 @@ const HttpServer = require("./http-server/index.cjs")
 
 module.exports = class VelociousApplication {
   constructor({debug, directory, httpServer}) {
-    if (global.velociousApplication) throw new Error("A Velocious application is already running")
-    if (global.velociousConfiguration) throw new Error("A Velocious configuration has already been set")
-
     this.configuration = new Configuration({debug, directory})
     this.httpServerConfiguration = httpServer ?? {}
+  }
+
+  isActive() {
+    return this.httpServer?.isActive()
   }
 
   async run(callback) {
@@ -28,6 +29,9 @@ module.exports = class VelociousApplication {
 
     logger(this, `Starting server on port ${port}`)
 
+    if (global.velociousApplication) throw new Error("A Velocious application is already running")
+    if (global.velociousConfiguration) throw new Error("A Velocious configuration has already been set")
+
     this.httpServer = new HttpServer({configuration, port})
 
     await this.httpServer.start()
@@ -37,6 +41,8 @@ module.exports = class VelociousApplication {
   }
 
   async stop() {
+    logger(this, "Stopping server")
+
     await this.httpServer.stop()
 
     global.velociousApplication = undefined

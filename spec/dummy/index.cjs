@@ -4,7 +4,6 @@ module.exports = class Dummy {
   static current() {
     if (!global.velociousDummy) {
       global.velociousDummy = new Dummy()
-      global.velociousDummy.start()
     }
 
     return global.velociousDummy
@@ -20,7 +19,7 @@ module.exports = class Dummy {
     try {
       await callback()
     } finally {
-      this.stop()
+      await this.stop()
     }
   }
 
@@ -39,11 +38,10 @@ module.exports = class Dummy {
     })
 
     await this.application.start()
-
-    this.started = true
   }
 
   async stop() {
-    await this.application.stop()
+    if (this.application.isActive())
+      await this.application.stop()
   }
 }

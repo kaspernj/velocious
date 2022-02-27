@@ -7,10 +7,6 @@ module.exports = class VelociousDatabaseQueryParserOptions {
     this.stringQuote = digg(options, "stringQuote")
   }
 
-  escapeString() {
-    throw new Error(`No method to escape string`)
-  }
-
   quoteColumnName(columnName) {
     if (columnName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${columnName}`)
 

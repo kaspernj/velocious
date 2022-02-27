@@ -1,6 +1,5 @@
-module.exports = new class VelociousDatabaseQueryInsert {
+module.exports = class VelociousDatabaseQueryInsert {
   constructor({tableName, data}) {
-    super()
     this.data = data
     this.tableName = tableName
   }

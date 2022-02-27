@@ -5,8 +5,8 @@ const WorkerHandler = require("./worker-handler/index.cjs")
 module.exports = class VelociousHttpServer {
   constructor({configuration, host, maxWorkers, port}) {
     this.configuration = configuration
-    this.host = host
-    this.port = port
+    this.host = host || "0.0.0.0"
+    this.port = port || 3006
     this.clientCount = 0
     this.maxWorkers = maxWorkers || 16
     this.workerCount = 0
@@ -14,21 +14,44 @@ module.exports = class VelociousHttpServer {
   }
 
   async start() {
-    // We need at least one worker to handle requests
-    if (this.workerHandlers.length == 0) {
-      await this.spawnWorker()
-    }
-
+    await this._ensureAtLeastOneWorker()
     this.netServer = new Net.Server()
     this.netServer.on("connection", this.onConnection)
-    this.netServer.listen(this.port, () => {
-      logger(this, `Velocious listening on ${this.host}:${this.port}`)
+    await this._netServerListen()
+  }
+
+  _netServerListen() {
+    return new Promise((resolve, reject) => {
+      try {
+        this.netServer.listen(this.port, this.host, () => {
+          logger(this, `Velocious listening on ${this.host}:${this.port}`)
+          resolve()
+        })
+      } catch (error) {
+        reject(error)
+      }
     })
   }
 
+  async _ensureAtLeastOneWorker() {
+    if (this.workerHandlers.length == 0) {
+      await this.spawnWorker()
+    }
+  }
+
+  isActive() {
+    return this.netServer.listening
+  }
+
   stop() {
-    return new Promise((resolve) => {
-      this.netServer?.close(() => resolve())
+    return new Promise((resolve, reject) => {
+      this.netServer.close((error) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve()
+        }
+      })
     })
   }
 

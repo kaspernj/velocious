@@ -1,6 +1,8 @@
 const Base = require("../base.cjs")
 const connectConnection = require("./connect-connection.cjs")
 const {digg} = require("diggerize")
+const Insert = require("./sql/insert.cjs")
+const Options = require("./options.cjs")
 const mysql = require("mysql")
 const query = require("./query.cjs")
 
@@ -26,6 +28,24 @@ module.exports = class VelociousDatabaseDriversMysql extends Base{
     }
 
     return connectArgs
+  }
+
+  escape(string) {
+    return this.connection.escape(string)
+  }
+
+  insertSql({tableName, data}) {
+    const insert = new Insert({tableName, data})
+    insert.setOptions(this.options())
+    return insert.toSql()
+  }
+
+  options() {
+    if (!this._options) {
+      this._options = new Options({connection: this})
+    }
+
+    return this._options
   }
 
   async query(sql) {

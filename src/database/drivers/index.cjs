@@ -1,4 +1,4 @@
-const Mysql = require("./mysql/index.cjs")
+const Mysql = require("../drivers/mysql/index.cjs")
 
 module.exports = {
   Mysql

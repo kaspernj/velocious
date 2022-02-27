@@ -1,8 +1,8 @@
 const {digs} = require("diggerize")
-const FromParser = require("../../../query-parser/from-parser.cjs")
-const JoinsParser = require("../../../query-parser/joins-parser.cjs")
+const FromParser = require("../../query-parser/from-parser.cjs")
+const JoinsParser = require("../../query-parser/joins-parser.cjs")
 const queryParserOptions = require("./options.cjs")
-const SelectParser = require("../../../query-parser/select-parser.cjs")
+const SelectParser = require("../../query-parser/select-parser.cjs")
 
 module.exports = class VelociousDatabaseConnectionDriversMysqlQueryParser {
   constructor({pretty, query}) {
