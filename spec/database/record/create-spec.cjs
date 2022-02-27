@@ -8,7 +8,7 @@ describe("Record - create", () => {
 
       await task.save()
 
-      expect(task.id()).notToEq(nil)
+      expect(task.id()).not.toBeUndefined()
     })
   })
 })

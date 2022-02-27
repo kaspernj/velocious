@@ -1,5 +1,7 @@
 const DatabasePool = require("../pool/index.cjs")
+const Handler = require("../handler.cjs")
 const inflection = require("inflection")
+const Query = require("../query/index.cjs")
 
 module.exports = class VelociousDatabaseRecord {
   static connection() {
@@ -28,6 +30,29 @@ module.exports = class VelociousDatabaseRecord {
 
   static tableName() {
     return inflection.underscore(inflection.pluralize(this.name))
+  }
+
+  static _newQuery() {
+    const handler = new Handler()
+    const query = new Query({
+      driver: this.connection(),
+      handler,
+      modelClass: this
+    })
+
+    return query.from(this.tableName())
+  }
+
+  static orderableColumn() {
+    // Allow to change to 'created_at' if using UUID?
+
+    return this.primaryKey()
+  }
+
+  static where(object) {
+    const query = this._newQuery().where(object)
+
+    return query
   }
 
   constructor(attributes = {}) {
@@ -67,8 +92,10 @@ module.exports = class VelociousDatabaseRecord {
       data: this.attributes()
     })
 
-    await this._connection().query(sql)
-    await this.reload()
+    const result = await this._connection().query(sql)
+    const id = result.insertId
+
+    await this._reloadWithId(id)
   }
 
   async _updateRecordWithChanges() {
@@ -87,5 +114,23 @@ module.exports = class VelociousDatabaseRecord {
 
   isNewRecord() {
     return !this.isPersisted()
+  }
+
+  async _reloadWithId(id) {
+    const primaryKey = this.constructor.primaryKey()
+    const whereObject = {}
+
+    whereObject[primaryKey] = id
+
+    const query = this.constructor.where(whereObject)
+    const result = await query.first()
+
+    console.log({result})
+
+    throw new Error("stub")
+  }
+
+  async reload() {
+    this._reloadWithId(this.readAttribute("id"))
   }
 }

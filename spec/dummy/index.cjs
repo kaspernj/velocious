@@ -10,6 +10,13 @@ module.exports = class Dummy {
     return global.velociousDummy
   }
 
+  static async prepare() {
+    const connection = DatabasePool.current().singleConnection()
+
+    await connection.query("DROP TABLE IF EXISTS tasks")
+    await connection.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, name VARCHAR(255), PRIMARY KEY (id))")
+  }
+
   static async run(callback) {
     await this.current().run(callback)
   }
@@ -18,6 +25,7 @@ module.exports = class Dummy {
     await this.start()
 
     try {
+      await Dummy.prepare()
       await callback()
     } finally {
       await this.stop()
