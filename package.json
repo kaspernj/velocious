@@ -1,4 +1,7 @@
 {
+  "bin": {
+    "velocious": "bin/velocious"
+  },
   "name": "velocious",
   "version": "1.0.1",
   "main": "index.cjs",

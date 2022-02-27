@@ -8,19 +8,19 @@ module.exports = class VelociousDatabasePool {
     return global.velociousDatabasePool
   }
 
-  checkout() {
-    // How do we keep track of which "threads" have a database connection?
-    // Return a single connection per worker for now
+  async connect() {
+    if (this.connection) throw new Error("Already connected")
 
-    return this.singleConnection()
+    this.connection = this.spawnConnection()
+    await this.connection.connect()
   }
 
-  checkin() {
-    // How do we keep track of which "threads" have a database connection?
+  isConnected() {
+    return Boolean(this.connection)
   }
 
   singleConnection() {
-    if (!this.connection) this.connection = this.spawnConnection()
+    if (!this.connection) throw new Error("Not connected")
 
     return this.connection
   }

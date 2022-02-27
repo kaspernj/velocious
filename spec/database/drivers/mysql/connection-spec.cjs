@@ -1,5 +1,7 @@
 const {Database: {Drivers: {Mysql}}} = require("../../../../index.cjs")
-const mysqlConfig = require("../../../support/mysql.json")
+const {databaseConfiguration} = require("../../../dummy/src/config/database.cjs")
+const {digg} = require("diggerize")
+const mysqlConfig = digg(databaseConfiguration(), "default", "master")
 
 describe("Database - Drivers - Mysql - Connection", () => {
   it("connects", async () => {

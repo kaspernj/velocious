@@ -1,6 +1,0 @@
-{
-  "database": "velocious_test",
-  "host": "mariadb",
-  "password": "password",
-  "user": "peakflow"
-}

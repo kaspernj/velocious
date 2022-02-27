@@ -1,4 +1,5 @@
 const {Application} = require("../../index.cjs")
+const DatabasePool = require("../../src/database/pool/index.cjs")
 
 module.exports = class Dummy {
   static current() {
@@ -38,6 +39,12 @@ module.exports = class Dummy {
     })
 
     await this.application.start()
+
+    const databasePool = DatabasePool.current()
+
+    if (!databasePool.isConnected()) {
+      await databasePool.connect()
+    }
   }
 
   async stop() {

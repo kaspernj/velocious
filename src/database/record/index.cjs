@@ -4,7 +4,9 @@ const inflection = require("inflection")
 module.exports = class VelociousDatabaseRecord {
   static connection() {
     const connection = DatabasePool.current().singleConnection()
+
     if (!connection) throw new Error("No connection?")
+
     return connection
   }
 
@@ -53,7 +55,7 @@ module.exports = class VelociousDatabaseRecord {
       data: this.attributes()
     })
 
-    await this.databaseDriver.execute(sql)
+    await this.constructor.connection().query(sql)
     await this.reload()
   }
 

@@ -10,6 +10,8 @@ module.exports = class VelociousDatabaseDriversMysqlOptions extends QueryParserO
   }
 
   escapeString(string) {
-    this.connection.escape(string)
+    if (!this.driver) throw new Error("Driver not set")
+
+    this.driver.escape(string)
   }
 }

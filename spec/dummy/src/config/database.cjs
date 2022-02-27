@@ -3,10 +3,10 @@ const databaseConfiguration = () => {
     "default": {
       "master": {
         "type": "mysql",
-        "host": "mysql",
-        "username": "username",
-        "password": "password",
-        "database": "velocious_test"
+        "host": "mariadb",
+        "username": "dev",
+        "password": "Eid7Eip6iof2weive7yaeshe8eu2Nei4",
+        "database": "development"
       }
     }
   }

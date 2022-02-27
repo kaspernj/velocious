@@ -21,16 +21,20 @@ module.exports = class VelociousDatabaseDriversMysql extends Base{
   connectArgs() {
     const args = this.getArgs()
     const connectArgs = []
-    const forward = ["database", "host", "password", "user"]
+    const forward = ["database", "host", "password"]
 
     for (const forwardValue of forward) {
       if (forwardValue in args) connectArgs[forwardValue] = digg(args, forwardValue)
     }
 
+    if ("username" in args) connectArgs["user"] = args["username"]
+
     return connectArgs
   }
 
   escape(string) {
+    if (!this.connection) throw new Error("Can't escape before connected")
+
     return this.connection.escape(string)
   }
 
@@ -42,7 +46,9 @@ module.exports = class VelociousDatabaseDriversMysql extends Base{
 
   options() {
     if (!this._options) {
-      this._options = new Options({connection: this})
+      if (!this.connection) throw new Error("Can't set options before connected to a database")
+
+      this._options = new Options({driver: this})
     }
 
     return this._options

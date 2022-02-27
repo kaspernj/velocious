@@ -1,5 +1,4 @@
 before_script:
-  - cp spec/support/mysql.peakflow.json spec/support/mysql.json
   - cp spec/dummy/config/databases.peakflow.json spec/dummy/config/databases.json
   - npm install
   - wait-for-it mariadb:3306
