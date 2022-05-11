@@ -1,19 +1,34 @@
 const {Application} = require("../../index.cjs")
+const DatabasePool = require("../../src/database/pool/index.cjs")
 
 module.exports = class Dummy {
-  static async run(callback) {
-    const dummy = new Dummy()
+  static current() {
+    if (!global.velociousDummy) {
+      global.velociousDummy = new Dummy()
+    }
 
-    await dummy.run(callback)
+    return global.velociousDummy
+  }
+
+  static async prepare() {
+    const connection = DatabasePool.current().singleConnection()
+
+    await connection.query("DROP TABLE IF EXISTS tasks")
+    await connection.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, name VARCHAR(255), PRIMARY KEY (id))")
+  }
+
+  static async run(callback) {
+    await this.current().run(callback)
   }
 
   async run(callback) {
     await this.start()
 
     try {
+      await Dummy.prepare()
       await callback()
     } finally {
-      this.stop()
+      await this.stop()
     }
   }
 
@@ -32,9 +47,16 @@ module.exports = class Dummy {
     })
 
     await this.application.start()
+
+    const databasePool = DatabasePool.current()
+
+    if (!databasePool.isConnected()) {
+      await databasePool.connect()
+    }
   }
 
-  stop() {
-    this.application.stop()
+  async stop() {
+    if (this.application.isActive())
+      await this.application.stop()
   }
 }

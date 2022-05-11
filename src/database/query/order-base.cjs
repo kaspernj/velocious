@@ -1,4 +1,4 @@
-module.exports = class VelociousDatabaseQuerySelectBase {
+module.exports = class VelociousDatabaseQueryOrderBase {
   getOptions() {
     return this.query.driver.options()
   }

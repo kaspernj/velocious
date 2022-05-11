@@ -1,6 +1,10 @@
-const Routes = require("./routes/index.cjs")
-
 module.exports = class VelociousConfiguration {
+  static current() {
+    if (!global.velociousConfiguration) throw new Error("A Velocious configuration hasn't been set")
+
+    return global.velociousConfiguration
+  }
+
   constructor({debug, directory}) {
     if (!directory) throw new Error("No directory given")
 

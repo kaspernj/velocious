@@ -1,5 +1,5 @@
+const Application = require("../../application.cjs")
 const Client = require("../client/index.cjs")
-const Configuration = require("../../configuration.cjs")
 const {digg, digs} = require("diggerize")
 const errorLogger = require("../../error-logger")
 const logger = require("../../logger.cjs")
@@ -8,8 +8,9 @@ module.exports = class VelociousHttpServerWorkerHandlerWorkerThread {
   constructor({parentPort, workerData}) {
     const {debug, directory, workerCount} = digs(workerData, "debug", "directory", "workerCount")
 
+    this.application = new Application({debug, directory})
     this.clients = {}
-    this.configuration = new Configuration({debug, directory})
+    this.configuration = this.application.configuration
     this.parentPort = parentPort
     this.workerCount = workerCount
 

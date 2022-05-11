@@ -9,6 +9,10 @@ module.exports = class VelociousApplication {
     this.httpServerConfiguration = httpServer ?? {}
   }
 
+  isActive() {
+    return this.httpServer?.isActive()
+  }
+
   async run(callback) {
     await this.start()
 
@@ -25,12 +29,23 @@ module.exports = class VelociousApplication {
 
     logger(this, `Starting server on port ${port}`)
 
+    if (global.velociousApplication) throw new Error("A Velocious application is already running")
+    if (global.velociousConfiguration) throw new Error("A Velocious configuration has already been set")
+
     this.httpServer = new HttpServer({configuration, port})
 
     await this.httpServer.start()
+
+    global.velociousApplication = this
+    global.velociousConfiguration = this.configuration
   }
 
-  stop() {
-    this.httpServer.stop()
+  async stop() {
+    logger(this, "Stopping server")
+
+    await this.httpServer.stop()
+
+    global.velociousApplication = undefined
+    global.velociousConfiguration = undefined
   }
 }
