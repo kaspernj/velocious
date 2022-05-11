@@ -1,5 +1,5 @@
 before_script:
-  - cp spec/dummy/config/databases.peakflow.cjs spec/dummy/config/databases.cjs
+  - cp spec/dummy/config/databases.peakflow.js spec/dummy/config/databases.js
   - npm install
   - wait-for-it mariadb:3306
 services:

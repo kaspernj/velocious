@@ -1,6 +1,6 @@
 #!/usr/bin/node
 
-const {Cli} = require("../index.cjs")
+import {Cli} from "../index.mjs"
 const cli = new Cli()
 const args = process.argv.slice(2)
 

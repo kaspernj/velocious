@@ -4,10 +4,11 @@
   },
   "name": "velocious",
   "version": "1.0.1",
-  "main": "index.cjs",
+  "main": "index.mjs",
   "scripts": {
     "test": "jasmine"
   },
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kaspernj/velocious.git"

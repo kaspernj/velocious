@@ -1,11 +1,12 @@
 {
   "spec_dir": "spec",
   "spec_files": [
-    "**/*[sS]pec.cjs"
+    "**/*-spec.mjs"
   ],
   "helpers": [
-    "helpers/**/*.cjs"
+    "helpers/**/*.js"
   ],
   "stopSpecOnExpectationFailure": false,
-  "random": false
+  "random": false,
+  "jsLoader": "import"
 }
