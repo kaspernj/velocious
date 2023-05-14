@@ -20,7 +20,7 @@
   "homepage": "https://github.com/kaspernj/velocious#readme",
   "description": "",
   "devDependencies": {
-    "jasmine": "^4.0.2",
+    "jasmine": "^5.0.0",
     "mysql": "^2.18.1",
     "node-fetch": "^2.6.1"
   },
