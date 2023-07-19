@@ -1,14 +1,13 @@
-import {digs} from "diggerize"
+import {digg, digs} from "diggerize"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import logger from "../../logger.mjs"
-import SocketHandler from "./socket-handler.mjs"
 import {Worker} from "worker_threads"
 
 export default class VelociousHttpServerWorker {
   constructor({configuration, workerCount}) {
     this.configuration = configuration
-    this.socketHandlers = {}
+    this.clients = {}
     this.workerCount = workerCount
   }
 
@@ -32,20 +31,18 @@ export default class VelociousHttpServerWorker {
     })
   }
 
-  addSocketConnection({socket, clientCount}) {
-    socket.on("end", () => {
-      logger(this, `Removing ${clientCount} from socketHandlers`)
-      delete this.socketHandlers[clientCount]
+  addSocketConnection(client) {
+    const clientCount = digg(client, "clientCount")
+
+    client.socket.on("end", () => {
+      logger(this, `Removing ${clientCount} from clients`)
+      delete this.clients[clientCount]
     })
 
-    const socketHandler = new SocketHandler({
-      configuration: this.configuration,
-      socket,
-      clientCount,
-      worker: this.worker
-    })
+    client.worker = this.worker
+    client.listen()
 
-    this.socketHandlers[clientCount] = socketHandler
+    this.clients[clientCount] = client
     this.worker.postMessage({command: "newClient", clientCount})
   }
 
@@ -74,7 +71,7 @@ export default class VelociousHttpServerWorker {
 
       logger(this, "CLIENT OUTPUT", data)
 
-      this.socketHandlers[clientCount].send(output)
+      this.clients[clientCount].send(output)
     } else {
       throw new Error(`Unknown command: ${command}`)
     }

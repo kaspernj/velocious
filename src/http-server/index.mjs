@@ -1,16 +1,20 @@
+import {digg} from "diggerize"
 import logger from "../logger.mjs"
 import Net from "net"
+import ServerClient from "./server-client.mjs"
 import WorkerHandler from "./worker-handler/index.mjs"
 
 export default class VelociousHttpServer {
+  clientCount = 0
+  clients = {}
+  workerCount = 0
+  workerHandlers = []
+
   constructor({configuration, host, maxWorkers, port}) {
     this.configuration = configuration
     this.host = host || "0.0.0.0"
     this.port = port || 3006
-    this.clientCount = 0
     this.maxWorkers = maxWorkers || 16
-    this.workerCount = 0
-    this.workerHandlers = []
   }
 
   async start() {
@@ -43,7 +47,15 @@ export default class VelociousHttpServer {
     return this.netServer.listening
   }
 
-  stop() {
+  async stopClients() {
+    for (const clientCount in this.clients) {
+      const client = this.clients[clientCount]
+
+      await client.close()
+    }
+  }
+
+  stopServer() {
     return new Promise((resolve, reject) => {
       this.netServer.close((error) => {
         if (error) {
@@ -55,6 +67,11 @@ export default class VelociousHttpServer {
     })
   }
 
+  async stop() {
+    await this.stopClients()
+    await this.stopServer()
+  }
+
   onConnection = (socket) => {
     const clientCount = this.clientCount
 
@@ -63,13 +80,32 @@ export default class VelociousHttpServer {
     this.clientCount++
 
     const workerHandler = this.workerHandlerToUse()
+    const client = new ServerClient({
+      clientCount,
+      configuration: this.configuration,
+      socket
+    })
+
+    client.events.on("close", this.onClientClose)
 
     logger(this, `Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
 
-    workerHandler.addSocketConnection({
-      socket,
-      clientCount: this.clientCount
-    })
+    workerHandler.addSocketConnection(client)
+
+    this.clients[clientCount] = client
+  }
+
+  onClientClose = (client) => {
+    const clientCount = digg(client, "clientCount")
+    const oldClientsLength = Object.keys(this.clients).length
+
+    delete this.clients[clientCount]
+
+    const newClientsLength = Object.keys(this.clients).length
+
+    if (newClientsLength != (oldClientsLength - 1)) {
+      console.error(`Expected client to have been removed but length didn't change from ${oldClientsLength} to ${oldClientsLength - 1}`)
+    }
   }
 
   async spawnWorker() {
