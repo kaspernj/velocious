@@ -123,11 +123,10 @@ export default class VelociousDatabaseRecord {
     whereObject[primaryKey] = id
 
     const query = this.constructor.where(whereObject)
-    const result = await query.first()
+    const reloadedModel = await query.first()
 
-    console.log({result})
-
-    throw new Error("stub")
+    this._attributes = reloadedModel.attributes()
+    this._changes = {}
   }
 
   async reload() {

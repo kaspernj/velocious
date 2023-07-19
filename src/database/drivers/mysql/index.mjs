@@ -5,6 +5,7 @@ import Insert from "./sql/insert.mjs"
 import Options from "./options.mjs"
 import mysql from "mysql"
 import query from "./query.mjs"
+import QueryParser from "./query-parser.mjs"
 
 export default class VelociousDatabaseDriversMysql extends Base{
   async connect() {
@@ -32,6 +33,14 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return connectArgs
   }
 
+  async query(sql) {
+    return await query(this.connection, sql)
+  }
+
+  queryToSql(query) {
+    return new QueryParser({query}).toSql()
+  }
+
   quote(string) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
@@ -50,9 +59,5 @@ export default class VelociousDatabaseDriversMysql extends Base{
     }
 
     return this._options
-  }
-
-  async query(sql) {
-    return await query(this.connection, sql)
   }
 }
