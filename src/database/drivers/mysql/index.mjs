@@ -6,6 +6,7 @@ import Options from "./options.mjs"
 import mysql from "mysql"
 import query from "./query.mjs"
 import QueryParser from "./query-parser.mjs"
+import Update from "./sql/update.mjs"
 
 export default class VelociousDatabaseDriversMysql extends Base{
   async connect() {
@@ -59,5 +60,11 @@ export default class VelociousDatabaseDriversMysql extends Base{
     }
 
     return this._options
+  }
+
+  updateSql({conditions, data, tableName}) {
+    const update = new Update({conditions, data, driver: this, tableName})
+
+    return update.toSql()
   }
 }
