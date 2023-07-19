@@ -1,4 +1,5 @@
 import Dummy from "../../dummy/index.mjs"
+import RecordNotFoundError from "../../../src/database/record/record-not-found-error.mjs"
 import Task from "../../dummy/src/models/task.mjs"
 
 describe("Record - find", () => {
@@ -11,6 +12,18 @@ describe("Record - find", () => {
       const foundTask = await Task.find(task.id())
 
       expect(foundTask.readAttribute("name")).toEqual("Test task")
+    })
+  })
+
+  it("raises an error when a record isn't found", async () => {
+    await Dummy.run(async () => {
+      try {
+        await Task.find(123)
+        throw new Error("Didn't expect to reach this")
+      } catch (error) {
+        expect(error.message).toEqual("Couldn't find Task with 'id'=123")
+        expect(error.constructor.name).toEqual("RecordNotFoundError")
+      }
     })
   })
 })
