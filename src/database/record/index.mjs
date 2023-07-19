@@ -2,6 +2,7 @@ import DatabasePool from "../pool/index.mjs"
 import Handler from "../handler.mjs"
 import inflection from "inflection"
 import Query from "../query/index.mjs"
+import RecordNotFoundError from "./record-not-found-error.mjs"
 
 export default class VelociousDatabaseRecord {
   static connection() {
@@ -18,6 +19,10 @@ export default class VelociousDatabaseRecord {
     conditions[this.primaryKey()] = recordId
 
     const record = await this.where(conditions).first()
+
+    if (!record) {
+      throw new RecordNotFoundError(`Couldn't find ${this.name} with '${this.primaryKey()}'=${recordId}`)
+    }
 
     return record
   }
