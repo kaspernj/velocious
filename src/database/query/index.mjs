@@ -26,6 +26,7 @@ export default class VelociousDatabaseQuery {
       handler: this.handler.clone(),
       joins: [...this._joins],
       limits: [...this._limits],
+      modelClass: this.modelClass,
       orders: [...this._orders],
       selects: [...this._selects],
       wheres: [...this._wheres]
@@ -40,9 +41,9 @@ export default class VelociousDatabaseQuery {
 
   async first() {
     const newQuery = this.clone()
-    const result = newQuery.limit(1).reorder(this.modelClass.orderableColumn()).toArray()
+    const results = await newQuery.limit(1).reorder(this.modelClass.orderableColumn()).toArray()
 
-    return result[0]
+    return results[0]
   }
 
   from(from) {
@@ -101,11 +102,21 @@ export default class VelociousDatabaseQuery {
   }
 
   async toArray() {
-    throw new Error("stub")
+    const sql = this.toSql()
+    const results = await this.driver.query(sql)
+    const models = []
+
+    for (const result of results) {
+      const model = new this.modelClass(result)
+
+      models.push(model)
+    }
+
+    return models
   }
 
   toSql() {
-    throw new Error("stub")
+    return this.driver.queryToSql(this)
   }
 
   where(where) {

@@ -13,9 +13,9 @@ describe("Database - Drivers - Mysql - Connection", () => {
 
     const result = await mysql.query("SELECT \"1\" AS test1, \"2\" AS test2")
 
-    expect(result).toEqual({
+    expect(result).toEqual([{
       test1: "1",
       test2: "2"
-    })
+    }])
   })
 })

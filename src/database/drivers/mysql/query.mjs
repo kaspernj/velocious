@@ -4,16 +4,22 @@ export default async function query(connection, sql) {
       if (error) {
         reject(error)
       } else {
-        const result = {}
+        const rows = []
 
-        for (const fieldKey in fields) {
-          const field = fields[fieldKey].name
-          const value = results[0][field]
+        for (const resultIndex in results) {
+          const result = {}
 
-          result[field] = value
+          for (const fieldKey in fields) {
+            const field = fields[fieldKey].name
+            const value = results[resultIndex][field]
+
+            result[field] = value
+          }
+
+          rows.push(result)
         }
 
-        resolve(result)
+        resolve(rows)
       }
     })
   })

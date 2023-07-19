@@ -34,6 +34,10 @@ export default class VelociousDatabaseQueryParserSelectParser {
       }
     }
 
+    if (query._selects.length == 0) {
+      sql += "*"
+    }
+
     return sql
   }
 }
