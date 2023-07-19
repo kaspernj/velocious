@@ -12,4 +12,4 @@ const databaseConfiguration = () => {
   }
 }
 
-export default {databaseConfiguration}
+export {databaseConfiguration}
