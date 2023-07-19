@@ -9,6 +9,10 @@ export default class VelociousApplication {
     this.httpServerConfiguration = httpServer ?? {}
   }
 
+  async initialize() {
+    await this.configuration.initialize()
+  }
+
   isActive() {
     return this.httpServer?.isActive()
   }

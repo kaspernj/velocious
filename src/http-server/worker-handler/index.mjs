@@ -1,4 +1,6 @@
 import {digs} from "diggerize"
+import {dirname} from "path"
+import {fileURLToPath} from "url"
 import logger from "../../logger.mjs"
 import SocketHandler from "./socket-handler.mjs"
 import {Worker} from "worker_threads"
@@ -13,9 +15,11 @@ export default class VelociousHttpServerWorker {
   async start() {
     return new Promise((resolve) => {
       const {debug, directory} = digs(this.configuration, "debug", "directory")
+      const __filename = fileURLToPath(import.meta.url)
+      const __dirname = dirname(__filename)
 
       this.onStartCallback = resolve
-      this.worker = new Worker(`${__dirname}/worker-script.js`, {
+      this.worker = new Worker(`${__dirname}/worker-script.mjs`, {
         workerData: {
           debug,
           directory,

@@ -1,4 +1,4 @@
-import {Cli} from "../../../index.mjs"
+import Cli from "../../../src/cli/index.mjs"
 
 describe("Cli - generate - migration", () => {
   it("generates a new migration", async () => {

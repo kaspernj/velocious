@@ -1,7 +1,9 @@
-// import {Database: {Drivers: {Mysql}}} from "../../../../index.mjs"
+import Database from "../../../../src/database/index.mjs"
 import {databaseConfiguration} from "../../../dummy/src/config/database.mjs"
 import {digg} from "diggerize"
+
 const mysqlConfig = digg(databaseConfiguration(), "default", "master")
+const Mysql = Database.Drivers.Mysql
 
 describe("Database - Drivers - Mysql - Connection", () => {
   it("connects", async () => {

@@ -1,5 +1,7 @@
-import BaseRoute from "./base-route.mjs"
+import BaseRoute, {initBaseRoute} from "./base-route.mjs"
 import escapeStringRegexp from "escape-string-regexp"
+
+initBaseRoute()
 
 export default class VelociousRouteGetRoute extends BaseRoute {
   constructor({name}) {

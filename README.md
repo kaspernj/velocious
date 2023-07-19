@@ -11,6 +11,12 @@ This is still work in progress.
 
 ## Migrations
 
-```js
+```bash
 npm veloucious db:migrate
+```
+
+## Testing
+
+```bash
+npm test
 ```

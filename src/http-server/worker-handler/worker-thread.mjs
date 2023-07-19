@@ -9,6 +9,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const {debug, directory, workerCount} = digs(workerData, "debug", "directory", "workerCount")
 
     this.application = new Application({debug, directory})
+    this.application.initialize()
     this.clients = {}
     this.configuration = this.application.configuration
     this.parentPort = parentPort
