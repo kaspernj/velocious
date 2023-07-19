@@ -12,8 +12,14 @@ export default class VelociousDatabaseRecord {
     return connection
   }
 
-  static find(recordId) {
-    throw new Error("stub")
+  static async find(recordId) {
+    const conditions = {}
+
+    conditions[this.primaryKey()] = recordId
+
+    const record = await this.where(conditions).first()
+
+    return record
   }
 
   static primaryKey() {
