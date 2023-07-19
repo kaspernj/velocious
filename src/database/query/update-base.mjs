@@ -1,5 +1,6 @@
-export default class VelociousDatabaseQueryInsertBase {
-  constructor({driver, tableName, data}) {
+export default class VelociousDatabaseQueryUpdateBase {
+  constructor({conditions, data, driver, tableName}) {
+    this.conditions = conditions
     this.data = data
     this.driver = driver
     this.tableName = tableName

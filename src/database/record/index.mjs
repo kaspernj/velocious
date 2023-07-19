@@ -60,6 +60,12 @@ export default class VelociousDatabaseRecord {
     this._changes = {}
   }
 
+  assign(attributesToAssign) {
+    for (const attributeToAssign in attributesToAssign) {
+      this._changes[attributeToAssign] = attributesToAssign[attributeToAssign]
+    }
+  }
+
   attributes() {
     return Object.assign({}, this._attributes, this._changes)
   }
@@ -91,7 +97,6 @@ export default class VelociousDatabaseRecord {
       tableName: this._tableName(),
       data: this.attributes()
     })
-
     const result = await this._connection().query(sql)
     const id = result.insertId
 
@@ -99,7 +104,17 @@ export default class VelociousDatabaseRecord {
   }
 
   async _updateRecordWithChanges() {
-    throw new Error("Update record not implemented")
+    const conditions = {}
+
+    conditions[this.constructor.primaryKey()] = this.id()
+
+    const sql = this._connection().updateSql({
+      tableName: this._tableName(),
+      data: this._changes,
+      conditions
+    })
+    await this._connection().query(sql)
+    await this._reloadWithId(this.id())
   }
 
   id() {
@@ -131,5 +146,11 @@ export default class VelociousDatabaseRecord {
 
   async reload() {
     this._reloadWithId(this.readAttribute("id"))
+  }
+
+  async update(attributesToAssign) {
+    if (attributesToAssign) this.assign(attributesToAssign)
+
+    await this.save()
   }
 }
