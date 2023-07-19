@@ -1,16 +1,27 @@
-import logger from "../../logger.mjs"
+import EventEmitter from "events"
+import logger from "../logger.mjs"
 
-export default class VelociousHttpServerWorkerHandlerSocketHandler {
-  constructor({configuration, socket, clientCount, worker}) {
+export default class ServerClient {
+  events = new EventEmitter()
+
+  constructor({configuration, socket, clientCount}) {
     if (!configuration) throw new Error("No configuration given")
 
     this.configuration = configuration
     this.socket = socket
     this.clientCount = clientCount
-    this.worker = worker
 
-    socket.on("data", this.onSocketData)
     socket.on("end", this.onSocketEnd)
+  }
+
+  listen = () => this.socket.on("data", this.onSocketData)
+
+  close() {
+    return new Promise((resolve, reject) => {
+      this.socket.destroy()
+      this.events.emit("close", this)
+      resolve()
+    })
   }
 
   onSocketData = (chunk) => {
@@ -25,6 +36,7 @@ export default class VelociousHttpServerWorkerHandlerSocketHandler {
 
   onSocketEnd = () => {
     logger(this, `Socket ${this.clientCount} end`)
+    this.events.emit("close", this)
   }
 
   send(data) {

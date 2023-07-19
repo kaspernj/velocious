@@ -1,4 +1,3 @@
-import Configuration from "../../configuration.mjs"
 import {digg} from "diggerize"
 import {EventEmitter} from "events"
 import logger from "../../logger.mjs"

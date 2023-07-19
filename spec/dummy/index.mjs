@@ -62,7 +62,8 @@ export default class Dummy {
   }
 
   async stop() {
-    if (this.application.isActive())
+    if (this.application.isActive()) {
       await this.application.stop()
+    }
   }
 }
