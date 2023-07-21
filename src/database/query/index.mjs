@@ -55,6 +55,10 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  async last() {
+    return await this.clone().reverseOrder().first()
+  }
+
   limit(value) {
     this._limits.push(value)
     return this
@@ -81,6 +85,14 @@ export default class VelociousDatabaseQuery {
   reorder(order) {
     this._orders = []
     this.order(order)
+    return this
+  }
+
+  reverseOrder() {
+    for (const order of this._orders) {
+      order.setReverseOrder(true)
+    }
+
     return this
   }
 

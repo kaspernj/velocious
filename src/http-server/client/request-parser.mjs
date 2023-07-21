@@ -72,6 +72,9 @@ export default class VelociousHttpServerClientRequestParser {
       if (this.httpMethod.toUpperCase() == "GET") {
         this.state = "done"
         this.events.emit("done")
+      } else if (this.httpMethod.toUpperCase() == "POST") {
+        this.state = "done"
+        this.events.emit("done")
       } else {
         throw new Error(`Unknown HTTP method: ${this.httpMethod}`)
       }

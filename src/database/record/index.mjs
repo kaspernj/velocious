@@ -27,6 +27,13 @@ export default class VelociousDatabaseRecord {
     return record
   }
 
+  static async last() {
+    const query = this._newQuery().order(this.primaryKey()).limit(1)
+    const record = await query.last()
+
+    return record
+  }
+
   static primaryKey() {
     return "id"
   }
