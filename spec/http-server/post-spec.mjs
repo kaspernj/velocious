@@ -1,12 +1,12 @@
 import fetch from "node-fetch"
 import Dummy from "../dummy/index.mjs"
-import qs from "qs"
+import querystring from "querystring"
 import Task from "../dummy/src/models/task.mjs"
 
 describe("HttpServer", () => {
   fit("handles post requests", async () => {
     await Dummy.run(async () => {
-      const postData = qs.stringify({
+      const postData = querystring.stringify({
         name: "Test create task"
       })
       const response = await fetch(
