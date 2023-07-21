@@ -87,6 +87,19 @@ export default class VelociousDatabaseRecord {
     return this.constructor.connection()
   }
 
+  async destroy() {
+    const conditions = {}
+
+    conditions[this.constructor.primaryKey()] = this.id()
+
+    const sql = this._connection().deleteSql({
+      conditions,
+      tableName: this._tableName()
+    })
+
+    await this._connection().query(sql)
+  }
+
   _tableName() {
     if (this.__tableName) return this.__tableName
 

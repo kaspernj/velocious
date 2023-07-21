@@ -1,5 +1,6 @@
 import Base from "../base.mjs"
 import connectConnection from "./connect-connection.mjs"
+import Delete from "./sql/delete.mjs"
 import {digg} from "diggerize"
 import Insert from "./sql/insert.mjs"
 import Options from "./options.mjs"
@@ -46,6 +47,12 @@ export default class VelociousDatabaseDriversMysql extends Base{
     if (!this.connection) throw new Error("Can't escape before connected")
 
     return this.connection.escape(string)
+  }
+
+  deleteSql({tableName, conditions}) {
+    const deleteInstruction = new Delete({conditions, driver: this, tableName})
+
+    return deleteInstruction.toSql()
   }
 
   insertSql({tableName, data}) {
