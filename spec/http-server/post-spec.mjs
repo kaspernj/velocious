@@ -7,7 +7,9 @@ describe("HttpServer", () => {
   fit("handles post requests", async () => {
     await Dummy.run(async () => {
       const postData = querystring.stringify({
-        name: "Test create task"
+        task: {
+          name: "Test create task"
+        }
       })
       const response = await fetch(
         "http://localhost:3006/tasks",

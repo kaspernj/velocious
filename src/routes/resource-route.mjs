@@ -10,7 +10,7 @@ export default class VelociousRouteResourceRoute extends BaseRoute {
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
   }
 
-  matchWithPath({params, path}) {
+  matchWithPath({params, path, request}) {
     const match = path.match(this.regExp)
 
     if (match) {
@@ -26,7 +26,9 @@ export default class VelociousRouteResourceRoute extends BaseRoute {
       }
 
       if (!subRoutesMatchesRestPath) {
-        if (restPath.match(/\/(.+)/)) {
+        if (request.httpMethod() == "POST") {
+          action = "create"
+        } else if (restPath.match(/\/(.+)/)) {
           // TODO: This should change the action to "show" and set the "resource_name_id" in params.
           action = "show"
         }

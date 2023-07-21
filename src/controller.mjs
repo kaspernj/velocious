@@ -15,7 +15,24 @@ export default class VelociousController {
     this.viewParams = {}
   }
 
-  render() {
+  params = () => this._params
+
+  render(args = {}) {
+    if (args.json) {
+      return this.renderJsonArg(args)
+    }
+
+    return this.renderView()
+  }
+
+  renderJsonArg(args) {
+    const body = JSON.stringify(args.json)
+
+    this._response.addHeader("Content-Type", "application/json")
+    this._response.setBody(body)
+  }
+
+  renderView() {
     return new Promise((resolve, reject) => {
       const actionName = digg(this, "_params", "action")
       const controllerName = digg(this, "_params", "controller")

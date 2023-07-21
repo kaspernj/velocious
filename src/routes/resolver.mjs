@@ -31,7 +31,11 @@ export default class VelociousRoutesResolver {
         response: this.response
       })
 
-      controllerInstance[this.params.action]()
+      if (!(this.params.action in controllerInstance)) {
+        throw new Error(`Missing action on controller: ${this.params.controller}#${this.params.action}`)
+      }
+
+      await controllerInstance[this.params.action]()
 
       return
     }
@@ -45,7 +49,8 @@ export default class VelociousRoutesResolver {
     for (const subRoute of route.routes) {
       const matchResult = subRoute.matchWithPath({
         params: this.params,
-        path: pathWithoutSlash
+        path: pathWithoutSlash,
+        request: this.request
       })
 
       if (!matchResult) continue
