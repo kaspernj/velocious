@@ -52,7 +52,7 @@ export default class Dummy {
     })
 
     await this.application.initialize()
-    await this.application.start()
+    await this.application.startHttpServer()
 
     const databasePool = DatabasePool.current()
 

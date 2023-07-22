@@ -1,9 +1,10 @@
-import {Database: {Migration}} from "../../../../index.mjs"
+import {Database} from "../../../../index.mjs"
 
-export default class CreateTasks extends Migration {
+export default class CreateTasks extends Database.Migration {
   change() {
     this.createTable("tasks", (table) => {
-      table.column("id", {autoIncrement: true, primaryKey: true})
+      table.bigint("id", {autoIncrement: true, primaryKey: true})
+      table.string("name")
       table.timestamps()
     })
   }

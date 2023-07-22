@@ -15,4 +15,12 @@ export default class TasksController extends Controller {
     this.viewParams.task = task
     this.render()
   }
+
+  async create() {
+    const task = new Task(this.params().task)
+
+    await task.save()
+
+    this.render({json: {status: "success"}})
+  }
 }

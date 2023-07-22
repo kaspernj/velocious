@@ -47,7 +47,7 @@ export default class VelociousHttpServerWorker {
   }
 
   onWorkerError = (error) => {
-    throw new Error(`Worker error: ${error}`)
+    throw error // Throws original error with backtrace and everything into the console
   }
 
   onWorkerExit = (code) => {
