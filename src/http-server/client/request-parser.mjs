@@ -1,5 +1,7 @@
 import {EventEmitter} from "events"
 import logger from "../../logger.mjs"
+import ParamsToObject from "./params-to-object.mjs"
+import querystring from "querystring"
 
 export default class VelociousHttpServerClientRequestParser {
   constructor({configuration}) {
@@ -10,6 +12,9 @@ export default class VelociousHttpServerClientRequestParser {
     this.events = new EventEmitter()
     this.headers = []
     this.headersByName = {}
+    this.params = {}
+    this.postBody = ""
+    this.postBodyChars = []
     this.state = "status"
   }
 
@@ -24,19 +29,29 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   feed(data) {
-    if (this.state == "status" || this.state == "headers") {
-      for (const char of data) {
-        this.data.push(char)
+    for (const char of data) {
+      this.data.push(char)
 
+      if (this.state == "status" || this.state == "headers") {
         if (char == 10) {
           const line = String.fromCharCode.apply(null, this.data)
 
           this.data = []
           this.parse(line)
         }
+      } else if (this.state == "post-body") {
+        this.postBodyChars.push(char)
       }
     }
+
+    this.postBody += String.fromCharCode.apply(null, this.postBodyChars)
+
+    if (this.contentLength && this.postBody.length >= this.contentLength) {
+      this.postRequestDone()
+    }
   }
+
+  getHeader = (name) => this.headersByName[name.toLowerCase().trim()]
 
   matchAndRemove(regex) {
     const match = this.data.match(regex)
@@ -70,11 +85,13 @@ export default class VelociousHttpServerClientRequestParser {
       this.addHeader(name, value)
     } else if (line == "\r\n") {
       if (this.httpMethod.toUpperCase() == "GET") {
-        this.state = "done"
-        this.events.emit("done")
+        this.requestDone()
       } else if (this.httpMethod.toUpperCase() == "POST") {
-        this.state = "done"
-        this.events.emit("done")
+        const contentLength = this.getHeader("Content-Length")
+
+        if (contentLength) this.contentLength = parseInt(contentLength)
+
+        this.state = "post-body"
       } else {
         throw new Error(`Unknown HTTP method: ${this.httpMethod}`)
       }
@@ -91,5 +108,20 @@ export default class VelociousHttpServerClientRequestParser {
     this.httpMethod = match[1]
     this.path = match[2]
     this.state = "headers"
+  }
+
+  postRequestDone() {
+    const unparsedParams = querystring.parse(this.postBody)
+    const paramsToObject = new ParamsToObject(unparsedParams)
+    const newParams = paramsToObject.toObject()
+
+    Object.assign(this.params, newParams)
+
+    this.requestDone()
+  }
+
+  requestDone() {
+    this.state = "done"
+    this.events.emit("done")
   }
 }

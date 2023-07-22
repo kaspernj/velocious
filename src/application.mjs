@@ -10,6 +10,12 @@ export default class VelociousApplication {
   }
 
   async initialize() {
+    if (global.velociousApplication) throw new Error("A Velocious application is already running")
+    if (global.velociousConfiguration) throw new Error("A Velocious configuration has already been set")
+
+    global.velociousApplication = this
+    global.velociousConfiguration = this.configuration
+
     await this.configuration.initialize()
   }
 
@@ -27,21 +33,16 @@ export default class VelociousApplication {
     }
   }
 
-  async start() {
+  async startHttpServer() {
     const {configuration, httpServerConfiguration} = digs(this, "configuration", "httpServerConfiguration")
+
     const port = httpServerConfiguration.port || 3006
 
     logger(this, `Starting server on port ${port}`)
 
-    if (global.velociousApplication) throw new Error("A Velocious application is already running")
-    if (global.velociousConfiguration) throw new Error("A Velocious configuration has already been set")
-
     this.httpServer = new HttpServer({configuration, port})
 
     await this.httpServer.start()
-
-    global.velociousApplication = this
-    global.velociousConfiguration = this.configuration
   }
 
   async stop() {

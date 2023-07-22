@@ -7,19 +7,9 @@ export default class VelociousHttpServerClientRequest {
     this.requestParser = new RequestParser({configuration})
   }
 
-  feed(data) {
-    this.requestParser.feed(data)
-  }
-
-  httpMethod() {
-    return digg(this, "requestParser", "httpMethod")
-  }
-
-  host() {
-    return digg(this, "requestParser", "headersByName", "host")
-  }
-
-  path() {
-    return digg(this, "requestParser", "path")
-  }
+  feed = (data) => this.requestParser.feed(data)
+  httpMethod = () => digg(this, "requestParser", "httpMethod")
+  host = () => digg(this, "requestParser", "headersByName", "host")
+  path = () => digg(this, "requestParser", "path")
+  params = () => digg(this, "requestParser", "params")
 }

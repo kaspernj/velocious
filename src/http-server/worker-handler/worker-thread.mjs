@@ -1,5 +1,6 @@
 import Application from "../../application.mjs"
 import Client from "../client/index.mjs"
+import DatabasePool from "../../database/pool/index.mjs"
 import {digg, digs} from "diggerize"
 import errorLogger from "../../error-logger.mjs"
 import logger from "../../logger.mjs"
@@ -9,7 +10,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const {debug, directory, workerCount} = digs(workerData, "debug", "directory", "workerCount")
 
     this.application = new Application({debug, directory})
-    this.application.initialize()
+    this.databasePool = DatabasePool.current()
     this.clients = {}
     this.configuration = this.application.configuration
     this.parentPort = parentPort
@@ -19,7 +20,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     logger(this, `Worker ${workerCount} started`)
 
-    parentPort.postMessage({command: "started"})
+    this.application.initialize().then(() => {
+      this.databasePool.connect().then(() => {
+        parentPort.postMessage({command: "started"})
+      })
+    })
   }
 
   onCommand = (data) => {

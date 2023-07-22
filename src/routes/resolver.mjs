@@ -1,13 +1,13 @@
 import {digg, digs} from "diggerize"
 
 export default class VelociousRoutesResolver {
-  constructor({configuration, request, response, routes}) {
+  constructor({configuration, request, response}) {
     if (!configuration) throw new Error("No configuration given")
     if (!request) throw new Error("No request given")
     if (!response) throw new Error("No response given")
 
     this.configuration = configuration
-    this.params = {}
+    this.params = request.params()
     this.request = request
     this.response = response
   }

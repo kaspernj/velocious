@@ -9,15 +9,18 @@ export default class VelociousDatabasePool {
   }
 
   async connect() {
-    if (this.connection) throw new Error("Already connected")
+    if (this.connection) {
+      console.warn("DatabasePoool#connect: Already connected")
+    } else {
+      this.connection = await this.spawnConnection()
 
-    this.connection = await this.spawnConnection()
-    await this.connection.connect()
+      if (!this.connection) throw new Error("spawnConnection didn't set a connection")
+
+      await this.connection.connect()
+    }
   }
 
-  isConnected() {
-    return Boolean(this.connection)
-  }
+  isConnected = () => Boolean(this.connection)
 
   singleConnection() {
     if (!this.connection) throw new Error("Not connected")
