@@ -1,4 +1,5 @@
 import {EventEmitter} from "events"
+import Incorporator from "incorporator"
 import logger from "../../logger.mjs"
 import ParamsToObject from "./params-to-object.mjs"
 import querystring from "querystring"
@@ -111,11 +112,19 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   postRequestDone() {
-    const unparsedParams = querystring.parse(this.postBody)
-    const paramsToObject = new ParamsToObject(unparsedParams)
-    const newParams = paramsToObject.toObject()
+    if (this.getHeader("content-type").startsWith("application/json")) {
+      const newParams = JSON.parse(this.postBody)
+      const incorporator = new Incorporator({objects: [this.params, newParams]})
 
-    Object.assign(this.params, newParams)
+      incorporator.merge()
+    } else {
+      const unparsedParams = querystring.parse(this.postBody)
+      const paramsToObject = new ParamsToObject(unparsedParams)
+      const newParams = paramsToObject.toObject()
+      const incorporator = new Incorporator({objects: [this.params, newParams]})
+
+      incorporator.merge()
+    }
 
     this.requestDone()
   }
