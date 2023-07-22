@@ -8,8 +8,8 @@ export default class VelociousHttpServerClientRequest {
   }
 
   feed = (data) => this.requestParser.feed(data)
-  httpMethod = () => digg(this, "requestParser", "httpMethod")
+  httpMethod = () => this.requestParser.getHttpMethod()
   host = () => digg(this, "requestParser", "headersByName", "host")
-  path = () => digg(this, "requestParser", "path")
+  path = () => this.requestParser.getPath()
   params = () => digg(this, "requestParser", "params")
 }

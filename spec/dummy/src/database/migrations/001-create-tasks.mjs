@@ -5,6 +5,7 @@ export default class CreateTasks extends Database.Migration {
     this.createTable("tasks", (table) => {
       table.bigint("id", {autoIncrement: true, primaryKey: true})
       table.string("name")
+      table.text("description")
       table.timestamps()
     })
   }

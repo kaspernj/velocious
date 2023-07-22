@@ -23,7 +23,7 @@
   "devDependencies": {
     "jasmine": "^5.0.2",
     "mysql": "^2.18.1",
-    "node-fetch": "^2.6.1"
+    "node-fetch": "^3.3.1"
   },
   "dependencies": {
     "diggerize": "^1.0.3",

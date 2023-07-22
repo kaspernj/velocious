@@ -47,4 +47,26 @@ describe("HttpServer", () => {
       expect(createdTask.readAttribute("name")).toEqual("Test create task")
     })
   })
+
+  it("handles post form-data requests", async () => {
+    await Dummy.run(async () => {
+      const body = new FormData()
+
+      body.append("task[name]", "Test create task")
+      body.append("task[description]", "This is a task")
+
+      const response = await fetch(
+        "http://localhost:3006/tasks",
+        {
+          body,
+          method: "POST"
+        }
+      )
+      const text = await response.text()
+      const createdTask = await Task.last()
+
+      expect(text).toEqual('{"status":"success"}')
+      expect(createdTask.readAttribute("name")).toEqual("Test create task")
+    })
+  })
 })
