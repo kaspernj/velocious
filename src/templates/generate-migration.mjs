@@ -1,3 +1,5 @@
+import {Database} from "velocious"
+
 export default class __MIGRATION_NAME__ extends Database.Migration {
   async up() {
     await this.connection().execute("...")
