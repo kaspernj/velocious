@@ -1,6 +1,6 @@
 {
   "bin": {
-    "velocious": "bin/velocious"
+    "velocious": "bin/velocious.mjs"
   },
   "name": "velocious",
   "version": "1.0.1",
