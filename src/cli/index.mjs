@@ -13,7 +13,7 @@ const fileExists = async (path) => {
 }
 
 export default class VelociousCli {
-  async execute(...args) {
+  async execute({args}) {
     const __filename = fileURLToPath(`${import.meta.url}/../..`)
     const __dirname = dirname(__filename)
     const commandParts = args[0].split(":")
