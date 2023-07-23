@@ -34,6 +34,10 @@ export default class VelociousCli {
     const CommandClass = commandClassImport.default
     const commandInstance = new CommandClass({args})
 
+    if (commandInstance.initialize) {
+      await commandInstance.initialize()
+    }
+
     await commandInstance.execute()
   }
 }

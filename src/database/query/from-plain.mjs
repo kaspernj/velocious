@@ -1,12 +1,10 @@
 import FromBase from "./from-base.mjs"
 
 export default class VelociousDatabaseQueryFromPlain extends FromBase {
-  constructor({plain}) {
-    super()
+  constructor({driver, plain}) {
+    super({driver})
     this.plain = plain
   }
 
-  toSql() {
-    return this.plain
-  }
+  toSql = () => this.plain
 }
