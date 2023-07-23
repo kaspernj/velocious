@@ -1,6 +1,9 @@
 import {EventEmitter} from "events"
 import FormDataPart from "./form-data-part.mjs"
 import Header from "./header.mjs"
+import Incorporator from "incorporator"
+import logger from "../../../logger.mjs"
+import ParamsToObject from "../params-to-object.mjs"
 import querystring from "querystring"
 
 export default class RequestBuffer {
@@ -15,9 +18,11 @@ export default class RequestBuffer {
   readingBody = false
   state = "status"
 
-  feed(data) {
-    console.log("feed", {state: this.state, data: String.fromCharCode.apply(null, data)})
+  constructor({configuration}) {
+    this.configuration = configuration
+  }
 
+  feed(data) {
     for (const char of data) {
       if (this.readingBody) this.bodyLength += 1
 
@@ -90,8 +95,6 @@ export default class RequestBuffer {
     this.formDataPart = undefined
     formDataPart.finish()
 
-    console.log(`New form data part: ${formDataPart.getName()}`)
-
     this.events.emit("form-data-part", formDataPart)
   }
 
@@ -150,7 +153,7 @@ export default class RequestBuffer {
       this.events.emit("header", header)
     } else if (line == "\r\n") {
       if (this.httpMethod.toUpperCase() == "GET") {
-        this.requestDone()
+        this.completeRequest()
       } else if (this.httpMethod.toUpperCase() == "POST") {
         this.readingBody = true
 
@@ -186,10 +189,12 @@ export default class RequestBuffer {
 
   postRequestDone() {
     this.postBody += String.fromCharCode.apply(null, this.postBodyChars)
+    this.parseQueryStringPostParams()
+    this.completeRequest()
   }
 
   setState(newState) {
-    console.log(`Changing state from ${this.state} to ${newState}`)
+    logger(this, `Changing state from ${this.state} to ${newState}`)
 
     this.state = newState
   }
@@ -197,12 +202,10 @@ export default class RequestBuffer {
   completeRequest = () => {
     this.state = "completed"
 
-    if (this.getHeader("content-type").value.startsWith("application/json")) {
+    if (this.getHeader("content-type")?.value?.startsWith("application/json")) {
       this.parseApplicationJsonParams()
     } else if (this.multiPartyFormData) {
       // Done after each new form data part
-    } else if (this.httpMethod == "POST") {
-      this.parseQueryStringPostParams()
     }
 
     this.events.emit("completed")

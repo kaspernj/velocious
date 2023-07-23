@@ -13,7 +13,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.events = new EventEmitter()
     this.params = {}
 
-    this.requestBuffer = new RequestBuffer()
+    this.requestBuffer = new RequestBuffer({configuration})
     this.requestBuffer.events.on("completed", this.requestDone)
     this.requestBuffer.events.on("form-data-part", this.onFormDataPart)
     this.requestBuffer.events.on("request-done", this.requestDone)
@@ -34,6 +34,7 @@ export default class VelociousHttpServerClientRequestParser {
   feed = (data) => this.requestBuffer.feed(data)
   getHeader = (name) => this.requestBuffer.getHeader(name)?.value
   getHttpMethod = () => digg(this, "requestBuffer", "httpMethod")
+  getHost = () => this.requestBuffer.getHeader("host")?.value
   getPath = () => digg(this, "requestBuffer", "path")
 
   requestDone = () => {
