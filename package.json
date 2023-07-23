@@ -6,7 +6,8 @@
   "version": "1.0.1",
   "main": "index.mjs",
   "scripts": {
-    "test": "jasmine"
+    "test": "jasmine",
+    "velocious": "asd"
   },
   "type": "module",
   "repository": {
