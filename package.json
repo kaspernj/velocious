@@ -3,7 +3,7 @@
     "velocious": "bin/velocious.mjs"
   },
   "name": "velocious",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "index.mjs",
   "scripts": {
     "test": "jasmine",
