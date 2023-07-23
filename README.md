@@ -12,7 +12,11 @@ This is still work in progress.
 ## Migrations
 
 ```bash
-npm veloucious db:migrate
+npx velocious db:g:migration create_tasks
+```
+
+```bash
+npx velocious db:migrate
 ```
 
 ## Testing
