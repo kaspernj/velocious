@@ -1,22 +1,13 @@
 import {dirname} from "path"
 import {fileURLToPath} from "url"
-import fs from "node:fs/promises"
-
-const fileExists = async (path) => {
-  try {
-    await fs.access(path)
-
-    return true
-  } catch (error) {
-    return false
-  }
-}
+import fileExists from "../utils/file-exists.mjs"
 
 export default class VelociousCli {
-  async execute({args}) {
+  async execute(args) {
+    const processArgs = args.processArgs
     const __filename = fileURLToPath(`${import.meta.url}/../..`)
     const __dirname = dirname(__filename)
-    const commandParts = args[0].split(":")
+    const commandParts = processArgs[0].split(":")
     let filePath = `${__dirname}/src/cli/commands`
 
     for (let commandPart of commandParts) {
@@ -28,12 +19,16 @@ export default class VelociousCli {
 
     filePath += ".mjs"
 
-    if (!fileExists(filePath)) throw new Error(`Unknown command: ${args[0]} which should have been in ${filePath}`)
+    if (!fileExists(filePath)) throw new Error(`Unknown command: ${processArgs[0]} which should have been in ${filePath}`)
 
     const commandClassImport = await import(filePath)
     const CommandClass = commandClassImport.default
-    const commandInstance = new CommandClass({args})
+    const commandInstance = new CommandClass(args)
 
-    await commandInstance.execute()
+    if (commandInstance.initialize) {
+      await commandInstance.initialize()
+    }
+
+    return await commandInstance.execute()
   }
 }

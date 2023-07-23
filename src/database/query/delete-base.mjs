@@ -1,15 +1,9 @@
-export default class VelociousDatabaseQueryDeleteBase {
+import QueryBase from "./base.mjs"
+
+export default class VelociousDatabaseQueryDeleteBase extends QueryBase {
   constructor({conditions, driver, tableName}) {
+    super({driver})
     this.conditions = conditions
-    this.driver = driver
     this.tableName = tableName
-  }
-
-  getOptions() {
-    return this.driver.options()
-  }
-
-  toSql() {
-    throw new Error("'toSql' wasn't implemented")
   }
 }

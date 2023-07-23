@@ -1,8 +1,8 @@
 import FromBase from "./from-base.mjs"
 
 export default class VelociousDatabaseQueryFromTable extends FromBase {
-  constructor({tableName}) {
-    super()
+  constructor({driver, tableName}) {
+    super({driver})
     this.tableName = tableName
   }
 

@@ -31,6 +31,7 @@
     "ejs": "^3.1.6",
     "escape-string-regexp": "^1.0.5",
     "incorporator": "^1.0.2",
-    "inflection": "^2.0.0"
+    "inflection": "^2.0.0",
+    "strftime": "^0.10.2"
   }
 }
