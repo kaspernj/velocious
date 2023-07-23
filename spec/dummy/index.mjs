@@ -16,7 +16,7 @@ export default class Dummy {
     const connection = DatabasePool.current().singleConnection()
 
     await connection.query("DROP TABLE IF EXISTS tasks")
-    await connection.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, name VARCHAR(255), PRIMARY KEY (id))")
+    await connection.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, name VARCHAR(255), description TEXT, PRIMARY KEY (id))")
   }
 
   static async run(callback) {
