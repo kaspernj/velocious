@@ -1,9 +1,9 @@
-import Cli from "../../../src/cli/index.mjs"
+import Cli from "../../../../src/cli/index.mjs"
 
-describe("Cli - generate - migration", () => {
-  it("generates a new migration", async () => {
+describe("Cli - Commands - db:create", () => {
+  fit("generates a new migration", async () => {
     const cli = new Cli()
-    const result = await cli.execute({processArgs: ["g:migration", "create-tasks"], testing: true})
+    const result = await cli.execute({processArgs: ["db:create"], testing: true})
 
     expect(result.migrationName).toEqual("create-tasks")
     expect(result.migrationNameCamelized).toEqual("CreateTasks")
