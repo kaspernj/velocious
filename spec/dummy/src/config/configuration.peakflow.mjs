@@ -1,4 +1,4 @@
-import Configuration from "../../../src/configuration.mjs"
+import Configuration from "../../../../src/configuration.mjs"
 
 const directory = `${process.cwd()}/spec/dummy`
 
