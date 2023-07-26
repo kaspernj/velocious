@@ -4,6 +4,8 @@ import fileExists from "../utils/file-exists.mjs"
 
 export default class VelociousCli {
   async execute(args) {
+    await this.loadConfiguration()
+
     const processArgs = args.processArgs
     const __filename = fileURLToPath(`${import.meta.url}/../..`)
     const __dirname = dirname(__filename)
@@ -30,5 +32,14 @@ export default class VelociousCli {
     }
 
     return await commandInstance.execute()
+  }
+
+  async loadConfiguration() {
+    const directory = process.cwd()
+    const configurationPath = `${directory}/src/config/configuration.mjs`
+    const configurationImport = await import(configurationPath)
+    const configuration = configurationImport.default
+
+    configuration.setCurrent()
   }
 }
