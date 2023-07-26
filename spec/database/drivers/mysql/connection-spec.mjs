@@ -1,5 +1,5 @@
 import Database from "../../../../src/database/index.mjs"
-import configuration from "../../../dummy/src/configuration.mjs"
+import configuration from "../../../dummy/src/config/configuration.mjs"
 import {digg} from "diggerize"
 
 const mysqlConfig = digg(configuration, "database", "default", "master")

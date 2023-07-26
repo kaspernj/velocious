@@ -1,5 +1,5 @@
 import Cli from "../../../../src/cli/index.mjs"
-import configuration from "../../../dummy/src/configuration.mjs"
+import configuration from "../../../dummy/src/config/configuration.mjs"
 
 configuration.setCurrent()
 

@@ -30,7 +30,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
   async initialize() {
     const {debug, directory} = digs(this.workerData, "debug", "directory")
-    const configurationPath = `${this.workerData.directory}/src/configuration.mjs`
+    const configurationPath = `${this.workerData.directory}/src/config/configuration.mjs`
     const configurationImport = await import(configurationPath)
     const configuration = configurationImport.default
 
