@@ -9,10 +9,6 @@ export default class VelociousApplication {
   }
 
   async initialize() {
-    if (global.velociousApplication) throw new Error("A Velocious application is already running")
-
-    global.velociousApplication = this
-
     await this.configuration.initialize()
   }
 
@@ -46,8 +42,5 @@ export default class VelociousApplication {
     logger(this, "Stopping server")
 
     await this.httpServer.stop()
-
-    global.velociousApplication = undefined
-    global.velociousConfiguration = undefined
   }
 }
