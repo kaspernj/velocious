@@ -7,9 +7,10 @@ export default class VelociousConfiguration {
     return global.velociousConfiguration
   }
 
-  constructor({debug, directory}) {
+  constructor({database, debug, directory}) {
     if (!directory) throw new Error("No directory given")
 
+    this.database = database
     this.debug = debug
     this.directory = directory
   }
@@ -23,5 +24,9 @@ export default class VelociousConfiguration {
     const routesImport = await import(`${this.directory}/src/config/routes.mjs`)
 
     this.routes = digg(routesImport, "default", "routes")
+  }
+
+  setCurrent() {
+    global.velociousConfiguration = this
   }
 }

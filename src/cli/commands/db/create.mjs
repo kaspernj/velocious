@@ -1,7 +1,10 @@
 import DatabasePool from "../../../database/pool/index.mjs"
+import {digg} from "diggerize"
 
 export default class DbCreate {
-  constructor({args}) {
+  constructor(args) {
+    if (!args) throw new Error("No 'args' given")
+
     this.args = args
   }
 
@@ -13,11 +16,13 @@ export default class DbCreate {
   }
 
   async execute() {
-    const migrationName = this.args[2]
-    const date = new Date()
+    const databaseName = digg(this.databaseConnection.getArgs(), "database")
+    const sql = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
-    console.log({ migrationName, date })
+    if (this.args.testing) {
+      return {databaseName, sql}
+    }
 
-    throw new Error("stub")
+    await this.databaseConnection.query(sql)
   }
 }

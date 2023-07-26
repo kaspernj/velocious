@@ -19,7 +19,7 @@ export default class VelociousCli {
 
     filePath += ".mjs"
 
-    if (!fileExists(filePath)) throw new Error(`Unknown command: ${processArgs[0]} which should have been in ${filePath}`)
+    if (!await fileExists(filePath)) throw new Error(`Unknown command: ${processArgs[0]} which should have been in ${filePath}`)
 
     const commandClassImport = await import(filePath)
     const CommandClass = commandClassImport.default

@@ -29,10 +29,7 @@ export default class VelociousDatabasePool {
   }
 
   async spawnConnection() {
-    const databaseConfigPath = `${Configuration.current().directory}/src/config/database.mjs`
-    const {databaseConfiguration} = await import(databaseConfigPath)
-    const config = databaseConfiguration()
-    const defaultConfig = digg(config, "default", "master")
+    const defaultConfig = digg(Configuration.current(), "database", "default", "master")
     const driverPath = `../drivers/${digg(defaultConfig, "type")}/index.mjs`
     const DriverClassImport = await import(driverPath)
     const DriverClass = DriverClassImport.default

@@ -1,13 +1,15 @@
 import Cli from "../../../../src/cli/index.mjs"
+import configuration from "../../../dummy/src/configuration.mjs"
+
+configuration.setCurrent()
 
 describe("Cli - Commands - db:create", () => {
-  fit("generates a new migration", async () => {
+  it("generates a new migration", async () => {
+
     const cli = new Cli()
     const result = await cli.execute({processArgs: ["db:create"], testing: true})
 
-    expect(result.migrationName).toEqual("create-tasks")
-    expect(result.migrationNameCamelized).toEqual("CreateTasks")
-    expect(result.migrationNumber).toMatch(/^\d+$/)
-    expect(result.migrationPath).toMatch(/-create-tasks\.mjs$/)
+    expect(result.databaseName).toEqual("development")
+    expect(result.sql).toEqual("CREATE DATABASE IF NOT EXISTS development")
   })
 })
