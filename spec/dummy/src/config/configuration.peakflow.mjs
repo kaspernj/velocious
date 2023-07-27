@@ -10,7 +10,8 @@ const configuration = new Configuration({
         host: "mariadb",
         username: "peakflow",
         password: "password",
-        database: "velocious_test"
+        database: "velocious_test",
+        useDatabase: "velocious_test"
       }
     }
   },
