@@ -14,12 +14,16 @@ export default class VelociousCliCommandsInit extends BaseCommand {
     const fileMappings = [
       {
         source: `${velocipusPath}/src/templates/configuration.mjs`,
-        target: `${projectPath}/src/config/configuration.mjs`
+        target: `${configPath}/configuration.mjs`
       },
       {
         source: `${velocipusPath}/src/templates/routes.mjs`,
-        target: `${projectPath}/src/config/routes.mjs`
+        target: `${configPath}/routes.mjs`
       }
+    ]
+    const paths = [
+      configPath,
+      `${projectPath}/database/migrations`
     ]
 
     if (this.args.testing) {
@@ -28,11 +32,13 @@ export default class VelociousCliCommandsInit extends BaseCommand {
       }
     }
 
-    if (await fileExists(configPath)) {
-      console.log(`Config dir already exists: ${configPath}`)
-    } else {
-      console.log(`Config dir doesn't exists: ${configPath}`)
-      await fs.mkdir(configPath, {recursive: true})
+    for (const path of paths) {
+      if (await fileExists(path)) {
+        console.log(`Config dir already exists: ${path}`)
+      } else {
+        console.log(`Config dir doesn't exists: ${path}`)
+        await fs.mkdir(path, {recursive: true})
+      }
     }
 
     for (const fileMapping of fileMappings) {
