@@ -20,6 +20,10 @@ export default class VelociousDatabasePool {
     }
   }
 
+  constructor(args = {}) {
+    this.configuration = args.configuration || Configuration.current()
+  }
+
   isConnected = () => Boolean(this.connection)
 
   singleConnection() {
@@ -28,15 +32,23 @@ export default class VelociousDatabasePool {
     return this.connection
   }
 
+  getConfiguration = () => digg(this, "configuration", "database", "default", "master")
+
+  setCurrent() {
+    global.velociousDatabasePool = this
+  }
+
   async spawnConnection() {
-    const databaseConfigPath = `${Configuration.current().directory}/src/config/database.mjs`
-    const {databaseConfiguration} = await import(databaseConfigPath)
-    const config = databaseConfiguration()
-    const defaultConfig = digg(config, "default", "master")
-    const driverPath = `../drivers/${digg(defaultConfig, "type")}/index.mjs`
+    const defaultConfig = this.getConfiguration()
+
+    return await this.spawnConnectionWithConfiguration(defaultConfig)
+  }
+
+  async spawnConnectionWithConfiguration(config) {
+    const driverPath = `../drivers/${digg(config, "type")}/index.mjs`
     const DriverClassImport = await import(driverPath)
     const DriverClass = DriverClassImport.default
-    const connection = new DriverClass(defaultConfig)
+    const connection = new DriverClass(config)
 
     return connection
   }

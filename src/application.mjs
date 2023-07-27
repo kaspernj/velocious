@@ -1,22 +1,26 @@
+import DatabasePool from "./database/pool/index.mjs"
 import {digs} from "diggerize"
-import Configuration from "./configuration.mjs"
 import logger from "./logger.mjs"
 import HttpServer from "./http-server/index.mjs"
 
 export default class VelociousApplication {
-  constructor({debug, directory, httpServer}) {
-    this.configuration = new Configuration({debug, directory})
+  constructor({configuration, httpServer}) {
+    this.configuration = configuration
     this.httpServerConfiguration = httpServer ?? {}
   }
 
   async initialize() {
-    if (global.velociousApplication) throw new Error("A Velocious application is already running")
-    if (global.velociousConfiguration) throw new Error("A Velocious configuration has already been set")
-
-    global.velociousApplication = this
-    global.velociousConfiguration = this.configuration
-
     await this.configuration.initialize()
+    await this.initializeDatabasePool()
+  }
+
+  async initializeDatabasePool() {
+    this.databasePool = new DatabasePool({configuration: this.configuration})
+    this.databasePool.setCurrent()
+
+    if (!this.databasePool.isConnected()) {
+      await this.databasePool.connect()
+    }
   }
 
   isActive() {
@@ -49,8 +53,5 @@ export default class VelociousApplication {
     logger(this, "Stopping server")
 
     await this.httpServer.stop()
-
-    global.velociousApplication = undefined
-    global.velociousConfiguration = undefined
   }
 }

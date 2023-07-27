@@ -7,24 +7,33 @@ import logger from "../../logger.mjs"
 
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
   constructor({parentPort, workerData}) {
-    const {debug, directory, workerCount} = digs(workerData, "debug", "directory", "workerCount")
+    const {workerCount} = digs(workerData, "workerCount")
 
-    this.application = new Application({debug, directory})
-    this.databasePool = DatabasePool.current()
     this.clients = {}
-    this.configuration = this.application.configuration
     this.parentPort = parentPort
+    this.workerData = workerData
     this.workerCount = workerCount
 
     parentPort.on("message", errorLogger(this.onCommand))
 
-    logger(this, `Worker ${workerCount} started`)
-
-    this.application.initialize().then(() => {
-      this.databasePool.connect().then(() => {
+    this.initialize().then(() => {
+      this.application.initialize().then(() => {
+        logger(this, `Worker ${workerCount} started`)
         parentPort.postMessage({command: "started"})
       })
     })
+  }
+
+  async initialize() {
+    const {debug, directory} = digs(this.workerData, "debug", "directory")
+    const configurationPath = `${this.workerData.directory}/src/config/configuration.mjs`
+    const configurationImport = await import(configurationPath)
+    const configuration = configurationImport.default
+
+    this.application = new Application({configuration, debug, directory})
+
+    this.configuration = configuration
+    this.configuration.setCurrent()
   }
 
   onCommand = (data) => {

@@ -1,5 +1,6 @@
 import Base from "../base.mjs"
 import connectConnection from "./connect-connection.mjs"
+import CreateDatabase from "./sql/create-database.mjs"
 import Delete from "./sql/delete.mjs"
 import {digg} from "diggerize"
 import Insert from "./sql/insert.mjs"
@@ -33,6 +34,18 @@ export default class VelociousDatabaseDriversMysql extends Base{
     if ("username" in args) connectArgs["user"] = args["username"]
 
     return connectArgs
+  }
+
+  async close() {
+    await this.connection.end()
+    this.connection = undefined
+  }
+
+  createDatabaseSql(databaseName, args) {
+    const createArgs = Object.assign({databaseName, driver: this}, args)
+    const createDatabase = new CreateDatabase(createArgs)
+
+    return createDatabase.toSql()
   }
 
   async query(sql) {

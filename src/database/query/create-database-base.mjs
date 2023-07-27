@@ -1,14 +1,19 @@
 import QueryBase from "./base.mjs"
 
 export default class VelociousDatabaseQueryDeleteBase extends QueryBase {
-  constructor({driver, databaseName}) {
+  constructor({driver, databaseName, ifNotExists}) {
     super({driver})
     this.databaseName = databaseName
+    this.ifNotExists = ifNotExists
   }
 
   toSql() {
     const {databaseName} = this
-    const sql = `CREATE DATABASE ${databaseName}`
+    let sql = "CREATE DATABASE"
+
+    if (this.ifNotExists) sql += " IF NOT EXISTS"
+
+    sql += ` ${databaseName}`
 
     return sql
   }
