@@ -1,13 +1,8 @@
+import BaseCommand from "../../base-command.mjs"
 import DatabasePool from "../../../database/pool/index.mjs"
 import {digg} from "diggerize"
 
-export default class DbCreate {
-  constructor(args) {
-    if (!args) throw new Error("No 'args' given")
-
-    this.args = args
-  }
-
+export default class DbCreate extends BaseCommand{
   async execute() {
     const databasePool = DatabasePool.current()
     const newConfiguration = Object.assign({}, databasePool.getConfiguration())

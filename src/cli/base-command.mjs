@@ -1,8 +1,9 @@
-export default class CliBaseCommand {
-  constructor(givenArgs) {
-    const {processArgs, ...args} = givenArgs
+import {digg} from "diggerize"
 
+export default class VelociousCliBaseCommand {
+  constructor(args) {
     this.args = args
-    this.processArgs = processArgs
+    this.configuration = digg(this.args, "configuration")
+    this.processArgs = args.processArgs
   }
 }

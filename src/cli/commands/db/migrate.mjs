@@ -1,8 +1,6 @@
-export default class DbMigrate {
-  constructor({args}) {
-    this.args = args
-  }
+import BaseCommand from "../../base-command.mjs"
 
+export default class DbMigrate extends BaseCommand {
   execute() {
     throw new Error("stub")
   }

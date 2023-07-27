@@ -16,6 +16,7 @@ Make a new NPM project.
 mkdir project
 cd project
 npm install velocious
+npx velocious init
 ```
 
 # Migrations

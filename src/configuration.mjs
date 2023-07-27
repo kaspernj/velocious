@@ -8,7 +8,7 @@ export default class VelociousConfiguration {
   }
 
   constructor({database, debug, directory}) {
-    if (!directory) throw new Error("No directory given")
+    if (!directory) directory = process.cwd()
 
     this.database = database
     this.debug = debug

@@ -1,19 +1,19 @@
+import configurationResolver from "../configuration-resolver.mjs"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fileExists from "../utils/file-exists.mjs"
 
 export default class VelociousCli {
   constructor(args = {}) {
-    this.directory = args.directory || process.cwd()
+    this.args = args
   }
 
-  async execute(args) {
+  async execute() {
     await this.loadConfiguration()
 
-    const processArgs = args.processArgs
     const __filename = fileURLToPath(`${import.meta.url}/../..`)
     const __dirname = dirname(__filename)
-    const commandParts = processArgs[0].split(":")
+    const commandParts = this.args.processArgs[0].split(":")
     let filePath = `${__dirname}/src/cli/commands`
 
     for (let commandPart of commandParts) {
@@ -25,11 +25,11 @@ export default class VelociousCli {
 
     filePath += ".mjs"
 
-    if (!await fileExists(filePath)) throw new Error(`Unknown command: ${processArgs[0]} which should have been in ${filePath}`)
+    if (!await fileExists(filePath)) throw new Error(`Unknown command: ${this.args.processArgs[0]} which should have been in ${filePath}`)
 
     const commandClassImport = await import(filePath)
     const CommandClass = commandClassImport.default
-    const commandInstance = new CommandClass(args)
+    const commandInstance = new CommandClass(this.args)
 
     if (commandInstance.initialize) {
       await commandInstance.initialize()
@@ -39,10 +39,8 @@ export default class VelociousCli {
   }
 
   async loadConfiguration() {
-    const configurationPath = `${this.directory}/src/config/configuration.mjs`
-    const configurationImport = await import(configurationPath)
-    const configuration = configurationImport.default
-
-    configuration.setCurrent()
+    this.configuration = await configurationResolver({directory: this.args.directory})
+    this.configuration.setCurrent()
+    this.args.configuration = this.configuration
   }
 }
