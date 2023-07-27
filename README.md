@@ -9,7 +9,16 @@ This is still work in progress.
 * Migrations ala Rails
 * Controllers and views ala Rails
 
-## Migrations
+# Setup
+
+Make a new NPM project.
+```bash
+mkdir project
+cd project
+npm install velocious
+```
+
+# Migrations
 
 ```bash
 npx velocious db:g:migration create_tasks
@@ -19,7 +28,7 @@ npx velocious db:g:migration create_tasks
 npx velocious db:migrate
 ```
 
-## Testing
+# Testing
 
 ```bash
 npm test
