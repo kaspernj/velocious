@@ -11,9 +11,9 @@ describe("Cli - Commands - init", () => {
     const result = await cli.execute()
 
     expect(result.fileMappings.length).toEqual(2)
-    expect(result.fileMappings[0].source).toContain("/velocious/src/templates/configuration.mjs")
-    expect(result.fileMappings[0].target).toContain("/velocious/spec/dummy/src/config/configuration.mjs")
-    expect(result.fileMappings[1].source).toContain("/velocious/src/templates/routes.mjs")
-    expect(result.fileMappings[1].target).toContain("/velocious/spec/dummy/src/config/routes.mjs")
+    expect(result.fileMappings[0].source).toContain("/src/templates/configuration.mjs")
+    expect(result.fileMappings[0].target).toContain("/spec/dummy/src/config/configuration.mjs")
+    expect(result.fileMappings[1].source).toContain("/src/templates/routes.mjs")
+    expect(result.fileMappings[1].target).toContain("/spec/dummy/src/config/routes.mjs")
   })
 })
