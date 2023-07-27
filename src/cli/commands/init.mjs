@@ -22,6 +22,12 @@ export default class VelociousCliCommandsInit extends BaseCommand {
       }
     ]
 
+    if (this.args.testing) {
+      return {
+        fileMappings
+      }
+    }
+
     if (await fileExists(configPath)) {
       console.log(`Config dir already exists: ${configPath}`)
     } else {
