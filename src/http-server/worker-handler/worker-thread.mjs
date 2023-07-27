@@ -9,7 +9,6 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   constructor({parentPort, workerData}) {
     const {workerCount} = digs(workerData, "workerCount")
 
-    this.databasePool = DatabasePool.current()
     this.clients = {}
     this.parentPort = parentPort
     this.workerData = workerData
@@ -18,12 +17,9 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     parentPort.on("message", errorLogger(this.onCommand))
 
     this.initialize().then(() => {
-
       this.application.initialize().then(() => {
-        this.databasePool.connect().then(() => {
-          logger(this, `Worker ${workerCount} started`)
-          parentPort.postMessage({command: "started"})
-        })
+        logger(this, `Worker ${workerCount} started`)
+        parentPort.postMessage({command: "started"})
       })
     })
   }

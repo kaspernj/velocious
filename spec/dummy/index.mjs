@@ -1,8 +1,6 @@
 import Application from "../../src/application.mjs"
-import Configuration from "../../src/configuration.mjs"
 import DatabasePool from "../../src/database/pool/index.mjs"
-import {dirname} from "path"
-import {fileURLToPath} from "url"
+import dummyConfiguration from "./src/config/configuration.mjs"
 
 export default class Dummy {
   static current() {
@@ -36,15 +34,8 @@ export default class Dummy {
   }
 
   async start() {
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const configuration = new Configuration({
-      debug: false,
-      directory: __dirname
-    })
-
     this.application = new Application({
-      configuration,
+      configuration: dummyConfiguration,
       databases: {
         default: {
           host: "mysql",
@@ -57,12 +48,6 @@ export default class Dummy {
 
     await this.application.initialize()
     await this.application.startHttpServer()
-
-    const databasePool = DatabasePool.current()
-
-    if (!databasePool.isConnected()) {
-      await databasePool.connect()
-    }
   }
 
   async stop() {

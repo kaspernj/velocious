@@ -3,6 +3,10 @@ import {fileURLToPath} from "url"
 import fileExists from "../utils/file-exists.mjs"
 
 export default class VelociousCli {
+  constructor(args = {}) {
+    this.directory = args.directory || process.cwd()
+  }
+
   async execute(args) {
     await this.loadConfiguration()
 
@@ -35,8 +39,7 @@ export default class VelociousCli {
   }
 
   async loadConfiguration() {
-    const directory = process.cwd()
-    const configurationPath = `${directory}/src/config/configuration.mjs`
+    const configurationPath = `${this.directory}/src/config/configuration.mjs`
     const configurationImport = await import(configurationPath)
     const configuration = configurationImport.default
 

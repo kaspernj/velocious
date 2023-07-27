@@ -36,6 +36,11 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return connectArgs
   }
 
+  async close() {
+    await this.connection.end()
+    this.connection = undefined
+  }
+
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
     const createDatabase = new CreateDatabase(createArgs)

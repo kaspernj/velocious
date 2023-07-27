@@ -8,21 +8,25 @@ export default class DbCreate {
     this.args = args
   }
 
-  async initialize() {
-    const database = DatabasePool.current()
-
-    await database.connect()
-    this.databaseConnection = database.singleConnection()
-  }
-
   async execute() {
-    const databaseName = digg(this.databaseConnection.getArgs(), "database")
-    const sql = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
+    const databasePool = DatabasePool.current()
+    const newConfiguration = Object.assign({}, databasePool.getConfiguration())
+    const databaseName = digg(newConfiguration, "database")
+
+    // Use a database known to exist. Since we are creating the database, it shouldn't actually exist which would make connecting fail.
+    newConfiguration.database = newConfiguration.useDatabase || "mysql"
+
+    const databaseConnection = await databasePool.spawnConnectionWithConfiguration(newConfiguration)
+
+    await databaseConnection.connect()
+
+    const sql = databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
     if (this.args.testing) {
       return {databaseName, sql}
     }
 
-    await this.databaseConnection.query(sql)
+    await databaseConnection.query(sql)
+    await databaseConnection.close()
   }
 }
