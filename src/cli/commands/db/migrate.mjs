@@ -8,8 +8,7 @@ export default class DbMigrate extends BaseCommand {
     const migrationsPath = `${projectPath}/src/database/migrations`
     const files = await fs.readdir(migrationsPath)
 
-    console.log({files, migrationsPath})
-
-    throw new Error("stub")
+    console.debug({files, migrationsPath})
+    console.warn("stub")
   }
 }

@@ -10,19 +10,19 @@ export default class VelociousCliCommandsInit extends BaseCommand {
     const __filename = fileURLToPath(`${import.meta.url}/../../..`)
     const velocipusPath = dirname(__filename)
     const projectPath = digg(this.configuration, "directory")
-    const configPath = `${velocipusPath}/src/config`
+    const projectConfigPath = `${projectPath}/src/config`
     const fileMappings = [
       {
         source: `${velocipusPath}/src/templates/configuration.mjs`,
-        target: `${configPath}/configuration.mjs`
+        target: `${projectConfigPath}/configuration.mjs`
       },
       {
         source: `${velocipusPath}/src/templates/routes.mjs`,
-        target: `${configPath}/routes.mjs`
+        target: `${projectConfigPath}/routes.mjs`
       }
     ]
     const paths = [
-      configPath,
+      projectConfigPath,
       `${projectPath}/database/migrations`
     ]
 

@@ -29,6 +29,8 @@ export default class DbGenerateMigration extends BaseCommand {
       }
 
       await fs.writeFile(migrationPath, migrationContent)
+
+      console.log(`create src/database/migrations/${migrationFileName}`)
     }
   }
 }
