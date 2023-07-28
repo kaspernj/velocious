@@ -1,6 +1,7 @@
 import BaseCommand from "../../base-command.mjs"
 import {digg} from "diggerize"
 import fs from "node:fs/promises"
+import inflection from "inflection"
 
 export default class DbMigrate extends BaseCommand {
   async execute() {
@@ -10,18 +11,40 @@ export default class DbMigrate extends BaseCommand {
 
     files = files
       .map((file) => {
-        const match = file.match(/^(\d{14})-/)
+        const match = file.match(/^(\d{14})-(.+)\.mjs$/)
 
         if (!match) return null
 
         const date = parseInt(match[1])
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName)
 
-        return {file, date}
+        return {
+          file,
+          fullPath: `${migrationsPath}/${file}`,
+          date,
+          migrationClassName
+        }
       })
-      .filter((file) => Boolean(file))
-      .sort((file1, file2) => file1.date - file2.date)
+      .filter((migration) => Boolean(migration))
+      .sort((migration1, migration2) => migration1.date - migration2.date)
 
-    console.debug({files, migrationsPath})
-    console.warn("stub")
+    for (const migration of files) {
+       await this.runMigrationFile(migration)
+    }
+  }
+
+  async runMigrationFile(migration) {
+    const migrationImport = await import(migration.fullPath)
+    const MigrationClass = migrationImport.default
+    const migrationInstance = new MigrationClass()
+
+    if (migrationInstance.change) {
+      await migrationInstance.change()
+    } else if (migrationInstance.up) {
+      await migrationInstance.up()
+    } else {
+      throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
+    }
   }
 }

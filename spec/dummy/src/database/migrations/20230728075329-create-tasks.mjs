@@ -1,6 +1,6 @@
-import {Database} from "../../../../index.mjs"
+import Migration from "../../../../../src/database/migration/index.mjs"
 
-export default class CreateTasks extends Database.Migration {
+export default class CreateTasks extends Migration {
   async change() {
     await this.createTable("tasks", (table) => {
       table.bigint("id", {autoIncrement: true, primaryKey: true})
