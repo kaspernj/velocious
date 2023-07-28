@@ -1,6 +1,5 @@
 import Configuration from "../../../../src/configuration.mjs"
-
-const directory = `${process.cwd()}/spec/dummy`
+import dummyDirectory from "../../dummy-directory.mjs"
 
 const configuration = new Configuration({
   database: {
@@ -14,7 +13,7 @@ const configuration = new Configuration({
       }
     }
   },
-  directory
+  directory: dummyDirectory()
 })
 
 export default configuration
