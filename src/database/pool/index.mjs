@@ -56,8 +56,9 @@ class VelociousDatabasePool {
 
   async spawnConnection() {
     const defaultConfig = this.getConfiguration()
+    const connection = await this.spawnConnectionWithConfiguration(defaultConfig)
 
-    return await this.spawnConnectionWithConfiguration(defaultConfig)
+    return connection
   }
 
   async spawnConnectionWithConfiguration(config) {
@@ -65,6 +66,8 @@ class VelociousDatabasePool {
     const DriverClassImport = await import(driverPath)
     const DriverClass = DriverClassImport.default
     const connection = new DriverClass(config)
+
+    await connection.connect()
 
     return connection
   }
@@ -93,13 +96,13 @@ class VelociousDatabasePool {
   }
 }
 
-const forwardMethods = ["createTableSql"]
+const forwardMethods = ["createTableSql", "deleteSql", "insertSql", "query", "quote", "updateSql"]
 
 for (const forwardMethod of forwardMethods) {
-  VelociousDatabasePool.prototype[forwardMethod] = async function(...args) {
+  VelociousDatabasePool.prototype[forwardMethod] = function(...args) {
     const connection = this.getCurrentConnection()
 
-    return await connection[forwardMethod](...args)
+    return connection[forwardMethod](...args)
   }
 }
 

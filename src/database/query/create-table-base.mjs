@@ -1,9 +1,11 @@
 import QueryBase from "./base.mjs"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
-  constructor({driver, ifNotExists, tableName}) {
+  constructor({columns, driver, ifNotExists, indexes, tableName}) {
     super({driver})
+    this.columns = columns
     this.ifNotExists = ifNotExists
+    this.indexes = indexes
     this.tableName = tableName
   }
 
@@ -15,6 +17,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
     sql += ` ${tableName}`
 
-    throw new Error("stub")
+    this.columns.forEach((column) => {
+      sql += ` ${column.name}`
+    })
+
+    return sql
   }
 }

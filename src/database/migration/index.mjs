@@ -49,6 +49,8 @@ export default class VelociousDatabaseMigration {
       indexes: tableData.indexes
     })
 
-    await databasePool.execute(sql)
+    console.log({sql})
+
+    await databasePool.query(sql)
   }
 }
