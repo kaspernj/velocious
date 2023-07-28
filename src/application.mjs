@@ -1,4 +1,3 @@
-import DatabasePool from "./database/pool/index.mjs"
 import {digs} from "diggerize"
 import logger from "./logger.mjs"
 import HttpServer from "./http-server/index.mjs"
@@ -11,16 +10,7 @@ export default class VelociousApplication {
 
   async initialize() {
     await this.configuration.initialize()
-    await this.initializeDatabasePool()
-  }
-
-  async initializeDatabasePool() {
-    this.databasePool = new DatabasePool({configuration: this.configuration})
-    this.databasePool.setCurrent()
-
-    if (!this.databasePool.isConnected()) {
-      await this.databasePool.connect()
-    }
+    await this.configuration.initializeDatabasePool()
   }
 
   isActive() {

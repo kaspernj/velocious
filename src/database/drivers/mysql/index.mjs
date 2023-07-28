@@ -1,6 +1,7 @@
 import Base from "../base.mjs"
 import connectConnection from "./connect-connection.mjs"
 import CreateDatabase from "./sql/create-database.mjs"
+import CreateTable from "./sql/create-table.mjs"
 import Delete from "./sql/delete.mjs"
 import {digg} from "diggerize"
 import Insert from "./sql/insert.mjs"

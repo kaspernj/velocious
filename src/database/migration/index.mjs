@@ -33,11 +33,22 @@ class TableData {
 }
 
 export default class VelociousDatabaseMigration {
+  constructor({configuration}) {
+    this.configuration = configuration
+  }
+
   async createTable(tableName, callback) {
     const tableData = new TableData()
 
     callback(tableData)
 
-    throw new Error("stub")
+    const databasePool = this.configuration.databasePool
+
+    const sql = databasePool.createTableSql(tableName, {
+      columns: tableData.columns,
+      indexes: tableData.indexes
+    })
+
+    await databasePool.execute(sql)
   }
 }

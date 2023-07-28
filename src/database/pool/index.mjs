@@ -1,35 +1,51 @@
+import {AsyncLocalStorage} from "node:async_hooks"
 import Configuration from "../../configuration.mjs"
 import {digg} from "diggerize"
 
-export default class VelociousDatabasePool {
+const asyncLocalStorage = new AsyncLocalStorage()
+let idSeq = 0
+
+class VelociousDatabasePool {
   static current() {
     if (!global.velociousDatabasePool) global.velociousDatabasePool = new VelociousDatabasePool()
 
     return global.velociousDatabasePool
   }
 
-  async connect() {
-    if (this.connection) {
-      console.warn("DatabasePoool#connect: Already connected")
-    } else {
-      this.connection = await this.spawnConnection()
-
-      if (!this.connection) throw new Error("spawnConnection didn't set a connection")
-
-      await this.connection.connect()
-    }
-  }
-
   constructor(args = {}) {
     this.configuration = args.configuration || Configuration.current()
+    this.connections = []
+    this.connectionsInUse = {}
   }
 
-  isConnected = () => Boolean(this.connection)
+  checkin = (connection) => {
+    const id = connection.getIdSeq()
 
-  singleConnection() {
-    if (!this.connection) throw new Error("Not connected")
+    console.log(`Checking in ${id}`)
 
-    return this.connection
+    if (id in this.connectionsInUse) {
+      delete this.connectionsInUse[id]
+    }
+
+    this.connections.push(connection)
+  }
+
+  async checkout() {
+    let connection = this.connections.shift()
+
+    if (!connection) {
+      connection = await this.spawnConnection()
+    }
+
+    const id = idSeq++
+
+    connection.setIdSeq(id)
+
+    this.connectionsInUse[id] = connection
+
+    console.log(`Checking out ${id}`)
+
+    return connection
   }
 
   getConfiguration = () => digg(this, "configuration", "database", "default", "master")
@@ -52,4 +68,39 @@ export default class VelociousDatabasePool {
 
     return connection
   }
+
+  async withConnection(callback) {
+    const connection = await this.checkout()
+    const id = connection.getIdSeq()
+
+    await asyncLocalStorage.run(id, async () => {
+      try {
+        await callback()
+      } finally {
+        this.checkin(connection)
+      }
+    })
+  }
+
+  getCurrentConnection() {
+    const id = asyncLocalStorage.getStore()
+
+    if (id === undefined) {
+      throw new Error("ID hasn't been set for this async context")
+    }
+
+    return digg(this, "connectionsInUse", id)
+  }
 }
+
+const forwardMethods = ["createTableSql"]
+
+for (const forwardMethod of forwardMethods) {
+  VelociousDatabasePool.prototype[forwardMethod] = async function(...args) {
+    const connection = this.getCurrentConnection()
+
+    return await connection[forwardMethod](...args)
+  }
+}
+
+export default VelociousDatabasePool

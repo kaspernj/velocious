@@ -6,4 +6,12 @@ export default class VelociousDatabaseDriversBase {
   getArgs() {
     return this._args
   }
+
+  getIdSeq() {
+    return this.idSeq
+  }
+
+  setIdSeq(id) {
+    this.idSeq = id
+  }
 }

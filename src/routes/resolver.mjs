@@ -35,7 +35,9 @@ export default class VelociousRoutesResolver {
         throw new Error(`Missing action on controller: ${this.params.controller}#${this.params.action}`)
       }
 
-      await controllerInstance[this.params.action]()
+      await this.configuration.databasePool.withConnection(async () => {
+        await controllerInstance[this.params.action]()
+      })
 
       return
     }

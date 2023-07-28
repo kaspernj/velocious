@@ -35,16 +35,22 @@ export default class DbMigrate extends BaseCommand {
   }
 
   async runMigrationFile(migration) {
-    const migrationImport = await import(migration.fullPath)
-    const MigrationClass = migrationImport.default
-    const migrationInstance = new MigrationClass()
+    await this.configuration.initializeDatabasePool()
 
-    if (migrationInstance.change) {
-      await migrationInstance.change()
-    } else if (migrationInstance.up) {
-      await migrationInstance.up()
-    } else {
-      throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
-    }
+    await this.configuration.databasePool.withConnection(async () => {
+      const migrationImport = await import(migration.fullPath)
+      const MigrationClass = migrationImport.default
+      const migrationInstance = new MigrationClass({
+        configuration: this.configuration
+      })
+
+      if (migrationInstance.change) {
+        await migrationInstance.change()
+      } else if (migrationInstance.up) {
+        await migrationInstance.up()
+      } else {
+        throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
+      }
+    })
   }
 }

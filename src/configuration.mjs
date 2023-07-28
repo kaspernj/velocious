@@ -1,3 +1,4 @@
+import DatabasePool from "./database/pool/index.mjs"
 import {digg} from "diggerize"
 
 export default class VelociousConfiguration {
@@ -17,6 +18,11 @@ export default class VelociousConfiguration {
 
   async initialize() {
     await this.initializeRoutes()
+  }
+
+  async initializeDatabasePool() {
+    this.databasePool = new DatabasePool({configuration: this.configuration})
+    this.databasePool.setCurrent()
   }
 
   async initializeRoutes() {
