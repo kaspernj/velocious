@@ -30,7 +30,7 @@ export default class DbMigrate extends BaseCommand {
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
     for (const migration of files) {
-       await this.runMigrationFile(migration)
+      await this.runMigrationFile(migration)
     }
   }
 

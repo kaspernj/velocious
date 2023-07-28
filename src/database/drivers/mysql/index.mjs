@@ -48,6 +48,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createDatabase.toSql()
   }
 
+  createTableSql(tableName, args) {
+    const createArgs = Object.assign({tableName, driver: this}, args)
+    const createTable = new CreateTable(createArgs)
+
+    return createTable.toSql()
+  }
+
   async query(sql) {
     return await query(this.connection, sql)
   }

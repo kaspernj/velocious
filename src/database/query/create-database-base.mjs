@@ -1,6 +1,6 @@
 import QueryBase from "./base.mjs"
 
-export default class VelociousDatabaseQueryDeleteBase extends QueryBase {
+export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase {
   constructor({driver, databaseName, ifNotExists}) {
     super({driver})
     this.databaseName = databaseName
