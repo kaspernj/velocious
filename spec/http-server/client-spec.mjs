@@ -1,24 +1,14 @@
 import Client from "../../src/http-server/client/index.mjs"
-import Configuration from "../../src/configuration.mjs"
 import {digg} from "diggerize"
-import {dirname} from "path"
-import {fileURLToPath} from "url"
-import path from "path"
+import dummyConfiguration from "../dummy/src/config/configuration.mjs"
 
 describe("http server - client", () => {
   it("spawns a request for each that it is fed", async () => {
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const dummyDirectory = path.join(__dirname, "../dummy")
-    const configuration = new Configuration({
-      directory: dummyDirectory
-    })
-
-    await configuration.initialize()
+    await dummyConfiguration.initialize()
 
     const client = new Client({
       clientCount: 0,
-      configuration
+      configuration: dummyConfiguration
     })
 
     const strings = [

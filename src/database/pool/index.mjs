@@ -25,6 +25,8 @@ class VelociousDatabasePool {
       delete this.connectionsInUse[id]
     }
 
+    connection.setIdSeq(undefined)
+
     this.connections.push(connection)
   }
 
@@ -34,6 +36,8 @@ class VelociousDatabasePool {
     if (!connection) {
       connection = await this.spawnConnection()
     }
+
+    if (connection.getIdSeq() !== undefined) throw new Error(`Connection already has an ID-seq - is it in use? ${connection.getIdSeq()}`)
 
     const id = idSeq++
 
@@ -87,7 +91,11 @@ class VelociousDatabasePool {
       throw new Error("ID hasn't been set for this async context")
     }
 
-    return digg(this, "connectionsInUse", id)
+    if (!(id in this.connectionsInUse)) {
+      throw new Error(`Connection ${id} doesn't exist any more - has it been checked in again?`)
+    }
+
+    return this.connectionsInUse[id]
   }
 }
 
