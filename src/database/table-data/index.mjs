@@ -28,12 +28,14 @@ export default class TableData {
   _indexes = []
   _references = []
 
-  constructor(name) {
+  constructor(name, args = {}) {
+    this.args = args
     this._name = name
   }
 
   getColumns = () => this._columns
   getName = () => this._name
+  getIfNotExists = () => this.args.ifNotExists
   getIndexes = () => this._indexes
   getReferences = () => this._references
 

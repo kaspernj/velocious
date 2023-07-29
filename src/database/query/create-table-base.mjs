@@ -11,7 +11,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     const {tableData} = this
     let sql = "CREATE TABLE"
 
-    if (this.ifNotExists) sql += " IF NOT EXISTS"
+    if (this.ifNotExists || tableData.getIfNotExists()) sql += " IF NOT EXISTS"
 
     sql += ` ${tableData.getName()} (`
 
