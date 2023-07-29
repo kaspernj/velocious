@@ -49,8 +49,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createDatabase.toSql()
   }
 
-  createTableSql(tableName, args) {
-    const createArgs = Object.assign({tableName, driver: this}, args)
+  createTableSql(tableData) {
+    const createArgs = Object.assign({tableData, driver: this})
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()

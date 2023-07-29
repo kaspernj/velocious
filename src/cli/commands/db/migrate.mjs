@@ -35,7 +35,9 @@ export default class DbMigrate extends BaseCommand {
   }
 
   async runMigrationFile(migration) {
-    await this.configuration.initializeDatabasePool()
+    if (!this.configuration.isDatabasePoolInitialized()) {
+      await this.configuration.initializeDatabasePool()
+    }
 
     await this.configuration.databasePool.withConnection(async () => {
       const migrationImport = await import(migration.fullPath)

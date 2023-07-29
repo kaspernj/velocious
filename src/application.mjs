@@ -10,7 +10,10 @@ export default class VelociousApplication {
 
   async initialize() {
     await this.configuration.initialize()
-    await this.configuration.initializeDatabasePool()
+
+    if (!this.configuration.isDatabasePoolInitialized()) {
+      await this.configuration.initializeDatabasePool()
+    }
   }
 
   isActive() {

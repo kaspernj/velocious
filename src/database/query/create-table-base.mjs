@@ -1,23 +1,25 @@
 import QueryBase from "./base.mjs"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
-  constructor({columns, driver, ifNotExists, indexes, tableName}) {
+  constructor({driver, ifNotExists, tableData}) {
     super({driver})
-    this.columns = columns
     this.ifNotExists = ifNotExists
-    this.indexes = indexes
-    this.tableName = tableName
+    this.tableData = tableData
   }
 
   toSql() {
-    const {tableName} = this
+    const {tableData} = this
     let sql = "CREATE TABLE"
 
     if (this.ifNotExists) sql += " IF NOT EXISTS"
 
-    sql += ` ${tableName} (`
+    sql += ` ${tableData.getName()} (`
 
-    this.columns.forEach((column, columnIndex) => {
+    let columnCount = 0
+
+    for (const column of tableData.getColumns()) {
+      columnCount++
+
       let maxlength = column.args.maxlength
       let type = column.args.type
 
@@ -26,16 +28,41 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         maxlength ||= 255
       }
 
-      if (columnIndex > 0) sql += ", "
+      if (columnCount > 1) sql += ", "
 
       sql += `${this.driver.quoteColumn(column.name)} ${type}`
 
       if (maxlength !== undefined) sql += `(${maxlength})`
-    })
+
+      if (column.args.autoIncrement) sql += " AUTO_INCREMENT"
+      if (column.args.primaryKey) sql += " PRIMARY KEY"
+    }
+
+    for (const index of tableData.getIndexes()) {
+      sql += ","
+
+      if (index.getUnique()) {
+        sql += " UNIQUE"
+      }
+
+      sql += " INDEX"
+
+      if (index.getName()) {
+        sql += ` ${index.getName()}`
+      }
+
+      sql += " ("
+
+      index.getColumns().forEach((column, columnIndex) => {
+        if (columnIndex > 0) sql += ", "
+
+        sql += this.driver.quoteColumn(column.name)
+      })
+
+      sql += ")"
+    }
 
     sql += ")"
-
-    console.log(sql)
 
     return sql
   }

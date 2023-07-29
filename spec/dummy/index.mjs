@@ -1,5 +1,4 @@
 import Application from "../../src/application.mjs"
-import DatabasePool from "../../src/database/pool/index.mjs"
 import dummyConfiguration from "./src/config/configuration.mjs"
 
 export default class Dummy {
@@ -12,10 +11,12 @@ export default class Dummy {
   }
 
   static async prepare() {
-    const connection = DatabasePool.current().singleConnection()
+    const db = dummyConfiguration.getDatabasePool()
 
-    await connection.query("DROP TABLE IF EXISTS tasks")
-    await connection.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, name VARCHAR(255), description TEXT, PRIMARY KEY (id))")
+    await db.withConnection(async () => {
+      await db.query("DROP TABLE IF EXISTS tasks")
+      await db.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, name VARCHAR(255), description TEXT, PRIMARY KEY (id))")
+    })
   }
 
   static async run(callback) {
@@ -23,17 +24,21 @@ export default class Dummy {
   }
 
   async run(callback) {
-    await this.start()
+    await dummyConfiguration.getDatabasePool().withConnection(async () => {
+      await this.start()
 
-    try {
-      await Dummy.prepare()
-      await callback()
-    } finally {
-      await this.stop()
-    }
+      try {
+        await Dummy.prepare()
+        await callback()
+      } finally {
+        await this.stop()
+      }
+    })
   }
 
   async start() {
+    if (!dummyConfiguration.isDatabasePoolInitialized()) await dummyConfiguration.initializeDatabasePool()
+
     this.application = new Application({
       configuration: dummyConfiguration,
       databases: {

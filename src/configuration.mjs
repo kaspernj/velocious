@@ -20,10 +20,20 @@ export default class VelociousConfiguration {
     await this.initializeRoutes()
   }
 
-  async initializeDatabasePool() {
-    this.databasePool = new DatabasePool({configuration: this.configuration})
+  getDatabasePool() {
+    if (!this.isDatabasePoolInitialized()) this.initializeDatabasePool()
+
+    return this.databasePool
+  }
+
+  initializeDatabasePool() {
+    if (this.databasePool) throw new Error("DatabasePool has already been initialized")
+
+    this.databasePool = new DatabasePool({configuration: this})
     this.databasePool.setCurrent()
   }
+
+  isDatabasePoolInitialized = () => Boolean(this.databasePool)
 
   async initializeRoutes() {
     // Every client need to make their own routes because they probably can't be shared across different worker threads

@@ -6,7 +6,7 @@ import RecordNotFoundError from "./record-not-found-error.mjs"
 
 export default class VelociousDatabaseRecord {
   static connection() {
-    const connection = DatabasePool.current().singleConnection()
+    const connection = DatabasePool.current().getCurrentConnection()
 
     if (!connection) throw new Error("No connection?")
 
