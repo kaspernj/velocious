@@ -21,8 +21,6 @@ class VelociousDatabasePool {
   checkin = (connection) => {
     const id = connection.getIdSeq()
 
-    console.log(`Checking in ${id}`)
-
     if (id in this.connectionsInUse) {
       delete this.connectionsInUse[id]
     }
@@ -40,10 +38,7 @@ class VelociousDatabasePool {
     const id = idSeq++
 
     connection.setIdSeq(id)
-
     this.connectionsInUse[id] = connection
-
-    console.log(`Checking out ${id}`)
 
     return connection
   }

@@ -70,6 +70,10 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return this.connection.escape(string)
   }
 
+  quoteColumn(string) {
+    return `\`${string}\``
+  }
+
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
 

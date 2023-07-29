@@ -15,11 +15,27 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
     if (this.ifNotExists) sql += " IF NOT EXISTS"
 
-    sql += ` ${tableName}`
+    sql += ` ${tableName} (`
 
-    this.columns.forEach((column) => {
-      sql += ` ${column.name}`
+    this.columns.forEach((column, columnIndex) => {
+      let maxlength = column.args.maxlength
+      let type = column.args.type
+
+      if (type == "string") {
+        type = "varchar"
+        maxlength ||= 255
+      }
+
+      if (columnIndex > 0) sql += ", "
+
+      sql += `${this.driver.quoteColumn(column.name)} ${type}`
+
+      if (maxlength !== undefined) sql += `(${maxlength})`
     })
+
+    sql += ")"
+
+    console.log(sql)
 
     return sql
   }
