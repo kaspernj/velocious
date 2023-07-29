@@ -3,13 +3,37 @@ import dummyDirectory from "../../../dummy/dummy-directory.mjs"
 
 describe("Cli - Commands - db:migrate", () => {
   it("runs migrations", async () => {
+    const directory = dummyDirectory()
     const cli = new Cli({
-      directory: dummyDirectory(),
+      directory,
       processArgs: ["db:migrate"],
       testing: true
     })
-    const result = await cli.execute()
 
-    console.debug("stub", {result})
+    await cli.loadConfiguration()
+
+    cli.configuration.initializeDatabasePool()
+
+    const db = cli.configuration.databasePool
+
+    await db.withConnection(async () => {
+      await db.query("DROP TABLE IF EXISTS tasks")
+      await db.query("DROP TABLE IF EXISTS projects")
+    })
+
+    await cli.execute()
+
+    let tablesResult
+
+    await db.withConnection(async () => {
+      tablesResult = await db.query("SHOW TABLES")
+    })
+
+    expect(tablesResult).toEqual(
+      [
+        {Tables_in_velocious_test: "projects"},
+        {Tables_in_velocious_test: "tasks"}
+      ]
+    )
   })
 })

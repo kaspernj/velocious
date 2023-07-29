@@ -1,6 +1,7 @@
 import Base from "../base.mjs"
 import connectConnection from "./connect-connection.mjs"
 import CreateDatabase from "./sql/create-database.mjs"
+import CreateTable from "./sql/create-table.mjs"
 import Delete from "./sql/delete.mjs"
 import {digg} from "diggerize"
 import Insert from "./sql/insert.mjs"
@@ -48,6 +49,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createDatabase.toSql()
   }
 
+  createTableSql(tableData) {
+    const createArgs = Object.assign({tableData, driver: this})
+    const createTable = new CreateTable(createArgs)
+
+    return createTable.toSql()
+  }
+
   async query(sql) {
     return await query(this.connection, sql)
   }
@@ -60,6 +68,10 @@ export default class VelociousDatabaseDriversMysql extends Base{
     if (!this.connection) throw new Error("Can't escape before connected")
 
     return this.connection.escape(string)
+  }
+
+  quoteColumn(string) {
+    return `\`${string}\``
   }
 
   deleteSql({tableName, conditions}) {
