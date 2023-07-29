@@ -1,27 +1,51 @@
 import BaseCommand from "../../base-command.mjs"
 import DatabasePool from "../../../database/pool/index.mjs"
 import {digg} from "diggerize"
+import TableData from "../../../database/table-data/index.mjs"
 
 export default class DbCreate extends BaseCommand{
   async execute() {
-    const databasePool = DatabasePool.current()
-    const newConfiguration = Object.assign({}, databasePool.getConfiguration())
-    const databaseName = digg(newConfiguration, "database")
+    this.databasePool = this.configuration.getDatabasePool()
+    this.newConfiguration = Object.assign({}, this.databasePool.getConfiguration())
+
+    if (this.args.testing) this.result = []
 
     // Use a database known to exist. Since we are creating the database, it shouldn't actually exist which would make connecting fail.
-    newConfiguration.database = newConfiguration.useDatabase || "mysql"
+    this.newConfiguration.database = this.newConfiguration.useDatabase || "mysql"
 
-    const databaseConnection = await databasePool.spawnConnectionWithConfiguration(newConfiguration)
+    this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
+    await this.databaseConnection.connect()
 
-    await databaseConnection.connect()
+    this.createDatabase()
+    await this.createSchemaMigrationsTable()
 
-    const sql = databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
+    await this.databaseConnection.close()
+
+    if (this.args.testing) return this.result
+  }
+
+  async createDatabase() {
+    const databaseName = digg(this.databasePool.getConfiguration(), "database")
+    const sql = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
     if (this.args.testing) {
-      return {databaseName, sql}
+      this.result.push({databaseName, sql})
+    } else {
+      await this.databaseConnection.query(sql)
     }
+  }
 
-    await databaseConnection.query(sql)
-    await databaseConnection.close()
+  async createSchemaMigrationsTable() {
+    const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
+
+    schemaMigrationsTable.string("version", {null: false, primaryKey: true})
+
+    const createSchemaMigrationsTableSql = this.databaseConnection.createTableSql(schemaMigrationsTable)
+
+    if (this.args.testing) {
+      this.result.push({createSchemaMigrationsTableSql})
+    } else {
+      await this.databaseConnection.query(createSchemaMigrationsTableSql)
+    }
   }
 }

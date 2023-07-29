@@ -10,7 +10,16 @@ describe("Cli - Commands - db:create", () => {
     })
     const result = await cli.execute()
 
-    expect(result.databaseName).toEqual("velocious_test")
-    expect(result.sql).toEqual("CREATE DATABASE IF NOT EXISTS velocious_test")
+    expect(result).toEqual(
+      [
+        {
+          databaseName: 'velocious_test',
+          sql: 'CREATE DATABASE IF NOT EXISTS velocious_test'
+        },
+        {
+          createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` varchar(255) PRIMARY KEY)'
+        }
+      ]
+    )
   })
 })

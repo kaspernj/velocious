@@ -12,9 +12,7 @@ describe("Cli - Commands - db:migrate", () => {
 
     await cli.loadConfiguration()
 
-    cli.configuration.initializeDatabasePool()
-
-    const db = cli.configuration.databasePool
+    const db = cli.configuration.getDatabasePool()
 
     await db.withConnection(async () => {
       await db.query("DROP TABLE IF EXISTS tasks")
