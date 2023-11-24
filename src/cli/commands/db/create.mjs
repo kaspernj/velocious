@@ -1,5 +1,4 @@
 import BaseCommand from "../../base-command.mjs"
-import DatabasePool from "../../../database/pool/index.mjs"
 import {digg} from "diggerize"
 import TableData from "../../../database/table-data/index.mjs"
 

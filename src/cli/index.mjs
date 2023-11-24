@@ -9,8 +9,6 @@ export default class VelociousCli {
   }
 
   async execute() {
-    await this.loadConfiguration()
-
     const __filename = fileURLToPath(`${import.meta.url}/../..`)
     const __dirname = dirname(__filename)
     const commandParts = this.args.processArgs[0].split(":")
@@ -29,6 +27,9 @@ export default class VelociousCli {
 
     const commandClassImport = await import(filePath)
     const CommandClass = commandClassImport.default
+
+    await this.loadConfiguration()
+
     const commandInstance = new CommandClass(this.args)
 
     if (commandInstance.initialize) {
