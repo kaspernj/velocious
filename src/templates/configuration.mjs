@@ -7,7 +7,7 @@ const configuration = new Configuration({
         type: "mysql",
         host: "mariadb",
         username: "username",
-        password: "passowrd",
+        password: "password",
         database: "database"
       }
     }
