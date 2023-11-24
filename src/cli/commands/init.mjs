@@ -9,7 +9,7 @@ export default class VelociousCliCommandsInit extends BaseCommand {
   async execute() {
     const __filename = fileURLToPath(`${import.meta.url}/../../..`)
     const velocipusPath = dirname(__filename)
-    const projectPath = digg(this.configuration, "directory")
+    const projectPath = this.configuration?.directory || process.cwd()
     const projectConfigPath = `${projectPath}/src/config`
     const fileMappings = [
       {
@@ -55,3 +55,7 @@ export default class VelociousCliCommandsInit extends BaseCommand {
     }
   }
 }
+
+const dontLoadConfiguration = true
+
+export {dontLoadConfiguration}
