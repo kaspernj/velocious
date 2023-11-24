@@ -28,9 +28,7 @@ export default class VelociousCli {
     const commandClassImport = await import(filePath)
     const CommandClass = commandClassImport.default
 
-    if (!commandClassImport.dontLoadConfiguration) {
-      await this.loadConfiguration()
-    }
+    await this.loadConfiguration()
 
     const commandInstance = new CommandClass(this.args)
 
