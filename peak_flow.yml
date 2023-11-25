@@ -21,4 +21,4 @@ services:
     mem_limit: 4096m
     restart_policy: on-failure
 script:
-  - npm test
+  - npx velocious test
