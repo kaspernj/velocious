@@ -12,6 +12,7 @@ export default class VelociousCli {
     const __filename = fileURLToPath(`${import.meta.url}/../..`)
     const __dirname = dirname(__filename)
     const commandParts = this.args.processArgs[0].split(":")
+    const filePaths = []
     let filePath = `${__dirname}/src/cli/commands`
 
     for (let commandPart of commandParts) {
@@ -21,11 +22,22 @@ export default class VelociousCli {
       filePath += `/${commandPart}`
     }
 
+    filePaths.push(`${filePath}/index.mjs`)
     filePath += ".mjs"
+    filePaths.push(filePath)
 
-    if (!await fileExists(filePath)) throw new Error(`Unknown command: ${this.args.processArgs[0]} which should have been in ${filePath}`)
+    let fileFound
 
-    const commandClassImport = await import(filePath)
+    for (const aFilePath of filePaths) {
+      if (await fileExists(aFilePath)) {
+        fileFound = aFilePath
+        break
+      }
+    }
+
+    if (!fileFound) throw new Error(`Unknown command: ${this.args.processArgs[0]} which should have been one of ${filePaths.join(", ")}`)
+
+    const commandClassImport = await import(fileFound)
     const CommandClass = commandClassImport.default
 
     await this.loadConfiguration()

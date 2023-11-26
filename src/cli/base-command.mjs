@@ -6,4 +6,6 @@ export default class VelociousCliBaseCommand {
     this.configuration = this.args.configuration
     this.processArgs = args.processArgs
   }
+
+  directory = () => digg(this, "configuration", "directory")
 }

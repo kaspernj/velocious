@@ -1,5 +1,4 @@
 import BaseCommand from "../base-command.mjs"
-import {digg} from "diggerize"
 import {dirname} from "path"
 import fileExists from "../../utils/file-exists.mjs"
 import {fileURLToPath} from "url"
