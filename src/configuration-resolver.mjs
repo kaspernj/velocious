@@ -1,8 +1,8 @@
 import Configuration from "./configuration.mjs"
 
 const configurationResolver = async (args) => {
-  if (global.velociousConfiguration) {
-    return global.velociousConfiguration
+  if (Configuration.current(false)) {
+    return Configuration.current()
   }
 
   const directory = args.directory || process.cwd()

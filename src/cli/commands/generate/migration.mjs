@@ -22,7 +22,7 @@ export default class DbGenerateMigration extends BaseCommand {
     const migrationPath = `${migrationDir}/${migrationFileName}`
 
     if (this.args.testing) {
-      return {date, migrationContent, migrationName, migrationNameCamelized, migrationNumber, migrationPath }
+      return {date, migrationContent, migrationName, migrationNameCamelized, migrationNumber, migrationPath}
     } else {
       if (!await fileExists(migrationDir)) {
         await fs.mkdir(migrationDir, {recursive: true})

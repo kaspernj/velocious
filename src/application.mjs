@@ -1,3 +1,4 @@
+import AppRoutes from "../src/routes/app-routes.mjs"
 import {digs} from "diggerize"
 import logger from "./logger.mjs"
 import HttpServer from "./http-server/index.mjs"
@@ -9,7 +10,11 @@ export default class VelociousApplication {
   }
 
   async initialize() {
+    const routes = await AppRoutes.getRoutes(this.configuration)
+
     await this.configuration.initialize()
+
+    this.configuration.setRoutes(routes)
 
     if (!this.configuration.isDatabasePoolInitialized()) {
       await this.configuration.initializeDatabasePool()

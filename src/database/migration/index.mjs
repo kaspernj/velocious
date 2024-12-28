@@ -10,7 +10,7 @@ export default class VelociousDatabaseMigration {
 
     callback(tableData)
 
-    const databasePool = this.configuration.databasePool
+    const databasePool = this.configuration.getDatabasePool()
     const sql = databasePool.createTableSql(tableData)
 
     await databasePool.query(sql)

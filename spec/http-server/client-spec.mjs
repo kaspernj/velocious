@@ -1,3 +1,4 @@
+import AppRoutes from "../../src/routes/app-routes.mjs"
 import Client from "../../src/http-server/client/index.mjs"
 import {digg} from "diggerize"
 import dummyConfiguration from "../dummy/src/config/configuration.mjs"
@@ -5,6 +6,10 @@ import dummyConfiguration from "../dummy/src/config/configuration.mjs"
 describe("http server - client", () => {
   it("spawns a request for each that it is fed", async () => {
     await dummyConfiguration.initialize()
+
+    const routes = await AppRoutes.getRoutes(dummyConfiguration)
+
+    dummyConfiguration.setRoutes(routes)
 
     const client = new Client({
       clientCount: 0,

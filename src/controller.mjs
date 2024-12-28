@@ -36,7 +36,7 @@ export default class VelociousController {
     return new Promise((resolve, reject) => {
       const actionName = digg(this, "_params", "action")
       const controllerName = digg(this, "_params", "controller")
-      const directory = digg(this, "_configuration", "directory")
+      const directory = digg(this, "_configuration").getDirectory()
       const viewPath = `${directory}/src/routes/${controllerName}/${actionName}.ejs`
       const {viewParams} = digs(this, "viewParams")
 

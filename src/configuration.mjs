@@ -1,49 +1,65 @@
-import DatabasePool from "./database/pool/index.mjs"
 import {digg} from "diggerize"
 
 export default class VelociousConfiguration {
-  static current() {
-    if (!global.velociousConfiguration) throw new Error("A Velocious configuration hasn't been set")
+  static current(throwError = true) {
+    if (!this.velociousConfiguration && throwError) throw new Error("A Velocious configuration hasn't been set")
 
-    return global.velociousConfiguration
+    return this.velociousConfiguration
   }
 
   constructor({database, debug, directory}) {
-    if (!directory) directory = process.cwd()
-
     this.database = database
     this.debug = debug
-    this.directory = directory
-  }
-
-  async initialize() {
-    await this.initializeRoutes()
+    this._directory = directory
   }
 
   getDatabasePool() {
-    if (!this.isDatabasePoolInitialized()) this.initializeDatabasePool()
+    if (!this.isDatabasePoolInitialized()) {
+      this.initializeDatabasePool()
+    }
 
     return this.databasePool
+  }
+
+  getDatabasePoolType = () => {
+    const poolTypeClass = digg(this, "database", "default", "master", "poolType")
+
+    if (!poolTypeClass) {
+      throw new Error("No poolType given in database configuration")
+    }
+
+    return poolTypeClass
+  }
+
+  getDirectory = () => {
+    if (!this._directory) {
+      this._directory = process.cwd()
+    }
+
+    return this._directory
   }
 
   initializeDatabasePool() {
     if (!this.database) throw new Error("No 'database' was given")
     if (this.databasePool) throw new Error("DatabasePool has already been initialized")
 
-    this.databasePool = new DatabasePool({configuration: this})
+    const PoolType = this.getDatabasePoolType()
+
+    this.databasePool = new PoolType({configuration: this})
     this.databasePool.setCurrent()
   }
 
   isDatabasePoolInitialized = () => Boolean(this.databasePool)
 
-  async initializeRoutes() {
-    // Every client need to make their own routes because they probably can't be shared across different worker threads
-    const routesImport = await import(`${this.directory}/src/config/routes.mjs`)
-
-    this.routes = digg(routesImport, "default", "routes")
+  initialize() {
+    // Doesn't currently do anything.
   }
 
   setCurrent() {
-    global.velociousConfiguration = this
+    this.constructor.velociousConfiguration = this
+  }
+
+  setRoutes(newRoutes) {
+    this.routes = newRoutes
   }
 }

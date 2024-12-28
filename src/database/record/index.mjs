@@ -1,4 +1,4 @@
-import DatabasePool from "../pool/index.mjs"
+import Configuration from "../../configuration.mjs"
 import Handler from "../handler.mjs"
 import inflection from "inflection"
 import Query from "../query/index.mjs"
@@ -6,7 +6,7 @@ import RecordNotFoundError from "./record-not-found-error.mjs"
 
 export default class VelociousDatabaseRecord {
   static connection() {
-    const connection = DatabasePool.current().getCurrentConnection()
+    const connection = Configuration.current().getDatabasePoolType().current().getCurrentConnection()
 
     if (!connection) throw new Error("No connection?")
 

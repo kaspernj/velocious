@@ -1,10 +1,14 @@
+import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tracked-multi-connection.mjs"
 import Configuration from "../../../../src/configuration.mjs"
 import dummyDirectory from "../../dummy-directory.mjs"
+import MysqlDriver from "../../../../src/database/drivers/mysql/index.mjs"
 
-const configuration = new Configuration({
+export default new Configuration({
   database: {
     default: {
       master: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
         type: "mysql",
         host: "mariadb",
         username: "peakflow",
@@ -16,5 +20,3 @@ const configuration = new Configuration({
   },
   directory: dummyDirectory()
 })
-
-export default configuration

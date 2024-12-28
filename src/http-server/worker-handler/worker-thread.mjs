@@ -1,6 +1,5 @@
 import Application from "../../application.mjs"
 import Client from "../client/index.mjs"
-import DatabasePool from "../../database/pool/index.mjs"
 import {digg, digs} from "diggerize"
 import errorLogger from "../../error-logger.mjs"
 import logger from "../../logger.mjs"
