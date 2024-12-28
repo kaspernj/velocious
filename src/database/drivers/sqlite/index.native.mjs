@@ -10,7 +10,7 @@ import QueryParser from "../sqlite/query-parser.mjs"
 import * as SQLite from "expo-sqlite"
 import Update from "../sqlite/sql/update.mjs"
 
-export default class VelociousDatabaseDriversMysql extends Base{
+export default class VelociousDatabaseDriversSqliteNative extends Base{
   async connect() {
     const connection = await SQLite.openDatabaseAsync(digg(this.connectArgs(), "name"))
 

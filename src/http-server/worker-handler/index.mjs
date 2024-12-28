@@ -13,7 +13,8 @@ export default class VelociousHttpServerWorker {
 
   async start() {
     return new Promise((resolve) => {
-      const {debug, directory} = digs(this.configuration, "debug", "directory")
+      const {debug} = digs(this.configuration, "debug")
+      const directory = this.configuration.getDirectory()
       const __filename = fileURLToPath(import.meta.url)
       const __dirname = dirname(__filename)
 

@@ -3,11 +3,11 @@ import dummyConfiguration from "./src/config/configuration.mjs"
 
 export default class Dummy {
   static current() {
-    if (!global.velociousDummy) {
-      global.velociousDummy = new Dummy()
+    if (!this.velociousDummy) {
+      this.velociousDummy = new Dummy()
     }
 
-    return global.velociousDummy
+    return this.velociousDummy
   }
 
   static async prepare() {
@@ -37,7 +37,9 @@ export default class Dummy {
   }
 
   async start() {
-    if (!dummyConfiguration.isDatabasePoolInitialized()) await dummyConfiguration.initializeDatabasePool()
+    if (!dummyConfiguration.isDatabasePoolInitialized()) {
+      await dummyConfiguration.initializeDatabasePool()
+    }
 
     this.application = new Application({
       configuration: dummyConfiguration,

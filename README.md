@@ -22,11 +22,17 @@ npx velocious init
 # Migrations
 
 ```bash
-npx velocious db:g:migration create_tasks
+npx velocious g:migration create_tasks
 ```
 
 ```bash
 npx velocious db:migrate
+```
+
+# Models
+
+```bash
+npx velocious g:model Option
 ```
 
 # Testing

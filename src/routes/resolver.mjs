@@ -21,7 +21,7 @@ export default class VelociousRoutesResolver {
     if (!matchResult) throw new Error(`Couldn't match a route with the given path: ${currentPath}`)
 
     if (this.params.action && this.params.controller) {
-      const controllerPath = `${digg(this, "configuration", "directory")}/src/routes/${digg(this, "params", "controller")}/controller.mjs`
+      const controllerPath = `${this.configuration.getDirectory()}/src/routes/${digg(this, "params", "controller")}/controller.mjs`
       const controllerClassImport = await import(controllerPath)
       const controllerClass = controllerClassImport.default
       const controllerInstance = new controllerClass({
