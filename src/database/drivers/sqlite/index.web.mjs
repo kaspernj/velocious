@@ -1,5 +1,4 @@
 import Base from "../base.mjs"
-import CreateDatabase from "../sqlite/sql/create-database.mjs"
 import CreateTable from "../sqlite/sql/create-table.mjs"
 import Delete from "../sqlite/sql/delete.mjs"
 import {digg} from "diggerize"
@@ -31,13 +30,6 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base{
     this.saveDatabase()
     await this.connection.end()
     this.connection = undefined
-  }
-
-  createDatabaseSql(databaseName, args) {
-    const createArgs = Object.assign({databaseName, driver: this}, args)
-    const createDatabase = new CreateDatabase(createArgs)
-
-    return createDatabase.toSql()
   }
 
   createTableSql(tableData) {

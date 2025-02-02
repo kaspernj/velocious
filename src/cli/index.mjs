@@ -18,6 +18,7 @@ export default class VelociousCli {
     for (let commandPart of commandParts) {
       if (commandPart == "d") commandPart = "destroy"
       if (commandPart == "g") commandPart = "generate"
+      if (commandPart == "s") commandPart = "server"
 
       filePath += `/${commandPart}`
     }
