@@ -1,3 +1,4 @@
+import {digs} from "diggerize"
 import QueryBase from "./base.mjs"
 
 export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase {
@@ -9,11 +10,12 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
 
   toSql() {
     const {databaseName} = this
+    const {tableQuote} = digs(this.getOptions(), "tableQuote")
     let sql = "CREATE DATABASE"
 
     if (this.ifNotExists) sql += " IF NOT EXISTS"
 
-    sql += ` ${databaseName}`
+    sql += ` ${tableQuote}${databaseName}${tableQuote}`
 
     return sql
   }

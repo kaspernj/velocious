@@ -30,7 +30,9 @@ export default class DbCreate extends BaseCommand{
     if (this.args.testing) {
       this.result.push({databaseName, sql})
     } else {
+      console.log("Running query: ", sql)
       await this.databaseConnection.query(sql)
+      console.log("Done with query")
     }
   }
 

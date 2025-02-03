@@ -1,4 +1,4 @@
-import {Routes} from "velocious"
+import Routes from "velocious/src/routes/index.mjs"
 
 const routes = new Routes()
 
