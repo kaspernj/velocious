@@ -34,7 +34,20 @@ class VelociousDatabasePoolBase {
   }
 }
 
-const forwardMethods = ["createTableSql", "deleteSql", "insertSql", "query", "quote", "updateSql"]
+const forwardMethods = [
+  "createTable",
+  "createTableSql",
+  "delete",
+  "deleteSql",
+  "getTables",
+  "insert",
+  "insertSql",
+  "query",
+  "quote",
+  "select",
+  "update",
+  "updateSql"
+]
 
 for (const forwardMethod of forwardMethods) {
   VelociousDatabasePoolBase.prototype[forwardMethod] = function(...args) {

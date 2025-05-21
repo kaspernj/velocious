@@ -58,7 +58,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     await this.asyncLocalStorage.run(id, async () => {
       try {
-        await callback()
+        await callback(connection)
       } finally {
         this.checkin(connection)
       }

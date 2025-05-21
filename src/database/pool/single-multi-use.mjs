@@ -27,7 +27,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
   async withConnection(callback) {
     await this.checkout() // Ensure a connection is present
-    await callback()
+    await callback(this.connection)
   }
 
   getCurrentConnection() {
