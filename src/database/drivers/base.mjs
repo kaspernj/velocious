@@ -1,5 +1,5 @@
-import Query from "../query/index"
-import Handler from "../handler"
+import Query from "../query/index.mjs"
+import Handler from "../handler.mjs"
 
 export default class VelociousDatabaseDriversBase {
   constructor(args) {
