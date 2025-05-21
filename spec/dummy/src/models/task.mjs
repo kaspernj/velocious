@@ -1,4 +1,4 @@
-import Database from "../../../../src/database/index.mjs"
+import DatabaseRecord from "../../../../src/database/record/index.mjs"
 
-export default class Task extends Database.Record {
+export default class Task extends DatabaseRecord {
 }

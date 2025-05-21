@@ -1,17 +1,13 @@
-import Base from "../base.mjs"
-import CreateTable from "../sqlite/sql/create-table.mjs"
-import Delete from "../sqlite/sql/delete.mjs"
+import Base from "./base"
 import {digg} from "diggerize"
-import Insert from "../sqlite/sql/insert.mjs"
+import escapeString from "sql-string-escape"
 import Options from "../sqlite/options.mjs"
-import query from "./query.mjs"
-import QueryParser from "../sqlite/query-parser.mjs"
+import query from "./query"
 import * as SQLite from "expo-sqlite"
-import Update from "../sqlite/sql/update.mjs"
 
-export default class VelociousDatabaseDriversSqliteNative extends Base{
+export default class VelociousDatabaseDriversSqliteNative extends Base {
   async connect() {
-    const connection = await SQLite.openDatabaseAsync(digg(this.connectArgs(), "name"))
+    const connection = await SQLite.openDatabaseAsync(digg(this.getArgs(), "name"))
 
     this.connection = connection
   }
@@ -39,54 +35,20 @@ export default class VelociousDatabaseDriversSqliteNative extends Base{
     this.connection = undefined
   }
 
-  createTableSql(tableData) {
-    const createArgs = Object.assign({tableData, driver: this})
-    const createTable = new CreateTable(createArgs)
-
-    return createTable.toSql()
-  }
-
-  async query(sql) {
-    return await query(this.connection, sql)
-  }
-
-  queryToSql(query) {
-    return new QueryParser({query}).toSql()
-  }
+  query = async (sql) => await query(this.connection, sql)
 
   quote(string) {
-    if (!this.connection) throw new Error("Can't escape before connected")
+    const type = typeof string
 
-    return this.connection.escape(string)
-  }
+    if (type == "number") return string
+    if (type != "string") string = `${string}`
 
-  quoteColumn(string) {
-    return `\`${string}\``
-  }
-
-  deleteSql({tableName, conditions}) {
-    const deleteInstruction = new Delete({conditions, driver: this, tableName})
-
-    return deleteInstruction.toSql()
-  }
-
-  insertSql({tableName, data}) {
-    const insert = new Insert({driver: this, tableName, data})
-
-    return insert.toSql()
+    return escapeString(string)
   }
 
   options() {
-    if (!this._options) {
-      this._options = new Options({driver: this})
-    }
+    if (!this._options) this._options = new Options({driver: this})
 
     return this._options
-  }
-
-  updateSql({conditions, data, tableName}) {
-    const update = new Update({conditions, data, driver: this, tableName})
-
-    return update.toSql()
   }
 }

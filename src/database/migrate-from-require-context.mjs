@@ -1,5 +1,6 @@
 import Configuration from "../configuration.mjs"
 import * as inflection from "inflection"
+import Migrator from "./migrator"
 
 export default class VelociousDatabaseMigrateFromRequireContext {
   constructor(configuration) {
@@ -7,6 +8,10 @@ export default class VelociousDatabaseMigrateFromRequireContext {
   }
 
   async execute(requireContext) {
+    const migrator = new Migrator({configuration: this.configuration})
+
+    await migrator.prepare()
+
     const files = requireContext.keys()
       .map((file) => {
         const match = file.match(/^\.\/(\d{14})-(.+)\.mjs$/)
@@ -27,7 +32,9 @@ export default class VelociousDatabaseMigrateFromRequireContext {
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
     for (const migration of files) {
-      await this.runMigrationFile(migration, requireContext)
+      if (!migrator.hasRunMigrationVersion(migration.date)) {
+        await this.runMigrationFile(migration, requireContext)
+      }
     }
   }
 
@@ -35,7 +42,7 @@ export default class VelociousDatabaseMigrateFromRequireContext {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
 
-    await this.configuration.getDatabasePool().withConnection(async () => {
+    await this.configuration.getDatabasePool().withConnection(async (db) => {
       const MigrationClass = requireContext(migration.file).default
       const migrationInstance = new MigrationClass({
         configuration: this.configuration
@@ -48,6 +55,8 @@ export default class VelociousDatabaseMigrateFromRequireContext {
       } else {
         throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
       }
+
+      await db.insert({tableName: "schema_migrations", data: {version: migration.date}})
     })
   }
 }

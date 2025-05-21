@@ -11,13 +11,13 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   quoteColumnName(columnName) {
-    if (columnName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${columnName}`)
+    if (!columnName || columnName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${columnName}`)
 
     return `${this.columnQuote}${columnName}${this.columnQuote}`
   }
 
   quoteTableName(tableName) {
-    if (tableName.includes(this.tableQuote)) throw new Error(`Invalid table name: ${tableName}`)
+    if (!tableName || tableName.includes(this.tableQuote)) throw new Error(`Invalid table name: ${tableName}`)
 
     return `${this.tableQuote}${tableName}${this.tableQuote}`
   }
