@@ -1,5 +1,6 @@
 import Base from "./base.mjs"
 import {digg} from "diggerize"
+import escapeString from "sql-string-escape"
 import Options from "../sqlite/options.mjs"
 import query from "./query"
 
@@ -30,9 +31,12 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   query = async (sql) => await query(this.connection, sql)
 
   quote(string) {
-    if (!this.connection) throw new Error("Can't escape before connected")
+    const type = typeof string
 
-    return this.connection.escape(string)
+    if (type == "number") return string
+    if (type != "string") string = `${string}`
+
+    return escapeString(string)
   }
 
   options() {
