@@ -2,6 +2,8 @@ import FromPlain from "./from-plain.mjs"
 import JoinPlain from "./join-plain.mjs"
 import OrderPlain from "./order-plain.mjs"
 import SelectPlain from "./select-plain.mjs"
+import WhereHash from "./where-hash.mjs"
+import WherePlain from "./where-plain.mjs"
 
 export default class VelociousDatabaseQuery {
   constructor({driver, froms = [], joins = [], handler, limits = [], modelClass, orders = [], selects = [], wheres = []}) {
@@ -128,9 +130,11 @@ export default class VelociousDatabaseQuery {
 
   where(where) {
     if (typeof where == "string") {
-      where = new WherePlain({plain: where})
-    } else if (typeof where == "object" && where.constructor.name == "object") {
-      where = new WhereHash({hash: where})
+      where = new WherePlain(this, where)
+    } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
+      where = new WhereHash(this, where)
+    } else {
+      throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }
 
     this._wheres.push(where)

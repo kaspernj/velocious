@@ -100,6 +100,12 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return tables
   }
 
+  async lastInsertID() {
+    const result = await this.query("SELECT LAST_INSERT_ID() AS last_insert_id")
+
+    return digg(result, 0, "last_insert_id")
+  }
+
   options() {
     if (!this._options) {
       this._options = new Options({driver: this})

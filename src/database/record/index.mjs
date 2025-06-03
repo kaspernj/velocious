@@ -1,4 +1,5 @@
 import Configuration from "../../configuration.mjs"
+import {digg} from "diggerize"
 import Handler from "../handler.mjs"
 import HasManyRelationship from "./has-many-relationship.mjs"
 import * as inflection from "inflection"
@@ -47,9 +48,8 @@ export default class VelociousDatabaseRecord {
 
     conditions[this.primaryKey()] = recordId
 
-    console.log("find", {conditions})
-
-    const record = await this.where(conditions).limit(1).first()
+    const query = this.where(conditions)
+    const record = await query.first()
 
     if (!record) {
       throw new RecordNotFoundError(`Couldn't find ${this.name} with '${this.primaryKey()}'=${recordId}`)
@@ -59,8 +59,6 @@ export default class VelociousDatabaseRecord {
   }
 
   static async findBy(conditions) {
-    console.log("findBy", {conditions})
-
     return await this.where(conditions).first()
   }
 
@@ -148,7 +146,7 @@ export default class VelociousDatabaseRecord {
   }
 
   static async last() {
-    const query = this._newQuery().order(this.primaryKey()).limit(1)
+    const query = this._newQuery().order(this.primaryKey())
     const record = await query.last()
 
     return record
@@ -360,8 +358,8 @@ export default class VelociousDatabaseRecord {
       tableName: this._tableName(),
       data: this.attributes()
     })
-    const result = await this._connection().query(sql)
-    const id = result.insertId
+    await this._connection().query(sql)
+    const id = await this._connection().lastInsertID()
 
     await this._reloadWithId(id)
     this.setIsNewRecord(false)

@@ -2,8 +2,6 @@ export default async function query(connection, sql) {
   const rows = []
   let result
 
-  console.log({sql})
-
   try {
     result = connection.exec(sql)
   } catch (error) {

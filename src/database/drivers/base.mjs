@@ -47,6 +47,10 @@ export default class VelociousDatabaseDriversBase {
     await this.query(sql)
   }
 
+  lastInsertID() {
+    throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
+  }
+
   async select(tableName) {
     const handler = new Handler()
     const query = new Query({

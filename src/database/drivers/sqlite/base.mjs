@@ -1,3 +1,5 @@
+import {digg} from "diggerize"
+
 import Base from "../base.mjs"
 import CreateIndex from "../sqlite/sql/create-index.mjs"
 import CreateTable from "../sqlite/sql/create-table.mjs"
@@ -40,7 +42,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   async getTables() {
-    const result = await this.query("SELECT name FROM sqlite_master WHERE type = 'table'")
+    const result = await this.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
     const tables = []
 
     for (const row of result) {
@@ -52,7 +54,18 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return tables
   }
 
+  async lastInsertID() {
+    const result = await this.query("SELECT LAST_INSERT_ROWID() AS last_insert_id")
+
+    return digg(result, 0, "last_insert_id")
+  }
+
   queryToSql = (query) => new QueryParser({query}).toSql()
-  quoteColumn = (string) => `\`${string}\``
+  quoteColumn = (string) => {
+    if (string.includes("`")) throw new Error(`Possible SQL injection in column name: ${string}`)
+
+    return `\`${string}\``
+  }
+
   updateSql = ({conditions, data, tableName}) => new Update({conditions, data, driver: this, tableName}).toSql()
 }
