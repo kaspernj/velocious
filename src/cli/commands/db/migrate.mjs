@@ -1,7 +1,6 @@
 import BaseCommand from "../../base-command.mjs"
-import {digg} from "diggerize"
 import fs from "node:fs/promises"
-import inflection from "inflection"
+import * as inflection from "inflection"
 
 export default class DbMigrate extends BaseCommand {
   async execute() {

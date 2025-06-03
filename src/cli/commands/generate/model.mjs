@@ -3,7 +3,7 @@ import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fileExists from "../../../utils/file-exists.mjs"
 import fs from "node:fs/promises"
-import inflection from "inflection"
+import * as inflection from "inflection"
 
 export default class DbGenerateModel extends BaseCommand {
   async execute() {

@@ -5,14 +5,30 @@ export default class VelociousDatabaseMigration {
     this.configuration = configuration
   }
 
+  async addIndex(tableName, columns, args) {
+    const databasePool = this.configuration.getDatabasePool()
+    const createIndexArgs = Object.assign(
+      {
+        columns,
+        tableName
+      },
+      args
+    )
+    const sql = databasePool.createIndexSql(createIndexArgs)
+
+    await databasePool.query(sql)
+  }
+
   async createTable(tableName, callback) {
     const tableData = new TableData(tableName)
 
     callback(tableData)
 
     const databasePool = this.configuration.getDatabasePool()
-    const sql = databasePool.createTableSql(tableData)
+    const sqls = databasePool.createTableSql(tableData)
 
-    await databasePool.query(sql)
+    for (const sql of sqls) {
+      await databasePool.query(sql)
+    }
   }
 }

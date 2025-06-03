@@ -7,10 +7,12 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({database, debug, directory}) {
+  constructor({database, debug, directory, locale, locales}) {
     this.database = database
     this.debug = debug
     this._directory = directory
+    this.locale = locale
+    this.locales = locales
   }
 
   getDatabasePool() {
@@ -38,6 +40,18 @@ export default class VelociousConfiguration {
 
     return this._directory
   }
+
+  getLocale() {
+    if (typeof this.locale == "function") {
+      return this.locale()
+    } else if (this.locale) {
+      return this.locale
+    } else {
+      return this.getLocales()[0]
+    }
+  }
+
+  getLocales = () => digg(this, "locales")
 
   initializeDatabasePool() {
     if (!this.database) throw new Error("No 'database' was given")

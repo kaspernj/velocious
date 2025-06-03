@@ -1,8 +1,27 @@
 export default async function query(connection, sql) {
   const rows = []
+  let result
 
-  for await (const entry of connection.exec(sql)) {
-    rows.push(entry)
+  try {
+    result = connection.exec(sql)
+  } catch (error) {
+    error.message += `\n\n${sql}`
+
+    throw error
+  }
+
+  if (result[0]) {
+    const columns = result[0].columns
+
+    for (const rowValues of result[0].values) {
+      const row = {}
+
+      for (const columnIndex in columns) {
+        row[columns[columnIndex]] = rowValues[columnIndex]
+      }
+
+      rows.push(row)
+    }
   }
 
   return rows

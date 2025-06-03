@@ -1,5 +1,4 @@
 import Dummy from "../../dummy/index.mjs"
-import RecordNotFoundError from "../../../src/database/record/record-not-found-error.mjs"
 import Task from "../../dummy/src/models/task.mjs"
 
 describe("Record - find", () => {

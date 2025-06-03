@@ -3,7 +3,7 @@ import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fileExists from "../../../utils/file-exists.mjs"
 import fs from "node:fs/promises"
-import inflection from "inflection"
+import * as inflection from "inflection"
 import strftime from "strftime"
 
 export default class DbGenerateMigration extends BaseCommand {

@@ -20,9 +20,11 @@ export default class VelociousDatabaseMigrator {
     schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
     await this.configuration.getDatabasePool().withConnection(async (db) => {
-      const createSchemaMigrationsTableSql = db.createTableSql(schemaMigrationsTable)
+      const createSchemaMigrationsTableSqls = db.createTableSql(schemaMigrationsTable)
 
-      await db.query(createSchemaMigrationsTableSql)
+      for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
+        await db.query(createSchemaMigrationsTableSql)
+      }
     })
   }
 

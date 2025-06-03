@@ -1,14 +1,18 @@
+import CreateIndexBase from "./create-index-base.mjs"
 import QueryBase from "./base.mjs"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
-  constructor({driver, ifNotExists, tableData}) {
+  constructor({driver, ifNotExists, indexInCreateTable = true, tableData}) {
     super({driver})
     this.ifNotExists = ifNotExists
+    this.indexInCreateTable = indexInCreateTable
     this.tableData = tableData
   }
 
   toSql() {
     const {tableData} = this
+    const sqls = []
+
     let sql = "CREATE TABLE"
 
     if (this.ifNotExists || tableData.getIfNotExists()) sql += " IF NOT EXISTS"
@@ -38,32 +42,50 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       if (column.args.primaryKey) sql += " PRIMARY KEY"
     }
 
-    for (const index of tableData.getIndexes()) {
-      sql += ","
+    if (this.indexInCreateTable) {
+      for (const index of tableData.getIndexes()) {
+        sql += ","
 
-      if (index.getUnique()) {
-        sql += " UNIQUE"
+        if (index.getUnique()) {
+          sql += " UNIQUE"
+        }
+
+        sql += " INDEX"
+
+        if (index.getName()) {
+          sql += ` ${index.getName()}`
+        }
+
+        sql += " ("
+
+        index.getColumns().forEach((column, columnIndex) => {
+          if (columnIndex > 0) sql += ", "
+
+          sql += this.driver.quoteColumn(column.name)
+        })
+
+        sql += ")"
       }
-
-      sql += " INDEX"
-
-      if (index.getName()) {
-        sql += ` ${index.getName()}`
-      }
-
-      sql += " ("
-
-      index.getColumns().forEach((column, columnIndex) => {
-        if (columnIndex > 0) sql += ", "
-
-        sql += this.driver.quoteColumn(column.name)
-      })
-
-      sql += ")"
     }
 
     sql += ")"
 
-    return sql
+    sqls.push(sql)
+
+    if (!this.indexInCreateTable) {
+      for (const index of tableData.getIndexes()) {
+        const createIndexArgs = {
+          columns: index.getColumns(),
+          driver: this.getDriver(),
+          tableName: tableData.getName(),
+          unique: index.getUnique()
+        }
+        const sql = new CreateIndexBase(createIndexArgs).toSql()
+
+        sqls.push(sql)
+      }
+    }
+
+    return [sql]
   }
 }
