@@ -5,8 +5,8 @@ import SelectPlain from "./select-plain.mjs"
 
 export default class VelociousDatabaseQuery {
   constructor({driver, froms = [], joins = [], handler, limits = [], modelClass, orders = [], selects = [], wheres = []}) {
-    if (!driver) throw new Error("No driver given")
-    if (!handler) throw new Error("No handler given")
+    if (!driver) throw new Error("No driver given to query")
+    if (!handler) throw new Error("No handler given to query")
 
     this.driver = driver
     this.handler = handler
@@ -35,9 +35,7 @@ export default class VelociousDatabaseQuery {
     return newQuery
   }
 
-  getOptions() {
-    return this.driver.options()
-  }
+  getOptions = () => this.driver.options()
 
   async first() {
     const newQuery = this.clone()
@@ -55,9 +53,7 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  async last() {
-    return await this.clone().reverseOrder().first()
-  }
+  last = async () => await this.clone().reverseOrder().first()
 
   limit(value) {
     this._limits.push(value)
@@ -121,15 +117,14 @@ export default class VelociousDatabaseQuery {
     for (const result of results) {
       const model = new this.modelClass(result)
 
+      model.setIsNewRecord(false)
       models.push(model)
     }
 
     return models
   }
 
-  toSql() {
-    return this.driver.queryToSql(this)
-  }
+  toSql = () => this.driver.queryToSql(this)
 
   where(where) {
     if (typeof where == "string") {

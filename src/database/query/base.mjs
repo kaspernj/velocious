@@ -3,7 +3,8 @@ export default class VelociousDatabaseQueryBase {
     this.driver = driver
   }
 
-  getOptions = () => this.driver?.options()
+  getDriver = () => this.driver
+  getOptions = () => this.getDriver()?.options()
 
   toSql() {
     throw new Error("'toSql' wasn't implemented")

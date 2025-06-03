@@ -7,9 +7,11 @@ export default class VelociousDatabaseDriversBase {
   }
 
   async createTable(...args) {
-    const sql = this.createTableSql(...args)
+    const sqls = this.createTableSql(...args)
 
-    await this.query(sql)
+    for (const sql of sqls) {
+      await this.query(sql)
+    }
   }
 
   async delete(...args) {
@@ -24,6 +26,19 @@ export default class VelociousDatabaseDriversBase {
 
   getIdSeq() {
     return this.idSeq
+  }
+
+  getTables() {
+    throw new Error(`${this.constructor.name}#getTables not implemented`)
+  }
+
+  async getTableByName(name) {
+    const tables = await this.getTables()
+    const table = tables.find((table) => table.getName() == name)
+
+    if (!table) throw new Error(`Couldn't find a table by that name: ${name}`)
+
+    return table
   }
 
   async insert(...args) {

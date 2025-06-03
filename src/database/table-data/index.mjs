@@ -33,18 +33,22 @@ export default class TableData {
     this._name = name
   }
 
+  _defineColumn(name, args = {}) {
+    const column = new TableColumn(name, args)
+
+    this._columns.push(column)
+  }
+
   getColumns = () => this._columns
   getName = () => this._name
   getIfNotExists = () => this.args.ifNotExists
   getIndexes = () => this._indexes
   getReferences = () => this._references
 
-  bigint(name, args = {}) {
-    const columnArgs = Object.assign({type: "bigint"}, args)
-    const column = new TableColumn(name, columnArgs)
-
-    this._columns.push(column)
-  }
+  bigint = (name, args = {}) => this._defineColumn(name, Object.assign({type: "bigint"}, args))
+  boolean = (name, args) => this._defineColumn(name, Object.assign({type: "boolean"}, args))
+  datetime = (name, args) => this._defineColumn(name, Object.assign({type: "datetime"}, args))
+  integer = (name, args = {}) => this._defineColumn(name, Object.assign({type: "integer"}, args))
 
   references(name, args = {}) {
     const columnName = `${name}_id`
@@ -59,25 +63,11 @@ export default class TableData {
     this._references.push(reference)
   }
 
-  string(name, args) {
-    const columnArgs = Object.assign({type: "string"}, args)
-    const column = new TableColumn(name, columnArgs)
+  string = (name, args) => this._defineColumn(name, Object.assign({type: "string"}, args))
+  text = (name, args) => this._defineColumn(name, Object.assign({type: "text"}, args))
 
-    this._columns.push(column)
-  }
-
-  text(name, args) {
-    const columnArgs = Object.assign({type: "text"}, args)
-    const column = new TableColumn(name, columnArgs)
-
-    this._columns.push(column)
-  }
-
-  timestamps() {
-    const createdAtColumn = new TableColumn("created_at", {type: "datetime"})
-    const updatedAtColumn = new TableColumn("updated_at", {type: "datetime"})
-
-    this._columns.push(createdAtColumn)
-    this._columns.push(updatedAtColumn)
+  timestamps(args = {}) {
+    this.datetime("created_at", args)
+    this.datetime("updated_at", args)
   }
 }

@@ -3,11 +3,12 @@ import {digg} from "diggerize"
 export default class VelociousDatabaseQueryParserOptions {
   constructor(options) {
     this.columnQuote = digg(options, "columnQuote")
+    this.indexQuote = digg(options, "indexQuote")
     this.driver = digg(options, "driver")
     this.tableQuote = digg(options, "tableQuote")
     this.stringQuote = digg(options, "stringQuote")
 
-    if (!this.driver) throw new Error("No driver given")
+    if (!this.driver) throw new Error("No driver given to parser options")
   }
 
   quoteColumnName(columnName) {

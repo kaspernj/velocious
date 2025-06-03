@@ -1,10 +1,39 @@
 import Configuration from "../../configuration.mjs"
 import Handler from "../handler.mjs"
-import inflection from "inflection"
+import HasManyRelationship from "./has-many-relationship.mjs"
+import * as inflection from "inflection"
 import Query from "../query/index.mjs"
 import RecordNotFoundError from "./record-not-found-error.mjs"
 
 export default class VelociousDatabaseRecord {
+  static _defineRelationship(relationshipName, data) {
+    if (!this._relationships) this._relationships = {}
+    if (relationshipName in this._relationships) throw new Error(`Relationship ${relationshipName} already exists`)
+
+    this._relationships[relationshipName] = data
+
+    this.prototype[relationshipName] = function () {
+      if (!this._instanceRelationships) this._instanceRelationships = {}
+      if (!(relationshipName in this._instanceRelationships)) {
+        let relationship
+
+        if (data.type == "hasMany") {
+          relationship = new HasManyRelationship({klass: data.klass, model: this, relationshipName})
+        } else {
+          throw new Error(`Unknown relationship type: ${data.type}`)
+        }
+
+        this._instanceRelationships[relationshipName] = relationship
+      }
+
+      return this._instanceRelationships[relationshipName]
+    }
+  }
+
+  static belongsTo(relationshipName) {
+    this._defineRelationship(relationshipName, {type: "belongsTo"})
+  }
+
   static connection() {
     const connection = Configuration.current().getDatabasePoolType().current().getCurrentConnection()
 
@@ -18,13 +47,104 @@ export default class VelociousDatabaseRecord {
 
     conditions[this.primaryKey()] = recordId
 
-    const record = await this.where(conditions).first()
+    console.log("find", {conditions})
+
+    const record = await this.where(conditions).limit(1).first()
 
     if (!record) {
       throw new RecordNotFoundError(`Couldn't find ${this.name} with '${this.primaryKey()}'=${recordId}`)
     }
 
     return record
+  }
+
+  static async findBy(conditions) {
+    console.log("findBy", {conditions})
+
+    return await this.where(conditions).first()
+  }
+
+  static async findOrInitializeBy(conditions) {
+    const record = await this.findBy(conditions)
+
+    if (record) return record
+
+    const newRecord = new this(conditions)
+
+    return newRecord
+  }
+
+  static hasMany(relationshipName) {
+    this._defineRelationship(relationshipName, {type: "hasMany"})
+  }
+
+  static async initializeRecord() {
+    this._table = await this.connection().getTableByName(this.tableName())
+    this._columns = await this._getTable().getColumns()
+    this._columnsAsHash = {}
+
+    for (const column of this._columns) {
+      this._columnsAsHash[column.getName()] = column
+
+      const camelizedColumnName = inflection.camelize(column.getName(), true)
+      const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
+      const getterMethodName = `get${camelizedColumnNameBigFirst}`
+      const setterMethodName = `set${camelizedColumnNameBigFirst}`
+
+      this.prototype[getterMethodName] = function () {
+        return this.getAttribute(camelizedColumnName)
+      }
+
+      this.prototype[setterMethodName] = function (newValue) {
+        return this._setColumnAttribute(camelizedColumnName, newValue)
+      }
+    }
+
+    this._defineTranslationMethods()
+    this._initialized = true
+  }
+
+  static isInitialized() {
+    if (this._initialized) return true
+
+    return false
+  }
+
+  getAttribute(name) {
+    const columnName = inflection.underscore(name)
+
+    if (!(columnName in this._attributes)) throw new Error(`${this.constructor.name}#${name} attribute hasn't been loaded yet in ${Object.keys(this._attributes).join(", ")}`)
+
+    return this._attributes[columnName]
+  }
+
+  setAttribute(name, newValue) {
+    const setterName = `set${inflection.camelize(name)}`
+
+    if (!this.constructor.isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
+    if (!(setterName in this)) throw new Error(`No such setter method: ${this.constructor.name}#${setterName}`)
+
+    this[setterName](newValue)
+  }
+
+  _setColumnAttribute(name, newValue) {
+    const columnName = inflection.underscore(name)
+
+    if (this._attributes[columnName] != newValue) {
+      this._changes[columnName] = newValue
+    }
+  }
+
+  static getColumns() {
+    if (!this._columns) throw new Error(`${this.name} hasn't been initialized yet`)
+
+    return this._columns
+  }
+
+  static _getTable() {
+    if (!this._table) throw new Error(`${this.name} hasn't been initialized yet`)
+
+    return this._table
   }
 
   static async last() {
@@ -48,6 +168,109 @@ export default class VelociousDatabaseRecord {
 
   static tableName() {
     return inflection.underscore(inflection.pluralize(this.name))
+  }
+
+  static setTableName(tableName) {
+    this._tableName = tableName
+  }
+
+  static translates(name) {
+    if (!this._translations) this._translations = {}
+    if (name in this._translations) throw new Error(`Translation already exists: ${name}`)
+
+    this._translations[name] = {}
+    this._defineRelationship("translations", {klass: this.getTranslationClass(), type: "hasMany"})
+  }
+
+  static getTranslationClass() {
+    if (this._translationClass) return this._translationClass
+
+    const className = `${this.name}Translation`
+    const TranslationClass = class Translation extends VelociousDatabaseRecord {}
+    const belongsTo = `${inflection.camelize(inflection.singularize(this.tableName()), true)}`
+    const tableName = `${inflection.singularize(this.tableName())}_translations`
+
+    Object.defineProperty(TranslationClass, "name", {value: className})
+    TranslationClass.setTableName(tableName)
+    TranslationClass.belongsTo(belongsTo)
+
+    this._translationClass = TranslationClass
+
+    return this._translationClass
+  }
+
+  static getTranslationsTableName() {
+    return `${inflection.singularize(this.tableName())}_translations`
+  }
+
+  static async hasTranslationsTable() {
+    try {
+      await this.connection().getTableByName(this.getTranslationsTableName())
+
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  static _defineTranslationMethods() {
+    const locales = Configuration.current().getLocales()
+
+    if (this._translations) {
+      for (const name in this._translations) {
+        const nameCamelized = inflection.camelize(name)
+        const getterMethodName = `get${nameCamelized}`
+        const setterMethodName = `set${nameCamelized}`
+
+        this.prototype[getterMethodName] = function () {
+          const locale = Configuration.current().getLocale()
+
+          return this._getTranslatedAttribute(name, locale)
+        }
+
+        this.prototype[setterMethodName] = function (newValue) {
+          const locale = Configuration.current().getLocale()
+
+          return this._setTranslatedAttribute(name, locale, newValue)
+        }
+
+        for (const locale of locales) {
+          const localeCamelized = inflection.camelize(locale)
+          const getterMethodNameLocalized = `${getterMethodName}${localeCamelized}`
+          const setterMethodNameLocalized = `${setterMethodName}${localeCamelized}`
+
+          this.prototype[getterMethodNameLocalized] = function () {
+            return this._getTranslatedAttribute(name, locale)
+          }
+
+          this.prototype[setterMethodNameLocalized] = function (newValue) {
+            return this._setTranslatedAttribute(name, locale, newValue)
+          }
+        }
+      }
+    }
+  }
+
+  _getTranslatedAttribute(name, locale) {
+    const translation = this.translations().loaded().find((translation) => translation.getLocale() == locale)
+
+    if (translation) {
+      return translation[name]()
+    }
+  }
+
+  _setTranslatedAttribute(name, locale, newValue) {
+    let translation = this.translations().loaded().find((translation) => translation.getLocale() == locale)
+
+    if (!translation) {
+      translation = this.translations().build({locale})
+    }
+
+    const assignments = {}
+
+    assignments[name] = newValue
+
+    translation.assign(assignments)
   }
 
   static _newQuery() {
@@ -76,11 +299,12 @@ export default class VelociousDatabaseRecord {
   constructor(attributes = {}) {
     this._attributes = attributes
     this._changes = {}
+    this._isNewRecord = true
   }
 
   assign(attributesToAssign) {
     for (const attributeToAssign in attributesToAssign) {
-      this._changes[attributeToAssign] = attributesToAssign[attributeToAssign]
+      this.setAttribute(attributeToAssign, attributesToAssign[attributeToAssign])
     }
   }
 
@@ -105,6 +329,14 @@ export default class VelociousDatabaseRecord {
     })
 
     await this._connection().query(sql)
+  }
+
+  isChanged() {
+    if (Object.keys(this._changes).length > 0) {
+      return true
+    }
+
+    return false
   }
 
   _tableName() {
@@ -132,6 +364,7 @@ export default class VelociousDatabaseRecord {
     const id = result.insertId
 
     await this._reloadWithId(id)
+    this.setIsNewRecord(false)
   }
 
   async _updateRecordWithChanges() {
@@ -148,18 +381,12 @@ export default class VelociousDatabaseRecord {
     await this._reloadWithId(this.id())
   }
 
-  id() {
-    return this.readAttribute(this.constructor.primaryKey())
-  }
+  id = () => this.readAttribute(this.constructor.primaryKey())
+  isPersisted = () => !this._isNewRecord
+  isNewRecord = () => _isNewRecord
 
-  isPersisted() {
-    if (this.id()) return true
-
-    return false
-  }
-
-  isNewRecord() {
-    return !this.isPersisted()
+  setIsNewRecord(newIsNewRecord) {
+    this._isNewRecord = newIsNewRecord
   }
 
   async _reloadWithId(id) {
@@ -170,6 +397,8 @@ export default class VelociousDatabaseRecord {
 
     const query = this.constructor.where(whereObject)
     const reloadedModel = await query.first()
+
+    if (!reloadedModel) throw new Error(`${this.constructor.name}#${this.id()} couldn't be reloaded - record didn't exist`)
 
     this._attributes = reloadedModel.attributes()
     this._changes = {}

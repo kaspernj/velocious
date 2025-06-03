@@ -35,6 +35,8 @@ class VelociousDatabasePoolBase {
 }
 
 const forwardMethods = [
+  "createIndex",
+  "createIndexSql",
   "createTable",
   "createTableSql",
   "delete",
@@ -52,6 +54,9 @@ const forwardMethods = [
 for (const forwardMethod of forwardMethods) {
   VelociousDatabasePoolBase.prototype[forwardMethod] = function(...args) {
     const connection = this.getCurrentConnection()
+    const connectionMethod = connection[forwardMethod]
+
+    if (!connectionMethod) throw new Error(`${forwardMethod} isn't defined on driver`)
 
     return connection[forwardMethod](...args)
   }

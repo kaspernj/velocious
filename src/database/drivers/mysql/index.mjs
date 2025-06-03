@@ -9,6 +9,7 @@ import Options from "./options.mjs"
 import mysql from "mysql"
 import query from "./query.mjs"
 import QueryParser from "./query-parser.mjs"
+import Table from "./table.mjs"
 import Update from "./sql/update.mjs"
 
 export default class VelociousDatabaseDriversMysql extends Base{
@@ -84,6 +85,19 @@ export default class VelociousDatabaseDriversMysql extends Base{
     const insert = new Insert({driver: this, tableName, data})
 
     return insert.toSql()
+  }
+
+  async getTables() {
+    const result = await this.query("SHOW FULL TABLES")
+    const tables = []
+
+    for (const row of result) {
+      const table = new Table(this, row)
+
+      tables.push(table)
+    }
+
+    return tables
   }
 
   options() {
