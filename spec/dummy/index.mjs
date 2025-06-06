@@ -1,9 +1,5 @@
 import Application from "../../src/application.mjs"
 import dummyConfiguration from "./src/config/configuration.mjs"
-import InitializerFromRequireContext from "../../src/database/initializer-from-require-context.mjs"
-import fs from "fs/promises"
-import path from "path"
-import requireContext from "require-context"
 
 export default class Dummy {
   static current() {
@@ -14,27 +10,23 @@ export default class Dummy {
     return this.velociousDummy
   }
 
-  static async initializeModels() {
-    if (this._initializedModels) throw new Error("Models already initialized")
-
-    const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/dummy/src/models`)
-    const requireContextModels = requireContext(modelsPath, true, /^(.+)\.mjs$/)
-    const initializerFromRequireContext = new InitializerFromRequireContext(requireContextModels)
-
-    await initializerFromRequireContext.initialize()
-
-    this._initializedModels = true
-  }
-
   static async prepare() {
+    dummyConfiguration.setCurrent()
+
     const db = dummyConfiguration.getDatabasePool()
 
     await db.withConnection(async () => {
       await db.query("DROP TABLE IF EXISTS tasks")
-      await db.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, name VARCHAR(255), description TEXT, PRIMARY KEY (id))")
+      await db.query("DROP TABLE IF EXISTS projects")
+      await db.query("DROP TABLE IF EXISTS project_translations")
 
-      if (!this._initializedModels) {
-        await this.initializeModels()
+      await db.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, project_id MEDIUMINT, name VARCHAR(255), description TEXT, PRIMARY KEY (id))")
+      await db.query("CREATE TABLE projects (id MEDIUMINT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))")
+      await db.query("CREATE TABLE project_translations (id MEDIUMINT NOT NULL AUTO_INCREMENT, project_id MEDIUMINT, locale VARCHAR(255), name VARCHAR(255), PRIMARY KEY (id))")
+      await db.query("CREATE UNIQUE INDEX unique_project_translation ON project_translations (project_id, locale)")
+
+      if (!dummyConfiguration.isInitialized()) {
+        await dummyConfiguration.initialize()
       }
     })
   }
@@ -45,10 +37,10 @@ export default class Dummy {
 
   async run(callback) {
     await dummyConfiguration.getDatabasePool().withConnection(async () => {
+      await Dummy.prepare()
       await this.start()
 
       try {
-        await Dummy.prepare()
         await callback()
       } finally {
         await this.stop()

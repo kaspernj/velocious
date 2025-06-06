@@ -1,12 +1,15 @@
 import FromPlain from "./from-plain.mjs"
+import {incorporate} from "incorporator"
+import * as inflection from "inflection"
 import JoinPlain from "./join-plain.mjs"
 import OrderPlain from "./order-plain.mjs"
+import Preloader from "./preloader.mjs"
 import SelectPlain from "./select-plain.mjs"
 import WhereHash from "./where-hash.mjs"
 import WherePlain from "./where-plain.mjs"
 
 export default class VelociousDatabaseQuery {
-  constructor({driver, froms = [], joins = [], handler, limits = [], modelClass, orders = [], selects = [], wheres = []}) {
+  constructor({driver, froms = [], groups = [], joins = [], handler, limits = [], modelClass, orders = [], preload = {}, selects = [], wheres = []}) {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
 
@@ -14,9 +17,11 @@ export default class VelociousDatabaseQuery {
     this.handler = handler
     this.modelClass = modelClass
     this._froms = froms
+    this._groups = groups
     this._joins = joins
     this._limits = limits
     this._orders = orders
+    this._preload = preload
     this._selects = selects
     this._wheres = wheres
   }
@@ -26,10 +31,12 @@ export default class VelociousDatabaseQuery {
       driver: this.driver,
       froms: [...this._froms],
       handler: this.handler.clone(),
+      groups: [...this._groups],
       joins: [...this._joins],
       limits: [...this._limits],
       modelClass: this.modelClass,
       orders: [...this._orders],
+      preload: {...this._preload},
       selects: [...this._selects],
       wheres: [...this._wheres]
     })
@@ -38,6 +45,38 @@ export default class VelociousDatabaseQuery {
   }
 
   getOptions = () => this.driver.options()
+
+  async findBy(conditions) {
+    const newConditions = {}
+
+    for (const key in conditions) {
+      const keyUnderscore = inflection.underscore(key)
+
+      newConditions[keyUnderscore] = conditions[key]
+    }
+
+    return await this.clone().where(newConditions).first()
+  }
+
+  async findOrCreateBy(conditions) {
+    const record = await this.findOrInitializeBy(conditions)
+
+    if (record.isNewRecord()) {
+      await record.save()
+    }
+
+    return record
+  }
+
+  async findOrInitializeBy(conditions) {
+    const record = await this.findBy(conditions)
+
+    if (record) return record
+
+    const newRecord = new this.modelClass(conditions)
+
+    return newRecord
+  }
 
   async first() {
     const newQuery = this.clone()
@@ -55,10 +94,8 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  last = async () => await this.clone().reverseOrder().first()
-
-  limit(value) {
-    this._limits.push(value)
+  group(group) {
+    this._groups.push(group)
     return this
   }
 
@@ -71,12 +108,24 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  last = async () => await this.clone().reverseOrder().first()
+
+  limit(value) {
+    this._limits.push(value)
+    return this
+  }
+
   order(order) {
     if (typeof order == "number" || typeof order == "string") order = new OrderPlain({plain: order, query: this})
 
     order.query = this
 
     this._orders.push(order)
+    return this
+  }
+
+  preload(data) {
+    incorporate(this._preload, data)
     return this
   }
 
@@ -117,10 +166,20 @@ export default class VelociousDatabaseQuery {
     const models = []
 
     for (const result of results) {
-      const model = new this.modelClass(result)
+      const model = new this.modelClass()
 
-      model.setIsNewRecord(false)
+      model.loadExistingRecord(result)
       models.push(model)
+    }
+
+    if (Object.keys(this._preload).length > 0 && models.length > 0) {
+      const preloader = new Preloader({
+        modelClass: this.modelClass,
+        models,
+        preload: this._preload
+      })
+
+      await preloader.run()
     }
 
     return models

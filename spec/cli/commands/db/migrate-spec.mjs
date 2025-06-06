@@ -17,6 +17,7 @@ describe("Cli - Commands - db:migrate", () => {
     await db.withConnection(async () => {
       await db.query("DROP TABLE IF EXISTS tasks")
       await db.query("DROP TABLE IF EXISTS projects")
+      await db.query("DROP TABLE IF EXISTS project_translations")
     })
 
     await cli.execute()
@@ -29,6 +30,7 @@ describe("Cli - Commands - db:migrate", () => {
 
     expect(tablesResult).toEqual(
       [
+        {Tables_in_velocious_test: "project_translations"},
         {Tables_in_velocious_test: "projects"},
         {Tables_in_velocious_test: "tasks"}
       ]

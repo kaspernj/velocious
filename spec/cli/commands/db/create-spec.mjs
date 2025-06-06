@@ -17,7 +17,7 @@ describe("Cli - Commands - db:create", () => {
           sql: 'CREATE DATABASE IF NOT EXISTS `velocious_test`'
         },
         {
-          createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` varchar(255) PRIMARY KEY)'
+          createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` varchar(255) PRIMARY KEY NOT NULL)'
         }
       ]
     )

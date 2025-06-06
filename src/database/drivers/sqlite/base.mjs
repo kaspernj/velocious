@@ -12,9 +12,9 @@ import Update from "../sqlite/sql/update.mjs"
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   createIndexSql(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
-    const createTable = new CreateIndex(createArgs)
+    const createIndex = new CreateIndex(createArgs)
 
-    return createTable.toSql()
+    return createIndex.toSql()
   }
 
   createTableSql(tableData) {
