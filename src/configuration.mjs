@@ -1,4 +1,5 @@
 import {digg} from "diggerize"
+import restArgsError from "./utils/rest-args-error.mjs"
 
 export default class VelociousConfiguration {
   static current(throwError = true) {
@@ -7,10 +8,10 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({database, debug, directory, initializeModels, locale, locales, ...restProps}) {
-    const restPropsKeys = Object.keys(restProps)
+  constructor({database, debug, directory, initializeModels, locale, locales, ...restArgs}) {
+    restArgsError(restArgs)
 
-    if (restPropsKeys.length > 0) throw new Error(`Unknown arguments: ${restPropsKeys.join(", ")}`)
+    if (!initializeModels) throw new Error("initializeModels wasn't given")
 
     this.database = database
     this.debug = debug
