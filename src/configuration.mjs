@@ -1,4 +1,5 @@
 import {digg} from "diggerize"
+import restArgsError from "./utils/rest-args-error.mjs"
 
 export default class VelociousConfiguration {
   static current(throwError = true) {
@@ -7,12 +8,19 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({database, debug, directory, locale, locales}) {
+  constructor({database, debug, directory, initializeModels, locale, locales, ...restArgs}) {
+    restArgsError(restArgs)
+
+    if (!initializeModels) throw new Error("initializeModels wasn't given")
+
     this.database = database
     this.debug = debug
     this._directory = directory
+    this._initializeModels = initializeModels
+    this._isInitialized = false
     this.locale = locale
     this.locales = locales
+    this.modelClasses = {}
   }
 
   getDatabasePool() {
@@ -53,6 +61,14 @@ export default class VelociousConfiguration {
 
   getLocales = () => digg(this, "locales")
 
+  getModelClass(name) {
+    const modelClass = this.modelClasses[name]
+
+    if (!modelClass) throw new Error(`No such model class ${name} in ${Object.keys(this.modelClasses).join(", ")}}`)
+
+    return modelClass
+  }
+
   initializeDatabasePool() {
     if (!this.database) throw new Error("No 'database' was given")
     if (this.databasePool) throw new Error("DatabasePool has already been initialized")
@@ -64,9 +80,15 @@ export default class VelociousConfiguration {
   }
 
   isDatabasePoolInitialized = () => Boolean(this.databasePool)
+  isInitialized = () => this._isInitialized
 
-  initialize() {
-    // Doesn't currently do anything.
+  async initialize() {
+    await this._initializeModels({configuration: this})
+    this._isInitialized = true
+  }
+
+  registerModelClass(modelClass) {
+    this.modelClasses[modelClass.name] = modelClass
   }
 
   setCurrent() {

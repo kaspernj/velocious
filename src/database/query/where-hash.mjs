@@ -10,13 +10,22 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   toSql() {
     const options = this.getOptions()
     let sql = "("
+    let index = 0
 
     for (const whereKey in this.hash) {
       const whereValue = this.hash[whereKey]
 
-      if (whereKey > 0) sql += " && "
+      if (index > 0) sql += " AND "
 
-      sql += `${options.quoteColumnName(whereKey)} = ${options.quote(whereValue)}`
+      sql += `${options.quoteColumnName(whereKey)}`
+
+      if (Array.isArray(whereValue)) {
+        sql += ` IN (${whereValue.map((value) => options.quote(value)).join(", ")})`
+      } else {
+        sql += ` = ${options.quote(whereValue)}`
+      }
+
+      index++
     }
 
     sql += ")"

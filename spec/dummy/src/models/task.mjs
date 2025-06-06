@@ -1,4 +1,8 @@
 import DatabaseRecord from "../../../../src/database/record/index.mjs"
 
-export default class Task extends DatabaseRecord {
+class Task extends DatabaseRecord {
 }
+
+Task.belongsTo("project")
+
+export default Task

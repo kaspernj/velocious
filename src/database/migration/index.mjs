@@ -22,6 +22,8 @@ export default class VelociousDatabaseMigration {
   async createTable(tableName, callback) {
     const tableData = new TableData(tableName)
 
+    tableData.integer("id", {null: false, primaryKey: true})
+
     callback(tableData)
 
     const databasePool = this.configuration.getDatabasePool()

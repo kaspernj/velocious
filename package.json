@@ -28,6 +28,7 @@
     "require-context": "^1.1.0"
   },
   "dependencies": {
+    "better-localstorage": "^1.0.7",
     "diggerize": "^1.0.5",
     "ejs": "^3.1.6",
     "escape-string-regexp": "^1.0.5",

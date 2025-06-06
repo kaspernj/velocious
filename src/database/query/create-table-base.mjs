@@ -40,6 +40,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (column.args.autoIncrement) sql += " AUTO_INCREMENT"
       if (column.args.primaryKey) sql += " PRIMARY KEY"
+      if (column.args.null === false) sql += " NOT NULL"
     }
 
     if (this.indexInCreateTable) {
