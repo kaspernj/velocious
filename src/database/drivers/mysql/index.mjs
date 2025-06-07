@@ -65,7 +65,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return new QueryParser({query}).toSql()
   }
 
-  escape() {
+  escape(string) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
     return this.connection.escape(string)

@@ -1,4 +1,5 @@
 import {digs} from "diggerize"
+import JoinPlain from "../query/join-plain.mjs"
 
 export default class VelocuiousDatabaseQueryParserJoinsParser {
   constructor({pretty, query}) {
@@ -9,15 +10,12 @@ export default class VelocuiousDatabaseQueryParserJoinsParser {
 
   toSql() {
     const {pretty, query} = digs(this, "pretty", "query")
-
     let sql = ""
 
     for (const joinKey in query._joins) {
       const join = query._joins[joinKey]
 
-      if (typeof join == "object") {
-        sql = this.joinObject({join, modelClass: query.modelClass, sql})
-      } else {
+      if (join instanceof JoinPlain) {
         if (joinKey == 0) {
           if (pretty) {
             sql += "\n\n"
@@ -27,6 +25,10 @@ export default class VelocuiousDatabaseQueryParserJoinsParser {
         }
 
         sql += join.toSql()
+      } else if (typeof join == "object") {
+        sql = this.joinObject({join, modelClass: query.modelClass, sql})
+      } else {
+        throw new Error(`Unknown join object: ${join.constructor.name}`)
       }
     }
 
