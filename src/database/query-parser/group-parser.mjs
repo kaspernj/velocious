@@ -28,7 +28,11 @@ export default class VelociousDatabaseQueryParserFromParser {
         sql += " "
       }
 
-      sql += group.toSql()
+      if (typeof group == "string") {
+        sql += group
+      } else {
+        sql += group.toSql()
+      }
     }
 
     return sql

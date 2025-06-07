@@ -65,13 +65,25 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return new QueryParser({query}).toSql()
   }
 
-  quote(string) {
+  escape(string) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
     return this.connection.escape(string)
   }
 
-  quoteColumn(string) {
+  quote(string) {
+    return `${this.escape(string)}`
+  }
+
+  quoteColumn = (string) => {
+    if (string.includes("`")) throw new Error(`Possible SQL injection in column name: ${string}`)
+
+    return `\`${string}\``
+  }
+
+  quoteTable = (string) => {
+    if (string.includes("`")) throw new Error(`Possible SQL injection in table name: ${string}`)
+
     return `\`${string}\``
   }
 

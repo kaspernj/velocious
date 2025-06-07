@@ -35,7 +35,11 @@ export default class VelociousDatabaseQueryParserSelectParser {
     }
 
     if (query._selects.length == 0) {
-      sql += "*"
+      if (query.modelClass) {
+        sql += `${query.modelClass.connection().quoteTable(query.modelClass.tableName())}.*`
+      } else {
+        sql += "*"
+      }
     }
 
     return sql

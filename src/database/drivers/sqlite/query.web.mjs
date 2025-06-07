@@ -5,7 +5,13 @@ export default async function query(connection, sql) {
   try {
     result = connection.exec(sql)
   } catch (error) {
-    error.message += `\n\n${sql}`
+    let sqlInErrorMessage = `${sql}`
+
+    if (sqlInErrorMessage.length >= 4096) {
+      sqlInErrorMessage = `${sqlInErrorMessage.substring(0, 4096)}...`
+    }
+
+    error.message += `\n\n${sqlInErrorMessage}`
 
     throw error
   }

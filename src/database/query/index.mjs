@@ -100,9 +100,13 @@ export default class VelociousDatabaseQuery {
   }
 
   joins(join) {
-    if (typeof join == "string") join = new JoinPlain({plain: join, query: this})
-
-    join.query = this
+    if (typeof join == "string") {
+      join = new JoinPlain({plain: join, query: this})
+    } else if (typeof join == "object") {
+      // Do nothing
+    } else {
+      throw new Error(`Unknown type of join: ${typeof join}`)
+    }
 
     this._joins.push(join)
     return this

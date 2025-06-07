@@ -19,7 +19,10 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     for (const model of this.models) {
       preloadCollections[model.id()] = []
       modelIds.push(model.id())
-      modelsById[model.id()] = model
+
+      if (!(model.id in modelsById)) modelsById[model.id()] = []
+
+      modelsById[model.id()].push(model)
     }
 
     const whereArgs = {}
@@ -38,11 +41,13 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     // Set the target preloaded models on the given models
     for (const modelId in preloadCollections) {
       const preloadedCollection = preloadCollections[modelId]
-      const model = modelsById[modelId]
-      const modelRelationship = model.getRelationshipByName(this.relationship.getRelationshipName())
 
-      modelRelationship.setPreloaded(true)
-      modelRelationship.addToLoaded(preloadedCollection)
+      for (const model of modelsById[modelId]) {
+        const modelRelationship = model.getRelationshipByName(this.relationship.getRelationshipName())
+
+        modelRelationship.setPreloaded(true)
+        modelRelationship.addToLoaded(preloadedCollection)
+      }
     }
 
     return targetModels

@@ -4,7 +4,9 @@ import Base from "../base.mjs"
 import CreateIndex from "../sqlite/sql/create-index.mjs"
 import CreateTable from "../sqlite/sql/create-table.mjs"
 import Delete from "../sqlite/sql/delete.mjs"
+import escapeString from "sql-string-escape"
 import Insert from "../sqlite/sql/insert.mjs"
+import Options from "../sqlite/options.mjs"
 import QueryParser from "../sqlite/query-parser.mjs"
 import Table from "./table"
 import Update from "../sqlite/sql/update.mjs"
@@ -60,9 +62,44 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return digg(result, 0, "last_insert_id")
   }
 
+  options() {
+    if (!this._options) {
+      this._options = new Options({driver: this})
+    }
+
+    return this._options
+  }
+
   queryToSql = (query) => new QueryParser({query}).toSql()
+
+  escape(value) {
+    const type = typeof value
+
+    if (type != "string") value = `${value}`
+
+    const resultWithQuotes = escapeString(value)
+    const result = resultWithQuotes.substring(1, resultWithQuotes.length - 1)
+
+    return result
+  }
+
+  quote(value) {
+    const type = typeof value
+
+    if (type == "number") return value
+    if (type != "string") value = `${value}`
+
+    return escapeString(value)
+  }
+
   quoteColumn = (string) => {
     if (string.includes("`")) throw new Error(`Possible SQL injection in column name: ${string}`)
+
+    return `\`${string}\``
+  }
+
+  quoteTable = (string) => {
+    if (string.includes("`")) throw new Error(`Possible SQL injection in table name: ${string}`)
 
     return `\`${string}\``
   }
