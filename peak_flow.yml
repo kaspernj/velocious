@@ -5,7 +5,7 @@ before_install:
   - sudo apt-get update
   - sudo apt-get install -y nodejs
 before_script:
-  - cp spec/dummy/src/config/configuration.peakflow.mjs spec/dummy/src/config/configuration.mjs
+  - cp spec/dummy/src/config/configuration.peakflow.js spec/dummy/src/config/configuration.js
   - npm install
   - wait-for-it mariadb:3306
 services:
