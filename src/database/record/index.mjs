@@ -1,6 +1,7 @@
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.mjs"
 import BelongsToRelationship from "./relationships/belongs-to.mjs"
 import Configuration from "../../configuration.mjs"
+import FromTable from "../query/from-table.mjs"
 import Handler from "../handler.mjs"
 import HasManyRelationship from "./relationships/has-many.mjs"
 import HasManyInstanceRelationship from "./instance-relationships/has-many.mjs"
@@ -107,6 +108,14 @@ export default class VelociousDatabaseRecord {
     if (!connection) throw new Error("No connection?")
 
     return connection
+  }
+
+  static async create(attributes) {
+    const record = new this(attributes)
+
+    await record.save()
+
+    return record
   }
 
   static async find(recordId) {
@@ -419,7 +428,7 @@ export default class VelociousDatabaseRecord {
       modelClass: this
     })
 
-    return query.from(this.tableName())
+    return query.from(new FromTable({driver: this.connection(), tableName: this.tableName()}))
   }
 
   static orderableColumn() {
@@ -442,6 +451,10 @@ export default class VelociousDatabaseRecord {
 
   static async findOrInitializeBy(...args) {
     return this._newQuery().findOrInitializeBy(...args)
+  }
+
+  static joins(...args) {
+    return this._newQuery().joins(...args)
   }
 
   static preload(...args) {

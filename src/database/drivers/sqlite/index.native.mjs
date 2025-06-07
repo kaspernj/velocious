@@ -1,19 +1,31 @@
-import Base from "./base"
 import {digg} from "diggerize"
-import escapeString from "sql-string-escape"
-import Options from "../sqlite/options.mjs"
 import query from "./query"
 import * as SQLite from "expo-sqlite"
 
+import Base from "./base"
+
 export default class VelociousDatabaseDriversSqliteNative extends Base {
   async connect() {
-    const connection = await SQLite.openDatabaseAsync(digg(this.getArgs(), "name"))
+    const args = this.getArgs()
+    const databaseName = digg(args, "name")
 
-    this.connection = connection
+    if (args.reset) {
+      try {
+        await SQLite.deleteDatabaseAsync(databaseName)
+      } catch (error) {
+        if (error.message.match(/Database '(.+)' not found/)) {
+          // Ignore not found
+        } else {
+          throw error
+        }
+      }
+    }
+
+    this.connection = await SQLite.openDatabaseAsync(databaseName)
   }
 
-  disconnect() {
-    this.connection.end()
+  async disconnect() {
+    await this.connection.closeAsync()
   }
 
   connectArgs() {
@@ -36,19 +48,4 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
   }
 
   query = async (sql) => await query(this.connection, sql)
-
-  quote(string) {
-    const type = typeof string
-
-    if (type == "number") return string
-    if (type != "string") string = `${string}`
-
-    return escapeString(string)
-  }
-
-  options() {
-    if (!this._options) this._options = new Options({driver: this})
-
-    return this._options
-  }
 }

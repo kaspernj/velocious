@@ -33,4 +33,18 @@ export default class VelociousDatabaseMigration {
       await databasePool.query(sql)
     }
   }
+
+  getConnection() {
+    const connection = this.configuration.getDatabasePool().getCurrentConnection()
+
+    if (!connection) throw new Error("Couldn't get current connection")
+
+    return connection
+  }
+
+  async tableExists(tableName) {
+    const exists = await this.getConnection().tableExists(tableName)
+
+    return exists
+  }
 }
