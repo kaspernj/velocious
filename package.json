@@ -1,10 +1,10 @@
 {
   "bin": {
-    "velocious": "bin/velocious.mjs"
+    "velocious": "bin/velocious.js"
   },
   "name": "velocious",
   "version": "1.0.6",
-  "main": "index.mjs",
+  "main": "index.js",
   "scripts": {
     "test": "jasmine",
     "velocious": "asd"
