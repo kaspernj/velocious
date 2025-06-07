@@ -3,7 +3,7 @@
     "velocious": "bin/velocious.mjs"
   },
   "name": "velocious",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "index.mjs",
   "scripts": {
     "test": "jasmine",
@@ -14,7 +14,7 @@
     "type": "git",
     "url": "git+https://github.com/kaspernj/velocious.git"
   },
-  "author": "k@spernj.org",
+  "author": "kasper@diestoeckels.de",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/kaspernj/velocious/issues"
