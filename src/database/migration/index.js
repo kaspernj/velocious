@@ -1,8 +1,20 @@
-import TableData from "../table-data/index.js"
+import TableData, {TableColumn} from "../table-data/index.js"
 
 export default class VelociousDatabaseMigration {
   constructor({configuration}) {
     this.configuration = configuration
+  }
+
+  async addColumn(tableName, columnName, args) {
+    const databasePool = this.configuration.getDatabasePool()
+    const sqls = databasePool.alterTableSql({
+      columns: [new TableColumn(columnName, args)],
+      tableName
+    })
+
+    for (const sql of sqls) {
+      await databasePool.query(sql)
+    }
   }
 
   async addIndex(tableName, columns, args) {

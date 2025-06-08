@@ -15,7 +15,9 @@ const configurationResolver = async (args) => {
     configuration = configurationImport.default
   } catch (error) {
     // This might happen during an "init" CLI command where we copy a sample configuration file.
-    if (error.code != "ERR_MODULE_NOT_FOUND") throw error
+    if (!error.message.match(/^Cannot find module '(.+)\/configuration\.js'/)) {
+      throw error
+    }
 
     configuration = new Configuration(args)
   }

@@ -1,5 +1,6 @@
 import {digg} from "diggerize"
 
+import AlterTable from "../sqlite/sql/alter-table.js"
 import Base from "../base.js"
 import CreateIndex from "../sqlite/sql/create-index.js"
 import CreateTable from "../sqlite/sql/create-table.js"
@@ -12,6 +13,13 @@ import Table from "./table"
 import Update from "../sqlite/sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
+  alterTableSql(columnData) {
+    const createArgs = Object.assign({driver: this}, columnData)
+    const alterTable = new AlterTable(createArgs)
+
+    return alterTable.toSqls()
+  }
+
   createIndexSql(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
