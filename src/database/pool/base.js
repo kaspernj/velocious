@@ -35,6 +35,8 @@ class VelociousDatabasePoolBase {
 }
 
 const forwardMethods = [
+  "alterTable",
+  "alterTableSql",
   "createIndex",
   "createIndexSql",
   "createTable",

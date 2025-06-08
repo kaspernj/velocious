@@ -20,7 +20,7 @@ export default class VelociousDatabaseMigrateFromRequireContext {
 
         const date = parseInt(match[1])
         const migrationName = match[2]
-        const migrationClassName = inflection.camelize(migrationName)
+        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
 
         return {
           file,

@@ -3,6 +3,8 @@ class TableColumn {
     this.args = args
     this.name = name
   }
+
+  getName = () => this.name
 }
 
 class TableIndex {
@@ -22,6 +24,8 @@ class TableReference {
     this.name = name
   }
 }
+
+export {TableColumn}
 
 export default class TableData {
   _columns = []
