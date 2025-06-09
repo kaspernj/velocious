@@ -5,12 +5,11 @@ import Migrator from "./migrator"
 export default class VelociousDatabaseMigrateFromRequireContext {
   constructor(configuration) {
     this.configuration = configuration || Configuration.current()
+    this.migrator = new Migrator({configuration: this.configuration})
   }
 
   async execute(requireContext) {
-    const migrator = new Migrator({configuration: this.configuration})
-
-    await migrator.prepare()
+    await this.migrator.prepare()
 
     const files = requireContext.keys()
       .map((file) => {
@@ -32,7 +31,7 @@ export default class VelociousDatabaseMigrateFromRequireContext {
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
     for (const migration of files) {
-      if (!migrator.hasRunMigrationVersion(migration.date)) {
+      if (!this.migrator.hasRunMigrationVersion(migration.date)) {
         await this.runMigrationFile(migration, requireContext)
       }
     }

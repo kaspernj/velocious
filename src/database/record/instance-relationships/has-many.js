@@ -39,9 +39,5 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     this._loaded = models
   }
 
-  setPreloaded(preloadedValue) {
-    this._preloaded = preloadedValue
-  }
-
   getTargetModelClass = () => this.relationship.getTargetModelClass()
 }

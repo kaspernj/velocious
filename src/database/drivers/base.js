@@ -69,6 +69,15 @@ export default class VelociousDatabaseDriversBase {
     this.idSeq = id
   }
 
+  async tableExists(tableName) {
+    const tables = await this.getTables()
+    const table = tables.find((table) => table.getName() == tableName)
+
+    if (table) return true
+
+    return false
+  }
+
   async update(...args) {
     const sql = this.updateSql(...args)
 

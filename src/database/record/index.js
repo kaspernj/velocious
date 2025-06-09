@@ -77,6 +77,12 @@ export default class VelociousDatabaseRecord {
     return relationship
   }
 
+  static getRelationships() {
+    if (this._relationships) return Object.values(this._relationships)
+
+    return []
+  }
+
   getRelationshipByName(relationshipName) {
     if (!this._instanceRelationships) this._instanceRelationships = {}
 
@@ -308,7 +314,7 @@ export default class VelociousDatabaseRecord {
 
       const model = instanceRelationship.loaded()
 
-      if (model.isChanged()) {
+      if (model?.isChanged()) {
         await model.save()
 
         const foreignKey = instanceRelationship.getForeignKey()
@@ -569,6 +575,13 @@ export default class VelociousDatabaseRecord {
 
     await this._reloadWithId(id)
     this.setIsNewRecord(false)
+
+    // Mark all relationships as preloaded, since we don't expect anything to have magically appeared since we created the record.
+    for (const relationship of this.constructor.getRelationships()) {
+      const instanceRelationship = this.getRelationshipByName(relationship.getRelationshipName())
+
+      instanceRelationship.setPreloaded(true)
+    }
   }
 
   async _updateRecordWithChanges() {
