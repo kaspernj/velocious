@@ -1,11 +1,17 @@
+import restArgsError from "../../utils/rest-args-error.js"
+
 export default class VelociousDatabaseQueryInsertBase {
-  constructor({driver, tableName, data}) {
+  constructor({columns, data, driver, multiple, tableName, rows, ...restArgs}) {
     if (!driver) throw new Error("No driver given to insert base")
     if (!tableName) throw new Error(`Invalid table name given to insert base: ${tableName}`)
-    if (!data) throw new Error("No data given to insert base")
 
+    restArgsError(restArgs)
+
+    this.columns = columns
     this.data = data
     this.driver = driver
+    this.multiple = multiple
+    this.rows = rows
     this.tableName = tableName
   }
 
@@ -14,6 +20,56 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   toSql() {
-    throw new Error("'toSql' wasn't implemented")
+    let sql = `INSERT INTO ${this.getOptions().quoteTableName(this.tableName)} (`
+    let count = 0
+    let columns
+
+    if (this.columns && this.rows) {
+      columns = this.columns
+    } else if (this.data) {
+      columns = Object.keys(this.data)
+    } else {
+      throw new Error("Neither 'column' and 'rows' or data was given")
+    }
+
+    for (const columnName of columns) {
+      if (count > 0) sql += ", "
+
+      sql += this.getOptions().quoteColumnName(columnName)
+      count++
+    }
+
+    sql += ") VALUES "
+
+    if (this.columns && this.rows) {
+      let count = 0
+
+      for (const row of this.rows) {
+        if (count >= 1) sql += ", "
+
+        count++
+        sql += this._valuesSql(row)
+      }
+    } else {
+      sql += this._valuesSql(Object.values(this.data))
+    }
+
+    return sql
+  }
+
+  _valuesSql(data) {
+    let count = 0
+    let sql = "("
+
+    for (const value of data) {
+      if (count > 0) sql += ", "
+
+      sql += this.getOptions().quote(value)
+      count++
+    }
+
+    sql += ")"
+
+    return sql
   }
 }

@@ -24,6 +24,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     const databaseContent = await this.betterLocaleStorage.get(this.localStorageName())
 
     this.connection = new SQL.Database(databaseContent)
+    await this.registerVersion()
   }
 
   localStorageName = () => `VelociousDatabaseDriversSqliteWeb---${digg(this.getArgs(), "name")}`

@@ -34,8 +34,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return createTable.toSql()
   }
 
-  deleteSql = ({tableName, conditions}) => new Delete({conditions, driver: this, tableName}).toSql()
-  insertSql = ({tableName, data}) => new Insert({driver: this, tableName, data}).toSql()
+  deleteSql = (args) => new Delete(Object.assign({driver: this}, args)).toSql()
+  insertSql = (args) => new Insert(Object.assign({driver: this}, args)).toSql()
 
   async getTableByName(tableName) {
     const result = await this.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${this.quote(tableName)} LIMIT 1`)
@@ -64,6 +64,53 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return tables
   }
 
+  async insertMultiple(...args) {
+    if (this.supportsMultipleInsertValues()) {
+      return await this.insertMultipleWithSingleInsert(...args)
+    } else {
+      return await this.insertMultipleWithTransaction(...args)
+    }
+  }
+
+  supportsMultipleInsertValues() {
+    if (this.versionMajor >= 4) return true
+    if (this.versionMajor == 3 && this.versionMinor >= 8) return true
+    if (this.versionMajor == 3 && this.versionMinor == 7 && this.versionPatch >= 11) return true
+
+    return false
+  }
+
+  async insertMultipleWithSingleInsert(tableName, columns, rows) {
+    const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
+
+    return await this.query(sql)
+  }
+
+  async insertMultipleWithTransaction(tableName, columns, rows) {
+    const sqls = []
+
+    for (const row of rows) {
+      const data = []
+
+      for (const columnIndex in columns) {
+        const columnName = columns[columnIndex]
+        const value = row[columnIndex]
+
+        data[columnName] = value
+      }
+
+      const insertSql = this.insertSql({tableName, data})
+
+      sqls.push(insertSql)
+    }
+
+    await this.transaction(async () => {
+      for (const sql of sqls) {
+        await this.query(sql)
+      }
+    })
+  }
+
   async lastInsertID() {
     const result = await this.query("SELECT LAST_INSERT_ROWID() AS last_insert_id")
 
@@ -79,6 +126,18 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   queryToSql = (query) => new QueryParser({query}).toSql()
+
+  async registerVersion() {
+    const versionResult = await this.query("SELECT sqlite_version() AS version")
+
+    this.version = versionResult[0].version
+
+    const versionParts = this.version.split(".")
+
+    this.versionMajor = versionParts[0]
+    this.versionMinor = versionParts[1]
+    this.versionPatch = versionParts[2]
+  }
 
   escape(value) {
     const type = typeof value

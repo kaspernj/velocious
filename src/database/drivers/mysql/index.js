@@ -93,8 +93,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return deleteInstruction.toSql()
   }
 
-  insertSql({tableName, data}) {
-    const insert = new Insert({driver: this, tableName, data})
+  insertSql(args) {
+    const insertArgs = Object.assign({driver: this}, args)
+    const insert = new Insert(insertArgs)
 
     return insert.toSql()
   }

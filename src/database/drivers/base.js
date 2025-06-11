@@ -78,6 +78,22 @@ export default class VelociousDatabaseDriversBase {
     return false
   }
 
+  async transaction(callback) {
+    await this.query("BEGIN TRANSACTION")
+
+    let result
+
+    try {
+      result = await callback()
+      await this.query("COMMIT")
+    } catch (error) {
+      this.query("ROLLBACK")
+      throw error
+    }
+
+    return result
+  }
+
   async update(...args) {
     const sql = this.updateSql(...args)
 

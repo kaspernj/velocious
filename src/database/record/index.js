@@ -275,6 +275,10 @@ export default class VelociousDatabaseRecord {
     return this._table
   }
 
+  static async insertMultiple(columns, rows) {
+    return await this.connection().insertMultiple(this.tableName(), columns, rows)
+  }
+
   static async last() {
     const query = this._newQuery().order(this.primaryKey())
     const record = await query.last()
@@ -415,9 +419,11 @@ export default class VelociousDatabaseRecord {
   }
 
   _setTranslatedAttribute(name, locale, newValue) {
-    let translation = this.translations().loaded()?.find((translation) =>translation.locale() == locale)
+    let translation = this.translations().loaded()?.find((translation) => translation.locale() == locale)
 
-    if (!translation) translation = this.translations().build({locale})
+    if (!translation) {
+      translation = this.translations().build({locale})
+    }
 
     const assignments = {}
 
@@ -519,7 +525,7 @@ export default class VelociousDatabaseRecord {
   _hasChanges = () => Object.keys(this._changes).length > 0
 
   isChanged() {
-    if (this.isNewRecord() || this._hasChanges()) {
+    if (this.isNewRecord() || this._hasChanges()){
       return true
     }
 
@@ -541,6 +547,18 @@ export default class VelociousDatabaseRecord {
     }
 
     return false
+  }
+
+  changes() {
+    const changes = {}
+
+    for (const changeKey in this._changes) {
+      const changeValue = this._changes[changeKey]
+
+      changes[changeKey] = [this._attributes[changeKey], changeValue]
+    }
+
+    return changes
   }
 
   _tableName() {

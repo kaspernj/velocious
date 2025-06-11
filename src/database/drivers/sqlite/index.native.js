@@ -22,6 +22,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     }
 
     this.connection = await SQLite.openDatabaseAsync(databaseName)
+    await this.registerVersion()
   }
 
   async disconnect() {
