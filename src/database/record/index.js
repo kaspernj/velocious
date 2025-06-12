@@ -19,6 +19,7 @@ export default class VelociousDatabaseRecord {
   }
 
   static _defineRelationship(relationshipName, data) {
+    if (!relationshipName) throw new Error(`Invalid relationship name given: ${relationshipName}`)
     if (!this._relationships) this._relationships = {}
     if (this._relationshipExists(relationshipName)) throw new Error(`Relationship ${relationshipName} already exists`)
 
