@@ -24,29 +24,13 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   localStorageName = () => `VelociousDatabaseDriversSqlite---${digg(this.getArgs(), "name")}`
-  disconnect = () => this.saveDatabase()
-  saveDatabase = async () => {
-    const localStorageContent = this.connection.export()
-    await this.betterLocaleStorage.set(this.localStorageName(), localStorageContent)
-  }
-
-  saveDatabaseDebounce = debounce(this.saveDatabase, 500)
 
   async close() {
-    await this.saveDatabase()
-    await this.connection.end()
+    await this.connection.close()
     this.connection = undefined
   }
 
   query = async (sql) => {
-    const result = await query(this.connection, sql)
-    const downcasedSQL = sql.toLowerCase().trim()
-
-    // Auto-save database in local storage in case we can find manipulating instructions in the SQL
-    if (downcasedSQL.startsWith("delete ") || downcasedSQL.startsWith("insert into ") || downcasedSQL.startsWith("update ")) {
-      this.saveDatabaseDebounce()
-    }
-
-    return result
+    return await query(this.connection, sql)
   }
 }
