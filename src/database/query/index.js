@@ -4,6 +4,7 @@ import * as inflection from "inflection"
 import JoinPlain from "./join-plain.js"
 import OrderPlain from "./order-plain.js"
 import Preloader from "./preloader.js"
+import RecordNotFoundError from "../record/record-not-found-error.js"
 import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
@@ -45,6 +46,21 @@ export default class VelociousDatabaseQuery {
   }
 
   getOptions = () => this.driver.options()
+
+  async find(recordId) {
+    const conditions = {}
+
+    conditions[this.modelClass.primaryKey()] = recordId
+
+    const query = this.clone().where(conditions)
+    const record = await query.first()
+
+    if (!record) {
+      throw new RecordNotFoundError(`Couldn't find ${this.modelClass.name} with '${this.modelClass.primaryKey()}'=${recordId}`)
+    }
+
+    return record
+  }
 
   async findBy(conditions) {
     const newConditions = {}

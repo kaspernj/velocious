@@ -15,5 +15,9 @@ export default new Configuration({
         database: "database"
       }
     }
+  },
+  localeFallbacks: {
+    de: ["de", "en"],
+    en: ["en", "de"]
   }
 })
