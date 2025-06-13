@@ -1,6 +1,6 @@
 import Configuration from "../configuration.js"
 import * as inflection from "inflection"
-import Migrator from "./migrator"
+import Migrator from "./migrator.js"
 
 export default class VelociousDatabaseMigrateFromRequireContext {
   constructor(configuration) {
@@ -13,7 +13,7 @@ export default class VelociousDatabaseMigrateFromRequireContext {
 
     const files = requireContext.keys()
       .map((file) => {
-        const match = file.match(/^\.\/(\d{14})-(.+)\.js$/)
+        const match = file.match(/(\d{14})-(.+)\.js$/)
 
         if (!match) return null
 
