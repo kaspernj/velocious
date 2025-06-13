@@ -7,7 +7,6 @@ import HasManyRelationship from "./relationships/has-many.js"
 import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
 import * as inflection from "inflection"
 import Query from "../query/index.js"
-import RecordNotFoundError from "./record-not-found-error.js"
 
 export default class VelociousDatabaseRecord {
   static _relationshipExists(relationshipName) {
@@ -125,21 +124,6 @@ export default class VelociousDatabaseRecord {
     return record
   }
 
-  static async find(recordId) {
-    const conditions = {}
-
-    conditions[this.primaryKey()] = recordId
-
-    const query = this.where(conditions)
-    const record = await query.first()
-
-    if (!record) {
-      throw new RecordNotFoundError(`Couldn't find ${this.name} with '${this.primaryKey()}'=${recordId}`)
-    }
-
-    return record
-  }
-
   static _getConfiguration() {
     if (!this._configuration) {
       this._configuration = Configuration.current()
@@ -211,7 +195,7 @@ export default class VelociousDatabaseRecord {
         this.prototype[name] = function () {
           const locale = this._getConfiguration().getLocale()
 
-          return this._getTranslatedAttribute(name, locale)
+          return this._getTranslatedAttributeWithFallback(name, locale)
         }
 
         this.prototype[setterMethodName] = function (newValue) {
@@ -419,6 +403,25 @@ export default class VelociousDatabaseRecord {
     }
   }
 
+  _getTranslatedAttributeWithFallback(name, locale) {
+    let localesInOrder
+    const fallbacks = this._getConfiguration().getLocaleFallbacks()
+
+    if (fallbacks && locale in fallbacks) {
+      localesInOrder = fallbacks[locale]
+    } else {
+      localesInOrder = [locale]
+    }
+
+    for (const fallbackLocale of localesInOrder) {
+      const result = this._getTranslatedAttribute(name, fallbackLocale)
+
+      if (result && result.trim() != "") {
+        return result
+      }
+    }
+  }
+
   _setTranslatedAttribute(name, locale, newValue) {
     let translation = this.translations().loaded()?.find((translation) => translation.locale() == locale)
 
@@ -452,6 +455,10 @@ export default class VelociousDatabaseRecord {
 
   static all() {
     return this._newQuery()
+  }
+
+  static async find(...args) {
+    return this._newQuery().find(...args)
   }
 
   static async findBy(...args) {

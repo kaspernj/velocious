@@ -8,7 +8,7 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({database, debug, directory, initializeModels, locale, locales, ...restArgs}) {
+  constructor({database, debug, directory, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!initializeModels) throw new Error("initializeModels wasn't given")
@@ -19,6 +19,7 @@ export default class VelociousConfiguration {
     this._initializeModels = initializeModels
     this._isInitialized = false
     this.locale = locale
+    this.localeFallbacks = localeFallbacks
     this.locales = locales
     this.modelClasses = {}
   }
@@ -31,7 +32,7 @@ export default class VelociousConfiguration {
     return this.databasePool
   }
 
-  getDatabasePoolType = () => {
+  getDatabasePoolType() {
     const poolTypeClass = digg(this, "database", "default", "master", "poolType")
 
     if (!poolTypeClass) {
@@ -41,12 +42,17 @@ export default class VelociousConfiguration {
     return poolTypeClass
   }
 
-  getDirectory = () => {
+  getDirectory() {
     if (!this._directory) {
       this._directory = process.cwd()
     }
 
     return this._directory
+  }
+
+  getLocaleFallbacks = () => this.localeFallbacks
+  setLocaleFallbacks(newLocaleFallbacks) {
+    this.localeFallbacks = newLocaleFallbacks
   }
 
   getLocale() {

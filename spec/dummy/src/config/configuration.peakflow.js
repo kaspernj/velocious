@@ -33,5 +33,9 @@ export default new Configuration({
     })
   },
   locale: () => "en",
+  localeFallbacks: {
+    de: ["de", "en"],
+    en: ["en", "de"]
+  },
   locales: ["de", "en"]
 })
