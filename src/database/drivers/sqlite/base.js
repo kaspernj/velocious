@@ -9,7 +9,7 @@ import escapeString from "sql-string-escape"
 import Insert from "../sqlite/sql/insert.js"
 import Options from "../sqlite/options.js"
 import QueryParser from "../sqlite/query-parser.js"
-import Table from "./table"
+import Table from "./table.js"
 import Update from "../sqlite/sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {

@@ -145,7 +145,7 @@ export default class VelociousDatabaseRecord {
   }
 
   static async initializeRecord({configuration}) {
-    if (!configuration) throw new Error("No configuration given")
+    if (!configuration) throw new Error(`No configuration given for ${this.name}`)
 
     this._configuration = configuration
     this._configuration.registerModelClass(this)

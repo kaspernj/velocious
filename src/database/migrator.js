@@ -1,5 +1,5 @@
 import {digg} from "diggerize"
-import TableData from "./table-data/index"
+import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
   constructor({configuration}) {
