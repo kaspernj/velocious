@@ -9,7 +9,11 @@ export default class VelociousDatabaseInitializerFromRequireContext {
 
   async initialize({configuration}) {
     for (const fileName of this.requireContext.keys()) {
-      const modelClass = this.requireContext(fileName).default
+      const modelClassImport = this.requireContext(fileName)
+
+      if (!modelClassImport) throw new Error(`Couldn't import model class from ${fileName}`)
+
+      const modelClass = modelClassImport.default
 
       await modelClass.initializeRecord({configuration})
 

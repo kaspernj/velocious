@@ -48,6 +48,8 @@ const forwardMethods = [
   "insertSql",
   "query",
   "quote",
+  "quoteColumn",
+  "quoteTable",
   "select",
   "update",
   "updateSql"
