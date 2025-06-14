@@ -1,14 +1,34 @@
+import restArgsError from "../../utils/rest-args-error.js"
+
 class TableColumn {
   constructor(name, args) {
+    if (args) {
+      const {autoIncrement, foreignKey, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args
+
+      restArgsError(restArgs)
+    }
+
     this.args = args
     this.name = name
   }
 
+  getAutoIncrement = () => this.args?.autoIncrement
+  getForeignKey = () => this.args?.foreignKey
+  getMaxLength = () => this.args?.maxLength
   getName = () => this.name
+  getNull = () => this.args?.null
+  getPrimaryKey = () => this.args?.primaryKey
+  getType = () => this.args?.type
 }
 
 class TableIndex {
   constructor(columns, args) {
+    if (args) {
+      const {name, unique, ...restArgs} = args
+
+      restArgsError(restArgs)
+    }
+
     this.args = args
     this.columns = columns
   }

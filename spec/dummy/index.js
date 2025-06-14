@@ -17,8 +17,8 @@ export default class Dummy {
 
     await db.withConnection(async () => {
       await db.query("DROP TABLE IF EXISTS tasks")
-      await db.query("DROP TABLE IF EXISTS projects")
       await db.query("DROP TABLE IF EXISTS project_translations")
+      await db.query("DROP TABLE IF EXISTS projects")
 
       await db.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, project_id MEDIUMINT, name VARCHAR(255), description TEXT, PRIMARY KEY (id))")
       await db.query("CREATE TABLE projects (id MEDIUMINT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))")

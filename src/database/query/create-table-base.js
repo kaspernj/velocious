@@ -1,4 +1,5 @@
 import CreateIndexBase from "./create-index-base.js"
+import * as inflection from "inflection"
 import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
@@ -24,8 +25,8 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     for (const column of tableData.getColumns()) {
       columnCount++
 
-      let maxlength = column.args.maxlength
-      let type = column.args.type
+      let maxlength = column.getMaxLength()
+      let type = column.getType()
 
       if (type == "string") {
         type = "varchar"
@@ -34,13 +35,26 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (columnCount > 1) sql += ", "
 
-      sql += `${this.driver.quoteColumn(column.name)} ${type}`
+      sql += `${this.driver.quoteColumn(column.getName())} ${type}`
 
       if (maxlength !== undefined) sql += `(${maxlength})`
 
-      if (column.args.autoIncrement) sql += " AUTO_INCREMENT"
-      if (column.args.primaryKey) sql += " PRIMARY KEY"
-      if (column.args.null === false) sql += " NOT NULL"
+      if (column.getAutoIncrement()) sql += " AUTO_INCREMENT"
+      if (column.getPrimaryKey()) sql += " PRIMARY KEY"
+      if (column.getNull() === false) sql += " NOT NULL"
+
+      if (column.getForeignKey()) {
+        let foreignKeyTable, foreignKeyColumn
+
+        if (column.getForeignKey() === true) {
+          foreignKeyColumn = "id"
+          foreignKeyTable = inflection.pluralize(column.getName().replace(/_id$/, ""))
+        } else {
+          throw new Error(`Unknown foreign key type given: ${column.getForeignKey()} (${typeof column.getForeignKey()})`)
+        }
+
+        sql += ` REFERENCES ${this.driver.quoteTable(foreignKeyTable)}(${this.driver.quoteColumn(foreignKeyColumn)})`
+      }
     }
 
     if (this.indexInCreateTable) {
