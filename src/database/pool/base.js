@@ -13,7 +13,7 @@ class VelociousDatabasePoolBase {
       globalThis.velociousDatabasePoolBase.current = new this()
     }
 
-    return globalThis.velociousDatabasePoolBase
+    return globalThis.velociousDatabasePoolBase.current
   }
 
   constructor(args = {}) {
