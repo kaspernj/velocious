@@ -25,7 +25,9 @@
     "jasmine": "^5.0.2",
     "mysql": "^2.18.1",
     "node-fetch": "^3.3.1",
-    "require-context": "^1.1.0"
+    "require-context": "^1.1.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   },
   "dependencies": {
     "better-localstorage": "^1.0.7",
