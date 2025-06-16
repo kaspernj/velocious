@@ -5,20 +5,28 @@ before_install:
   - sudo apt-get update
   - sudo apt-get install -y nodejs
 before_script:
-  - cp spec/dummy/src/config/configuration.peakflow.js spec/dummy/src/config/configuration.js
   - npm install
-  - wait-for-it mariadb:3306
-services:
-  mariadb:
-    environment:
-      MYSQL_USER: peakflow
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: velocious_test
-    image: mariadb:latest
-    expose:
-      - 3306
-    mem_limit: 4096m
-    restart_policy: on-failure
-script:
-  - npm test
+builds:
+  build_1:
+    name: MariaDB
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
+      - wait-for-it mariadb:3306
+      - npm test
+    services:
+      mariadb:
+        environment:
+          MYSQL_USER: peakflow
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: velocious_test
+        image: mariadb:latest
+        expose:
+          - 3306
+        mem_limit: 4096m
+        restart_policy: on-failure
+  build_2:
+    name: SQLite
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - npm test

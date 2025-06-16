@@ -46,6 +46,7 @@ const forwardMethods = [
   "getTables",
   "insert",
   "insertSql",
+  "primaryKeyType",
   "query",
   "quote",
   "quoteColumn",

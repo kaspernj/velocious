@@ -57,6 +57,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createTable.toSql()
   }
 
+  primaryKeyType = () => "bigint"
+
   async query(sql) {
     return await query(this.connection, sql)
   }
@@ -64,6 +66,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
   queryToSql(query) {
     return new QueryParser({query}).toSql()
   }
+
+  shouldSetAutoIncrementWhenPrimaryKey = () => true
 
   escape(string) {
     if (!this.connection) throw new Error("Can't escape before connected")

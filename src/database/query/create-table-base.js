@@ -26,10 +26,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       columnCount++
 
       let maxlength = column.getMaxLength()
-      let type = column.getType()
+      let type = column.getType().toUpperCase()
 
-      if (type == "string") {
-        type = "varchar"
+      if (type == "STRING") {
+        type = "VARCHAR"
         maxlength ||= 255
       }
 
@@ -39,7 +39,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (maxlength !== undefined) sql += `(${maxlength})`
 
-      if (column.getAutoIncrement()) sql += " AUTO_INCREMENT"
+      if (column.getAutoIncrement() && this.driver.shouldSetAutoIncrementWhenPrimaryKey()) sql += " AUTO_INCREMENT"
       if (column.getPrimaryKey()) sql += " PRIMARY KEY"
       if (column.getNull() === false) sql += " NOT NULL"
 

@@ -6,10 +6,12 @@ export default class VelociousDatabaseMigration {
     this.configuration = configuration
   }
 
-  async addColumn(tableName, columnName, args) {
+  async addColumn(tableName, columnName, columnType, args) {
     const databasePool = this.configuration.getDatabasePool()
+    const tableColumnArgs = Object.assign({type: columnType}, args)
+
     const sqls = databasePool.alterTableSql({
-      columns: [new TableColumn(columnName, args)],
+      columns: [new TableColumn(columnName, tableColumnArgs)],
       tableName
     })
 
@@ -60,13 +62,16 @@ export default class VelociousDatabaseMigration {
   }
 
   async createTable(tableName, callback) {
+    const databasePool = this.configuration.getDatabasePool()
+    const primaryKeyType = databasePool.primaryKeyType()
     const tableData = new TableData(tableName)
 
-    tableData.bigint("id", {null: false, primaryKey: true})
+    if (!(primaryKeyType in tableData)) throw new Error(`Unsupported primary key type: ${primaryKeyType}`)
+
+    tableData[primaryKeyType]("id", {autoIncrement: true, null: false, primaryKey: true})
 
     callback(tableData)
 
-    const databasePool = this.configuration.getDatabasePool()
     const sqls = databasePool.createTableSql(tableData)
 
     for (const sql of sqls) {
