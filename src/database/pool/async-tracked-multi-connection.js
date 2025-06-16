@@ -4,14 +4,6 @@ import BasePool from "./base.js"
 let idSeq = 0
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
-  static current() {
-    if (!this.velociousDatabasePoolAsyncTrackedMultiConnection) {
-      this.velociousDatabasePoolAsyncTrackedMultiConnection = new VelociousDatabasePoolAsyncTrackedMultiConnection()
-    }
-
-    return this.velociousDatabasePoolAsyncTrackedMultiConnection
-  }
-
   constructor(args = {}) {
     super(args)
     this.connections = []
@@ -46,10 +38,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.connectionsInUse[id] = connection
 
     return connection
-  }
-
-  setCurrent() {
-    this.constructor.velociousDatabasePoolAsyncTrackedMultiConnection = this
   }
 
   async withConnection(callback) {

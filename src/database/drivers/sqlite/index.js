@@ -9,7 +9,7 @@ import Base from "./base.js"
 export default class VelociousDatabaseDriversSqliteNode extends Base {
   async connect() {
     const args = this.getArgs()
-    const databasePath = `db/${this.localStorageName()}.sqlite`
+    const databasePath = `${this.getConfiguration().getDirectory()}/db/${this.localStorageName()}.sqlite`
 
     if (args.reset) {
       await fs.unlink(databasePath)

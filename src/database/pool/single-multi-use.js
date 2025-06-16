@@ -1,14 +1,6 @@
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
-  static current() {
-    if (!this.velociousDatabasePoolSingleMultiUser) {
-      this.velociousDatabasePoolSingleMultiUser = new VelociousDatabasePoolSingleMultiUser()
-    }
-
-    return this.velociousDatabasePoolSingleMultiUser
-  }
-
   checkin = (connection) => {
     // Do nothing
   }
@@ -19,10 +11,6 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     }
 
     return this.connection
-  }
-
-  setCurrent() {
-    this.constructor.velociousDatabasePoolSingleMultiUser = this
   }
 
   async withConnection(callback) {

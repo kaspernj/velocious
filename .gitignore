@@ -1,3 +1,4 @@
 node_modules
+spec/dummy/db/*.sqlite
 spec/dummy/src/config/configuration.js
 spec/support/mysql.json

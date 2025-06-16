@@ -57,4 +57,6 @@ export default class VelociousCli {
     this.configuration.setCurrent()
     this.args.configuration = this.configuration
   }
+
+  getConfiguration = () => this.args.configuration
 }

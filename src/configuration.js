@@ -42,6 +42,16 @@ export default class VelociousConfiguration {
     return poolTypeClass
   }
 
+  getDatabaseType() {
+    const databaseType = digg(this, "database", "default", "master", "type")
+
+    if (!databaseType) {
+      throw new Error("No database type given in database configuration")
+    }
+
+    return databaseType
+  }
+
   getDirectory() {
     if (!this._directory) {
       this._directory = process.cwd()

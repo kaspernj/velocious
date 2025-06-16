@@ -1,7 +1,21 @@
 import Configuration from "../../configuration.js"
 import {digg} from "diggerize"
 
+if (!globalThis.velociousDatabasePoolBase) {
+  globalThis.velociousDatabasePoolBase = {
+    current: null
+  }
+}
+
 class VelociousDatabasePoolBase {
+  static current() {
+    if (!globalThis.velociousDatabasePoolBase.current) {
+      globalThis.velociousDatabasePoolBase.current = new this()
+    }
+
+    return globalThis.velociousDatabasePoolBase
+  }
+
   constructor(args = {}) {
     this.configuration = args.configuration || Configuration.current()
     this.connections = []
@@ -9,6 +23,10 @@ class VelociousDatabasePoolBase {
   }
 
   getConfiguration = () => digg(this, "configuration", "database", "default", "master")
+
+  setCurrent() {
+    globalThis.velociousDatabasePoolBase.current = this
+  }
 
   setDriverClass(driverClass) {
     this.driverClass = driverClass
@@ -26,7 +44,7 @@ class VelociousDatabasePoolBase {
 
     if (!DriverClass) throw new Error("No driver class set in database pool or in given config")
 
-    const connection = new DriverClass(config)
+    const connection = new DriverClass(config, this.configuration)
 
     await connection.connect()
 
