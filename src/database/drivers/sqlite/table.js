@@ -1,5 +1,6 @@
 import Column from "./column.js"
 import {digg} from "diggerize"
+import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversSqliteTable {
   constructor({driver, row}) {
@@ -7,7 +8,7 @@ export default class VelociousDatabaseDriversSqliteTable {
     this.row = row
   }
 
-  getColumns = async () => {
+  async getColumns() {
     const result = await this.driver.query(`PRAGMA table_info('${this.getName()}')`)
     const columns = []
 
@@ -18,6 +19,19 @@ export default class VelociousDatabaseDriversSqliteTable {
     }
 
     return columns
+  }
+
+  async getForeignKeys() {
+    const foreignKeysData = await this.driver.query(`SELECT * FROM pragma_foreign_key_list(${this.driver.quote(this.getName())})`)
+    const foreignKeys = []
+
+    for (const foreignKeyData of foreignKeysData) {
+      const foreignKey = new ForeignKey(foreignKeyData, {tableName: this.getName()})
+
+      foreignKeys.push(foreignKey)
+    }
+
+    return foreignKeys
   }
 
   getName = () => digg(this, "row", "name")

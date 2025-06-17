@@ -70,7 +70,9 @@ export default class VelociousDatabaseMigration {
 
     tableData[primaryKeyType]("id", {autoIncrement: true, null: false, primaryKey: true})
 
-    callback(tableData)
+    if (callback) {
+      callback(tableData)
+    }
 
     const sqls = databasePool.createTableSql(tableData)
 

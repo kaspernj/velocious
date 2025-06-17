@@ -10,7 +10,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     this.tableData = tableData
   }
 
+  getConfiguration = () => this.driver.getConfiguration()
+
   toSql() {
+    const databaseType = this.getConfiguration().getDatabaseType()
     const {tableData} = this
     const sqls = []
 
@@ -31,6 +34,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       if (type == "STRING") {
         type = "VARCHAR"
         maxlength ||= 255
+      }
+
+      if (databaseType == "sqlite" && column.getAutoIncrement() && column.getPrimaryKey()) {
+        type = "INTEGER"
       }
 
       if (columnCount > 1) sql += ", "

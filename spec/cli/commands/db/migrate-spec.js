@@ -25,7 +25,9 @@ describe("Cli - Commands - db:migrate", () => {
     let projectForeignKey, tablesResult
 
     await dbPool.withConnection(async (db) => {
-      tablesResult = await db.query("SHOW TABLES")
+      const tables = await db.getTables()
+
+      tablesResult = tables.map((table) => table.getName())
 
       const table = await db.getTableByName("tasks")
       const foreignKeys = await table.getForeignKeys()
@@ -35,9 +37,9 @@ describe("Cli - Commands - db:migrate", () => {
 
     expect(tablesResult).toEqual(
       [
-        {Tables_in_velocious_test: "project_translations"},
-        {Tables_in_velocious_test: "projects"},
-        {Tables_in_velocious_test: "tasks"}
+        "project_translations",
+        "projects",
+        "tasks"
       ]
     )
 

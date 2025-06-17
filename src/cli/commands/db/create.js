@@ -26,7 +26,7 @@ export default class DbCreate extends BaseCommand{
   }
 
   async createDatabase() {
-    const databaseName = digg(this.getConfiguration(), "database")
+    const databaseName = digg(this, "configuration", "database")
     const sql = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
     if (this.args.testing) {
