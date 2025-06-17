@@ -1,6 +1,7 @@
 import Base from "../base.js"
 import connectConnection from "./connect-connection.js"
 import CreateDatabase from "./sql/create-database.js"
+import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
 import Delete from "./sql/delete.js"
 import {digg} from "diggerize"
@@ -50,6 +51,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createDatabase.toSql()
   }
 
+  createIndexSql(indexData) {
+    const createArgs = Object.assign({driver: this}, indexData)
+    const createIndex = new CreateIndex(createArgs)
+
+    return createIndex.toSql()
+  }
+
   createTableSql(tableData) {
     const createArgs = Object.assign({tableData, driver: this})
     const createTable = new CreateTable(createArgs)
@@ -57,6 +65,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createTable.toSql()
   }
 
+  getType = () => "mysql"
   primaryKeyType = () => "bigint"
 
   async query(sql) {

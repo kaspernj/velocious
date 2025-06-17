@@ -35,6 +35,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   deleteSql = (args) => new Delete(Object.assign({driver: this}, args)).toSql()
+  getType = () => "sqlite"
   insertSql = (args) => new Insert(Object.assign({driver: this}, args)).toSql()
 
   async getTableByName(tableName) {

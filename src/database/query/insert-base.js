@@ -62,8 +62,10 @@ export default class VelociousDatabaseQueryInsertBase {
       if (Object.keys(this.data).length > 0) {
         sql += " VALUES "
         sql += this._valuesSql(Object.values(this.data))
-      } else {
+      } else if (this.driver.getType() == "sqlite") {
         sql += " DEFAULT VALUES"
+      } else if (this.driver.getType() == "mysql") {
+        sql += " () VALUES ()"
       }
     }
 

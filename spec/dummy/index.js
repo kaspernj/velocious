@@ -23,7 +23,9 @@ export default class Dummy {
 
       const migration = new Migration({configuration: dummyConfiguration})
 
-      await migration.createTable("projects")
+      await migration.createTable("projects", (t) => {
+        t.timestamps()
+      })
       await migration.createTable("project_translations", (t) => {
         t.references("project", {null: false, foreignKey: true})
         t.string("locale", {null: false})
@@ -37,13 +39,6 @@ export default class Dummy {
         t.string("name")
         t.text("description")
       })
-
-      /*
-      await db.query("CREATE TABLE tasks (id MEDIUMINT NOT NULL AUTO_INCREMENT, project_id MEDIUMINT, name VARCHAR(255), description TEXT, PRIMARY KEY (id))")
-      await db.query("CREATE TABLE projects (id MEDIUMINT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))")
-      await db.query("CREATE TABLE project_translations (id MEDIUMINT NOT NULL AUTO_INCREMENT, project_id MEDIUMINT, locale VARCHAR(255), name VARCHAR(255), PRIMARY KEY (id))")
-      await db.query("CREATE UNIQUE INDEX unique_project_translation ON project_translations (project_id, locale)")
-      */
 
       if (!dummyConfiguration.isInitialized()) {
         await dummyConfiguration.initialize()
