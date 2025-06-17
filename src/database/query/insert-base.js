@@ -20,7 +20,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   toSql() {
-    let sql = `INSERT INTO ${this.getOptions().quoteTableName(this.tableName)} (`
+    let sql = `INSERT INTO ${this.getOptions().quoteTableName(this.tableName)}`
     let count = 0
     let columns
 
@@ -32,16 +32,24 @@ export default class VelociousDatabaseQueryInsertBase {
       throw new Error("Neither 'column' and 'rows' or data was given")
     }
 
-    for (const columnName of columns) {
-      if (count > 0) sql += ", "
+    if (columns.length > 0) {
+      sql += " ("
 
-      sql += this.getOptions().quoteColumnName(columnName)
-      count++
+      for (const columnName of columns) {
+        if (count > 0) sql += ", "
+
+        sql += this.getOptions().quoteColumnName(columnName)
+        count++
+      }
+
+      sql += ")"
     }
 
-    sql += ") VALUES "
-
     if (this.columns && this.rows) {
+      if (this.rows.length > 0) {
+        sql += " VALUES "
+      }
+
       let count = 0
 
       for (const row of this.rows) {
@@ -51,7 +59,12 @@ export default class VelociousDatabaseQueryInsertBase {
         sql += this._valuesSql(row)
       }
     } else {
-      sql += this._valuesSql(Object.values(this.data))
+      if (Object.keys(this.data).length > 0) {
+        sql += " VALUES "
+        sql += this._valuesSql(Object.values(this.data))
+      } else {
+        sql += " DEFAULT VALUES"
+      }
     }
 
     return sql
