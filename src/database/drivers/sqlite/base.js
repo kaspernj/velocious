@@ -35,6 +35,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   deleteSql = (args) => new Delete(Object.assign({driver: this}, args)).toSql()
+  getType = () => "sqlite"
   insertSql = (args) => new Insert(Object.assign({driver: this}, args)).toSql()
 
   async getTableByName(tableName) {
@@ -125,6 +126,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return this._options
   }
 
+  primaryKeyType = () => "integer" // Because bigint on SQLite doesn't support auto increment
   queryToSql = (query) => new QueryParser({query}).toSql()
 
   async registerVersion() {
@@ -138,6 +140,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     this.versionMinor = versionParts[1]
     this.versionPatch = versionParts[2]
   }
+
+  shouldSetAutoIncrementWhenPrimaryKey = () => false
 
   escape(value) {
     const type = typeof value

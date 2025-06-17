@@ -12,28 +12,40 @@ describe("Cli - Commands - db:migrate", () => {
 
     await cli.loadConfiguration()
 
-    const db = cli.configuration.getDatabasePool()
+    const dbPool = cli.configuration.getDatabasePool()
 
-    await db.withConnection(async () => {
+    await dbPool.withConnection(async (db) => {
       await db.query("DROP TABLE IF EXISTS tasks")
-      await db.query("DROP TABLE IF EXISTS projects")
       await db.query("DROP TABLE IF EXISTS project_translations")
+      await db.query("DROP TABLE IF EXISTS projects")
     })
 
     await cli.execute()
 
-    let tablesResult
+    let projectForeignKey, tablesResult
 
-    await db.withConnection(async () => {
-      tablesResult = await db.query("SHOW TABLES")
+    await dbPool.withConnection(async (db) => {
+      const tables = await db.getTables()
+
+      tablesResult = tables.map((table) => table.getName())
+
+      const table = await db.getTableByName("tasks")
+      const foreignKeys = await table.getForeignKeys()
+
+      projectForeignKey = foreignKeys.find((foreignKey) => foreignKey.getColumnName() == "project_id")
     })
 
     expect(tablesResult).toEqual(
       [
-        {Tables_in_velocious_test: "project_translations"},
-        {Tables_in_velocious_test: "projects"},
-        {Tables_in_velocious_test: "tasks"}
+        "project_translations",
+        "projects",
+        "tasks"
       ]
     )
+
+    expect(projectForeignKey.getTableName()).toEqual("tasks")
+    expect(projectForeignKey.getColumnName()).toEqual("project_id")
+    expect(projectForeignKey.getReferencedTableName()).toEqual("projects")
+    expect(projectForeignKey.getReferencedColumnName()).toEqual("id")
   })
 })

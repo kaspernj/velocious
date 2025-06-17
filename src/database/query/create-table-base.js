@@ -1,4 +1,5 @@
 import CreateIndexBase from "./create-index-base.js"
+import * as inflection from "inflection"
 import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
@@ -9,7 +10,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     this.tableData = tableData
   }
 
+  getConfiguration = () => this.driver.getConfiguration()
+
   toSql() {
+    const databaseType = this.getConfiguration().getDatabaseType()
     const {tableData} = this
     const sqls = []
 
@@ -24,23 +28,40 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     for (const column of tableData.getColumns()) {
       columnCount++
 
-      let maxlength = column.args.maxlength
-      let type = column.args.type
+      let maxlength = column.getMaxLength()
+      let type = column.getType().toUpperCase()
 
-      if (type == "string") {
-        type = "varchar"
+      if (type == "STRING") {
+        type = "VARCHAR"
         maxlength ||= 255
+      }
+
+      if (databaseType == "sqlite" && column.getAutoIncrement() && column.getPrimaryKey()) {
+        type = "INTEGER"
       }
 
       if (columnCount > 1) sql += ", "
 
-      sql += `${this.driver.quoteColumn(column.name)} ${type}`
+      sql += `${this.driver.quoteColumn(column.getName())} ${type}`
 
       if (maxlength !== undefined) sql += `(${maxlength})`
 
-      if (column.args.autoIncrement) sql += " AUTO_INCREMENT"
-      if (column.args.primaryKey) sql += " PRIMARY KEY"
-      if (column.args.null === false) sql += " NOT NULL"
+      if (column.getAutoIncrement() && this.driver.shouldSetAutoIncrementWhenPrimaryKey()) sql += " AUTO_INCREMENT"
+      if (column.getPrimaryKey()) sql += " PRIMARY KEY"
+      if (column.getNull() === false) sql += " NOT NULL"
+
+      if (column.getForeignKey()) {
+        let foreignKeyTable, foreignKeyColumn
+
+        if (column.getForeignKey() === true) {
+          foreignKeyColumn = "id"
+          foreignKeyTable = inflection.pluralize(column.getName().replace(/_id$/, ""))
+        } else {
+          throw new Error(`Unknown foreign key type given: ${column.getForeignKey()} (${typeof column.getForeignKey()})`)
+        }
+
+        sql += ` REFERENCES ${this.driver.quoteTable(foreignKeyTable)}(${this.driver.quoteColumn(foreignKeyColumn)})`
+      }
     }
 
     if (this.indexInCreateTable) {

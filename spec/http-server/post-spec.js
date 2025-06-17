@@ -1,14 +1,15 @@
 import fetch from "node-fetch"
-import Dummy from "../dummy/index.js"
 import querystring from "querystring"
-import Task from "../dummy/src/models/task.js"
+
+import Dummy from "../dummy/index.js"
+import Project from "../dummy/src/models/project.js"
 
 describe("HttpServer", () => {
   it("handles post requests", async () => {
     await Dummy.run(async () => {
-      const postData = querystring.stringify({"task[name]": "Test create task"})
+      const postData = querystring.stringify({"project[name]": "Test create project"})
       const response = await fetch(
-        "http://localhost:3006/tasks",
+        "http://localhost:3006/projects",
         {
           body: postData,
           headers: {
@@ -19,18 +20,18 @@ describe("HttpServer", () => {
         }
       )
       const text = await response.text()
-      const createdTask = await Task.last()
+      const createdProject = await Project.preload({translations: true}).last()
 
       expect(text).toEqual('{"status":"success"}')
-      expect(createdTask.readAttribute("name")).toEqual("Test create task")
+      expect(createdProject.name()).toEqual("Test create project")
     })
   })
 
   it("handles post json requests", async () => {
     await Dummy.run(async () => {
-      const postData = JSON.stringify({task: {name: "Test create task"}})
+      const postData = JSON.stringify({project: {name: "Test create project"}})
       const response = await fetch(
-        "http://localhost:3006/tasks",
+        "http://localhost:3006/projects",
         {
           body: postData,
           headers: {
@@ -41,10 +42,10 @@ describe("HttpServer", () => {
         }
       )
       const text = await response.text()
-      const createdTask = await Task.last()
+      const createdProject = await Project.preload({translations: true}).last()
 
       expect(text).toEqual('{"status":"success"}')
-      expect(createdTask.readAttribute("name")).toEqual("Test create task")
+      expect(createdProject.name()).toEqual("Test create project")
     })
   })
 
@@ -52,21 +53,20 @@ describe("HttpServer", () => {
     await Dummy.run(async () => {
       const body = new FormData()
 
-      body.append("task[name]", "Test create task")
-      body.append("task[description]", "This is a task")
+      body.append("project[name]", "Test create project")
 
       const response = await fetch(
-        "http://localhost:3006/tasks",
+        "http://localhost:3006/projects",
         {
           body,
           method: "POST"
         }
       )
       const text = await response.text()
-      const createdTask = await Task.last()
+      const createdProject = await Project.preload({translations: true}).last()
 
       expect(text).toEqual('{"status":"success"}')
-      expect(createdTask.readAttribute("name")).toEqual("Test create task")
+      expect(createdProject.name()).toEqual("Test create project")
     })
   })
 })

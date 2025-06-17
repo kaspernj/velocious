@@ -10,16 +10,26 @@ describe("Cli - Commands - db:create", () => {
     })
     const result = await cli.execute()
 
-    expect(result).toEqual(
-      [
-        {
-          databaseName: 'velocious_test',
-          sql: 'CREATE DATABASE IF NOT EXISTS `velocious_test`'
-        },
-        {
-          createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` varchar(255) PRIMARY KEY NOT NULL)'
-        }
-      ]
-    )
+    if (cli.getConfiguration().getDatabaseType() == "sqlite") {
+      expect(result).toEqual(
+        [
+          {
+            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+          }
+        ]
+      )
+    } else {
+      expect(result).toEqual(
+        [
+          {
+            databaseName: 'velocious_test',
+            sql: 'CREATE DATABASE IF NOT EXISTS `velocious_test`'
+          },
+          {
+            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+          }
+        ]
+      )
+    }
   })
 })

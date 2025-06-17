@@ -2,8 +2,9 @@ import Query from "../query/index.js"
 import Handler from "../handler.js"
 
 export default class VelociousDatabaseDriversBase {
-  constructor(args) {
-    this._args = args
+  constructor(config, configuration) {
+    this._args = config
+    this.configuration = configuration
   }
 
   async createTable(...args) {
@@ -23,6 +24,8 @@ export default class VelociousDatabaseDriversBase {
   getArgs() {
     return this._args
   }
+
+  getConfiguration = () => this.configuration
 
   getIdSeq() {
     return this.idSeq

@@ -15,16 +15,18 @@ export default class DbCreate extends BaseCommand{
     this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
     await this.databaseConnection.connect()
 
-    this.createDatabase()
-    await this.createSchemaMigrationsTable()
+    if (this.configuration.getDatabaseType() != "sqlite") {
+      await this.createDatabase()
+    }
 
+    await this.createSchemaMigrationsTable()
     await this.databaseConnection.close()
 
     if (this.args.testing) return this.result
   }
 
   async createDatabase() {
-    const databaseName = digg(this.databasePool.getConfiguration(), "database")
+    const databaseName = digg(this, "configuration", "database", "default", "master", "database")
     const sql = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
     if (this.args.testing) {
