@@ -47,6 +47,14 @@ export default class VelociousDatabaseQuery {
 
   getOptions = () => this.driver.options()
 
+  async destroyAll() {
+    const records = await this.toArray()
+
+    for (const record of records) {
+      await record.destroy()
+    }
+  }
+
   async find(recordId) {
     const conditions = {}
 

@@ -457,6 +457,10 @@ export default class VelociousDatabaseRecord {
     return this._newQuery()
   }
 
+  static async destroyAll(...args) {
+    return this._newQuery().destroyAll(...args)
+  }
+
   static async find(...args) {
     return this._newQuery().find(...args)
   }

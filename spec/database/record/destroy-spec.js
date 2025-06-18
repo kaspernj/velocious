@@ -14,4 +14,19 @@ describe("Record - destroy", () => {
       expect(foundTask).toEqual(undefined)
     })
   })
+
+  it("destroys all records in a collection", async () => {
+    await Dummy.run(async () => {
+      const task1 = await Task.create({name: "Test task 1"})
+      const task2 = await Task.create({name: "Test task 2"})
+
+      await Task.where({id: task1.id()}).destroyAll()
+
+      const foundTask1 = await Task.where({id: task1.id()}).first()
+      const foundTask2 = await Task.where({id: task2.id()}).first()
+
+      expect(foundTask1).toEqual(undefined)
+      expect(foundTask2).toBeDefined()
+    })
+  })
 })
