@@ -1,4 +1,3 @@
-import {digg} from "diggerize"
 import fs from "fs/promises"
 import query from "./query.js"
 import sqlite3 from "sqlite3"
@@ -22,7 +21,13 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     await this.registerVersion()
   }
 
-  localStorageName = () => `VelociousDatabaseDriversSqlite---${digg(this.getArgs(), "name")}`
+  localStorageName() {
+    const args = this.getArgs()
+
+    if (!args.name) throw new Error("No name given for SQLite Node")
+
+    return `VelociousDatabaseDriversSqlite---${args.name}`
+  }
 
   async close() {
     await this.connection.close()

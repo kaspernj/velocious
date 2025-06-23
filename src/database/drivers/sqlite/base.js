@@ -66,6 +66,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   async insertMultiple(...args) {
+    await this.registerVersion()
+
     if (this.supportsMultipleInsertValues()) {
       return await this.insertMultipleWithSingleInsert(...args)
     } else {
@@ -130,6 +132,10 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   queryToSql = (query) => new QueryParser({query}).toSql()
 
   async registerVersion() {
+    if (this.versionMajor || this.versionMinor) {
+      return
+    }
+
     const versionResult = await this.query("SELECT sqlite_version() AS version")
 
     this.version = versionResult[0].version

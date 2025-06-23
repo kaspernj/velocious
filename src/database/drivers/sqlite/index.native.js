@@ -7,7 +7,10 @@ import Base from "./base"
 export default class VelociousDatabaseDriversSqliteNative extends Base {
   async connect() {
     const args = this.getArgs()
-    const databaseName = digg(args, "name")
+
+    if (!args.name) throw new Error("No name given for SQLite Native")
+
+    const databaseName = args.name
 
     if (args.reset) {
       try {

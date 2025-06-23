@@ -481,6 +481,14 @@ export default class VelociousDatabaseRecord {
     return this._newQuery().joins(...args)
   }
 
+  static limit(...args) {
+    return this._newQuery().limit(...args)
+  }
+
+  static order(...args) {
+    return this._newQuery().order(...args)
+  }
+
   static preload(...args) {
     return this._newQuery().preload(...args)
   }
@@ -522,6 +530,39 @@ export default class VelociousDatabaseRecord {
   }
 
   async destroy() {
+    for (const relationship of this.constructor.getRelationships()) {
+      if (relationship.getDependent() != "destroy") {
+        continue
+      }
+
+      const instanceRelationship = this.getRelationshipByName(relationship.getRelationshipName())
+      let models
+
+      if (instanceRelationship.getType() == "belongsTo") {
+        if (!instanceRelationship.isLoaded()) {
+          await instanceRelationship.load()
+        }
+
+        const model = instanceRelationship.loaded()
+
+        models = [model]
+      } else if (instanceRelationship.getType() == "hasMany") {
+        if (!instanceRelationship.isLoaded()) {
+          await instanceRelationship.load()
+        }
+
+        models = instanceRelationship.loaded()
+      } else {
+        throw new Error(`Unhandled relationship type: ${instanceRelationship.getType()}`)
+      }
+
+      for (const model of models) {
+        if (model.isPersisted()) {
+          await model.destroy()
+        }
+      }
+    }
+
     const conditions = {}
 
     conditions[this.constructor.primaryKey()] = this.id()
