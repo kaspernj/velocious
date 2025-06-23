@@ -1,5 +1,5 @@
 export default class VelociousDatabaseRecordBaseRelationship {
-  constructor({className, configuration, foreignKey, klass, modelClass, relationshipName, through, type, ...restArgs}) {
+  constructor({className, configuration, dependent, foreignKey, klass, modelClass, relationshipName, through, type, ...restArgs}) {
     const restArgsKeys = Object.keys(restArgs)
 
     if (restArgsKeys.length > 0) throw new Error(`Unknown args given: ${restArgsKeys.join(", ")}`)
@@ -8,6 +8,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
 
     this.className = className
     this.configuration = configuration
+    this._dependent = dependent
     this.foreignKey = foreignKey
     this.klass = klass
     this.modelClass = modelClass
@@ -16,6 +17,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this.type = type
   }
 
+  getDependent = () => this._dependent
   getRelationshipName = () => this.relationshipName
   getPrimaryKey = () => "id" // TODO: Support custom given primary key
   getType = () => this.type

@@ -1,5 +1,4 @@
 import Column from "./column.js"
-import {digg} from "diggerize"
 import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversSqliteTable {
@@ -34,5 +33,11 @@ export default class VelociousDatabaseDriversSqliteTable {
     return foreignKeys
   }
 
-  getName = () => digg(this, "row", "name")
+  getName() {
+    if (!this.row.name) {
+      throw new Error("No name given for SQLite table")
+    }
+
+    return this.row.name
+  }
 }
