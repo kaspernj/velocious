@@ -493,6 +493,10 @@ export default class VelociousDatabaseRecord {
     return this._newQuery().preload(...args)
   }
 
+  static toArray(...args) {
+    return this._newQuery().toArray(...args)
+  }
+
   static where(...args) {
     return this._newQuery().where(...args)
   }
