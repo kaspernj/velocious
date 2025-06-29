@@ -1,6 +1,8 @@
 import configurationResolver from "../configuration-resolver.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
+import fs from "fs/promises"
+
 import fileExists from "../utils/file-exists.js"
 
 export default class VelociousCli {
@@ -9,11 +11,11 @@ export default class VelociousCli {
   }
 
   async execute() {
-    const __filename = fileURLToPath(`${import.meta.url}/../..`)
-    const __dirname = dirname(__filename)
+    const __filename = fileURLToPath(import.meta.url)
+    const basePath = await fs.realpath(`${dirname(__filename)}/../..`)
     const commandParts = this.args.processArgs[0].split(":")
     const filePaths = []
-    let filePath = `${__dirname}/src/cli/commands`
+    let filePath = `${basePath}/src/cli/commands`
 
     for (let commandPart of commandParts) {
       if (commandPart == "d") commandPart = "destroy"
