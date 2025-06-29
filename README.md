@@ -40,3 +40,9 @@ npx velocious g:model Option
 ```bash
 npm test
 ```
+
+# Running a server
+
+```bash
+npx velocious server
+```
