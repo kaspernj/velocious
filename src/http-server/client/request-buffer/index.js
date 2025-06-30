@@ -82,7 +82,7 @@ export default class RequestBuffer {
 
           break
         default:
-          console.error(`Unknown state: ${this.state}`)
+          console.error(`Unknown state for request buffer: ${this.state}`)
       }
     }
   }
@@ -128,7 +128,7 @@ export default class RequestBuffer {
         this.setState("multi-part-form-data-body")
       }
     } else {
-      throw new Error(`Unknown state: ${this.state}`)
+      throw new Error(`Unknown state parsing line: ${this.state}`)
     }
   }
 
@@ -200,7 +200,7 @@ export default class RequestBuffer {
   }
 
   completeRequest = () => {
-    this.state = "completed"
+    this.state = "status" // Reset state to new request
 
     if (this.getHeader("content-type")?.value?.startsWith("application/json")) {
       this.parseApplicationJsonParams()

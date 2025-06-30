@@ -13,7 +13,10 @@ export default class VelociousHttpServerClientRequestRunner {
     this.configuration = configuration
     this.request = request
     this.response = new Response({configuration})
+    this.state = "running"
   }
+
+  getState = () => this.state
 
   async run() {
     if (!this.request) throw new Error("No request?")
@@ -27,6 +30,7 @@ export default class VelociousHttpServerClientRequestRunner {
     })
 
     await routesResolver.resolve()
+    this.state = "done"
     this.events.emit("done", this)
   }
 }
