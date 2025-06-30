@@ -18,6 +18,7 @@ describe("Cli - Commands - db:migrate", () => {
       await db.query("DROP TABLE IF EXISTS tasks")
       await db.query("DROP TABLE IF EXISTS project_translations")
       await db.query("DROP TABLE IF EXISTS projects")
+      await db.query("DROP TABLE IF EXISTS schema_migrations")
     })
 
     await cli.execute()
@@ -39,6 +40,7 @@ describe("Cli - Commands - db:migrate", () => {
       [
         "project_translations",
         "projects",
+        "schema_migrations",
         "tasks"
       ]
     )

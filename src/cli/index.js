@@ -1,8 +1,8 @@
-import configurationResolver from "../configuration-resolver.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
 
+import configurationResolver from "../configuration-resolver.js"
 import fileExists from "../utils/file-exists.js"
 
 export default class VelociousCli {
