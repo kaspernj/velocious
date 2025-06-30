@@ -23,7 +23,7 @@ describe("Cli - Commands - db:migrate", () => {
 
     await cli.execute()
 
-    let projectForeignKey, tablesResult
+    let projectForeignKey, schemaMigrations, tablesResult
 
     await dbPool.withConnection(async (db) => {
       const tables = await db.getTables()
@@ -34,6 +34,8 @@ describe("Cli - Commands - db:migrate", () => {
       const foreignKeys = await table.getForeignKeys()
 
       projectForeignKey = foreignKeys.find((foreignKey) => foreignKey.getColumnName() == "project_id")
+
+      schemaMigrations = (await db.query("SELECT * FROM schema_migrations ORDER BY version")).map((schemaMigration) => schemaMigration.version)
     })
 
     expect(tablesResult).toEqual(
@@ -49,5 +51,7 @@ describe("Cli - Commands - db:migrate", () => {
     expect(projectForeignKey.getColumnName()).toEqual("project_id")
     expect(projectForeignKey.getReferencedTableName()).toEqual("projects")
     expect(projectForeignKey.getReferencedColumnName()).toEqual("id")
+
+    expect(schemaMigrations).toEqual(["20230728075328", "20230728075329", "20250605133926"])
   })
 })
