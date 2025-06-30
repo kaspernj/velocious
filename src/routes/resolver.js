@@ -1,4 +1,7 @@
 import {digg, digs} from "diggerize"
+import {fileURLToPath} from "url"
+import fs from "fs/promises"
+import {dirname} from "path"
 
 export default class VelociousRoutesResolver {
   constructor({configuration, request, response}) {
@@ -13,36 +16,49 @@ export default class VelociousRoutesResolver {
   }
 
   async resolve() {
+    let controllerPath
     let currentRoute = digg(this, "configuration", "routes", "rootRoute")
     let currentPath = this.request.path()
+    let viewPath
 
     const matchResult = this.matchPathWithRoutes(currentRoute, currentPath)
+    let action = this.params.action
+    let controller = this.params.controller
 
-    if (!matchResult) throw new Error(`Couldn't match a route with the given path: ${currentPath}`)
+    if (!matchResult) {
+      const __filename = fileURLToPath(import.meta.url)
+      const __dirname = dirname(__filename)
 
-    if (this.params.action && this.params.controller) {
-      const controllerPath = `${this.configuration.getDirectory()}/src/routes/${digg(this, "params", "controller")}/controller.js`
-      const controllerClassImport = await import(controllerPath)
-      const controllerClass = controllerClassImport.default
-      const controllerInstance = new controllerClass({
-        configuration: this.configuration,
-        params: this.params,
-        request: this.request,
-        response: this.response
-      })
-
-      if (!(this.params.action in controllerInstance)) {
-        throw new Error(`Missing action on controller: ${this.params.controller}#${this.params.action}`)
-      }
-
-      await this.configuration.getDatabasePool().withConnection(async () => {
-        await controllerInstance[this.params.action]()
-      })
-
-      return
+      controller = "errors"
+      controllerPath = "./built-in/errors/controller.js"
+      action = "notFound"
+      viewPath = await fs.realpath(`${__dirname}/built-in/errors`) // eslint-disable-line no-undef
+    } else if (action && controller) {
+      controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+      viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
+    } else {
+      throw new Error(`Matched the route but didn't know what to do with it: ${currentPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
     }
 
-    throw new Error(`Matched the route but didn't know what to do with it: ${currentPath}`)
+    const controllerClassImport = await import(controllerPath)
+    const controllerClass = controllerClassImport.default
+    const controllerInstance = new controllerClass({
+      action,
+      configuration: this.configuration,
+      controller,
+      params: this.params,
+      request: this.request,
+      response: this.response,
+      viewPath
+    })
+
+    if (!(action in controllerInstance)) {
+      throw new Error(`Missing action on controller: ${controller}#${action}`)
+    }
+
+    await this.configuration.getDatabasePool().withConnection(async () => {
+      await controllerInstance[action]()
+    })
   }
 
   matchPathWithRoutes(route, path) {

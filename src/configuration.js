@@ -11,8 +11,6 @@ export default class VelociousConfiguration {
   constructor({database, debug, directory, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
     restArgsError(restArgs)
 
-    if (!initializeModels) throw new Error("initializeModels wasn't given")
-
     this.database = database
     this.debug = debug
     this._directory = directory
@@ -99,7 +97,10 @@ export default class VelociousConfiguration {
   isInitialized = () => this._isInitialized
 
   async initialize() {
-    await this._initializeModels({configuration: this})
+    if (this._initializeModels) {
+      await this._initializeModels({configuration: this})
+    }
+
     this._isInitialized = true
   }
 
