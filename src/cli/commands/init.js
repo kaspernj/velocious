@@ -22,9 +22,9 @@ export default class VelociousCliCommandsInit extends BaseCommand {
     ]
     const paths = [
       projectConfigPath,
-      `${projectPath}/database/migrations`,
-      `${projectPath}/models`,
-      `${projectPath}/routes`
+      `${projectPath}/src/database/migrations`,
+      `${projectPath}/src/models`,
+      `${projectPath}/src/routes`
     ]
 
     if (this.args.testing) {

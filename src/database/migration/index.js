@@ -1,4 +1,5 @@
 import * as inflection from "inflection"
+import restArgsError from "../../utils/rest-args-error.js"
 import TableData, {TableColumn} from "../table-data/index.js"
 
 export default class VelociousDatabaseMigration {
@@ -61,14 +62,29 @@ export default class VelociousDatabaseMigration {
     }
   }
 
-  async createTable(tableName, callback) {
+  async createTable(tableName, arg1, arg2) {
+    let args
+    let callback
+
+    if (typeof arg1 == "function") {
+      args = {}
+      callback = arg1
+    } else {
+      args = arg1
+      callback = arg2
+    }
+
     const databasePool = this.configuration.getDatabasePool()
-    const primaryKeyType = databasePool.primaryKeyType()
+    const {id = {}, ...restArgs} = args
+    const {default: idDefault, type: idType = databasePool.primaryKeyType(), ...restArgsId} = id
     const tableData = new TableData(tableName)
 
-    if (!(primaryKeyType in tableData)) throw new Error(`Unsupported primary key type: ${primaryKeyType}`)
+    restArgsError(restArgs)
+    restArgsError(restArgsId)
 
-    tableData[primaryKeyType]("id", {autoIncrement: true, null: false, primaryKey: true})
+    if (!(idType in tableData)) throw new Error(`Unsupported primary key type: ${idType}`)
+
+    tableData[idType]("id", {autoIncrement: true, default: idDefault, null: false, primaryKey: true})
 
     if (callback) {
       callback(tableData)
