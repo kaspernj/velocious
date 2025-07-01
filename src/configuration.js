@@ -97,11 +97,13 @@ export default class VelociousConfiguration {
   isInitialized = () => this._isInitialized
 
   async initialize() {
-    if (this._initializeModels) {
-      await this._initializeModels({configuration: this})
-    }
+    if (!this.isInitialized()) {
+      if (this._initializeModels) {
+        await this._initializeModels({configuration: this})
+      }
 
-    this._isInitialized = true
+      this._isInitialized = true
+    }
   }
 
   registerModelClass(modelClass) {

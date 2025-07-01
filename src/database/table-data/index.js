@@ -3,7 +3,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 class TableColumn {
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, foreignKey, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args
+      const {autoIncrement, default: columnDefault, foreignKey, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args
 
       restArgsError(restArgs)
     }
@@ -13,6 +13,7 @@ class TableColumn {
   }
 
   getAutoIncrement = () => this.args?.autoIncrement
+  getDefault = () => this.args?.default
   getForeignKey = () => this.args?.foreignKey
   getMaxLength = () => this.args?.maxLength
   getName = () => this.name
@@ -70,6 +71,7 @@ export default class TableData {
   getReferences = () => this._references
 
   bigint = (name, args = {}) => this._defineColumn(name, Object.assign({type: "bigint"}, args))
+  blob = (name, args = {}) => this._defineColumn(name, Object.assign({type: "blob"}, args))
   boolean = (name, args) => this._defineColumn(name, Object.assign({type: "boolean"}, args))
   datetime = (name, args) => this._defineColumn(name, Object.assign({type: "datetime"}, args))
   integer = (name, args = {}) => this._defineColumn(name, Object.assign({type: "integer"}, args))
@@ -94,4 +96,6 @@ export default class TableData {
     this.datetime("created_at", args)
     this.datetime("updated_at", args)
   }
+
+  uuid = (name, args) => this._defineColumn(name, Object.assign({type: "uuid"}, args))
 }

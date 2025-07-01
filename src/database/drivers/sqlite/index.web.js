@@ -1,6 +1,5 @@
 import BetterLocalStorage from "better-localstorage"
 import ConnectionSqlJs from "./connection-sql-js"
-import {digg} from "diggerize"
 import initSqlJs from "sql.js"
 
 import Base from "./base.js"

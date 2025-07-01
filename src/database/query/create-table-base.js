@@ -47,6 +47,13 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       if (maxlength !== undefined) sql += `(${maxlength})`
 
       if (column.getAutoIncrement() && this.driver.shouldSetAutoIncrementWhenPrimaryKey()) sql += " AUTO_INCREMENT"
+
+      if (typeof column.getDefault() == "function") {
+        sql += ` DEFAULT (${column.getDefault()()})`
+      } else if (column.getDefault()) {
+        sql += ` DEFAULT ${this.driver.quote(column.getDefault())}`
+      }
+
       if (column.getPrimaryKey()) sql += " PRIMARY KEY"
       if (column.getNull() === false) sql += " NOT NULL"
 
