@@ -6,7 +6,8 @@ import Configuration from "../configuration.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 const shared = {
-  loaded: false
+  loaded: false,
+  running: false
 }
 
 const loadMigrations = function loadMigrations({migrationsRequireContext, ...restArgs}) {
@@ -14,20 +15,26 @@ const loadMigrations = function loadMigrations({migrationsRequireContext, ...res
   const [loaded, setLoaded] = React.useState(shared.loaded)
 
   const loadDatabase = React.useCallback(async () => {
-    await Configuration.current().getDatabasePool().withConnection(async () => {
-      const databaseMigrateFromRequireContext = new DatabaseMigrateFromRequireContext()
+    shared.running = true
 
-      await databaseMigrateFromRequireContext.execute(migrationsRequireContext)
-    })
+    try {
+      await Configuration.current().getDatabasePool().withConnection(async () => {
+        const databaseMigrateFromRequireContext = new DatabaseMigrateFromRequireContext()
 
-    await Configuration.current().initialize()
+        await databaseMigrateFromRequireContext.execute(migrationsRequireContext)
+      })
 
-    shared.loaded = true
-    setLoaded(true)
+      await Configuration.current().initialize()
+
+      shared.loaded = true
+      setLoaded(true)
+    } finally {
+      shared.running = false
+    }
   }, [])
 
   React.useMemo(() => {
-    if (!loaded && !isServer) {
+    if (!loaded && !isServer && !shared.running) {
       loadDatabase()
     }
   }, [loaded])
