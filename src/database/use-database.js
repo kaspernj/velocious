@@ -5,17 +5,13 @@ import useEnvSense from "env-sense/src/use-env-sense.js"
 import Configuration from "../configuration.js"
 import restArgsError from "../utils/rest-args-error.js"
 
-const shared = {
-  loaded: false,
-  running: false
-}
-
 const loadMigrations = function loadMigrations({migrationsRequireContext, ...restArgs}) {
+  const instance = React.useMemo(() => ({running: false}), [])
   const {isServer} = useEnvSense()
-  const [loaded, setLoaded] = React.useState(shared.loaded)
+  const [loaded, setLoaded] = React.useState(false)
 
   const loadDatabase = React.useCallback(async () => {
-    shared.running = true
+    instance.running = true
 
     try {
       await Configuration.current().getDatabasePool().withConnection(async () => {
@@ -25,16 +21,14 @@ const loadMigrations = function loadMigrations({migrationsRequireContext, ...res
       })
 
       await Configuration.current().initialize()
-
-      shared.loaded = true
       setLoaded(true)
     } finally {
-      shared.running = false
+      instance.running = false
     }
   }, [])
 
   React.useMemo(() => {
-    if (!loaded && !isServer && !shared.running) {
+    if (!loaded && !isServer && !instance.running) {
       loadDatabase()
     }
   }, [loaded])
