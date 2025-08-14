@@ -23,7 +23,7 @@ export default class VelociousCliCommandsServer extends BaseCommand{
 
     await application.initialize()
     await application.startHttpServer()
-
     console.log(`Started Velocious HTTP server on ${host}:${port}`)
+    await application.wait()
   }
 }
