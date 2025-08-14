@@ -1,4 +1,5 @@
 import {digg} from "diggerize"
+import EventEmitter from "events"
 import logger from "../logger.js"
 import Net from "net"
 import ServerClient from "./server-client.js"
@@ -7,6 +8,7 @@ import WorkerHandler from "./worker-handler/index.js"
 export default class VelociousHttpServer {
   clientCount = 0
   clients = {}
+  events = new EventEmitter()
   workerCount = 0
   workerHandlers = []
 
@@ -20,6 +22,7 @@ export default class VelociousHttpServer {
   async start() {
     await this._ensureAtLeastOneWorker()
     this.netServer = new Net.Server()
+    this.netServer.on("close", this.onClose)
     this.netServer.on("connection", this.onConnection)
     await this._netServerListen()
   }
@@ -70,6 +73,10 @@ export default class VelociousHttpServer {
   async stop() {
     await this.stopClients()
     await this.stopServer()
+  }
+
+  onClose = () => {
+    this.events.emit("close")
   }
 
   onConnection = (socket) => {

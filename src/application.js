@@ -43,6 +43,7 @@ export default class VelociousApplication {
     logger(this, `Starting server on port ${port}`)
 
     this.httpServer = new HttpServer({configuration, port})
+    this.httpServer.events.on("close", this.onHttpServerClose)
 
     await this.httpServer.start()
   }
@@ -51,5 +52,19 @@ export default class VelociousApplication {
     logger(this, "Stopping server")
 
     await this.httpServer.stop()
+  }
+
+  onHttpServerClose = () => {
+    console.log("HTTP server closed")
+
+    if (this.waitResolve) {
+      this.waitResolve()
+    }
+  }
+
+  wait() {
+    return new Promise((resolve) => {
+      this.waitResolve = resolve
+    })
   }
 }
