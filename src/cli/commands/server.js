@@ -5,10 +5,8 @@ export default class VelociousCliCommandsServer extends BaseCommand{
   async execute() {
     this.databasePool = this.configuration.getDatabasePool()
     this.newConfiguration = Object.assign({}, this.databasePool.getConfiguration())
-
-    if (this.args.testing) this.result = []
-
     this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
+
     await this.databaseConnection.connect()
 
     const host = "0.0.0.0"

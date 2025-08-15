@@ -157,7 +157,7 @@ export default class RequestBuffer {
       } else if (this.httpMethod.toUpperCase() == "POST") {
         this.readingBody = true
 
-        const match = this.getHeader("content-type").value.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
+        const match = this.getHeader("content-type")?.value?.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
 
         if (match) {
           this.boundary = match[1]
