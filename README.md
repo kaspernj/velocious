@@ -90,6 +90,34 @@ If you are developing on Velocious, you can run the tests with:
 npm run test
 ```
 
+# Writing a require test
+
+First create a test file under something like the following path 'src/routes/accounts/create-test.js' with something like the following content:
+
+```js
+import {describe, expect, it} from "velocious/src/testing/test.js"
+import Account from "../../models/account.js"
+
+await describe("accounts - create", {type: "request"}, async () => {
+  it("creates an account", async ({client}) => {
+    const response = await client.post("/accounts", {account: {name: "My event company"}})
+
+    expect(response.statusCode()).toEqual(200)
+    expect(response.contentType()).toEqual("application/json")
+
+    const data = JSON.parse(response.body())
+
+    expect(data.status).toEqual("success")
+
+    const createdAccount = await Account.last()
+
+    expect(createdAccount).toHaveAttributes({
+      name: "My event company"
+    })
+  })
+})
+```
+
 # Running a server
 
 ```bash
