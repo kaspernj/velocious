@@ -1,4 +1,4 @@
-import TestFilesFinder from "../../../../src/cli/commands/test/test-files-finder.js"
+import TestFilesFinder from "../../../../src/testing/test-files-finder.js"
 
 describe("Cli - Commands - test - TestFilesFinder", () => {
   it("finds the correct test files", async () => {

@@ -90,7 +90,7 @@ export default class TestFilesFinder {
           return true
         }
       }
-    } else if (file.match(/-spec\.js/)) {
+    } else if (file.match(/-(spec|test)\.js/)) {
       return true
     }
 
