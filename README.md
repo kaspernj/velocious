@@ -79,6 +79,13 @@ const tasks = await Task
 
 # Testing
 
+If you are using Velocious for an app, Velocious has a built-in testing framework. You can run your tests like this:
+```bash
+npx velocious test
+```
+
+If you are developing on Velocious, you can run the tests with:
+
 ```bash
 npm run test
 ```

@@ -13,16 +13,27 @@ export default class VelociousDatabaseMigrateFromRequireContext {
 
     const files = requireContext.keys()
       .map((file) => {
-        const match = file.match(/(\d{14})-(.+)\.js$/)
+        // "13,14" because somes "require-context"-npm-module deletes first character!?
+        const match = file.match(/(\d{13,14})-(.+)\.js$/)
 
         if (!match) return null
 
-        const date = parseInt(match[1])
+        // Fix require-context-npm-module deletes first character
+        let fileName = file
+        let dateNumber = match[1]
+
+        if (dateNumber.length == 13) {
+          dateNumber = `2${dateNumber}`
+          fileName = `2${fileName}`
+        }
+
+        // Parse regex
+        const date = parseInt(dateNumber)
         const migrationName = match[2]
         const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
 
         return {
-          file,
+          file: fileName,
           date,
           migrationClassName
         }

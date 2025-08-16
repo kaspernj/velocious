@@ -6,6 +6,34 @@ const tests = {
 
 let currentPath = [tests]
 
+class Expect {
+  constructor(object) {
+    this._object = object
+  }
+
+  toEqual(result) {
+    if (this._object != result) {
+      throw new Error(`${this._object} wasn't equal to ${result}`)
+    }
+  }
+
+  toHaveAttributes(result) {
+    const differences = {}
+
+    for (const key in result) {
+      const value = result[key]
+      const objectValue = this._object[key]()
+
+      if (value != objectValue) {
+        differences[key] = [value, objectValue]
+      }
+    }
+
+    if (Object.keys(differences).length > 0)
+    throw new Error(`Object had differet values: ${JSON.stringify(differences)}`)
+  }
+}
+
 async function describe(description, arg1, arg2) {
   let testArgs, testFunction
 
@@ -39,10 +67,10 @@ async function describe(description, arg1, arg2) {
 }
 
 function expect(arg) {
-  throw new Error("expect stub")
+  return new Expect(arg)
 }
 
-function it(description, arg1, args) {
+function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
   let testArgs, testFunction
 

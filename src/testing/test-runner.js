@@ -29,10 +29,6 @@ export default class TestRunner {
     return this._application
   }
 
-  async configuration() {
-
-  }
-
   async requestClient() {
     if (!this._requestClient) {
       this._requestClient = new RequestClient()
@@ -70,17 +66,20 @@ export default class TestRunner {
       try {
         await testData.function(testArgs)
       } catch (error) {
-        console.error(`${leftPadding}  Test failed: ${error.message}`)
+        // console.error(`${leftPadding}  Test failed: ${error.message}`)
+        console.error(error.stack)
       }
     }
 
-    for (const subDescription in tests.subs) {
-      const subTest = tests.subs[subDescription]
-      const newDecriptions = descriptions.concat([subDescription])
+    await this.configuration.getDatabasePool().withConnection(async () => {
+      for (const subDescription in tests.subs) {
+        const subTest = tests.subs[subDescription]
+        const newDecriptions = descriptions.concat([subDescription])
 
-      console.log(`${leftPadding}${subDescription}`)
+        console.log(`${leftPadding}${subDescription}`)
 
-      await this.runTests(subTest, newDecriptions, indentLevel + 1)
-    }
+        await this.runTests(subTest, newDecriptions, indentLevel + 1)
+      }
+    })
   }
 }
