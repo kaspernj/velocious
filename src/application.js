@@ -55,7 +55,7 @@ export default class VelociousApplication {
   }
 
   onHttpServerClose = () => {
-    console.log("HTTP server closed")
+    logger(this, "HTTP server closed")
 
     if (this.waitResolve) {
       this.waitResolve()

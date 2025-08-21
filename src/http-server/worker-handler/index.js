@@ -54,6 +54,8 @@ export default class VelociousHttpServerWorker {
   onWorkerExit = (code) => {
     if (code !== 0) {
       throw new Error(`Client worker stopped with exit code ${code}`)
+    } else {
+      logger(this, () => [`Client worker stopped with exit code ${code}`])
     }
   }
 
@@ -66,11 +68,9 @@ export default class VelociousHttpServerWorker {
       this.onStartCallback()
       this.onStartCallback = null
     } else if (command == "clientOutput") {
-      logger(this, "CLIENT OUTPUT", data)
+      logger(this, () => ["CLIENT OUTPUT", data])
 
       const {clientCount, output} = digs(data, "clientCount", "output")
-
-      logger(this, "CLIENT OUTPUT", data)
 
       this.clients[clientCount].send(output)
     } else {

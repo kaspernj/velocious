@@ -20,7 +20,7 @@ export default class VelociousRouteResourceRoute extends BaseRoute {
       let subRoutesMatchesRestPath = false
 
       for (const route of this.routes) {
-        if (route.matchWithPath(restPath)) {
+        if (route.matchWithPath({path: restPath})) {
           subRoutesMatchesRestPath = true
         }
       }

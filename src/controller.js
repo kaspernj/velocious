@@ -4,6 +4,12 @@ import * as inflection from "inflection"
 import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousController {
+  static beforeAction(methodName) {
+    if (!this._beforeActions) this._beforeActions = []
+
+    this._beforeActions.push(methodName)
+  }
+
   constructor({action, configuration, controller, params, request, response, viewPath}) {
     if (!action) throw new Error("No action given")
     if (!configuration) throw new Error("No configuration given")
@@ -21,6 +27,30 @@ export default class VelociousController {
     this._response = response
     this.viewParams = {}
     this._viewPath = viewPath
+  }
+
+  async _runBeforeCallbacks() {
+    console.log("_runBeforeCallbacks", {className: this.constructor.name})
+
+    let currentControllerClass = this.constructor
+
+    while (currentControllerClass) {
+      const beforeActions = currentControllerClass._beforeActions
+
+      if (!beforeActions) continue
+
+      for (const beforeActionName of beforeActions) {
+        const beforeAction = currentControllerClass.prototype[beforeActionName]
+
+        if (!beforeAction) throw new Error(`No such before action: ${beforeActionName}`)
+
+        const boundBeforeAction = beforeAction.bind(this)
+
+        await boundBeforeAction()
+      }
+
+      currentControllerClass = Object.getPrototypeOf(currentControllerClass)
+    }
   }
 
   params = () => this._params
