@@ -202,7 +202,7 @@ export default class RequestBuffer {
   }
 
   completeRequest = () => {
-    this.setState("status") // Reset state to new request
+    this.state = "status" // Reset state to new request
 
     if (this.getHeader("content-type")?.value?.startsWith("application/json")) {
       this.parseApplicationJsonParams()

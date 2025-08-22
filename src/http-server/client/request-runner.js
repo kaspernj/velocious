@@ -25,15 +25,17 @@ export default class VelociousHttpServerClientRequestRunner {
 
     try {
       if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
-        logger(this, () => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
+        await logger(this, () => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
         await configuration.cors({request, response})
       } else {
-        logger(this, "Run request")
+        await logger(this, "Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
 
         await routesResolver.resolve()
       }
     } catch (error) {
+      await logger(this, `Error while running request: ${error.message}`)
+
       response.setStatus(500)
       response.setErrorBody(error)
     }

@@ -1,6 +1,7 @@
 import {digs} from "diggerize"
 import ejs from "ejs"
 import * as inflection from "inflection"
+import logger from "./logger.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousController {
@@ -30,29 +31,33 @@ export default class VelociousController {
   }
 
   async _runBeforeCallbacks() {
-    console.log("_runBeforeCallbacks", {className: this.constructor.name})
+    await logger(this, "_runBeforeCallbacks")
 
     let currentControllerClass = this.constructor
 
     while (currentControllerClass) {
+      await logger(this, `Running callbacks for ${currentControllerClass.name}`)
+
       const beforeActions = currentControllerClass._beforeActions
 
-      if (!beforeActions) continue
+      if (beforeActions) {
+        for (const beforeActionName of beforeActions) {
+          const beforeAction = currentControllerClass.prototype[beforeActionName]
 
-      for (const beforeActionName of beforeActions) {
-        const beforeAction = currentControllerClass.prototype[beforeActionName]
+          if (!beforeAction) throw new Error(`No such before action: ${beforeActionName}`)
 
-        if (!beforeAction) throw new Error(`No such before action: ${beforeActionName}`)
+          const boundBeforeAction = beforeAction.bind(this)
 
-        const boundBeforeAction = beforeAction.bind(this)
-
-        await boundBeforeAction()
+          await boundBeforeAction()
+        }
       }
 
       currentControllerClass = Object.getPrototypeOf(currentControllerClass)
+
+      if (!currentControllerClass?.name?.endsWith("Controller")) break
     }
 
-    console.log("After runBeforeCallbacks")
+    await logger(this, "After runBeforeCallbacks")
   }
 
   params = () => this._params

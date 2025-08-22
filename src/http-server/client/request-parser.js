@@ -54,7 +54,7 @@ export default class VelociousHttpServerClientRequestParser {
   getHost() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
 
-    if (rawHostSplit[0]) return rawHostSplit[0]
+    if (rawHostSplit && rawHostSplit[0]) return rawHostSplit[0]
   }
 
   getPath = () => digg(this, "requestBuffer", "path")
@@ -63,7 +63,7 @@ export default class VelociousHttpServerClientRequestParser {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
     const httpMethod = this.getHttpMethod()
 
-    if (rawHostSplit[1]) {
+    if (rawHostSplit && rawHostSplit[1]) {
       return parseInt(rawHostSplit[1])
     } else if (httpMethod == "http") {
       return 80

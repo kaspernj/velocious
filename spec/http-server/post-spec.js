@@ -49,7 +49,7 @@ describe("HttpServer", () => {
     })
   })
 
-  fit("handles post form-data requests", async () => {
+  it("handles post form-data requests", async () => {
     await Dummy.run(async () => {
       const body = new FormData()
 
