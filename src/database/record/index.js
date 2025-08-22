@@ -41,6 +41,7 @@ export default class VelociousDatabaseRecord {
       relationship = new BelongsToRelationship(actualData)
 
       const buildMethodName = `build${inflection.camelize(relationshipName)}`
+      const setMethodName = `set${inflection.camelize(relationshipName)}`
 
       this.prototype[relationshipName] = function () {
         const relationship = this.getRelationshipByName(relationshipName)
@@ -53,6 +54,13 @@ export default class VelociousDatabaseRecord {
         const record = relationship.build(attributes)
 
         return record
+      }
+
+      this.prototype[setMethodName] = function (model) {
+        const relationship = this.getRelationshipByName(relationshipName)
+
+        relationship.setLoaded(model)
+        relationship.setDirty(true)
       }
     } else if (actualData.type == "hasMany") {
       relationship = new HasManyRelationship(actualData)
@@ -276,19 +284,20 @@ export default class VelociousDatabaseRecord {
   }
 
   async save() {
+    const isNewRecord = this.isNewRecord()
     let result
 
-    const isNewRecord = this.isNewRecord()
+    await this.constructor.transaction(async () => {
+      await this._autoSaveBelongsToRelationships()
 
-    await this._autoSaveBelongsToRelationships()
+      if (this.isPersisted()) {
+        result = await this._updateRecordWithChanges()
+      } else {
+        result = await this._createNewRecord()
+      }
 
-    if (this.isPersisted()) {
-      result = await this._updateRecordWithChanges()
-    } else {
-      result = await this._createNewRecord()
-    }
-
-    await this._autoSaveHasManyRelationships({isNewRecord})
+      await this._autoSaveHasManyRelationships({isNewRecord})
+    })
 
     return result
   }
@@ -310,6 +319,7 @@ export default class VelociousDatabaseRecord {
 
         this.setAttribute(foreignKey, model.id())
         instanceRelationship.setPreloaded(true)
+        instanceRelationship.setDirty(false)
       }
     }
   }
@@ -348,6 +358,10 @@ export default class VelociousDatabaseRecord {
 
   static setTableName(tableName) {
     this._tableName = tableName
+  }
+
+  static async transaction(callback) {
+    await this.connection().transaction(callback)
   }
 
   static translates(...names) {
@@ -666,9 +680,21 @@ export default class VelociousDatabaseRecord {
 
     conditions[this.constructor.primaryKey()] = this.id()
 
+    const changes = {...this._changes}
+
+    if (this._instanceRelationships) {
+      for (const relationshipName in this._instanceRelationships) {
+        const relationship = this._instanceRelationships[relationshipName]
+
+        if (relationship.getType() == "belongsTo" && relationship.getDirty()) {
+          changes[relationship.getForeignKey()] = relationship.getLoaded().id()
+        }
+      }
+    }
+
     const sql = this._connection().updateSql({
       tableName: this._tableName(),
-      data: this._changes,
+      data: changes,
       conditions
     })
     await this._connection().query(sql)

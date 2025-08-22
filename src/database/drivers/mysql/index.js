@@ -140,6 +140,22 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return this._options
   }
 
+  async transaction(callback) {
+    await this.query("START TRANSACTION")
+
+    let result
+
+    try {
+      result = await callback()
+      await this.query("COMMIT")
+    } catch (error) {
+      this.query("ROLLBACK")
+      throw error
+    }
+
+    return result
+  }
+
   updateSql({conditions, data, tableName}) {
     const update = new Update({conditions, data, driver: this, tableName})
 
