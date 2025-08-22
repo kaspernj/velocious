@@ -25,7 +25,7 @@ export default class ServerClient {
   }
 
   onSocketData = (chunk) => {
-    logger(this, `Socket ${this.clientCount}: ${chunk}`)
+    logger(this, () => [`Socket ${this.clientCount}: ${chunk}`])
 
     this.worker.postMessage({
       command: "clientWrite",

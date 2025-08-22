@@ -152,7 +152,7 @@ export default class RequestBuffer {
 
       this.events.emit("header", header)
     } else if (line == "\r\n") {
-      if (this.httpMethod.toUpperCase() == "GET") {
+      if (this.httpMethod.toUpperCase() == "GET" || this.httpMethod.toUpperCase() == "OPTIONS") {
         this.completeRequest()
       } else if (this.httpMethod.toUpperCase() == "POST") {
         this.readingBody = true
@@ -176,7 +176,7 @@ export default class RequestBuffer {
   }
 
   parseStatusLine(line) {
-    const match = line.match(/^(GET|POST) (.+?) HTTP\/1\.1\r\n/)
+    const match = line.match(/^(GET|OPTIONS|POST) (.+?) HTTP\/1\.1\r\n/)
 
     if (!match) {
       throw new Error(`Couldn't match status line from: ${line}`)
@@ -185,6 +185,8 @@ export default class RequestBuffer {
     this.httpMethod = match[1]
     this.path = match[2]
     this.setState("headers")
+
+    logger(this, () => ["Parsed status line", {httpMethod: this.httpMethod, path: this.path}])
   }
 
   postRequestDone() {
@@ -194,7 +196,7 @@ export default class RequestBuffer {
   }
 
   setState(newState) {
-    logger(this, `Changing state from ${this.state} to ${newState}`)
+    logger(this, () => [`Changing state from ${this.state} to ${newState}`])
 
     this.state = newState
   }

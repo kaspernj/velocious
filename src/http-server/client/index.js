@@ -40,6 +40,7 @@ export default class VeoliciousHttpServerClient {
       this.currentRequest = new Request({
         configuration: this.configuration
       })
+
       this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
       this.currentRequest.feed(data)
       this.state = "requestStarted"

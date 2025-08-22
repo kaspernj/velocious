@@ -19,17 +19,27 @@ export default class VelociousHttpServerClientRequestRunner {
   getState = () => this.state
 
   async run() {
-    if (!this.request) throw new Error("No request?")
+    const {configuration, request, response} = this
 
-    logger(this, "Run request")
+    if (!request) throw new Error("No request?")
 
-    const routesResolver = new RoutesResolver({
-      configuration: this.configuration,
-      request: this.request,
-      response: this.response
-    })
+    try {
+      if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
+        await logger(this, () => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
+        await configuration.cors({request, response})
+      } else {
+        await logger(this, "Run request")
+        const routesResolver = new RoutesResolver({configuration, request, response})
 
-    await routesResolver.resolve()
+        await routesResolver.resolve()
+      }
+    } catch (error) {
+      await logger(this, `Error while running request: ${error.message}`)
+
+      response.setStatus(500)
+      response.setErrorBody(error)
+    }
+
     this.state = "done"
     this.events.emit("done", this)
   }

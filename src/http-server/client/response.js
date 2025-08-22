@@ -15,7 +15,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   getBody() {
-    if (this.body) {
+    if (this.body !== undefined) {
       return this.body
     }
 
@@ -34,10 +34,21 @@ export default class VelociousHttpServerClientResponse {
     this.body = value
   }
 
+  setErrorBody(error) {
+    this.body = `${error.message}\n\n${error.stack}`
+    this.addHeader("Content-Type", "text/plain")
+  }
+
   setStatus(status) {
-    if (status == "not-found" || status == 404) {
+    if (status == "success" || status == 200) {
+      this.statusCode = 200
+      this.statusMessage = "OK"
+    } else if (status == "not-found" || status == 404) {
       this.statusCode = 404
       this.statusMessage = "Not Found"
+    } else if (status == "internal-server-error" || status == 500) {
+      this.statusCode = 500
+      this.statusMessage = "Internal server error"
     } else {
       throw new Error(`Unhandled status: ${status}`)
     }

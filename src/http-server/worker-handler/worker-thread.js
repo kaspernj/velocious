@@ -38,10 +38,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
   }
 
-  onCommand = (data) => {
-    logger(this, `Worker ${this.workerCount} received command`, data)
+  onCommand = async (data) => {
+    await logger(this, () => [`Worker ${this.workerCount} received command`, data])
 
-    const {command} = data
+    const command = data.command
 
     if (command == "newClient") {
       const {clientCount} = digs(data, "clientCount")
@@ -56,8 +56,12 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
       this.clients[clientCount] = client
     } else if (command == "clientWrite") {
+      await logger(this, "Looking up client")
+
       const {chunk, clientCount} = digs(data, "chunk", "clientCount")
       const client = digg(this.clients, clientCount)
+
+      await logger(this, `Sending to client ${clientCount}`)
 
       client.onWrite(chunk)
     } else {

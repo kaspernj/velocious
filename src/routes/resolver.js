@@ -57,6 +57,7 @@ export default class VelociousRoutesResolver {
     }
 
     await this.configuration.getDatabasePool().withConnection(async () => {
+      await controllerInstance._runBeforeCallbacks()
       await controllerInstance[action]()
     })
   }

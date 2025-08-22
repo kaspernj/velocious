@@ -34,8 +34,45 @@ export default class VelociousHttpServerClientRequestParser {
   feed = (data) => this.requestBuffer.feed(data)
   getHeader = (name) => this.requestBuffer.getHeader(name)?.value
   getHttpMethod = () => digg(this, "requestBuffer", "httpMethod")
-  getHost = () => this.requestBuffer.getHeader("host")?.value
+
+  _getHostMatch = () => {
+    const rawHost = this.requestBuffer.getHeader("origin")?.value
+
+    if (!rawHost) return null
+
+    const match = rawHost.match(/^(.+):\/\/(.+)(|:(\d+))/)
+
+    if (!match) throw new Error(`Couldn't match host: ${rawHost}`)
+
+    return {
+      protocol: match[1],
+      host: match[2],
+      port: match[4]
+    }
+  }
+
+  getHost() {
+    const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
+
+    if (rawHostSplit && rawHostSplit[0]) return rawHostSplit[0]
+  }
+
   getPath = () => digg(this, "requestBuffer", "path")
+
+  getPort() {
+    const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
+    const httpMethod = this.getHttpMethod()
+
+    if (rawHostSplit && rawHostSplit[1]) {
+      return parseInt(rawHostSplit[1])
+    } else if (httpMethod == "http") {
+      return 80
+    } else if (httpMethod == "https") {
+      return 443
+    }
+  }
+
+  getProtocol = () => this._getHostMatch()?.protocol
 
   requestDone = () => {
     const incorporator = new Incorporator({objects: [this.params, this.requestBuffer.params]})
