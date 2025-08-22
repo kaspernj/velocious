@@ -1,5 +1,5 @@
 import EventEmitter from "events"
-import logger from "../logger.js"
+import {Logger} from "../logger.js"
 
 export default class ServerClient {
   events = new EventEmitter()
@@ -8,6 +8,7 @@ export default class ServerClient {
     if (!configuration) throw new Error("No configuration given")
 
     this.configuration = configuration
+    this.logger = new Logger(this)
     this.socket = socket
     this.clientCount = clientCount
 
@@ -25,7 +26,7 @@ export default class ServerClient {
   }
 
   onSocketData = (chunk) => {
-    logger(this, () => [`Socket ${this.clientCount}: ${chunk}`])
+    this.logger.debug(() => [`Socket ${this.clientCount}: ${chunk}`])
 
     this.worker.postMessage({
       command: "clientWrite",
@@ -35,13 +36,12 @@ export default class ServerClient {
   }
 
   onSocketEnd = () => {
-    logger(this, `Socket ${this.clientCount} end`)
+    this.logger.debug(`Socket ${this.clientCount} end`)
     this.events.emit("close", this)
   }
 
   send(data) {
-    logger(this, "Send", data)
-
+    this.logger.debug("Send", data)
     this.socket.write(data)
   }
 }

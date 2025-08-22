@@ -1,13 +1,14 @@
 import {digg, digs} from "diggerize"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
-import logger from "../../logger.js"
+import {Logger} from "../../logger.js"
 import {Worker} from "worker_threads"
 
 export default class VelociousHttpServerWorker {
   constructor({configuration, workerCount}) {
     this.configuration = configuration
     this.clients = {}
+    this.logger = new Logger(this)
     this.workerCount = workerCount
   }
 
@@ -36,7 +37,7 @@ export default class VelociousHttpServerWorker {
     const clientCount = digg(client, "clientCount")
 
     client.socket.on("end", () => {
-      logger(this, `Removing ${clientCount} from clients`)
+      this.logger.debug(`Removing ${clientCount} from clients`)
       delete this.clients[clientCount]
     })
 
@@ -55,12 +56,12 @@ export default class VelociousHttpServerWorker {
     if (code !== 0) {
       throw new Error(`Client worker stopped with exit code ${code}`)
     } else {
-      logger(this, () => [`Client worker stopped with exit code ${code}`])
+      this.logger.debug(() => [`Client worker stopped with exit code ${code}`])
     }
   }
 
   onWorkerMessage = (data) => {
-    logger(this, `Worker message`, data)
+    this.logger.debug(`Worker message`, data)
 
     const {command} = digs(data, "command")
 
@@ -68,7 +69,7 @@ export default class VelociousHttpServerWorker {
       this.onStartCallback()
       this.onStartCallback = null
     } else if (command == "clientOutput") {
-      logger(this, () => ["CLIENT OUTPUT", data])
+      this.logger.debug("CLIENT OUTPUT", data)
 
       const {clientCount, output} = digs(data, "clientCount", "output")
 

@@ -1,6 +1,6 @@
 import {digg} from "diggerize"
 import {EventEmitter} from "events"
-import logger from "../../logger.js"
+import {Logger} from "../../logger.js"
 import Request from "./request.js"
 import RequestRunner from "./request-runner.js"
 
@@ -11,6 +11,7 @@ export default class VeoliciousHttpServerClient {
   constructor({clientCount, configuration, onExecuteRequest}) {
     if (!configuration) throw new Error("No configuration given")
 
+    this.logger = new Logger(this)
     this.clientCount = clientCount
     this.configuration = configuration
     this.onExecuteRequest = onExecuteRequest
@@ -18,7 +19,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   executeCurrentRequest = () => {
-    logger(this, "executeCurrentRequest")
+    this.logger.debug("executeCurrentRequest")
 
     // We are done parsing the given request and can theoretically start parsing a new one, before the current request is done - so reset the state.
     this.state = "initial"

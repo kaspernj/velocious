@@ -1,7 +1,7 @@
 import {digs} from "diggerize"
 import ejs from "ejs"
 import * as inflection from "inflection"
-import logger from "./logger.js"
+import {Logger} from "./logger.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousController {
@@ -23,6 +23,7 @@ export default class VelociousController {
     this._action = action
     this._controller = controller
     this._configuration = configuration
+    this.logger = new Logger(this)
     this._params = params
     this._request = request
     this._response = response
@@ -31,12 +32,12 @@ export default class VelociousController {
   }
 
   async _runBeforeCallbacks() {
-    await logger(this, "_runBeforeCallbacks")
+    await this.logger.debug("_runBeforeCallbacks")
 
     let currentControllerClass = this.constructor
 
     while (currentControllerClass) {
-      await logger(this, `Running callbacks for ${currentControllerClass.name}`)
+      await this.logger.debug(`Running callbacks for ${currentControllerClass.name}`)
 
       const beforeActions = currentControllerClass._beforeActions
 
@@ -57,7 +58,7 @@ export default class VelociousController {
       if (!currentControllerClass?.name?.endsWith("Controller")) break
     }
 
-    await logger(this, "After runBeforeCallbacks")
+    await this.logger.debug("After runBeforeCallbacks")
   }
 
   params = () => this._params

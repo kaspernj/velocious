@@ -2,13 +2,14 @@ import Application from "../../application.js"
 import Client from "../client/index.js"
 import {digg, digs} from "diggerize"
 import errorLogger from "../../error-logger.js"
-import logger from "../../logger.js"
+import {Logger} from "../../logger.js"
 
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
   constructor({parentPort, workerData}) {
     const {workerCount} = digs(workerData, "workerCount")
 
     this.clients = {}
+    this.logger = new Logger(this)
     this.parentPort = parentPort
     this.workerData = workerData
     this.workerCount = workerCount
@@ -17,7 +18,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     this.initialize().then(() => {
       this.application.initialize().then(() => {
-        logger(this, `Worker ${workerCount} started`)
+        this.logger.debug(`Worker ${workerCount} started`)
         parentPort.postMessage({command: "started"})
       })
     })
@@ -39,7 +40,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   onCommand = async (data) => {
-    await logger(this, () => [`Worker ${this.workerCount} received command`, data])
+    await this.logger.debug(() => [`Worker ${this.workerCount} received command`, data])
 
     const command = data.command
 
@@ -56,12 +57,12 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
       this.clients[clientCount] = client
     } else if (command == "clientWrite") {
-      await logger(this, "Looking up client")
+      await this.logger.debug("Looking up client")
 
       const {chunk, clientCount} = digs(data, "chunk", "clientCount")
       const client = digg(this.clients, clientCount)
 
-      await logger(this, `Sending to client ${clientCount}`)
+      await this.logger.debug(`Sending to client ${clientCount}`)
 
       client.onWrite(chunk)
     } else {

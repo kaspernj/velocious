@@ -2,50 +2,88 @@ import Configuration from "./configuration.js"
 
 function consoleLog(message) {
   return new Promise((resolve) => {
-    process.stdout.write(message, "utf8", resolve)
+    process.stdout.write(`${message}\n`, "utf8", resolve)
   })
 }
 
-export default async function log(object, ...messages) {
-  let configuration
+function consoleError(message) {
+  return new Promise((resolve) => {
+    process.stderr.write(`${message}\n`, "utf8", resolve)
+  })
+}
 
-  if (object.configuration) {
-    configuration = object.configuration
-  } else {
-    configuration = Configuration.current()
+function functionOrMessages(messages) {
+  if (messages.length === 1 && typeof messages[0] == "function") {
+    messages = messages[0]()
   }
 
-  if (configuration?.debug) {
-    try {
-      if (!object.constructor.name) {
-        throw new Error(`No constructor name for object`)
-      }
+  return messages
+}
 
-      const className = object.constructor.name
+function messagesToMessage(...messages) {
+  let message = ""
 
-      if (messages.length === 1 && typeof messages[0] == "function") {
-        messages = messages[0]()
-      }
+  for (const messagePartIndex in messages) {
+    const messagePart = messages[messagePartIndex]
 
-      let message = ""
-
-      for (const messagePartIndex in messages) {
-        const messagePart = messages[messagePartIndex]
-
-        if (messagePartIndex > 0) {
-          message += " "
-        }
-
-        if (typeof messagePart == "object") {
-          message += JSON.stringify(messagePart)
-        } else {
-          message += messagePart
-        }
-      }
-
-      await consoleLog(`${className} ${message}\n`)
-    } catch (error) {
-      console.error(`ERROR ${error.message}`)
+    if (messagePartIndex > 0) {
+      message += " "
     }
+
+    if (typeof messagePart == "object") {
+      message += JSON.stringify(messagePart)
+    } else {
+      message += messagePart
+    }
+  }
+
+  return message
+}
+
+class Logger {
+  constructor(object) {
+    if (typeof object == "string") {
+      this._subject = object
+    } else {
+      this._object = object
+      this._subject = object.constructor.name
+    }
+
+    if (!this._subject) {
+      throw new Error(`No subject given`)
+    }
+  }
+
+  getConfiguration() {
+    if (!this._configuration) {
+      this._configuration = this._object?.configuration || Configuration.current()
+    }
+
+    return this._configuration
+  }
+
+  async debug(...messages) {
+    if (this.getConfiguration()?.debug) {
+      await this.log(...messages)
+    }
+  }
+
+  async log(...messages) {
+    await consoleLog(messagesToMessage(this._subject, ...functionOrMessages(messages)))
+  }
+
+  async error(...messages) {
+    await consoleError(messagesToMessage(this._subject, ...functionOrMessages(messages)))
+  }
+}
+
+export {Logger}
+
+export default async function logger(object, ...messages) {
+  const className = object.constructor.name
+  const configuration = object.configuration || Configuration.current()
+
+  if (configuration.debug) {
+    await consoleLog(messagesToMessage(className, ...functionOrMessages(messages)))
   }
 }
