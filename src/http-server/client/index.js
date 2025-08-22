@@ -36,8 +36,6 @@ export default class VeoliciousHttpServerClient {
   }
 
   onWrite(data) {
-    logger(this, "onWrite", {state: this.state})
-
     if (this.state == "initial") {
       this.currentRequest = new Request({
         configuration: this.configuration

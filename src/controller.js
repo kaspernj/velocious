@@ -51,6 +51,8 @@ export default class VelociousController {
 
       currentControllerClass = Object.getPrototypeOf(currentControllerClass)
     }
+
+    console.log("After runBeforeCallbacks")
   }
 
   params = () => this._params
