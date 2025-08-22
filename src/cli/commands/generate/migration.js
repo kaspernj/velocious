@@ -13,9 +13,9 @@ export default class DbGenerateMigration extends BaseCommand {
     const date = new Date()
     const migrationNumber = strftime("%Y%m%d%H%M%S")
     const migrationFileName = `${migrationNumber}-${migrationName}.js`
-    const __filename = fileURLToPath(`${import.meta.url}/../../..`)
+    const __filename = fileURLToPath(import.meta.url)
     const __dirname = dirname(__filename)
-    const templateFilePath = `${__dirname}/templates/generate-migration.js`
+    const templateFilePath = `${__dirname}/../../../templates/generate-migration.js`
     const migrationContentBuffer = await fs.readFile(templateFilePath)
     const migrationContent = migrationContentBuffer.toString().replaceAll("__MIGRATION_NAME__", migrationNameCamelized)
     const migrationDir = `${process.cwd()}/src/database/migrations`
