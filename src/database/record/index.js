@@ -361,7 +361,7 @@ export default class VelociousDatabaseRecord {
   }
 
   static async transaction(callback) {
-    await this.connection().transaction(callback)
+    return await this.connection().transaction(callback)
   }
 
   static translates(...names) {

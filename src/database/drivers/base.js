@@ -1,10 +1,12 @@
 import Query from "../query/index.js"
 import Handler from "../handler.js"
+import {v4 as uuidv4} from "uuid"
 
 export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
     this._args = config
     this.configuration = configuration
+    this._transactionsCount = 0
   }
 
   async createTable(...args) {
@@ -81,16 +83,41 @@ export default class VelociousDatabaseDriversBase {
     return false
   }
 
+  async startTransaction() {
+    return await this.query("BEGIN TRANSACTION")
+  }
+
   async transaction(callback) {
-    await this.query("BEGIN TRANSACTION")
+    const savePointName = `sp${uuidv4().replaceAll("-", "")}`
+    let transactionStarted = false
+
+    if (this._transactionsCount == 0) {
+      await this.startTransaction()
+      transactionStarted = true
+      this._transactionsCount++
+    }
+
+    await this.query(`SAVEPOINT ${savePointName}`)
 
     let result
 
     try {
       result = await callback()
-      await this.query("COMMIT")
+
+      await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+
+      if (transactionStarted) {
+        await this.query("COMMIT")
+        this._transactionsCount--
+      }
     } catch (error) {
-      this.query("ROLLBACK")
+      await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
+
+      if (transactionStarted) {
+        await this.query("ROLLBACK")
+        this._transactionsCount--
+      }
+
       throw error
     }
 
