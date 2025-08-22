@@ -1,8 +1,15 @@
 export default class VelociousDatabaseRecordBaseInstanceRelationship {
   constructor({model, relationship}) {
+    this._dirty = false
     this.model = model
     this.relationship = relationship
   }
+
+  setDirty(newValue) {
+    this._dirty = newValue
+  }
+
+  getDirty = () => this._dirty
 
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {

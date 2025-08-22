@@ -140,6 +140,10 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return this._options
   }
 
+  async startTransaction() {
+    return await this.query("START TRANSACTION")
+  }
+
   updateSql({conditions, data, tableName}) {
     const update = new Update({conditions, data, driver: this, tableName})
 
