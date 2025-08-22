@@ -1,6 +1,6 @@
 import {digg} from "diggerize"
 import EventEmitter from "events"
-import logger from "../logger.js"
+import {Logger} from "../logger.js"
 import Net from "net"
 import ServerClient from "./server-client.js"
 import WorkerHandler from "./worker-handler/index.js"
@@ -14,6 +14,7 @@ export default class VelociousHttpServer {
 
   constructor({configuration, host, maxWorkers, port}) {
     this.configuration = configuration
+    this.logger = new Logger(this)
     this.host = host || "0.0.0.0"
     this.port = port || 3006
     this.maxWorkers = maxWorkers || 16
@@ -31,7 +32,7 @@ export default class VelociousHttpServer {
     return new Promise((resolve, reject) => {
       try {
         this.netServer.listen(this.port, this.host, () => {
-          logger(this, `Velocious listening on ${this.host}:${this.port}`)
+          this.logger.debug(`Velocious listening on ${this.host}:${this.port}`)
           resolve()
         })
       } catch (error) {
@@ -82,8 +83,7 @@ export default class VelociousHttpServer {
   onConnection = (socket) => {
     const clientCount = this.clientCount
 
-    logger(this, `New client ${clientCount}`)
-
+    this.logger.debug(`New client ${clientCount}`)
     this.clientCount++
 
     const workerHandler = this.workerHandlerToUse()
@@ -95,10 +95,8 @@ export default class VelociousHttpServer {
 
     client.events.on("close", this.onClientClose)
 
-    logger(this, `Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
-
+    this.logger.debug(`Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
     workerHandler.addSocketConnection(client)
-
     this.clients[clientCount] = client
   }
 
@@ -130,7 +128,7 @@ export default class VelociousHttpServer {
   }
 
   workerHandlerToUse() {
-    logger(this, `Worker handlers length: ${this.workerHandlers.length}`)
+    this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 
     const randomWorkerNumber = parseInt(Math.random() * this.workerHandlers.length)
     const workerHandler = this.workerHandlers[randomWorkerNumber]

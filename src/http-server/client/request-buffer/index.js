@@ -2,7 +2,7 @@ import {EventEmitter} from "events"
 import FormDataPart from "./form-data-part.js"
 import Header from "./header.js"
 import Incorporator from "incorporator"
-import logger from "../../../logger.js"
+import {Logger} from "../../../logger.js"
 import ParamsToObject from "../params-to-object.js"
 import querystring from "querystring"
 
@@ -20,6 +20,7 @@ export default class RequestBuffer {
 
   constructor({configuration}) {
     this.configuration = configuration
+    this.logger = new Logger(this)
   }
 
   feed(data) {
@@ -185,8 +186,7 @@ export default class RequestBuffer {
     this.httpMethod = match[1]
     this.path = match[2]
     this.setState("headers")
-
-    logger(this, () => ["Parsed status line", {httpMethod: this.httpMethod, path: this.path}])
+    this.logger.debug(() => ["Parsed status line", {httpMethod: this.httpMethod, path: this.path}])
   }
 
   postRequestDone() {
@@ -196,8 +196,7 @@ export default class RequestBuffer {
   }
 
   setState(newState) {
-    logger(this, () => [`Changing state from ${this.state} to ${newState}`])
-
+    this.logger.debug(() => [`Changing state from ${this.state} to ${newState}`])
     this.state = newState
   }
 

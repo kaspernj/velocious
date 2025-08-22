@@ -1,5 +1,5 @@
 import EventEmitter from "events"
-import logger from "../../logger.js"
+import {Logger} from "../../logger.js"
 import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
 
@@ -10,6 +10,7 @@ export default class VelociousHttpServerClientRequestRunner {
     if (!configuration) throw new Error("No configuration given")
     if (!request) throw new Error("No request given")
 
+    this.logger = new Logger(this)
     this.configuration = configuration
     this.request = request
     this.response = new Response({configuration})
@@ -25,7 +26,7 @@ export default class VelociousHttpServerClientRequestRunner {
 
     try {
       if (request.header("sec-fetch-mode") == "cors") {
-        await logger(this, () => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
+        await this.logger.debug(() => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
         await configuration.cors({request, response})
       }
 
@@ -33,13 +34,13 @@ export default class VelociousHttpServerClientRequestRunner {
         response.setStatus(200)
         response.setBody("")
       } else {
-        await logger(this, "Run request")
+        await this.logger.debug("Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
 
         await routesResolver.resolve()
       }
     } catch (error) {
-      await logger(this, `Error while running request: ${error.message}`)
+      await this.logger.error(() => [`Error while running request: ${error.message}\n\n${error.stack}`])
 
       response.setStatus(500)
       response.setErrorBody(error)

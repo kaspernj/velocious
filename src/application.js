@@ -1,12 +1,13 @@
 import AppRoutes from "../src/routes/app-routes.js"
 import {digs} from "diggerize"
-import logger from "./logger.js"
+import {Logger} from "./logger.js"
 import HttpServer from "./http-server/index.js"
 
 export default class VelociousApplication {
   constructor({configuration, httpServer}) {
     this.configuration = configuration
     this.httpServerConfiguration = httpServer ?? {}
+    this.logger = new Logger(this)
   }
 
   async initialize() {
@@ -40,7 +41,7 @@ export default class VelociousApplication {
 
     const port = httpServerConfiguration.port || 3006
 
-    logger(this, `Starting server on port ${port}`)
+    await this.logger.debug(`Starting server on port ${port}`)
 
     this.httpServer = new HttpServer({configuration, port})
     this.httpServer.events.on("close", this.onHttpServerClose)
@@ -49,13 +50,12 @@ export default class VelociousApplication {
   }
 
   async stop() {
-    logger(this, "Stopping server")
-
+    await this.logger.debug("Stopping server")
     await this.httpServer.stop()
   }
 
   onHttpServerClose = () => {
-    logger(this, "HTTP server closed")
+    this.logger.debug("HTTP server closed")
 
     if (this.waitResolve) {
       this.waitResolve()
