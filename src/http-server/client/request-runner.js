@@ -24,9 +24,14 @@ export default class VelociousHttpServerClientRequestRunner {
     if (!request) throw new Error("No request?")
 
     try {
-      if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
+      if (request.header("sec-fetch-mode") == "cors") {
         await logger(this, () => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
         await configuration.cors({request, response})
+      }
+
+      if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
+        response.setStatus(200)
+        response.setBody("")
       } else {
         await logger(this, "Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})

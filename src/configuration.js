@@ -8,9 +8,10 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({database, debug, directory, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
+  constructor({cors, database, debug, directory, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
     restArgsError(restArgs)
 
+    this.cors = cors
     this.database = database
     this.debug = debug
     this._directory = directory
