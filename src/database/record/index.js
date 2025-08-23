@@ -650,14 +650,31 @@ export default class VelociousDatabaseRecord {
     return this._attributes[attributeNameUnderscore]
   }
 
+  _belongsToChanges() {
+    const belongsToChanges = {}
+
+    if (this._instanceRelationships) {
+      for (const relationshipName in this._instanceRelationships) {
+        const relationship = this._instanceRelationships[relationshipName]
+
+        if (relationship.getType() == "belongsTo" && relationship.getDirty()) {
+          belongsToChanges[relationship.getForeignKey()] = relationship.loaded()?.id()
+        }
+      }
+    }
+
+    return belongsToChanges
+  }
+
   async _createNewRecord() {
     if (!this.constructor.connection()["insertSql"]) {
       throw new Error(`No insertSql on ${this.constructor.connection().constructor.name}`)
     }
 
+    const data = Object.assign({}, this._belongsToChanges(), this.attributes())
     const sql = this._connection().insertSql({
       tableName: this._tableName(),
-      data: this.attributes()
+      data
     })
     await this._connection().query(sql)
     const id = await this._connection().lastInsertID()
@@ -680,17 +697,7 @@ export default class VelociousDatabaseRecord {
 
     conditions[this.constructor.primaryKey()] = this.id()
 
-    const changes = {...this._changes}
-
-    if (this._instanceRelationships) {
-      for (const relationshipName in this._instanceRelationships) {
-        const relationship = this._instanceRelationships[relationshipName]
-
-        if (relationship.getType() == "belongsTo" && relationship.getDirty()) {
-          changes[relationship.getForeignKey()] = relationship.getLoaded().id()
-        }
-      }
-    }
+    const changes = Object.assign({}, this._belongsToChanges(), this._changes)
 
     const sql = this._connection().updateSql({
       tableName: this._tableName(),
