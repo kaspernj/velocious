@@ -471,6 +471,10 @@ export default class VelociousDatabaseRecord {
     return this._newQuery()
   }
 
+  static async count() {
+    return this._newQuery().count()
+  }
+
   static async destroyAll(...args) {
     return this._newQuery().destroyAll(...args)
   }
@@ -489,6 +493,10 @@ export default class VelociousDatabaseRecord {
 
   static async findOrInitializeBy(...args) {
     return this._newQuery().findOrInitializeBy(...args)
+  }
+
+  static async first() {
+    return this._newQuery().first()
   }
 
   static joins(...args) {

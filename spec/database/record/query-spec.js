@@ -34,4 +34,52 @@ describe("Record - query", () => {
       expect(newProject.nameEn()).toEqual("Test project")
     })
   })
+
+  it("finds the first record", async () => {
+    await Dummy.run(async () => {
+      const taskIDs = []
+
+      for (let i = 0; i < 5; i++) {
+        const task = await Task.create({name: `Task ${i}`})
+
+        taskIDs.push(task.id())
+      }
+
+      const lastTask = await Task.first()
+
+      expect(lastTask.id()).toEqual(taskIDs[0])
+    })
+  })
+
+  it("finds the last record", async () => {
+    await Dummy.run(async () => {
+      const taskIDs = []
+
+      for (let i = 0; i < 5; i++) {
+        const task = await Task.create({name: `Task ${i}`})
+
+        taskIDs.push(task.id())
+      }
+
+      const lastTask = await Task.last()
+
+      expect(lastTask.id()).toEqual(taskIDs[4])
+    })
+  })
+
+  it("counts the records", async () => {
+    await Dummy.run(async () => {
+      const taskIDs = []
+
+      for (let i = 0; i < 5; i++) {
+        const task = await Task.create({name: `Task ${i}`})
+
+        taskIDs.push(task.id())
+      }
+
+      const tasksCount = await Task.count()
+
+      expect(tasksCount).toEqual(5)
+    })
+  })
 })
