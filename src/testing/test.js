@@ -1,3 +1,5 @@
+import restArgsError from "../utils/rest-args-error.js"
+
 const tests = {
   args: {},
   subs: {},
@@ -6,14 +8,74 @@ const tests = {
 
 let currentPath = [tests]
 
+class ExpectToChange {
+  constructor({changeCallback, expect, ...restArgs}) {
+    restArgsError(restArgs)
+
+    this.expect = expect
+    this.changeCallback = changeCallback
+  }
+
+  by(count) {
+    this.count = count
+
+    return this.expect
+  }
+
+  async runBefore() {
+    this.oldCount = await this.changeCallback()
+  }
+
+  async runAfter() {
+    this.newCount = await this.changeCallback()
+  }
+
+  async execute() {
+    const difference = this.newCount - this.oldCount
+
+    if (difference != this.count) {
+      throw new Error(`Expected to change by ${count} but changed by ${difference}`)
+    }
+  }
+}
+
 class Expect {
   constructor(object) {
     this._object = object
+    this.expectations = []
+  }
+
+  toChange(changeCallback) {
+    const expectToChange = new ExpectToChange({changeCallback, expect: this})
+
+    this.expectations.push(expectToChange)
+
+    return expectToChange
+  }
+
+  andChange(...args) {
+    return this.toChange(...args)
   }
 
   toEqual(result) {
     if (this._object != result) {
       throw new Error(`${this._object} wasn't equal to ${result}`)
+    }
+  }
+
+  async execute() {
+    for (const expectation of this.expectations) {
+      await expectation.runBefore()
+    }
+
+    await this._object()
+
+    for (const expectation of this.expectations) {
+      await expectation.runAfter()
+    }
+
+    for (const expectation of this.expectations) {
+      await expectation.execute()
     }
   }
 

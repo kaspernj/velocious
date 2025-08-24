@@ -2,6 +2,7 @@ import FromPlain from "./from-plain.js"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
 import JoinPlain from "./join-plain.js"
+import {Logger} from "../../logger.js"
 import OrderPlain from "./order-plain.js"
 import Preloader from "./preloader.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
@@ -16,6 +17,7 @@ export default class VelociousDatabaseQuery {
 
     this.driver = driver
     this.handler = handler
+    this.logger = new Logger(this)
     this.modelClass = modelClass
     this._froms = froms
     this._groups = groups
@@ -43,6 +45,21 @@ export default class VelociousDatabaseQuery {
     })
 
     return newQuery
+  }
+
+  async count() {
+    const countQuery = this.clone()
+
+    countQuery._selects = []
+    countQuery.select("COUNT(id) AS count")
+
+    const results = await countQuery._executeQuery()
+
+    if (results.length == 1) {
+      return results[0].count
+    }
+
+    throw new Error("count multiple stub")
   }
 
   getOptions = () => this.driver.options()
@@ -136,7 +153,11 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  last = async () => await this.clone().reverseOrder().first()
+  last = async () => {
+    const results = await this.clone().reorder("id DESC").limit(1).toArray()
+
+    return results[0]
+  }
 
   limit(value) {
     this._limits.push(value)
@@ -188,10 +209,18 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  async toArray() {
+  async _executeQuery() {
     const sql = this.toSql()
     const results = await this.driver.query(sql)
+
+    this.logger.debug(`SQL: sql`)
+
+    return results
+  }
+
+  async toArray() {
     const models = []
+    const results = await this._executeQuery()
 
     for (const result of results) {
       const model = new this.modelClass()
