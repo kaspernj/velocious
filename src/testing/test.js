@@ -34,7 +34,7 @@ class ExpectToChange {
     const difference = this.newCount - this.oldCount
 
     if (difference != this.count) {
-      throw new Error(`Expected to change by ${count} but changed by ${difference}`)
+      throw new Error(`Expected to change by ${this.count} but changed by ${difference}`)
     }
   }
 }
