@@ -213,7 +213,7 @@ export default class VelociousDatabaseQuery {
     const sql = this.toSql()
     const results = await this.driver.query(sql)
 
-    this.logger.debug(`SQL: sql`)
+    this.logger.debug("SQL: ", sql)
 
     return results
   }
