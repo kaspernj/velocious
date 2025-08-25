@@ -68,7 +68,7 @@ class Expect {
       await expectation.runBefore()
     }
 
-    await this._object()
+    const result = await this._object()
 
     for (const expectation of this.expectations) {
       await expectation.runAfter()
@@ -77,6 +77,8 @@ class Expect {
     for (const expectation of this.expectations) {
       await expectation.execute()
     }
+
+    return result
   }
 
   toHaveAttributes(result) {
