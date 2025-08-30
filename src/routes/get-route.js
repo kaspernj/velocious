@@ -10,9 +10,13 @@ export default class VelociousRouteGetRoute extends BaseRoute {
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
   }
 
-  matchWithPath({path}) {
-    if (path.match(this.regExp)) {
+  matchWithPath({params, path}) {
+    const match = path.match(this.regExp)
+
+    if (match) {
       const [_beginnigSlash, _matchedName, restPath] = match
+
+      params.action = this.name
 
       return {restPath}
     }

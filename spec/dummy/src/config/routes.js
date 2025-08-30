@@ -8,6 +8,8 @@ routes.draw((route) => {
   route.resources("tasks", (route) => {
     route.get("users")
   })
+
+  route.get("ping")
 })
 
 export default {routes}
