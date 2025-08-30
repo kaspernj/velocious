@@ -2,7 +2,6 @@ import {digg} from "diggerize"
 
 import Controller from "../../../../../src/controller.js"
 import Project from "../../models/project.js"
-import Task from "../../models/task.js"
 
 export default class ProjectsController extends Controller {
   index() {
