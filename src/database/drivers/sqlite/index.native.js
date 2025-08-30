@@ -1,4 +1,5 @@
 import {digg} from "diggerize"
+import envSense from "env-sense/src/use-env-sense.js"
 import query from "./query"
 import * as SQLite from "expo-sqlite"
 
@@ -6,6 +7,10 @@ import Base from "./base"
 
 export default class VelociousDatabaseDriversSqliteNative extends Base {
   async connect() {
+    const {isBrowser, isNative, isServer} = envSense()
+
+    if (!isNative) throw new Error(`SQLite native driver running inside non-native environment: ${JSON.stringify({isBrowser, isNative, isServer})}`)
+
     const args = this.getArgs()
 
     if (!args.name) throw new Error("No name given for SQLite Native")
@@ -51,5 +56,9 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     this.connection = undefined
   }
 
-  query = async (sql) => await query(this.connection, sql)
+  query = async (sql) => {
+    if (!this.connection) throw new Error("Not connected yet")
+
+    return await query(this.connection, sql)
+  }
 }
