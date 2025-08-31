@@ -681,11 +681,18 @@ export default class VelociousDatabaseRecord {
 
     const data = Object.assign({}, this._belongsToChanges(), this.attributes())
     const sql = this._connection().insertSql({
+      returnLastInsertedColumnName: this.constructor.primaryKey(),
       tableName: this._tableName(),
       data
     })
-    await this._connection().query(sql)
-    const id = await this._connection().lastInsertID()
+    const insertResult = await this._connection().query(sql)
+    let id
+
+    if (insertResult && insertResult[0]?.lastInsertID) {
+      id = insertResult[0]?.lastInsertID
+    } else {
+      id = await this._connection().lastInsertID()
+    }
 
     await this._reloadWithId(id)
     this.setIsNewRecord(false)

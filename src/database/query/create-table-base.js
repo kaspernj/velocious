@@ -48,7 +48,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (column.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
         if (driver.getType() == "mssql") {
-          sql += " IDENTITY(1,1)"
+          sql += " IDENTITY"
         } else {
           sql += " AUTO_INCREMENT"
         }

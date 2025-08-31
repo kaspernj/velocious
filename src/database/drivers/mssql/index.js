@@ -170,7 +170,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async releaseSavePoint(savePointName) {
-    await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+    await this.query(`COMMIT TRANSACTION [${savePointName}]`)
   }
 
   async rollbackSavePoint(savePointName) {

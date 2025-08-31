@@ -8,6 +8,7 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
 
   toSql() {
     const {pretty, query} = digs(this, "pretty", "query")
+    const driver = query.driver
     let sql = ""
 
     if (query._limits.length == 0) return sql
@@ -19,7 +20,11 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
       sql += " "
     }
 
-    sql += "LIMIT"
+    if (driver.getType() == "mssql") {
+      // sql += "BETWEEN"
+    } else {
+      sql += "LIMIT"
+    }
 
     for (const limitKey in query._limits) {
       const limit = query._limits[limitKey]
@@ -32,7 +37,11 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
         sql += " "
       }
 
-      sql += this.query.getOptions().quote(limit)
+      if (driver.getType() == "mssql") {
+        sql += `OFFSET 0 ROWS FETCH FIRST ${this.query.getOptions().quote(limit)} ROWS ONLY`
+      } else {
+        sql += this.query.getOptions().quote(limit)
+      }
     }
 
     return sql
