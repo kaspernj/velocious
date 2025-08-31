@@ -84,22 +84,6 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return this.connection.escape(string)
   }
 
-  quote(string) {
-    return `${this.escape(string)}`
-  }
-
-  quoteColumn = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in column name: ${string}`)
-
-    return `\`${string}\``
-  }
-
-  quoteTable = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in table name: ${string}`)
-
-    return `\`${string}\``
-  }
-
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
 
@@ -133,9 +117,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   options() {
-    if (!this._options) {
-      this._options = new Options({driver: this})
-    }
+    if (!this._options) this._options = new Options({driver: this})
 
     return this._options
   }

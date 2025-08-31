@@ -1,3 +1,4 @@
+import {digg} from "diggerize"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
 import {v4 as uuidv4} from "uuid"
@@ -56,6 +57,26 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
   }
 
+  quote(string) {
+    return `${this.escape(string)}`
+  }
+
+  quoteColumn = (string) => {
+    const quoteChar = digg(this.options(), "columnQuote")
+
+    if (string.includes(quoteChar)) throw new Error(`Possible SQL injection in column name: ${string}`)
+
+    return `${quoteChar}${string}${quoteChar}`
+  }
+
+  quoteTable = (string) => {
+    const quoteChar = digg(this.options(), "tableQuote")
+
+    if (string.includes(quoteChar)) throw new Error(`Possible SQL injection in table name: ${string}`)
+
+    return `${quoteChar}${string}${quoteChar}`
+  }
+
   async select(tableName) {
     const handler = new Handler()
     const query = new Query({
@@ -83,12 +104,8 @@ export default class VelociousDatabaseDriversBase {
     return false
   }
 
-  async startTransaction() {
-    return await this.query("BEGIN TRANSACTION")
-  }
-
   async transaction(callback) {
-    const savePointName = `sp${uuidv4().replaceAll("-", "")}`
+    const savePointName = this.generateSavePointName()
     let transactionStarted = false
 
     if (this._transactionsCount == 0) {
@@ -97,24 +114,24 @@ export default class VelociousDatabaseDriversBase {
       this._transactionsCount++
     }
 
-    await this.query(`SAVEPOINT ${savePointName}`)
+    await this.startSavePoint(savePointName)
 
     let result
 
     try {
       result = await callback()
 
-      await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+      await this.releaseSavepoint(savePointName)
 
       if (transactionStarted) {
-        await this.query("COMMIT")
+        await this.commitTransaction()
         this._transactionsCount--
       }
     } catch (error) {
-      await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
+      await this.rollbackSavePoint(savePointName)
 
       if (transactionStarted) {
-        await this.query("ROLLBACK")
+        await this.rollbackTransaction()
         this._transactionsCount--
       }
 
@@ -122,6 +139,34 @@ export default class VelociousDatabaseDriversBase {
     }
 
     return result
+  }
+
+  async startTransaction() {
+    return await this.query("BEGIN TRANSACTION")
+  }
+
+  async commitTransaction() {
+    await this.query("COMMIT")
+  }
+
+  async rollbackTransaction() {
+    await this.query("ROLLBACK")
+  }
+
+  generateSavePointName() {
+    return `sp${uuidv4().replaceAll("-", "")}`
+  }
+
+  async startSavePoint(savePointName) {
+    await this.query(`SAVEPOINT ${savePointName}`)
+  }
+
+  async releaseSavePoint(savePointName) {
+    await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+  }
+
+  async rollbackSavePoint(savePointName) {
+    await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
   }
 
   async update(...args) {

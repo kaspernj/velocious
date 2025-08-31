@@ -24,8 +24,8 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   toSql() {
-    const {tableName} = this
-    const {columnQuote, indexQuote, tableQuote} = digs(this.getOptions(), "columnQuote", "indexQuote", "tableQuote")
+    const {driver, tableName} = this
+    const {indexQuote} = digs(this.getOptions(), "columnQuote", "indexQuote", "tableQuote")
     let sql = "CREATE"
 
     if (this.unique) sql += " UNIQUE"
@@ -35,12 +35,12 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     if (this.ifNotExists) sql += " IF NOT EXISTS"
 
     sql += ` ${indexQuote}${this.name || this.generateIndexName()}${indexQuote}`
-    sql += ` ON ${tableQuote}${tableName}${tableQuote} (`
+    sql += ` ON ${driver.quoteTable(tableName)} (`
 
     for (const columnIndex in this.columns) {
       if (columnIndex > 0) sql += ", "
 
-      sql += `${columnQuote}${this.columns[columnIndex]}${columnQuote}`
+      sql += `${this.driver.quoteColumn(this.columns[columnIndex])}`
     }
 
     sql += ")"

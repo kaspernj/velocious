@@ -1,4 +1,5 @@
 import Column from "./column.js"
+import {digg} from "diggerize"
 import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversMssqlTable {
@@ -8,7 +9,7 @@ export default class VelociousDatabaseDriversMssqlTable {
   }
 
   async getColumns() {
-    const result = await this.driver.query(`SHOW FULL COLUMNS FROM \`${this.getName()}\``)
+    const result = await this.driver.query(`SELECT [COLUMN_NAME] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_NAME] = ${this.driver.quote(this.getName())}`)
     const columns = []
 
     for (const data of result) {
@@ -42,6 +43,6 @@ export default class VelociousDatabaseDriversMssqlTable {
   }
 
   getName() {
-    return Object.values(this.data)[0]
+    return digg(this.data, "TABLE_NAME")
   }
 }

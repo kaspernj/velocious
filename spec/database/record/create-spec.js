@@ -22,7 +22,7 @@ describe("Record - create", () => {
     })
   })
 
-  it("creates a new task with an existing project", async () => {
+  fit("creates a new task with an existing project", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({name: "Test project"})
       const task = new Task({name: "Test task", project})

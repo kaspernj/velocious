@@ -20,7 +20,9 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   toSql() {
-    let sql = `INSERT INTO ${this.getOptions().quoteTableName(this.tableName)}`
+    const {driver} = this
+
+    let sql = `INSERT INTO ${driver.quoteTable(this.tableName)}`
     let count = 0
     let columns
 
@@ -38,7 +40,7 @@ export default class VelociousDatabaseQueryInsertBase {
       for (const columnName of columns) {
         if (count > 0) sql += ", "
 
-        sql += this.getOptions().quoteColumnName(columnName)
+        sql += driver.quoteColumn(columnName)
         count++
       }
 
@@ -62,9 +64,9 @@ export default class VelociousDatabaseQueryInsertBase {
       if (Object.keys(this.data).length > 0) {
         sql += " VALUES "
         sql += this._valuesSql(Object.values(this.data))
-      } else if (this.driver.getType() == "sqlite") {
+      } else if (driver.getType() == "sqlite" || driver.getType() == "mssql") {
         sql += " DEFAULT VALUES"
-      } else if (this.driver.getType() == "mysql") {
+      } else if (driver.getType() == "mysql") {
         sql += " () VALUES ()"
       }
     }

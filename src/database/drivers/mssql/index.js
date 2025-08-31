@@ -4,37 +4,26 @@ import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
 import Delete from "./sql/delete.js"
 import {digg} from "diggerize"
+import escapeString from "sql-escape-string"
 import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import mssql from "mssql"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import Update from "./sql/update.js"
+import {v4 as uuidv4} from "uuid"
 
 export default class VelociousDatabaseDriversMssql extends Base{
   async connect() {
-    const connectArgs = this.connectArgs()
-    const sqlConfig = digg(connectArgs, "sqlConfig")
+    const args = this.getArgs()
+    const sqlConfig = digg(args, "sqlConfig")
 
+    this.currentDatabaseName = digg(sqlConfig, "database")
     this.connection = await mssql.connect(sqlConfig)
   }
 
   disconnect() {
     this.connection.end()
-  }
-
-  connectArgs() {
-    const args = this.getArgs()
-    const connectArgs = []
-    const forward = ["database", "host", "password"]
-
-    for (const forwardValue of forward) {
-      if (forwardValue in args) connectArgs[forwardValue] = digg(args, forwardValue)
-    }
-
-    if ("username" in args) connectArgs["user"] = args["username"]
-
-    return connectArgs
   }
 
   async close() {
@@ -67,9 +56,24 @@ export default class VelociousDatabaseDriversMssql extends Base{
   primaryKeyType = () => "bigint"
 
   async query(sql) {
-    const result = await mssql.query(sql)
+    let result, request
 
-    return result
+    if (this._currentTransaction) {
+      request = new mssql.Request(this._currentTransaction)
+    } else {
+      request = mssql
+    }
+
+    try {
+      result = await request.query(sql)
+    } catch (error) {
+      // Re-throw error because the stack-trace is broken and can't be used for app-development.
+      throw new Error(`Query failed '${error.message})': ${sql}`)
+    }
+
+    console.log({sql, result: result.recordsets[0]})
+
+    return result.recordsets[0]
   }
 
   queryToSql(query) {
@@ -78,27 +82,28 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   shouldSetAutoIncrementWhenPrimaryKey = () => true
 
-  escape(string) {
-    if (!this.connection) throw new Error("Can't escape before connected")
+  escape(value) {
+    const type = typeof value
 
-    return this.connection.escape(string)
+    if (type != "string") value = `${value}`
+
+    const resultWithQuotes = escapeString(value)
+    const result = resultWithQuotes.substring(1, resultWithQuotes.length - 1)
+
+    return result
   }
 
-  quote(string) {
-    return `${this.escape(string)}`
+  quote(value) {
+    const type = typeof value
+
+    if (type == "number") return value
+    if (type != "string") value = `${value}`
+
+    return escapeString(value)
   }
 
-  quoteColumn = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in column name: ${string}`)
-
-    return `\`${string}\``
-  }
-
-  quoteTable = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in table name: ${string}`)
-
-    return `\`${string}\``
-  }
+  quoteColumn = (string) => this.options().quoteColumnName(string)
+  quoteTable = (string) => this.options().quoteTableName(string)
 
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
@@ -114,7 +119,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async getTables() {
-    const result = await this.query("SHOW FULL TABLES")
+    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = ${this.quote(this.currentDatabaseName)} AND [TABLE_SCHEMA] = 'dbo'`)
     const tables = []
 
     for (const row of result) {
@@ -127,21 +132,53 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async lastInsertID() {
-    const result = await this.query("SELECT LAST_INSERT_ID() AS last_insert_id")
+    const result = await this.query("SELECT SCOPE_IDENTITY() AS last_insert_id")
+    const lastInsertID = digg(result, 0, "last_insert_id")
 
-    return digg(result, 0, "last_insert_id")
+    if (lastInsertID === null) throw new Error("Couldn't get the last inserted ID")
+
+    return lastInsertID
   }
 
   options() {
-    if (!this._options) {
-      this._options = new Options({driver: this})
-    }
+    if (!this._options) this._options = new Options({driver: this})
 
     return this._options
   }
 
   async startTransaction() {
-    return await this.query("START TRANSACTION")
+    if (this._currentTransaction) throw new Error("A transaction is already running")
+
+    this._currentTransaction = new mssql.Transaction()
+    await this._currentTransaction.begin()
+  }
+
+  async commitTransaction() {
+    if (!this._currentTransaction) throw new Error("A transaction isn't running")
+
+    await this._currentTransaction.commit()
+  }
+
+  async rollbackTransaction() {
+    if (!this._currentTransaction) throw new Error("A transaction isn't running")
+
+    await this._currentTransaction.rollback()
+  }
+
+  async startSavePoint(savePointName) {
+    await this.query(`SAVE TRANSACTION [${savePointName}]`)
+  }
+
+  async releaseSavePoint(savePointName) {
+    await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+  }
+
+  async rollbackSavePoint(savePointName) {
+    await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
+  }
+
+  generateSavePointName() {
+    return `sp${uuidv4().replaceAll("-", "")}`.substring(0, 32)
   }
 
   updateSql({conditions, data, tableName}) {

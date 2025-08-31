@@ -14,14 +14,14 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
   toSql() {
     const databaseType = this.getConfiguration().getDatabaseType()
-    const {tableData} = this
+    const {driver, tableData} = this
     const sqls = []
 
     let sql = "CREATE TABLE"
 
     if (this.ifNotExists || tableData.getIfNotExists()) sql += " IF NOT EXISTS"
 
-    sql += ` ${tableData.getName()} (`
+    sql += ` ${driver.quoteTable(tableData.getName())} (`
 
     let columnCount = 0
 
@@ -42,16 +42,23 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (columnCount > 1) sql += ", "
 
-      sql += `${this.driver.quoteColumn(column.getName())} ${type}`
+      sql += `${driver.quoteColumn(column.getName())} ${type}`
 
       if (maxlength !== undefined) sql += `(${maxlength})`
 
-      if (column.getAutoIncrement() && this.driver.shouldSetAutoIncrementWhenPrimaryKey()) sql += " AUTO_INCREMENT"
+      if (column.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
+        if (driver.getType() == "mssql") {
+          sql += " IDENTITY(1,1)"
+        } else {
+          sql += " AUTO_INCREMENT"
+        }
+      }
+
 
       if (typeof column.getDefault() == "function") {
         sql += ` DEFAULT (${column.getDefault()()})`
       } else if (column.getDefault()) {
-        sql += ` DEFAULT ${this.driver.quote(column.getDefault())}`
+        sql += ` DEFAULT ${driver.quote(column.getDefault())}`
       }
 
       if (column.getPrimaryKey()) sql += " PRIMARY KEY"
@@ -67,7 +74,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           throw new Error(`Unknown foreign key type given: ${column.getForeignKey()} (${typeof column.getForeignKey()})`)
         }
 
-        sql += ` REFERENCES ${this.driver.quoteTable(foreignKeyTable)}(${this.driver.quoteColumn(foreignKeyColumn)})`
+        sql += ` REFERENCES ${driver.quoteTable(foreignKeyTable)}(${driver.quoteColumn(foreignKeyColumn)})`
       }
     }
 
@@ -90,7 +97,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         index.getColumns().forEach((column, columnIndex) => {
           if (columnIndex > 0) sql += ", "
 
-          sql += this.driver.quoteColumn(column.name)
+          sql += driver.quoteColumn(column.name)
         })
 
         sql += ")"
