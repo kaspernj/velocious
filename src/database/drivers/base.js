@@ -121,7 +121,7 @@ export default class VelociousDatabaseDriversBase {
     try {
       result = await callback()
 
-      await this.releaseSavepoint(savePointName)
+      await this.releaseSavePoint(savePointName)
 
       if (transactionStarted) {
         await this.commitTransaction()
