@@ -18,12 +18,28 @@ services:
       - 3306
     mem_limit: 4096m
     restart_policy: on-failure
+  mssql:
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: Super-Secret-Password
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    expose:
+      - 1433
+    mem_limit: 4096m
+    restart_policy: on-failure
 builds:
   build_1:
     name: MariaDB
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
+      - npm test
+  build_1:
+    name: MS-SQL
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
+      - wait-for-it mssql:1433
       - npm test
   build_2:
     name: SQLite
