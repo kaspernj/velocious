@@ -35,13 +35,13 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
       - npm test
-  build_1:
+  build_2:
     name: MS-SQL
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
       - npm test
-  build_2:
+  build_3:
     name: SQLite
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
