@@ -14,29 +14,9 @@ import Update from "./sql/update.js"
 export default class VelociousDatabaseDriversMssql extends Base{
   async connect() {
     const connectArgs = this.connectArgs()
-    const connectStringParts = ["Encrypt=true"]
-    const connectArgsKeys = {
-      database: "Database",
-      host: "Server",
-      user: "User Id",
-      password: "Password"
-    }
+    const sqlConfig = digg(connectArgs, "sqlConfig")
 
-    for (const key in connectArgs) {
-      let actualKey
-
-      if (key in connectArgsKeys) {
-        actualKey = connectArgsKeys[key]
-      } else {
-        throw new Error(`Unknown argument: ${key}`)
-      }
-
-      connectStringParts.push(`${actualKey}=${connectArgs[key]}`)
-    }
-
-    const connectString = connectStringParts.join(";")
-
-    this.connection = await mssql.connect(connectString)
+    this.connection = await mssql.connect(sqlConfig)
   }
 
   disconnect() {

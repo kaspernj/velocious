@@ -14,11 +14,23 @@ export default new Configuration({
         driver: MssqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mssql",
-        host: "mssql",
-        username: "sa",
-        password: "Super-Secret-Password",
         database: "velocious_test",
-        useDatabase: "velocious_test"
+        useDatabase: "velocious_test",
+        sqlConfig: {
+          user: "sa",
+          password: "Super-Secret-Password",
+          database: "velocious_test",
+          server: "mssql",
+          pool: {
+            max: 10,
+            min: 0,
+            idleTimeoutMillis: 30000
+          },
+          options: {
+            encrypt: true, // for azure
+            trustServerCertificate: true // change to true for local dev / self-signed certs
+          }
+        }
       }
     }
   },
