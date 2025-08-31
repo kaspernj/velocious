@@ -1,5 +1,4 @@
 import Base from "../base.js"
-import connectConnection from "./connect-connection.js"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
@@ -8,17 +7,36 @@ import {digg} from "diggerize"
 import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import mssql from "mssql"
-import query from "./query.js"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversMssql extends Base{
   async connect() {
-    const connection = mssql.createConnection(this.connectArgs())
+    const connectArgs = this.connectArgs()
+    const connectStringParts = ["Encrypt=true"]
+    const connectArgsKeys = {
+      database: "Database",
+      host: "Server",
+      user: "User Id",
+      password: "Password"
+    }
 
-    await connectConnection(connection)
-    this.connection = connection
+    for (const key in connectArgs) {
+      let actualKey
+
+      if (key in connectArgsKeys) {
+        actualKey = connectArgsKeys[key]
+      } else {
+        throw new Error(`Unknown argument: ${key}`)
+      }
+
+      connectStringParts.push(`${actualKey}=${connectArgs[key]}`)
+    }
+
+    const connectString = connectStringParts.join(";")
+
+    this.connection = await mssql.connect(connectString)
   }
 
   disconnect() {
@@ -69,7 +87,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
   primaryKeyType = () => "bigint"
 
   async query(sql) {
-    return await query(this.connection, sql)
+    const result = await mssql.query(sql)
+
+    return result
   }
 
   queryToSql(query) {
