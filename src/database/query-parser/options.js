@@ -11,10 +11,22 @@ export default class VelociousDatabaseQueryParserOptions {
     if (!this.driver) throw new Error("No driver given to parser options")
   }
 
+  quoteDatabaseName(databaseName) {
+    if (databaseName.includes(this.tableQuote)) throw new Error(`Possible SQL injection in database name: ${databaseName}`)
+
+    return `${this.tableQuote}${databaseName}${this.tableQuote}`
+  }
+
   quoteColumnName(columnName) {
     if (!columnName || columnName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${columnName}`)
 
     return `${this.columnQuote}${columnName}${this.columnQuote}`
+  }
+
+  quoteIndexName(indexName) {
+    if (!indexName || indexName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${indexName}`)
+
+    return `${this.columnQuote}${indexName}${this.columnQuote}`
   }
 
   quoteTableName(tableName) {

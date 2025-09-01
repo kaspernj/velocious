@@ -22,8 +22,21 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
     return `[${string}]`
   }
 
+  quoteDatabaseName(databaseName) {
+    if (typeof databaseName != "string") throw new Error(`Invalid database name given: ${databaseName}`)
+    if (databaseName.includes("[") || databaseName.includes("]")) throw new Error(`Possible SQL injection in database name: ${databaseName}`)
+
+    return `[${databaseName}]`
+  }
+
+  quoteIndexName = (string) => {
+    if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in index name: ${string}`)
+
+    return `[${string}]`
+  }
+
   quoteTableName = (string) => {
-    if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in column name: ${string}`)
+    if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in table name: ${string}`)
 
     return `[${string}]`
   }
