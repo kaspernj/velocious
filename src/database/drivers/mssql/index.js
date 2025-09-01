@@ -19,7 +19,12 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const sqlConfig = digg(args, "sqlConfig")
 
     this.currentDatabaseName = digg(sqlConfig, "database")
-    this.connection = await mssql.connect(sqlConfig)
+
+    try {
+      this.connection = await mssql.connect(sqlConfig)
+    } catch (error) {
+      throw new Error(`Couldn't connect to database: ${error.message}`) // Re-throw to fix unuseable stack trace.
+    }
   }
 
   disconnect() {
