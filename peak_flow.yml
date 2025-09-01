@@ -40,7 +40,7 @@ builds:
     script:
       - wait-for-it mssql:1433
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
-      - cp spec/dummy && npx velocious db:create
+      - cd spec/dummy && npx velocious db:create
       - npm test
   build_3:
     name: SQLite
