@@ -28,7 +28,7 @@ describe("Cli - Commands - db:migrate", () => {
     await dbPool.withConnection(async (db) => {
       const tables = await db.getTables()
 
-      tablesResult = tables.map((table) => table.getName())
+      tablesResult = tables.map((table) => table.getName()).sort()
 
       const table = await db.getTableByName("tasks")
       const foreignKeys = await table.getForeignKeys()

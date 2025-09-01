@@ -14,7 +14,19 @@ describe("Cli - Commands - db:create", () => {
       expect(result).toEqual(
         [
           {
-            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+          }
+        ]
+      )
+    } else if (cli.getConfiguration().getDatabaseType() == "mssql") {
+      expect(result).toEqual(
+        [
+          {
+            databaseName: 'velocious_test',
+            sql: "IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'velocious_test') BEGIN CREATE DATABASE [velocious_test] END"
+          },
+          {
+            createSchemaMigrationsTableSql: "IF NOT EXISTS(SELECT * FROM [sysobjects] WHERE [name] = 'schema_migrations' AND [xtype] = 'U') BEGIN CREATE TABLE [schema_migrations] ([version] VARCHAR(255) PRIMARY KEY NOT NULL) END"
           }
         ]
       )
@@ -26,7 +38,7 @@ describe("Cli - Commands - db:create", () => {
             sql: 'CREATE DATABASE IF NOT EXISTS `velocious_test`'
           },
           {
-            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
           }
         ]
       )

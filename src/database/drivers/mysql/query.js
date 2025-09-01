@@ -2,7 +2,7 @@ export default async function query(connection, sql) {
   return new Promise((resolve, reject) => {
     connection.query(sql, (error, results, fields) => {
       if (error) {
-        reject(error)
+        reject(new Error(`Query failed because of ${error}: ${sql}`))
       } else {
         const rows = []
 

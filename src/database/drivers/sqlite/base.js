@@ -121,9 +121,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   options() {
-    if (!this._options) {
-      this._options = new Options({driver: this})
-    }
+    if (!this._options) this._options = new Options({driver: this})
 
     return this._options
   }
@@ -167,18 +165,6 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     if (type != "string") value = `${value}`
 
     return escapeString(value)
-  }
-
-  quoteColumn = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in column name: ${string}`)
-
-    return `\`${string}\``
-  }
-
-  quoteTable = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in table name: ${string}`)
-
-    return `\`${string}\``
   }
 
   updateSql = ({conditions, data, tableName}) => new Update({conditions, data, driver: this, tableName}).toSql()

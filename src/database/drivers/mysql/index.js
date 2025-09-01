@@ -78,26 +78,18 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   shouldSetAutoIncrementWhenPrimaryKey = () => true
 
-  escape(string) {
+  escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
-    return this.connection.escape(string)
+    const escapedValueWithQuotes = this.connection.escape(value)
+
+    return escapedValueWithQuotes.slice(1, escapedValueWithQuotes.length - 1)
   }
 
-  quote(string) {
-    return `${this.escape(string)}`
-  }
+  quote(value) {
+    if (!this.connection) throw new Error("Can't escape before connected")
 
-  quoteColumn = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in column name: ${string}`)
-
-    return `\`${string}\``
-  }
-
-  quoteTable = (string) => {
-    if (string.includes("`")) throw new Error(`Possible SQL injection in table name: ${string}`)
-
-    return `\`${string}\``
+    return this.connection.escape(value)
   }
 
   deleteSql({tableName, conditions}) {
@@ -133,9 +125,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   options() {
-    if (!this._options) {
-      this._options = new Options({driver: this})
-    }
+    if (!this._options) this._options = new Options({driver: this})
 
     return this._options
   }

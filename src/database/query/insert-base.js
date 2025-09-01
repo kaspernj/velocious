@@ -1,7 +1,7 @@
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryInsertBase {
-  constructor({columns, data, driver, multiple, tableName, rows, ...restArgs}) {
+  constructor({columns, data, driver, multiple, tableName, returnLastInsertedColumnName, rows, ...restArgs}) {
     if (!driver) throw new Error("No driver given to insert base")
     if (!tableName) throw new Error(`Invalid table name given to insert base: ${tableName}`)
 
@@ -11,6 +11,7 @@ export default class VelociousDatabaseQueryInsertBase {
     this.data = data
     this.driver = driver
     this.multiple = multiple
+    this.returnLastInsertedColumnName = returnLastInsertedColumnName
     this.rows = rows
     this.tableName = tableName
   }
@@ -20,9 +21,23 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   toSql() {
-    let sql = `INSERT INTO ${this.getOptions().quoteTableName(this.tableName)}`
+    const {driver} = this
+
+    let sql = `INSERT INTO ${driver.quoteTable(this.tableName)}`
     let count = 0
-    let columns
+    let columns, lastInsertedSQL
+
+    if (this.returnLastInsertedColumnName) {
+      if (driver.getType() == "mssql") {
+        lastInsertedSQL = ` OUTPUT INSERTED.${driver.quoteColumn(this.returnLastInsertedColumnName)} AS lastInsertID`
+
+        if (Object.keys(this.data).length <= 0) {
+          sql += lastInsertedSQL
+        }
+      } else if (driver.getType() == "mysql") {
+        lastInsertedSQL = ` RETURNING ${driver.quoteColumn(this.returnLastInsertedColumnName)} AS lastInsertID`
+      }
+    }
 
     if (this.columns && this.rows) {
       columns = this.columns
@@ -38,11 +53,15 @@ export default class VelociousDatabaseQueryInsertBase {
       for (const columnName of columns) {
         if (count > 0) sql += ", "
 
-        sql += this.getOptions().quoteColumnName(columnName)
+        sql += driver.quoteColumn(columnName)
         count++
       }
 
       sql += ")"
+    }
+
+    if (this.returnLastInsertedColumnName && driver.getType() == "mssql" && Object.keys(this.data).length > 0) {
+      sql += lastInsertedSQL
     }
 
     if (this.columns && this.rows) {
@@ -62,10 +81,16 @@ export default class VelociousDatabaseQueryInsertBase {
       if (Object.keys(this.data).length > 0) {
         sql += " VALUES "
         sql += this._valuesSql(Object.values(this.data))
-      } else if (this.driver.getType() == "sqlite") {
+      } else if (driver.getType() == "sqlite" || driver.getType() == "mssql") {
         sql += " DEFAULT VALUES"
-      } else if (this.driver.getType() == "mysql") {
+      } else if (driver.getType() == "mysql") {
         sql += " () VALUES ()"
+      }
+    }
+
+    if (this.returnLastInsertedColumnName) {
+      if (driver.getType() == "mysql") {
+        sql += lastInsertedSQL
       }
     }
 

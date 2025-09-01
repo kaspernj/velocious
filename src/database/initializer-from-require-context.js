@@ -18,7 +18,9 @@ export default class VelociousDatabaseInitializerFromRequireContext {
       await modelClass.initializeRecord({configuration})
 
       if (await modelClass.hasTranslationsTable()) {
-        await modelClass.getTranslationClass().initializeRecord({configuration})
+        const translationClass = modelClass.getTranslationClass()
+
+        await translationClass.initializeRecord({configuration})
       }
     }
   }
