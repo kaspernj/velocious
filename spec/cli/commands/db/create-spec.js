@@ -14,7 +14,7 @@ describe("Cli - Commands - db:create", () => {
       expect(result).toEqual(
         [
           {
-            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
           }
         ]
       )
@@ -38,7 +38,7 @@ describe("Cli - Commands - db:create", () => {
             sql: 'CREATE DATABASE IF NOT EXISTS `velocious_test`'
           },
           {
-            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS schema_migrations (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
           }
         ]
       )
