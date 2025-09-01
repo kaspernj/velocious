@@ -27,7 +27,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async close() {
-    await this.connection.end()
+    await this.connection.close()
     this.connection = undefined
   }
 
@@ -70,8 +70,6 @@ export default class VelociousDatabaseDriversMssql extends Base{
       // Re-throw error because the stack-trace is broken and can't be used for app-development.
       throw new Error(`Query failed '${error.message})': ${sql}`)
     }
-
-    console.log({sql, result: result.recordsets[0]})
 
     return result.recordsets[0]
   }
@@ -157,12 +155,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (!this._currentTransaction) throw new Error("A transaction isn't running")
 
     await this._currentTransaction.commit()
+    this._currentTransaction = null
   }
 
   async rollbackTransaction() {
     if (!this._currentTransaction) throw new Error("A transaction isn't running")
 
     await this._currentTransaction.rollback()
+    this._currentTransaction = null
   }
 
   async startSavePoint(savePointName) {
@@ -170,7 +170,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async releaseSavePoint(savePointName) {
-    await this.query(`COMMIT TRANSACTION [${savePointName}]`)
+    // Do nothing in MS-SQL.
   }
 
   async rollbackSavePoint(savePointName) {

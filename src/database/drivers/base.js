@@ -1,4 +1,5 @@
 import {digg} from "diggerize"
+import {Logger} from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
 import {v4 as uuidv4} from "uuid"
@@ -7,6 +8,7 @@ export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
     this._args = config
     this.configuration = configuration
+    this.logger = new Logger(this)
     this._transactionsCount = 0
   }
 
@@ -107,30 +109,44 @@ export default class VelociousDatabaseDriversBase {
   async transaction(callback) {
     const savePointName = this.generateSavePointName()
     let transactionStarted = false
+    let savePointStarted = false
 
     if (this._transactionsCount == 0) {
+      this.logger.debug("Start transaction")
       await this.startTransaction()
       transactionStarted = true
       this._transactionsCount++
+    } else {
+      this.logger.debug("Start savepoint", savePointName)
+      await this.startSavePoint(savePointName)
+      savePointStarted = true
     }
-
-    await this.startSavePoint(savePointName)
 
     let result
 
     try {
       result = await callback()
 
-      await this.releaseSavePoint(savePointName)
+      if (savePointStarted) {
+        this.logger.debug("Release savepoint", savePointName)
+        await this.releaseSavePoint(savePointName)
+      }
 
       if (transactionStarted) {
+        this.logger.debug("Commit transaction")
         await this.commitTransaction()
         this._transactionsCount--
       }
     } catch (error) {
-      await this.rollbackSavePoint(savePointName)
+      this.logger.debug("Transaction error", error.message)
+
+      if (savePointStarted) {
+        this.logger.debug("Rollback savepoint", savePointName)
+        await this.rollbackSavePoint(savePointName)
+      }
 
       if (transactionStarted) {
+        this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
         this._transactionsCount--
       }
