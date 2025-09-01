@@ -17,7 +17,7 @@ export default class DbCreate extends BaseCommand{
 
     if (databaseType == "mssql" && this.newConfiguration.sqlConfig?.database && this.newConfiguration.useDatabase) {
       console.log(`Override sqlConfig.database with ${this.newConfiguration.useDatabase}`)
-      this.newConfiguration.sqlConfig.database = this.newConfiguration.useDatabase
+      delete this.newConfiguration.sqlConfig.database
     }
 
     this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
