@@ -1,21 +1,28 @@
 import BaseCommand from "../../base-command.js"
 import {digg} from "diggerize"
+import {incorporate} from "incorporator"
 import TableData from "../../../database/table-data/index.js"
 
 export default class DbCreate extends BaseCommand{
   async execute() {
+    const databaseType = this.configuration.getDatabaseType()
+
     this.databasePool = this.configuration.getDatabasePool()
-    this.newConfiguration = Object.assign({}, this.databasePool.getConfiguration())
+    this.newConfiguration = incorporate({}, this.databasePool.getConfiguration())
 
     if (this.args.testing) this.result = []
 
     // Use a database known to exist. Since we are creating the database, it shouldn't actually exist which would make connecting fail.
     this.newConfiguration.database = this.newConfiguration.useDatabase || "mysql"
 
+    if (databaseType == "mysql" && this.newConfiguration.sqlConfig?.database && this.newConfiguration.useDatabase) {
+      this.newConfiguration.sqlConfig.database = this.newConfiguration.useDatabase
+    }
+
     this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
     await this.databaseConnection.connect()
 
-    if (this.configuration.getDatabaseType() != "sqlite") {
+    if (databaseType != "sqlite") {
       await this.createDatabase()
     }
 
