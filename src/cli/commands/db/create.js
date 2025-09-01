@@ -15,8 +15,8 @@ export default class DbCreate extends BaseCommand{
     // Use a database known to exist. Since we are creating the database, it shouldn't actually exist which would make connecting fail.
     this.newConfiguration.database = this.newConfiguration.useDatabase || "mysql"
 
-    if (databaseType == "mssql" && this.newConfiguration.sqlConfig?.database && this.newConfiguration.useDatabase) {
-      console.log(`Override sqlConfig.database with ${this.newConfiguration.useDatabase}`)
+    // Login can fail because given db name doesn't exist, which it might not because we are trying to create it right now.
+    if (databaseType == "mssql" && this.newConfiguration.sqlConfig?.database) {
       delete this.newConfiguration.sqlConfig.database
     }
 

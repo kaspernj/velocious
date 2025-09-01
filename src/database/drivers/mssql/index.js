@@ -18,8 +18,6 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const args = this.getArgs()
     const sqlConfig = digg(args, "sqlConfig")
 
-    this.currentDatabaseName = digg(sqlConfig, "database")
-
     try {
       this.connection = await mssql.connect(sqlConfig)
     } catch (error) {
@@ -122,7 +120,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async getTables() {
-    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = ${this.quote(this.currentDatabaseName)} AND [TABLE_SCHEMA] = 'dbo'`)
+    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo'`)
     const tables = []
 
     for (const row of result) {
@@ -135,7 +133,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async getTableByName(tableName) {
-    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = ${this.quote(this.currentDatabaseName)} AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
+    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
 
     if (!result[0]) throw new Error(`Couldn't find a table by that name: ${name}`)
 
