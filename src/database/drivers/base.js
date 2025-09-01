@@ -59,24 +59,23 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
   }
 
-  quote(string) {
-    return `${this.escape(string)}`
+  quote(value) {
+    if (typeof value == "number") return value
+
+    const escapedValue = this.escape(value)
+    const result = `"${escapedValue}"`
+
+    console.log({value, escapedValue, result})
+
+    return result
   }
 
-  quoteColumn = (string) => {
-    const quoteChar = digg(this.options(), "columnQuote")
-
-    if (string.includes(quoteChar)) throw new Error(`Possible SQL injection in column name: ${string}`)
-
-    return `${quoteChar}${string}${quoteChar}`
+  quoteColumn(columnName) {
+    return this.options().quoteColumnName(columnName)
   }
 
-  quoteTable = (string) => {
-    const quoteChar = digg(this.options(), "tableQuote")
-
-    if (string.includes(quoteChar)) throw new Error(`Possible SQL injection in table name: ${string}`)
-
-    return `${quoteChar}${string}${quoteChar}`
+  quoteTable(tableName) {
+    return this.options().quoteColumnName(tableName)
   }
 
   async select(tableName) {

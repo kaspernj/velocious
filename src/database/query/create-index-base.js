@@ -25,7 +25,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
 
   toSql() {
     const options = this.getOptions()
-    const {driver, tableName} = this
+    const {tableName} = this
     let sql = "CREATE"
 
     if (this.unique) sql += " UNIQUE"
@@ -40,7 +40,16 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     for (const columnIndex in this.columns) {
       if (columnIndex > 0) sql += ", "
 
-      sql += `${options.quoteColumnName(this.columns[columnIndex])}`
+      const column = this.columns[columnIndex]
+      let columnName
+
+      if (typeof column == "string") {
+        columnName = column
+      } else {
+        columnName = column.getName()
+      }
+
+      sql += `${options.quoteColumnName(columnName)}`
     }
 
     sql += ")"

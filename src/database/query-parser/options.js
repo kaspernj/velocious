@@ -11,6 +11,12 @@ export default class VelociousDatabaseQueryParserOptions {
     if (!this.driver) throw new Error("No driver given to parser options")
   }
 
+  quote(value) {
+    if (typeof value == "number") return value
+
+    return this.quoteString(value)
+  }
+
   quoteDatabaseName(databaseName) {
     if (databaseName.includes(this.tableQuote)) throw new Error(`Possible SQL injection in database name: ${databaseName}`)
 
@@ -18,7 +24,8 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   quoteColumnName(columnName) {
-    if (!columnName || columnName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${columnName}`)
+    if (!columnName) throw new Error("No column name was given")
+    if (columnName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${columnName}`)
 
     return `${this.columnQuote}${columnName}${this.columnQuote}`
   }
@@ -33,12 +40,5 @@ export default class VelociousDatabaseQueryParserOptions {
     if (!tableName || tableName.includes(this.tableQuote)) throw new Error(`Invalid table name: ${tableName}`)
 
     return `${this.tableQuote}${tableName}${this.tableQuote}`
-  }
-
-  quote(value) {
-    if (typeof value == "number")
-      return value
-
-    return this.quoteString(value)
   }
 }

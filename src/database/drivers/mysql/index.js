@@ -78,10 +78,18 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   shouldSetAutoIncrementWhenPrimaryKey = () => true
 
-  escape(string) {
+  escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
-    return this.connection.escape(string)
+    const escapedValueWithQuotes = this.connection.escape(value)
+
+    return escapedValueWithQuotes.slice(1, escapedValueWithQuotes.length - 1)
+  }
+
+  quote(value) {
+    if (!this.connection) throw new Error("Can't escape before connected")
+
+    return this.connection.escape(value)
   }
 
   deleteSql({tableName, conditions}) {
