@@ -15,7 +15,7 @@ export default new Configuration({
         poolType: AsyncTrackedMultiConnection,
         type: "mssql",
         database: "velocious_test",
-        useDatabase: "velocious_test",
+        useDatabase: "master",
         sqlConfig: {
           user: "sa",
           password: "Super-Secret-Password",
