@@ -5,9 +5,9 @@ export default class VelociousDatabaseDriversMssqlForeignKey {
     this.data = data
   }
 
-  getColumnName = () => digg(this, "data", "COLUMN_NAME")
+  getColumnName = () => digg(this, "data", "ParentColumn")
   getName = () => digg(this, "data", "CONSTRAINT_NAME")
-  getTableName = () => digg(this, "data", "TABLE_NAME")
-  getReferencedColumnName = () => digg(this, "data", "REFERENCED_COLUMN_NAME")
-  getReferencedTableName = () => digg(this, "data", "REFERENCED_TABLE_NAME")
+  getTableName = () => digg(this, "data", "TableName")
+  getReferencedColumnName = () => digg(this, "data", "ReferencedColumn")
+  getReferencedTableName = () => digg(this, "data", "ReferencedTable")
 }

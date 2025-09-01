@@ -129,6 +129,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return tables
   }
 
+  async getTableByName(tableName) {
+    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = ${this.quote(this.currentDatabaseName)} AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
+
+    if (result[0]) {
+      return new Table(this, result[0])
+    }
+  }
+
   async lastInsertID() {
     const result = await this.query("SELECT SCOPE_IDENTITY() AS last_insert_id")
     const lastInsertID = digg(result, 0, "last_insert_id")

@@ -14,12 +14,19 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
   toSql() {
     const databaseType = this.getConfiguration().getDatabaseType()
+    const options = this.getOptions()
     const {driver, tableData} = this
     const sqls = []
+    const ifNotExists = this.ifNotExists || tableData.getIfNotExists()
+    let sql = ""
 
-    let sql = "CREATE TABLE"
+    if (databaseType == "mssql" && ifNotExists) {
+      sql += `IF NOT EXISTS(SELECT * FROM [sysobjects] WHERE [name] = ${options.quote(tableData.getName())} AND [xtype] = 'U') BEGIN `
+    }
 
-    if (this.ifNotExists || tableData.getIfNotExists()) sql += " IF NOT EXISTS"
+    sql += "CREATE TABLE"
+
+    if (databaseType != "mssql" && ifNotExists) sql += " IF NOT EXISTS"
 
     sql += ` ${driver.quoteTable(tableData.getName())} (`
 
@@ -42,23 +49,22 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (columnCount > 1) sql += ", "
 
-      sql += `${driver.quoteColumn(column.getName())} ${type}`
+      sql += `${options.quoteColumnName(column.getName())} ${type}`
 
       if (maxlength !== undefined) sql += `(${maxlength})`
 
       if (column.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
-        if (driver.getType() == "mssql") {
+        if (databaseType == "mssql") {
           sql += " IDENTITY"
         } else {
           sql += " AUTO_INCREMENT"
         }
       }
 
-
       if (typeof column.getDefault() == "function") {
         sql += ` DEFAULT (${column.getDefault()()})`
       } else if (column.getDefault()) {
-        sql += ` DEFAULT ${driver.quote(column.getDefault())}`
+        sql += ` DEFAULT ${options.quote(column.getDefault())}`
       }
 
       if (column.getPrimaryKey()) sql += " PRIMARY KEY"
@@ -105,6 +111,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     }
 
     sql += ")"
+
+    if (databaseType == "mssql" && ifNotExists) {
+      sql += " END"
+    }
 
     sqls.push(sql)
 

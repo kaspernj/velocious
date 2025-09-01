@@ -6,7 +6,7 @@ const mysqlConfig = digg(configuration, "database", "default", "master")
 
 describe("Database - Drivers - Mysql - Connection", () => {
   it("connects", async () => {
-    if (configuration.getDatabaseType() != "sqlite") {
+    if (configuration.getDatabaseType() != "sqlite" && configuration.getDatabaseType() != "mssql") {
       const mysql = new DatabaseDriversMysql(mysqlConfig)
 
       await mysql.connect()

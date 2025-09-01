@@ -23,11 +23,28 @@ export default class VelociousDatabaseDriversMssqlTable {
 
   async getForeignKeys() {
     const sql = `
-      SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-      WHERE
-        REFERENCED_TABLE_SCHEMA = (SELECT DATABASE()) AND
-        TABLE_NAME = ${this.driver.quote(this.getName())}
+      SELECT
+          fk.name AS ForeignKeyName,
+          tp.name AS ParentTable,
+          ref.name AS ReferencedTable,
+          cp.name AS ParentColumn,
+          cref.name AS ReferencedColumn,
+          tp.name AS TableName
+      FROM sys.foreign_keys fk
+      INNER JOIN sys.foreign_key_columns fkc
+          ON fkc.constraint_object_id = fk.object_id
+      INNER JOIN sys.tables tp
+          ON fkc.parent_object_id = tp.object_id
+      INNER JOIN sys.columns cp
+          ON fkc.parent_object_id = cp.object_id
+          AND fkc.parent_column_id = cp.column_id
+      INNER JOIN sys.tables ref
+          ON fkc.referenced_object_id = ref.object_id
+      INNER JOIN sys.columns cref
+          ON fkc.referenced_object_id = cref.object_id
+          AND fkc.referenced_column_id = cref.column_id
+      WHERE tp.name = ${this.driver.quote(this.getName())}
+      ORDER BY ForeignKeyName, ParentTable, ReferencedTable;
     `
 
     const foreignKeyRows = await this.driver.query(sql)

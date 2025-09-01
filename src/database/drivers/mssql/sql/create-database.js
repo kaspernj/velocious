@@ -14,13 +14,13 @@ export default class VelociousDatabaseConnectionDriversMssqlSqlCreateDatabase ex
     let sql = ""
 
     if (this.ifNotExists) {
-      sql += `IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = ${options.quote(databaseName)}); BEGIN; `
+      sql += `IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = ${options.quote(databaseName)}) BEGIN `
     }
 
-    sql =+ `CREATE DATABASE ${options.quoteDatabaseName(databaseName)}`
+    sql += `CREATE DATABASE ${options.quoteDatabaseName(databaseName)}`
 
     if (this.ifNotExists) {
-      sql =+ "; END"
+      sql += " END"
     }
 
     return sql
