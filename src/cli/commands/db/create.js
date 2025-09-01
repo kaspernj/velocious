@@ -16,6 +16,7 @@ export default class DbCreate extends BaseCommand{
     this.newConfiguration.database = this.newConfiguration.useDatabase || "mysql"
 
     if (databaseType == "mysql" && this.newConfiguration.sqlConfig?.database && this.newConfiguration.useDatabase) {
+      console.log(`Override sqlConfig.database with ${this.newConfiguration.useDatabase}`)
       this.newConfiguration.sqlConfig.database = this.newConfiguration.useDatabase
     }
 
