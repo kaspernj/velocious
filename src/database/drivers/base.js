@@ -65,13 +65,15 @@ export default class VelociousDatabaseDriversBase {
     const escapedValue = this.escape(value)
     const result = `"${escapedValue}"`
 
-    console.log({value, escapedValue, result})
-
     return result
   }
 
   quoteColumn(columnName) {
     return this.options().quoteColumnName(columnName)
+  }
+
+  quoteIndex(columnName) {
+    return this.options().quoteIndexName(columnName)
   }
 
   quoteTable(tableName) {

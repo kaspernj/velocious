@@ -132,9 +132,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
   async getTableByName(tableName) {
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = ${this.quote(this.currentDatabaseName)} AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
 
-    if (result[0]) {
-      return new Table(this, result[0])
-    }
+    if (!result[0]) throw new Error(`Couldn't find a table by that name: ${name}`)
+
+    return new Table(this, result[0])
   }
 
   async lastInsertID() {
