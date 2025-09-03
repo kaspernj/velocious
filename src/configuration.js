@@ -14,7 +14,7 @@ export default class VelociousConfiguration {
     this.cors = cors
     this.database = database
     this.debug = debug
-    this._environment = environment || "development"
+    this._environment = environment || process.env.NODE_ENV || "development"
     this._directory = directory
     this._initializeModels = initializeModels
     this._isInitialized = false

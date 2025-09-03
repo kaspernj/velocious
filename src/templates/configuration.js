@@ -48,9 +48,9 @@ export default new Configuration({
     })
   },
   locale: () => "en",
+  locales: ["de", "en"],
   localeFallbacks: {
     de: ["de", "en"],
     en: ["en", "de"]
-  },
-  locales: ["de", "en"]
+  }
 })

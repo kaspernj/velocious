@@ -18,11 +18,16 @@ class VelociousDatabasePoolBase {
 
   constructor(args = {}) {
     this.configuration = args.configuration || Configuration.current()
+
+    if (!this.configuration) throw new Error("No configuration given")
+
     this.connections = []
     this.connectionsInUse = {}
   }
 
-  getConfiguration = () => digg(this.configuration.getDatabaseConfiguration(), "master")
+  getConfiguration() {
+    return digg(this.configuration.getDatabaseConfiguration(), "master")
+  }
 
   setCurrent() {
     globalThis.velociousDatabasePoolBase.current = this
