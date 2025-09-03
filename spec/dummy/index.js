@@ -22,7 +22,7 @@ export default class Dummy {
       await db.query("DROP TABLE IF EXISTS project_translations")
       await db.query("DROP TABLE IF EXISTS projects")
 
-      const migration = new Migration({configuration: dummyConfiguration})
+      const migration = new Migration({configuration: dummyConfiguration, databaseIdentifier: "default"})
 
       await migration.createTable("projects", (t) => {
         t.timestamps()

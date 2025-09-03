@@ -1,16 +1,17 @@
 import {digg} from "diggerize"
 
-import AlterTable from "../sqlite/sql/alter-table.js"
+import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
-import CreateIndex from "../sqlite/sql/create-index.js"
-import CreateTable from "../sqlite/sql/create-table.js"
-import Delete from "../sqlite/sql/delete.js"
+import CreateIndex from "./sql/create-index.js"
+import CreateTable from "./sql/create-table.js"
+import Delete from "./sql/delete.js"
+import DropTable from "./sql/drop-table.js"
 import escapeString from "sql-escape-string"
-import Insert from "../sqlite/sql/insert.js"
-import Options from "../sqlite/options.js"
-import QueryParser from "../sqlite/query-parser.js"
+import Insert from "./sql/insert.js"
+import Options from "./options.js"
+import QueryParser from "./query-parser.js"
 import Table from "./table.js"
-import Update from "../sqlite/sql/update.js"
+import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   alterTableSql(columnData) {
@@ -32,6 +33,13 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()
+  }
+
+  dropTableSql(tableName, args = {}) {
+    const dropArgs = Object.assign({tableName, driver: this}, args)
+    const dropTable = new DropTable(dropArgs)
+
+    return dropTable.toSql()
   }
 
   deleteSql = (args) => new Delete(Object.assign({driver: this}, args)).toSql()

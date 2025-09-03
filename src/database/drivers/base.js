@@ -25,6 +25,14 @@ export default class VelociousDatabaseDriversBase {
     await this.query(sql)
   }
 
+  async dropTable(...args) {
+    const sqls = this.dropTableSql(...args)
+
+    for (const sql of sqls) {
+      await this.query(sql)
+    }
+  }
+
   getArgs() {
     return this._args
   }

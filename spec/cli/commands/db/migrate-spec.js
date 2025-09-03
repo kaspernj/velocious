@@ -3,7 +3,7 @@ import {digg} from "diggerize"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 
 describe("Cli - Commands - db:migrate", () => {
-  fit("runs migrations", async () => {
+  it("runs migrations", async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -18,10 +18,11 @@ describe("Cli - Commands - db:migrate", () => {
     await cli.configuration.withConnections(async (dbs) => {
       const db = digg(dbs, "default")
 
-      await db.query("DROP TABLE IF EXISTS tasks")
-      await db.query("DROP TABLE IF EXISTS project_translations")
-      await db.query("DROP TABLE IF EXISTS projects")
-      await db.query("DROP TABLE IF EXISTS schema_migrations")
+      await dbs.mssql.dropTable("accouts", {ifExists: true})
+      await dbs.default.query("DROP TABLE IF EXISTS tasks")
+      await dbs.default.query("DROP TABLE IF EXISTS project_translations")
+      await dbs.default.query("DROP TABLE IF EXISTS projects")
+      await dbs.default.query("DROP TABLE IF EXISTS schema_migrations")
       await cli.execute()
 
       const tables = await db.getTables()
@@ -38,6 +39,7 @@ describe("Cli - Commands - db:migrate", () => {
 
     expect(tablesResult).toEqual(
       [
+        "accounts",
         "project_translations",
         "projects",
         "schema_migrations",
@@ -50,6 +52,6 @@ describe("Cli - Commands - db:migrate", () => {
     expect(projectForeignKey.getReferencedTableName()).toEqual("projects")
     expect(projectForeignKey.getReferencedColumnName()).toEqual("id")
 
-    expect(schemaMigrations).toEqual(["20230728075328", "20230728075329", "20250605133926"])
+    expect(schemaMigrations).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845"])
   })
 })

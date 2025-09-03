@@ -3,6 +3,7 @@ import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
 import Delete from "./sql/delete.js"
+import DropTable from "./sql/drop-table.js"
 import {digg} from "diggerize"
 import escapeString from "sql-escape-string"
 import Insert from "./sql/insert.js"
@@ -53,6 +54,13 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()
+  }
+
+  dropTableSql(tableName, args = {}) {
+    const dropArgs = Object.assign({tableName, driver: this}, args)
+    const dropTable = new DropTable(dropArgs)
+
+    return dropTable.toSql()
   }
 
   getType = () => "mssql"

@@ -10,12 +10,11 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     this.tableData = tableData
   }
 
-  getConfiguration = () => this.driver.getConfiguration()
-
   toSql() {
     const databaseType = this.getConfiguration().getDatabaseType()
+    const driver = this.getDriver()
     const options = this.getOptions()
-    const {driver, tableData} = this
+    const {tableData} = this
     const sqls = []
     const ifNotExists = this.ifNotExists || tableData.getIfNotExists()
     let sql = ""
@@ -28,7 +27,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
     if (databaseType != "mssql" && ifNotExists) sql += " IF NOT EXISTS"
 
-    sql += ` ${driver.quoteTable(tableData.getName())} (`
+    sql += ` ${options.quoteTableName(tableData.getName())} (`
 
     let columnCount = 0
 

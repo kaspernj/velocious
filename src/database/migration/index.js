@@ -3,8 +3,21 @@ import restArgsError from "../../utils/rest-args-error.js"
 import TableData, {TableColumn} from "../table-data/index.js"
 
 export default class VelociousDatabaseMigration {
-  constructor({configuration}) {
+  static onDatabases(databaseIdentifiers) {
+    this._databaseIdentifiers = databaseIdentifiers
+  }
+
+  constructor({configuration, databaseIdentifier = "default"}) {
+    if (!databaseIdentifier) throw new Error("No database identifier given")
+
     this.configuration = configuration
+    this._databaseIdentifier = databaseIdentifier
+  }
+
+  _getDatabaseIdentifier() {
+    if (!this._databaseIdentifier) throw new Error("No database identifier set")
+
+    return this._databaseIdentifier
   }
 
   async addColumn(tableName, columnName, columnType, args) {
@@ -74,8 +87,9 @@ export default class VelociousDatabaseMigration {
       callback = arg2
     }
 
-    const {id = {}, on, ...restArgs} = args
-    const databasePool = this.configuration.getDatabasePool(on)
+    const {id = {}, ...restArgs} = args
+    const databaseIdentifier = this._getDatabaseIdentifier()
+    const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
     const {default: idDefault, type: idType = databasePool.primaryKeyType(), ...restArgsId} = id
     const tableData = new TableData(tableName)
 

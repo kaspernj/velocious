@@ -1,6 +1,6 @@
 import {digg} from "diggerize"
+import * as inflection from "inflection"
 import TableData from "./table-data/index.js"
-import { table } from "node:console"
 
 export default class VelociousDatabaseMigrator {
   constructor({configuration}) {
@@ -42,6 +42,53 @@ export default class VelociousDatabaseMigrator {
     return false
   }
 
+  async migrateFiles(files) {
+    for (const migration of files) {
+      if (!this.hasRunMigrationVersion(migration.date)) {
+        await this.runMigrationFile(migration)
+      }
+    }
+  }
+
+  async migrateFilesFromRequireContext(requireContext) {
+    const files = requireContext
+      .keys()
+      .map((file) => {
+        // "13,14" because somes "require-context"-npm-module deletes first character!?
+        const match = file.match(/(\d{13,14})-(.+)\.js$/)
+
+        if (!match) return null
+
+        // Fix require-context-npm-module deletes first character
+        let fileName = file
+        let dateNumber = match[1]
+
+        if (dateNumber.length == 13) {
+          dateNumber = `2${dateNumber}`
+          fileName = `2${fileName}`
+        }
+
+        // Parse regex
+        const date = parseInt(dateNumber)
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+
+        return {
+          file: fileName,
+          date,
+          migrationClassName
+        }
+      })
+      .filter((migration) => Boolean(migration))
+      .sort((migration1, migration2) => migration1.date - migration2.date)
+
+    for (const migration of files) {
+      if (!this.hasRunMigrationVersion(migration.date)) {
+        await this.runMigrationFileFromRequireContext(migration, requireContext)
+      }
+    }
+  }
+
   async loadMigrationsVersions() {
     this.migrationsVersions = {}
 
@@ -65,6 +112,36 @@ export default class VelociousDatabaseMigrator {
     if (!schemaTable) return false
 
     return true
+  }
+
+  async executeRequireContext(requireContext) {
+    const migrationFiles = requireContext.keys()
+
+    files = migrationFiles
+      .map((file) => {
+        const match = file.match(/^(\d{14})-(.+)\.js$/)
+
+        if (!match) return null
+
+        const date = parseInt(match[1])
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName)
+
+        return {
+          file,
+          fullPath: `${migrationsPath}/${file}`,
+          date,
+          migrationClassName
+        }
+      })
+      .filter((migration) => Boolean(migration))
+      .sort((migration1, migration2) => migration1.date - migration2.date)
+
+    for (const migration of files) {
+      if (!this.hasRunMigrationVersion(migration.date)) {
+        await this.runMigrationFileFromRequireContext(migration, requireContext)
+      }
+    }
   }
 
   async runMigrationFileFromRequireContext(migration, requireContext) {
@@ -111,7 +188,7 @@ export default class VelociousDatabaseMigrator {
       }
 
       for (const db of Object.values(dbs)) {
-        const dateString = migration.date
+        const dateString = digg(migration, "date")
         const existingSchemaMigrations = await db.newQuery()
           .from("schema_migrations")
           .where({version: dateString})
