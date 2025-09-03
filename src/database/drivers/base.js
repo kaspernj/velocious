@@ -1,4 +1,3 @@
-import {digg} from "diggerize"
 import {Logger} from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"

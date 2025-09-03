@@ -74,8 +74,8 @@ export default class VelociousDatabaseMigration {
       callback = arg2
     }
 
-    const databasePool = this.configuration.getDatabasePool()
-    const {id = {}, ...restArgs} = args
+    const {id = {}, on, ...restArgs} = args
+    const databasePool = this.configuration.getDatabasePool(on)
     const {default: idDefault, type: idType = databasePool.primaryKeyType(), ...restArgsId} = id
     const tableData = new TableData(tableName)
 

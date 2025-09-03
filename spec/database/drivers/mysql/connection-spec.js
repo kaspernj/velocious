@@ -2,7 +2,7 @@ import DatabaseDriversMysql from "../../../../src/database/drivers/mysql/index.j
 import configuration from "../../../dummy/src/config/configuration.js"
 import {digg} from "diggerize"
 
-const mysqlConfig = digg(configuration, "database", "test", "master")
+const mysqlConfig = digg(configuration, "database", "test", "default")
 
 describe("Database - Drivers - Mysql - Connection", () => {
   it("connects", async () => {

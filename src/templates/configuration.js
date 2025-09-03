@@ -5,7 +5,7 @@ import MysqlDriver from "velocious/src/database/drivers/mysql/index.js"
 export default new Configuration({
   database: {
     development: {
-      master: {
+      default: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mysql",
@@ -16,7 +16,7 @@ export default new Configuration({
       }
     },
     production: {
-      master: {
+      default: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mysql",
@@ -27,7 +27,7 @@ export default new Configuration({
       }
     },
     test: {
-      master: {
+      default: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mysql",

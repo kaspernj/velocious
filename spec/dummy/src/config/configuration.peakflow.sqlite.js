@@ -10,7 +10,7 @@ import SingleMultiUsePool from "../../../../src/database/pool/single-multi-use.j
 export default new Configuration({
   database: {
     test: {
-      master: {
+      default: {
         driver: SqliteDriver,
         poolType: SingleMultiUsePool,
         type: "sqlite",

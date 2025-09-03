@@ -10,7 +10,7 @@ import requireContext from "require-context"
 export default new Configuration({
   database: {
     development: {
-      master: {
+      default: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mysql",
@@ -21,7 +21,7 @@ export default new Configuration({
       }
     },
     production: {
-      master: {
+      default: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mysql",
@@ -32,7 +32,7 @@ export default new Configuration({
       }
     },
     test: {
-      master: {
+      default: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mysql",

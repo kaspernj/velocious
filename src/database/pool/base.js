@@ -26,7 +26,7 @@ class VelociousDatabasePoolBase {
   }
 
   getConfiguration() {
-    return digg(this.configuration.getDatabaseConfiguration(), "master")
+    return digg(this.configuration.getDatabaseConfiguration(), "default")
   }
 
   setCurrent() {

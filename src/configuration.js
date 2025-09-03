@@ -13,8 +13,9 @@ export default class VelociousConfiguration {
 
     this.cors = cors
     this.database = database
+    this.databasePools = {}
     this.debug = debug
-    this._environment = environment || process.env.NODE_ENV || "development"
+    this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._directory = directory
     this._initializeModels = initializeModels
     this._isInitialized = false
@@ -28,16 +29,22 @@ export default class VelociousConfiguration {
     return digg(this, "database", this.getEnvironment())
   }
 
-  getDatabasePool() {
-    if (!this.isDatabasePoolInitialized()) {
-      this.initializeDatabasePool()
+  getDatabasePool(identifier = "default") {
+    if (!this.isDatabasePoolInitialized(identifier)) {
+      this.initializeDatabasePool(identifier)
     }
 
-    return this.databasePool
+    return digg(this, "databasePools", identifier)
   }
 
-  getDatabasePoolType() {
-    const poolTypeClass = digg(this.getDatabaseConfiguration(), "master", "poolType")
+  getDatabaseIdentifier(identifier) {
+    if (!this.getDatabaseConfiguration()[identifier]) throw new Error(`No such database identifier configured: ${identifier}`)
+
+    return this.getDatabaseConfiguration()[identifier]
+  }
+
+  getDatabasePoolType(identifier = "default") {
+    const poolTypeClass = digg(this.getDatabaseIdentifier(identifier), "poolType")
 
     if (!poolTypeClass) {
       throw new Error("No poolType given in database configuration")
@@ -46,12 +53,10 @@ export default class VelociousConfiguration {
     return poolTypeClass
   }
 
-  getDatabaseType() {
-    const databaseType = digg(this.getDatabaseConfiguration(), "master", "type")
+  getDatabaseType(identifier = "default") {
+    const databaseType = digg(this.getDatabaseIdentifier(identifier), "type")
 
-    if (!databaseType) {
-      throw new Error("No database type given in database configuration")
-    }
+    if (!databaseType) throw new Error("No database type given in database configuration")
 
     return databaseType
   }
@@ -93,17 +98,17 @@ export default class VelociousConfiguration {
     return modelClass
   }
 
-  initializeDatabasePool() {
+  initializeDatabasePool(identifier = "default") {
     if (!this.database) throw new Error("No 'database' was given")
-    if (this.databasePool) throw new Error("DatabasePool has already been initialized")
+    if (this.databasePools[identifier]) throw new Error("DatabasePool has already been initialized")
 
-    const PoolType = this.getDatabasePoolType()
+    const PoolType = this.getDatabasePoolType(identifier)
 
-    this.databasePool = new PoolType({configuration: this})
-    this.databasePool.setCurrent()
+    this.databasePools[identifier] = new PoolType({configuration: this})
+    this.databasePools[identifier].setCurrent()
   }
 
-  isDatabasePoolInitialized = () => Boolean(this.databasePool)
+  isDatabasePoolInitialized = (identifier = "default") => Boolean(this.databasePools[identifier])
   isInitialized = () => this._isInitialized
 
   async initialize() {

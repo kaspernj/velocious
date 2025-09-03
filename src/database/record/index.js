@@ -117,7 +117,7 @@ export default class VelociousDatabaseRecord {
   }
 
   static connection() {
-    const connection = this._getConfiguration().getDatabasePoolType().current().getCurrentConnection()
+    const connection = this._getConfiguration().getDatabasePoolType(this.getDatabaseIdentifier()).current().getCurrentConnection()
 
     if (!connection) throw new Error("No connection?")
 
@@ -227,6 +227,14 @@ export default class VelociousDatabaseRecord {
         }
       }
     }
+  }
+
+  static getDatabaseIdentifier() {
+    return this._databaseIdentifier || "default"
+  }
+
+  static setDatabaseIdentifier(databaseIdentifier) {
+    this._databaseIdentifier = databaseIdentifier
   }
 
   getAttribute(name) {

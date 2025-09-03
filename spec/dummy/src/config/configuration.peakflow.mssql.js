@@ -10,12 +10,12 @@ import requireContext from "require-context"
 export default new Configuration({
   database: {
     test: {
-      master: {
+      default: {
         driver: MssqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mssql",
         database: "velocious_test",
-        useDatabase: "master",
+        useDatabase: "default",
         sqlConfig: {
           user: "sa",
           password: "Super-Secret-Password",
