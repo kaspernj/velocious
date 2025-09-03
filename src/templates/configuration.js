@@ -43,7 +43,7 @@ export default new Configuration({
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
     const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
 
-    await configuration.getDatabasePool().withConnection(async () => {
+    await configuration.withConnections(async () => {
       await initializerFromRequireContext.initialize({configuration})
     })
   },

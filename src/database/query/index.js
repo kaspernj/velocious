@@ -218,9 +218,13 @@ export default class VelociousDatabaseQuery {
     return results
   }
 
+  async results() {
+    return await this._executeQuery()
+  }
+
   async toArray() {
     const models = []
-    const results = await this._executeQuery()
+    const results = await this.results()
 
     for (const result of results) {
       const model = new this.modelClass()

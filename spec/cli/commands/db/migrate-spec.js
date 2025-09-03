@@ -16,8 +16,6 @@ describe("Cli - Commands - db:migrate", () => {
     let projectForeignKey, schemaMigrations, tablesResult
 
     await cli.configuration.withConnections(async (dbs) => {
-      console.log({dbs})
-
       const db = digg(dbs, "default")
 
       await db.query("DROP TABLE IF EXISTS tasks")

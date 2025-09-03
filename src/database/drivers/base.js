@@ -79,12 +79,17 @@ export default class VelociousDatabaseDriversBase {
     return this.options().quoteColumnName(tableName)
   }
 
-  async select(tableName) {
+  newQuery() {
     const handler = new Handler()
-    const query = new Query({
+
+    return new Query({
       driver: this,
       handler
     })
+  }
+
+  async select(tableName) {
+    const query = this.newQuery()
 
     const sql = query
       .from(tableName)

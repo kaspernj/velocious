@@ -52,7 +52,7 @@ export default class VelociousDatabaseMigrateFromRequireContext {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
 
-    await this.configuration.getDatabasePool().withConnection(async (db) => {
+    await this.configuration.withConnections(async (dbs) => {
       const MigrationClass = requireContext(migration.file).default
       const migrationInstance = new MigrationClass({
         configuration: this.configuration
@@ -66,7 +66,9 @@ export default class VelociousDatabaseMigrateFromRequireContext {
         throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
       }
 
-      await db.insert({tableName: "schema_migrations", data: {version: migration.date}})
+      for (const db of Object.values(dbs)) {
+        await db.insert({tableName: "schema_migrations", data: {version: migration.date}})
+      }
     })
   }
 }

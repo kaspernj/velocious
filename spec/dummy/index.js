@@ -1,4 +1,5 @@
 import Application from "../../src/application.js"
+import {digg} from "diggerize"
 import dummyConfiguration from "./src/config/configuration.js"
 import Migration from "../../src/database/migration/index.js"
 
@@ -14,9 +15,9 @@ export default class Dummy {
   static async prepare() {
     dummyConfiguration.setCurrent()
 
-    const db = dummyConfiguration.getDatabasePool()
+    await dummyConfiguration.withConnections(async (dbs) => {
+      const db = digg(dbs, "default")
 
-    await db.withConnection(async () => {
       await db.query("DROP TABLE IF EXISTS tasks")
       await db.query("DROP TABLE IF EXISTS project_translations")
       await db.query("DROP TABLE IF EXISTS projects")
@@ -51,7 +52,7 @@ export default class Dummy {
   }
 
   async run(callback) {
-    await dummyConfiguration.getDatabasePool().withConnection(async () => {
+    await dummyConfiguration.withConnections(async () => {
       await Dummy.prepare()
       await this.start()
 

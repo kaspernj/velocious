@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import * as inflection from "inflection"
 import Migrator from "../../../database/migrator.js"
 
-export default class DbMigrate extends BaseCommand {
+export default class DbReset extends BaseCommand {
   async execute() {
     const projectPath = this.configuration.getDirectory()
     const migrationsPath = `${projectPath}/src/database/migrations`
