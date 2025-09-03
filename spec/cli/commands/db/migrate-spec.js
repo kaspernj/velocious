@@ -1,8 +1,9 @@
 import Cli from "../../../../src/cli/index.js"
+import {digg} from "diggerize"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 
 describe("Cli - Commands - db:migrate", () => {
-  it("runs migrations", async () => {
+  fit("runs migrations", async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -12,20 +13,19 @@ describe("Cli - Commands - db:migrate", () => {
 
     await cli.loadConfiguration()
 
-    const dbPool = cli.configuration.getDatabasePool()
+    let projectForeignKey, schemaMigrations, tablesResult
 
-    await dbPool.withConnection(async (db) => {
+    await cli.configuration.withConnections(async (dbs) => {
+      console.log({dbs})
+
+      const db = digg(dbs, "default")
+
       await db.query("DROP TABLE IF EXISTS tasks")
       await db.query("DROP TABLE IF EXISTS project_translations")
       await db.query("DROP TABLE IF EXISTS projects")
       await db.query("DROP TABLE IF EXISTS schema_migrations")
-    })
+      await cli.execute()
 
-    await cli.execute()
-
-    let projectForeignKey, schemaMigrations, tablesResult
-
-    await dbPool.withConnection(async (db) => {
       const tables = await db.getTables()
 
       tablesResult = tables.map((table) => table.getName()).sort()

@@ -29,6 +29,10 @@ export default class VelociousConfiguration {
     return digg(this, "database", this.getEnvironment())
   }
 
+  getDatabaseIdentifiers() {
+    return Object.keys(this.getDatabaseConfiguration())
+  }
+
   getDatabasePool(identifier = "default") {
     if (!this.isDatabasePoolInitialized(identifier)) {
       this.initializeDatabasePool(identifier)
@@ -131,5 +135,30 @@ export default class VelociousConfiguration {
 
   setRoutes(newRoutes) {
     this.routes = newRoutes
+  }
+
+  async withConnections(callback) {
+    const dbs = {}
+    const actualCallback = async () => {
+      return await callback(dbs)
+    }
+
+    let runRequest = actualCallback
+
+    for (const identifier of this.getDatabaseIdentifiers()) {
+      let actualRunRequest = runRequest
+
+      const nextRunRequest = async () => {
+        return await this.getDatabasePool(identifier).withConnection(async (db) => {
+          dbs[identifier] = db
+
+          await actualRunRequest()
+        })
+      }
+
+      runRequest = nextRunRequest
+    }
+
+    await runRequest()
   }
 }
