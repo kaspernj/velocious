@@ -9,10 +9,6 @@ export default class DbReset extends BaseCommand {
     const migrationsPath = `${projectPath}/src/database/migrations`
     let files = await fs.readdir(migrationsPath)
 
-    this.migrator = new Migrator({configuration: this.configuration})
-
-    await this.migrator.prepare()
-
     files = files
       .map((file) => {
         const match = file.match(/^(\d{14})-(.+)\.js$/)
@@ -33,40 +29,9 @@ export default class DbReset extends BaseCommand {
       .filter((migration) => Boolean(migration))
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
-    for (const migration of files) {
-      if (!this.migrator.hasRunMigrationVersion(migration.date)) {
-        await this.migrator.runMigrationFile(migration)
-      }
-    }
-  }
+    this.migrator = new Migrator({configuration: this.configuration})
 
-  async executeRequireContext(requireContext) {
-    const migrationFiles = requireContext.keys()
-
-    files = migrationFiles
-      .map((file) => {
-        const match = file.match(/^(\d{14})-(.+)\.js$/)
-
-        if (!match) return null
-
-        const date = parseInt(match[1])
-        const migrationName = match[2]
-        const migrationClassName = inflection.camelize(migrationName)
-
-        return {
-          file,
-          fullPath: `${migrationsPath}/${file}`,
-          date,
-          migrationClassName
-        }
-      })
-      .filter((migration) => Boolean(migration))
-      .sort((migration1, migration2) => migration1.date - migration2.date)
-
-    for (const migration of files) {
-      if (!this.migrator.hasRunMigrationVersion(migration.date)) {
-        await this.migrator.runMigrationFileFromRequireContext(migration, requireContext)
-      }
-    }
+    await this.migrator.prepare()
+    await this.migrator.migrateFiles(files)
   }
 }
