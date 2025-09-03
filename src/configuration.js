@@ -8,12 +8,13 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({cors, database, debug, directory, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
+  constructor({cors, database, debug, directory, environment, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
     this.database = database
     this.debug = debug
+    this._environment = environment || "development"
     this._directory = directory
     this._initializeModels = initializeModels
     this._isInitialized = false
@@ -21,6 +22,10 @@ export default class VelociousConfiguration {
     this.localeFallbacks = localeFallbacks
     this.locales = locales
     this.modelClasses = {}
+  }
+
+  getDatabaseConfiguration() {
+    return digg(this, "database", this.getEnvironment())
   }
 
   getDatabasePool() {
@@ -32,7 +37,7 @@ export default class VelociousConfiguration {
   }
 
   getDatabasePoolType() {
-    const poolTypeClass = digg(this, "database", "default", "master", "poolType")
+    const poolTypeClass = digg(this.getDatabaseConfiguration(), "master", "poolType")
 
     if (!poolTypeClass) {
       throw new Error("No poolType given in database configuration")
@@ -42,7 +47,7 @@ export default class VelociousConfiguration {
   }
 
   getDatabaseType() {
-    const databaseType = digg(this, "database", "default", "master", "type")
+    const databaseType = digg(this.getDatabaseConfiguration(), "master", "type")
 
     if (!databaseType) {
       throw new Error("No database type given in database configuration")
@@ -57,6 +62,10 @@ export default class VelociousConfiguration {
     }
 
     return this._directory
+  }
+
+  getEnvironment() {
+    return digg(this, "_environment")
   }
 
   getLocaleFallbacks = () => this.localeFallbacks

@@ -22,7 +22,7 @@ class VelociousDatabasePoolBase {
     this.connectionsInUse = {}
   }
 
-  getConfiguration = () => digg(this, "configuration", "database", "default", "master")
+  getConfiguration = () => digg(this.configuration.getDatabaseConfiguration(), "master")
 
   setCurrent() {
     globalThis.velociousDatabasePoolBase.current = this

@@ -9,7 +9,7 @@ import requireContext from "require-context"
 
 export default new Configuration({
   database: {
-    default: {
+    test: {
       master: {
         driver: MssqlDriver,
         poolType: AsyncTrackedMultiConnection,

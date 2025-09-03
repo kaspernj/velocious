@@ -9,7 +9,29 @@ import requireContext from "require-context"
 
 export default new Configuration({
   database: {
-    default: {
+    development: {
+      master: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "velocious_development"
+      }
+    },
+    production: {
+      master: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "velocious_production"
+      }
+    },
+    test: {
       master: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
