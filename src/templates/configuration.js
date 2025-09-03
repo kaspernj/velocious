@@ -5,42 +5,36 @@ import MysqlDriver from "velocious/src/database/drivers/mysql/index.js"
 export default new Configuration({
   database: {
     development: {
-      default: {
-        master: {
-          driver: MysqlDriver,
-          poolType: AsyncTrackedMultiConnection,
-          type: "mysql",
-          host: "mariadb",
-          username: "username",
-          password: "password",
-          database: "database_development"
-        }
+      master: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "database_development"
       }
     },
     production: {
-      default: {
-        master: {
-          driver: MysqlDriver,
-          poolType: AsyncTrackedMultiConnection,
-          type: "mysql",
-          host: "mariadb",
-          username: "username",
-          password: "password",
-          database: "database_production"
-        }
+      master: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "database_production"
       }
     },
     test: {
-      default: {
-        master: {
-          driver: MysqlDriver,
-          poolType: AsyncTrackedMultiConnection,
-          type: "mysql",
-          host: "mariadb",
-          username: "username",
-          password: "password",
-          database: "database_test"
-        }
+      master: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "database_test"
       }
     }
   },
