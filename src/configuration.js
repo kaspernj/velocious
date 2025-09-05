@@ -108,7 +108,7 @@ export default class VelociousConfiguration {
 
     const PoolType = this.getDatabasePoolType(identifier)
 
-    this.databasePools[identifier] = new PoolType({configuration: this})
+    this.databasePools[identifier] = new PoolType({configuration: this, identifier})
     this.databasePools[identifier].setCurrent()
   }
 
@@ -160,5 +160,15 @@ export default class VelociousConfiguration {
     }
 
     await runRequest()
+  }
+
+  async getCurrentConnections() {
+    const dbs = {}
+
+    for (const identifier of this.getDatabaseIdentifiers()) {
+      dbs[identifier] = this.getDatabasePool(identifier).getCurrentConnection()
+    }
+
+    return dbs
   }
 }

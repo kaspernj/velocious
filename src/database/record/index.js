@@ -117,7 +117,8 @@ export default class VelociousDatabaseRecord {
   }
 
   static connection() {
-    const connection = this._getConfiguration().getDatabasePoolType(this.getDatabaseIdentifier()).current().getCurrentConnection()
+    const databasePool = this._getConfiguration().getDatabasePool(this.getDatabaseIdentifier())
+    const connection = databasePool.getCurrentConnection()
 
     if (!connection) throw new Error("No connection?")
 

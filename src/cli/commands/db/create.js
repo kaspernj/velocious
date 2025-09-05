@@ -5,32 +5,34 @@ import TableData from "../../../database/table-data/index.js"
 
 export default class DbCreate extends BaseCommand{
   async execute() {
-    const databaseType = this.configuration.getDatabaseType()
+    for (const databaseIdentifier of this.configuration.getDatabaseIdentifiers()) {
+      const databaseType = this.configuration.getDatabaseType(databaseIdentifier)
 
-    this.databasePool = this.configuration.getDatabasePool()
-    this.newConfiguration = incorporate({}, this.databasePool.getConfiguration())
+      this.databasePool = this.configuration.getDatabasePool(databaseIdentifier)
+      this.newConfiguration = incorporate({}, this.databasePool.getConfiguration())
 
-    if (this.args.testing) this.result = []
+      if (this.args.testing) this.result = []
 
-    // Use a database known to exist. Since we are creating the database, it shouldn't actually exist which would make connecting fail.
-    this.newConfiguration.database = this.newConfiguration.useDatabase || "mysql"
+      // Use a database known to exist. Since we are creating the database, it shouldn't actually exist which would make connecting fail.
+      this.newConfiguration.database = this.newConfiguration.useDatabase || "mysql"
 
-    // Login can fail because given db name doesn't exist, which it might not because we are trying to create it right now.
-    if (databaseType == "mssql" && this.newConfiguration.sqlConfig?.database) {
-      delete this.newConfiguration.sqlConfig.database
+      // Login can fail because given db name doesn't exist, which it might not because we are trying to create it right now.
+      if (databaseType == "mssql" && this.newConfiguration.sqlConfig?.database) {
+        delete this.newConfiguration.sqlConfig.database
+      }
+
+      this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
+      await this.databaseConnection.connect()
+
+      if (databaseType != "sqlite") {
+        await this.createDatabase()
+      }
+
+      await this.createSchemaMigrationsTable()
+      await this.databaseConnection.close()
+
+      if (this.args.testing) return this.result
     }
-
-    this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
-    await this.databaseConnection.connect()
-
-    if (databaseType != "sqlite") {
-      await this.createDatabase()
-    }
-
-    await this.createSchemaMigrationsTable()
-    await this.databaseConnection.close()
-
-    if (this.args.testing) return this.result
   }
 
   async createDatabase() {

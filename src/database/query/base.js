@@ -22,6 +22,10 @@ export default class VelociousDatabaseQueryBase {
     return this._options
   }
 
+  getDatabaseType() {
+    return this.getDriver().getType()
+  }
+
   toSql() {
     throw new Error("'toSql' wasn't implemented")
   }

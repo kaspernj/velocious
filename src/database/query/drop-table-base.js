@@ -12,7 +12,7 @@ export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
   }
 
   toSql() {
-    const databaseType = this.getConfiguration().getDatabaseType()
+    const databaseType = this.getDatabaseType()
     const options = this.getOptions()
     const {ifExists, tableName} = this
     const sqls = []
@@ -24,7 +24,7 @@ export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
 
     sql += "DROP TABLE"
 
-    if (databaseType != "mssql" && ifExists) sql += " IF NOT EXISTS"
+    if (databaseType != "mssql" && ifExists) sql += " IF EXISTS"
 
     sql += ` ${options.quoteTableName(tableName)}`
 

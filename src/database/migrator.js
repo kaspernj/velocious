@@ -1,10 +1,12 @@
 import {digg} from "diggerize"
 import * as inflection from "inflection"
+import {Logger} from "../logger.js"
 import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
   constructor({configuration}) {
     this.configuration = configuration
+    this.logger = new Logger(this)
   }
 
   async prepare() {
@@ -30,10 +32,9 @@ export default class VelociousDatabaseMigrator {
     })
   }
 
-  hasRunMigrationVersion(version) {
-    if (!this.migrationsVersions) {
-      throw new Error("Migrations versions hasn't been loaded yet")
-    }
+  hasRunMigrationVersion(dbIdentifier, version) {
+    if (!this.migrationsVersions) throw new Error("Migrations versions hasn't been loaded yet")
+    if (!this.migrationsVersions[dbIdentifier]) throw new Error(`Migrations versions hasn't been loaded yet for db: ${dbIdentifier}`)
 
     if (version in this.migrationsVersions) {
       return true
@@ -43,11 +44,18 @@ export default class VelociousDatabaseMigrator {
   }
 
   async migrateFiles(files) {
-    for (const migration of files) {
-      if (!this.hasRunMigrationVersion(migration.date)) {
-        await this.runMigrationFile(migration)
+    await this.configuration.withConnections(async () => {
+      for (const migration of files) {
+        await this.runMigrationFile({
+          migration,
+          requireMigration: async () => {
+            const migrationImport = await import(migration.fullPath)
+
+            return migrationImport.default
+          }
+        })
       }
-    }
+    })
   }
 
   async migrateFilesFromRequireContext(requireContext) {
@@ -82,27 +90,33 @@ export default class VelociousDatabaseMigrator {
       .filter((migration) => Boolean(migration))
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
-    for (const migration of files) {
-      if (!this.hasRunMigrationVersion(migration.date)) {
-        await this.runMigrationFileFromRequireContext(migration, requireContext)
+    await this.configuration.withConnections(async () => {
+      for (const migration of files) {
+        await this.runMigrationFile({
+          migration,
+          requireMigration: () => requireContext(migration.file).default
+        })
       }
-    }
+    })
   }
 
   async loadMigrationsVersions() {
     this.migrationsVersions = {}
 
-    await this.configuration.withConnections(async (dbs) => {
-      for (const db of Object.values(dbs)) {
-        const rows = await db.select("schema_migrations")
+    const dbs = await this.configuration.getCurrentConnections()
 
-        for (const row of rows) {
-          const version = digg(row, "version")
+    for (const dbIdentifier in dbs) {
+      const db = dbs[dbIdentifier]
+      const rows = await db.select("schema_migrations")
 
-          this.migrationsVersions[version] = true
-        }
+      this.migrationsVersions[dbIdentifier] = {}
+
+      for (const row of rows) {
+        const version = digg(row, "version")
+
+        this.migrationsVersions[dbIdentifier][version] = true
       }
-    })
+    }
   }
 
   async migrationsTableExist(db) {
@@ -138,20 +152,39 @@ export default class VelociousDatabaseMigrator {
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
     for (const migration of files) {
-      if (!this.hasRunMigrationVersion(migration.date)) {
-        await this.runMigrationFileFromRequireContext(migration, requireContext)
-      }
+      await this.runMigrationFile({
+        migration,
+        require: requireContext(migration.file).default
+      })
     }
   }
 
-  async runMigrationFileFromRequireContext(migration, requireContext) {
+  async runMigrationFile({migration, requireMigration}) {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
 
-    await this.configuration.withConnections(async (dbs) => {
-      const MigrationClass = requireContext(migration.file).default
+    const dbs = await this.configuration.getCurrentConnections()
+    const migrationClass = await requireMigration()
+    const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
+
+    for (const dbIdentifier in dbs) {
+      if (!migrationDatabaseIdentifiers.includes(dbIdentifier)) {
+        this.logger.debug(`${dbIdentifier} shouldn't run migration ${migration.file}`, {migrationDatabaseIdentifiers})
+        continue
+      }
+
+      if (this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
+        this.logger.debug(`${dbIdentifier} has already run migration ${migration.file}`)
+        continue
+      }
+
+      this.logger.debug(`Running migration on ${dbIdentifier}: ${migration.file}`, {migrationDatabaseIdentifiers})
+
+      const db = dbs[dbIdentifier]
+      const MigrationClass = migrationClass
       const migrationInstance = new MigrationClass({
-        configuration: this.configuration
+        configuration: this.configuration,
+        db
       })
 
       if (migrationInstance.change) {
@@ -162,42 +195,15 @@ export default class VelociousDatabaseMigrator {
         throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
       }
 
-      for (const db of Object.values(dbs)) {
-        await db.insert({tableName: "schema_migrations", data: {version: migration.date}})
+      const dateString = digg(migration, "date")
+      const existingSchemaMigrations = await db.newQuery()
+        .from("schema_migrations")
+        .where({version: dateString})
+        .results()
+
+      if (existingSchemaMigrations.length == 0) {
+        await db.insert({tableName: "schema_migrations", data: {version: dateString}})
       }
-    })
-  }
-
-  async runMigrationFile(migration) {
-    if (!this.configuration) throw new Error("No configuration set")
-    if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
-
-    await this.configuration.withConnections(async (dbs) => {
-      const migrationImport = await import(migration.fullPath)
-      const MigrationClass = migrationImport.default
-      const migrationInstance = new MigrationClass({
-        configuration: this.configuration
-      })
-
-      if (migrationInstance.change) {
-        await migrationInstance.change()
-      } else if (migrationInstance.up) {
-        await migrationInstance.up()
-      } else {
-        throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
-      }
-
-      for (const db of Object.values(dbs)) {
-        const dateString = digg(migration, "date")
-        const existingSchemaMigrations = await db.newQuery()
-          .from("schema_migrations")
-          .where({version: dateString})
-          .results()
-
-        if (existingSchemaMigrations.length == 0) {
-          await db.insert({tableName: "schema_migrations", data: {version: dateString}})
-        }
-      }
-    })
+    }
   }
 }

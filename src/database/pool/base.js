@@ -1,5 +1,6 @@
 import Configuration from "../../configuration.js"
 import {digg} from "diggerize"
+import {Logger} from "../../logger.js"
 
 if (!globalThis.velociousDatabasePoolBase) {
   globalThis.velociousDatabasePoolBase = {
@@ -20,13 +21,16 @@ class VelociousDatabasePoolBase {
     this.configuration = args.configuration || Configuration.current()
 
     if (!this.configuration) throw new Error("No configuration given")
+    if (!args.identifier) throw new Error("No identifier was given")
 
     this.connections = []
     this.connectionsInUse = {}
+    this.identifier = args.identifier
+    this.logger = new Logger(this)
   }
 
   getConfiguration() {
-    return digg(this.configuration.getDatabaseConfiguration(), "default")
+    return digg(this.configuration.getDatabaseConfiguration(), this.identifier)
   }
 
   setCurrent() {
@@ -38,8 +42,11 @@ class VelociousDatabasePoolBase {
   }
 
   async spawnConnection() {
-    const defaultConfig = this.getConfiguration()
-    const connection = await this.spawnConnectionWithConfiguration(defaultConfig)
+    const databaseConfig = this.getConfiguration()
+
+    this.logger.debug("spawnConnection", {identifier: this.identifier, databaseConfig})
+
+    const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
 
     return connection
   }

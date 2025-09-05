@@ -18,11 +18,11 @@ export default class Dummy {
     await dummyConfiguration.withConnections(async (dbs) => {
       const db = digg(dbs, "default")
 
-      await db.query("DROP TABLE IF EXISTS tasks")
-      await db.query("DROP TABLE IF EXISTS project_translations")
-      await db.query("DROP TABLE IF EXISTS projects")
+      await db.dropTable("tasks", {ifExists: true})
+      await db.dropTable("project_translations", {ifExists: true})
+      await db.dropTable("projects", {ifExists: true})
 
-      const migration = new Migration({configuration: dummyConfiguration, databaseIdentifier: "default"})
+      const migration = new Migration({configuration: dummyConfiguration, databaseIdentifier: "default", db})
 
       await migration.createTable("projects", (t) => {
         t.timestamps()

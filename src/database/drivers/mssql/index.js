@@ -143,7 +143,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   async getTableByName(tableName) {
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
 
-    if (!result[0]) throw new Error(`Couldn't find a table by that name: ${name}`)
+    if (!result[0]) throw new Error(`Couldn't find a table by that name: ${tableName}`)
 
     return new Table(this, result[0])
   }

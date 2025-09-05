@@ -11,7 +11,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   }
 
   toSql() {
-    const databaseType = this.getConfiguration().getDatabaseType()
+    const databaseType = this.getDatabaseType()
     const driver = this.getDriver()
     const options = this.getOptions()
     const {tableData} = this
