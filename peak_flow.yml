@@ -6,6 +6,8 @@ before_install:
   - sudo apt-get install -y nodejs
 before_script:
   - npm install
+environment:
+  NODE_ENV: test
 services:
   mariadb:
     environment:
@@ -33,6 +35,7 @@ builds:
     name: MariaDB
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
+      - cd spec/dummy && npx velocious db:create
       - wait-for-it mariadb:3306
       - npm test
   build_2:
@@ -46,4 +49,5 @@ builds:
     name: SQLite
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - cd spec/dummy && npx velocious db:create
       - npm test

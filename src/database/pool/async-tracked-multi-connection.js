@@ -1,14 +1,13 @@
 import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
-let idSeq = 0
-
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
   constructor(args = {}) {
     super(args)
     this.connections = []
     this.connectionsInUse = {}
     this.asyncLocalStorage = new AsyncLocalStorage()
+    this.idSeq = 0
   }
 
   checkin = (connection) => {
@@ -32,7 +31,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (connection.getIdSeq() !== undefined) throw new Error(`Connection already has an ID-seq - is it in use? ${connection.getIdSeq()}`)
 
-    const id = idSeq++
+    const id = this.idSeq++
 
     connection.setIdSeq(id)
     this.connectionsInUse[id] = connection

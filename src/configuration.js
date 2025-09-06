@@ -8,12 +8,14 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({cors, database, debug, directory, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
+  constructor({cors, database, debug, directory, environment, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
     this.database = database
+    this.databasePools = {}
     this.debug = debug
+    this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._directory = directory
     this._initializeModels = initializeModels
     this._isInitialized = false
@@ -23,16 +25,30 @@ export default class VelociousConfiguration {
     this.modelClasses = {}
   }
 
-  getDatabasePool() {
-    if (!this.isDatabasePoolInitialized()) {
-      this.initializeDatabasePool()
-    }
-
-    return this.databasePool
+  getDatabaseConfiguration() {
+    return digg(this, "database", this.getEnvironment())
   }
 
-  getDatabasePoolType() {
-    const poolTypeClass = digg(this, "database", "default", "master", "poolType")
+  getDatabaseIdentifiers() {
+    return Object.keys(this.getDatabaseConfiguration())
+  }
+
+  getDatabasePool(identifier = "default") {
+    if (!this.isDatabasePoolInitialized(identifier)) {
+      this.initializeDatabasePool(identifier)
+    }
+
+    return digg(this, "databasePools", identifier)
+  }
+
+  getDatabaseIdentifier(identifier) {
+    if (!this.getDatabaseConfiguration()[identifier]) throw new Error(`No such database identifier configured: ${identifier}`)
+
+    return this.getDatabaseConfiguration()[identifier]
+  }
+
+  getDatabasePoolType(identifier = "default") {
+    const poolTypeClass = digg(this.getDatabaseIdentifier(identifier), "poolType")
 
     if (!poolTypeClass) {
       throw new Error("No poolType given in database configuration")
@@ -41,12 +57,10 @@ export default class VelociousConfiguration {
     return poolTypeClass
   }
 
-  getDatabaseType() {
-    const databaseType = digg(this, "database", "default", "master", "type")
+  getDatabaseType(identifier = "default") {
+    const databaseType = digg(this.getDatabaseIdentifier(identifier), "type")
 
-    if (!databaseType) {
-      throw new Error("No database type given in database configuration")
-    }
+    if (!databaseType) throw new Error("No database type given in database configuration")
 
     return databaseType
   }
@@ -57,6 +71,10 @@ export default class VelociousConfiguration {
     }
 
     return this._directory
+  }
+
+  getEnvironment() {
+    return digg(this, "_environment")
   }
 
   getLocaleFallbacks = () => this.localeFallbacks
@@ -84,17 +102,17 @@ export default class VelociousConfiguration {
     return modelClass
   }
 
-  initializeDatabasePool() {
+  initializeDatabasePool(identifier = "default") {
     if (!this.database) throw new Error("No 'database' was given")
-    if (this.databasePool) throw new Error("DatabasePool has already been initialized")
+    if (this.databasePools[identifier]) throw new Error("DatabasePool has already been initialized")
 
-    const PoolType = this.getDatabasePoolType()
+    const PoolType = this.getDatabasePoolType(identifier)
 
-    this.databasePool = new PoolType({configuration: this})
-    this.databasePool.setCurrent()
+    this.databasePools[identifier] = new PoolType({configuration: this, identifier})
+    this.databasePools[identifier].setCurrent()
   }
 
-  isDatabasePoolInitialized = () => Boolean(this.databasePool)
+  isDatabasePoolInitialized = (identifier = "default") => Boolean(this.databasePools[identifier])
   isInitialized = () => this._isInitialized
 
   async initialize() {
@@ -117,5 +135,40 @@ export default class VelociousConfiguration {
 
   setRoutes(newRoutes) {
     this.routes = newRoutes
+  }
+
+  async withConnections(callback) {
+    const dbs = {}
+    const actualCallback = async () => {
+      return await callback(dbs)
+    }
+
+    let runRequest = actualCallback
+
+    for (const identifier of this.getDatabaseIdentifiers()) {
+      let actualRunRequest = runRequest
+
+      const nextRunRequest = async () => {
+        return await this.getDatabasePool(identifier).withConnection(async (db) => {
+          dbs[identifier] = db
+
+          await actualRunRequest()
+        })
+      }
+
+      runRequest = nextRunRequest
+    }
+
+    await runRequest()
+  }
+
+  async getCurrentConnections() {
+    const dbs = {}
+
+    for (const identifier of this.getDatabaseIdentifiers()) {
+      dbs[identifier] = this.getDatabasePool(identifier).getCurrentConnection()
+    }
+
+    return dbs
   }
 }

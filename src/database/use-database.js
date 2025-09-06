@@ -14,7 +14,7 @@ const loadMigrations = function loadMigrations({migrationsRequireContext, ...res
     instance.running = true
 
     try {
-      await Configuration.current().getDatabasePool().withConnection(async () => {
+      await Configuration.current().withConnections(async () => {
         const databaseMigrateFromRequireContext = new DatabaseMigrateFromRequireContext()
 
         await databaseMigrateFromRequireContext.execute(migrationsRequireContext)

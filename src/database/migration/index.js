@@ -3,26 +3,43 @@ import restArgsError from "../../utils/rest-args-error.js"
 import TableData, {TableColumn} from "../table-data/index.js"
 
 export default class VelociousDatabaseMigration {
-  constructor({configuration}) {
+  static onDatabases(databaseIdentifiers) {
+    this._databaseIdentifiers = databaseIdentifiers
+  }
+
+  static getDatabaseIdentifiers() {
+    return this._databaseIdentifiers
+  }
+
+  constructor({configuration, databaseIdentifier = "default", db}) {
+    if (!databaseIdentifier) throw new Error("No database identifier given")
+    if (!db) throw new Error("No 'db' given")
+
     this.configuration = configuration
+    this._databaseIdentifier = databaseIdentifier
+    this._db = db
+  }
+
+  _getDatabaseIdentifier() {
+    if (!this._databaseIdentifier) throw new Error("No database identifier set")
+
+    return this._databaseIdentifier
   }
 
   async addColumn(tableName, columnName, columnType, args) {
-    const databasePool = this.configuration.getDatabasePool()
     const tableColumnArgs = Object.assign({type: columnType}, args)
 
-    const sqls = databasePool.alterTableSql({
+    const sqls = this._db.alterTableSql({
       columns: [new TableColumn(columnName, tableColumnArgs)],
       tableName
     })
 
     for (const sql of sqls) {
-      await databasePool.query(sql)
+      await this._db.query(sql)
     }
   }
 
   async addIndex(tableName, columns, args) {
-    const databasePool = this.configuration.getDatabasePool()
     const createIndexArgs = Object.assign(
       {
         columns,
@@ -30,25 +47,24 @@ export default class VelociousDatabaseMigration {
       },
       args
     )
-    const sql = databasePool.createIndexSql(createIndexArgs)
+    const sql = this._db.createIndexSql(createIndexArgs)
 
-    await databasePool.query(sql)
+    await this._db.query(sql)
   }
 
   async addForeignKey(tableName, referenceName) {
     const referenceNameUnderscore = inflection.underscore(referenceName)
     const tableNameUnderscore = inflection.underscore(tableName)
     const columnName = `${referenceNameUnderscore}_id`
-    const databasePool = this.configuration.getDatabasePool()
     const foreignKeyName = `fk_${tableName}_${referenceName}`
     let sql = ""
 
-    sql += `ALTER TABLE ${databasePool.quoteTable(tableName)}`
+    sql += `ALTER TABLE ${this._db.quoteTable(tableName)}`
     sql += ` ADD CONSTRAINT ${foreignKeyName} `
-    sql += ` FOREIGN KEY (${databasePool.quoteColumn(columnName)})`
+    sql += ` FOREIGN KEY (${this._db.quoteColumn(columnName)})`
     sql += ` REFERENCES ${tableNameUnderscore}(id)`
 
-    await databasePool.query(sql)
+    await this._db.query(sql)
   }
 
   async addReference(tableName, referenceName, args) {
@@ -74,8 +90,9 @@ export default class VelociousDatabaseMigration {
       callback = arg2
     }
 
-    const databasePool = this.configuration.getDatabasePool()
     const {id = {}, ...restArgs} = args
+    const databaseIdentifier = this._getDatabaseIdentifier()
+    const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
     const {default: idDefault, type: idType = databasePool.primaryKeyType(), ...restArgsId} = id
     const tableData = new TableData(tableName)
 
@@ -90,23 +107,15 @@ export default class VelociousDatabaseMigration {
       callback(tableData)
     }
 
-    const sqls = databasePool.createTableSql(tableData)
+    const sqls = this._db.createTableSql(tableData)
 
     for (const sql of sqls) {
-      await databasePool.query(sql)
+      await this._db.query(sql)
     }
   }
 
-  getConnection() {
-    const connection = this.configuration.getDatabasePool().getCurrentConnection()
-
-    if (!connection) throw new Error("Couldn't get current connection")
-
-    return connection
-  }
-
   async tableExists(tableName) {
-    const exists = await this.getConnection().tableExists(tableName)
+    const exists = await this._db.tableExists(tableName)
 
     return exists
   }

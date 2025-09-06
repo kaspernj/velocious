@@ -3,6 +3,7 @@ import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
 import Delete from "./sql/delete.js"
+import DropTable from "./sql/drop-table.js"
 import {digg} from "diggerize"
 import escapeString from "sql-escape-string"
 import Insert from "./sql/insert.js"
@@ -53,6 +54,21 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()
+  }
+
+  async disableForeignKeys() {
+    await this.query("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"")
+  }
+
+  async enableForeignKeys() {
+    await this.query("EXEC sp_MSforeachtable @command1=\"print '?'\", @command2=\"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\"")
+  }
+
+  dropTableSql(tableName, args = {}) {
+    const dropArgs = Object.assign({tableName, driver: this}, args)
+    const dropTable = new DropTable(dropArgs)
+
+    return dropTable.toSql()
   }
 
   getType = () => "mssql"
@@ -135,7 +151,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   async getTableByName(tableName) {
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
 
-    if (!result[0]) throw new Error(`Couldn't find a table by that name: ${name}`)
+    if (!result[0]) throw new Error(`Couldn't find a table by that name: ${tableName}`)
 
     return new Table(this, result[0])
   }

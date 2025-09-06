@@ -71,7 +71,7 @@ export default class TestRunner {
       }
     }
 
-    await this.configuration.getDatabasePool().withConnection(async () => {
+    await this.configuration.withConnections(async () => {
       for (const subDescription in tests.subs) {
         const subTest = tests.subs[subDescription]
         const newDecriptions = descriptions.concat([subDescription])

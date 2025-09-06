@@ -1,37 +1,40 @@
 import {digg} from "diggerize"
+import * as inflection from "inflection"
+import {Logger} from "../logger.js"
 import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
   constructor({configuration}) {
     this.configuration = configuration
+    this.logger = new Logger(this)
   }
 
   async prepare() {
-    const exists = await this.migrationsTableExist()
-
-    if (!exists) await this.createMigrationsTable()
-
+    await this.createMigrationsTable()
     await this.loadMigrationsVersions()
   }
 
   async createMigrationsTable() {
-    const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
+    const dbs = await this.configuration.getCurrentConnections()
 
-    schemaMigrationsTable.string("version", {null: false, primaryKey: true})
+    for (const db of Object.values(dbs)) {
+      if (await this.migrationsTableExist(db)) continue
 
-    await this.configuration.getDatabasePool().withConnection(async (db) => {
+      const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
+
+      schemaMigrationsTable.string("version", {null: false, primaryKey: true})
+
       const createSchemaMigrationsTableSqls = db.createTableSql(schemaMigrationsTable)
 
       for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
         await db.query(createSchemaMigrationsTableSql)
       }
-    })
+    }
   }
 
-  hasRunMigrationVersion(version) {
-    if (!this.migrationsVersions) {
-      throw new Error("Migrations versions hasn't been loaded yet")
-    }
+  hasRunMigrationVersion(dbIdentifier, version) {
+    if (!this.migrationsVersions) throw new Error("Migrations versions hasn't been loaded yet")
+    if (!this.migrationsVersions[dbIdentifier]) throw new Error(`Migrations versions hasn't been loaded yet for db: ${dbIdentifier}`)
 
     if (version in this.migrationsVersions) {
       return true
@@ -40,36 +43,182 @@ export default class VelociousDatabaseMigrator {
     return false
   }
 
-  async loadMigrationsVersions() {
-    const db = this.configuration.getDatabasePool()
+  async migrateFiles(files) {
+    await this.configuration.withConnections(async () => {
+      for (const migration of files) {
+        await this.runMigrationFile({
+          migration,
+          requireMigration: async () => {
+            const migrationImport = await import(migration.fullPath)
 
-    this.migrationsVersions = {}
-
-    await db.withConnection(async () => {
-      const rows = await db.select("schema_migrations")
-
-      for (const row of rows) {
-        const version = digg(row, "version")
-
-        this.migrationsVersions[version] = true
+            return migrationImport.default
+          }
+        })
       }
     })
   }
 
-  async migrationsTableExist() {
-    let exists = false
+  async migrateFilesFromRequireContext(requireContext) {
+    const files = requireContext
+      .keys()
+      .map((file) => {
+        // "13,14" because somes "require-context"-npm-module deletes first character!?
+        const match = file.match(/(\d{13,14})-(.+)\.js$/)
 
-    await this.configuration.getDatabasePool().withConnection(async (db) => {
-      const tables = await db.getTables()
+        if (!match) return null
 
-      for (const table of tables) {
-        if (table.getName() == "schema_migrations") {
-          exists = true
-          break
+        // Fix require-context-npm-module deletes first character
+        let fileName = file
+        let dateNumber = match[1]
+
+        if (dateNumber.length == 13) {
+          dateNumber = `2${dateNumber}`
+          fileName = `2${fileName}`
         }
+
+        // Parse regex
+        const date = parseInt(dateNumber)
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+
+        return {
+          file: fileName,
+          date,
+          migrationClassName
+        }
+      })
+      .filter((migration) => Boolean(migration))
+      .sort((migration1, migration2) => migration1.date - migration2.date)
+
+    await this.configuration.withConnections(async () => {
+      for (const migration of files) {
+        await this.runMigrationFile({
+          migration,
+          requireMigration: () => requireContext(migration.file).default
+        })
       }
     })
+  }
 
-    return exists
+  async loadMigrationsVersions() {
+    this.migrationsVersions = {}
+
+    const dbs = await this.configuration.getCurrentConnections()
+
+    for (const dbIdentifier in dbs) {
+      const db = dbs[dbIdentifier]
+      const rows = await db.select("schema_migrations")
+
+      this.migrationsVersions[dbIdentifier] = {}
+
+      for (const row of rows) {
+        const version = digg(row, "version")
+
+        this.migrationsVersions[dbIdentifier][version] = true
+      }
+    }
+  }
+
+  async migrationsTableExist(db) {
+    const tables = await db.getTables()
+    const schemaTable = tables.find((table) => table.getName() == "schema_migrations")
+
+    if (!schemaTable) return false
+
+    return true
+  }
+
+  async executeRequireContext(requireContext) {
+    const migrationFiles = requireContext.keys()
+
+    files = migrationFiles
+      .map((file) => {
+        const match = file.match(/^(\d{14})-(.+)\.js$/)
+
+        if (!match) return null
+
+        const date = parseInt(match[1])
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName)
+
+        return {
+          file,
+          fullPath: `${migrationsPath}/${file}`,
+          date,
+          migrationClassName
+        }
+      })
+      .filter((migration) => Boolean(migration))
+      .sort((migration1, migration2) => migration1.date - migration2.date)
+
+    for (const migration of files) {
+      await this.runMigrationFile({
+        migration,
+        require: requireContext(migration.file).default
+      })
+    }
+  }
+
+  async reset() {
+    const dbs = await this.configuration.getCurrentConnections()
+
+    for (const dbIdentifier in dbs) {
+      const db = dbs[dbIdentifier]
+
+      await db.withDisabledForeignKeys(async () => {
+        for (const table of await db.getTables()) {
+          this.logger.log(`Dropping table ${table.getName()}`)
+          await db.dropTable(table.getName())
+        }
+      })
+    }
+  }
+
+  async runMigrationFile({migration, requireMigration}) {
+    if (!this.configuration) throw new Error("No configuration set")
+    if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
+
+    const dbs = await this.configuration.getCurrentConnections()
+    const migrationClass = await requireMigration()
+    const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
+
+    for (const dbIdentifier in dbs) {
+      if (!migrationDatabaseIdentifiers.includes(dbIdentifier)) {
+        this.logger.debug(`${dbIdentifier} shouldn't run migration ${migration.file}`, {migrationDatabaseIdentifiers})
+        continue
+      }
+
+      if (this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
+        this.logger.debug(`${dbIdentifier} has already run migration ${migration.file}`)
+        continue
+      }
+
+      this.logger.debug(`Running migration on ${dbIdentifier}: ${migration.file}`, {migrationDatabaseIdentifiers})
+
+      const db = dbs[dbIdentifier]
+      const MigrationClass = migrationClass
+      const migrationInstance = new MigrationClass({
+        configuration: this.configuration,
+        db
+      })
+
+      if (migrationInstance.change) {
+        await migrationInstance.change()
+      } else if (migrationInstance.up) {
+        await migrationInstance.up()
+      } else {
+        throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
+      }
+
+      const dateString = digg(migration, "date")
+      const existingSchemaMigrations = await db.newQuery()
+        .from("schema_migrations")
+        .where({version: dateString})
+        .results()
+
+      if (existingSchemaMigrations.length == 0) {
+        await db.insert({tableName: "schema_migrations", data: {version: dateString}})
+      }
+    }
   }
 }

@@ -1,5 +1,6 @@
 import Cli from "../../../../src/cli/index.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
+import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
   it("runs migrations", async () => {
@@ -12,46 +13,76 @@ describe("Cli - Commands - db:migrate", () => {
 
     await cli.loadConfiguration()
 
-    const dbPool = cli.configuration.getDatabasePool()
+    let defaultDatabaseType, defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
 
-    await dbPool.withConnection(async (db) => {
-      await db.query("DROP TABLE IF EXISTS tasks")
-      await db.query("DROP TABLE IF EXISTS project_translations")
-      await db.query("DROP TABLE IF EXISTS projects")
-      await db.query("DROP TABLE IF EXISTS schema_migrations")
-    })
+    await cli.configuration.withConnections(async (dbs) => {
+      defaultDatabaseType = dbs.default.getType()
 
-    await cli.execute()
+      const tableNames = ["accounts", "tasks", "project_translations", "projects", "schema_migrations"]
 
-    let projectForeignKey, schemaMigrations, tablesResult
+      for (const tableName of tableNames) {
+        await dbs.default.dropTable(tableName, {ifExists: true})
+        await dbs.mssql.dropTable(tableName, {ifExists: true})
+      }
 
-    await dbPool.withConnection(async (db) => {
-      const tables = await db.getTables()
+      await cli.execute()
 
-      tablesResult = tables.map((table) => table.getName()).sort()
-
-      const table = await db.getTableByName("tasks")
+      const table = await dbs.default.getTableByName("tasks")
       const foreignKeys = await table.getForeignKeys()
 
-      projectForeignKey = foreignKeys.find((foreignKey) => foreignKey.getColumnName() == "project_id")
+      for (const foreignKey of foreignKeys) {
+        if (foreignKey.getColumnName() == "project_id") {
+          projectForeignKey = foreignKey
+        }
+      }
 
-      schemaMigrations = (await db.query("SELECT * FROM schema_migrations ORDER BY version")).map((schemaMigration) => schemaMigration.version)
+      for (const db of Object.values(dbs)) {
+        const schemaMigrations = await db.query("SELECT * FROM schema_migrations ORDER BY version")
+
+        for (const schemaMigration of schemaMigrations) {
+          defaultSchemaMigrations.push(schemaMigration.version)
+        }
+
+        const tables = await db.getTables()
+
+        for (const table of tables) {
+          tablesResult.push(table.getName())
+        }
+      }
     })
 
-    expect(tablesResult).toEqual(
-      [
-        "project_translations",
-        "projects",
-        "schema_migrations",
-        "tasks"
-      ]
-    )
+
 
     expect(projectForeignKey.getTableName()).toEqual("tasks")
     expect(projectForeignKey.getColumnName()).toEqual("project_id")
     expect(projectForeignKey.getReferencedTableName()).toEqual("projects")
     expect(projectForeignKey.getReferencedColumnName()).toEqual("id")
 
-    expect(schemaMigrations).toEqual(["20230728075328", "20230728075329", "20250605133926"])
+    if (defaultDatabaseType == "mssql") {
+      expect(uniqunize(tablesResult.sort())).toEqual(
+        [
+          "accounts",
+          "project_translations",
+          "projects",
+          "schema_migrations",
+          "tasks"
+        ]
+      )
+
+      expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845"])
+    } else {
+      expect(tablesResult.sort()).toEqual(
+        [
+          "accounts",
+          "project_translations",
+          "projects",
+          "schema_migrations",
+          "schema_migrations",
+          "tasks"
+        ]
+      )
+
+      expect(defaultSchemaMigrations.sort()).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845"])
+    }
   })
 })

@@ -1,4 +1,3 @@
-import {digg} from "diggerize"
 import {Logger} from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
@@ -24,6 +23,14 @@ export default class VelociousDatabaseDriversBase {
     const sql = this.deleteSql(...args)
 
     await this.query(sql)
+  }
+
+  async dropTable(...args) {
+    const sqls = this.dropTableSql(...args)
+
+    for (const sql of sqls) {
+      await this.query(sql)
+    }
   }
 
   getArgs() {
@@ -80,12 +87,17 @@ export default class VelociousDatabaseDriversBase {
     return this.options().quoteColumnName(tableName)
   }
 
-  async select(tableName) {
+  newQuery() {
     const handler = new Handler()
-    const query = new Query({
+
+    return new Query({
       driver: this,
       handler
     })
+  }
+
+  async select(tableName) {
+    const query = this.newQuery()
 
     const sql = query
       .from(tableName)
@@ -190,5 +202,15 @@ export default class VelociousDatabaseDriversBase {
     const sql = this.updateSql(...args)
 
     await this.query(sql)
+  }
+
+  async withDisabledForeignKeys(callback) {
+    await this.disableForeignKeys()
+
+    try {
+      return await callback()
+    } finally {
+      await this.enableForeignKeys()
+    }
   }
 }

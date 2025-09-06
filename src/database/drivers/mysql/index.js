@@ -5,6 +5,7 @@ import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
 import Delete from "./sql/delete.js"
 import {digg} from "diggerize"
+import DropTable from "./sql/drop-table.js"
 import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import mysql from "mysql"
@@ -65,11 +66,31 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createTable.toSql()
   }
 
+  async disableForeignKeys() {
+    await this.query("SET FOREIGN_KEY_CHECKS = 0")
+  }
+
+  async enableForeignKeys() {
+    await this.query("SET FOREIGN_KEY_CHECKS = 1")
+  }
+
+  dropTableSql(tableName, args = {}) {
+    const dropArgs = Object.assign({tableName, driver: this}, args)
+    const dropTable = new DropTable(dropArgs)
+
+    return dropTable.toSql()
+  }
+
   getType = () => "mysql"
   primaryKeyType = () => "bigint"
 
   async query(sql) {
-    return await query(this.connection, sql)
+    try {
+      return await query(this.connection, sql)
+    } catch (error) {
+      // Re-throw to un-corrupt stacktrace
+      throw new Error(error.message)
+    }
   }
 
   queryToSql(query) {

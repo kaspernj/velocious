@@ -9,13 +9,35 @@ import requireContext from "require-context"
 
 export default new Configuration({
   database: {
-    default: {
-      master: {
+    test: {
+      default: {
         driver: MssqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mssql",
         database: "velocious_test",
-        useDatabase: "master",
+        useDatabase: "default",
+        sqlConfig: {
+          user: "sa",
+          password: "Super-Secret-Password",
+          database: "velocious_test",
+          server: "mssql",
+          pool: {
+            max: 10,
+            min: 0,
+            idleTimeoutMillis: 30000
+          },
+          options: {
+            encrypt: true, // for azure
+            trustServerCertificate: true // change to true for local dev / self-signed certs
+          }
+        }
+      },
+      mssql: {
+        driver: MssqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mssql",
+        database: "velocious_test",
+        useDatabase: "default",
         sqlConfig: {
           user: "sa",
           password: "Super-Secret-Password",
@@ -40,7 +62,7 @@ export default new Configuration({
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
     const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
 
-    await configuration.getDatabasePool().withConnection(async () => {
+    await configuration.withConnections(async () => {
       await initializerFromRequireContext.initialize({configuration})
     })
   },

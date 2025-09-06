@@ -9,8 +9,30 @@ import requireContext from "require-context"
 
 export default new Configuration({
   database: {
-    default: {
-      master: {
+    development: {
+      default: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "velocious_development"
+      }
+    },
+    production: {
+      default: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "velocious_production"
+      }
+    },
+    test: {
+      default: {
         driver: MysqlDriver,
         poolType: AsyncTrackedMultiConnection,
         type: "mysql",
@@ -27,7 +49,7 @@ export default new Configuration({
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
     const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
 
-    await configuration.getDatabasePool().withConnection(async () => {
+    await configuration.withConnections(async () => {
       await initializerFromRequireContext.initialize({configuration})
     })
   },
