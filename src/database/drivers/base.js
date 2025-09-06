@@ -203,4 +203,14 @@ export default class VelociousDatabaseDriversBase {
 
     await this.query(sql)
   }
+
+  async withDisabledForeignKeys(callback) {
+    await this.disableForeignKeys()
+
+    try {
+      return await callback()
+    } finally {
+      await this.enableForeignKeys()
+    }
+  }
 }

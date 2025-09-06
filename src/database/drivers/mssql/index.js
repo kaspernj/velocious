@@ -56,6 +56,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return createTable.toSql()
   }
 
+  async disableForeignKeys() {
+    await this.query("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"")
+  }
+
+  async enableForeignKeys() {
+    await this.query("EXEC sp_MSforeachtable @command1=\"print '?'\", @command2=\"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\"")
+  }
+
   dropTableSql(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)

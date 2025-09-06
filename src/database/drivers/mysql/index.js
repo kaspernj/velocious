@@ -66,6 +66,14 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createTable.toSql()
   }
 
+  async disableForeignKeys() {
+    await this.query("SET FOREIGN_KEY_CHECKS = 0")
+  }
+
+  async enableForeignKeys() {
+    await this.query("SET FOREIGN_KEY_CHECKS = 1")
+  }
+
   dropTableSql(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)

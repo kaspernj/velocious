@@ -15,21 +15,21 @@ export default class VelociousDatabaseMigrator {
   }
 
   async createMigrationsTable() {
-    await this.configuration.withConnections(async (dbs) => {
-      for (const db of Object.values(dbs)) {
-        if (await this.migrationsTableExist(db)) continue
+    const dbs = await this.configuration.getCurrentConnections()
 
-        const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
+    for (const db of Object.values(dbs)) {
+      if (await this.migrationsTableExist(db)) continue
 
-        schemaMigrationsTable.string("version", {null: false, primaryKey: true})
+      const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
 
-        const createSchemaMigrationsTableSqls = db.createTableSql(schemaMigrationsTable)
+      schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
-        for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
-          await db.query(createSchemaMigrationsTableSql)
-        }
+      const createSchemaMigrationsTableSqls = db.createTableSql(schemaMigrationsTable)
+
+      for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
+        await db.query(createSchemaMigrationsTableSql)
       }
-    })
+    }
   }
 
   hasRunMigrationVersion(dbIdentifier, version) {
@@ -155,6 +155,21 @@ export default class VelociousDatabaseMigrator {
       await this.runMigrationFile({
         migration,
         require: requireContext(migration.file).default
+      })
+    }
+  }
+
+  async reset() {
+    const dbs = await this.configuration.getCurrentConnections()
+
+    for (const dbIdentifier in dbs) {
+      const db = dbs[dbIdentifier]
+
+      await db.withDisabledForeignKeys(async () => {
+        for (const table of await db.getTables()) {
+          this.logger.log(`Dropping table ${table.getName()}`)
+          await db.dropTable(table.getName())
+        }
       })
     }
   }

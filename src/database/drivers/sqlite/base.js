@@ -35,6 +35,14 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return createTable.toSql()
   }
 
+  async disableForeignKeys() {
+    await this.query("PRAGMA foreign_keys = 0")
+  }
+
+  async enableForeignKeys() {
+    await this.query("PRAGMA foreign_keys = 1")
+  }
+
   dropTableSql(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
