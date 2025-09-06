@@ -25,7 +25,7 @@ export default class DbCreate extends BaseCommand{
       await this.databaseConnection.connect()
 
       if (databaseType != "sqlite") {
-        await this.createDatabase()
+        await this.createDatabase(databaseIdentifier)
       }
 
       await this.createSchemaMigrationsTable()
@@ -35,8 +35,8 @@ export default class DbCreate extends BaseCommand{
     }
   }
 
-  async createDatabase() {
-    const databaseName = digg(this.configuration.getDatabaseConfiguration(), "default", "database")
+  async createDatabase(databaseIdentifier) {
+    const databaseName = digg(this.configuration.getDatabaseConfiguration(), databaseIdentifier, "database")
     const sql = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
     if (this.args.testing) {
