@@ -6,6 +6,8 @@ before_install:
   - sudo apt-get install -y nodejs
 before_script:
   - npm install
+environment:
+  NODE_ENV: test
 services:
   mariadb:
     environment:
