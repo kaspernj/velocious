@@ -30,13 +30,12 @@ services:
       - 1433
     mem_limit: 4096m
     restart_policy: on-failure
-before_script:
-  - cd spec/dummy && npx velocious db:create
 builds:
   build_1:
     name: MariaDB
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
+      - cd spec/dummy && npx velocious db:create
       - wait-for-it mariadb:3306
       - npm test
   build_2:
@@ -44,9 +43,11 @@ builds:
     script:
       - wait-for-it mssql:1433
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
+      - cd spec/dummy && npx velocious db:create
       - npm test
   build_3:
     name: SQLite
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - cd spec/dummy && npx velocious db:create
       - npm test
