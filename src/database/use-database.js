@@ -1,8 +1,8 @@
-import DatabaseMigrateFromRequireContext from "./migrate-from-require-context.js"
 import React from "react"
 import useEnvSense from "env-sense/src/use-env-sense.js"
 
 import Configuration from "../configuration.js"
+import Migrator from "./migrator.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 const loadMigrations = function loadMigrations({migrationsRequireContext, ...restArgs}) {
@@ -15,9 +15,10 @@ const loadMigrations = function loadMigrations({migrationsRequireContext, ...res
 
     try {
       await Configuration.current().withConnections(async () => {
-        const databaseMigrateFromRequireContext = new DatabaseMigrateFromRequireContext()
+        const migrator = new Migrator({configuration: Configuration.current()})
 
-        await databaseMigrateFromRequireContext.execute(migrationsRequireContext)
+        await migrator.prepare()
+        await migrator.migrateFilesFromRequireContext(migrationsRequireContext)
       })
 
       await Configuration.current().initialize()

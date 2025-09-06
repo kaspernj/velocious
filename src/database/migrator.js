@@ -36,20 +36,20 @@ export default class VelociousDatabaseMigrator {
     if (!this.migrationsVersions) throw new Error("Migrations versions hasn't been loaded yet")
     if (!this.migrationsVersions[dbIdentifier]) throw new Error(`Migrations versions hasn't been loaded yet for db: ${dbIdentifier}`)
 
-    if (version in this.migrationsVersions) {
+    if (version in this.migrationsVersions[dbIdentifier]) {
       return true
     }
 
     return false
   }
 
-  async migrateFiles(files) {
+  async migrateFiles(files, importCallback) {
     await this.configuration.withConnections(async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,
           requireMigration: async () => {
-            const migrationImport = await import(migration.fullPath)
+            const migrationImport = await importCallback(migration.fullPath)
 
             return migrationImport.default
           }

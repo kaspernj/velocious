@@ -33,7 +33,7 @@ export default class DbMigrate extends BaseCommand {
 
     await this.configuration.withConnections(async () => {
       await this.migrator.prepare()
-      await this.migrator.migrateFiles(files)
+      await this.migrator.migrateFiles(files, async (importPath) => await import(importPath))
     })
   }
 }
