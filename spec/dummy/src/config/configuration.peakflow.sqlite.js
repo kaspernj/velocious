@@ -1,3 +1,4 @@
+import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tracked-multi-connection.js"
 import Configuration from "../../../../src/configuration.js"
 import dummyDirectory from "../../dummy-directory.js"
 import fs from "fs/promises"
