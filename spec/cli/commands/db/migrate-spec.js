@@ -1,5 +1,6 @@
 import Cli from "../../../../src/cli/index.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
+import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
   it("runs migrations", async () => {
@@ -12,9 +13,11 @@ describe("Cli - Commands - db:migrate", () => {
 
     await cli.loadConfiguration()
 
-    let defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
+    let defaultDatabaseType, defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
 
     await cli.configuration.withConnections(async (dbs) => {
+      defaultDatabaseType = dbs.default.getType()
+
       const tableNames = ["accounts", "tasks", "project_translations", "projects", "schema_migrations"]
 
       for (const tableName of tableNames) {
@@ -48,22 +51,38 @@ describe("Cli - Commands - db:migrate", () => {
       }
     })
 
-    expect(tablesResult.sort()).toEqual(
-      [
-        "accounts",
-        "project_translations",
-        "projects",
-        "schema_migrations",
-        "schema_migrations",
-        "tasks"
-      ]
-    )
+
 
     expect(projectForeignKey.getTableName()).toEqual("tasks")
     expect(projectForeignKey.getColumnName()).toEqual("project_id")
     expect(projectForeignKey.getReferencedTableName()).toEqual("projects")
     expect(projectForeignKey.getReferencedColumnName()).toEqual("id")
 
-    expect(defaultSchemaMigrations.sort()).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845"])
+    if (defaultDatabaseType == "mssql") {
+      expect(uniqunize(tablesResult.sort())).toEqual(
+        [
+          "accounts",
+          "project_translations",
+          "projects",
+          "schema_migrations",
+          "tasks"
+        ]
+      )
+
+      expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845"])
+    } else {
+      expect(tablesResult.sort()).toEqual(
+        [
+          "accounts",
+          "project_translations",
+          "projects",
+          "schema_migrations",
+          "schema_migrations",
+          "tasks"
+        ]
+      )
+
+      expect(defaultSchemaMigrations.sort()).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845"])
+    }
   })
 })
