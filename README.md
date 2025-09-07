@@ -1,7 +1,5 @@
 # README
 
-This is still work in progress.
-
 * Concurrent multi threadded web server
 * Database framework ala Rails
 * Database models ala Rails
