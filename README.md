@@ -19,23 +19,29 @@ npm install velocious
 npx velocious init
 ```
 
-# Migrations
-
-```bash
-npx velocious g:migration create_tasks
-```
-
-```bash
-npx velocious db:migrate
-```
-
 # Models
 
 ```bash
+npx velocious g:model Account
 npx velocious g:model Task
 ```
 
+```js
+import Record from "velocious/src/database/record/index.js"
+
+class Task extends Record {
+}
+
+Task.belongsTo("account")
+Task.translates("description", "subTitle", "title")
+
+export default Task
+```
+
 # Migrations
+
+Make a new migration from a template like this:
+
 ```bash
 npx velocious g:migration create-tasks
 ```
@@ -66,7 +72,12 @@ export default class CreateEvents extends Migration {
 }
 ```
 
-Run migrations from anywhere
+Run migrations from the command line like this:
+```bash
+npx velocious db:migrate
+```
+
+Run migrations from anywhere if you want to:
 
 ```js
 const migrationsPath = `/some/dir/migrations`
@@ -88,6 +99,8 @@ import {Task} from "@/src/models/task"
 const tasks = await Task
   .preload({project: {account: true}})
   .where({projects: {public: true}})
+  .order("name")
+  .limit(5)
   .toArray()
 ```
 
@@ -104,7 +117,7 @@ If you are developing on Velocious, you can run the tests with:
 npm run test
 ```
 
-# Writing a require test
+# Writing a request test
 
 First create a test file under something like the following path 'src/routes/accounts/create-test.js' with something like the following content:
 
