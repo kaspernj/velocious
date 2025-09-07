@@ -13,8 +13,6 @@ export default class RequestBuffer {
   headers = []
   headersByName = {}
   params = {}
-  postBody = ""
-  postBodyChars = []
   readingBody = false
   state = "status"
 
@@ -74,10 +72,9 @@ export default class RequestBuffer {
 
           break
         case "post-body":
-          this.bodyLength += 1
-          this.postBodyChars.push(char)
+          this.postBodyChars[this.bodyLength - 1] = char
 
-          if (this.contentLength && this.postBodyChars.length >= this.contentLength) {
+          if (this.contentLength && this.bodyLength >= this.contentLength) {
             this.postRequestDone()
           }
 
@@ -157,6 +154,7 @@ export default class RequestBuffer {
         this.completeRequest()
       } else if (this.httpMethod.toUpperCase() == "POST") {
         this.readingBody = true
+        this.bodyLength = 0
 
         const match = this.getHeader("content-type")?.value?.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
 
@@ -168,6 +166,11 @@ export default class RequestBuffer {
           this.multiPartyFormData = true
           this.setState("multi-part-form-data")
         } else {
+          if (!this.contentLength) throw new Error("Content length hasn't been set")
+
+          this.postBodyBuffer = new ArrayBuffer(this.contentLength)
+          this.postBodyChars = new Uint8Array(this.postBodyBuffer)
+
           this.setState("post-body")
         }
       } else {
@@ -190,7 +193,11 @@ export default class RequestBuffer {
   }
 
   postRequestDone() {
-    this.postBody += String.fromCharCode.apply(null, this.postBodyChars)
+    this.postBody = String.fromCharCode.apply(null, this.postBodyChars)
+
+    delete this.postBodyChars
+    delete this.postBodyBuffer
+
     this.parseQueryStringPostParams()
     this.completeRequest()
   }

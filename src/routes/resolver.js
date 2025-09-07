@@ -1,7 +1,8 @@
 import {digg, digs} from "diggerize"
+import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
-import {dirname} from "path"
+import * as inflection from "inflection"
 
 export default class VelociousRoutesResolver {
   constructor({configuration, request, response}) {
@@ -22,7 +23,7 @@ export default class VelociousRoutesResolver {
     let viewPath
 
     const matchResult = this.matchPathWithRoutes(currentRoute, currentPath)
-    let action = this.params.action
+    let action = this.params.action ? inflection.camelize(this.params.action.replaceAll("-", "_"), true) : undefined
     let controller = this.params.controller
 
     if (!matchResult) {

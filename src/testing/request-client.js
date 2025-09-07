@@ -5,6 +5,8 @@ class Response {
 
   async parse() {
     this._body = await this.fetchResponse.text()
+
+    if (this.statusCode() != 200) throw new Error(`Request failed with code ${this.statusCode()} and body: ${this.body()}`)
   }
 
   body = () => this._body
@@ -16,8 +18,13 @@ export default class RequestClient {
   host = "localhost"
   port = 31006
 
-  get() {
-    throw new Error("get stub")
+  async get(path) {
+    const fetchResponse = await fetch(`http://${this.host}:${this.port}${path}`)
+    const response = new Response(fetchResponse)
+
+    await response.parse()
+
+    return response
   }
 
   async post(path, data) {

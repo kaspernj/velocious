@@ -66,6 +66,20 @@ export default class CreateEvents extends Migration {
 }
 ```
 
+Run migrations from anywhere
+
+```js
+const migrationsPath = `/some/dir/migrations`
+const files = await new FilesFinder({path: migrationsPath}).findFiles()
+
+await this.configuration.withConnections(async () => {
+  const migrator = new Migrator({configuration: this.configuration})
+
+  await migrator.prepare()
+  await migrator.migrateFiles(files, async (path) => await import(path))
+})
+```
+
 # Querying
 
 ```js

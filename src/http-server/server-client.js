@@ -19,9 +19,13 @@ export default class ServerClient {
 
   close() {
     return new Promise((resolve, reject) => {
-      this.socket.destroy()
-      this.events.emit("close", this)
-      resolve()
+      try {
+        this.socket.destroy()
+        this.events.emit("close", this)
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
     })
   }
 
