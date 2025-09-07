@@ -177,6 +177,7 @@ export default class VelociousDatabaseMigrator {
   async runMigrationFile({migration, requireMigration}) {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
+    if (!this.migrationsVersions) await this.loadMigrationsVersions()
 
     const dbs = await this.configuration.getCurrentConnections()
     const migrationClass = await requireMigration()

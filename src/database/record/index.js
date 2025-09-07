@@ -362,7 +362,9 @@ export default class VelociousDatabaseRecord {
   }
 
   static tableName() {
-    return inflection.underscore(inflection.pluralize(this.name))
+    if (!this._tableName) this._tableName = inflection.underscore(inflection.pluralize(this.name))
+
+    return this._tableName
   }
 
   static setTableName(tableName) {
