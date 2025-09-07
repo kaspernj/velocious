@@ -42,6 +42,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         maxlength ||= 255
       }
 
+      if (databaseType == "mssql" && type == "BOOLEAN") {
+        type = "BIT"
+      }
+
       if (databaseType == "sqlite" && column.getAutoIncrement() && column.getPrimaryKey()) {
         type = "INTEGER"
       }
