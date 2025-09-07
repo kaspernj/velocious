@@ -395,10 +395,9 @@ export default class VelociousDatabaseRecord {
     const className = `${this.name}Translation`
     const TranslationClass = class Translation extends VelociousDatabaseRecord {}
     const belongsTo = `${inflection.camelize(inflection.singularize(this.tableName()), true)}`
-    const tableName = `${inflection.singularize(this.tableName())}_translations`
 
     Object.defineProperty(TranslationClass, "name", {value: className})
-    TranslationClass.setTableName(tableName)
+    TranslationClass.setTableName(this.getTranslationsTableName())
     TranslationClass.belongsTo(belongsTo)
 
     this._translationClass = TranslationClass
@@ -407,7 +406,11 @@ export default class VelociousDatabaseRecord {
   }
 
   static getTranslationsTableName() {
-    return `${inflection.singularize(this.tableName())}_translations`
+    const tableNameParts = this.tableName().split("_")
+
+    tableNameParts[tableNameParts.length - 1] = inflection.singularize(tableNameParts[tableNameParts.length - 1])
+
+    return `${tableNameParts.join("_")}_translations`
   }
 
   static async hasTranslationsTable() {
