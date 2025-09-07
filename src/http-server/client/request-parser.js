@@ -19,6 +19,13 @@ export default class VelociousHttpServerClientRequestParser {
     this.requestBuffer.events.on("request-done", this.requestDone)
   }
 
+  destroy() {
+    this.requestBuffer.events.off("completed", this.requestDone)
+    this.requestBuffer.events.off("form-data-part", this.onFormDataPart)
+    this.requestBuffer.events.off("request-done", this.requestDone)
+    this.requestBuffer.destroy()
+  }
+
   onFormDataPart = (formDataPart) => {
     const unorderedParams = {}
 
@@ -78,6 +85,7 @@ export default class VelociousHttpServerClientRequestParser {
     const incorporator = new Incorporator({objects: [this.params, this.requestBuffer.params]})
 
     incorporator.merge()
+
     this.state = "done"
     this.events.emit("done")
   }
