@@ -12,7 +12,7 @@ import mssql from "mssql"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import Update from "./sql/update.js"
-import {v4 as uuidv4} from "uuid"
+import UUID from "pure-uuid"
 
 export default class VelociousDatabaseDriversMssql extends Base{
   async connect() {
@@ -205,7 +205,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   generateSavePointName() {
-    return `sp${uuidv4().replaceAll("-", "")}`.substring(0, 32)
+    return `sp${new UUID(4).format().replaceAll("-", "")}`.substring(0, 32)
   }
 
   updateSql({conditions, data, tableName}) {

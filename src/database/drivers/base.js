@@ -1,7 +1,7 @@
 import {Logger} from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
-import {v4 as uuidv4} from "uuid"
+import UUID from "pure-uuid"
 
 export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
@@ -183,7 +183,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   generateSavePointName() {
-    return `sp${uuidv4().replaceAll("-", "")}`
+    return `sp${new UUID(4).format().replaceAll("-", "")}`
   }
 
   async startSavePoint(savePointName) {
