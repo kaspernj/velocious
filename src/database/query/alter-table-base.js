@@ -14,9 +14,9 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
     const sqls = []
 
     for (const column of this.columns) {
-      let sql = `ALTER TABLE ${this.driver.quoteTable(this.tableName)} ADD `
+      let sql = `ALTER TABLE ${this.getOptions().quoteTableName(this.tableName)} ADD `
 
-      sql += this.driver.quoteColumn(column.getName())
+      sql += this.getOptions().quoteColumnName(column.getName())
 
       sqls.push(sql)
     }
