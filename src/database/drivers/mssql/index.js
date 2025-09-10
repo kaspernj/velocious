@@ -10,7 +10,6 @@ import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import mssql from "mssql"
 import QueryParser from "./query-parser.js"
-import strftime from "strftime"
 import Table from "./table.js"
 import Update from "./sql/update.js"
 import UUID from "pure-uuid"
@@ -100,13 +99,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   shouldSetAutoIncrementWhenPrimaryKey = () => true
 
-  _convertValue(value) {
-    if (value instanceof Date) {
-      return strftime("%F %T.%L", value)
-    }
 
-    return value
-  }
 
   escape(value) {
     value = this._convertValue(value)

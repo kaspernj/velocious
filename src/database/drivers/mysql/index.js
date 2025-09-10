@@ -102,7 +102,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
-    const escapedValueWithQuotes = this.connection.escape(value)
+    const escapedValueWithQuotes = this.connection.escape(this._convertValue(value))
 
     return escapedValueWithQuotes.slice(1, escapedValueWithQuotes.length - 1)
   }
@@ -110,7 +110,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   quote(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
 
-    return this.connection.escape(value)
+    return this.connection.escape(this._convertValue(value))
   }
 
   deleteSql({tableName, conditions}) {

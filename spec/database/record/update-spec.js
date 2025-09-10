@@ -20,7 +20,7 @@ describe("Record - update", () => {
       const project = new Project({name: "Test project"})
 
       await project.save()
-      await wait(50)
+      await wait(1000)
       await project.update({name: "Updated name"})
 
       expect(project.name()).toEqual("Updated name")
