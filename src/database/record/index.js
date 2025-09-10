@@ -7,8 +7,26 @@ import HasManyRelationship from "./relationships/has-many.js"
 import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
 import * as inflection from "inflection"
 import Query from "../query/index.js"
+import ValidatorsPresence from "./validators/presence.js"
+import ValidatorsUniqueness from "./validators/uniqueness.js"
 
-export default class VelociousDatabaseRecord {
+class VelociousDatabaseRecord {
+  static validatorTypes() {
+    if (!this._validatorTypes) this._validatorTypes = {}
+
+    return this._validatorTypes
+  }
+
+  static registerValidatorType(name, validatorClass) {
+    this.validatorTypes()[name] = validatorClass
+  }
+
+  static getValidatorType(validatorName) {
+    if (!(validatorName in this.validatorTypes())) throw new Error(`Validator type ${validatorName} not found`)
+
+    return this.validatorTypes()[validatorName]
+  }
+
   static _relationshipExists(relationshipName) {
     if (this._relationships && relationshipName in this._relationships) {
       return true
@@ -434,8 +452,7 @@ export default class VelociousDatabaseRecord {
   static async validates(attributeName, validators) {
     for (const validatorName in validators) {
       const validatorArgs = validators[validatorName]
-      const validatorImport = await import(`./validators/${inflection.dasherize(validatorName)}.js`)
-      const ValidatorClass = validatorImport.default
+      const ValidatorClass = this.getValidatorType(validatorName)
       const validator = new ValidatorClass({attributeName, args: validatorArgs})
 
       if (!this._validators) this._validators = {}
@@ -832,3 +849,8 @@ export default class VelociousDatabaseRecord {
     await this.save()
   }
 }
+
+VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
+VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
+
+export default VelociousDatabaseRecord
