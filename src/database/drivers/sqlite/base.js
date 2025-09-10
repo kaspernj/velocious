@@ -164,6 +164,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   shouldSetAutoIncrementWhenPrimaryKey = () => false
 
   escape(value) {
+    value = this._convertValue(value)
+
     const type = typeof value
 
     if (type != "string") value = `${value}`
@@ -175,6 +177,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   quote(value) {
+    value = this._convertValue(value)
+
     const type = typeof value
 
     if (type == "number") return value

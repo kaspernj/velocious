@@ -1,4 +1,7 @@
 node_modules
 spec/dummy/db/*.sqlite
 spec/dummy/src/config/configuration.js
+spec/dummy/src/config/configuration.mariadb.js
+spec/dummy/src/config/configuration.mssql.js
+spec/dummy/src/config/configuration.sqlite.js
 spec/support/mysql.json

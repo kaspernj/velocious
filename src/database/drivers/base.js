@@ -1,6 +1,7 @@
 import {Logger} from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
+import strftime from "strftime"
 import UUID from "pure-uuid"
 
 export default class VelociousDatabaseDriversBase {
@@ -64,6 +65,14 @@ export default class VelociousDatabaseDriversBase {
 
   lastInsertID() {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
+  }
+
+  _convertValue(value) {
+    if (value instanceof Date) {
+      return strftime("%F %T.%L", value)
+    }
+
+    return value
   }
 
   quote(value) {

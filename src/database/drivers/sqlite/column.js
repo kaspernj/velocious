@@ -11,4 +11,14 @@ export default class VelociousDatabaseDriversSqliteColumn {
 
     return this.column.name
   }
+
+  getType() {
+    const match = this.column.type.match(/(.*)\((\d+)\)$/)
+
+    if (match) {
+      return match[1].toLowerCase()
+    }
+
+    return this.column.type.toLowerCase()
+  }
 }

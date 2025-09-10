@@ -19,6 +19,8 @@ describe("Record - create", () => {
       expect(project.name()).toEqual("Test project")
       expect(project.nameDe()).toEqual("Test projekt")
       expect(project.nameEn()).toEqual("Test project")
+      expect(project.createdAt()).toBeInstanceOf(Date)
+      expect(project.updatedAt()).toBeInstanceOf(Date)
     })
   })
 
@@ -33,6 +35,28 @@ describe("Record - create", () => {
       expect(task.name()).toEqual("Test task")
       expect(task.project().id()).toEqual(project.id())
       expect(task.project()).toEqual(project)
+    })
+  })
+
+  it("uses transactions and rolls back in case of an error", async () => {
+    await Dummy.run(async () => {
+      const project = new Project({name: "Test project"})
+
+      project.tasks().build({name: " ", project})
+
+      try {
+        await project.save()
+
+        throw new Error("Didnt expect to succeed")
+      } catch (error) {
+        expect(error.message).toEqual("Validation failed: Name can't be blank")
+      }
+
+      const projectsCount = await Project.count()
+      const tasksCount = await Task.count()
+
+      expect(projectsCount).toEqual(0)
+      expect(tasksCount).toEqual(0)
     })
   })
 })
