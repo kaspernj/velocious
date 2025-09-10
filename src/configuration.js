@@ -137,6 +137,20 @@ export default class VelociousConfiguration {
     this.routes = newRoutes
   }
 
+  setTranslator(callback) {
+    this._translator = callback
+  }
+
+  _defaultTranslator(msgID, args) {
+    if (args?.defaultValue) return args.defaultValue
+
+    return msgID
+  }
+
+  getTranslator() {
+    return this._translator || this._defaultTranslator
+  }
+
   async withConnections(callback) {
     const dbs = {}
     const actualCallback = async () => {

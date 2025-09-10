@@ -126,9 +126,17 @@ export default class VelociousDatabaseDriversBase {
 
     if (this._transactionsCount == 0) {
       this.logger.debug("Start transaction")
-      await this.startTransaction()
-      transactionStarted = true
       this._transactionsCount++
+
+      try {
+        await this.startTransaction()
+      } catch (error) {
+        this._transactionsCount--
+
+        throw error
+      }
+
+      transactionStarted = true
     } else {
       this.logger.debug("Start savepoint", savePointName)
       await this.startSavePoint(savePointName)
