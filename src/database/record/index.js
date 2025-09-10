@@ -744,14 +744,24 @@ class VelociousDatabaseRecord {
 
   readAttribute(attributeName) {
     const attributeNameUnderscore = inflection.underscore(attributeName)
+    const column = this.constructor.getColumns().find((column) => column.getName() == attributeNameUnderscore)
+    let result
 
-    if (attributeNameUnderscore in this._changes) return this._changes[attributeNameUnderscore]
-
-    if (!(attributeNameUnderscore in this._attributes) && this.isPersisted()) {
+    if (attributeNameUnderscore in this._changes) {
+      result = this._changes[attributeNameUnderscore]
+    } else if (attributeNameUnderscore in this._attributes) {
+      result = this._attributes[attributeNameUnderscore]
+    } else if (this.isPersisted()) {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
 
-    return this._attributes[attributeNameUnderscore]
+    if (column && this.constructor.connection().getType() == "sqlite") {
+      if (column.getType() == "date" || column.getType() == "datetime") {
+        result = new Date(Date.parse(result))
+      }
+    }
+
+    return result
   }
 
   _belongsToChanges() {
