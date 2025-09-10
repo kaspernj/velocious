@@ -10,6 +10,7 @@ import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import mssql from "mssql"
 import QueryParser from "./query-parser.js"
+import strftime from "strftime"
 import Table from "./table.js"
 import Update from "./sql/update.js"
 import UUID from "pure-uuid"
@@ -99,7 +100,17 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   shouldSetAutoIncrementWhenPrimaryKey = () => true
 
+  _convertValue(value) {
+    if (value instanceof Date) {
+      return strftime("%F %T.%L", value)
+    }
+
+    return value
+  }
+
   escape(value) {
+    value = this._convertValue(value)
+
     const type = typeof value
 
     if (type != "string") value = `${value}`
@@ -111,6 +122,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   quote(value) {
+    value = this._convertValue(value)
+
     const type = typeof value
 
     if (type == "number") return value
@@ -172,9 +185,11 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async startTransaction() {
+    if (!this.connection) throw new Error("No connection")
     if (this._currentTransaction) throw new Error("A transaction is already running")
 
-    this._currentTransaction = new mssql.Transaction()
+    this._currentTransaction = new mssql.Transaction(this.connection)
+
     await this._currentTransaction.begin()
   }
 
@@ -189,6 +204,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (!this._currentTransaction) throw new Error("A transaction isn't running")
 
     await this._currentTransaction.rollback()
+
     this._currentTransaction = null
   }
 

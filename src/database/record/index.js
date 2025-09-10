@@ -323,10 +323,16 @@ class VelociousDatabaseRecord {
     await this._runValidations()
 
     await this.constructor.transaction(async () => {
-      await this._autoSaveBelongsToRelationships()
+      // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
+      const {savedCount} = await this._autoSaveBelongsToRelationships()
 
       if (this.isPersisted()) {
-        result = await this._updateRecordWithChanges()
+        // If any has-many-relationships will be saved, then updated-at should still be set on this record.
+        const autoSaveHasManyrelationships = this._autoSaveHasManyRelationshipsToSave()
+
+        if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
+          result = await this._updateRecordWithChanges()
+        }
       } else {
         result = await this._createNewRecord()
       }
@@ -338,6 +344,8 @@ class VelociousDatabaseRecord {
   }
 
   async _autoSaveBelongsToRelationships() {
+    let savedCount = 0
+
     for (const relationshipName in this._instanceRelationships) {
       const instanceRelationship = this._instanceRelationships[relationshipName]
 
@@ -355,11 +363,17 @@ class VelociousDatabaseRecord {
         this.setAttribute(foreignKey, model.id())
         instanceRelationship.setPreloaded(true)
         instanceRelationship.setDirty(false)
+
+        savedCount++
       }
     }
+
+    return {savedCount}
   }
 
-  async _autoSaveHasManyRelationships({isNewRecord}) {
+  _autoSaveHasManyRelationshipsToSave() {
+    const relationships = []
+
     for (const relationshipName in this._instanceRelationships) {
       const instanceRelationship = this._instanceRelationships[relationshipName]
 
@@ -367,6 +381,31 @@ class VelociousDatabaseRecord {
         continue
       }
 
+      let loaded = instanceRelationship._loaded
+
+      if (!Array.isArray(loaded)) loaded = [loaded]
+
+      let useRelationship = false
+
+      for (const model of loaded) {
+        const foreignKey = instanceRelationship.getForeignKey()
+
+        model.setAttribute(foreignKey, this.id())
+
+        if (model.isChanged()) {
+          useRelationship = true
+          continue
+        }
+      }
+
+      if (useRelationship) relationships.push(instanceRelationship)
+    }
+
+    return relationships
+  }
+
+  async _autoSaveHasManyRelationships({isNewRecord}) {
+    for (const instanceRelationship of this._autoSaveHasManyRelationshipsToSave()) {
       let loaded = instanceRelationship._loaded
 
       if (!Array.isArray(loaded)) loaded = [loaded]
@@ -736,7 +775,14 @@ class VelociousDatabaseRecord {
       throw new Error(`No insertSql on ${this.constructor.connection().constructor.name}`)
     }
 
+    const createdAtColumn = this.constructor.getColumns().find((column) => column.getName() == "created_at")
+    const updatedAtColumn = this.constructor.getColumns().find((column) => column.getName() == "updated_at")
     const data = Object.assign({}, this._belongsToChanges(), this.attributes())
+    const currentDate = new Date()
+
+    if (createdAtColumn) data.created_at = currentDate
+    if (updatedAtColumn) data.updated_at = currentDate
+
     const sql = this._connection().insertSql({
       returnLastInsertedColumnName: this.constructor.primaryKey(),
       tableName: this._tableName(),
@@ -763,21 +809,25 @@ class VelociousDatabaseRecord {
   }
 
   async _updateRecordWithChanges() {
-    if (!this._hasChanges()) return
-
     const conditions = {}
 
     conditions[this.constructor.primaryKey()] = this.id()
 
     const changes = Object.assign({}, this._belongsToChanges(), this._changes)
+    const updatedAtColumn = this.constructor.getColumns().find((column) => column.getName() == "updated_at")
+    const currentDate = new Date()
 
-    const sql = this._connection().updateSql({
-      tableName: this._tableName(),
-      data: changes,
-      conditions
-    })
-    await this._connection().query(sql)
-    await this._reloadWithId(this.id())
+    if (updatedAtColumn) changes.updated_at = currentDate
+
+    if (Object.keys(changes).length > 0) {
+      const sql = this._connection().updateSql({
+        tableName: this._tableName(),
+        data: changes,
+        conditions
+      })
+      await this._connection().query(sql)
+      await this._reloadWithId(this.id())
+    }
   }
 
   id = () => this.readAttribute(this.constructor.primaryKey())
