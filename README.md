@@ -32,6 +32,7 @@ class Task extends Record {
 
 Task.belongsTo("account")
 Task.translates("description", "subTitle", "title")
+Task.validates("name", {presence: true, uniqueness: true})
 
 export default Task
 ```

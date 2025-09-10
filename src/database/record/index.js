@@ -153,6 +153,12 @@ export default class VelociousDatabaseRecord {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasMany"}, options))
   }
 
+  static humanAttributeName(attributeName) {
+    const modelNameKey = inflection.underscore(this.constructor.name)
+
+    return this._getConfiguration().getTranslator()(`velocious.database.record.attributes.${modelNameKey}.${attributeName}`, {defaultValue: inflection.camelize(attributeName)})
+  }
+
   static async initializeRecord({configuration}) {
     if (!configuration) throw new Error(`No configuration given for ${this.name}`)
 
@@ -296,6 +302,8 @@ export default class VelociousDatabaseRecord {
     const isNewRecord = this.isNewRecord()
     let result
 
+    await this._runValidations()
+
     await this.constructor.transaction(async () => {
       await this._autoSaveBelongsToRelationships()
 
@@ -423,6 +431,20 @@ export default class VelociousDatabaseRecord {
     }
   }
 
+  static async validates(attributeName, validators) {
+    for (const validatorName in validators) {
+      const validatorArgs = validators[validatorName]
+      const validatorImport = await import(`./validators/${inflection.dasherize(validatorName)}.js`)
+      const ValidatorClass = validatorImport.default
+      const validator = new ValidatorClass({attributeName, args: validatorArgs})
+
+      if (!this._validators) this._validators = {}
+      if (!(attributeName in this._validators)) this._validators[attributeName] = []
+
+      this._validators[attributeName].push(validator)
+    }
+  }
+
   _getTranslatedAttribute(name, locale) {
     const translation = this.translations().loaded().find((translation) => translation.locale() == locale)
 
@@ -527,6 +549,10 @@ export default class VelociousDatabaseRecord {
 
   static preload(...args) {
     return this._newQuery().preload(...args)
+  }
+
+  static select(...args) {
+    return this._newQuery().select(...args)
   }
 
   static toArray(...args) {
@@ -762,6 +788,42 @@ export default class VelociousDatabaseRecord {
 
   async reload() {
     this._reloadWithId(this.readAttribute("id"))
+  }
+
+  async _runValidations() {
+    this._validationErrors = {}
+
+    const validators = this.constructor._validators
+
+    if (validators) {
+      for (const attributeName in validators) {
+        const attributeValidators = validators[attributeName]
+
+        for (const validator of attributeValidators) {
+          await validator.validate({model: this, attributeName})
+        }
+      }
+    }
+
+    if (Object.keys(this._validationErrors).length > 0) {
+      throw new Error(`Validation failed: ${this.fullErrorMessages().join(". ")}`)
+    }
+  }
+
+  fullErrorMessages() {
+    const validationErrorMessages = []
+
+    if (this._validationErrors) {
+      for (const attributeName in this._validationErrors) {
+        for (const validationError of this._validationErrors[attributeName]) {
+          const message = `${this.constructor.humanAttributeName(attributeName)} ${validationError.message}`
+
+          validationErrorMessages.push(message)
+        }
+      }
+    }
+
+    return validationErrorMessages
   }
 
   async update(attributesToAssign) {
