@@ -30,12 +30,12 @@ services:
       - 1433
     mem_limit: 4096m
     restart_policy: on-failure
-  mariadb:
+  postgres:
     environment:
       POSTGRES_USER: peakflow
       POSTGRES_PASSWORD: password
       POSTGRES_DB: velocious_test
-    image: pgsql:17.6
+    image: postgres:17.6
     expose:
       - 5432
     mem_limit: 4096m
