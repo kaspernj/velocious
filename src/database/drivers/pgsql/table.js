@@ -22,11 +22,26 @@ export default class VelociousDatabaseDriversPgsqlTable {
 
   async getForeignKeys() {
     const sql = `
-      SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      SELECT
+        tc.constraint_name,
+        tc.table_name,
+        kcu.column_name,
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name
+
+      FROM
+        information_schema.table_constraints AS tc
+
+      JOIN information_schema.key_column_usage AS kcu ON
+        tc.constraint_name = kcu.constraint_name
+
+      JOIN information_schema.constraint_column_usage AS ccu
+        ON ccu.constraint_name = tc.constraint_name
+
       WHERE
-        REFERENCED_TABLE_SCHEMA = (SELECT DATABASE()) AND
-        TABLE_NAME = ${this.driver.quote(this.getName())}
+        constraint_type = 'FOREIGN KEY' AND
+        tc.table_catalog = CURRENT_DATABASE() AND
+        tc.table_name = ${this.driver.quote(this.getName())}
     `
 
     const foreignKeyRows = await this.driver.query(sql)

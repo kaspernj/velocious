@@ -214,7 +214,7 @@ export default class VelociousDatabaseMigrator {
       const dateString = digg(migration, "date")
       const existingSchemaMigrations = await db.newQuery()
         .from("schema_migrations")
-        .where({version: dateString})
+        .where({version: `${dateString}`})
         .results()
 
       if (existingSchemaMigrations.length == 0) {

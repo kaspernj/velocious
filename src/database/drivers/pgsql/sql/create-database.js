@@ -8,8 +8,7 @@ export default class VelociousDatabaseConnectionDriversPgsqlSqlCreateDatabase ex
     const sqls = []
 
     if (this.ifNotExists) {
-      // Its not our job to perform admin actions like this
-      // sqls.push("CREATE EXTENSION IF NOT EXISTS dblink")
+      sqls.push("CREATE EXTENSION IF NOT EXISTS dblink")
 
       const connectArgs = this._driver.connectArgs()
       const {password, username} = digs(connectArgs, "password", "username")

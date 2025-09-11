@@ -24,12 +24,15 @@ export default class DbCreate extends BaseCommand{
       this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
       await this.databaseConnection.connect()
 
-      if (databaseType != "sqlite") {
-        await this.createDatabase(databaseIdentifier)
-      }
+      try {
+        if (databaseType != "sqlite") {
+          await this.createDatabase(databaseIdentifier)
+        }
 
-      await this.createSchemaMigrationsTable()
-      await this.databaseConnection.close()
+        await this.createSchemaMigrationsTable()
+      } finally {
+        await this.databaseConnection.close()
+      }
 
       if (this.args.testing) return this.result
     }

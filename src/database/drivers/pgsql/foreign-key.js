@@ -5,9 +5,9 @@ export default class VelociousDatabaseDriversPgsqlForeignKey {
     this.data = data
   }
 
-  getColumnName = () => digg(this, "data", "COLUMN_NAME")
-  getName = () => digg(this, "data", "CONSTRAINT_NAME")
-  getTableName = () => digg(this, "data", "TABLE_NAME")
-  getReferencedColumnName = () => digg(this, "data", "REFERENCED_COLUMN_NAME")
-  getReferencedTableName = () => digg(this, "data", "REFERENCED_TABLE_NAME")
+  getColumnName = () => digg(this, "data", "column_name")
+  getName = () => digg(this, "data", "constraint_name")
+  getTableName = () => digg(this, "data", "table_name")
+  getReferencedColumnName = () => digg(this, "data", "foreign_column_name")
+  getReferencedTableName = () => digg(this, "data", "foreign_table_name")
 }

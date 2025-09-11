@@ -30,6 +30,12 @@ describe("Cli - Commands - db:create", () => {
           }
         ]
       )
+    } else if (cli.getConfiguration().getDatabaseType() == "pgsql") {
+      expect(result[1]).toEqual(
+        {
+          createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS "schema_migrations" ("version" VARCHAR(255) PRIMARY KEY NOT NULL)'
+        }
+      )
     } else {
       expect(result).toEqual(
         [
