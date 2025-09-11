@@ -11,9 +11,9 @@ export default class VelociousDatabaseConnectionDriversPgsqlSqlCreateDatabase ex
       sqls.push("CREATE EXTENSION IF NOT EXISTS dblink")
 
       const connectArgs = this._driver.connectArgs()
-      const {password, username} = digs(connectArgs, "password", "username")
+      const {password, user} = digs(connectArgs, "password", "user")
 
-      console.log({username})
+      console.log({user})
 
       const port = connectArgs.port || 5432
       const sql = `
@@ -23,7 +23,7 @@ export default class VelociousDatabaseConnectionDriversPgsqlSqlCreateDatabase ex
           IF EXISTS (SELECT FROM ${options.quoteTableName("pg_database")} WHERE ${options.quoteColumnName("datname")} = ${options.quote(databaseName)}) THEN
             RAISE NOTICE 'Database already exists';  -- optional
           ELSE
-            PERFORM dblink_connect('host=localhost port=' || ${port} || ' user=' || ${options.quote(username)} || ' password=' || ${options.quote(password)} || ' dbname=' || current_database());
+            PERFORM dblink_connect('host=localhost port=' || ${port} || ' user=' || ${options.quote(user)} || ' password=' || ${options.quote(password)} || ' dbname=' || current_database());
             PERFORM dblink_exec('CREATE DATABASE ' || ${options.quote(databaseName)});
           END IF;
         END
