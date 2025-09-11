@@ -33,11 +33,13 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   connectArgs() {
     const args = this.getArgs()
     const connectArgs = []
-    const forward = ["database", "host", "password", "username"]
+    const forward = ["database", "host", "password", "port"]
 
     for (const forwardValue of forward) {
       if (forwardValue in args) connectArgs[forwardValue] = digg(args, forwardValue)
     }
+
+    if ("username" in args) connectArgs["user"] = args["username"]
 
     return connectArgs
   }
