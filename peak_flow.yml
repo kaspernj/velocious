@@ -54,7 +54,6 @@ builds:
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
-      - wait-for-it pgsql:5432
       - cd spec/dummy && npx velocious db:create
       - npm test
   build_3:
@@ -62,6 +61,7 @@ builds:
     script:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
+      - wait-for-it postgres:5432
       - cd spec/dummy && npx velocious db:create
       - npm test
   build_4:
