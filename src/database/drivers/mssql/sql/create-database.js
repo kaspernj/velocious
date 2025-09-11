@@ -23,6 +23,6 @@ export default class VelociousDatabaseConnectionDriversMssqlSqlCreateDatabase ex
       sql += " END"
     }
 
-    return sql
+    return [sql]
   }
 }

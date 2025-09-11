@@ -30,24 +30,44 @@ services:
       - 1433
     mem_limit: 4096m
     restart_policy: on-failure
+  mariadb:
+    environment:
+      POSTGRES_USER: peakflow
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: velocious_test
+    image: pgsql:17.6
+    expose:
+      - 5432
+    mem_limit: 4096m
+    restart_policy: on-failure
 builds:
   build_1:
     name: MariaDB
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
-      - cd spec/dummy && npx velocious db:create
       - wait-for-it mariadb:3306
+      - wait-for-it mssql:1433
+      - cd spec/dummy && npx velocious db:create
       - npm test
   build_2:
     name: MS-SQL
     script:
-      - wait-for-it mssql:1433
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
+      - wait-for-it mssql:1433
+      - wait-for-it pgsql:5432
+      - cd spec/dummy && npx velocious db:create
+      - npm test
+  build_2:
+    name: PG-SQL
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
+      - wait-for-it mssql:1433
       - cd spec/dummy && npx velocious db:create
       - npm test
   build_3:
     name: SQLite
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - wait-for-it mssql:1433
       - cd spec/dummy && npx velocious db:create
       - npm test

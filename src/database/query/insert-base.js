@@ -34,7 +34,7 @@ export default class VelociousDatabaseQueryInsertBase {
         if (Object.keys(this.data).length <= 0) {
           sql += lastInsertedSQL
         }
-      } else if (driver.getType() == "mysql") {
+      } else if (driver.getType() == "mysql" || driver.getType() == "pgsql") {
         lastInsertedSQL = ` RETURNING ${driver.quoteColumn(this.returnLastInsertedColumnName)} AS lastInsertID`
       }
     }
