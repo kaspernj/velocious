@@ -16,7 +16,12 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   async connect() {
     const client = new Client(this.connectArgs())
 
-    await client.connect()
+    try {
+      await client.connect()
+    } catch (error) {
+      // Re-throw to recover real stack trace
+      throw new Error(`Connect to Postgres server failed: ${error.message}`)
+    }
 
     this.connection = client
   }
