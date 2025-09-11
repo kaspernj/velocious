@@ -13,6 +13,9 @@ export default class VelociousDatabaseConnectionDriversPgsqlSqlCreateDatabase ex
 
       const connectArgs = this._driver.connectArgs()
       const {password, username} = digs(connectArgs, "password", "username")
+
+      console.log({username})
+
       const port = connectArgs.port || 5432
       const sql = `
         DO
