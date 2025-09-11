@@ -43,7 +43,14 @@ export default class TestRunner {
     }
   }
 
+  isFailed() {
+    return this.failedTests > 0
+  }
+
   async run() {
+    this.failedTests = 0
+    this.successfulTests = 0
+
     await this.importTestFiles()
     await this.runTests(tests, [], 0)
   }
@@ -65,7 +72,10 @@ export default class TestRunner {
 
       try {
         await testData.function(testArgs)
+        this.successfulTests++
       } catch (error) {
+        this.failedTests++
+
         // console.error(`${leftPadding}  Test failed: ${error.message}`)
         console.error(error.stack)
       }

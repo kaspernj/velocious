@@ -9,5 +9,13 @@ export default class VelociousCliCommandsInit extends BaseCommand {
     const testRunner = new TestRunner({configuration: this.configuration, testFiles})
 
     await testRunner.run()
+
+    if (testRunner.isFailed()) {
+      console.error(`Test run failed with ${testRunner.failedTests} failed tests and ${testRunner.successfulTests} successfull`)
+      process.exit(-1)
+    } else {
+      console.log(`Test run succeeded with ${testRunner.successfulTests} successful tests`)
+      process.exit(1)
+    }
   }
 }
