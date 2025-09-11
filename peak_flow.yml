@@ -57,14 +57,14 @@ builds:
       - wait-for-it pgsql:5432
       - cd spec/dummy && npx velocious db:create
       - npm test
-  build_2:
+  build_3:
     name: PG-SQL
     script:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
       - cd spec/dummy && npx velocious db:create
       - npm test
-  build_3:
+  build_4:
     name: SQLite
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
