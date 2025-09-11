@@ -15,6 +15,6 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
 
     sql += ` ${this.getOptions().quoteDatabaseName(databaseName)}`
 
-    return sql
+    return [sql]
   }
 }

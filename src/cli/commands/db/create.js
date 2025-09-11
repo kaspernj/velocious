@@ -24,12 +24,15 @@ export default class DbCreate extends BaseCommand{
       this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
       await this.databaseConnection.connect()
 
-      if (databaseType != "sqlite") {
-        await this.createDatabase(databaseIdentifier)
-      }
+      try {
+        if (databaseType != "sqlite") {
+          await this.createDatabase(databaseIdentifier)
+        }
 
-      await this.createSchemaMigrationsTable()
-      await this.databaseConnection.close()
+        await this.createSchemaMigrationsTable()
+      } finally {
+        await this.databaseConnection.close()
+      }
 
       if (this.args.testing) return this.result
     }
@@ -37,12 +40,14 @@ export default class DbCreate extends BaseCommand{
 
   async createDatabase(databaseIdentifier) {
     const databaseName = digg(this.configuration.getDatabaseConfiguration(), databaseIdentifier, "database")
-    const sql = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
+    const sqls = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
-    if (this.args.testing) {
-      this.result.push({databaseName, sql})
-    } else {
-      await this.databaseConnection.query(sql)
+    for (const sql of sqls) {
+      if (this.args.testing) {
+        this.result.push({databaseName, sql})
+      } else {
+        await this.databaseConnection.query(sql)
+      }
     }
   }
 

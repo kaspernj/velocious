@@ -48,10 +48,19 @@ export default class VelociousDatabaseQuery {
   }
 
   async count() {
+    // Generate count SQL
+    let sql = "COUNT(id)"
+
+    if (this.driver.getType() == "pgsql") sql += "::int"
+
+    sql += " AS count"
+
+
+    // Clone query and execute count
     const countQuery = this.clone()
 
     countQuery._selects = []
-    countQuery.select("COUNT(id) AS count")
+    countQuery.select(sql)
 
     const results = await countQuery._executeQuery()
 

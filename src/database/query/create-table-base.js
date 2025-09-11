@@ -37,6 +37,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       let maxlength = column.getMaxLength()
       let type = column.getType().toUpperCase()
 
+      if (type == "DATETIME" && databaseType == "pgsql") {
+        type = "TIMESTAMP"
+      }
+
       if (type == "STRING") {
         type = "VARCHAR"
         maxlength ||= 255
@@ -50,6 +54,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         type = "INTEGER"
       }
 
+      if (databaseType == "pgsql" && column.getAutoIncrement() && column.getPrimaryKey()) {
+        type = "SERIAL"
+      }
+
       if (columnCount > 1) sql += ", "
 
       sql += `${options.quoteColumnName(column.getName())} ${type}`
@@ -59,6 +67,12 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       if (column.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
         if (databaseType == "mssql") {
           sql += " IDENTITY"
+        } else if (databaseType == "pgsql") {
+          if (column.getAutoIncrement() && column.getPrimaryKey()) {
+            // Do nothing
+          } else {
+            throw new Error("pgsql auto increment must be primary key")
+          }
         } else {
           sql += " AUTO_INCREMENT"
         }
@@ -83,7 +97,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           throw new Error(`Unknown foreign key type given: ${column.getForeignKey()} (${typeof column.getForeignKey()})`)
         }
 
-        sql += ` REFERENCES ${driver.quoteTable(foreignKeyTable)}(${driver.quoteColumn(foreignKeyColumn)})`
+        sql += ` REFERENCES ${options.quoteTableName(foreignKeyTable)}(${options.quoteColumnName(foreignKeyColumn)})`
       }
     }
 
@@ -98,7 +112,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         sql += " INDEX"
 
         if (index.getName()) {
-          sql += ` ${index.getName()}`
+          sql += ` ${options.quoteIndexName(index.getName())}`
         }
 
         sql += " ("
