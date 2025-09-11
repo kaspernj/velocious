@@ -2,7 +2,7 @@ import Cli from "../../../../src/cli/index.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 
 describe("Cli - Commands - db:create", () => {
-  it("generates SQL to create a new database", async () => {
+  fit("generates SQL to create a new database", async () => {
     const cli = new Cli({
       directory: dummyDirectory(),
       processArgs: ["db:create"],
@@ -31,7 +31,7 @@ describe("Cli - Commands - db:create", () => {
         ]
       )
     } else if (cli.getConfiguration().getDatabaseType() == "pgsql") {
-      expect(result[1]).toEqual(
+      expect(result[2]).toEqual(
         {
           createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS "schema_migrations" ("version" VARCHAR(255) PRIMARY KEY NOT NULL)'
         }

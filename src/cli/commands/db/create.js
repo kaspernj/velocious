@@ -21,6 +21,8 @@ export default class DbCreate extends BaseCommand{
         delete this.newConfiguration.sqlConfig.database
       }
 
+      console.log({newConfiguration: this.newConfiguration})
+
       this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
       await this.databaseConnection.connect()
 
