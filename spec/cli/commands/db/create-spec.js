@@ -2,7 +2,7 @@ import Cli from "../../../../src/cli/index.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 
 describe("Cli - Commands - db:create", () => {
-  fit("generates SQL to create a new database", async () => {
+  it("generates SQL to create a new database", async () => {
     const cli = new Cli({
       directory: dummyDirectory(),
       processArgs: ["db:create"],
