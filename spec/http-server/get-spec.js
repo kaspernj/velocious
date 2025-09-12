@@ -23,7 +23,7 @@ describe("HttpServer", () => {
 
         expect(response.status).toEqual(404)
         expect(response.statusText).toEqual("Not Found")
-        expect(text).toEqual("Not found!\n")
+        expect(text).toEqual("Path not found: /tasks/doesnt-exist\n")
       }
     })
   })

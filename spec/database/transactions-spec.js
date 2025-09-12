@@ -1,6 +1,7 @@
 import Dummy from "../dummy/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Task from "../dummy/src/models/task.js"
+import {ValidationError} from "../../src/database/record/index.js"
 
 describe("database - transactions", () => {
   it("supports transactions and savepoints", async () => {
@@ -22,7 +23,8 @@ describe("database - transactions", () => {
                 throw new Error("Didn't expect to succeed")
               })
             } catch (error) {
-              expect(error.message).toEqual("Validation failed: Name can't be blank")
+              expect(error).toBeInstanceOf(ValidationError)
+              expect(error.message).toEqual("Name can't be blank")
             }
           })
         })

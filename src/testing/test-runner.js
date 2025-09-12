@@ -1,3 +1,4 @@
+import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import Application from "../../src/application.js"
 import RequestClient from "./request-client.js"
 import {tests} from "./test.js"
@@ -98,7 +99,7 @@ export default class TestRunner {
         this.failedTests++
 
         // console.error(`${leftPadding}  Test failed: ${error.message}`)
-        console.error(error.stack)
+        console.error(addTrackedStackToError(error))
       }
     }
 

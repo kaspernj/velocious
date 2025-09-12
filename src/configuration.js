@@ -1,5 +1,6 @@
 import {digg} from "diggerize"
 import restArgsError from "./utils/rest-args-error.js"
+import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
 export default class VelociousConfiguration {
   static current(throwError = true) {
@@ -153,8 +154,11 @@ export default class VelociousConfiguration {
 
   async withConnections(callback) {
     const dbs = {}
+    const stack = Error().stack
     const actualCallback = async () => {
-      return await callback(dbs)
+      await withTrackedStack(stack, async () => {
+        return await callback(dbs)
+      })
     }
 
     let runRequest = actualCallback

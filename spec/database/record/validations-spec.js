@@ -1,12 +1,13 @@
 import Dummy from "../../dummy/index.js"
 import Task from "../../dummy/src/models/task.js"
+import {ValidationError} from "../../../src/database/record/index.js"
 
 describe("Record - validations", () => {
   it("raises validations if trying to create an invalid record because of a presence validation", async () => {
     await Dummy.run(async () => {
       const task = new Task({name: " "})
 
-      await expectAsync(task.save()).toBeRejectedWith(new Error("Validation failed: Name can't be blank"))
+      await expectAsync(task.save()).toBeRejectedWith(new ValidationError("Name can't be blank"))
     })
   })
 
@@ -21,7 +22,8 @@ describe("Record - validations", () => {
 
         throw new Error("Task 2 save didn't fail")
       } catch (error) {
-        expect(error.message).toEqual("Validation failed: Name has already been taken")
+        expect(error).toBeInstanceOf(ValidationError)
+        expect(error.message).toEqual("Name has already been taken")
       }
     })
   })

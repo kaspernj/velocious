@@ -1,5 +1,6 @@
 import {digs} from "diggerize"
 import ejs from "ejs"
+import {incorporate} from "incorporator"
 import * as inflection from "inflection"
 import {Logger} from "./logger.js"
 import restArgsError from "./utils/rest-args-error.js"
@@ -29,6 +30,18 @@ export default class VelociousController {
     this._response = response
     this.viewParams = {}
     this._viewPath = viewPath
+  }
+
+  getAction() {
+    return this._action
+  }
+
+  getParams() {
+    return this._params
+  }
+
+  getRequest() {
+    return this._request
   }
 
   async _runBeforeCallbacks() {
@@ -88,8 +101,9 @@ export default class VelociousController {
     return new Promise((resolve, reject) => {
       const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
       const {viewParams} = digs(this, "viewParams")
+      const actualViewParams = incorporate({controller: this}, viewParams)
 
-      ejs.renderFile(viewPath, viewParams, {}, (err, str) => {
+      ejs.renderFile(viewPath, actualViewParams, {}, (err, str) => {
         if (err) {
           reject(err)
         } else {
