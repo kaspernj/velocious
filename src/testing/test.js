@@ -153,4 +153,20 @@ function it(description, arg1, arg2) {
   currentTest.tests[description] = {args: newTestArgs, function: testFunction}
 }
 
-export {describe, expect, it, tests}
+function fit(description, arg1, arg2) {
+  let testArgs, testFunction
+
+  if (typeof arg1 == "function") {
+    testFunction = arg1
+    testArgs = {focus: true}
+  } else if (typeof arg2 == "function") {
+    testFunction = arg2
+    testArgs = Object.assign({focus: true}, arg1)
+  } else {
+    throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
+  }
+
+  return it(description, testArgs, testFunction)
+}
+
+export {describe, expect, fit, it, tests}
