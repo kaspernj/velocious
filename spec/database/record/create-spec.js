@@ -22,6 +22,9 @@ describe("Record - create", () => {
       expect(project.nameEn()).toEqual("Test project")
       expect(project.createdAt()).toBeInstanceOf(Date)
       expect(project.updatedAt()).toBeInstanceOf(Date)
+
+      // 'name' is not a column but rather a column on the translation data model.
+      expect(() => project.readColumn("name")).toThrowError("No such attribute or not selected Project#name")
     })
   })
 

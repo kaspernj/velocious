@@ -11,6 +11,7 @@ describe("Record - find", () => {
       const foundTask = await Task.find(task.id())
 
       expect(foundTask.readAttribute("name")).toEqual("Test task")
+      expect(foundTask.readColumn("name")).toEqual("Test task")
     })
   })
 
