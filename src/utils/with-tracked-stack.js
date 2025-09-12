@@ -1,8 +1,15 @@
 import {AsyncLocalStorage} from "async_hooks"
 
-const asyncLocalStorage = new AsyncLocalStorage()
+let asyncLocalStorage
+
+if (AsyncLocalStorage) {
+  asyncLocalStorage = new AsyncLocalStorage()
+}
 
 function addTrackedStackToError(error) {
+  // Not supported
+  if (!asyncLocalStorage) return
+
   const parentStacks = asyncLocalStorage.getStore() || []
   const additionalStackLines = []
 
@@ -14,8 +21,6 @@ function addTrackedStackToError(error) {
 
   // Replace the error message on the first line with this string
   error.stack += "\n" + additionalStackLines.join("\n")
-
-  throw error
 }
 
 async function withTrackedStack(arg1, arg2) {
@@ -28,6 +33,9 @@ async function withTrackedStack(arg1, arg2) {
     callback = arg1
     stack = Error().stack
   }
+
+  // Not supported
+  if (!asyncLocalStorage) return await callback()
 
   const parentStacks = asyncLocalStorage.getStore() || []
   const additionalStackLines = ["    [WITH TRACKED STACK]"]
@@ -46,7 +54,7 @@ async function withTrackedStack(arg1, arg2) {
   const newStacks = [additionalStackLines, ...parentStacks]
 
   await asyncLocalStorage.run(newStacks, async () => {
-    await callback()
+    return await callback()
   })
 }
 
