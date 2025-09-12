@@ -1,6 +1,6 @@
 import {digg} from "diggerize"
 import {EventEmitter} from "events"
-import Incorporator from "incorporator"
+import {incorporate} from "incorporator"
 import ParamsToObject from "./params-to-object.js"
 import RequestBuffer from "./request-buffer/index.js"
 
@@ -33,9 +33,8 @@ export default class VelociousHttpServerClientRequestParser {
 
     const paramsToObject = new ParamsToObject(unorderedParams)
     const newParams = paramsToObject.toObject()
-    const incorporator = new Incorporator({objects: [this.params, newParams]})
 
-    incorporator.merge()
+    incorporate(this.params, newParams)
   }
 
   feed = (data) => this.requestBuffer.feed(data)
@@ -82,9 +81,7 @@ export default class VelociousHttpServerClientRequestParser {
   getProtocol = () => this._getHostMatch()?.protocol
 
   requestDone = () => {
-    const incorporator = new Incorporator({objects: [this.params, this.requestBuffer.params]})
-
-    incorporator.merge()
+    incorporate(this.params, this.requestBuffer.params)
 
     this.state = "done"
     this.events.emit("done")

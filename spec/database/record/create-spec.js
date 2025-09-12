@@ -1,6 +1,7 @@
 import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
+import {ValidationError} from "../../../src/database/record/index.js"
 
 describe("Record - create", () => {
   it("creates a new simple record with relationships and translations", async () => {
@@ -49,7 +50,8 @@ describe("Record - create", () => {
 
         throw new Error("Didnt expect to succeed")
       } catch (error) {
-        expect(error.message).toEqual("Validation failed: Name can't be blank")
+        expect(error).toBeInstanceOf(ValidationError)
+        expect(error.message).toEqual("Name can't be blank")
       }
 
       const projectsCount = await Project.count()

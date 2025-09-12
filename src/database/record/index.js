@@ -10,6 +10,24 @@ import Query from "../query/index.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 
+class ValidationError extends Error {
+  getModel() {
+    return this._model
+  }
+
+  setModel(model) {
+    this._model = model
+  }
+
+  getValidationErrors() {
+    return this._validationErrors
+  }
+
+  setValidationErrors(validationErrors) {
+    this._validationErrors = validationErrors
+  }
+}
+
 class VelociousDatabaseRecord {
   static validatorTypes() {
     if (!this._validatorTypes) this._validatorTypes = {}
@@ -883,7 +901,12 @@ class VelociousDatabaseRecord {
     }
 
     if (Object.keys(this._validationErrors).length > 0) {
-      throw new Error(`Validation failed: ${this.fullErrorMessages().join(". ")}`)
+      const validationError = new ValidationError(this.fullErrorMessages().join(". "))
+
+      validationError.setValidationErrors(this._validationErrors)
+      validationError.setModel(this)
+
+      throw validationError
     }
   }
 
@@ -913,4 +936,5 @@ class VelociousDatabaseRecord {
 VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
 VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
 
+export {ValidationError}
 export default VelociousDatabaseRecord
