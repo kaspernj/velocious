@@ -168,7 +168,7 @@ export default class VelociousDatabaseMigrator {
       await db.withDisabledForeignKeys(async () => {
         for (const table of await db.getTables()) {
           this.logger.log(`Dropping table ${table.getName()}`)
-          await db.dropTable(table.getName())
+          await db.dropTable(table.getName(), {cascade: true})
         }
       })
     }

@@ -1,6 +1,7 @@
 import CreateIndexBase from "./create-index-base.js"
 import * as inflection from "inflection"
 import QueryBase from "./base.js"
+import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   constructor({driver, ifNotExists, indexInCreateTable = true, tableData}) {
@@ -79,7 +80,17 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       }
 
       if (typeof column.getDefault() == "function") {
-        sql += ` DEFAULT (${column.getDefault()()})`
+        const defaultValue = column.getDefault()()
+
+        sql += ` DEFAULT (`
+
+        if (databaseType == "pgsql" && defaultValue == "UUID()") {
+          sql += "gen_random_uuid()"
+        } else {
+          sql += defaultValue
+        }
+
+        sql += ")"
       } else if (column.getDefault()) {
         sql += ` DEFAULT ${options.quote(column.getDefault())}`
       }
@@ -125,6 +136,24 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
         sql += ")"
       }
+
+      for (const column of tableData.getColumns()) {
+        if (!column.getIndex()) continue
+
+        const indexName = `index_on_${column.getName()}`
+
+        sql += ","
+
+        const {unique, ...restIndexArgs} = column.getIndex()
+
+        restArgsError(restIndexArgs)
+
+        if (unique) {
+          sql += " UNIQUE"
+        }
+
+        sql += ` INDEX ${options.quoteIndexName(indexName)} (${options.quoteColumnName(column.getName())})`
+      }
     }
 
     sql += ")"
@@ -142,6 +171,26 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           driver: this.getDriver(),
           tableName: tableData.getName(),
           unique: index.getUnique()
+        }
+        const sql = new CreateIndexBase(createIndexArgs).toSql()
+
+        sqls.push(sql)
+      }
+
+      for (const column of tableData.getColumns()) {
+        if (!column.getIndex()) continue
+
+        const indexName = `index_on_${column.getName()}`
+        const {unique, ...restIndexArgs} = column.getIndex()
+
+        restArgsError(restIndexArgs)
+
+        const createIndexArgs = {
+          columns: [column.getName()],
+          driver: this.getDriver(),
+          name: indexName,
+          tableName: tableData.getName(),
+          unique
         }
         const sql = new CreateIndexBase(createIndexArgs).toSql()
 
