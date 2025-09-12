@@ -45,8 +45,9 @@ builds:
     name: MariaDB
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
-      - wait-for-it mariadb:3306
       - wait-for-it mssql:1433
+      - wait-for-it mariadb:3306
+      - sleep 5
       - cd spec/dummy && npx velocious db:create
       - npm test
   build_2:
@@ -54,6 +55,7 @@ builds:
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
+      - sleep 5
       - cd spec/dummy && npx velocious db:create
       - npm test
   build_3:
@@ -62,6 +64,7 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
       - wait-for-it postgres:5432
+      - sleep 5
       - cd spec/dummy && npx velocious db:create
       - npm test
   build_4:
@@ -69,5 +72,6 @@ builds:
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
+      - sleep 5
       - cd spec/dummy && npx velocious db:create
       - npm test

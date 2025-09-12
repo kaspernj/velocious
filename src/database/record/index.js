@@ -330,7 +330,13 @@ class VelociousDatabaseRecord {
     return record
   }
 
+  static setPrimaryKey(primaryKey) {
+    this._primaryKey = primaryKey
+  }
+
   static primaryKey() {
+    if (this._primaryKey) return this._primaryKey
+
     return "id"
   }
 
