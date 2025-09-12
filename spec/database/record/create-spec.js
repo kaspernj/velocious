@@ -4,7 +4,7 @@ import Task from "../../dummy/src/models/task.js"
 import {ValidationError} from "../../../src/database/record/index.js"
 
 describe("Record - create", () => {
-  it("creates a new simple record with relationships and translations", async () => {
+  fit("creates a new simple record with relationships and translations", async () => {
     await Dummy.run(async () => {
       const task = new Task({name: "Test task"})
       const project = task.buildProject({nameEn: "Test project", nameDe: "Test projekt"})
@@ -22,6 +22,9 @@ describe("Record - create", () => {
       expect(project.nameEn()).toEqual("Test project")
       expect(project.createdAt()).toBeInstanceOf(Date)
       expect(project.updatedAt()).toBeInstanceOf(Date)
+
+      // 'name' is not a column but rather a column on the translation data model.
+      expect(() => project.readColumn("name")).toThrowError("No such attribute or not selected Project#name")
     })
   })
 

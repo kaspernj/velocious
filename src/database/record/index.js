@@ -768,13 +768,18 @@ class VelociousDatabaseRecord {
 
   readAttribute(attributeName) {
     const attributeNameUnderscore = inflection.underscore(attributeName)
-    const column = this.constructor.getColumns().find((column) => column.getName() == attributeNameUnderscore)
+
+    return this.readColumn(attributeNameUnderscore)
+  }
+
+  readColumn(attributeName) {
+    const column = this.constructor.getColumns().find((column) => column.getName() == attributeName)
     let result
 
-    if (attributeNameUnderscore in this._changes) {
-      result = this._changes[attributeNameUnderscore]
-    } else if (attributeNameUnderscore in this._attributes) {
-      result = this._attributes[attributeNameUnderscore]
+    if (attributeName in this._changes) {
+      result = this._changes[attributeName]
+    } else if (attributeName in this._attributes) {
+      result = this._attributes[attributeName]
     } else if (this.isPersisted()) {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
