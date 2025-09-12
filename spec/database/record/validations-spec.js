@@ -11,6 +11,14 @@ describe("Record - validations", () => {
     })
   })
 
+  it("raises validations if trying to create an invalid record with a blank value because of a presence validation", async () => {
+    await Dummy.run(async () => {
+      const task = new Task({name: null})
+
+      await expectAsync(task.save()).toBeRejectedWith(new ValidationError("Name can't be blank"))
+    })
+  })
+
   it("raises validations if trying to create an invalid record because of a uniqueness validation", async () => {
     await Dummy.run(async () => {
       await Task.create({name: "Task 1"})

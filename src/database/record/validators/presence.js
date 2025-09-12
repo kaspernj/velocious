@@ -2,7 +2,7 @@ import Base from "./base.js"
 
 export default class VelociousDatabaseRecordValidatorsPresence extends Base {
   validate({model, attributeName}) {
-    const attributeValue = model.readAttribute(attributeName).trim()
+    const attributeValue = model.readAttribute(attributeName)?.trim()
 
     if (!attributeValue) {
       if (!(attributeName in model._validationErrors)) model._validationErrors[attributeName] = []
