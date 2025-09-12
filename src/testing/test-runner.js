@@ -39,7 +39,7 @@ export default class TestRunner {
 
   async importTestFiles() {
     for (const testFile of this.testFiles) {
-      const importTestFile = await import(testFile)
+      await import(testFile)
     }
   }
 
@@ -50,9 +50,29 @@ export default class TestRunner {
   async run() {
     this.failedTests = 0
     this.successfulTests = 0
-
     await this.importTestFiles()
+    this.onlyFocussed = this.areAnyTestsFocussed(tests)
     await this.runTests(tests, [], 0)
+  }
+
+  areAnyTestsFocussed(tests) {
+    for (const testDescription in tests.tests) {
+      const testData = tests.tests[testDescription]
+      const testArgs = Object.assign({}, testData.args)
+
+      if (testArgs.focus) {
+        return true
+      }
+    }
+
+    for (const subDescription in tests.subs) {
+      const subTest = tests.subs[subDescription]
+      const result = this.areAnyTestsFocussed(subTest)
+
+      if (result) return true
+    }
+
+    return false
   }
 
   async runTests(tests, descriptions, indentLevel) {
@@ -61,7 +81,8 @@ export default class TestRunner {
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
       const testArgs = Object.assign({}, testData.args)
-      const testName = descriptions.concat([`it ${testDescription}`]).join(" - ")
+
+      if (this.onlyFocussed && !testArgs.focus) continue
 
       if (testArgs.type == "request") {
         testArgs.application = await this.application()
@@ -86,9 +107,10 @@ export default class TestRunner {
         const subTest = tests.subs[subDescription]
         const newDecriptions = descriptions.concat([subDescription])
 
-        console.log(`${leftPadding}${subDescription}`)
-
-        await this.runTests(subTest, newDecriptions, indentLevel + 1)
+        if (!this.onlyFocussed || this.areAnyTestsFocussed(subTest)) {
+          console.log(`${leftPadding}${subDescription}`)
+          await this.runTests(subTest, newDecriptions, indentLevel + 1)
+        }
       }
     })
   }
