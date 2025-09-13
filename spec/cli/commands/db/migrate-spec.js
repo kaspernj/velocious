@@ -3,7 +3,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
-  fit("runs migrations", async () => {
+  it("runs migrations", async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -42,7 +42,9 @@ describe("Cli - Commands - db:migrate", () => {
       const tokenColumn = await authenticationTokensTable.getColumnByName("token")
       const tokenIndex = await tokenColumn.getIndexByName("index_on_token")
 
-      console.log({tokenIndex})
+      expect(tokenIndex.getName()).toEqual("index_on_token")
+      expect(tokenIndex.isPrimaryKey()).toBeFalse()
+      expect(tokenIndex.isUnique()).toBeTrue()
 
       for (const db of Object.values(dbs)) {
         const schemaMigrations = await db.query("SELECT * FROM schema_migrations ORDER BY version")

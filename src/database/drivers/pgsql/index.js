@@ -91,8 +91,6 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   async query(sql) {
     let response
 
-    console.log(sql)
-
     try {
       response = await this.connection.query(sql)
     } catch (error) {

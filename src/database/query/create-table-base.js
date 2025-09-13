@@ -198,6 +198,6 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       }
     }
 
-    return [sql]
+    return sqls
   }
 }

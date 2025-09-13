@@ -1,4 +1,5 @@
 import BaseColumn from "../base-column.js"
+import ColumnsIndex from "./columns-index.js"
 import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
@@ -11,7 +12,7 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
   async getIndexes() {
     const options = this.getOptions()
 
-    const indexes = await this.table.getDriver().query(`
+    const indexesRows = await this.table.getDriver().query(`
       SELECT
         pg_attribute.attname AS column_name,
         pg_index.indexrelid::regclass as index_name,
@@ -23,12 +24,19 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
       JOIN pg_class ON pg_class.oid = pg_index.indrelid
       JOIN pg_attribute ON pg_attribute.attrelid = pg_class.oid AND pg_attribute.attnum = ANY(pg_index.indkey)
       WHERE
+        pg_attribute.attname = ${options.quote(this.getName())} AND
         pg_class.relname = ${options.quote(this.getTable().getName())}
     `)
 
-    console.log({indexes})
+    const indexes = []
 
-    throw new Error("stub")
+    for (const indexRow of indexesRows) {
+      const columnsIndex = new ColumnsIndex(this.getTable(), indexRow)
+
+      indexes.push(columnsIndex)
+    }
+
+    return indexes
   }
 
   getName() {
