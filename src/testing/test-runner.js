@@ -67,10 +67,24 @@ export default class TestRunner {
     await this.importTestFiles()
     await this.analyzeTests(tests)
     this._onlyFocussed = this.anyTestsFocussed
+
+    const testingConfigPath = this.configuration.getTesting()
+
+    if (testingConfigPath) {
+      await import(testingConfigPath)
+    }
   }
 
   async run() {
-    await this.runTests(tests, [], 0)
+    await this.configuration.ensureConnections(async () => {
+      await this.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
+      })
+    })
   }
 
   analyzeTests(tests) {
@@ -102,8 +116,10 @@ export default class TestRunner {
     return {anyTestsFocussed: anyTestsFocussedFound}
   }
 
-  async runTests(tests, descriptions, indentLevel) {
+  async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {
     const leftPadding = " ".repeat(indentLevel * 2)
+    const newAfterEaches = [...afterEaches, ...tests.afterEaches]
+    const newBeforeEaches = [...beforeEaches, ...tests.beforeEaches]
 
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
@@ -119,6 +135,10 @@ export default class TestRunner {
       console.log(`${leftPadding}it ${testDescription}`)
 
       try {
+        for (const beforeEachData of newBeforeEaches) {
+          await beforeEachData.callback()
+        }
+
         await testData.function(testArgs)
         this._successfulTests++
       } catch (error) {
@@ -132,19 +152,27 @@ export default class TestRunner {
         for (const stackLine of stackLines) {
           console.error(`${leftPadding}  ${stackLine}`)
         }
+      } finally {
+        for (const afterEachData of newAfterEaches) {
+          await afterEachData.callback()
+        }
       }
     }
 
-    await this.configuration.withConnections(async () => {
-      for (const subDescription in tests.subs) {
-        const subTest = tests.subs[subDescription]
-        const newDecriptions = descriptions.concat([subDescription])
+    for (const subDescription in tests.subs) {
+      const subTest = tests.subs[subDescription]
+      const newDecriptions = descriptions.concat([subDescription])
 
-        if (!this._onlyFocussed || subTest.anyTestsFocussed) {
-          console.log(`${leftPadding}${subDescription}`)
-          await this.runTests(subTest, newDecriptions, indentLevel + 1)
-        }
+      if (!this._onlyFocussed || subTest.anyTestsFocussed) {
+        console.log(`${leftPadding}${subDescription}`)
+        await this.runTests({
+          afterEaches: newAfterEaches,
+          beforeEaches: newBeforeEaches,
+          tests: subTest,
+          descriptions: newDecriptions,
+          indentLevel: indentLevel + 1
+        })
       }
-    })
+    }
   }
 }

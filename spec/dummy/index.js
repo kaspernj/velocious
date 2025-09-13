@@ -15,7 +15,7 @@ export default class Dummy {
   static async prepare() {
     dummyConfiguration.setCurrent()
 
-    await dummyConfiguration.withConnections(async () => {
+    await dummyConfiguration.ensureConnections(async () => {
       await this.runMigrations()
 
       if (!dummyConfiguration.isInitialized()) {
@@ -38,7 +38,7 @@ export default class Dummy {
   }
 
   async run(callback) {
-    await dummyConfiguration.withConnections(async () => {
+    await dummyConfiguration.ensureConnections(async () => {
       await Dummy.prepare()
       await this.start()
 

@@ -12,7 +12,7 @@ export default class DbDrop extends BaseCommand {
 
     this.migrator = new Migrator({configuration: this.configuration})
 
-    await this.configuration.withConnections(async () => {
+    await this.configuration.ensureConnections(async () => {
       await this.migrator.dropDatabase()
     })
   }

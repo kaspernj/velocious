@@ -1,10 +1,12 @@
 import Dummy from "../../dummy/index.js"
+import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - destroy", () => {
   it("destroys a record", async () => {
     await Dummy.run(async () => {
-      const task = new Task({name: "Test task"})
+      const project = await Project.create()
+      const task = new Task({name: "Test task", project})
 
       await task.save()
       await task.destroy()
@@ -17,8 +19,9 @@ describe("Record - destroy", () => {
 
   it("destroys all records in a collection", async () => {
     await Dummy.run(async () => {
-      const task1 = await Task.create({name: "Test task 1"})
-      const task2 = await Task.create({name: "Test task 2"})
+      const project = await Project.create()
+      const task1 = await Task.create({name: "Test task 1", project})
+      const task2 = await Task.create({name: "Test task 2", project})
 
       await Task.where({id: task1.id()}).destroyAll()
 

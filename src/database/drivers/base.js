@@ -135,16 +135,7 @@ export default class VelociousDatabaseDriversBase {
 
     if (this._transactionsCount == 0) {
       this.logger.debug("Start transaction")
-      this._transactionsCount++
-
-      try {
-        await this.startTransaction()
-      } catch (error) {
-        this._transactionsCount--
-
-        throw error
-      }
-
+      await this.startTransaction()
       transactionStarted = true
     } else {
       this.logger.debug("Start savepoint", savePointName)
@@ -165,7 +156,6 @@ export default class VelociousDatabaseDriversBase {
       if (transactionStarted) {
         this.logger.debug("Commit transaction")
         await this.commitTransaction()
-        this._transactionsCount--
       }
     } catch (error) {
       this.logger.debug("Transaction error", error.message)
@@ -178,7 +168,6 @@ export default class VelociousDatabaseDriversBase {
       if (transactionStarted) {
         this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
-        this._transactionsCount--
       }
 
       throw error
@@ -188,15 +177,18 @@ export default class VelociousDatabaseDriversBase {
   }
 
   async startTransaction() {
-    return await this.query("BEGIN TRANSACTION")
+    await this.query("BEGIN TRANSACTION")
+    this._transactionsCount++
   }
 
   async commitTransaction() {
     await this.query("COMMIT")
+    this._transactionsCount--
   }
 
   async rollbackTransaction() {
     await this.query("ROLLBACK")
+    this._transactionsCount--
   }
 
   generateSavePointName() {

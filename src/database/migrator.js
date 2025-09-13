@@ -44,7 +44,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   async migrateFiles(files, importCallback) {
-    await this.configuration.withConnections(async () => {
+    await this.configuration.ensureConnections(async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,
@@ -90,7 +90,7 @@ export default class VelociousDatabaseMigrator {
       .filter((migration) => Boolean(migration))
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
-    await this.configuration.withConnections(async () => {
+    await this.configuration.ensureConnections(async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,

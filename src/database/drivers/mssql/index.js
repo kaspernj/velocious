@@ -184,6 +184,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     this._currentTransaction = new mssql.Transaction(this.connection)
 
     await this._currentTransaction.begin()
+    this._transactionsCount++
   }
 
   async commitTransaction() {
@@ -191,6 +192,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
     await this._currentTransaction.commit()
     this._currentTransaction = null
+    this._transactionsCount--
   }
 
   async rollbackTransaction() {
@@ -199,6 +201,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     await this._currentTransaction.rollback()
 
     this._currentTransaction = null
+    this._transactionsCount--
   }
 
   async startSavePoint(savePointName) {

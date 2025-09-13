@@ -1,29 +1,33 @@
 import Dummy from "../../dummy/index.js"
 import Task from "../../dummy/src/models/task.js"
 import {ValidationError} from "../../../src/database/record/index.js"
+import Project from "../../dummy/src/models/project.js"
 
 describe("Record - validations", () => {
   it("raises validations if trying to create an invalid record because of a presence validation", async () => {
     await Dummy.run(async () => {
-      const task = new Task({name: " "})
+      const project = await Project.create()
+      const task = new Task({name: " ", project})
 
-      await expectAsync(task.save()).toBeRejectedWith(new ValidationError("Name can't be blank"))
+      await expect(async () => task.save()).toThrowError(new ValidationError("Name can't be blank"))
     })
   })
 
   it("raises validations if trying to create an invalid record with a blank value because of a presence validation", async () => {
     await Dummy.run(async () => {
-      const task = new Task({name: null})
+      const project = await Project.create()
+      const task = new Task({name: null, project})
 
-      await expectAsync(task.save()).toBeRejectedWith(new ValidationError("Name can't be blank"))
+      await expect(async () => task.save()).toThrowError(new ValidationError("Name can't be blank"))
     })
   })
 
   it("raises validations if trying to create an invalid record because of a uniqueness validation", async () => {
     await Dummy.run(async () => {
-      await Task.create({name: "Task 1"})
+      const project = await Project.create()
+      await Task.create({name: "Task 1", project})
 
-      const task2 = await Task.create({name: "Task 2"})
+      const task2 = await Task.create({name: "Task 2", project})
 
       try {
         await task2.update({name: "Task 1"})

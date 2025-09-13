@@ -161,7 +161,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   async startTransaction() {
-    return await this.query("START TRANSACTION")
+    await this.query("START TRANSACTION")
+    this._transactionsCount++
   }
 
   updateSql({conditions, data, tableName}) {

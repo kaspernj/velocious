@@ -52,7 +52,7 @@ export default new Configuration({
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
     const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
 
-    await configuration.withConnections(async () => {
+    await configuration.ensureConnections(async () => {
       await initializerFromRequireContext.initialize({configuration})
     })
   },

@@ -1,6 +1,6 @@
 import {digg} from "diggerize"
 import restArgsError from "./utils/rest-args-error.js"
-import {withTrackedStack} from "./utils/with-tracked-stack.js"
+import {addTrackedStackToError, withTrackedStack} from "./utils/with-tracked-stack.js"
 
 export default class VelociousConfiguration {
   static current(throwError = true) {
@@ -9,7 +9,7 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({cors, database, debug, directory, environment, initializeModels, locale, localeFallbacks, locales, ...restArgs}) {
+  constructor({cors, database, debug, directory, environment, initializeModels, locale, localeFallbacks, locales, testing, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -24,6 +24,7 @@ export default class VelociousConfiguration {
     this.localeFallbacks = localeFallbacks
     this.locales = locales
     this.modelClasses = {}
+    this._testing = testing
   }
 
   getDatabaseConfiguration() {
@@ -105,6 +106,8 @@ export default class VelociousConfiguration {
     return modelClass
   }
 
+  getTesting() { return this._testing }
+
   initializeDatabasePool(identifier = "default") {
     if (!this.database) throw new Error("No 'database' was given")
     if (this.databasePools[identifier]) throw new Error("DatabasePool has already been initialized")
@@ -182,13 +185,31 @@ export default class VelociousConfiguration {
     await runRequest()
   }
 
-  async getCurrentConnections() {
+  getCurrentConnections() {
     const dbs = {}
 
     for (const identifier of this.getDatabaseIdentifiers()) {
-      dbs[identifier] = this.getDatabasePool(identifier).getCurrentConnection()
+      try {
+        dbs[identifier] = this.getDatabasePool(identifier).getCurrentConnection()
+      } catch (error) {
+        if (error.message == "ID hasn't been set for this async context") {
+          // Ignore
+        } else {
+          throw error
+        }
+      }
     }
 
     return dbs
+  }
+
+  async ensureConnections(callback) {
+    let dbs = this.getCurrentConnections()
+
+    if (Object.keys(dbs).length > 0) {
+      await callback(dbs)
+    } else {
+      await this.withConnections(callback)
+    }
   }
 }

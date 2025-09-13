@@ -15,7 +15,7 @@ describe("Cli - Commands - db:migrate", () => {
 
     let defaultDatabaseType, defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
 
-    await cli.configuration.withConnections(async (dbs) => {
+    await cli.configuration.ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
 
       const tableNames = ["accounts", "authentication_tokens", "tasks", "project_translations", "projects", "schema_migrations", "users"]

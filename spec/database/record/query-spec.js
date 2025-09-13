@@ -1,4 +1,5 @@
 import Dummy from "../../dummy/index.js"
+import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - query", () => {
@@ -38,9 +39,10 @@ describe("Record - query", () => {
   it("finds the first record", async () => {
     await Dummy.run(async () => {
       const taskIDs = []
+      const project = await Project.create()
 
       for (let i = 0; i < 5; i++) {
-        const task = await Task.create({name: `Task ${i}`})
+        const task = await Task.create({name: `Task ${i}`, project})
 
         taskIDs.push(task.id())
       }
@@ -54,9 +56,10 @@ describe("Record - query", () => {
   it("finds the last record", async () => {
     await Dummy.run(async () => {
       const taskIDs = []
+      const project = await Project.create()
 
       for (let i = 0; i < 5; i++) {
-        const task = await Task.create({name: `Task ${i}`})
+        const task = await Task.create({name: `Task ${i}`, project})
 
         taskIDs.push(task.id())
       }
@@ -70,9 +73,10 @@ describe("Record - query", () => {
   it("counts the records", async () => {
     await Dummy.run(async () => {
       const taskIDs = []
+      const project = await Project.create()
 
       for (let i = 0; i < 5; i++) {
-        const task = await Task.create({name: `Task ${i}`})
+        const task = await Task.create({name: `Task ${i}`, project})
 
         taskIDs.push(task.id())
       }
