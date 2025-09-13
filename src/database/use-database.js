@@ -14,7 +14,7 @@ const loadMigrations = function loadMigrations({migrationsRequireContext, ...res
     instance.running = true
 
     try {
-      await Configuration.current().withConnections(async () => {
+      await Configuration.current().ensureConnections(async () => {
         const migrator = new Migrator({configuration: Configuration.current()})
 
         await migrator.prepare()

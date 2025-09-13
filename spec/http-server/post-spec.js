@@ -4,7 +4,7 @@ import querystring from "querystring"
 import Dummy from "../dummy/index.js"
 import Project from "../dummy/src/models/project.js"
 
-describe("HttpServer", () => {
+describe("HttpServer - post", () => {
   it("handles post requests", async () => {
     await Dummy.run(async () => {
       for (let i = 0; i <= 5; i++) {

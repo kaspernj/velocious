@@ -1,12 +1,13 @@
+import fs from "fs/promises"
 import TestFilesFinder from "../../../../src/testing/test-files-finder.js"
 
 describe("Cli - Commands - test - TestFilesFinder", () => {
   it("finds the correct test files", async () => {
-    const testFilesFinder = new TestFilesFinder({directory: process.cwd(), processArgs: ["test"]})
+    const directory = await fs.realpath(`${process.cwd()}/../..`)
+    const testFilesFinder = new TestFilesFinder({directory, processArgs: ["test"]})
     const testFiles = await testFilesFinder.findTestFiles()
+    const sampleTestFilePath = `${directory}/spec/cli/commands/destroy/migration-spec.js`
 
-    const sampleTestFilePath = `${process.cwd()}/spec/cli/commands/destroy/migration-spec.js`
-
-    expect(testFiles.includes(sampleTestFilePath)).toBe(true)
+    expect(testFiles).toContain(sampleTestFilePath)
   })
 })

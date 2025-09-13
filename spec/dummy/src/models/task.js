@@ -1,6 +1,6 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import Record from "../../../../src/database/record/index.js"
 
-class Task extends DatabaseRecord {
+class Task extends Record {
 }
 
 Task.belongsTo("project")

@@ -1,10 +1,12 @@
 import Dummy from "../../dummy/index.js"
+import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - find", () => {
   it("finds an existing record", async () => {
     await Dummy.run(async () => {
-      const task = new Task({name: "Test task"})
+      const project = await Project.create()
+      const task = new Task({name: "Test task", project})
 
       await task.save()
 

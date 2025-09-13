@@ -49,7 +49,8 @@ builds:
       - wait-for-it mariadb:3306
       - sleep 5
       - cd spec/dummy && npx velocious db:create
-      - npm test
+      - cd spec/dummy && npx velocious db:migrate
+      - cd spec/dummy && npx velocious test
   build_2:
     name: MS-SQL
     script:
@@ -57,7 +58,8 @@ builds:
       - wait-for-it mssql:1433
       - sleep 5
       - cd spec/dummy && npx velocious db:create
-      - npm test
+      - cd spec/dummy && npx velocious db:migrate
+      - cd spec/dummy && npx velocious test
   build_3:
     name: PG-SQL
     script:
@@ -66,7 +68,8 @@ builds:
       - wait-for-it postgres:5432
       - sleep 5
       - cd spec/dummy && npx velocious db:create
-      - npm test
+      - cd spec/dummy && npx velocious db:migrate
+      - cd spec/dummy && npx velocious test
   build_4:
     name: SQLite
     script:
@@ -74,4 +77,5 @@ builds:
       - wait-for-it mssql:1433
       - sleep 5
       - cd spec/dummy && npx velocious db:create
-      - npm test
+      - cd spec/dummy && npx velocious db:migrate
+      - cd spec/dummy && npx velocious test

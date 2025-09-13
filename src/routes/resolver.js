@@ -59,7 +59,7 @@ export default class VelociousRoutesResolver {
       throw new Error(`Missing action on controller: ${controller}#${action}`)
     }
 
-    await this.configuration.withConnections(async () => {
+    await this.configuration.ensureConnections(async () => {
       await controllerInstance._runBeforeCallbacks()
       await controllerInstance[action]()
     })

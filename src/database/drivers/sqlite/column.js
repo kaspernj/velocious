@@ -1,5 +1,8 @@
-export default class VelociousDatabaseDriversSqliteColumn {
+import BaseColumn from "../base-column.js"
+
+export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
   constructor({column, driver}) {
+    super()
     this.column = column
     this.driver = driver
   }

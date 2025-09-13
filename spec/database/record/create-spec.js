@@ -44,6 +44,12 @@ describe("Record - create", () => {
 
   it("uses transactions and rolls back in case of an error", async () => {
     await Dummy.run(async () => {
+      const beforeProjectsCount = await Project.count()
+      const beforeTasksCount = await Task.count()
+
+      expect(beforeProjectsCount).toEqual(0)
+      expect(beforeTasksCount).toEqual(0)
+
       const project = new Project({name: "Test project"})
 
       project.tasks().build({name: " ", project})

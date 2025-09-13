@@ -1,9 +1,11 @@
+import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import {digg} from "diggerize"
 import ForeignKey from "./foreign-key.js"
 
-export default class VelociousDatabaseDriversMssqlTable {
+export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   constructor(driver, data) {
+    super()
     this.data = data
     this.driver = driver
   }

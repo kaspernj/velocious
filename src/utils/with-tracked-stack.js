@@ -38,16 +38,18 @@ async function withTrackedStack(arg1, arg2) {
   if (!asyncLocalStorage) return await callback()
 
   const parentStacks = asyncLocalStorage.getStore() || []
-  const additionalStackLines = ["    [WITH TRACKED STACK]"]
+  const additionalStackLines = []
   const currentStackLines = stack.split("\n")
+
+  currentStackLines[0] = "    [WITH TRACKED STACK]"
 
   for (let i = currentStackLines.length; i >= 0; i--) {
     const stackLine = currentStackLines[i]
 
+    additionalStackLines.unshift(stackLine)
+
     if (stackLine == "    [WITH TRACKED STACK]") {
       break
-    } else {
-      additionalStackLines.unshift(stackLine)
     }
   }
 

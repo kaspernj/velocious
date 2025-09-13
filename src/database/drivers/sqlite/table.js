@@ -1,8 +1,10 @@
+import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import ForeignKey from "./foreign-key.js"
 
-export default class VelociousDatabaseDriversSqliteTable {
+export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   constructor({driver, row}) {
+    super()
     this.driver = driver
     this.row = row
   }

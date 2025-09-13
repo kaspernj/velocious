@@ -13,7 +13,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
     this.connection = undefined
   }
 
-  disconnect = () => this.saveDatabase()
+  disconnect = async () => await this.saveDatabase()
 
   async query(sql) {
     const result = await query(this.connection, sql)

@@ -17,7 +17,16 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     for (const columnIndex in this.columns) {
       if (columnIndex > 0) indexName += "_and_"
 
-      indexName += this.columns[columnIndex]
+      const column = this.columns[columnIndex]
+      let columnName
+
+      if (typeof column == "string") {
+        columnName = column
+      } else {
+        columnName = column.getName()
+      }
+
+      indexName += columnName
     }
 
     return indexName

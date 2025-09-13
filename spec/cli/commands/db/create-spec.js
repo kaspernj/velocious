@@ -8,6 +8,7 @@ describe("Cli - Commands - db:create", () => {
       processArgs: ["db:create"],
       testing: true
     })
+
     const result = await cli.execute()
 
     if (cli.getConfiguration().getDatabaseType() == "sqlite") {

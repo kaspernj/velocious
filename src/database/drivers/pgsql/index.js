@@ -26,8 +26,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     this.connection = client
   }
 
-  disconnect() {
-    this.connection.end()
+  async disconnect() {
+    await this.connection.end()
   }
 
   connectArgs() {
@@ -71,11 +71,11 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   async disableForeignKeys() {
-    await this.query("SET FOREIGN_KEY_CHECKS = 0")
+    await this.query("SET session_replication_role = 'replica'")
   }
 
   async enableForeignKeys() {
-    await this.query("SET FOREIGN_KEY_CHECKS = 1")
+    await this.query("SET session_replication_role = 'origin'")
   }
 
   dropTableSql(tableName, args = {}) {
@@ -161,7 +161,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   async startTransaction() {
-    return await this.query("START TRANSACTION")
+    await this.query("START TRANSACTION")
+    this._transactionsCount++
   }
 
   updateSql({conditions, data, tableName}) {
