@@ -120,8 +120,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   async migrationsTableExist(db) {
-    const tables = await db.getTables()
-    const schemaTable = tables.find((table) => table.getName() == "schema_migrations")
+    const schemaTable = await db.getTableByName("schema_migrations", {throwError: false})
 
     if (!schemaTable) return false
 

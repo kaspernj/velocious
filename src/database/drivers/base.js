@@ -48,11 +48,11 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#getTables not implemented`)
   }
 
-  async getTableByName(name) {
+  async getTableByName(name, args) {
     const tables = await this.getTables()
     const table = tables.find((table) => table.getName() == name)
 
-    if (!table) throw new Error(`Couldn't find a table by that name: ${name}`)
+    if (!table && args?.throwError !== false) throw new Error(`Couldn't find a table by that name: ${name}`)
 
     return table
   }

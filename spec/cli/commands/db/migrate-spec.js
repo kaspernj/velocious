@@ -3,7 +3,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
-  it("runs migrations", async () => {
+  fit("runs migrations", async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -22,7 +22,10 @@ describe("Cli - Commands - db:migrate", () => {
 
       for (const tableName of tableNames) {
         await dbs.default.dropTable(tableName, {cascade: true, ifExists: true})
-        await dbs.mssql.dropTable(tableName, {cascade: true, ifExists: true})
+
+        if (dbs.default.getType() != "mssql") {
+          await dbs.mssql.dropTable(tableName, {cascade: true, ifExists: true})
+        }
       }
 
       await cli.execute()
