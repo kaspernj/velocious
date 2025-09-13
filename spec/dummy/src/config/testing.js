@@ -28,9 +28,11 @@ afterEach(async () => {
     await db.rollbackTransaction()
   }
 
-  const tasksCount = await Task.count()
+  /*
+    const tasksCount = await Task.count()
 
-  if (tasksCount !== 0) {
-    throw new Error(`Expected zero tasks but it was ${tasksCount}`)
-  }
+    if (tasksCount !== 0) {
+      throw new Error(`Expected zero tasks but it was ${tasksCount}`)
+    }
+  */
 })

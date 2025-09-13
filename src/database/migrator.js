@@ -166,9 +166,30 @@ export default class VelociousDatabaseMigrator {
       const db = dbs[dbIdentifier]
 
       await db.withDisabledForeignKeys(async () => {
-        for (const table of await db.getTables()) {
-          this.logger.log(`Dropping table ${table.getName()}`)
-          await db.dropTable(table.getName(), {cascade: true})
+        while (true) {
+          const errors = []
+          let anyTableDropped = false
+
+          try {
+            for (const table of await db.getTables()) {
+              this.logger.log(`Dropping table ${table.getName()}`)
+
+              try {
+                await db.dropTable(table.getName(), {cascade: true})
+                anyTableDropped = true
+              } catch (error) {
+                errors.push(error)
+              }
+            }
+
+            break
+          } catch (error) {
+            if (errors.length > 0 && anyTableDropped) {
+              // Retry
+            } else {
+              throw errors[0]
+            }
+          }
         }
       })
     }

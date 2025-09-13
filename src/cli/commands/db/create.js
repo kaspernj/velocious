@@ -7,21 +7,22 @@ export default class DbCreate extends BaseCommand{
   async execute() {
     for (const databaseIdentifier of this.configuration.getDatabaseIdentifiers()) {
       const databaseType = this.configuration.getDatabaseType(databaseIdentifier)
-
-      this.databasePool = this.configuration.getDatabasePool(databaseIdentifier)
-      this.newConfiguration = incorporate({}, this.databasePool.getConfiguration())
+      const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
+      const newConfiguration = incorporate({}, databasePool.getConfiguration())
+      const DriverClass = digg(newConfiguration, "driver")
 
       if (this.args.testing) this.result = []
 
       // Use a database known to exist. Since we are creating the database, it shouldn't actually exist which would make connecting fail.
-      this.newConfiguration.database = this.newConfiguration.useDatabase || "mysql"
+      newConfiguration.database = newConfiguration.useDatabase || "mysql"
 
       // Login can fail because given db name doesn't exist, which it might not because we are trying to create it right now.
-      if (databaseType == "mssql" && this.newConfiguration.sqlConfig?.database) {
-        delete this.newConfiguration.sqlConfig.database
+      if (databaseType == "mssql" && newConfiguration.sqlConfig?.database) {
+        delete newConfiguration.sqlConfig.database
       }
 
-      this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
+      this.databaseConnection = new DriverClass(newConfiguration)
+
       await this.databaseConnection.connect()
 
       try {
@@ -31,7 +32,9 @@ export default class DbCreate extends BaseCommand{
 
         await this.createSchemaMigrationsTable()
       } finally {
-        await this.databaseConnection.close()
+        if (databaseType != "mssql") {
+          await this.databaseConnection.close()
+        }
       }
 
       if (this.args.testing) return this.result

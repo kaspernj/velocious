@@ -49,6 +49,9 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (databaseType == "mssql" && type == "BOOLEAN") {
         type = "BIT"
+      } else if (databaseType == "mssql" && type == "UUID") {
+        type = "VARCHAR"
+        maxlength ||= 36
       }
 
       if (databaseType == "sqlite" && column.getAutoIncrement() && column.getPrimaryKey()) {
@@ -86,6 +89,8 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
         if (databaseType == "pgsql" && defaultValue == "UUID()") {
           sql += "gen_random_uuid()"
+        } else if (databaseType == "mssql" && defaultValue == "UUID()") {
+          sql += "NEWID()"
         } else {
           sql += defaultValue
         }

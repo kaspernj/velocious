@@ -32,11 +32,6 @@ export default new Configuration({
           password: "Super-Secret-Password",
           database: "velocious_test",
           server: "mssql",
-          pool: {
-            max: 10,
-            min: 0,
-            idleTimeoutMillis: 30000
-          },
           options: {
             encrypt: true, // for azure
             trustServerCertificate: true // change to true for local dev / self-signed certs

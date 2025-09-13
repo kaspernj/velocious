@@ -26,8 +26,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     this.connection = client
   }
 
-  disconnect() {
-    this.connection.end()
+  async disconnect() {
+    await this.connection.end()
   }
 
   connectArgs() {

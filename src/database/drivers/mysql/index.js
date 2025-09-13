@@ -22,8 +22,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     this.connection = connection
   }
 
-  disconnect() {
-    this.connection.end()
+  async close() {
+    await this.connection.end()
+    this.connection = undefined
   }
 
   connectArgs() {
@@ -38,11 +39,6 @@ export default class VelociousDatabaseDriversMysql extends Base{
     if ("username" in args) connectArgs["user"] = args["username"]
 
     return connectArgs
-  }
-
-  async close() {
-    await this.connection.end()
-    this.connection = undefined
   }
 
   createDatabaseSql(databaseName, args) {
