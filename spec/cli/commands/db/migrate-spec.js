@@ -3,7 +3,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
-  it("runs migrations", async () => {
+  fit("runs migrations", async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -27,14 +27,22 @@ describe("Cli - Commands - db:migrate", () => {
 
       await cli.execute()
 
-      const table = await dbs.default.getTableByName("tasks")
-      const foreignKeys = await table.getForeignKeys()
+      // It creates foreign keys
+      const tasksTable = await dbs.default.getTableByName("tasks")
+      const foreignKeys = await tasksTable.getForeignKeys()
 
       for (const foreignKey of foreignKeys) {
         if (foreignKey.getColumnName() == "project_id") {
           projectForeignKey = foreignKey
         }
       }
+
+      // It creates unique indexes
+      const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
+      const tokenColumn = await authenticationTokensTable.getColumnByName("token")
+      const tokenIndex = await tokenColumn.getIndexByName("index_on_token")
+
+      console.log({tokenIndex})
 
       for (const db of Object.values(dbs)) {
         const schemaMigrations = await db.query("SELECT * FROM schema_migrations ORDER BY version")
