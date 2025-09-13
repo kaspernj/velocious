@@ -49,6 +49,7 @@ builds:
       - wait-for-it mariadb:3306
       - sleep 5
       - cd spec/dummy && npx velocious db:create
+      - cd spec/dummy && npx velocious db:migrate
       - cd spec/dummy && npx velocious test
   build_2:
     name: MS-SQL
@@ -57,6 +58,7 @@ builds:
       - wait-for-it mssql:1433
       - sleep 5
       - cd spec/dummy && npx velocious db:create
+      - cd spec/dummy && npx velocious db:migrate
       - cd spec/dummy && npx velocious test
   build_3:
     name: PG-SQL
@@ -66,6 +68,7 @@ builds:
       - wait-for-it postgres:5432
       - sleep 5
       - cd spec/dummy && npx velocious db:create
+      - cd spec/dummy && npx velocious db:migrate
       - cd spec/dummy && npx velocious test
   build_4:
     name: SQLite
@@ -74,4 +77,5 @@ builds:
       - wait-for-it mssql:1433
       - sleep 5
       - cd spec/dummy && npx velocious db:create
+      - cd spec/dummy && npx velocious db:migrate
       - cd spec/dummy && npx velocious test
