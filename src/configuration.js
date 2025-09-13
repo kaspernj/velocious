@@ -192,7 +192,7 @@ export default class VelociousConfiguration {
       try {
         dbs[identifier] = this.getDatabasePool(identifier).getCurrentConnection()
       } catch (error) {
-        if (error.message == "ID hasn't been set for this async context") {
+        if (error.message == "ID hasn't been set for this async context" || error.message == "A connection hasn't been made yet") {
           // Ignore
         } else {
           throw error
