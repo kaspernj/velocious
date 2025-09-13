@@ -45,35 +45,61 @@ export default class TestRunner {
   }
 
   isFailed() {
-    return this.failedTests > 0
+    return this._failedTests > 0
+  }
+
+  getFailedTests() {
+    return this._failedTests
+  }
+
+  getSuccessfulTests() {
+    return this._successfulTests
+  }
+
+  getTestsCount() {
+    return this._testsCount
+  }
+
+  async prepare() {
+    this._failedTests = 0
+    this._successfulTests = 0
+    this._testsCount = 0
+    await this.importTestFiles()
+    await this.analyzeTests(tests)
+    this._onlyFocussed = this.anyTestsFocussed
   }
 
   async run() {
-    this.failedTests = 0
-    this.successfulTests = 0
-    await this.importTestFiles()
-    this.onlyFocussed = this.areAnyTestsFocussed(tests)
     await this.runTests(tests, [], 0)
   }
 
-  areAnyTestsFocussed(tests) {
+  analyzeTests(tests) {
+    let anyTestsFocussedFound = false
+
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
       const testArgs = Object.assign({}, testData.args)
 
+      this._testsCount++
+
       if (testArgs.focus) {
-        return true
+        anyTestsFocussedFound = true
+        this.anyTestsFocussed = true
       }
     }
 
     for (const subDescription in tests.subs) {
       const subTest = tests.subs[subDescription]
-      const result = this.areAnyTestsFocussed(subTest)
+      const {anyTestsFocussed} = this.analyzeTests(subTest)
 
-      if (result) return true
+      if (anyTestsFocussed) {
+        anyTestsFocussedFound = true
+      }
+
+      subTest.anyTestsFocussed = anyTestsFocussed
     }
 
-    return false
+    return {anyTestsFocussed: anyTestsFocussedFound}
   }
 
   async runTests(tests, descriptions, indentLevel) {
@@ -83,7 +109,7 @@ export default class TestRunner {
       const testData = tests.tests[testDescription]
       const testArgs = Object.assign({}, testData.args)
 
-      if (this.onlyFocussed && !testArgs.focus) continue
+      if (this._onlyFocussed && !testArgs.focus) continue
 
       if (testArgs.type == "request") {
         testArgs.application = await this.application()
@@ -94,12 +120,18 @@ export default class TestRunner {
 
       try {
         await testData.function(testArgs)
-        this.successfulTests++
+        this._successfulTests++
       } catch (error) {
-        this.failedTests++
+        this._failedTests++
 
         // console.error(`${leftPadding}  Test failed: ${error.message}`)
-        console.error(addTrackedStackToError(error))
+        addTrackedStackToError(error)
+
+        const stackLines = error.stack.split("\n")
+
+        for (const stackLine of stackLines) {
+          console.error(`${leftPadding}  ${stackLine}`)
+        }
       }
     }
 
@@ -108,7 +140,7 @@ export default class TestRunner {
         const subTest = tests.subs[subDescription]
         const newDecriptions = descriptions.concat([subDescription])
 
-        if (!this.onlyFocussed || this.areAnyTestsFocussed(subTest)) {
+        if (!this._onlyFocussed || subTest.anyTestsFocussed) {
           console.log(`${leftPadding}${subDescription}`)
           await this.runTests(subTest, newDecriptions, indentLevel + 1)
         }

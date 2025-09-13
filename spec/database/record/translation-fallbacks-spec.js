@@ -1,7 +1,7 @@
 import Dummy from "../../dummy/index.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("Record - create", () => {
+describe("Record - translation fallbacks", () => {
   it("creates a new simple record with relationships and translations with fallbacks", async () => {
     await Dummy.run(async () => {
       const task = new Task({name: "Test task"})

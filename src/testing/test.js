@@ -45,6 +45,10 @@ class Expect {
     this.expectations = []
   }
 
+  andChange(...args) {
+    return this.toChange(...args)
+  }
+
   toChange(changeCallback) {
     const expectToChange = new ExpectToChange({changeCallback, expect: this})
 
@@ -53,8 +57,10 @@ class Expect {
     return expectToChange
   }
 
-  andChange(...args) {
-    return this.toChange(...args)
+  toContain(valueToContain) {
+    if (!this._object.includes(valueToContain)) {
+      throw new Error(`${this._object} doesn't contain ${valueToContain}`)
+    }
   }
 
   toEqual(result) {
@@ -168,5 +174,11 @@ function fit(description, arg1, arg2) {
 
   return it(description, testArgs, testFunction)
 }
+
+// Make the methods global so they can be used in test files
+globalThis.describe = describe
+globalThis.expect = expect
+globalThis.it = it
+globalThis.fit = fit
 
 export {describe, expect, fit, it, tests}

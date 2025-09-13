@@ -27,6 +27,8 @@ export default class VelociousConfiguration {
   }
 
   getDatabaseConfiguration() {
+    if (!this.database) throw new Error("No database configuration")
+
     return digg(this, "database", this.getEnvironment())
   }
 
