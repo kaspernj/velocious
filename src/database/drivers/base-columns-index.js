@@ -1,6 +1,11 @@
 import { digg } from "diggerize"
 
 export default class VelociousDatabaseDriversBaseColumnsIndex {
+  constructor(table, data) {
+    this.data = data
+    this.table = table
+  }
+
   getDriver() {
     return this.getTable().getDriver()
   }

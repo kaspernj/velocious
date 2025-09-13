@@ -21,7 +21,7 @@ export default class DbCreate extends BaseCommand{
         delete newConfiguration.sqlConfig.database
       }
 
-      this.databaseConnection = new DriverClass(newConfiguration)
+      this.databaseConnection = new DriverClass(newConfiguration, this.configuration)
 
       await this.databaseConnection.connect()
 

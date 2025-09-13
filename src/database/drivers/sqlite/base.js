@@ -58,14 +58,16 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     const result = await this.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${this.quote(tableName)} LIMIT 1`)
     const row = result[0]
 
-    if (!row && args?.throwError !== false) {
+    if (row) {
+      return new Table({driver: this, row})
+    }
+
+    if (args?.throwError !== false) {
       const tables = await this.getTables()
       const tableNames = tables.map((table) => table.getName())
 
       throw new Error(`No table by that name: ${tableName} in ${tableNames.join(", ")}`)
     }
-
-    return new Table({driver: this, row})
   }
 
   async getTables() {

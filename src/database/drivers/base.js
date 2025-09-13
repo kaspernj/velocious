@@ -38,7 +38,11 @@ export default class VelociousDatabaseDriversBase {
     return this._args
   }
 
-  getConfiguration = () => this.configuration
+  getConfiguration() {
+    if (!this.configuration) throw new Error("No configuration set")
+
+    return this.configuration
+}
 
   getIdSeq() {
     return this.idSeq
