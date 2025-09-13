@@ -58,5 +58,6 @@ export default new Configuration({
     de: ["de", "en"],
     en: ["en", "de"]
   },
-  locales: ["de", "en"]
+  locales: ["de", "en"],
+  testing: `${dummyDirectory()}/src/config/testing.js`
 })
