@@ -20,7 +20,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const sqlConfig = digg(args, "sqlConfig")
 
     try {
-      this.connection = await mssql.connect(sqlConfig)
+      this.connection = new mssql.ConnectionPool(sqlConfig)
+      await this.connection.connect()
     } catch (error) {
       throw new Error(`Couldn't connect to database: ${error.message}`) // Re-throw to fix unuseable stack trace.
     }
@@ -50,6 +51,12 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()
+  }
+
+  async currentDatabase() {
+    const rows = await this.query("SELECT DB_NAME() AS db_name")
+
+    return digg(rows, 0, "db_name")
   }
 
   async disableForeignKeys() {

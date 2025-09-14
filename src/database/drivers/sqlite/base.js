@@ -35,6 +35,10 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return createTable.toSql()
   }
 
+  currentDatabase() {
+    return null
+  }
+
   async disableForeignKeys() {
     await this.query("PRAGMA foreign_keys = 0")
   }

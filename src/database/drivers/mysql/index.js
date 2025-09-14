@@ -62,6 +62,12 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createTable.toSql()
   }
 
+  async currentDatabase() {
+    const rows = await this.query("SELECT DATABASE() AS db_name")
+
+    return digg(rows, 0, "db_name")
+  }
+
   async disableForeignKeys() {
     await this.query("SET FOREIGN_KEY_CHECKS = 0")
   }
