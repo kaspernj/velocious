@@ -44,7 +44,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   async migrateFiles(files, importCallback) {
-    await this.configuration.withConnections(async () => {
+    await this.configuration.ensureConnections(async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,
@@ -90,7 +90,7 @@ export default class VelociousDatabaseMigrator {
       .filter((migration) => Boolean(migration))
       .sort((migration1, migration2) => migration1.date - migration2.date)
 
-    await this.configuration.withConnections(async () => {
+    await this.configuration.ensureConnections(async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,
@@ -120,8 +120,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   async migrationsTableExist(db) {
-    const tables = await db.getTables()
-    const schemaTable = tables.find((table) => table.getName() == "schema_migrations")
+    const schemaTable = await db.getTableByName("schema_migrations", {throwError: false})
 
     if (!schemaTable) return false
 
@@ -166,9 +165,30 @@ export default class VelociousDatabaseMigrator {
       const db = dbs[dbIdentifier]
 
       await db.withDisabledForeignKeys(async () => {
-        for (const table of await db.getTables()) {
-          this.logger.log(`Dropping table ${table.getName()}`)
-          await db.dropTable(table.getName())
+        while (true) {
+          const errors = []
+          let anyTableDropped = false
+
+          try {
+            for (const table of await db.getTables()) {
+              this.logger.log(`Dropping table ${table.getName()}`)
+
+              try {
+                await db.dropTable(table.getName(), {cascade: true})
+                anyTableDropped = true
+              } catch (error) {
+                errors.push(error)
+              }
+            }
+
+            break
+          } catch (error) {
+            if (errors.length > 0 && anyTableDropped) {
+              // Retry
+            } else {
+              throw errors[0]
+            }
+          }
         }
       })
     }

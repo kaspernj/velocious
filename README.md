@@ -82,7 +82,7 @@ Run migrations from anywhere if you want to:
 const migrationsPath = `/some/dir/migrations`
 const files = await new FilesFinder({path: migrationsPath}).findFiles()
 
-await this.configuration.withConnections(async () => {
+await this.configuration.ensureConnections(async () => {
   const migrator = new Migrator({configuration: this.configuration})
 
   await migrator.prepare()

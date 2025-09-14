@@ -26,10 +26,6 @@ export default class VelociousDatabaseDriversMssql extends Base{
     }
   }
 
-  disconnect() {
-    this.connection.end()
-  }
-
   async close() {
     await this.connection.close()
     this.connection = undefined
@@ -50,7 +46,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   createTableSql(tableData) {
-    const createArgs = Object.assign({tableData, driver: this})
+    const createArgs = Object.assign({tableData, driver: this, indexInCreateTable: false})
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()
@@ -75,7 +71,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   primaryKeyType = () => "bigint"
 
   async query(sql) {
-    let result, request
+    let result, request, tries = 0
 
     if (this._currentTransaction) {
       request = new mssql.Request(this._currentTransaction)
@@ -83,11 +79,22 @@ export default class VelociousDatabaseDriversMssql extends Base{
       request = mssql
     }
 
-    try {
-      result = await request.query(sql)
-    } catch (error) {
-      // Re-throw error because the stack-trace is broken and can't be used for app-development.
-      throw new Error(`Query failed '${error.message})': ${sql}`)
+    while (true) {
+      tries++
+
+      try {
+        result = await request.query(sql)
+        break
+      } catch (error) {
+        if (error.message == "No connection is specified for that request." && tries <= 3) {
+          this.logger.log("Reconnecting to database")
+          await this.connect()
+          // Retry
+        } else {
+          // Re-throw error because the stack-trace is broken and can't be used for app-development.
+          throw new Error(`Query failed '${error.message}': ${sql}`)
+        }
+      }
     }
 
     return result.recordsets[0]
@@ -154,12 +161,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return tables
   }
 
-  async getTableByName(tableName) {
+  async getTableByName(tableName, args) {
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
 
-    if (!result[0]) throw new Error(`Couldn't find a table by that name: ${tableName}`)
+    if (result[0]) {
+      return new Table(this, result[0])
+    }
 
-    return new Table(this, result[0])
+    if (args?.throwError !== false) throw new Error(`Couldn't find a table by that name: ${tableName}`)
   }
 
   async lastInsertID() {
@@ -184,6 +193,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     this._currentTransaction = new mssql.Transaction(this.connection)
 
     await this._currentTransaction.begin()
+    this._transactionsCount++
   }
 
   async commitTransaction() {
@@ -191,6 +201,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
     await this._currentTransaction.commit()
     this._currentTransaction = null
+    this._transactionsCount--
   }
 
   async rollbackTransaction() {
@@ -199,6 +210,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     await this._currentTransaction.rollback()
 
     this._currentTransaction = null
+    this._transactionsCount--
   }
 
   async startSavePoint(savePointName) {

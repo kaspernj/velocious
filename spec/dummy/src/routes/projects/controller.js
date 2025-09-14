@@ -22,6 +22,12 @@ export default class ProjectsController extends Controller {
 
     await project.save()
 
-    this.render({json: {status: "success"}})
+    this.render({json: {
+      project: {
+        id: project.id(),
+        name: project.name()
+      },
+      status: "success"
+    }})
   }
 }

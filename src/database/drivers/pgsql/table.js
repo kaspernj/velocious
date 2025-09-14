@@ -1,8 +1,10 @@
+import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import ForeignKey from "./foreign-key.js"
 
-export default class VelociousDatabaseDriversPgsqlTable {
+export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
   constructor(driver, data) {
+    super()
     this.data = data
     this.driver = driver
   }

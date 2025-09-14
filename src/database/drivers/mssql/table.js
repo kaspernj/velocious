@@ -1,9 +1,11 @@
+import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import {digg} from "diggerize"
 import ForeignKey from "./foreign-key.js"
 
-export default class VelociousDatabaseDriversMssqlTable {
+export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   constructor(driver, data) {
+    super()
     this.data = data
     this.driver = driver
   }
@@ -61,5 +63,18 @@ export default class VelociousDatabaseDriversMssqlTable {
 
   getName() {
     return digg(this.data, "TABLE_NAME")
+  }
+
+  async truncate() {
+    try {
+      await this.getDriver().query(`TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`)
+    } catch (error) {
+      if (error.message.startsWith("Query failed 'Cannot truncate table")) {
+        // Truncate table is really buggy for some reason - fall back to delete all rows instead
+        await this.getDriver().query(`DELETE FROM ${this.getOptions().quoteTableName(this.getName())}`)
+      } else {
+        throw error
+      }
+    }
   }
 }

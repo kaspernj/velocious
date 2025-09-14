@@ -3,7 +3,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 class TableColumn {
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, default: columnDefault, foreignKey, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args
+      const {autoIncrement, default: columnDefault, foreignKey, index, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args
 
       restArgsError(restArgs)
     }
@@ -15,6 +15,7 @@ class TableColumn {
   getAutoIncrement = () => this.args?.autoIncrement
   getDefault = () => this.args?.default
   getForeignKey = () => this.args?.foreignKey
+  getIndex = () => this.args?.index
   getMaxLength = () => this.args?.maxLength
   getName = () => this.name
   getNull = () => this.args?.null

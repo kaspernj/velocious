@@ -1,7 +1,7 @@
 import fetch from "node-fetch"
 import Dummy from "../dummy/index.js"
 
-describe("HttpServer", () => {
+describe("HttpServer - root get", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("handles root get requests", async () => {
     await Dummy.run(async () => {
       for (let i = 0; i <= 5; i++) {

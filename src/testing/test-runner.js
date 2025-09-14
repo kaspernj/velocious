@@ -45,45 +45,87 @@ export default class TestRunner {
   }
 
   isFailed() {
-    return this.failedTests > 0
+    return this._failedTests > 0
+  }
+
+  getFailedTests() {
+    return this._failedTests
+  }
+
+  getSuccessfulTests() {
+    return this._successfulTests
+  }
+
+  getTestsCount() {
+    return this._testsCount
+  }
+
+  async prepare() {
+    this._failedTests = 0
+    this._successfulTests = 0
+    this._testsCount = 0
+    await this.importTestFiles()
+    await this.analyzeTests(tests)
+    this._onlyFocussed = this.anyTestsFocussed
+
+    const testingConfigPath = this.configuration.getTesting()
+
+    if (testingConfigPath) {
+      await import(testingConfigPath)
+    }
   }
 
   async run() {
-    this.failedTests = 0
-    this.successfulTests = 0
-    await this.importTestFiles()
-    this.onlyFocussed = this.areAnyTestsFocussed(tests)
-    await this.runTests(tests, [], 0)
+    await this.configuration.ensureConnections(async () => {
+      await this.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
+      })
+    })
   }
 
-  areAnyTestsFocussed(tests) {
+  analyzeTests(tests) {
+    let anyTestsFocussedFound = false
+
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
       const testArgs = Object.assign({}, testData.args)
 
+      this._testsCount++
+
       if (testArgs.focus) {
-        return true
+        anyTestsFocussedFound = true
+        this.anyTestsFocussed = true
       }
     }
 
     for (const subDescription in tests.subs) {
       const subTest = tests.subs[subDescription]
-      const result = this.areAnyTestsFocussed(subTest)
+      const {anyTestsFocussed} = this.analyzeTests(subTest)
 
-      if (result) return true
+      if (anyTestsFocussed) {
+        anyTestsFocussedFound = true
+      }
+
+      subTest.anyTestsFocussed = anyTestsFocussed
     }
 
-    return false
+    return {anyTestsFocussed: anyTestsFocussedFound}
   }
 
-  async runTests(tests, descriptions, indentLevel) {
+  async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {
     const leftPadding = " ".repeat(indentLevel * 2)
+    const newAfterEaches = [...afterEaches, ...tests.afterEaches]
+    const newBeforeEaches = [...beforeEaches, ...tests.beforeEaches]
 
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
       const testArgs = Object.assign({}, testData.args)
 
-      if (this.onlyFocussed && !testArgs.focus) continue
+      if (this._onlyFocussed && !testArgs.focus) continue
 
       if (testArgs.type == "request") {
         testArgs.application = await this.application()
@@ -93,26 +135,44 @@ export default class TestRunner {
       console.log(`${leftPadding}it ${testDescription}`)
 
       try {
+        for (const beforeEachData of newBeforeEaches) {
+          await beforeEachData.callback({testArgs, testData})
+        }
+
         await testData.function(testArgs)
-        this.successfulTests++
+        this._successfulTests++
       } catch (error) {
-        this.failedTests++
+        this._failedTests++
 
         // console.error(`${leftPadding}  Test failed: ${error.message}`)
-        console.error(addTrackedStackToError(error))
+        addTrackedStackToError(error)
+
+        const stackLines = error.stack.split("\n")
+
+        for (const stackLine of stackLines) {
+          console.error(`${leftPadding}  ${stackLine}`)
+        }
+      } finally {
+        for (const afterEachData of newAfterEaches) {
+          await afterEachData.callback({testArgs, testData})
+        }
       }
     }
 
-    await this.configuration.withConnections(async () => {
-      for (const subDescription in tests.subs) {
-        const subTest = tests.subs[subDescription]
-        const newDecriptions = descriptions.concat([subDescription])
+    for (const subDescription in tests.subs) {
+      const subTest = tests.subs[subDescription]
+      const newDecriptions = descriptions.concat([subDescription])
 
-        if (!this.onlyFocussed || this.areAnyTestsFocussed(subTest)) {
-          console.log(`${leftPadding}${subDescription}`)
-          await this.runTests(subTest, newDecriptions, indentLevel + 1)
-        }
+      if (!this._onlyFocussed || subTest.anyTestsFocussed) {
+        console.log(`${leftPadding}${subDescription}`)
+        await this.runTests({
+          afterEaches: newAfterEaches,
+          beforeEaches: newBeforeEaches,
+          tests: subTest,
+          descriptions: newDecriptions,
+          indentLevel: indentLevel + 1
+        })
       }
-    })
+    }
   }
 }

@@ -38,7 +38,11 @@ export default class VelociousDatabaseDriversBase {
     return this._args
   }
 
-  getConfiguration = () => this.configuration
+  getConfiguration() {
+    if (!this.configuration) throw new Error("No configuration set")
+
+    return this.configuration
+}
 
   getIdSeq() {
     return this.idSeq
@@ -48,11 +52,11 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#getTables not implemented`)
   }
 
-  async getTableByName(name) {
+  async getTableByName(name, args) {
     const tables = await this.getTables()
     const table = tables.find((table) => table.getName() == name)
 
-    if (!table) throw new Error(`Couldn't find a table by that name: ${name}`)
+    if (!table && args?.throwError !== false) throw new Error(`Couldn't find a table by that name: ${name}`)
 
     return table
   }
@@ -135,16 +139,7 @@ export default class VelociousDatabaseDriversBase {
 
     if (this._transactionsCount == 0) {
       this.logger.debug("Start transaction")
-      this._transactionsCount++
-
-      try {
-        await this.startTransaction()
-      } catch (error) {
-        this._transactionsCount--
-
-        throw error
-      }
-
+      await this.startTransaction()
       transactionStarted = true
     } else {
       this.logger.debug("Start savepoint", savePointName)
@@ -165,7 +160,6 @@ export default class VelociousDatabaseDriversBase {
       if (transactionStarted) {
         this.logger.debug("Commit transaction")
         await this.commitTransaction()
-        this._transactionsCount--
       }
     } catch (error) {
       this.logger.debug("Transaction error", error.message)
@@ -178,7 +172,6 @@ export default class VelociousDatabaseDriversBase {
       if (transactionStarted) {
         this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
-        this._transactionsCount--
       }
 
       throw error
@@ -188,15 +181,18 @@ export default class VelociousDatabaseDriversBase {
   }
 
   async startTransaction() {
-    return await this.query("BEGIN TRANSACTION")
+    await this.query("BEGIN TRANSACTION")
+    this._transactionsCount++
   }
 
   async commitTransaction() {
     await this.query("COMMIT")
+    this._transactionsCount--
   }
 
   async rollbackTransaction() {
     await this.query("ROLLBACK")
+    this._transactionsCount--
   }
 
   generateSavePointName() {

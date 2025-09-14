@@ -1,7 +1,7 @@
 import Application from "../../src/application.js"
-import {digg} from "diggerize"
 import dummyConfiguration from "./src/config/configuration.js"
-import Migration from "../../src/database/migration/index.js"
+import FilesFinder from "../../src/database/migrator/files-finder.js"
+import Migrator from "../../src/database/migrator.js"
 
 export default class Dummy {
   static current() {
@@ -15,31 +15,8 @@ export default class Dummy {
   static async prepare() {
     dummyConfiguration.setCurrent()
 
-    await dummyConfiguration.withConnections(async (dbs) => {
-      const db = digg(dbs, "default")
-
-      await db.dropTable("tasks", {ifExists: true})
-      await db.dropTable("project_translations", {ifExists: true})
-      await db.dropTable("projects", {ifExists: true})
-
-      const migration = new Migration({configuration: dummyConfiguration, databaseIdentifier: "default", db})
-
-      await migration.createTable("projects", (t) => {
-        t.timestamps()
-      })
-      await migration.createTable("project_translations", (t) => {
-        t.references("project", {null: false, foreignKey: true})
-        t.string("locale", {null: false})
-        t.string("name")
-      })
-
-      await migration.addIndex("project_translations", ["project_id", "locale"], {unique: true})
-
-      await migration.createTable("tasks", (t) => {
-        t.references("project")
-        t.string("name")
-        t.text("description")
-      })
+    await dummyConfiguration.ensureConnections(async () => {
+      await this.runMigrations()
 
       if (!dummyConfiguration.isInitialized()) {
         await dummyConfiguration.initialize()
@@ -47,12 +24,21 @@ export default class Dummy {
     })
   }
 
+  static async runMigrations() {
+    const migrationsPath = `${import.meta.dirname}/src/database/migrations`
+    const files = await new FilesFinder({path: migrationsPath}).findFiles()
+    const migrator = new Migrator({configuration: dummyConfiguration})
+
+    await migrator.prepare()
+    await migrator.migrateFiles(files, async (path) => await import(path))
+  }
+
   static async run(callback) {
     await this.current().run(callback)
   }
 
   async run(callback) {
-    await dummyConfiguration.withConnections(async () => {
+    await dummyConfiguration.ensureConnections(async () => {
       await Dummy.prepare()
       await this.start()
 
@@ -78,7 +64,10 @@ export default class Dummy {
           password: ""
         }
       },
-      httpServer: {port: 3006}
+      httpServer: {
+        maxWorkers: 1,
+        port: 3006
+      }
     })
 
     await this.application.initialize()
