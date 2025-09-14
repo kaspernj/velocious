@@ -166,12 +166,16 @@ export default class RequestBuffer {
           this.multiPartyFormData = true
           this.setState("multi-part-form-data")
         } else {
-          if (!this.contentLength) throw new Error("Content length hasn't been set")
+          if (this.contentLength === 0) {
+            this.completeRequest()
+          } else if (!this.contentLength) {
+            throw new Error("Content length hasn't been set")
+          } else {
+            this.postBodyBuffer = new ArrayBuffer(this.contentLength)
+            this.postBodyChars = new Uint8Array(this.postBodyBuffer)
 
-          this.postBodyBuffer = new ArrayBuffer(this.contentLength)
-          this.postBodyChars = new Uint8Array(this.postBodyBuffer)
-
-          this.setState("post-body")
+            this.setState("post-body")
+          }
         }
       } else {
         throw new Error(`Unknown HTTP method: ${this.httpMethod}`)

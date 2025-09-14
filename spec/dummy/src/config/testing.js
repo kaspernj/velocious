@@ -28,35 +28,7 @@ afterEach(async ({testArgs}) => {
     }
 
     if (truncate) {
-      await db.withDisabledForeignKeys(async () => {
-        let tries = 0
-
-        while(true) {
-          tries++
-
-          const tables = await db.getTables()
-          const truncateErrors = []
-
-          for (const table of tables) {
-            if (table.getName() != "schema_migrations") {
-              try {
-                await table.truncate({cascade: true})
-              } catch (error) {
-                console.error(error)
-                truncateErrors.push(error)
-              }
-            }
-          }
-
-          if (truncateErrors.length == 0) {
-            break
-          } else if (tries <= 5) {
-            // Retry
-          } else {
-            throw truncateErrors[0]
-          }
-        }
-      })
+      await db.truncateAllTables()
     }
   }
 })
