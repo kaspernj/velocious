@@ -24,6 +24,7 @@ export default class VelociousHttpServerWorker {
         workerData: {
           debug,
           directory,
+          environment: this.configuration.getEnvironment(),
           workerCount: this.workerCount
         }
       })

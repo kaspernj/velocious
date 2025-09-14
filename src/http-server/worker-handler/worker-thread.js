@@ -25,11 +25,12 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   async initialize() {
-    const {debug, directory} = digs(this.workerData, "debug", "directory")
-    const configurationPath = `${this.workerData.directory}/src/config/configuration.js`
+    const {debug, directory, environment} = digs(this.workerData, "debug", "directory", "environment")
+    const configurationPath = `${directory}/src/config/configuration.js`
     const configurationImport = await import(configurationPath)
 
     this.configuration = configurationImport.default
+    this.configuration.setEnvironment(environment)
     this.configuration.setCurrent()
 
     this.application = new Application({configuration: this.configuration, debug, directory})

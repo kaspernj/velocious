@@ -4,6 +4,8 @@ import TestRunner from "../../testing/test-runner.js"
 
 export default class VelociousCliCommandsTest extends BaseCommand {
   async execute() {
+    this.getConfiguration().setEnvironment("test")
+
     const directory = process.env.VELOCIOUS_TEST_DIR || this.directory()
     const testFilesFinder = new TestFilesFinder({directory, processArgs: this.processArgs})
     const testFiles = await testFilesFinder.findTestFiles()

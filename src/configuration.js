@@ -78,11 +78,10 @@ export default class VelociousConfiguration {
   }
 
   getEnvironment() { return digg(this, "_environment") }
+  setEnvironment(newEnvironment) { this._environment = newEnvironment }
 
   getLocaleFallbacks = () => this.localeFallbacks
-  setLocaleFallbacks(newLocaleFallbacks) {
-    this.localeFallbacks = newLocaleFallbacks
-  }
+  setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
 
   getLocale() {
     if (typeof this.locale == "function") {

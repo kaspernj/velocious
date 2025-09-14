@@ -7,5 +7,6 @@ export default class VelociousCliBaseCommand {
     this.processArgs = args.processArgs
   }
 
-  directory = () => digg(this, "configuration").getDirectory()
+  directory() { return digg(this, "configuration").getDirectory() }
+  getConfiguration() { return this.configuration }
 }
