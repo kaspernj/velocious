@@ -5,6 +5,10 @@
   "name": "velocious",
   "version": "1.0.45",
   "main": "index.js",
+  "scripts": {
+    "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",
+    "velocious": "asd"
+  },
   "type": "module",
   "repository": {
     "type": "git",
