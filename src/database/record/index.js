@@ -204,6 +204,8 @@ class VelociousDatabaseRecord {
     this._table = await this.connection().getTableByName(this.tableName())
     this._columns = await this._getTable().getColumns()
     this._columnsAsHash = {}
+    this._columnNameToAttributeName = {}
+    this._attributeNameToColumnName = {}
 
     for (const column of this._columns) {
       this._columnsAsHash[column.getName()] = column
@@ -211,6 +213,9 @@ class VelociousDatabaseRecord {
       const camelizedColumnName = inflection.camelize(column.getName(), true)
       const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
       const setterMethodName = `set${camelizedColumnNameBigFirst}`
+
+      this._attributeNameToColumnName[camelizedColumnName] = column.getName()
+      this._columnNameToAttributeName[column.getName()] = camelizedColumnName
 
       this.prototype[camelizedColumnName] = function () {
         return this.readAttribute(camelizedColumnName)
@@ -300,7 +305,11 @@ class VelociousDatabaseRecord {
   }
 
   _setColumnAttribute(name, newValue) {
-    const columnName = inflection.underscore(name)
+    if (!this.constructor._attributeNameToColumnName) throw new Error("No attribute-to-column mapping. Has record been initialized?")
+
+    const columnName = this.constructor._attributeNameToColumnName[name]
+
+    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName}`)
 
     if (this._attributes[columnName] != newValue) {
       this._changes[columnName] = newValue
@@ -767,9 +776,11 @@ class VelociousDatabaseRecord {
   }
 
   readAttribute(attributeName) {
-    const attributeNameUnderscore = inflection.underscore(attributeName)
+    const columnName = this.constructor._attributeNameToColumnName[attributeName]
 
-    return this.readColumn(attributeNameUnderscore)
+    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName}`)
+
+    return this.readColumn(columnName)
   }
 
   readColumn(attributeName) {
