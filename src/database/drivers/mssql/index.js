@@ -83,7 +83,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (this._currentTransaction) {
       request = new mssql.Request(this._currentTransaction)
     } else {
-      request = mssql
+      request = new mssql.Request(this.connection)
     }
 
     while (true) {
