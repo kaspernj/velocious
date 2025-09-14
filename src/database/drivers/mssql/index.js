@@ -27,8 +27,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async close() {
-    // FIXME: This seems buggy? Waits forever. Removed 'await' for this reason.
-    this.connection.close()
+    await this.connection.close()
     this.connection = undefined
   }
 

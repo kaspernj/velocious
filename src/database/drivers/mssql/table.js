@@ -64,4 +64,17 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   getName() {
     return digg(this.data, "TABLE_NAME")
   }
+
+  async truncate() {
+    try {
+      await this.getDriver().query(`TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`)
+    } catch (error) {
+      if (error.message.startsWith("Query failed 'Cannot truncate table")) {
+        // Truncate table is really buggy for some reason - fall back to delete all rows instead
+        await this.getDriver().query(`DELETE FROM ${this.getOptions().quoteTableName(this.getName())}`)
+      } else {
+        throw error
+      }
+    }
+  }
 }
