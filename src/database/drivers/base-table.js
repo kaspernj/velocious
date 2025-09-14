@@ -25,10 +25,17 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   async truncate(args) {
-    let sql = `TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`
+    const databaseType = this.getDriver().getType()
+    let sql
 
-    if (args?.cascade && this.getDriver().getType() == "pgsql") {
-      sql += " CASCADE"
+    if (databaseType == "sqlite") {
+      sql = `DELETE FROM ${this.getOptions().quoteTableName(this.getName())}`
+    } else {
+      sql = `TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`
+
+      if (args?.cascade && databaseType == "pgsql") {
+        sql += " CASCADE"
+      }
     }
 
     await this.getDriver().query(sql)

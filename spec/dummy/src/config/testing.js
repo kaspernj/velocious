@@ -42,6 +42,7 @@ afterEach(async ({testArgs}) => {
               try {
                 await table.truncate({cascade: true})
               } catch (error) {
+                console.error(error)
                 truncateErrors.push(error)
               }
             }

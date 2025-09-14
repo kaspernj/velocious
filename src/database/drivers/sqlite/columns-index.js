@@ -7,4 +7,16 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumnsInd
     this.data = data
     this.table = table
   }
+
+  getName() {
+    return digg(this, "data", "name")
+  }
+
+  isPrimaryKey() {
+    return false
+  }
+
+  isUnique() {
+    return digg(this, "data", "unique") == 1
+  }
 }
