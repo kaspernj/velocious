@@ -1,5 +1,6 @@
 import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import Application from "../../src/application.js"
+import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
 import {tests} from "./test.js"
 
@@ -147,7 +148,9 @@ export default class TestRunner {
         // console.error(`${leftPadding}  Test failed: ${error.message}`)
         addTrackedStackToError(error)
 
-        const stackLines = error.stack.split("\n")
+        const backtraceCleaner = new BacktraceCleaner(error)
+        const cleanedStack = backtraceCleaner.getCleanedStack()
+        const stackLines = cleanedStack.split("\n")
 
         for (const stackLine of stackLines) {
           console.error(`${leftPadding}  ${stackLine}`)

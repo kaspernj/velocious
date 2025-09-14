@@ -1,3 +1,4 @@
+import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import EventEmitter from "events"
 import {Logger} from "../../logger.js"
 import Response from "./response.js"
@@ -40,7 +41,7 @@ export default class VelociousHttpServerClientRequestRunner {
         await routesResolver.resolve()
       }
     } catch (error) {
-      await this.logger.error(() => [`Error while running request: ${error.message}\n\n${error.stack}`])
+      await this.logger.error(() => [`Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`])
 
       response.setStatus(500)
       response.setErrorBody(error)
