@@ -5,10 +5,6 @@
   "name": "velocious",
   "version": "1.0.45",
   "main": "index.js",
-  "scripts": {
-    "test": "jasmine",
-    "velocious": "asd"
-  },
   "type": "module",
   "repository": {
     "type": "git",
@@ -23,7 +19,6 @@
   "description": "",
   "devDependencies": {
     "awaitery": "^1.0.1",
-    "jasmine": "^5.0.2",
     "mssql": "^11.0.1",
     "mysql": "^2.18.1",
     "node-fetch": "^3.3.1",
