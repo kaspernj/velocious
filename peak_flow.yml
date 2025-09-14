@@ -8,6 +8,7 @@ before_script:
   - npm install
 environment:
   NODE_ENV: test
+  VELOCIOUS_TEST_DIR: /home/build/project/spec
 services:
   mariadb:
     environment:
