@@ -32,17 +32,10 @@ export default class VelociousController {
     this._viewPath = viewPath
   }
 
-  getAction() {
-    return this._action
-  }
-
-  getParams() {
-    return this._params
-  }
-
-  getRequest() {
-    return this._request
-  }
+  getAction() { return this._action }
+  getConfiguration() { return this._configuration }
+  getParams() { return this._params }
+  getRequest() { return this._request }
 
   async _runBeforeCallbacks() {
     await this.logger.debug("_runBeforeCallbacks")
@@ -74,7 +67,7 @@ export default class VelociousController {
     await this.logger.debug("After runBeforeCallbacks")
   }
 
-  params = () => this._params
+  params() { return this._params }
 
   render({json, status, ...restArgs} = {}) {
     restArgsError(restArgs)
@@ -120,11 +113,6 @@ export default class VelociousController {
     throw new Error("renderText stub")
   }
 
-  request() {
-    return this._request
-  }
-
-  response() {
-    return this._response
-  }
+  request() { return this._request }
+  response() { return this._response }
 }

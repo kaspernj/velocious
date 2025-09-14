@@ -1,4 +1,5 @@
 import GetRoute from "./get-route.js"
+import NamespaceRoute from "./namespace-route.js"
 import PostRoute from "./post-route.js"
 import ResourceRoute from "./resource-route.js"
 
@@ -18,6 +19,16 @@ export function initBaseRoute() {
 
     matchWithPath(_path) {
       throw new Error(`No 'matchWithPath' implemented on ${this.constructor.name}`)
+    }
+
+    namespace(name, callback) {
+      const route = new NamespaceRoute({name})
+
+      this.routes.push(route)
+
+      if (callback) {
+        callback(route)
+      }
     }
 
     post(name, args) {

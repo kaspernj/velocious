@@ -211,6 +211,38 @@ export default class VelociousDatabaseDriversBase {
     await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
   }
 
+  async truncateAllTables() {
+    await this.withDisabledForeignKeys(async () => {
+      let tries = 0
+
+      while(tries <= 5) {
+        tries++
+
+        const tables = await this.getTables()
+        const truncateErrors = []
+
+        for (const table of tables) {
+          if (table.getName() != "schema_migrations") {
+            try {
+              await table.truncate({cascade: true})
+            } catch (error) {
+              console.error(error)
+              truncateErrors.push(error)
+            }
+          }
+        }
+
+        if (truncateErrors.length == 0) {
+          break
+        } else if (tries <= 5) {
+          // Retry
+        } else {
+          throw truncateErrors[0]
+        }
+      }
+    })
+  }
+
   async update(...args) {
     const sql = this.updateSql(...args)
 

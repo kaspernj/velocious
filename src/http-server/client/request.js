@@ -7,13 +7,13 @@ export default class VelociousHttpServerClientRequest {
     this.requestParser = new RequestParser({configuration})
   }
 
-  baseURL = () => `${this.protocol()}://${this.hostWithPort()}`
-  feed = (data) => this.requestParser.feed(data)
-  header = (headerName) => this.requestParser.requestBuffer.getHeader(headerName)?.value
-  httpMethod = () => this.requestParser.getHttpMethod()
-  host = () => this.requestParser.getHost()
+  baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
+  feed(data) { return this.requestParser.feed(data) }
+  header(headerName) { return this.requestParser.requestBuffer.getHeader(headerName)?.value }
+  httpMethod() { return this.requestParser.getHttpMethod() }
+  host() { return this.requestParser.getHost() }
 
-  hostWithPort = () => {
+  hostWithPort() {
     const port = this.port()
     const protocol = this.protocol()
     let hostWithPort = `${this.host()}`
