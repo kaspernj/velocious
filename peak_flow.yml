@@ -50,7 +50,7 @@ builds:
       - sleep 5
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
-      - VELOCIOUS_TEST_DIR=/home/build/project/speccd spec/dummy && npx velocious test
+      - VELOCIOUS_TEST_DIR=/home/build/project/spec cd spec/dummy && npx velocious test
   build_2:
     name: MS-SQL
     script:
@@ -59,7 +59,7 @@ builds:
       - sleep 5
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
-      - VELOCIOUS_TEST_DIR=/home/build/project/speccd spec/dummy && npx velocious test
+      - VELOCIOUS_TEST_DIR=/home/build/project/spec cd spec/dummy && npx velocious test
   build_3:
     name: PG-SQL
     script:
@@ -69,7 +69,7 @@ builds:
       - sleep 5
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
-      - VELOCIOUS_TEST_DIR=/home/build/project/speccd spec/dummy && npx velocious test
+      - VELOCIOUS_TEST_DIR=/home/build/project/spec cd spec/dummy && npx velocious test
   build_4:
     name: SQLite
     script:
