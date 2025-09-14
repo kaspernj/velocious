@@ -76,6 +76,7 @@ export default class TableData {
   boolean = (name, args) => this._defineColumn(name, Object.assign({type: "boolean"}, args))
   datetime = (name, args) => this._defineColumn(name, Object.assign({type: "datetime"}, args))
   integer = (name, args = {}) => this._defineColumn(name, Object.assign({type: "integer"}, args))
+  tinyint = (name, args = {}) => this._defineColumn(name, Object.assign({type: "tinyint"}, args))
 
   references(name, args = {}) {
     const columnName = `${name}_id`

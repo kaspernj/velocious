@@ -26,6 +26,8 @@ export default class VelociousDatabaseMigration {
     return this._databaseIdentifier
   }
 
+  getDriver() { return this._db }
+
   async addColumn(tableName, columnName, columnType, args) {
     const tableColumnArgs = Object.assign({type: columnType}, args)
 
@@ -101,7 +103,9 @@ export default class VelociousDatabaseMigration {
 
     if (!(idType in tableData)) throw new Error(`Unsupported primary key type: ${idType}`)
 
-    tableData[idType]("id", {autoIncrement: true, default: idDefault, null: false, primaryKey: true})
+    if (id !== false) {
+      tableData[idType]("id", {autoIncrement: true, default: idDefault, null: false, primaryKey: true})
+    }
 
     if (callback) {
       callback(tableData)

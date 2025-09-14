@@ -20,7 +20,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const sqlConfig = digg(args, "sqlConfig")
 
     try {
-      this.connection = await mssql.connect(sqlConfig)
+      this.connection = new mssql.ConnectionPool(sqlConfig)
+      await this.connection.connect()
     } catch (error) {
       throw new Error(`Couldn't connect to database: ${error.message}`) // Re-throw to fix unuseable stack trace.
     }
@@ -52,6 +53,12 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return createTable.toSql()
   }
 
+  async currentDatabase() {
+    const rows = await this.query("SELECT DB_NAME() AS db_name")
+
+    return digg(rows, 0, "db_name")
+  }
+
   async disableForeignKeys() {
     await this.query("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"")
   }
@@ -76,7 +83,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (this._currentTransaction) {
       request = new mssql.Request(this._currentTransaction)
     } else {
-      request = mssql
+      request = new mssql.Request(this.connection)
     }
 
     while (true) {
