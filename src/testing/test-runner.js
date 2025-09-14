@@ -136,7 +136,7 @@ export default class TestRunner {
 
       try {
         for (const beforeEachData of newBeforeEaches) {
-          await beforeEachData.callback()
+          await beforeEachData.callback({testArgs, testData})
         }
 
         await testData.function(testArgs)
@@ -154,7 +154,7 @@ export default class TestRunner {
         }
       } finally {
         for (const afterEachData of newAfterEaches) {
-          await afterEachData.callback()
+          await afterEachData.callback({testArgs, testData})
         }
       }
     }

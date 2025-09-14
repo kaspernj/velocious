@@ -1,10 +1,12 @@
+import {digg} from "diggerize"
 import fetch from "node-fetch"
 import querystring from "querystring"
+import wait from "awaitery/src/wait.js"
 
 import Dummy from "../dummy/index.js"
 import Project from "../dummy/src/models/project.js"
 
-describe("HttpServer - post", () => {
+describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("handles post requests", async () => {
     await Dummy.run(async () => {
       for (let i = 0; i <= 5; i++) {
@@ -20,10 +22,13 @@ describe("HttpServer - post", () => {
             method: "POST"
           }
         )
-        const text = await response.text()
-        const createdProject = await Project.preload({translations: true}).last()
+        const data = await response.json()
+        const projectID = digg(data, "project", "id")
 
-        expect(text).toEqual('{"status":"success"}')
+        await wait(100) // Wait a bit to ensure the database connections are in sync
+
+        const createdProject = await Project.preload({translations: true}).find(projectID)
+
         expect(createdProject.name()).toEqual("Test create project")
       }
     })
@@ -44,10 +49,14 @@ describe("HttpServer - post", () => {
             method: "POST"
           }
         )
-        const text = await response.text()
+        const data = await response.json()
+
+        expect(data.status).toEqual("success")
+
+        await wait(100) // Wait a bit to ensure the database connections are in sync
+
         const createdProject = await Project.preload({translations: true}).last()
 
-        expect(text).toEqual('{"status":"success"}')
         expect(createdProject.name()).toEqual("Test create project")
       }
     })
@@ -67,10 +76,14 @@ describe("HttpServer - post", () => {
             method: "POST"
           }
         )
-        const text = await response.text()
+        const data = await response.json()
+
+        expect(data.status).toEqual("success")
+
+        await wait(100) // Wait a bit to ensure the database connections are in sync
+
         const createdProject = await Project.preload({translations: true}).last()
 
-        expect(text).toEqual('{"status":"success"}')
         expect(createdProject.name()).toEqual("Test create project")
       }
     })

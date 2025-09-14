@@ -144,7 +144,7 @@ class Expect {
     } else {
       if (typeof this._object == "object" && typeof result == "object") {
         if (anythingDifferent(this._object, result)) {
-          throw new Error(`${this._object} wasn't equal to ${result}`)
+          throw new Error(`${JSON.stringify(this._object)} wasn't equal to ${JSON.stringify(result)}`)
         }
       } else {
         if (this._object != result) {

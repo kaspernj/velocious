@@ -64,7 +64,10 @@ export default class Dummy {
           password: ""
         }
       },
-      httpServer: {port: 3006}
+      httpServer: {
+        maxWorkers: 1,
+        port: 3006
+      }
     })
 
     await this.application.initialize()

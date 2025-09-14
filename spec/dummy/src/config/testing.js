@@ -1,38 +1,42 @@
 import dummyConfiguration from "./configuration.js"
-import Task from "../models/task.js"
 
-beforeEach(async () => {
-  const dbs = dummyConfiguration.getCurrentConnections()
+beforeEach(async ({testArgs}) => {
+  const transaction = testArgs.databaseCleaning?.transaction
 
-  // console.log("beforeEach transaction", {dbs: Object.keys(dbs)})
+  if (transaction === undefined) {
+    const dbs = dummyConfiguration.getCurrentConnections()
 
-  for (const dbIdentifier in dbs) {
-    const db = dbs[dbIdentifier]
+    for (const dbIdentifier in dbs) {
+      const db = dbs[dbIdentifier]
 
-    // console.log(`Starting transaction for ${dbIdentifier}`)
-
-    await db.startTransaction()
+      await db.startTransaction()
+    }
   }
 })
 
-afterEach(async () => {
-  const dbs = dummyConfiguration.getCurrentConnections()
+afterEach(async ({testArgs}) => {
+  const transaction = testArgs.databaseCleaning?.transaction
+  const truncate = testArgs.databaseCleaning?.truncate
 
-  // console.log("afterEach transaction", {dbs: Object.keys(dbs)})
+  const dbs = dummyConfiguration.getCurrentConnections()
 
   for (const dbIdentifier in dbs) {
     const db = dbs[dbIdentifier]
 
-    // console.log(`Rolling back transaction for ${dbIdentifier}`)
-
-    await db.rollbackTransaction()
-  }
-
-  /*
-    const tasksCount = await Task.count()
-
-    if (tasksCount !== 0) {
-      throw new Error(`Expected zero tasks but it was ${tasksCount}`)
+    if (transaction === undefined || transaction) {
+      await db.rollbackTransaction()
     }
-  */
+
+    if (truncate) {
+      await db.withDisabledForeignKeys(async () => {
+        const tables = await db.getTables()
+
+        for (const table of tables) {
+          if (table.getName() != "schema_migrations") {
+            await table.truncate()
+          }
+        }
+      })
+    }
+  }
 })

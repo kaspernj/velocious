@@ -11,4 +11,12 @@ export default class VelociousDatabaseDriversBaseTable {
 
     return this.driver
   }
+
+  getOptions() {
+    return this.getDriver().options()
+  }
+
+  async truncate() {
+    await this.getDriver().query(`TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`)
+  }
 }
