@@ -1,5 +1,6 @@
+import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
-import {Client, escapeLiteral} from "pg"
+import {Client} from "pg"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
@@ -49,6 +50,13 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     this.connection = undefined
   }
 
+  alterTableSql(tableData) {
+    const alterArgs = {tableData, driver: this}
+    const alterTable = new AlterTable(alterArgs)
+
+    return alterTable.toSqls()
+  }
+
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
     const createDatabase = new CreateDatabase(createArgs)
@@ -64,7 +72,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   createTableSql(tableData) {
-    const createArgs = Object.assign({tableData, driver: this, indexInCreateTable: false})
+    const createArgs = {tableData, driver: this, indexInCreateTable: false}
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()

@@ -15,8 +15,8 @@ import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   alterTableSql(columnData) {
-    const createArgs = Object.assign({driver: this}, columnData)
-    const alterTable = new AlterTable(createArgs)
+    const alterArgs = Object.assign({driver: this}, columnData)
+    const alterTable = new AlterTable(alterArgs)
 
     return alterTable.toSqls()
   }

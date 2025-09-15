@@ -30,11 +30,11 @@ export default class VelociousDatabaseMigration {
 
   async addColumn(tableName, columnName, columnType, args) {
     const tableColumnArgs = Object.assign({type: columnType}, args)
+    const tableData = new TableData(tableName)
 
-    const sqls = this._db.alterTableSql({
-      columns: [new TableColumn(columnName, tableColumnArgs)],
-      tableName
-    })
+    tableData.addColumn(columnName, tableColumnArgs)
+
+    const sqls = this._db.alterTableSql(tableData)
 
     for (const sql of sqls) {
       await this._db.query(sql)
@@ -78,6 +78,13 @@ export default class VelociousDatabaseMigration {
     if (args?.foreignKey) {
       await this.addForeignKey(tableName, referenceName)
     }
+  }
+
+  async changeColumnNull(tableName, columnName, nullable) {
+    const table = await this.getDriver().getTableByName(tableName)
+    const column = await table.getColumnByName(columnName)
+
+    await column.changeNullable(nullable)
   }
 
   async createTable(tableName, arg1, arg2) {

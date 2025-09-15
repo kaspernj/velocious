@@ -1,3 +1,4 @@
+import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
 import connectConnection from "./connect-connection.js"
 import CreateDatabase from "./sql/create-database.js"
@@ -41,6 +42,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return connectArgs
   }
 
+  alterTableSql(tableData) {
+    const alterArgs = {tableData, driver: this}
+    const alterTable = new AlterTable(alterArgs)
+
+    return alterTable.toSqls()
+  }
+
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
     const createDatabase = new CreateDatabase(createArgs)
@@ -56,7 +64,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   createTableSql(tableData) {
-    const createArgs = Object.assign({tableData, driver: this})
+    const createArgs = {tableData, driver: this}
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()

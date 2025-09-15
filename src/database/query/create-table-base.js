@@ -1,5 +1,4 @@
 import CreateIndexBase from "./create-index-base.js"
-import * as inflection from "inflection"
 import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
@@ -35,86 +34,9 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     for (const column of tableData.getColumns()) {
       columnCount++
 
-      let maxlength = column.getMaxLength()
-      let type = column.getType().toUpperCase()
-
-      if (type == "DATETIME" && databaseType == "pgsql") {
-        type = "TIMESTAMP"
-      }
-
-      if (type == "STRING") {
-        type = "VARCHAR"
-        maxlength ||= 255
-      }
-
-      if (databaseType == "mssql" && type == "BOOLEAN") {
-        type = "BIT"
-      } else if (databaseType == "mssql" && type == "UUID") {
-        type = "VARCHAR"
-        maxlength ||= 36
-      }
-
-      if (databaseType == "sqlite" && column.getAutoIncrement() && column.getPrimaryKey()) {
-        type = "INTEGER"
-      }
-
-      if (databaseType == "pgsql" && column.getAutoIncrement() && column.getPrimaryKey()) {
-        type = "SERIAL"
-      }
-
       if (columnCount > 1) sql += ", "
 
-      sql += `${options.quoteColumnName(column.getName())} ${type}`
-
-      if (maxlength !== undefined) sql += `(${maxlength})`
-
-      if (column.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
-        if (databaseType == "mssql") {
-          sql += " IDENTITY"
-        } else if (databaseType == "pgsql") {
-          if (column.getAutoIncrement() && column.getPrimaryKey()) {
-            // Do nothing
-          } else {
-            throw new Error("pgsql auto increment must be primary key")
-          }
-        } else {
-          sql += " AUTO_INCREMENT"
-        }
-      }
-
-      if (typeof column.getDefault() == "function") {
-        const defaultValue = column.getDefault()()
-
-        sql += ` DEFAULT (`
-
-        if (databaseType == "pgsql" && defaultValue == "UUID()") {
-          sql += "gen_random_uuid()"
-        } else if (databaseType == "mssql" && defaultValue == "UUID()") {
-          sql += "NEWID()"
-        } else {
-          sql += defaultValue
-        }
-
-        sql += ")"
-      } else if (column.getDefault()) {
-        sql += ` DEFAULT ${options.quote(column.getDefault())}`
-      }
-
-      if (column.getPrimaryKey()) sql += " PRIMARY KEY"
-      if (column.getNull() === false) sql += " NOT NULL"
-
-      if (column.getForeignKey()) {
-        let foreignKeyTable, foreignKeyColumn
-
-        if (column.getForeignKey() === true) {
-          foreignKeyColumn = "id"
-          foreignKeyTable = inflection.pluralize(column.getName().replace(/_id$/, ""))
-        } else {
-          throw new Error(`Unknown foreign key type given: ${column.getForeignKey()} (${typeof column.getForeignKey()})`)
-        }
-
-        sql += ` REFERENCES ${options.quoteTableName(foreignKeyTable)}(${options.quoteColumnName(foreignKeyColumn)})`
-      }
+      sql += column.getSQL(driver)
     }
 
     if (this.indexInCreateTable) {

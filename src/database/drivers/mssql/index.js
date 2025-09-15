@@ -1,3 +1,4 @@
+import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
@@ -32,6 +33,13 @@ export default class VelociousDatabaseDriversMssql extends Base{
     this.connection = undefined
   }
 
+  alterTableSql(tableData) {
+    const alterArgs = {tableData, driver: this}
+    const alterTable = new AlterTable(alterArgs)
+
+    return alterTable.toSqls()
+  }
+
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
     const createDatabase = new CreateDatabase(createArgs)
@@ -47,7 +55,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   createTableSql(tableData) {
-    const createArgs = Object.assign({tableData, driver: this, indexInCreateTable: false})
+    const createArgs = {tableData, driver: this, indexInCreateTable: false}
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()
