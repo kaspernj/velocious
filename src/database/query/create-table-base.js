@@ -36,7 +36,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (columnCount > 1) sql += ", "
 
-      sql += column.getSQL(driver)
+      sql += column.getSQL({driver, forAlterTable: false})
     }
 
     if (this.indexInCreateTable) {

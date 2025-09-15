@@ -29,7 +29,7 @@ class TableColumn {
   getType() { return this.args?.type }
   isNewColumn() { return this.args?.isNewColumn }
 
-  getSQL(driver) {
+  getSQL({forAlterTable, driver}) {
     const databaseType = driver.getType()
     const options = driver.options()
     let maxlength = this.getMaxLength()
@@ -59,9 +59,13 @@ class TableColumn {
       type = "SERIAL"
     }
 
-    let sql = `${options.quoteColumnName(this.getName())} ${type}`
+    let sql = `${options.quoteColumnName(this.getName())} `
 
-    if (maxlength !== undefined) sql += `(${maxlength})`
+    if (databaseType == "pgsql" && forAlterTable) sql += "TYPE "
+
+    sql += type
+
+    if (maxlength !== undefined && maxlength !== null) sql += `(${maxlength})`
 
     if (this.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
       if (databaseType == "mssql") {

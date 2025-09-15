@@ -14,6 +14,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   }
 
   toSqls() {
+    const databaseType = this.getDriver().getType()
     const sqls = []
     const {tableData} = digs(this, "tableData")
     const options = this.getOptions()
@@ -27,10 +28,14 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
       if (column.isNewColumn()) {
         sql += "ADD "
       } else {
-        sql += "MODIFY "
+        if (databaseType == "pgsql") {
+          sql += "ALTER COLUMN "
+        } else {
+          sql += "MODIFY "
+        }
       }
 
-      sql += column.getSQL(this.getDriver())
+      sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
       columnsCount++
     }
 
