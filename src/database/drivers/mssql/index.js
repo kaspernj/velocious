@@ -33,11 +33,11 @@ export default class VelociousDatabaseDriversMssql extends Base{
     this.connection = undefined
   }
 
-  alterTableSql(tableData) {
+  async alterTableSql(tableData) {
     const alterArgs = {tableData, driver: this}
     const alterTable = new AlterTable(alterArgs)
 
-    return alterTable.toSqls()
+    return await alterTable.toSqls()
   }
 
   createDatabaseSql(databaseName, args) {

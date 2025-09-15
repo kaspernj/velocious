@@ -1,5 +1,6 @@
 import BaseColumnsIndex from "../base-columns-index.js"
 import {digg} from "diggerize"
+import {TableIndex} from "../../table-data/index.js"
 
 export default class VelociousDatabaseDriversSqliteColumn extends BaseColumnsIndex {
   constructor(table, data) {
@@ -8,8 +9,19 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumnsInd
     this.table = table
   }
 
+  getColumnNames() {
+    return digg(this, "data", "columnNames")
+  }
+
   getName() {
     return digg(this, "data", "name")
+  }
+
+  getTableDataIndex() {
+    return new TableIndex(this.getColumnNames(), {
+      name: this.getName(),
+      unique: this.isUnique()
+    })
   }
 
   isPrimaryKey() {

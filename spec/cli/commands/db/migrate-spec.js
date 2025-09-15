@@ -3,7 +3,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
-  fit("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
+  it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -43,9 +43,9 @@ describe("Cli - Commands - db:migrate", () => {
       // It creates unique indexes
       const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
       const tokenColumn = await authenticationTokensTable.getColumnByName("token")
-      const tokenIndex = await tokenColumn.getIndexByName("index_on_token")
+      const tokenIndex = await tokenColumn.getIndexByName("index_on_authentication_tokens_token")
 
-      expect(tokenIndex.getName()).toEqual("index_on_token")
+      expect(tokenIndex.getName()).toEqual("index_on_authentication_tokens_token")
       expect(tokenIndex.isPrimaryKey()).toBeFalse()
       expect(tokenIndex.isUnique()).toBeTrue()
 

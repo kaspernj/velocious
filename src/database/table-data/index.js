@@ -143,7 +143,7 @@ class TableReference {
   }
 }
 
-export {TableColumn}
+export {TableColumn, TableIndex}
 
 export default class TableData {
   _columns = []
@@ -167,6 +167,7 @@ export default class TableData {
     }
   }
 
+  addIndex(index) { this._indexes.push(index) }
   getColumns() { return this._columns }
   getName() { return this._name }
   setName(newName) { this._name = newName }
@@ -183,7 +184,7 @@ export default class TableData {
 
   references(name, args = {}) {
     const columnName = `${name}_id`
-    const indexName = `index_on_${columnName}`
+    const indexName = `index_on_${this.getName()}_${columnName}`
     const reference = new TableReference(name, args)
     const columnArgs = Object.assign({isNewColumn: true, type: "bigint"}, args)
     const column = new TableColumn(columnName, columnArgs)

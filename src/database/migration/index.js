@@ -34,7 +34,7 @@ export default class VelociousDatabaseMigration {
 
     tableData.addColumn(columnName, tableColumnArgs)
 
-    const sqls = this._db.alterTableSql(tableData)
+    const sqls = await this._db.alterTableSql(tableData)
 
     for (const sql of sqls) {
       await this._db.query(sql)

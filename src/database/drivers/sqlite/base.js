@@ -14,11 +14,11 @@ import Table from "./table.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
-  alterTableSql(tableData) {
+  async alterTableSql(tableData) {
     const alterArgs = {driver: this, tableData}
     const alterTable = new AlterTable(alterArgs)
 
-    return alterTable.toSqls()
+    return await alterTable.toSqls()
   }
 
   createIndexSql(indexData) {

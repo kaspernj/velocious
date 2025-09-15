@@ -16,7 +16,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
     tableData.addColumn(column)
 
-    const sqls = this.getDriver().alterTableSql(tableData)
+    const sqls = await this.getDriver().alterTableSql(tableData)
 
     console.log({sqls})
 
