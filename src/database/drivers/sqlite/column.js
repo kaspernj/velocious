@@ -1,3 +1,4 @@
+import {digg} from "diggerize"
 import BaseColumn from "../base-column.js"
 import ColumnsIndex from "./columns-index.js"
 
@@ -48,21 +49,45 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
     return columnNames
   }
 
-  getName() {
-    if (!this.column.name) {
-      throw new Error("No name given for SQLite column")
-    }
+  getDefault() {
+    return digg(this, "column", "dflt_value")
+  }
 
-    return this.column.name
+  getName() {
+    const name = digg(this, "column", "name")
+
+    if (!name) throw new Error("No name given for SQLite column")
+
+    return name
+  }
+
+  getMaxLength() {
+    const columnType = digg(this, "column", "type")
+    const match = columnType.match(/(.*)\((\d+)\)$/)
+
+    if (match) {
+      return parseInt(match[2])
+    }
+  }
+
+  getNull() {
+    const notNullValue = digg(this, "column", "notnull")
+
+    if (notNullValue === 1) {
+      return false
+    } else {
+      return true
+    }
   }
 
   getType() {
-    const match = this.column.type.match(/(.*)\((\d+)\)$/)
+    const columnType = digg(this, "column", "type")
+    const match = columnType.match(/(.*)\((\d+)\)$/)
 
     if (match) {
       return match[1].toLowerCase()
     }
 
-    return this.column.type.toLowerCase()
+    return columnType.toLowerCase()
   }
 }

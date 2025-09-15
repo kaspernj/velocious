@@ -14,8 +14,8 @@ import Table from "./table.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
-  alterTableSql(columnData) {
-    const alterArgs = Object.assign({driver: this}, columnData)
+  alterTableSql(tableData) {
+    const alterArgs = {driver: this, tableData}
     const alterTable = new AlterTable(alterArgs)
 
     return alterTable.toSqls()
@@ -29,7 +29,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   createTableSql(tableData) {
-    const createArgs = Object.assign({tableData, driver: this, indexInCreateTable: false})
+    const createArgs = {tableData, driver: this, indexInCreateTable: false}
     const createTable = new CreateTable(createArgs)
 
     return createTable.toSql()
