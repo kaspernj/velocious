@@ -43,9 +43,9 @@ describe("Cli - Commands - db:migrate", () => {
       // It creates unique indexes
       const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
       const tokenColumn = await authenticationTokensTable.getColumnByName("token")
-      const tokenIndex = await tokenColumn.getIndexByName("index_on_token")
+      const tokenIndex = await tokenColumn.getIndexByName("index_on_authentication_tokens_token")
 
-      expect(tokenIndex.getName()).toEqual("index_on_token")
+      expect(tokenIndex.getName()).toEqual("index_on_authentication_tokens_token")
       expect(tokenIndex.isPrimaryKey()).toBeFalse()
       expect(tokenIndex.isUnique()).toBeTrue()
 
@@ -63,8 +63,6 @@ describe("Cli - Commands - db:migrate", () => {
         }
       }
     })
-
-
 
     expect(projectForeignKey.getTableName()).toEqual("tasks")
     expect(projectForeignKey.getColumnName()).toEqual("project_id")
@@ -84,7 +82,15 @@ describe("Cli - Commands - db:migrate", () => {
         ]
       )
 
-      expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845", "20250912183605", "20250912183606"])
+      expect(uniqunize(defaultSchemaMigrations.sort())).toEqual([
+        "20230728075328",
+        "20230728075329",
+        "20250605133926",
+        "20250903112845",
+        "20250912183605",
+        "20250912183606",
+        "20250915085450"
+      ])
     } else {
       expect(tablesResult.sort()).toEqual(
         [
@@ -99,7 +105,7 @@ describe("Cli - Commands - db:migrate", () => {
         ]
       )
 
-      expect(defaultSchemaMigrations.sort()).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845", "20250912183605", "20250912183606"])
+      expect(defaultSchemaMigrations.sort()).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845", "20250912183605", "20250912183606", "20250915085450"])
     }
   })
 })

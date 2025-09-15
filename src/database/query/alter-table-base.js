@@ -1,25 +1,45 @@
+import {digs} from "diggerize"
 import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
+import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
-  constructor({columns, driver, tableName, ...restArgs}) {
+  constructor({driver, tableData, ...restArgs}) {
     restArgsError(restArgs)
 
+    if (!(tableData instanceof TableData)) throw new Error("Invalid table data was given")
+
     super({driver})
-    this.columns = columns
-    this.tableName = tableName
+    this.tableData = tableData
   }
 
   toSqls() {
+    const databaseType = this.getDriver().getType()
     const sqls = []
+    const {tableData} = digs(this, "tableData")
+    const options = this.getOptions()
 
-    for (const column of this.columns) {
-      let sql = `ALTER TABLE ${this.getOptions().quoteTableName(this.tableName)} ADD `
+    let sql = `ALTER TABLE ${options.quoteTableName(tableData.getName())} `
+    let columnsCount = 0
 
-      sql += this.getOptions().quoteColumnName(column.getName())
+    for (const column of tableData.getColumns()) {
+      if (columnsCount > 0) sql += ", "
 
-      sqls.push(sql)
+      if (column.isNewColumn()) {
+        sql += "ADD "
+      } else {
+        if (databaseType == "mssql" || databaseType == "pgsql") {
+          sql += "ALTER COLUMN "
+        } else {
+          sql += "MODIFY "
+        }
+      }
+
+      sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
+      columnsCount++
     }
+
+    sqls.push(sql)
 
     return sqls
   }

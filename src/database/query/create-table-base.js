@@ -1,10 +1,13 @@
 import CreateIndexBase from "./create-index-base.js"
-import * as inflection from "inflection"
+import {digs} from "diggerize"
 import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
+import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   constructor({driver, ifNotExists, indexInCreateTable = true, tableData}) {
+    if (!(tableData instanceof TableData)) throw new Error("Invalid table data was given")
+
     super({driver})
     this.ifNotExists = ifNotExists
     this.indexInCreateTable = indexInCreateTable
@@ -15,7 +18,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     const databaseType = this.getDatabaseType()
     const driver = this.getDriver()
     const options = this.getOptions()
-    const {tableData} = this
+    const {tableData} = digs(this, "tableData")
     const sqls = []
     const ifNotExists = this.ifNotExists || tableData.getIfNotExists()
     let sql = ""
@@ -35,86 +38,9 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     for (const column of tableData.getColumns()) {
       columnCount++
 
-      let maxlength = column.getMaxLength()
-      let type = column.getType().toUpperCase()
-
-      if (type == "DATETIME" && databaseType == "pgsql") {
-        type = "TIMESTAMP"
-      }
-
-      if (type == "STRING") {
-        type = "VARCHAR"
-        maxlength ||= 255
-      }
-
-      if (databaseType == "mssql" && type == "BOOLEAN") {
-        type = "BIT"
-      } else if (databaseType == "mssql" && type == "UUID") {
-        type = "VARCHAR"
-        maxlength ||= 36
-      }
-
-      if (databaseType == "sqlite" && column.getAutoIncrement() && column.getPrimaryKey()) {
-        type = "INTEGER"
-      }
-
-      if (databaseType == "pgsql" && column.getAutoIncrement() && column.getPrimaryKey()) {
-        type = "SERIAL"
-      }
-
       if (columnCount > 1) sql += ", "
 
-      sql += `${options.quoteColumnName(column.getName())} ${type}`
-
-      if (maxlength !== undefined) sql += `(${maxlength})`
-
-      if (column.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
-        if (databaseType == "mssql") {
-          sql += " IDENTITY"
-        } else if (databaseType == "pgsql") {
-          if (column.getAutoIncrement() && column.getPrimaryKey()) {
-            // Do nothing
-          } else {
-            throw new Error("pgsql auto increment must be primary key")
-          }
-        } else {
-          sql += " AUTO_INCREMENT"
-        }
-      }
-
-      if (typeof column.getDefault() == "function") {
-        const defaultValue = column.getDefault()()
-
-        sql += ` DEFAULT (`
-
-        if (databaseType == "pgsql" && defaultValue == "UUID()") {
-          sql += "gen_random_uuid()"
-        } else if (databaseType == "mssql" && defaultValue == "UUID()") {
-          sql += "NEWID()"
-        } else {
-          sql += defaultValue
-        }
-
-        sql += ")"
-      } else if (column.getDefault()) {
-        sql += ` DEFAULT ${options.quote(column.getDefault())}`
-      }
-
-      if (column.getPrimaryKey()) sql += " PRIMARY KEY"
-      if (column.getNull() === false) sql += " NOT NULL"
-
-      if (column.getForeignKey()) {
-        let foreignKeyTable, foreignKeyColumn
-
-        if (column.getForeignKey() === true) {
-          foreignKeyColumn = "id"
-          foreignKeyTable = inflection.pluralize(column.getName().replace(/_id$/, ""))
-        } else {
-          throw new Error(`Unknown foreign key type given: ${column.getForeignKey()} (${typeof column.getForeignKey()})`)
-        }
-
-        sql += ` REFERENCES ${options.quoteTableName(foreignKeyTable)}(${options.quoteColumnName(foreignKeyColumn)})`
-      }
+      sql += column.getSQL({driver, forAlterTable: false})
     }
 
     if (this.indexInCreateTable) {
@@ -145,7 +71,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       for (const column of tableData.getColumns()) {
         if (!column.getIndex()) continue
 
-        const indexName = `index_on_${column.getName()}`
+        const indexName = `index_on_${tableData.getName()}_${column.getName()}`
 
         sql += ","
 
@@ -174,6 +100,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         const createIndexArgs = {
           columns: index.getColumns(),
           driver: this.getDriver(),
+          name: index.getName(),
           tableName: tableData.getName(),
           unique: index.getUnique()
         }
@@ -185,7 +112,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       for (const column of tableData.getColumns()) {
         if (!column.getIndex()) continue
 
-        const indexName = `index_on_${column.getName()}`
+        const indexName = `index_on_${tableData.getName()}_${column.getName()}`
         const {unique, ...restIndexArgs} = column.getIndex()
 
         restArgsError(restIndexArgs)

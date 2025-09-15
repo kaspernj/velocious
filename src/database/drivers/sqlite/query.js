@@ -1,5 +1,4 @@
 export default async function query(connection, sql) {
-  const rows = []
   let result
 
   try {
@@ -13,7 +12,7 @@ export default async function query(connection, sql) {
 
     error.message += `\n\n${sqlInErrorMessage}`
 
-    throw error
+    throw new Error(error.message)
   }
 
   return result

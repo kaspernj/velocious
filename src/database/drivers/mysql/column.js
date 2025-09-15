@@ -49,5 +49,38 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
     return indexes
   }
 
-  getName = () => digg(this, "data", "Field")
+  getDefault() { return digg(this, "data", "Default") }
+
+  getMaxLength() {
+    const type = digg(this, "data", "Type")
+    const match = type.match(/\((\d+)\)$/)
+
+    if (match) {
+      const maxLength = parseInt(match[1])
+
+      return maxLength
+    }
+  }
+
+  getName() { return digg(this, "data", "Field") }
+
+  getNull() {
+    const nullValue = digg(this, "data", "Null")
+
+    if (nullValue == "NO") {
+      return false
+    } else if (nullValue == "YES") {
+      return true
+    } else {
+      throw new Error(`Unknown null value: ${nullValue}`)
+    }
+  }
+
+  getType() {
+    const type = digg(this, "data", "Type")
+    const match = type.match(/^(.+)\((\d+)\)$/)
+    const columnType = match[1]
+
+    return columnType
+  }
 }

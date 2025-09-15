@@ -39,7 +39,29 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
     return indexes
   }
 
+  getDefault() {
+    return digg(this, "data", "column_default")
+  }
+
+  getMaxLength() {
+    return digg(this, "data", "character_maximum_length")
+  }
+
   getName() {
     return digg(this, "data", "column_name")
+  }
+
+  getNull() {
+    const nullValue = digg(this, "data", "is_nullable")
+
+    if (nullValue == "NO") {
+      return false
+    } else {
+      return true
+    }
+  }
+
+  getType() {
+    return digg(this, "data", "data_type")
   }
 }

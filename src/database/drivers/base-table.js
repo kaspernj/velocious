@@ -1,4 +1,5 @@
 import {digg} from "diggerize"
+import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseTable {
   async getColumnByName(columnName) {
@@ -16,6 +17,20 @@ export default class VelociousDatabaseDriversBaseTable {
 
   getOptions() {
     return this.getDriver().options()
+  }
+
+  async getTableData() {
+    const tableData = new TableData(this.getName())
+
+    for (const column of await this.getColumns()) {
+      tableData.addColumn(column.getTableDataColumn())
+    }
+
+    for (const index of await this.getIndexes()) {
+      tableData.addIndex(index.getTableDataIndex())
+    }
+
+    return tableData
   }
 
   async rowsCount() {
