@@ -45,7 +45,29 @@ export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
     return indexes
   }
 
+  getDefault() {
+    return digg(this, "data", "COLUMN_DEFAULT")
+  }
+
+  getMaxLength() {
+    return digg(this, "data", "CHARACTER_MAXIMUM_LENGTH")
+  }
+
   getName() {
     return digg(this, "data", "COLUMN_NAME")
+  }
+
+  getNull() {
+    const nullValue = digg(this, "data", "IS_NULLABLE")
+
+    if (nullValue == "NO") {
+      return false
+    } else {
+      return true
+    }
+  }
+
+  getType() {
+    return digg(this, "data", "DATA_TYPE")
   }
 }

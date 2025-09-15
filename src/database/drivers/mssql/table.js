@@ -11,7 +11,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   }
 
   async getColumns() {
-    const result = await this.driver.query(`SELECT [COLUMN_NAME] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_NAME] = ${this.driver.quote(this.getName())}`)
+    const result = await this.driver.query(`SELECT * FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_NAME] = ${this.driver.quote(this.getName())}`)
     const columns = []
 
     for (const data of result) {

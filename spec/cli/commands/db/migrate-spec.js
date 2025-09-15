@@ -3,7 +3,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
-  it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
+  fit("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -64,8 +64,6 @@ describe("Cli - Commands - db:migrate", () => {
       }
     })
 
-
-
     expect(projectForeignKey.getTableName()).toEqual("tasks")
     expect(projectForeignKey.getColumnName()).toEqual("project_id")
     expect(projectForeignKey.getReferencedTableName()).toEqual("projects")
@@ -84,7 +82,15 @@ describe("Cli - Commands - db:migrate", () => {
         ]
       )
 
-      expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845", "20250912183605", "20250912183606"])
+      expect(uniqunize(defaultSchemaMigrations.sort())).toEqual([
+        "20230728075328",
+        "20230728075329",
+        "20250605133926",
+        "20250903112845",
+        "20250912183605",
+        "20250912183606",
+        "20250915085450"
+      ])
     } else {
       expect(tablesResult.sort()).toEqual(
         [

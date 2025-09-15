@@ -24,6 +24,8 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
       indexes.push(columnsIndex)
     }
 
+    console.log({indexes})
+
     return indexes
   }
 

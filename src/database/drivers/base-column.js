@@ -10,13 +10,15 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   async changeNullable(nullable) {
     const tableData = new TableData(this.getTable().getName())
-    const column = this.getTableColumn()
+    const column = this.getTableDataColumn()
 
     column.setNull(nullable)
 
     tableData.addColumn(column)
 
     const sqls = this.getDriver().alterTableSql(tableData)
+
+    console.log({sqls})
 
     for (const sql of sqls) {
       await this.getDriver().query(sql)
@@ -37,7 +39,7 @@ export default class VelociousDatabaseDriversBaseColumn {
     return this.table
   }
 
-  getTableColumn() {
+  getTableDataColumn() {
     return new TableColumn(this.getName(), {
       default: this.getDefault(),
       isNewColumn: false,

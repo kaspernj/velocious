@@ -1,5 +1,4 @@
 export default async function query(connection, sql) {
-  const rows = []
   let result
 
   try {

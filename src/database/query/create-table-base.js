@@ -1,9 +1,13 @@
 import CreateIndexBase from "./create-index-base.js"
+import {digs} from "diggerize"
 import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
+import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   constructor({driver, ifNotExists, indexInCreateTable = true, tableData}) {
+    if (!(tableData instanceof TableData)) throw new Error("Invalid table data was given")
+
     super({driver})
     this.ifNotExists = ifNotExists
     this.indexInCreateTable = indexInCreateTable
@@ -14,7 +18,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     const databaseType = this.getDatabaseType()
     const driver = this.getDriver()
     const options = this.getOptions()
-    const {tableData} = this
+    const {tableData} = digs(this, "tableData")
     const sqls = []
     const ifNotExists = this.ifNotExists || tableData.getIfNotExists()
     let sql = ""

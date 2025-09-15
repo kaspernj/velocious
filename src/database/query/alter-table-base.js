@@ -28,7 +28,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
       if (column.isNewColumn()) {
         sql += "ADD "
       } else {
-        if (databaseType == "pgsql") {
+        if (databaseType == "mssql" || databaseType == "pgsql") {
           sql += "ALTER COLUMN "
         } else {
           sql += "MODIFY "

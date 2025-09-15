@@ -169,6 +169,7 @@ export default class TableData {
 
   getColumns() { return this._columns }
   getName() { return this._name }
+  setName(newName) { this._name = newName }
   getIfNotExists() { return this.args.ifNotExists }
   getIndexes() { return this._indexes }
   getReferences() { return this._references }
