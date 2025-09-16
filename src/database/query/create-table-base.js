@@ -105,6 +105,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         const createIndexArgs = {
           columns: index.getColumns(),
           driver: this.getDriver(),
+          ifNotExists: true,
           name: index.getName(),
           tableName: tableData.getName(),
           unique: index.getUnique()

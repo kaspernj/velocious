@@ -43,19 +43,27 @@ describe("Cli - Commands - db:migrate", () => {
       // It creates the correct index
       const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
       const indexes = await authenticationTokensTable.getIndexes()
-      const indexesNames = indexes.map((index) => index.getName())
+      const indexesNames = indexes.map((index) => index.getName()).filter((indexName) => indexName != "authentication_tokens_pkey").sort()
 
       if (defaultDatabaseType == "sqlite") {
-        expect(indexesNames).toEqual(["index_on_authentication_tokens_user_id", "index_on_authentication_tokens_token"])
+        expect(indexesNames).toEqual(["index_on_authentication_tokens_token", "index_on_authentication_tokens_user_id"])
       } else {
-        expect(indexesNames).toEqual(["index_on_user_id", "index_on_token"])
+        expect(indexesNames).toEqual(["index_on_token", "index_on_user_id"])
       }
 
       // It creates unique indexes
-      const tokenColumn = await authenticationTokensTable.getColumnByName("token")
-      const tokenIndex = await tokenColumn.getIndexByName("index_on_authentication_tokens_token")
+      let tokenIndexName
 
-      expect(tokenIndex.getName()).toEqual("index_on_authentication_tokens_token")
+      if (defaultDatabaseType == "sqlite") {
+        tokenIndexName = "index_on_authentication_tokens_token"
+      } else {
+        tokenIndexName = "index_on_token"
+      }
+
+      const tokenColumn = await authenticationTokensTable.getColumnByName("token")
+      const tokenIndex = await tokenColumn.getIndexByName(tokenIndexName)
+
+      expect(tokenIndex.getName()).toEqual(tokenIndexName)
       expect(tokenIndex.isPrimaryKey()).toBeFalse()
       expect(tokenIndex.isUnique()).toBeTrue()
 
