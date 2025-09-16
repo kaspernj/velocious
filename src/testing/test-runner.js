@@ -1,4 +1,4 @@
-import {addTrackedStackToError} from "../utils/with-tracked-stack"
+import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
