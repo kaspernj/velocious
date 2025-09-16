@@ -1,6 +1,6 @@
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
-import TableData, {TableColumn} from "../table-data/index.js"
+import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseMigration {
   static onDatabases(databaseIdentifiers) {
@@ -29,15 +29,17 @@ export default class VelociousDatabaseMigration {
   getDriver() { return this._db }
 
   async addColumn(tableName, columnName, columnType, args) {
-    const tableColumnArgs = Object.assign({type: columnType}, args)
+    if (!columnType) throw new Error("No column type given")
+
+    const tableColumnArgs = Object.assign({isNewColumn: true, type: columnType}, args)
     const tableData = new TableData(tableName)
 
     tableData.addColumn(columnName, tableColumnArgs)
 
-    const sqls = await this._db.alterTableSql(tableData)
+    const sqls = await this.getDriver().alterTableSql(tableData)
 
     for (const sql of sqls) {
-      await this._db.query(sql)
+      await this.getDriver().query(sql)
     }
   }
 
@@ -49,9 +51,9 @@ export default class VelociousDatabaseMigration {
       },
       args
     )
-    const sql = this._db.createIndexSql(createIndexArgs)
+    const sql = this.getDriver().createIndexSql(createIndexArgs)
 
-    await this._db.query(sql)
+    await this.getDriver().query(sql)
   }
 
   async addForeignKey(tableName, referenceName) {
@@ -66,16 +68,19 @@ export default class VelociousDatabaseMigration {
     sql += ` FOREIGN KEY (${this._db.quoteColumn(columnName)})`
     sql += ` REFERENCES ${tableNameUnderscore}(id)`
 
-    await this._db.query(sql)
+    await this.getDriver().query(sql)
   }
 
   async addReference(tableName, referenceName, args) {
+    const {foreignKey, type, unique, ...restArgs} = args
     const columnName = `${inflection.underscore(referenceName)}_id`
 
-    await this.addColumn(tableName, columnName, {type: args?.type})
-    await this.addIndex(tableName, [columnName], {unique: args?.unique})
+    restArgsError(restArgs)
 
-    if (args?.foreignKey) {
+    await this.addColumn(tableName, columnName, type || "integer")
+    await this.addIndex(tableName, [columnName], {unique: unique})
+
+    if (foreignKey) {
       await this.addForeignKey(tableName, referenceName)
     }
   }
@@ -118,7 +123,7 @@ export default class VelociousDatabaseMigration {
       callback(tableData)
     }
 
-    const sqls = this._db.createTableSql(tableData)
+    const sqls = this.getDriver().createTableSql(tableData)
 
     for (const sql of sqls) {
       await this._db.query(sql)
@@ -126,7 +131,7 @@ export default class VelociousDatabaseMigration {
   }
 
   async tableExists(tableName) {
-    const exists = await this._db.tableExists(tableName)
+    const exists = await this.getDriver().tableExists(tableName)
 
     return exists
   }

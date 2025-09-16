@@ -40,14 +40,42 @@ describe("Cli - Commands - db:migrate", () => {
         }
       }
 
-      // It creates unique indexes
+      // It creates the correct index
       const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
-      const tokenColumn = await authenticationTokensTable.getColumnByName("token")
-      const tokenIndex = await tokenColumn.getIndexByName("index_on_authentication_tokens_token")
+      const indexes = await authenticationTokensTable.getIndexes()
+      const indexesNames = indexes
+        .map((index) => index.getName())
+        .filter((indexName) => indexName != "authentication_tokens_pkey" && indexName != "PRIMARY" && !indexName.startsWith("PK__"))
+        .sort()
 
-      expect(tokenIndex.getName()).toEqual("index_on_authentication_tokens_token")
+      if (defaultDatabaseType == "mysql") {
+        expect(indexesNames).toEqual(["index_on_token","user_id"])
+      } else if (defaultDatabaseType == "sqlite") {
+        expect(indexesNames).toEqual(["index_on_authentication_tokens_token", "index_on_authentication_tokens_user_id"])
+      } else {
+        expect(indexesNames).toEqual(["index_on_token", "index_on_user_id"])
+      }
+
+      // It creates unique indexes
+      let tokenIndexName
+
+      if (defaultDatabaseType == "sqlite") {
+        tokenIndexName = "index_on_authentication_tokens_token"
+      } else {
+        tokenIndexName = "index_on_token"
+      }
+
+      const tokenColumn = await authenticationTokensTable.getColumnByName("token")
+      const tokenIndex = await tokenColumn.getIndexByName(tokenIndexName)
+
+      expect(tokenIndex.getName()).toEqual(tokenIndexName)
       expect(tokenIndex.isPrimaryKey()).toBeFalse()
       expect(tokenIndex.isUnique()).toBeTrue()
+
+      // It creates foreign keys
+      const authTokensTableForeignKeys = await authenticationTokensTable.getForeignKeys()
+
+      expect(authTokensTableForeignKeys.length).toEqual(1)
 
       for (const db of Object.values(dbs)) {
         const schemaMigrations = await db.query("SELECT * FROM schema_migrations ORDER BY version")

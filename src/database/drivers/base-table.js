@@ -21,9 +21,23 @@ export default class VelociousDatabaseDriversBaseTable {
 
   async getTableData() {
     const tableData = new TableData(this.getName())
+    const tableDataColumns = []
 
     for (const column of await this.getColumns()) {
-      tableData.addColumn(column.getTableDataColumn())
+      const tableDataColumn = column.getTableDataColumn()
+
+      tableData.addColumn(tableDataColumn)
+      tableDataColumns.push(tableDataColumn)
+    }
+
+    for (const foreignKey of await this.getForeignKeys()) {
+      tableData.addForeignKey(foreignKey.getTableDataForeignKey())
+
+      const tableDataColumn = tableDataColumns.find((tableDataColumn) => tableDataColumn.getName() == foreignKey.getColumnName())
+
+      if (!tableDataColumn) throw new Error(`Couldn't find table data column for foreign key: ${foreignKey.getColumnName()}`)
+
+      tableDataColumn.setForeignKey(foreignKey)
     }
 
     for (const index of await this.getIndexes()) {

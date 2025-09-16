@@ -68,10 +68,15 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         sql += ")"
       }
 
+      // Create indexes for all columns with the index argument
       for (const column of tableData.getColumns()) {
         if (!column.getIndex()) continue
 
-        const indexName = `index_on_${tableData.getName()}_${column.getName()}`
+        let indexName = `index_on_`
+
+        if (databaseType == "sqlite") sql += `${tableData.getName()}_`
+
+        indexName += column.getName()
 
         sql += ","
 
@@ -100,6 +105,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         const createIndexArgs = {
           columns: index.getColumns(),
           driver: this.getDriver(),
+          ifNotExists: true,
           name: index.getName(),
           tableName: tableData.getName(),
           unique: index.getUnique()
@@ -109,13 +115,19 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         sqls.push(sql)
       }
 
+      // Create indexes for all columns with the index argument
       for (const column of tableData.getColumns()) {
         if (!column.getIndex()) continue
 
-        const indexName = `index_on_${tableData.getName()}_${column.getName()}`
         const {unique, ...restIndexArgs} = column.getIndex()
 
         restArgsError(restIndexArgs)
+
+        let indexName = `index_on_`
+
+        if (databaseType == "sqlite") indexName += `${tableData.getName()}_`
+
+        indexName += column.getName()
 
         const createIndexArgs = {
           columns: [column.getName()],

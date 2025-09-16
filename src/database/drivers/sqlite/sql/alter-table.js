@@ -1,6 +1,7 @@
 import AlterTableBase from "../../../query/alter-table-base.js"
 import CreateIndexBase from "../../../query/create-index-base.js"
 import {digs} from "diggerize"
+import {Logger} from "../../../../logger.js"
 import restArgsError from "../../../../utils/rest-args-error.js"
 import TableData from "../../../table-data/index.js"
 
@@ -11,6 +12,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     if (!(tableData instanceof TableData)) throw new Error("Invalid table data was given")
 
     super({driver, tableData})
+    this.logger = new Logger(this)
     this.tableData = tableData
   }
 
@@ -34,6 +36,48 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       newTableData.addColumn(newTableDataColumn || tableDataColumn)
     }
 
+    for (const tableDataColumn of tableData.getColumns()) {
+      if (!tableDataColumn.isNewColumn()) continue
+
+      newTableData.addColumn(tableDataColumn)
+    }
+
+    const foundForeignKeys = []
+
+    for (const tableDataForeignKey of currentTableData.getForeignKeys()) {
+      const newTableDataForeignKey = newTableData.getForeignKeys().find((newTableDataForeignKey) => newTableDataForeignKey.getName() == tableDataForeignKey.getName())
+
+      if (newTableDataForeignKey) foundForeignKeys.push(newTableDataForeignKey.getName())
+
+      const actualTableDataForeignKey = newTableDataForeignKey || tableDataForeignKey
+
+      // Register foreign key on the table
+      newTableData.addForeignKey(actualTableDataForeignKey)
+
+      // Register foreign key on the column
+      const tableDataColumn = newTableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == actualTableDataForeignKey.getColumnName())
+
+      if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
+
+      this.logger.log(`Setting foreign key on column ${tableDataColumn.getName()}`)
+      tableDataColumn.setForeignKey(actualTableDataForeignKey)
+    }
+
+    for (const foreignKey of tableData.getForeignKeys()) {
+      if (foundForeignKeys.includes(foreignKey.getName())) continue
+
+      // Register foreign key on the table
+      newTableData.addForeignKey(foreignKey)
+
+      // Register foreign key on the column
+      const tableDataColumn = newTableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == foreignKey.getColumnName())
+
+      if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
+
+      this.logger.log(`Setting foreign key on column ${tableDataColumn.getName()}`)
+      tableDataColumn.setForeignKey(actualTableDataForeignKey)
+    }
+
     const createNewTableSQL = this.getDriver().createTableSql(newTableData)
     const insertSQL = `INSERT INTO ${options.quoteTableName(tempTableName)} (${oldColumnsSQL}) SELECT ${oldColumnsSQL} FROM ${options.quoteTableName(tableName)}`
     const dropTableSQL = `DROP TABLE ${options.quoteTableName(tableName)}`
@@ -54,8 +98,6 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
       newTableData.addIndex(actualTableIndex)
 
-      console.log({actualTableIndex})
-
       const createIndexArgs = {
         columns: actualTableIndex.getColumns(),
         driver: this.getDriver(),
@@ -67,8 +109,6 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
       sqls.push(sql)
     }
-
-    console.log({sqls})
 
     return sqls
   }

@@ -21,9 +21,10 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
         NON_UNIQUE,
         INDEX_TYPE
       FROM INFORMATION_SCHEMA.STATISTICS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ${options.quote(this.table.getName())}
-        AND COLUMN_NAME = ${options.quote(this.getName())}
+      WHERE
+        TABLE_SCHEMA = DATABASE() AND
+        TABLE_NAME = ${options.quote(this.table.getName())} AND
+        COLUMN_NAME = ${options.quote(this.getName())}
     `
     const indexesRows = await this.getDriver().query(sql)
     const indexes = []

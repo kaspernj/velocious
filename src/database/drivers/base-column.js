@@ -1,4 +1,5 @@
-import TableData, {TableColumn} from "../table-data/index.js"
+import TableColumn from "../table-data/table-column.js"
+import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseColumn {
   async getIndexByName(indexName) {
@@ -17,8 +18,6 @@ export default class VelociousDatabaseDriversBaseColumn {
     tableData.addColumn(column)
 
     const sqls = await this.getDriver().alterTableSql(tableData)
-
-    console.log({sqls})
 
     for (const sql of sqls) {
       await this.getDriver().query(sql)

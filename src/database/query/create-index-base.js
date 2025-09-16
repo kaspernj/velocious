@@ -12,7 +12,10 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   generateIndexName() {
-    let indexName = `index_on_${this.tableName}_`
+    const databaseType = this.getDriver().getType()
+    let indexName = `index_on_`
+
+    if (databaseType == "sqlite") indexName += `${this.tableName}_`
 
     for (const columnIndex in this.columns) {
       if (columnIndex > 0) indexName += "_and_"
@@ -33,17 +36,34 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   toSql() {
+    const databaseType = this.getDriver().getType()
+    const indexName = this.name || this.generateIndexName()
     const options = this.getOptions()
     const {tableName} = this
-    let sql = "CREATE"
+    let sql = ""
+
+    if (this.ifNotExists && databaseType == "mssql") {
+      sql += `
+        IF NOT EXISTS (
+          SELECT 1
+          FROM sys.indexes
+          WHERE
+            name = ${options.quote(indexName)} AND
+            object_id = OBJECT_ID(${options.quote(`dbo.${tableName}`)})
+        )
+        BEGIN
+      `
+    }
+
+    sql += "CREATE"
 
     if (this.unique) sql += " UNIQUE"
 
     sql += " INDEX"
 
-    if (this.ifNotExists) sql += " IF NOT EXISTS"
+    if (this.ifNotExists && databaseType != "mssql") sql += " IF NOT EXISTS"
 
-    sql += ` ${options.quoteIndexName(this.name || this.generateIndexName())}`
+    sql += ` ${options.quoteIndexName(indexName)}`
     sql += ` ON ${options.quoteTableName(tableName)} (`
 
     for (const columnIndex in this.columns) {
@@ -62,6 +82,10 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     }
 
     sql += ")"
+
+    if (this.ifNotExists && databaseType == "mssql") {
+      sql += " END"
+    }
 
     return sql
   }

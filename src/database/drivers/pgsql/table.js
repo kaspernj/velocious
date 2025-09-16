@@ -1,5 +1,6 @@
 import BaseTable from "../base-table.js"
 import Column from "./column.js"
+import ColumnsIndex from "./columns-index.js"
 import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
@@ -43,10 +44,10 @@ export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
       WHERE
         constraint_type = 'FOREIGN KEY' AND
         tc.table_catalog = CURRENT_DATABASE() AND
-        tc.table_name = ${this.driver.quote(this.getName())}
+        tc.table_name = ${this.getDriver().quote(this.getName())}
     `
 
-    const foreignKeyRows = await this.driver.query(sql)
+    const foreignKeyRows = await this.getDriver().query(sql)
     const foreignKeys = []
 
     for (const foreignKeyRow of foreignKeyRows) {
@@ -56,6 +57,35 @@ export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
     }
 
     return foreignKeys
+  }
+
+  async getIndexes() {
+    const options = this.getOptions()
+
+    const indexesRows = await this.getDriver().query(`
+      SELECT
+        pg_attribute.attname AS column_name,
+        pg_index.indexrelid::regclass as index_name,
+        pg_class.relnamespace::regnamespace as schema_name,
+        pg_class.relname as table_name,
+        pg_index.indisprimary as is_primary_key,
+        pg_index.indisunique as is_unique
+      FROM pg_index
+      JOIN pg_class ON pg_class.oid = pg_index.indrelid
+      JOIN pg_attribute ON pg_attribute.attrelid = pg_class.oid AND pg_attribute.attnum = ANY(pg_index.indkey)
+      WHERE
+        pg_class.relname = ${options.quote(this.getName())}
+    `)
+
+    const indexes = []
+
+    for (const indexRow of indexesRows) {
+      const columnsIndex = new ColumnsIndex(this, indexRow)
+
+      indexes.push(columnsIndex)
+    }
+
+    return indexes
   }
 
   getName() {
