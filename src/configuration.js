@@ -1,6 +1,6 @@
 import {digg} from "diggerize"
 import restArgsError from "./utils/rest-args-error.js"
-import {withTrackedStack} from "./utils/with-tracked-stack.js"
+import {withTrackedStack} from "./utils/with-tracked-stack"
 
 export default class VelociousConfiguration {
   static current(throwError = true) {
