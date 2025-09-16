@@ -134,7 +134,7 @@ export default class TableColumn {
         foreignKeyColumn = foreignKey.getReferencedColumnName()
         foreignKeyTable = foreignKey.getReferencedTableName()
       } else {
-        throw new Error(`Unknown foreign key type given: ${this.getForeignKey()} (${typeof this.getForeignKey()})`)
+        throw new Error(`Unknown foreign key type given: ${foreignKey} (${typeof foreignKey})`)
       }
 
       sql += ` REFERENCES ${options.quoteTableName(foreignKeyTable)}(${options.quoteColumnName(foreignKeyColumn)})`

@@ -5,6 +5,7 @@ import strftime from "strftime"
 import UUID from "pure-uuid"
 import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
+import TableForeignKey from "../table-data/table-foreign-key.js"
 
 export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
@@ -12,6 +13,30 @@ export default class VelociousDatabaseDriversBase {
     this.configuration = configuration
     this.logger = new Logger(this)
     this._transactionsCount = 0
+  }
+
+  async addForeignKey(tableName, columnName, referencedTableName, referencedColumnName, args) {
+    console.log("ADD FOREIGN KEY")
+
+    const tableForeignKeyArgs = Object.assign(
+      {
+        columnName,
+        tableName,
+        referencedColumnName,
+        referencedTableName
+      },
+      args
+    )
+    const tableForeignKey = new TableForeignKey(tableForeignKeyArgs)
+    const tableData = new TableData(tableName)
+
+    tableData.addForeignKey(tableForeignKey)
+
+    const alterTableSQLs = await this.alterTableSql(tableData)
+
+    for (const alterTableSQL of alterTableSQLs) {
+      await this.query(alterTableSQL)
+    }
   }
 
   async createTable(...args) {

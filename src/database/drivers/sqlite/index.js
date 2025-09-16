@@ -35,6 +35,8 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   async query(sql) {
+    console.error("SQL: ", sql)
+
     return await query(this.connection, sql)
   }
 }

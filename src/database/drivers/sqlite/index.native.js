@@ -56,7 +56,9 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     this.connection = undefined
   }
 
-  query = async (sql) => {
+  async query(sql) {
+    console.error("Native SQL: ", sql)
+
     if (!this.connection) throw new Error("Not connected yet")
 
     return await query(this.connection, sql)

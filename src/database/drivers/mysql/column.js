@@ -9,6 +9,8 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
     this.table = table
   }
 
+  getAutoIncrement() { return digg(this, "data", "Extra").includes("auto_increment") }
+
   async getIndexes() {
     const options = this.getOptions()
     const sql = `
@@ -76,6 +78,8 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
       throw new Error(`Unknown null value: ${nullValue}`)
     }
   }
+
+  getPrimaryKey() { return digg(this, "data", "Key") == "PRI" }
 
   getType() {
     const type = digg(this, "data", "Type")

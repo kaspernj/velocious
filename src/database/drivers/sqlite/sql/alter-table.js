@@ -89,6 +89,8 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     }
 
     for (const foreignKey of tableData.getForeignKeys()) {
+      console.log(`Foreign key`, {foreignKey})
+
       if (foundForeignKeys.includes(foreignKey.getName())) continue
 
       // Register foreign key on the table
@@ -100,7 +102,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
 
       this.logger.debug(() => [`Setting foreign key on column ${tableDataColumn.getName()}`])
-      tableDataColumn.setForeignKey(actualTableDataForeignKey)
+      tableDataColumn.setForeignKey(foreignKey)
     }
 
     const createNewTableSQL = this.getDriver().createTableSql(newTableData)
