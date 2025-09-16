@@ -193,8 +193,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
         return await this._queryActual(sql)
       } catch (error) {
         if (tries < 5 && error.message.includes("attempt to write a readonly database")) {
-          await wait(10)
-          this.logger.warn(`Retrying query because failed with: ${error.message}`)
+          await wait(100)
+          this.logger.warn(`Retrying query because failed with: ${error.stack}`)
           // Retry
         } else {
           throw error
