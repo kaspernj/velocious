@@ -16,8 +16,6 @@ export default class VelociousDatabaseDriversBase {
   }
 
   async addForeignKey(tableName, columnName, referencedTableName, referencedColumnName, args) {
-    console.log("ADD FOREIGN KEY")
-
     const tableForeignKeyArgs = Object.assign(
       {
         columnName,

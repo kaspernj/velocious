@@ -89,8 +89,6 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     }
 
     for (const foreignKey of tableData.getForeignKeys()) {
-      console.log(`Foreign key`, {foreignKey})
-
       if (foundForeignKeys.includes(foreignKey.getName())) continue
 
       // Register foreign key on the table
