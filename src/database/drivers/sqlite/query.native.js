@@ -13,7 +13,8 @@ export default async function query(connection, sql) {
 
     error.message += `\n\n${sqlInErrorMessage}`
 
-    throw error
+    // Re-throw to recover stack trace
+    throw new Error(error.message)
   }
 
   for await (const entry of result) {

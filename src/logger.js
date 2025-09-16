@@ -12,6 +12,12 @@ function consoleError(message) {
   })
 }
 
+function consoleWarn(message) {
+  return new Promise((resolve) => {
+    process.stderr.write(`${message}\n`, "utf8", resolve)
+  })
+}
+
 function functionOrMessages(messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
     messages = messages[0]()
@@ -74,6 +80,10 @@ class Logger {
 
   async error(...messages) {
     await consoleError(messagesToMessage(this._subject, ...functionOrMessages(messages)))
+  }
+
+  async warn(...messages) {
+    await consoleWarn(messagesToMessage(this._subject, ...functionOrMessages(messages)))
   }
 }
 

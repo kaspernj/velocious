@@ -21,19 +21,8 @@
   },
   "homepage": "https://github.com/kaspernj/velocious#readme",
   "description": "",
-  "devDependencies": {
-    "awaitery": "^1.0.1",
-    "mssql": "^11.0.1",
-    "mysql": "^2.18.1",
-    "node-fetch": "^3.3.1",
-    "pg": "^8.16.3",
-    "require-context": "^1.1.0",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
-    "tedious": "^18.6.1",
-    "uniqunize": "^1.0.1"
-  },
   "dependencies": {
+    "awaitery": "^1.0.1",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",
     "debounce": "^2.2.0",
@@ -48,5 +37,16 @@
     "sql-escape-string": "^1.1.0",
     "sql.js": "^1.12.0",
     "strftime": "^0.10.2"
+  },
+  "devDependencies": {
+    "mssql": "^11.0.1",
+    "mysql": "^2.18.1",
+    "node-fetch": "^3.3.1",
+    "pg": "^8.16.3",
+    "require-context": "^1.1.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "tedious": "^18.6.1",
+    "uniqunize": "^1.0.1"
   }
 }

@@ -12,6 +12,7 @@ import Options from "./options.js"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import Update from "./sql/update.js"
+import wait from "awaitery/src/wait.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   async alterTableSql(tableData) {
@@ -54,9 +55,9 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return dropTable.toSql()
   }
 
-  deleteSql = (args) => new Delete(Object.assign({driver: this}, args)).toSql()
-  getType = () => "sqlite"
-  insertSql = (args) => new Insert(Object.assign({driver: this}, args)).toSql()
+  deleteSql(args) { return new Delete(Object.assign({driver: this}, args)).toSql() }
+  getType() { return "sqlite" }
+  insertSql(args) { return new Insert(Object.assign({driver: this}, args)).toSql() }
 
   async getTableByName(tableName, args) {
     const result = await this.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${this.quote(tableName)} LIMIT 1`)
@@ -148,8 +149,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return this._options
   }
 
-  primaryKeyType = () => "integer" // Because bigint on SQLite doesn't support auto increment
-  queryToSql = (query) => new QueryParser({query}).toSql()
+  primaryKeyType() { return "integer" } // Because bigint on SQLite doesn't support auto increment
+  queryToSql(query) { return new QueryParser({query}).toSql() }
 
   async registerVersion() {
     if (this.versionMajor || this.versionMinor) {
@@ -167,7 +168,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     this.versionPatch = versionParts[2]
   }
 
-  shouldSetAutoIncrementWhenPrimaryKey = () => false
+  shouldSetAutoIncrementWhenPrimaryKey() { return false }
 
   escape(value) {
     value = this._convertValue(value)
@@ -182,6 +183,26 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return result
   }
 
+  async query(sql) {
+    let tries = 0
+
+    while(tries < 5) {
+      tries++
+
+      try {
+        return await this._queryActual(sql)
+      } catch (error) {
+        if (tries < 5 && error.message.includes("attempt to write a readonly database")) {
+          await wait(100)
+          this.logger.warn(`Retrying query because failed with: ${error.stack}`)
+          // Retry
+        } else {
+          throw error
+        }
+      }
+    }
+  }
+
   quote(value) {
     value = this._convertValue(value)
 
@@ -193,5 +214,5 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return escapeString(value)
   }
 
-  updateSql = ({conditions, data, tableName}) => new Update({conditions, data, driver: this, tableName}).toSql()
+  updateSql({conditions, data, tableName}) { return new Update({conditions, data, driver: this, tableName}).toSql() }
 }
