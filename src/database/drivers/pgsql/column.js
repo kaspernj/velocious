@@ -9,6 +9,14 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
     this.table = table
   }
 
+  getAutoIncrement() {
+    return this.getDefault() == `nextval('${this.getTable().getName()}_${this.getName()}_seq'::regclass)`
+  }
+
+  getPrimaryKey() {
+    return digg(this, "data", "is_primary_key") === 1
+  }
+
   async getIndexes() {
     const options = this.getOptions()
 

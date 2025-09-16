@@ -40,10 +40,12 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   getTableDataColumn() {
     return new TableColumn(this.getName(), {
+      autoIncrement: this.getAutoIncrement(),
       default: this.getDefault(),
       isNewColumn: false,
       maxLength: this.getMaxLength(),
       null: this.getNull(),
+      primaryKey: this.getPrimaryKey(),
       type: this.getType()
     })
   }

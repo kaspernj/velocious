@@ -9,6 +9,8 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
     this.table = table
   }
 
+  getAutoIncrement() { return this.getPrimaryKey() }
+
   async getIndexes() {
     const indexes = await this.getTable().getIndexes()
     const indexesForColumn = indexes.filter((index) => index.getColumnNames().includes(this.getName()))
@@ -16,9 +18,7 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
     return indexesForColumn
   }
 
-  getDefault() {
-    return digg(this, "column", "dflt_value")
-  }
+  getDefault() { return digg(this, "column", "dflt_value") }
 
   getName() {
     const name = digg(this, "column", "name")
@@ -46,6 +46,8 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
       return true
     }
   }
+
+  getPrimaryKey() { return digg(this, "column", "pk") == 1 }
 
   getType() {
     const columnType = digg(this, "column", "type")

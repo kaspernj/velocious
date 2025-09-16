@@ -11,7 +11,30 @@ export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
   }
 
   async getColumns() {
-    const result = await this.driver.query(`SELECT * FROM information_schema.columns WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public' AND table_name = '${this.getName()}'`)
+    const result = await this.driver.query(`
+      SELECT
+        columns.*,
+        CASE WHEN key_column_usage.column_name IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key
+
+      FROM
+        information_schema.columns AS columns
+
+      LEFT JOIN information_schema.table_constraints AS table_constraints ON
+        table_constraints.table_name = columns.table_name AND
+        table_constraints.table_schema = columns.table_schema AND
+        table_constraints.constraint_type = 'PRIMARY KEY'
+
+      LEFT JOIN information_schema.key_column_usage AS key_column_usage ON
+        key_column_usage.constraint_name = table_constraints.constraint_name AND
+        key_column_usage.table_schema = table_constraints.table_schema AND
+        key_column_usage.table_name = columns.table_name AND
+        key_column_usage.column_name = columns.column_name
+
+      WHERE
+        columns.table_catalog = CURRENT_DATABASE() AND
+        columns.table_schema = 'public' AND
+        columns.table_name = '${this.getName()}'
+    `)
     const columns = []
 
     for (const data of result) {

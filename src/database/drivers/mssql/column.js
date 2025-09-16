@@ -9,6 +9,8 @@ export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
     this.table = table
   }
 
+  getAutoIncrement() { return digg(this, "data", "isIdentity") === 1 }
+
   async getIndexes() {
     const options = this.getOptions()
     const sql = `
@@ -45,17 +47,9 @@ export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
     return indexes
   }
 
-  getDefault() {
-    return digg(this, "data", "COLUMN_DEFAULT")
-  }
-
-  getMaxLength() {
-    return digg(this, "data", "CHARACTER_MAXIMUM_LENGTH")
-  }
-
-  getName() {
-    return digg(this, "data", "COLUMN_NAME")
-  }
+  getDefault() { return digg(this, "data", "COLUMN_DEFAULT") }
+  getMaxLength() { return digg(this, "data", "CHARACTER_MAXIMUM_LENGTH") }
+  getName() { return digg(this, "data", "COLUMN_NAME") }
 
   getNull() {
     const nullValue = digg(this, "data", "IS_NULLABLE")
@@ -67,7 +61,6 @@ export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
     }
   }
 
-  getType() {
-    return digg(this, "data", "DATA_TYPE")
-  }
+  getPrimaryKey() { return digg(this, "data", "isIdentity") === 1 }
+  getType() { return digg(this, "data", "DATA_TYPE") }
 }

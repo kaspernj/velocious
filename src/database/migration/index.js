@@ -61,14 +61,17 @@ export default class VelociousDatabaseMigration {
     const tableNameUnderscore = inflection.underscore(tableName)
     const columnName = `${referenceNameUnderscore}_id`
     const foreignKeyName = `fk_${tableName}_${referenceName}`
-    let sql = ""
 
-    sql += `ALTER TABLE ${this._db.quoteTable(tableName)}`
-    sql += ` ADD CONSTRAINT ${foreignKeyName} `
-    sql += ` FOREIGN KEY (${this._db.quoteColumn(columnName)})`
-    sql += ` REFERENCES ${tableNameUnderscore}(id)`
-
-    await this.getDriver().query(sql)
+    await this.getDriver().addForeignKey(
+      tableName,
+      columnName,
+      tableNameUnderscore,
+      "id",
+      {
+        isNewForeignKey: true,
+        name: foreignKeyName
+      }
+    )
   }
 
   async addReference(tableName, referenceName, args) {
