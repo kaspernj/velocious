@@ -119,9 +119,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return new QueryParser({query}).toSql()
   }
 
-  shouldSetAutoIncrementWhenPrimaryKey = () => true
-
-
+  shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
   escape(value) {
     value = this._convertValue(value)
@@ -147,8 +145,12 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return escapeString(value)
   }
 
-  quoteColumn = (string) => this.options().quoteColumnName(string)
-  quoteTable = (string) => this.options().quoteTableName(string)
+  quoteColumn(string) { return this.options().quoteColumnName(string) }
+  quoteTable(string) { return this.options().quoteTableName(string) }
+
+  async renameColumn(tableName, oldColumnName, newColumnName) {
+    await this.query(`EXEC sp_rename ${this.quote(`${tableName}.${oldColumnName}`)}, ${this.quote(newColumnName)}, 'COLUMN'`)
+  }
 
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})

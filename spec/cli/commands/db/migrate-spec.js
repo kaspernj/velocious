@@ -3,7 +3,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
-  fit("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
+  it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       directory,
@@ -117,7 +117,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20250903112845",
         "20250912183605",
         "20250912183606",
-        "20250915085450"
+        "20250915085450",
+        "20250916111330"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
