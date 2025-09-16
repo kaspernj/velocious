@@ -43,9 +43,14 @@ describe("Cli - Commands - db:migrate", () => {
       // It creates the correct index
       const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
       const indexes = await authenticationTokensTable.getIndexes()
-      const indexesNames = indexes.map((index) => index.getName()).filter((indexName) => indexName != "authentication_tokens_pkey").sort()
+      const indexesNames = indexes
+        .map((index) => index.getName())
+        .filter((indexName) => indexName != "authentication_tokens_pkey" && indexName != "PRIMARY")
+        .sort()
 
-      if (defaultDatabaseType == "sqlite") {
+      if (defaultDatabaseType == "mysql") {
+        expect(indexesNames).toEqual(["index_on_token","user_id"])
+      } else if (defaultDatabaseType == "sqlite") {
         expect(indexesNames).toEqual(["index_on_authentication_tokens_token", "index_on_authentication_tokens_user_id"])
       } else {
         expect(indexesNames).toEqual(["index_on_token", "index_on_user_id"])

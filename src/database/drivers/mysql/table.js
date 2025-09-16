@@ -1,5 +1,6 @@
 import BaseTable from "../base-table.js"
 import Column from "./column.js"
+import ColumnsIndex from "./columns-index.js"
 import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversMysqlTable extends BaseTable {
@@ -41,6 +42,46 @@ export default class VelociousDatabaseDriversMysqlTable extends BaseTable {
     }
 
     return foreignKeys
+  }
+
+  async getIndexes() {
+    const options = this.getOptions()
+    const sql = `
+      SELECT
+        TABLE_SCHEMA,
+        TABLE_NAME,
+        INDEX_NAME AS index_name,
+        COLUMN_NAME,
+        SEQ_IN_INDEX,
+        NON_UNIQUE,
+        INDEX_TYPE
+      FROM INFORMATION_SCHEMA.STATISTICS
+      WHERE
+        TABLE_SCHEMA = DATABASE() AND
+        TABLE_NAME = ${options.quote(this.getName())}
+    `
+    const indexesRows = await this.getDriver().query(sql)
+    const indexes = []
+
+    for (const indexRow of indexesRows) {
+      if (indexRow.NON_UNIQUE == 1) {
+        indexRow.is_unique = false
+      } else {
+        indexRow.is_unique = true
+      }
+
+      if (indexRow.index_name == "PRIMARY") {
+        indexRow.is_primary_key = true
+      } else {
+        indexRow.is_primary_key = false
+      }
+
+      const index = new ColumnsIndex(this, indexRow)
+
+      indexes.push(index)
+    }
+
+    return indexes
   }
 
   getName() {

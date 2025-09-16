@@ -72,7 +72,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       for (const column of tableData.getColumns()) {
         if (!column.getIndex()) continue
 
-        const indexName = `index_on_`
+        let indexName = `index_on_`
 
         if (databaseType == "sqlite") sql += `${tableData.getName()}_`
 
