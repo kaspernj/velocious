@@ -82,7 +82,7 @@ class Logger {
     await consoleError(messagesToMessage(this._subject, ...functionOrMessages(messages)))
   }
 
-  async error(...messages) {
+  async warn(...messages) {
     await consoleWarn(messagesToMessage(this._subject, ...functionOrMessages(messages)))
   }
 }
