@@ -40,14 +40,29 @@ describe("Cli - Commands - db:migrate", () => {
         }
       }
 
-      // It creates unique indexes
+      // It creates the correct index
       const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
+      const indexes = await authenticationTokensTable.getIndexes()
+      const indexesNames = indexes.map((index) => index.getName())
+
+      if (defaultDatabaseType == "sqlite") {
+        expect(indexesNames).toEqual(["index_on_authentication_tokens_user_id", "index_on_authentication_tokens_token"])
+      } else {
+        expect(indexesNames).toEqual(["index_on_user_id", "index_on_token"])
+      }
+
+      // It creates unique indexes
       const tokenColumn = await authenticationTokensTable.getColumnByName("token")
       const tokenIndex = await tokenColumn.getIndexByName("index_on_authentication_tokens_token")
 
       expect(tokenIndex.getName()).toEqual("index_on_authentication_tokens_token")
       expect(tokenIndex.isPrimaryKey()).toBeFalse()
       expect(tokenIndex.isUnique()).toBeTrue()
+
+      // It creates foreign keys
+      const authTokensTableForeignKeys = await authenticationTokensTable.getForeignKeys()
+
+      expect(authTokensTableForeignKeys.length).toEqual(1)
 
       for (const db of Object.values(dbs)) {
         const schemaMigrations = await db.query("SELECT * FROM schema_migrations ORDER BY version")

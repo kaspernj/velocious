@@ -1,8 +1,8 @@
 import BaseColumnsIndex from "../base-columns-index.js"
 import {digg} from "diggerize"
-import {TableIndex} from "../../table-data/index.js"
+import TableIndex from "../../table-data/table-index.js"
 
-export default class VelociousDatabaseDriversSqliteColumn extends BaseColumnsIndex {
+export default class VelociousDatabaseDriversSqliteColumnsIndex extends BaseColumnsIndex {
   constructor(table, data) {
     super()
     this.data = data

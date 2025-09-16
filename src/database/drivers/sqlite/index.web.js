@@ -45,5 +45,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     return `VelociousDatabaseDriversSqliteWeb---${this.args.name}`
   }
 
-  query = async (sql) => await this.getConnection().query(sql)
+  query = async (sql) => {
+    return await this.getConnection().query(sql)
+  }
 }

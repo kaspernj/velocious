@@ -12,7 +12,10 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   generateIndexName() {
-    let indexName = `index_on_${this.tableName}_`
+    const databaseType = this.getDriver().getType()
+    let indexName = `index_on_`
+
+    if (databaseType == "sqlite") indexName += `${this.tableName}_`
 
     for (const columnIndex in this.columns) {
       if (columnIndex > 0) indexName += "_and_"
