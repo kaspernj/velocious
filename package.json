@@ -3,7 +3,7 @@
     "velocious": "bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.52",
+  "version": "1.0.53",
   "main": "index.js",
   "scripts": {
     "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",
