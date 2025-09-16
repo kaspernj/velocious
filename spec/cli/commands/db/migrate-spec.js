@@ -45,7 +45,7 @@ describe("Cli - Commands - db:migrate", () => {
       const indexes = await authenticationTokensTable.getIndexes()
       const indexesNames = indexes
         .map((index) => index.getName())
-        .filter((indexName) => indexName != "authentication_tokens_pkey" && indexName != "PRIMARY")
+        .filter((indexName) => indexName != "authentication_tokens_pkey" && indexName != "PRIMARY" && !indexName.startsWith("PK__"))
         .sort()
 
       if (defaultDatabaseType == "mysql") {
