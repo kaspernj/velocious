@@ -1,6 +1,7 @@
 import AlterTableBase from "../../../query/alter-table-base.js"
 import CreateIndexBase from "../../../query/create-index-base.js"
 import {digs} from "diggerize"
+import * as inflection from "inflection"
 import {Logger} from "../../../../logger.js"
 import restArgsError from "../../../../utils/rest-args-error.js"
 import TableData from "../../../table-data/index.js"
@@ -23,7 +24,15 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     const options = this.getOptions()
     const tableName = tableData.getName()
     const tempTableName = `${tableData.getName()}AlterTableTemp`
+    const newColumnNames = currentTableData.getColumns()
+      .filter((column) => !column.isNewColumn())
+      .map((column) => {
+        const newTableColumn = tableData.getColumns().find((tableColumn) => tableColumn.getName() == column.getName())
+
+        return newTableColumn?.getNewName() || newTableColumn?.getName() || column.getNewName() || column.getName()
+      })
     const oldColumnNames = currentTableData.getColumns().filter((column) => !column.isNewColumn()).map((column) => column.getName())
+    const newColumnsSQL = newColumnNames.map((name) => options.quoteColumnName(name)).join(", ")
     const oldColumnsSQL = oldColumnNames.map((name) => options.quoteColumnName(name)).join(", ")
 
     tableData.setName(tempTableName)
@@ -31,7 +40,23 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     const newTableData = new TableData(tempTableName)
 
     for (const tableDataColumn of currentTableData.getColumns()) {
-      const newTableDataColumn = newTableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
+      const newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
+
+      if (newTableDataColumn) {
+        const settingsToClone = ["autoIncrement", "default", "index", "foreignKey", "maxLength", "primaryKey", "type"]
+
+        for (const settingToClone of settingsToClone) {
+          const camelizedSettingToClone = inflection.camelize(settingToClone)
+
+          if (!newTableDataColumn[`get${camelizedSettingToClone}`]) {
+            throw new Error(`No such method on column: get${camelizedSettingToClone}`)
+          }
+
+          if (!newTableDataColumn[`get${camelizedSettingToClone}`]()) {
+            newTableDataColumn[`set${camelizedSettingToClone}`](tableDataColumn[`get${camelizedSettingToClone}`]())
+          }
+        }
+      }
 
       newTableData.addColumn(newTableDataColumn || tableDataColumn)
     }
@@ -59,7 +84,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
       if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
 
-      this.logger.log(`Setting foreign key on column ${tableDataColumn.getName()}`)
+      this.logger.debug(() => [`Setting foreign key on column ${tableDataColumn.getName()}`])
       tableDataColumn.setForeignKey(actualTableDataForeignKey)
     }
 
@@ -74,12 +99,12 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
       if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
 
-      this.logger.log(`Setting foreign key on column ${tableDataColumn.getName()}`)
+      this.logger.debug(() => [`Setting foreign key on column ${tableDataColumn.getName()}`])
       tableDataColumn.setForeignKey(actualTableDataForeignKey)
     }
 
     const createNewTableSQL = this.getDriver().createTableSql(newTableData)
-    const insertSQL = `INSERT INTO ${options.quoteTableName(tempTableName)} (${oldColumnsSQL}) SELECT ${oldColumnsSQL} FROM ${options.quoteTableName(tableName)}`
+    const insertSQL = `INSERT INTO ${options.quoteTableName(tempTableName)} (${newColumnsSQL}) SELECT ${oldColumnsSQL} FROM ${options.quoteTableName(tableName)}`
     const dropTableSQL = `DROP TABLE ${options.quoteTableName(tableName)}`
     const renameTableSQL = `ALTER TABLE ${options.quoteTableName(tempTableName)} RENAME TO ${options.quoteTableName(tableName)}`
     const sqls = []
@@ -98,8 +123,14 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
       newTableData.addIndex(actualTableIndex)
 
+      const columnNames = actualTableIndex.getColumns().map((columnName) => {
+        const newTableColumn = tableData.getColumns().find((tableColumn) => tableColumn.getName() == columnName)
+
+        return newTableColumn?.getNewName() || newTableColumn?.getName() || columnName
+      })
+
       const createIndexArgs = {
-        columns: actualTableIndex.getColumns(),
+        columns: columnNames,
         driver: this.getDriver(),
         name: actualTableIndex.getName(),
         tableName,

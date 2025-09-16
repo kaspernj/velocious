@@ -130,6 +130,10 @@ export default class VelociousDatabaseMigration {
     }
   }
 
+  async renameColumn(tableName, oldColumnName, newColumnName) {
+    await this.getDriver().renameColumn(tableName, oldColumnName, newColumnName)
+  }
+
   async tableExists(tableName) {
     const exists = await this.getDriver().tableExists(tableName)
 

@@ -65,7 +65,7 @@ describe("Cli - Commands - db:migrate", () => {
         tokenIndexName = "index_on_token"
       }
 
-      const tokenColumn = await authenticationTokensTable.getColumnByName("token")
+      const tokenColumn = await authenticationTokensTable.getColumnByName("user_token")
       const tokenIndex = await tokenColumn.getIndexByName(tokenIndexName)
 
       expect(tokenIndex.getName()).toEqual(tokenIndexName)
@@ -117,7 +117,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20250903112845",
         "20250912183605",
         "20250912183606",
-        "20250915085450"
+        "20250915085450",
+        "20250916111330"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
@@ -133,7 +134,16 @@ describe("Cli - Commands - db:migrate", () => {
         ]
       )
 
-      expect(defaultSchemaMigrations.sort()).toEqual(["20230728075328", "20230728075329", "20250605133926", "20250903112845", "20250912183605", "20250912183606", "20250915085450"])
+      expect(defaultSchemaMigrations.sort()).toEqual([
+        "20230728075328",
+        "20230728075329",
+        "20250605133926",
+        "20250903112845",
+        "20250912183605",
+        "20250912183606",
+        "20250915085450",
+        "20250916111330"
+      ])
     }
   })
 })
