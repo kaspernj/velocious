@@ -27,15 +27,20 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
       if (column.isNewColumn()) {
         sql += "ADD "
+        sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
+      } else if (column.getNewName()) {
+        sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(column.getNewName())}`
       } else {
         if (databaseType == "mssql" || databaseType == "pgsql") {
           sql += "ALTER COLUMN "
         } else {
           sql += "MODIFY "
         }
+
+        sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
       }
 
-      sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
+
       columnsCount++
     }
 

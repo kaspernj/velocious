@@ -18,24 +18,44 @@ export default class TableColumn {
     this.name = name
   }
 
+  getName() { return this.name }
+
+  getNewName() { return this._newName }
+  setNewName(newName) { this._newName = newName }
+
+  getActualName() { return this.getNewName() || this.getName() }
+
   getAutoIncrement() { return this.args?.autoIncrement }
+  setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
+
   getDefault() { return this.args?.default }
+  setDefault(newDefault) { this.args.default = newDefault }
+
   getForeignKey() { return this.args?.foreignKey }
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
+
   getIndex() { return this.args?.index }
+  setIndex(newIndex) { this.args.index = newIndex }
+
   getMaxLength() { return this.args?.maxLength }
-  getName() { return this.name }
+  setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
+
   getNull() { return this.args?.null }
   setNull(nullable) { this.args.null = nullable }
+
   getPrimaryKey() { return this.args?.primaryKey }
+  setPrimaryKey(newPrimaryKey) { this.args.primaryKey = newPrimaryKey }
+
   getType() { return this.args?.type }
+  setType(newType) { this.args.type = newType }
+
   isNewColumn() { return this.args?.isNewColumn }
 
   getSQL({forAlterTable, driver}) {
     const databaseType = driver.getType()
     const options = driver.options()
     let maxlength = this.getMaxLength()
-    let type = this.getType().toUpperCase()
+    let type = this.getType()?.toUpperCase()
 
     if (type == "DATETIME" && databaseType == "pgsql") {
       type = "TIMESTAMP"
@@ -61,13 +81,11 @@ export default class TableColumn {
       type = "SERIAL"
     }
 
-    let sql = `${options.quoteColumnName(this.getName())} `
+    let sql = `${options.quoteColumnName(this.getActualName())} `
 
     if (databaseType == "pgsql" && forAlterTable) sql += "TYPE "
-
-    sql += type
-
-    if (maxlength !== undefined && maxlength !== null) sql += `(${maxlength})`
+    if (type) sql += type
+    if (type && maxlength !== undefined && maxlength !== null) sql += `(${maxlength})`
 
     if (this.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
       if (databaseType == "mssql") {
@@ -111,7 +129,7 @@ export default class TableColumn {
 
       if (foreignKey === true) {
         foreignKeyColumn = "id"
-        foreignKeyTable = inflection.pluralize(this.getName().replace(/_id$/, ""))
+        foreignKeyTable = inflection.pluralize(this.getActualName().replace(/_id$/, ""))
       } else if (foreignKey instanceof TableForeignKey) {
         foreignKeyColumn = foreignKey.getReferencedColumnName()
         foreignKeyTable = foreignKey.getReferencedTableName()

@@ -3,6 +3,8 @@ import Query from "../query/index.js"
 import Handler from "../handler.js"
 import strftime from "strftime"
 import UUID from "pure-uuid"
+import TableData from "../table-data/index.js"
+import TableColumn from "../table-data/table-column.js"
 
 export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
@@ -42,7 +44,7 @@ export default class VelociousDatabaseDriversBase {
     if (!this.configuration) throw new Error("No configuration set")
 
     return this.configuration
-}
+  }
 
   getIdSeq() {
     return this.idSeq
@@ -201,6 +203,22 @@ export default class VelociousDatabaseDriversBase {
 
   async startSavePoint(savePointName) {
     await this.query(`SAVEPOINT ${savePointName}`)
+  }
+
+  async renameColumn(tableName, oldColumnName, newColumnName) {
+    const tableColumn = new TableColumn(oldColumnName)
+
+    tableColumn.setNewName(newColumnName)
+
+    const tableData = new TableData(tableName)
+
+    tableData.addColumn(tableColumn)
+
+    const alterTableSQLs = await this.alterTableSql(tableData)
+
+    for (const alterTableSQL of alterTableSQLs) {
+      await this.query(alterTableSQL)
+    }
   }
 
   async releaseSavePoint(savePointName) {
