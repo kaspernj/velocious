@@ -16,7 +16,8 @@ export default new Configuration({
         driver: SqliteDriver,
         poolType: SingleMultiUsePool,
         type: "sqlite",
-        name: "test-db"
+        name: "test-db",
+        migrations: true
       },
       mssql: {
         driver: MssqlDriver,
@@ -24,6 +25,7 @@ export default new Configuration({
         type: "mssql",
         database: "velocious_test",
         useDatabase: "default",
+        migrations: true,
         sqlConfig: {
           user: "sa",
           password: "Super-Secret-Password",

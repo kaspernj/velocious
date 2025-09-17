@@ -17,8 +17,19 @@ export default class VelociousDatabaseMigrator {
   async createMigrationsTable() {
     const dbs = await this.configuration.getCurrentConnections()
 
-    for (const db of Object.values(dbs)) {
-      if (await this.migrationsTableExist(db)) continue
+    for (const dbIdentifier in dbs) {
+      const db = dbs[dbIdentifier]
+      const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
+
+      if (!databaseConfiguration.migrations) {
+        this.logger.log(`${dbIdentifier} isn't configured for migrations - skipping creating migrations table for it`)
+        continue
+      }
+
+      if (await this.migrationsTableExist(db)) {
+        this.logger.log(`${dbIdentifier} migrations table already exists - skipping`)
+        continue
+      }
 
       const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
 
@@ -107,6 +118,18 @@ export default class VelociousDatabaseMigrator {
 
     for (const dbIdentifier in dbs) {
       const db = dbs[dbIdentifier]
+      const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
+
+      if (!databaseConfiguration.migrations) {
+        this.logger.debug(`${dbIdentifier} isn't configured for migrations - skipping loading migrations versions for it`)
+        continue
+      }
+
+      if (!await this.migrationsTableExist(db)) {
+        this.logger.log(`Migration table does not exist for ${dbIdentifier} - skipping loading migrations versions for it`)
+        continue
+      }
+
       const rows = await db.select("schema_migrations")
 
       this.migrationsVersions[dbIdentifier] = {}
@@ -204,6 +227,13 @@ export default class VelociousDatabaseMigrator {
     const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
 
     for (const dbIdentifier in dbs) {
+      const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
+
+      if (!databaseConfiguration.migrations) {
+        this.logger.debug(`${dbIdentifier} isn't configured for migrations - skipping migration ${digg(migration, "date")}`)
+        continue
+      }
+
       if (!migrationDatabaseIdentifiers.includes(dbIdentifier)) {
         this.logger.debug(`${dbIdentifier} shouldn't run migration ${migration.file}`, {migrationDatabaseIdentifiers})
         continue
