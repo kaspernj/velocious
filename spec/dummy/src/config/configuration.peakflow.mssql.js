@@ -16,6 +16,7 @@ export default new Configuration({
         type: "mssql",
         database: "velocious_test",
         useDatabase: "default",
+        migrations: true,
         sqlConfig: {
           user: "sa",
           password: "Super-Secret-Password",
@@ -33,6 +34,7 @@ export default new Configuration({
         type: "mssql",
         database: "velocious_test",
         useDatabase: "default",
+        migrations: true,
         sqlConfig: {
           user: "sa",
           password: "Super-Secret-Password",

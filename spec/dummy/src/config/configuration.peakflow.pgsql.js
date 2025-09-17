@@ -19,7 +19,8 @@ export default new Configuration({
         username: "peakflow",
         password: "password",
         database: "velocious_test",
-        useDatabase: "velocious_test"
+        useDatabase: "velocious_test",
+        migrations: true
       },
       mssql: {
         driver: MssqlDriver,
@@ -27,6 +28,7 @@ export default new Configuration({
         type: "mssql",
         database: "velocious_test",
         useDatabase: "default",
+        migrations: true,
         sqlConfig: {
           user: "sa",
           password: "Super-Secret-Password",

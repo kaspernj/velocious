@@ -17,7 +17,8 @@ export default new Configuration({
         host: "mariadb",
         username: "username",
         password: "password",
-        database: "velocious_development"
+        database: "velocious_development",
+        migrations: true
       }
     },
     production: {
@@ -28,7 +29,8 @@ export default new Configuration({
         host: "mariadb",
         username: "username",
         password: "password",
-        database: "velocious_production"
+        database: "velocious_production",
+        migrations: true
       }
     },
     test: {
@@ -39,7 +41,8 @@ export default new Configuration({
         host: "mariadb",
         username: "username",
         password: "password",
-        database: "velocious_test"
+        database: "velocious_test",
+        migrations: true
       }
     }
   },
