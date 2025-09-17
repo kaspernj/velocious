@@ -1,4 +1,4 @@
-// import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
+import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
@@ -145,8 +145,8 @@ export default class TestRunner {
       } catch (error) {
         this._failedTests++
 
-        // console.error(`${leftPadding}  Test failed: ${error.message}`)
-        // addTrackedStackToError(error)
+        console.error(`${leftPadding}  Test failed: ${error.message}`)
+        addTrackedStackToError(error)
 
         const backtraceCleaner = new BacktraceCleaner(error)
         const cleanedStack = backtraceCleaner.getCleanedStack()
