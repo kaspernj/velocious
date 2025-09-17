@@ -61,11 +61,15 @@ export default class VeoliciousHttpServerClient {
         this.requestRunners.shift()
         this.sendResponse(requestRunner)
 
-        const connectionHeader = this.currentRequest.header("connection")?.value?.toLowerCase()?.strip()
+
         const httpVersion = this.currentRequest.httpVersion()
 
-        if (httpVersion == "1.0" && connectionHeader != "keep-alive") {
-          console.log("Sending close")
+        /*
+          FIXME: We should only send close if the client requests it - implement keep-alive support
+          const connectionHeader = this.currentRequest.header("connection")?.value?.toLowerCase()?.strip()
+          connectionHeader != "keep-alive"
+        */
+        if (httpVersion == "1.0") {
           this.events.emit("close")
         }
       } else {

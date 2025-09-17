@@ -65,8 +65,6 @@ export default class Dummy {
 
     await this.application.initialize()
     await this.application.startHttpServer()
-
-    console.log("After startHttpServer")
   }
 
   async stop() {

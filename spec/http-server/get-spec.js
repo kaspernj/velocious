@@ -28,8 +28,6 @@ function httpOneZeroRequest(path) {
     })
 
     client.on("end", () => {
-      console.log("Disconnected from server", {response})
-
       const lines = response.split("\r\n")
       const statusLine = lines.shift()
       let status = "headers"
@@ -92,17 +90,7 @@ describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: t
       const json = JSON.parse(body)
 
       expect(json).toEqual({message: "Pong"})
-
-      console.log({headers})
-
       expect(headers.Connection).toEqual("Close")
-
-      /*
-      const response = await fetch("http://localhost:3006/ping")
-      const text = await response.json()
-
-      expect(text).toEqual({message: "Pong"})
-      */
     })
   })
 })
