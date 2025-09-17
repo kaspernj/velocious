@@ -38,10 +38,11 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   feed = (data) => this.requestBuffer.feed(data)
-  getHeader = (name) => this.requestBuffer.getHeader(name)?.value
-  getHttpMethod = () => digg(this, "requestBuffer", "httpMethod")
+  getHeader(name) { return this.requestBuffer.getHeader(name)?.value }
+  getHttpMethod() { return digg(this, "requestBuffer", "httpMethod") }
+  getHttpVersion() { return digg(this, "requestBuffer", "httpVersion") }
 
-  _getHostMatch = () => {
+  _getHostMatch() {
     const rawHost = this.requestBuffer.getHeader("origin")?.value
 
     if (!rawHost) return null
@@ -63,7 +64,7 @@ export default class VelociousHttpServerClientRequestParser {
     if (rawHostSplit && rawHostSplit[0]) return rawHostSplit[0]
   }
 
-  getPath = () => digg(this, "requestBuffer", "path")
+  getPath() { return digg(this, "requestBuffer", "path") }
 
   getPort() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
@@ -78,7 +79,7 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
-  getProtocol = () => this._getHostMatch()?.protocol
+  getProtocol() { return this._getHostMatch()?.protocol }
 
   requestDone = () => {
     incorporate(this.params, this.requestBuffer.params)

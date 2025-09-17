@@ -56,6 +56,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
         this.parentPort.postMessage({command: "clientOutput", clientCount, output})
       })
 
+      client.events.on("close", (output) => {
+        console.log("Close received from client - forwarding to server")
+        this.parentPort.postMessage({command: "clientClose", clientCount, output})
+      })
+
       this.clients[clientCount] = client
     } else if (command == "clientWrite") {
       await this.logger.debug("Looking up client")

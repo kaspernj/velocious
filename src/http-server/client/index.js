@@ -38,7 +38,7 @@ export default class VeoliciousHttpServerClient {
 
   onWrite(data) {
     if (this.state == "initial") {
-      this.currentRequest = new Request({configuration: this.configuration})
+      this.currentRequest = new Request({client: this, configuration: this.configuration})
       this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
       this.currentRequest.feed(data)
       this.state = "requestStarted"
@@ -60,25 +60,41 @@ export default class VeoliciousHttpServerClient {
       if (requestRunner?.getState() == "done") {
         this.requestRunners.shift()
         this.sendResponse(requestRunner)
+
+        const connectionHeader = this.currentRequest.header("connection")?.value?.toLowerCase()?.strip()
+        const httpVersion = this.currentRequest.httpVersion()
+
+        console.log({connectionHeader, httpVersion})
+
+        if (httpVersion == "1.0" && connectionHeader != "keep-alive") {
+          console.log("Sending close")
+          this.events.emit("close")
+        }
       } else {
         break
       }
     }
   }
 
-  sendResponse = (requestRunner) => {
+  sendResponse(requestRunner) {
     const response = digg(requestRunner, "response")
     const body = response.getBody()
     const date = new Date()
 
-    response.addHeader("Connection", "keep-alive")
+    if (this.currentRequest.httpVersion() == "1.0") {
+      // We don't support keep-alive for HTTP 1.0 for now.
+      response.addHeader("Connection", "Close")
+    } else {
+      response.addHeader("Connection", "Keep-Alive")
+    }
+
     response.addHeader("Content-Length", response.body.length)
     response.addHeader("Date", date.toUTCString())
     response.addHeader("Server", "Velocious")
 
     let headers = ""
 
-    headers += `HTTP/1.1 ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
+    headers += `HTTP/${this.currentRequest.httpVersion()} ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
 
     for (const headerKey in response.headers) {
       for (const headerValue of response.headers[headerKey]) {

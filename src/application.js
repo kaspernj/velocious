@@ -38,7 +38,6 @@ export default class VelociousApplication {
 
   async startHttpServer() {
     const {configuration, httpServerConfiguration} = digs(this, "configuration", "httpServerConfiguration")
-
     const port = httpServerConfiguration.port || 3006
 
     await this.logger.debug(`Starting server on port ${port}`)

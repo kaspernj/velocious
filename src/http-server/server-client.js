@@ -18,15 +18,8 @@ export default class ServerClient {
   listen = () => this.socket.on("data", this.onSocketData)
 
   close() {
-    return new Promise((resolve, reject) => {
-      try {
-        this.socket.destroy()
-        this.events.emit("close", this)
-        resolve()
-      } catch (error) {
-        reject(error)
-      }
-    })
+    this.socket.destroy()
+    this.events.emit("close", this)
   }
 
   onSocketData = (chunk) => {

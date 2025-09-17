@@ -184,16 +184,17 @@ export default class RequestBuffer {
   }
 
   parseStatusLine(line) {
-    const match = line.match(/^(GET|OPTIONS|POST) (.+?) HTTP\/1\.1\r\n/)
+    const match = line.match(/^(GET|OPTIONS|POST) (.+?) HTTP\/(.+)\r\n/)
 
     if (!match) {
       throw new Error(`Couldn't match status line from: ${line}`)
     }
 
     this.httpMethod = match[1]
+    this.httpVersion = match[3]
     this.path = match[2]
     this.setState("headers")
-    this.logger.debug(() => ["Parsed status line", {httpMethod: this.httpMethod, path: this.path}])
+    this.logger.debug(() => ["Parsed status line", {httpMethod: this.httpMethod, httpVersion: this.httpVersion, path: this.path}])
   }
 
   postRequestDone() {

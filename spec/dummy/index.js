@@ -57,13 +57,6 @@ export default class Dummy {
 
     this.application = new Application({
       configuration: dummyConfiguration,
-      databases: {
-        default: {
-          host: "mysql",
-          username: "user",
-          password: ""
-        }
-      },
       httpServer: {
         maxWorkers: 1,
         port: 3006
@@ -72,6 +65,8 @@ export default class Dummy {
 
     await this.application.initialize()
     await this.application.startHttpServer()
+
+    console.log("After startHttpServer")
   }
 
   async stop() {
