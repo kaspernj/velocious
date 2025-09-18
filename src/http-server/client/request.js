@@ -1,16 +1,21 @@
 import {digg} from "diggerize"
 import RequestParser from "./request-parser.js"
+import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousHttpServerClientRequest {
-  constructor({configuration}) {
+  constructor({client, configuration, ...restArgs}) {
+    restArgsError(restArgs)
+
+    this.client = client
     this.configuration = configuration
     this.requestParser = new RequestParser({configuration})
   }
 
   baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
   feed(data) { return this.requestParser.feed(data) }
-  header(headerName) { return this.requestParser.requestBuffer.getHeader(headerName)?.value }
+  header(headerName) { return this.getRequestBuffer().getHeader(headerName)?.getValue() }
   httpMethod() { return this.requestParser.getHttpMethod() }
+  httpVersion() { return this.requestParser.getHttpVersion() }
   host() { return this.requestParser.getHost() }
 
   hostWithPort() {
@@ -29,9 +34,12 @@ export default class VelociousHttpServerClientRequest {
     return hostWithPort
   }
 
-  origin = () => this.header("origin")
-  path = () => this.requestParser.getPath()
-  params = () => digg(this, "requestParser", "params")
-  port = () => this.requestParser.getPort()
-  protocol = () => this.requestParser.getProtocol()
+  origin() { return this.header("origin") }
+  path() { return this.requestParser.getPath() }
+  params() { return digg(this, "requestParser", "params") }
+  port() { return this.requestParser.getPort() }
+  protocol() { return this.requestParser.getProtocol() }
+
+  getRequestBuffer() { return this.getRequestParser().getRequestBuffer() }
+  getRequestParser() { return this.requestParser }
 }

@@ -57,13 +57,6 @@ export default class Dummy {
 
     this.application = new Application({
       configuration: dummyConfiguration,
-      databases: {
-        default: {
-          host: "mysql",
-          username: "user",
-          password: ""
-        }
-      },
       httpServer: {
         maxWorkers: 1,
         port: 3006

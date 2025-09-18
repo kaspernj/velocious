@@ -18,7 +18,8 @@ export default class VelociousHttpServerClientRequestRunner {
     this.state = "running"
   }
 
-  getState = () => this.state
+  getRequest() { return this.request }
+  getState() { return this.state }
 
   async run() {
     const {configuration, request, response} = this

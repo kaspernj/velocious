@@ -1,3 +1,4 @@
+import "../../../../src/utils/with-tracked-stack-async-hooks.js"
 import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tracked-multi-connection.js"
 import Configuration from "../../../../src/configuration.js"
 import dummyDirectory from "../../dummy-directory.js"

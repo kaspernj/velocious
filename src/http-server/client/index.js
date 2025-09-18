@@ -38,7 +38,7 @@ export default class VeoliciousHttpServerClient {
 
   onWrite(data) {
     if (this.state == "initial") {
-      this.currentRequest = new Request({configuration: this.configuration})
+      this.currentRequest = new Request({client: this, configuration: this.configuration})
       this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
       this.currentRequest.feed(data)
       this.state = "requestStarted"
@@ -56,29 +56,49 @@ export default class VeoliciousHttpServerClient {
   sendDoneRequests() {
     while (true) {
       const requestRunner = this.requestRunners[0]
+      const request = requestRunner?.getRequest()
 
       if (requestRunner?.getState() == "done") {
+        const httpVersion = request.httpVersion()
+        const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
+
         this.requestRunners.shift()
         this.sendResponse(requestRunner)
+        this.logger.debug(() => ["sendDoneRequests", {clientCount: this.clientCount, connectionHeader, httpVersion}])
+
+        if (httpVersion == "1.0" && connectionHeader != "keep-alive") {
+          this.logger.debug(() => [`Closing the connection because ${httpVersion} and connection header ${connectionHeader}`, {clientCount: this.clientCount}])
+          this.events.emit("close")
+        }
       } else {
         break
       }
     }
   }
 
-  sendResponse = (requestRunner) => {
+  sendResponse(requestRunner) {
     const response = digg(requestRunner, "response")
+    const request = requestRunner.getRequest()
     const body = response.getBody()
     const date = new Date()
+    const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
+    const httpVersion = request.httpVersion()
 
-    response.addHeader("Connection", "keep-alive")
+    this.logger.debug("sendResponse", {clientCount: this.clientCount, connectionHeader, httpVersion})
+
+    if (httpVersion == "1.0" && connectionHeader == "keep-alive") {
+      response.addHeader("Connection", "Keep-Alive")
+    } else {
+      response.addHeader("Connection", "Close")
+    }
+
     response.addHeader("Content-Length", response.body.length)
     response.addHeader("Date", date.toUTCString())
     response.addHeader("Server", "Velocious")
 
     let headers = ""
 
-    headers += `HTTP/1.1 ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
+    headers += `HTTP/${this.currentRequest.httpVersion()} ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
 
     for (const headerKey in response.headers) {
       for (const headerValue of response.headers[headerKey]) {

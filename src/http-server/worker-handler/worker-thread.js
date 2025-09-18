@@ -9,7 +9,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const {workerCount} = digs(workerData, "workerCount")
 
     this.clients = {}
-    this.logger = new Logger(this)
+    this.logger = new Logger(this, {debug: false})
     this.parentPort = parentPort
     this.workerData = workerData
     this.workerCount = workerCount
@@ -54,6 +54,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
       client.events.on("output", (output) => {
         this.parentPort.postMessage({command: "clientOutput", clientCount, output})
+      })
+
+      client.events.on("close", (output) => {
+        this.logger.log("Close received from client in worker - forwarding to worker parent")
+        this.parentPort.postMessage({command: "clientClose", clientCount, output})
       })
 
       this.clients[clientCount] = client
