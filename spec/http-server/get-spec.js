@@ -31,7 +31,7 @@ describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: t
     })
   })
 
-  fit("supports HTTP 1.0 close connection", async () => {
+  it("supports HTTP 1.0 close connection", async () => {
     await Dummy.run(async () => {
       await wait(200)
 
@@ -56,7 +56,7 @@ describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: t
     })
   })
 
-  fit("supports HTTP 1.0 keep-alive", async () => {
+  it("supports HTTP 1.0 keep-alive", async () => {
     await Dummy.run(async () => {
       await wait(200)
 
