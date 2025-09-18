@@ -1,12 +1,10 @@
 export default class Header {
   constructor(name, value) {
-    this.formattedName = name.toLowerCase().trim()
     this.name = name
     this.value = value
   }
 
   getName() { return this.name }
-  getFormattedName() { return this.formattedName }
   getValue() { return this.value }
   toString() { return `${this.getName()}: ${this.getValue()}` }
 }

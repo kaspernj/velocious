@@ -10,7 +10,6 @@ export default class RequestBuffer {
   bodyLength = 0
   data = []
   events = new EventEmitter()
-  headers = []
   headersByName = {}
   params = {}
   readingBody = false
@@ -18,7 +17,7 @@ export default class RequestBuffer {
 
   constructor({configuration}) {
     this.configuration = configuration
-    this.logger = new Logger(this)
+    this.logger = new Logger(this, {debug: false})
   }
 
   feed(data) {
@@ -85,7 +84,25 @@ export default class RequestBuffer {
     }
   }
 
-  getHeader = (name) => this.headersByName[name.toLowerCase().trim()]
+  getHeader(name) {
+    const result = this.headersByName[name.toLowerCase().trim()]
+
+    this.logger.debug(() => [`getHeader ${name}`, {result: result?.toString()}])
+
+    return result
+  }
+
+  getHeadersHash() {
+    const result = {}
+
+    for (const headerFormattedName in this.headersByName) {
+      const header = this.headersByName[headerFormattedName]
+
+      result[header.getName()] = header.getValue()
+    }
+
+    return result
+  }
 
   formDataPartDone() {
     const formDataPart = this.formDataPart
@@ -96,7 +113,9 @@ export default class RequestBuffer {
     this.events.emit("form-data-part", formDataPart)
   }
 
-  isMultiPartyFormData = () => this.multiPartyFormData
+  isMultiPartyFormData() {
+    return this.multiPartyFormData
+  }
 
   newFormDataPart() {
     this.formDataPart = new FormDataPart()
@@ -140,14 +159,20 @@ export default class RequestBuffer {
     }
   }
 
+  addHeader(header) {
+    const formattedName = header.getFormattedName()
+
+    this.headersByName[formattedName] = header
+
+    if (formattedName == "content-length") this.contentLength = parseInt(header.getValue())
+  }
+
   parseHeader(line) {
     const header = this.readHeaderFromLine(line)
 
     if (header) {
-      this.headersByName[header.formattedName] = header
-
-      if (header.formattedName == "content-length") this.contentLength = parseInt(header.value)
-
+      this.logger.debug(() => [`Parsed header: ${header.toString()}`])
+      this.addHeader(header)
       this.events.emit("header", header)
     } else if (line == "\r\n") {
       if (this.httpMethod.toUpperCase() == "GET" || this.httpMethod.toUpperCase() == "OPTIONS") {

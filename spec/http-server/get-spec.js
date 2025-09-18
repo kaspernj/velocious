@@ -1,59 +1,8 @@
 import fetch from "node-fetch"
 import Dummy from "../dummy/index.js"
-import net from "net"
-import {wait} from "awaitery"
-
-function httpOneZeroRequest(path) {
-  return new Promise((resolve, reject) => {
-    let response = ""
-    let headers = {}
-    let body = ""
-
-    const client = net.createConnection(3006, "127.0.0.1", () => {
-      // Send a raw HTTP/1.0 request
-      client.write(
-        `GET ${path} HTTP/1.0\r\n` +
-        'Host: example.com\r\n' +
-        '\r\n'
-      )
-    })
-
-    // Print the server’s response
-    client.on("data", (data) => {
-      response += data.toString()
-    })
-
-    client.on("error", (error) => {
-      reject(error)
-    })
-
-    client.on("end", () => {
-      const lines = response.split("\r\n")
-      const statusLine = lines.shift()
-      let status = "headers"
-
-      for (const line of lines) {
-        if (status === "headers" && line === "") {
-          status = "body"
-        } else if (status === "body") {
-          body += line
-        } else {
-          const headerMatch = line.match(/^(.+?):\s*(.+)$/)
-
-          if (!headerMatch) throw new Error(`Couldn't match: ${line}`)
-
-          headers[headerMatch[1]] = headerMatch[2]
-        }
-      }
-
-      resolve({
-        statusLine,
-        body,
-        headers
-      })
-    })
-  })
-}
+import Header from "../../src/http-client/header.js"
+import HttpClient from "../../src/http-client/index.js"
+import {wait, waitFor} from "awaitery"
 
 describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("handles get requests", async () => {
@@ -82,15 +31,56 @@ describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: t
     })
   })
 
-  it("supports HTTP 1.0 close connection", async () => {
+  fit("supports HTTP 1.0 close connection", async () => {
     await Dummy.run(async () => {
+      await wait(200)
+
+      const httpClient = new HttpClient({
+        debug: false,
+        headers: [
+          new Header("Connection", "Close")
+        ],
+        version: "1.0"
+      })
+
+      await httpClient.connect()
+
+      const {response} = await httpClient.get("/ping")
+
+      expect(response.json()).toEqual({message: "Pong"})
+      expect(response.getHeader("Connection")?.value).toEqual("Close")
+
+      await waitFor(() => {
+        if (httpClient.isConnected()) throw new Error("HTTP client is still connected")
+      })
+    })
+  })
+
+  fit("supports HTTP 1.0 keep-alive", async () => {
+    await Dummy.run(async () => {
+      await wait(200)
+
+      const httpClient = new HttpClient({
+        debug: false,
+        headers: [
+          new Header("Connection", "Keep-Alive")
+        ],
+        version: "1.0"
+      })
+
+      await httpClient.connect()
+
+      for (let i = 0; i < 5; i++) {
+        const {response} = await httpClient.get("/ping")
+
+        expect(response.json()).toEqual({message: "Pong"})
+        expect(response.getHeader("Connection")?.value).toEqual("Keep-Alive")
+        await wait(100)
+        expect(httpClient.isConnected()).toBeTrue()
+      }
+
       await wait(500)
-
-      const {body, headers} = await httpOneZeroRequest("/ping")
-      const json = JSON.parse(body)
-
-      expect(json).toEqual({message: "Pong"})
-      expect(headers.Connection).toEqual("Close")
+      expect(httpClient.isConnected()).toBeTrue()
     })
   })
 })

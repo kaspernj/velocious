@@ -47,7 +47,9 @@ function messagesToMessage(...messages) {
 }
 
 class Logger {
-  constructor(object) {
+  constructor(object, args) {
+    this._debug = args?.debug
+
     if (typeof object == "string") {
       this._subject = object
     } else {
@@ -69,7 +71,7 @@ class Logger {
   }
 
   async debug(...messages) {
-    if (this.getConfiguration()?.debug) {
+    if (this._debug || this.getConfiguration()?.debug) {
       await this.log(...messages)
     }
   }

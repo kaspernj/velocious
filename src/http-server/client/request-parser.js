@@ -80,6 +80,7 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   getProtocol() { return this._getHostMatch()?.protocol }
+  getRequestBuffer() { return this.requestBuffer }
 
   requestDone = () => {
     incorporate(this.params, this.requestBuffer.params)

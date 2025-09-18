@@ -13,7 +13,7 @@ export default class VelociousHttpServerClientRequest {
 
   baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
   feed(data) { return this.requestParser.feed(data) }
-  header(headerName) { return this.requestParser.requestBuffer.getHeader(headerName)?.value }
+  header(headerName) { return this.getRequestBuffer().getHeader(headerName)?.getValue() }
   httpMethod() { return this.requestParser.getHttpMethod() }
   httpVersion() { return this.requestParser.getHttpVersion() }
   host() { return this.requestParser.getHost() }
@@ -39,4 +39,7 @@ export default class VelociousHttpServerClientRequest {
   params() { return digg(this, "requestParser", "params") }
   port() { return this.requestParser.getPort() }
   protocol() { return this.requestParser.getProtocol() }
+
+  getRequestBuffer() { return this.getRequestParser().getRequestBuffer() }
+  getRequestParser() { return this.requestParser }
 }

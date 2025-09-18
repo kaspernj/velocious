@@ -56,20 +56,18 @@ export default class VeoliciousHttpServerClient {
   sendDoneRequests() {
     while (true) {
       const requestRunner = this.requestRunners[0]
+      const request = requestRunner?.getRequest()
 
       if (requestRunner?.getState() == "done") {
+        const httpVersion = request.httpVersion()
+        const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
+
         this.requestRunners.shift()
         this.sendResponse(requestRunner)
+        this.logger.debug(() => ["sendDoneRequests", {clientCount: this.clientCount, connectionHeader, httpVersion}])
 
-
-        const httpVersion = this.currentRequest.httpVersion()
-
-        /*
-          FIXME: We should only send close if the client requests it - implement keep-alive support
-          const connectionHeader = this.currentRequest.header("connection")?.value?.toLowerCase()?.strip()
-          connectionHeader != "keep-alive"
-        */
-        if (httpVersion == "1.0") {
+        if (httpVersion == "1.0" && connectionHeader != "keep-alive") {
+          this.logger.debug(() => [`Closing the connection because ${httpVersion} and connection header ${connectionHeader}`, {clientCount: this.clientCount}])
           this.events.emit("close")
         }
       } else {
@@ -80,14 +78,18 @@ export default class VeoliciousHttpServerClient {
 
   sendResponse(requestRunner) {
     const response = digg(requestRunner, "response")
+    const request = requestRunner.getRequest()
     const body = response.getBody()
     const date = new Date()
+    const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
+    const httpVersion = request.httpVersion()
 
-    if (this.currentRequest.httpVersion() == "1.0") {
-      // We don't support keep-alive for HTTP 1.0 for now.
-      response.addHeader("Connection", "Close")
-    } else {
+    this.logger.debug("sendResponse", {clientCount: this.clientCount, connectionHeader, httpVersion})
+
+    if (httpVersion == "1.0" && connectionHeader == "keep-alive") {
       response.addHeader("Connection", "Keep-Alive")
+    } else {
+      response.addHeader("Connection", "Close")
     }
 
     response.addHeader("Content-Length", response.body.length)
