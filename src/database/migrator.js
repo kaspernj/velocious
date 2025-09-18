@@ -22,12 +22,12 @@ export default class VelociousDatabaseMigrator {
       const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
 
       if (!databaseConfiguration.migrations) {
-        this.logger.log(`${dbIdentifier} isn't configured for migrations - skipping creating migrations table for it`)
+        this.logger.debug(`${dbIdentifier} isn't configured for migrations - skipping creating migrations table for it`)
         continue
       }
 
       if (await this.migrationsTableExist(db)) {
-        this.logger.log(`${dbIdentifier} migrations table already exists - skipping`)
+        this.logger.debug(`${dbIdentifier} migrations table already exists - skipping`)
         continue
       }
 
