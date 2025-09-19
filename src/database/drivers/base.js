@@ -6,13 +6,16 @@ import UUID from "pure-uuid"
 import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
+import {Mutex} from "async-mutex"
 
 export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
     this._args = config
     this.configuration = configuration
+    this.mutex = new Mutex() // Can be used to lock this instance for exclusive use
     this.logger = new Logger(this)
     this._transactionsCount = 0
+    this._transactionsActionsMutex = new Mutex()
   }
 
   async addForeignKey(tableName, columnName, referencedTableName, referencedColumnName, args) {
@@ -206,18 +209,36 @@ export default class VelociousDatabaseDriversBase {
   }
 
   async startTransaction() {
+    await this._transactionsActionsMutex.runExclusive(async () => {
+      await this._startTransactionAction()
+      this._transactionsCount++
+    })
+  }
+
+  async _startTransactionAction() {
     await this.query("BEGIN TRANSACTION")
-    this._transactionsCount++
   }
 
   async commitTransaction() {
+    await this._transactionsActionsMutex.runExclusive(async () => {
+      await this._commitTransactionAction()
+      this._transactionsCount--
+    })
+  }
+
+  async _commitTransactionAction() {
     await this.query("COMMIT")
-    this._transactionsCount--
   }
 
   async rollbackTransaction() {
+    await this._transactionsActionsMutex.runExclusive(async () => {
+      await this._rollbackTransactionAction()
+      this._transactionsCount--
+    })
+  }
+
+  async _rollbackTransactionAction() {
     await this.query("ROLLBACK")
-    this._transactionsCount--
   }
 
   generateSavePointName() {
@@ -225,6 +246,12 @@ export default class VelociousDatabaseDriversBase {
   }
 
   async startSavePoint(savePointName) {
+    await this._transactionsActionsMutex.runExclusive(async () => {
+      await this._startSavePointAction(savePointName)
+    })
+  }
+
+  async _startSavePointAction(savePointName) {
     await this.query(`SAVEPOINT ${savePointName}`)
   }
 
@@ -245,10 +272,22 @@ export default class VelociousDatabaseDriversBase {
   }
 
   async releaseSavePoint(savePointName) {
+    await this._transactionsActionsMutex.runExclusive(async () => {
+      await this._releaseSavePointAction(savePointName)
+    })
+  }
+
+  async _releaseSavePointAction(savePointName) {
     await this.query(`RELEASE SAVEPOINT ${savePointName}`)
   }
 
   async rollbackSavePoint(savePointName) {
+    await this._transactionsActionsMutex.runExclusive(async () => {
+      await this._rollbackSavePointAction(savePointName)
+    })
+  }
+
+  async _rollbackSavePointAction(savePointName) {
     await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
   }
 

@@ -203,42 +203,39 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return this._options
   }
 
-  async startTransaction() {
+  async _startTransactionAction() {
     if (!this.connection) throw new Error("No connection")
     if (this._currentTransaction) throw new Error("A transaction is already running")
 
     this._currentTransaction = new mssql.Transaction(this.connection)
 
     await this._currentTransaction.begin()
-    this._transactionsCount++
   }
 
-  async commitTransaction() {
+  async _commitTransactionAction() {
     if (!this._currentTransaction) throw new Error("A transaction isn't running")
 
     await this._currentTransaction.commit()
     this._currentTransaction = null
-    this._transactionsCount--
   }
 
-  async rollbackTransaction() {
+  async _rollbackTransactionAction() {
     if (!this._currentTransaction) throw new Error("A transaction isn't running")
 
     await this._currentTransaction.rollback()
 
     this._currentTransaction = null
-    this._transactionsCount--
   }
 
-  async startSavePoint(savePointName) {
+  async _startSavePointAction(savePointName) {
     await this.query(`SAVE TRANSACTION [${savePointName}]`)
   }
 
-  async releaseSavePoint(savePointName) {
+  async _releaseSavePointAction(savePointName) {
     // Do nothing in MS-SQL.
   }
 
-  async rollbackSavePoint(savePointName) {
+  async _rollbackSavePointAction(savePointName) {
     await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
   }
 
