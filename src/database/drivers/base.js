@@ -12,6 +12,7 @@ export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
     this._args = config
     this.configuration = configuration
+    this.mutex = new Mutex() // Can be used to lock this instance for exclusive use
     this.logger = new Logger(this)
     this._transactionsCount = 0
     this._transactionsActionsMutex = new Mutex()
