@@ -272,7 +272,7 @@ export default class VelociousDatabaseDriversBase {
 
   async releaseSavePoint(savePointName) {
     await this._transactionsActionsMutex.runExclusive(async () => {
-      this._releaseSavePointAction(savePointName)
+      await this._releaseSavePointAction(savePointName)
     })
   }
 
