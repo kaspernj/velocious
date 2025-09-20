@@ -2,19 +2,31 @@ import Configuration from "./configuration.js"
 
 function consoleLog(message) {
   return new Promise((resolve) => {
-    process.stdout.write(`${message}\n`, "utf8", resolve)
+    if (process.stdout) {
+      process.stdout.write(`${message}\n`, "utf8", resolve)
+    } else {
+      console.log(message)
+    }
   })
 }
 
 function consoleError(message) {
   return new Promise((resolve) => {
-    process.stderr.write(`${message}\n`, "utf8", resolve)
+    if (process.stderr) {
+      process.stderr.write(`${message}\n`, "utf8", resolve)
+    } else {
+      console.error(message)
+    }
   })
 }
 
 function consoleWarn(message) {
   return new Promise((resolve) => {
-    process.stderr.write(`${message}\n`, "utf8", resolve)
+    if (process.stderr) {
+      process.stderr.write(`${message}\n`, "utf8", resolve)
+    } else {
+      console.warn(message)
+    }
   })
 }
 
