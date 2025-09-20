@@ -225,7 +225,7 @@ class VelociousDatabaseRecord {
       }
 
       this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
-        let value = this.camelizedColumnName()
+        let value = this[camelizedColumnName]()
 
         if (typeof value == "string") {
           value = value.trim()
