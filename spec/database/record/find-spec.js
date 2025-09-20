@@ -14,6 +14,7 @@ describe("Record - find", () => {
 
       expect(foundTask.readAttribute("name")).toEqual("Test task")
       expect(foundTask.readColumn("name")).toEqual("Test task")
+      expect(foundTask.hasName()).toBeTrue()
     })
   })
 

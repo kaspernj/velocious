@@ -212,17 +212,30 @@ class VelociousDatabaseRecord {
 
       const camelizedColumnName = inflection.camelize(column.getName(), true)
       const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
-      const setterMethodName = `set${camelizedColumnNameBigFirst}`
 
       this._attributeNameToColumnName[camelizedColumnName] = column.getName()
       this._columnNameToAttributeName[column.getName()] = camelizedColumnName
 
-      this.prototype[camelizedColumnName] = function () {
+      this.prototype[camelizedColumnName] = function() {
         return this.readAttribute(camelizedColumnName)
       }
 
-      this.prototype[setterMethodName] = function (newValue) {
+      this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
         return this._setColumnAttribute(camelizedColumnName, newValue)
+      }
+
+      this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
+        let value = this[camelizedColumnName]()
+
+        if (typeof value == "string") {
+          value = value.trim()
+        }
+
+        if (value) {
+          return true
+        }
+
+        return false
       }
     }
 
