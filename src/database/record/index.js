@@ -398,7 +398,7 @@ class VelociousDatabaseRecord {
 
       if (this.isPersisted()) {
         // If any has-many-relationships will be saved, then updated-at should still be set on this record.
-        const autoSaveHasManyrelationships = this._autoSaveHasManyRelationshipsToSave()
+        const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
 
         if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
           result = await this._updateRecordWithChanges()
