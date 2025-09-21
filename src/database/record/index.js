@@ -4,8 +4,8 @@ import Configuration from "../../configuration.js"
 import FromTable from "../query/from-table.js"
 import Handler from "../handler.js"
 import HasManyRelationship from "./relationships/has-many.js"
-import HasManyInstanceRelationship from "./instance-relationships/has-one.js"
-import HasOneRelationship from "./relationships/has-many.js"
+import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
+import HasOneRelationship from "./relationships/has-one.js"
 import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import * as inflection from "inflection"
 import Query from "../query/index.js"
@@ -107,10 +107,19 @@ class VelociousDatabaseRecord {
         return this.getRelationshipByName(relationshipName)
       }
     } else if (actualData.type == "hasOne") {
+      const buildMethodName = `build${inflection.camelize(relationshipName)}`
+
       relationship = new HasOneRelationship(actualData)
 
       this.prototype[relationshipName] = function () {
-        return this.getRelationshipByName(relationshipName)
+        return this.getRelationshipByName(relationshipName).loaded()
+      }
+
+      this.prototype[buildMethodName] = function (attributes) {
+        const relationship = this.getRelationshipByName(relationshipName)
+        const record = relationship.build(attributes)
+
+        return record
       }
     } else {
       throw new Error(`Unknown relationship type: ${actualData.type}`)
@@ -398,7 +407,7 @@ class VelociousDatabaseRecord {
         result = await this._createNewRecord()
       }
 
-      await this._autoSaveHasManyRelationships({isNewRecord})
+      await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
     })
 
     return result
@@ -432,19 +441,31 @@ class VelociousDatabaseRecord {
     return {savedCount}
   }
 
-  _autoSaveHasManyRelationshipsToSave() {
+  _autoSaveHasManyAndHasOneRelationships() {
     const relationships = []
 
     for (const relationshipName in this._instanceRelationships) {
       const instanceRelationship = this._instanceRelationships[relationshipName]
 
-      if (instanceRelationship.getType() != "hasMany") {
+      if (instanceRelationship.getType() != "hasMany" && instanceRelationship.getType() != "hasOne") {
         continue
       }
 
-      let loaded = instanceRelationship._loaded
+      let loaded
 
-      if (!Array.isArray(loaded)) loaded = [loaded]
+      if (instanceRelationship.getType() == "hasOne") {
+        const hasOneLoaded = instanceRelationship.getLoadedOrNull()
+
+        if (hasOneLoaded) {
+          loaded = [hasOneLoaded]
+        } else {
+          continue
+        }
+      } else {
+        loaded = instanceRelationship.getLoadedOrNull()
+
+        if (!Array.isArray(loaded)) loaded = [loaded]
+      }
 
       let useRelationship = false
 

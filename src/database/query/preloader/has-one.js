@@ -17,7 +17,7 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
     const preloadCollections = {}
 
     for (const model of this.models) {
-      preloadCollections[model.id()] = []
+      preloadCollections[model.id()] = null
       modelIds.push(model.id())
 
       if (!(model.id in modelsById)) modelsById[model.id()] = []
