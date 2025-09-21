@@ -1,5 +1,6 @@
 import BelongsToPreloader from "./preloader/belongs-to.js"
 import HasManyPreloader from "./preloader/has-many.js"
+import HasOnePreloader from "./preloader/has-one.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloader {
@@ -24,6 +25,10 @@ export default class VelociousDatabaseQueryPreloader {
         const hasManyPreloader = new HasManyPreloader({models: this.models, relationship: relationship})
 
         targetModels = await hasManyPreloader.run()
+      } else if (relationship.getType() == "hasMany") {
+        const hasOnePreloader = new HasOnePreloader({models: this.models, relationship: relationship})
+
+        targetModels = await hasOnePreloader.run()
       } else {
         throw new Error(`Unknown relationship type: ${relationship.getType()}`)
       }

@@ -18,7 +18,7 @@ describe("Cli - Commands - db:migrate", () => {
     await cli.configuration.ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
 
-      const tableNames = ["accounts", "authentication_tokens", "tasks", "project_translations", "projects", "schema_migrations", "users"]
+      const tableNames = ["accounts", "authentication_tokens", "tasks", "project_translations", "projects", "project_details", "schema_migrations", "users"]
 
       for (const tableName of tableNames) {
         await dbs.default.dropTable(tableName, {cascade: true, ifExists: true})
@@ -102,6 +102,7 @@ describe("Cli - Commands - db:migrate", () => {
         [
           "accounts",
           "authentication_tokens",
+          "project_details",
           "project_translations",
           "projects",
           "schema_migrations",
@@ -125,6 +126,7 @@ describe("Cli - Commands - db:migrate", () => {
         [
           "accounts",
           "authentication_tokens",
+          "project_details",
           "project_translations",
           "projects",
           "schema_migrations",

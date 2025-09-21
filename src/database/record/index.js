@@ -4,7 +4,9 @@ import Configuration from "../../configuration.js"
 import FromTable from "../query/from-table.js"
 import Handler from "../handler.js"
 import HasManyRelationship from "./relationships/has-many.js"
-import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
+import HasManyInstanceRelationship from "./instance-relationships/has-one.js"
+import HasOneRelationship from "./relationships/has-many.js"
+import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import * as inflection from "inflection"
 import Query from "../query/index.js"
 import ValidatorsPresence from "./validators/presence.js"
@@ -104,6 +106,12 @@ class VelociousDatabaseRecord {
       this.prototype[relationshipName] = function () {
         return this.getRelationshipByName(relationshipName)
       }
+    } else if (actualData.type == "hasOne") {
+      relationship = new HasOneRelationship(actualData)
+
+      this.prototype[relationshipName] = function () {
+        return this.getRelationshipByName(relationshipName)
+      }
     } else {
       throw new Error(`Unknown relationship type: ${actualData.type}`)
     }
@@ -132,14 +140,17 @@ class VelociousDatabaseRecord {
 
     if (!(relationshipName in this._instanceRelationships)) {
       const modelClassRelationship = this.constructor.getRelationshipByName(relationshipName)
+      const relationshipType = modelClassRelationship.getType()
       let instanceRelationship
 
-      if (modelClassRelationship.getType() == "belongsTo") {
+      if (relationshipType == "belongsTo") {
         instanceRelationship = new BelongsToInstanceRelationship({model: this, relationship: modelClassRelationship})
-      } else if (modelClassRelationship.getType() == "hasMany") {
+      } else if (relationshipType == "hasMany") {
         instanceRelationship = new HasManyInstanceRelationship({model: this, relationship: modelClassRelationship})
+      } else if (relationshipType == "hasOne") {
+        instanceRelationship = new HasOneInstanceRelationship({model: this, relationship: modelClassRelationship})
       } else {
-        throw new Error(`Unknown relationship type: ${modelClassRelationship.getType()}`)
+        throw new Error(`Unknown relationship type: ${relationshipType}`)
       }
 
       this._instanceRelationships[relationshipName] = instanceRelationship
@@ -187,6 +198,10 @@ class VelociousDatabaseRecord {
 
   static hasMany(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasMany"}, options))
+  }
+
+  static hasOne(relationshipName, options = {}) {
+    return this._defineRelationship(relationshipName, Object.assign({type: "hasOne"}, options))
   }
 
   static humanAttributeName(attributeName) {

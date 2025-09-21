@@ -4,6 +4,7 @@ class Project extends DatabaseRecord {
 }
 
 Project.hasMany("tasks")
+Project.hasOne("projectDetail")
 Project.translates("name")
 
 export default Project

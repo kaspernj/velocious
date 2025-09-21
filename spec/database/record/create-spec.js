@@ -53,6 +53,7 @@ describe("Record - create", () => {
       const project = new Project({name: "Test project"})
 
       project.tasks().build({name: " ", project})
+      project.buildProjectDetail({note: "Test note"})
 
       try {
         await project.save()
@@ -68,6 +69,11 @@ describe("Record - create", () => {
 
       expect(projectsCount).toEqual(0)
       expect(tasksCount).toEqual(0)
+
+      const projectNote = project.projectNote()
+
+      expect(projectNote.note()).toEqual("Test note")
+      expect(projectNote.projectId()).toEqual(project.id())
     })
   })
 })
