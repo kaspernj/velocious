@@ -14,6 +14,10 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     return newInstance
   }
 
+  getLoadedOrNull() {
+    return this._loaded
+  }
+
   setLoaded(models) {
     this._loaded = models
   }

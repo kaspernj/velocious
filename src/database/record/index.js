@@ -441,7 +441,7 @@ class VelociousDatabaseRecord {
     return {savedCount}
   }
 
-  _autoSaveHasManyAndHasOneRelationships() {
+  _autoSaveHasManyAndHasOneRelationshipsToSave() {
     const relationships = []
 
     for (const relationshipName in this._instanceRelationships) {
@@ -463,8 +463,6 @@ class VelociousDatabaseRecord {
         }
       } else {
         loaded = instanceRelationship.getLoadedOrNull()
-
-        if (!Array.isArray(loaded)) loaded = [loaded]
       }
 
       let useRelationship = false
@@ -486,8 +484,8 @@ class VelociousDatabaseRecord {
     return relationships
   }
 
-  async _autoSaveHasManyRelationships({isNewRecord}) {
-    for (const instanceRelationship of this._autoSaveHasManyRelationshipsToSave()) {
+  async _autoSaveHasManyAndHasOneRelationships({isNewRecord}) {
+    for (const instanceRelationship of this._autoSaveHasManyAndHasOneRelationshipsToSave()) {
       let loaded = instanceRelationship._loaded
 
       if (!Array.isArray(loaded)) loaded = [loaded]

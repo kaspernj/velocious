@@ -10,7 +10,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     const targetModelClass = this.getTargetModelClass()
     const newInstance = new targetModelClass(data)
 
-    this._loaded.push(newInstance)
+    this._loaded = newInstance
 
     return newInstance
   }
@@ -20,6 +20,10 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
       throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
     }
 
+    return this._loaded
+  }
+
+  getLoadedOrNull() {
     return this._loaded
   }
 

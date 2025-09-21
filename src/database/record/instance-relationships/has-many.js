@@ -23,6 +23,10 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     return this._loaded
   }
 
+  getLoadedOrNull() {
+    return this._loaded
+  }
+
   addToLoaded(models) {
     if (Array.isArray(models)) {
       for (const model of models) {

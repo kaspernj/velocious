@@ -3,7 +3,7 @@ import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - query", () => {
-  fit("queries for records", async () => {
+  it("queries for records", async () => {
     await Dummy.run(async () => {
       const task = new Task({name: "Test task"})
       const project = task.buildProject({nameEn: "Test project", nameDe: "Test projekt"})
