@@ -3,7 +3,7 @@ import BaseInstanceRelationship from "./base.js"
 export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
   constructor(args) {
     super(args)
-    this._loaded = []
+    this._loaded = null
   }
 
   build(data) {
