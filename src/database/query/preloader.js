@@ -25,7 +25,7 @@ export default class VelociousDatabaseQueryPreloader {
         const hasManyPreloader = new HasManyPreloader({models: this.models, relationship: relationship})
 
         targetModels = await hasManyPreloader.run()
-      } else if (relationship.getType() == "hasMany") {
+      } else if (relationship.getType() == "hasOne") {
         const hasOnePreloader = new HasOnePreloader({models: this.models, relationship: relationship})
 
         targetModels = await hasOnePreloader.run()

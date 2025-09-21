@@ -8,6 +8,8 @@ describe("Record - query", () => {
       const task = new Task({name: "Test task"})
       const project = task.buildProject({nameEn: "Test project", nameDe: "Test projekt"})
 
+      project.buildProjectDetail({note: "Test note"})
+
       await task.save()
 
       expect(task.id()).not.toBeUndefined()
@@ -20,9 +22,10 @@ describe("Record - query", () => {
       expect(project.nameDe()).toEqual("Test projekt")
       expect(project.nameEn()).toEqual("Test project")
 
-      const tasks = await Task.preload({project: {translations: true}}).toArray()
+      const tasks = await Task.preload({project: {projectDetail: true, translations: true}}).toArray()
       const newTask = tasks[0]
       const newProject = newTask.project()
+      const newProjectDetail = newProject.projectDetail()
 
       expect(newTask.id()).not.toBeUndefined()
       expect(newTask.name()).toEqual("Test task")
@@ -33,6 +36,8 @@ describe("Record - query", () => {
       expect(newProject.name()).toEqual("Test project")
       expect(newProject.nameDe()).toEqual("Test projekt")
       expect(newProject.nameEn()).toEqual("Test project")
+
+      expect(newProjectDetail.note()).toEqual("Test note")
     })
   })
 
