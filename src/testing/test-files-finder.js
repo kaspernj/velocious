@@ -90,12 +90,8 @@ export default class TestFilesFinder {
           return true
         }
       }
-    } else if (file.match(/-(spec|test)\.js/)) {
-      const endsWithJS = file.endsWith(".js")
-
-      console.log({file, endsWithJS})
-
-      return endsWithJS
+    } else if (file.match(/-(spec|test)\.(m|)js$/)) {
+      return true
     }
 
     return false
