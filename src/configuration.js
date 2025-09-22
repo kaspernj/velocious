@@ -119,7 +119,7 @@ export default class VelociousConfiguration {
   isDatabasePoolInitialized(identifier = "default") { return Boolean(this.databasePools[identifier]) }
   isInitialized() { return this._isInitialized }
 
-  async initialize({type}) {
+  async initialize({type} = {}) {
     if (!this.isInitialized()) {
       this._isInitialized = true
 
