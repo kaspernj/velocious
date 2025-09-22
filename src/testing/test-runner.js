@@ -76,6 +76,14 @@ export default class TestRunner {
     }
   }
 
+  areAnyTestsFocussed() {
+    if (this.anyTestsFocussed === undefined) {
+      throw new Error("Hasn't been detected yet")
+    }
+
+    return this.anyTestsFocussed
+  }
+
   async run() {
     await this.configuration.ensureConnections(async () => {
       await this.runTests({
