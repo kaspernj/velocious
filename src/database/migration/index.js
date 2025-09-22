@@ -27,6 +27,11 @@ export default class VelociousDatabaseMigration {
   }
 
   getDriver() { return this._db }
+  connection() { return this.getDriver() }
+
+  async execute(sql) {
+    await this.connection().query(sql)
+  }
 
   async addColumn(tableName, columnName, columnType, args) {
     if (!columnType) throw new Error("No column type given")
