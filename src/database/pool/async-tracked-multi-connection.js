@@ -10,7 +10,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.idSeq = 0
   }
 
-  checkin = (connection) => {
+  checkin(connection) {
     const id = connection.getIdSeq()
 
     if (id in this.connectionsInUse) {

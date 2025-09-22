@@ -6,5 +6,5 @@ export default class VelociousDatabaseQueryFromPlain extends FromBase {
     this.plain = plain
   }
 
-  toSql = () => this.plain
+  toSql() { return this.plain }
 }

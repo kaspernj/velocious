@@ -1,7 +1,7 @@
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
-  checkin = (connection) => {
+  checkin(connection) {
     // Do nothing
   }
 

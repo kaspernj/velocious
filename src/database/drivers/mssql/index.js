@@ -82,8 +82,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return dropTable.toSql()
   }
 
-  getType = () => "mssql"
-  primaryKeyType = () => "bigint"
+  getType() { return "mssql" }
+  primaryKeyType() { return "bigint" }
 
   async query(sql) {
     let result, request, tries = 0

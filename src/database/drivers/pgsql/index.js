@@ -99,8 +99,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return dropTable.toSql()
   }
 
-  getType = () => "pgsql"
-  primaryKeyType = () => "bigint"
+  getType() { return "pgsql" }
+  primaryKeyType() { return "bigint" }
 
   async query(sql) {
     let response
@@ -118,7 +118,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return new QueryParser({query}).toSql()
   }
 
-  shouldSetAutoIncrementWhenPrimaryKey = () => true
+  shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
   escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
