@@ -23,7 +23,7 @@ export default class TestFilesFinder {
     return this.foundFiles
   }
 
-  findingPromisesLength = () => Object.keys(this.findingPromises).length
+  findingPromisesLength() { return Object.keys(this.findingPromises).length }
 
   async waitForFindingPromises() {
     while (this.findingPromisesLength() > 0) {
@@ -91,7 +91,11 @@ export default class TestFilesFinder {
         }
       }
     } else if (file.match(/-(spec|test)\.js/)) {
-      return true
+      const endsWithJS = file.endsWith(".js")
+
+      console.log({file, endsWithJS})
+
+      return endsWithJS
     }
 
     return false
