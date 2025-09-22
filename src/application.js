@@ -4,16 +4,19 @@ import {Logger} from "./logger.js"
 import HttpServer from "./http-server/index.js"
 
 export default class VelociousApplication {
-  constructor({configuration, httpServer}) {
+  constructor({configuration, httpServer, type}) {
     this.configuration = configuration
     this.httpServerConfiguration = httpServer ?? {}
     this.logger = new Logger(this)
+    this._type = type
   }
+
+  getType() { return this._type }
 
   async initialize() {
     const routes = await AppRoutes.getRoutes(this.configuration)
 
-    await this.configuration.initialize()
+    await this.configuration.initialize({type: this.getType()})
 
     this.configuration.setRoutes(routes)
 

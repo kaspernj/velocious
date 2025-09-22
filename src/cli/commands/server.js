@@ -17,7 +17,8 @@ export default class VelociousCliCommandsServer extends BaseCommand{
       httpServer: {
         host,
         port
-      }
+      },
+      type: "server"
     })
 
     await application.initialize()

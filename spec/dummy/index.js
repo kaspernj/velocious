@@ -60,7 +60,8 @@ export default class Dummy {
       httpServer: {
         maxWorkers: 1,
         port: 3006
-      }
+      },
+      type: "dummy"
     })
 
     await this.application.initialize()
