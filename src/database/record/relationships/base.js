@@ -1,4 +1,4 @@
-import restArgsError from "velocious/src/utils/rest-args-error"
+import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseRecordBaseRelationship {
   constructor({className, configuration, dependent, foreignKey, klass, modelClass, primaryKey = "id", relationshipName, through, type, ...restArgs}) {
