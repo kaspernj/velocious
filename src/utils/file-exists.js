@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
 
-const fileExists = async (path) => {
+async function fileExists(path) {
   try {
     await fs.access(path)
 
