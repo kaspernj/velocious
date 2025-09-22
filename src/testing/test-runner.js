@@ -21,7 +21,8 @@ export default class TestRunner {
             password: ""
           }
         },
-        httpServer: {port: 31006}
+        httpServer: {port: 31006},
+        type: "test-runner"
       })
 
       await this._application.initialize()

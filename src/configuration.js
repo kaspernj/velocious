@@ -9,7 +9,7 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
-  constructor({cors, database, debug, directory, environment, initializeModels, locale, localeFallbacks, locales, testing, ...restArgs}) {
+  constructor({cors, database, debug, directory, environment, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -19,6 +19,7 @@ export default class VelociousConfiguration {
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._directory = directory
     this._initializeModels = initializeModels
+    this._initializers = initializers
     this._isInitialized = false
     this.locale = locale
     this.localeFallbacks = localeFallbacks
@@ -118,13 +119,29 @@ export default class VelociousConfiguration {
   isDatabasePoolInitialized(identifier = "default") { return Boolean(this.databasePools[identifier]) }
   isInitialized() { return this._isInitialized }
 
-  async initialize() {
+  async initialize({type}) {
     if (!this.isInitialized()) {
+      this._isInitialized = true
+
       if (this._initializeModels) {
-        await this._initializeModels({configuration: this})
+        await this._initializeModels({configuration: this, type})
       }
 
-      this._isInitialized = true
+      if (this._initializers) {
+        const initializers = await this._initializers({configuration: this})
+        const {requireContext, ...restArgs} = initializers
+
+        restArgsError(restArgs)
+
+        if (requireContext) {
+          for (const initializerKey of requireContext.keys()) {
+            const InitializerClass = requireContext(initializerKey).default
+            const initializerInstance = new InitializerClass({configuration: this, type})
+
+            await initializerInstance.run()
+          }
+        }
+      }
     }
   }
 
