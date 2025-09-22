@@ -62,6 +62,7 @@ export default class TestRunner {
   }
 
   async prepare() {
+    this.anyTestsFocussed = false
     this._failedTests = 0
     this._successfulTests = 0
     this._testsCount = 0
