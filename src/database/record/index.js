@@ -111,8 +111,6 @@ class VelociousDatabaseRecord {
 
       relationship = new HasOneRelationship(actualData)
 
-      console.log("defineRelationship hasOne", {relationshipName})
-
       this.prototype[relationshipName] = function () {
         return this.getRelationshipByName(relationshipName).loaded()
       }
