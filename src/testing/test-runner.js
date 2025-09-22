@@ -62,6 +62,7 @@ export default class TestRunner {
   }
 
   async prepare() {
+    this.anyTestsFocussed = false
     this._failedTests = 0
     this._successfulTests = 0
     this._testsCount = 0
@@ -74,6 +75,14 @@ export default class TestRunner {
     if (testingConfigPath) {
       await import(testingConfigPath)
     }
+  }
+
+  areAnyTestsFocussed() {
+    if (this.anyTestsFocussed === undefined) {
+      throw new Error("Hasn't been detected yet")
+    }
+
+    return this.anyTestsFocussed
   }
 
   async run() {
