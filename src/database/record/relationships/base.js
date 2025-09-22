@@ -1,8 +1,9 @@
+import restArgsError from "velocious/src/utils/rest-args-error"
+
 export default class VelociousDatabaseRecordBaseRelationship {
   constructor({className, configuration, dependent, foreignKey, klass, modelClass, primaryKey = "id", relationshipName, through, type, ...restArgs}) {
-    const restArgsKeys = Object.keys(restArgs)
+    restArgsError(restArgs)
 
-    if (restArgsKeys.length > 0) throw new Error(`Unknown args given: ${restArgsKeys.join(", ")}`)
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
     if (!className && !klass) throw new Error(`Neither 'className' or 'klass' was given for ${modelClass.name}#${relationshipName}`)
 
@@ -18,10 +19,10 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this.type = type
   }
 
-  getDependent = () => this._dependent
-  getRelationshipName = () => this.relationshipName
-  getPrimaryKey = () => this._primaryKey
-  getType = () => this.type
+  getDependent() { return this._dependent }
+  getRelationshipName() { return this.relationshipName }
+  getPrimaryKey() { return this._primaryKey }
+  getType() { return this.type }
 
   getTargetModelClass() {
     if (this.className) {
