@@ -9,7 +9,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     this._dirty = newValue
   }
 
-  getDirty = () => this._dirty
+  getDirty() { return this._dirty }
 
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
@@ -27,9 +27,9 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     this._preloaded = preloadedValue
   }
 
-  getForeignKey = () => this.getRelationship().getForeignKey()
-  getPrimaryKey = () => this.getRelationship().getPrimaryKey()
-  getRelationship = () => this.relationship
-  getTargetModelClass = () => this.getRelationship().getTargetModelClass()
-  getType = () => this.getRelationship().getType()
+  getForeignKey() { return this.getRelationship().getForeignKey() }
+  getPrimaryKey() { return this.getRelationship().getPrimaryKey() }
+  getRelationship() { return this.relationship }
+  getTargetModelClass() { return this.getRelationship().getTargetModelClass() }
+  getType() { return this.getRelationship().getType() }
 }

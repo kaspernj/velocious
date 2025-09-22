@@ -16,7 +16,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
     return this.driver.quote(string)
   }
 
-  quoteColumnName = (string) => {
+  quoteColumnName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in column name: ${string}`)
 
     return `[${string}]`
@@ -29,13 +29,13 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
     return `[${databaseName}]`
   }
 
-  quoteIndexName = (string) => {
+  quoteIndexName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in index name: ${string}`)
 
     return `[${string}]`
   }
 
-  quoteTableName = (string) => {
+  quoteTableName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in table name: ${string}`)
 
     return `[${string}]`

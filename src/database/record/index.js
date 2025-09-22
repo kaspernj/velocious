@@ -5,6 +5,8 @@ import FromTable from "../query/from-table.js"
 import Handler from "../handler.js"
 import HasManyRelationship from "./relationships/has-many.js"
 import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
+import HasOneRelationship from "./relationships/has-one.js"
+import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import * as inflection from "inflection"
 import Query from "../query/index.js"
 import ValidatorsPresence from "./validators/presence.js"
@@ -104,6 +106,21 @@ class VelociousDatabaseRecord {
       this.prototype[relationshipName] = function () {
         return this.getRelationshipByName(relationshipName)
       }
+    } else if (actualData.type == "hasOne") {
+      const buildMethodName = `build${inflection.camelize(relationshipName)}`
+
+      relationship = new HasOneRelationship(actualData)
+
+      this.prototype[relationshipName] = function () {
+        return this.getRelationshipByName(relationshipName).loaded()
+      }
+
+      this.prototype[buildMethodName] = function (attributes) {
+        const relationship = this.getRelationshipByName(relationshipName)
+        const record = relationship.build(attributes)
+
+        return record
+      }
     } else {
       throw new Error(`Unknown relationship type: ${actualData.type}`)
     }
@@ -132,14 +149,17 @@ class VelociousDatabaseRecord {
 
     if (!(relationshipName in this._instanceRelationships)) {
       const modelClassRelationship = this.constructor.getRelationshipByName(relationshipName)
+      const relationshipType = modelClassRelationship.getType()
       let instanceRelationship
 
-      if (modelClassRelationship.getType() == "belongsTo") {
+      if (relationshipType == "belongsTo") {
         instanceRelationship = new BelongsToInstanceRelationship({model: this, relationship: modelClassRelationship})
-      } else if (modelClassRelationship.getType() == "hasMany") {
+      } else if (relationshipType == "hasMany") {
         instanceRelationship = new HasManyInstanceRelationship({model: this, relationship: modelClassRelationship})
+      } else if (relationshipType == "hasOne") {
+        instanceRelationship = new HasOneInstanceRelationship({model: this, relationship: modelClassRelationship})
       } else {
-        throw new Error(`Unknown relationship type: ${modelClassRelationship.getType()}`)
+        throw new Error(`Unknown relationship type: ${relationshipType}`)
       }
 
       this._instanceRelationships[relationshipName] = instanceRelationship
@@ -187,6 +207,10 @@ class VelociousDatabaseRecord {
 
   static hasMany(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasMany"}, options))
+  }
+
+  static hasOne(relationshipName, options = {}) {
+    return this._defineRelationship(relationshipName, Object.assign({type: "hasOne"}, options))
   }
 
   static humanAttributeName(attributeName) {
@@ -374,7 +398,7 @@ class VelociousDatabaseRecord {
 
       if (this.isPersisted()) {
         // If any has-many-relationships will be saved, then updated-at should still be set on this record.
-        const autoSaveHasManyrelationships = this._autoSaveHasManyRelationshipsToSave()
+        const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
 
         if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
           result = await this._updateRecordWithChanges()
@@ -383,7 +407,7 @@ class VelociousDatabaseRecord {
         result = await this._createNewRecord()
       }
 
-      await this._autoSaveHasManyRelationships({isNewRecord})
+      await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
     })
 
     return result
@@ -417,19 +441,29 @@ class VelociousDatabaseRecord {
     return {savedCount}
   }
 
-  _autoSaveHasManyRelationshipsToSave() {
+  _autoSaveHasManyAndHasOneRelationshipsToSave() {
     const relationships = []
 
     for (const relationshipName in this._instanceRelationships) {
       const instanceRelationship = this._instanceRelationships[relationshipName]
 
-      if (instanceRelationship.getType() != "hasMany") {
+      if (instanceRelationship.getType() != "hasMany" && instanceRelationship.getType() != "hasOne") {
         continue
       }
 
-      let loaded = instanceRelationship._loaded
+      let loaded
 
-      if (!Array.isArray(loaded)) loaded = [loaded]
+      if (instanceRelationship.getType() == "hasOne") {
+        const hasOneLoaded = instanceRelationship.getLoadedOrNull()
+
+        if (hasOneLoaded) {
+          loaded = [hasOneLoaded]
+        } else {
+          continue
+        }
+      } else {
+        loaded = instanceRelationship.getLoadedOrNull()
+      }
 
       let useRelationship = false
 
@@ -450,8 +484,8 @@ class VelociousDatabaseRecord {
     return relationships
   }
 
-  async _autoSaveHasManyRelationships({isNewRecord}) {
-    for (const instanceRelationship of this._autoSaveHasManyRelationshipsToSave()) {
+  async _autoSaveHasManyAndHasOneRelationships({isNewRecord}) {
+    for (const instanceRelationship of this._autoSaveHasManyAndHasOneRelationshipsToSave()) {
       let loaded = instanceRelationship._loaded
 
       if (!Array.isArray(loaded)) loaded = [loaded]

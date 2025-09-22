@@ -91,8 +91,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return dropTable.toSql()
   }
 
-  getType = () => "mysql"
-  primaryKeyType = () => "bigint"
+  getType() { return "mysql" }
+  primaryKeyType() { return "bigint" }
 
   async query(sql) {
     try {
@@ -107,7 +107,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return new QueryParser({query}).toSql()
   }
 
-  shouldSetAutoIncrementWhenPrimaryKey = () => true
+  shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
   escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")

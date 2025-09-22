@@ -80,7 +80,7 @@ export default class VelociousConfiguration {
   getEnvironment() { return digg(this, "_environment") }
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
 
-  getLocaleFallbacks = () => this.localeFallbacks
+  getLocaleFallbacks() { return this.localeFallbacks }
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
 
   getLocale() {
@@ -93,7 +93,7 @@ export default class VelociousConfiguration {
     }
   }
 
-  getLocales = () => digg(this, "locales")
+  getLocales() { return digg(this, "locales") }
 
   getModelClass(name) {
     const modelClass = this.modelClasses[name]
@@ -115,8 +115,8 @@ export default class VelociousConfiguration {
     this.databasePools[identifier].setCurrent()
   }
 
-  isDatabasePoolInitialized = (identifier = "default") => Boolean(this.databasePools[identifier])
-  isInitialized = () => this._isInitialized
+  isDatabasePoolInitialized(identifier = "default") { return Boolean(this.databasePools[identifier]) }
+  isInitialized() { return this._isInitialized }
 
   async initialize() {
     if (!this.isInitialized()) {

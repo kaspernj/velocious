@@ -71,7 +71,7 @@ export default class VelociousDatabaseQuery {
     throw new Error("count multiple stub")
   }
 
-  getOptions = () => this.driver.options()
+  getOptions() { return this.driver.options() }
 
   async destroyAll() {
     const records = await this.toArray()
@@ -255,7 +255,7 @@ export default class VelociousDatabaseQuery {
     return models
   }
 
-  toSql = () => this.driver.queryToSql(this)
+  toSql() { return this.driver.queryToSql(this) }
 
   where(where) {
     if (typeof where == "string") {

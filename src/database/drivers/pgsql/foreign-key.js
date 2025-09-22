@@ -2,9 +2,9 @@ import BaseForeignKey from "../base-foreign-key.js"
 import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversPgsqlForeignKey extends BaseForeignKey {
-  getColumnName = () => digg(this, "data", "column_name")
-  getName = () => digg(this, "data", "constraint_name")
-  getTableName = () => digg(this, "data", "table_name")
-  getReferencedColumnName = () => digg(this, "data", "foreign_column_name")
-  getReferencedTableName = () => digg(this, "data", "foreign_table_name")
+  getColumnName() { return digg(this, "data", "column_name") }
+  getName() { return digg(this, "data", "constraint_name") }
+  getTableName() { return digg(this, "data", "table_name") }
+  getReferencedColumnName() { return digg(this, "data", "foreign_column_name") }
+  getReferencedTableName() { return digg(this, "data", "foreign_table_name") }
 }

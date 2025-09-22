@@ -1,16 +1,16 @@
 import BaseInstanceRelationship from "./base.js"
 
-export default class VelociousDatabaseRecordHasManyInstanceRelationship extends BaseInstanceRelationship {
+export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
   constructor(args) {
     super(args)
-    this._loaded = []
+    this._loaded = null
   }
 
   build(data) {
     const targetModelClass = this.getTargetModelClass()
     const newInstance = new targetModelClass(data)
 
-    this._loaded.push(newInstance)
+    this._loaded = newInstance
 
     return newInstance
   }
@@ -27,20 +27,10 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     return this._loaded
   }
 
-  addToLoaded(models) {
-    if (Array.isArray(models)) {
-      for (const model of models) {
-        this._loaded.push(model)
-      }
-    } else {
-      this._loaded.push(models)
-    }
-  }
+  setLoaded(model) {
+    if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
 
-  setLoaded(models) {
-    if (!Array.isArray(models)) throw new Error(`Argument given to setLoaded wasn't an array: ${typeof models}`)
-
-    this._loaded = models
+    this._loaded = model
   }
 
   getTargetModelClass = () => this.relationship.getTargetModelClass()
