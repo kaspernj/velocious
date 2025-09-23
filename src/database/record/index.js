@@ -168,8 +168,8 @@ class VelociousDatabaseRecord {
     return this._instanceRelationships[relationshipName]
   }
 
-  static belongsTo(relationshipName) {
-    this._defineRelationship(relationshipName, {type: "belongsTo"})
+  static belongsTo(relationshipName, options) {
+    this._defineRelationship(relationshipName, Object.assign({type: "belongsTo"}, options))
   }
 
   static connection() {
