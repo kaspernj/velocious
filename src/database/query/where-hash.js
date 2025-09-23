@@ -8,27 +8,42 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   }
 
   toSql() {
-    const options = this.getOptions()
     let sql = "("
+
+    sql += this._whereSQLFromHash(this.hash)
+    sql += ")"
+
+    return sql
+  }
+
+  _whereSQLFromHash(hash, tableName) {
+    const options = this.getOptions()
+    let sql = ""
     let index = 0
 
-    for (const whereKey in this.hash) {
-      const whereValue = this.hash[whereKey]
+    for (const whereKey in hash) {
+      const whereValue = hash[whereKey]
 
       if (index > 0) sql += " AND "
 
-      sql += `${options.quoteColumnName(whereKey)}`
-
-      if (Array.isArray(whereValue)) {
-        sql += ` IN (${whereValue.map((value) => options.quote(value)).join(", ")})`
+      if (!Array.isArray(whereValue) && typeof whereValue == "object") {
+        sql += this._whereSQLFromHash(whereValue, whereKey)
       } else {
-        sql += ` = ${options.quote(whereValue)}`
+        if (tableName) {
+          sql += `${options.quoteTableName(tableName)}.`
+        }
+
+        sql += `${options.quoteColumnName(whereKey)}`
+
+        if (Array.isArray(whereValue)) {
+          sql += ` IN (${whereValue.map((value) => options.quote(value)).join(", ")})`
+        } else {
+          sql += ` = ${options.quote(whereValue)}`
+        }
       }
 
       index++
     }
-
-    sql += ")"
 
     return sql
   }

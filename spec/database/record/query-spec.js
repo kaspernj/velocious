@@ -75,6 +75,30 @@ describe("Record - query", () => {
     })
   })
 
+  it("finds the record with joins and where hashes", async () => {
+    await Dummy.run(async () => {
+      const project1 = await Project.create({name: "Test project 1"})
+      const project2 = await Project.create({name: "Test project 2"})
+
+      for (let i = 0; i < 5; i++) {
+        await Task.create({name: `Task 1-${i}`, project: project1})
+        await Task.create({name: `Task 2-${i}`, project: project2})
+      }
+
+      const tasks = await Task
+        .joins({project: {translations: true}})
+        .where({tasks: {name: "Task 2-2"}, project_translations: {name: "Test project 2"}})
+        .preload({project: {translations: true}})
+        .toArray()
+
+      const task = tasks[0]
+
+      expect(tasks.length).toEqual(1)
+      expect(task.name()).toEqual("Task 2-2")
+      expect(task.project().name()).toEqual("Test project 2")
+    })
+  })
+
   it("counts the records", async () => {
     await Dummy.run(async () => {
       const taskIDs = []
