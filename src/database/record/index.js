@@ -390,24 +390,26 @@ class VelociousDatabaseRecord {
     const isNewRecord = this.isNewRecord()
     let result
 
-    await this._runValidations()
+    await this.constructor._getConfiguration().ensureConnections(async () => {
+      await this._runValidations()
 
-    await this.constructor.transaction(async () => {
-      // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
-      const {savedCount} = await this._autoSaveBelongsToRelationships()
+      await this.constructor.transaction(async () => {
+        // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
+        const {savedCount} = await this._autoSaveBelongsToRelationships()
 
-      if (this.isPersisted()) {
-        // If any has-many-relationships will be saved, then updated-at should still be set on this record.
-        const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
+        if (this.isPersisted()) {
+          // If any has-many-relationships will be saved, then updated-at should still be set on this record.
+          const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
 
-        if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
-          result = await this._updateRecordWithChanges()
+          if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
+            result = await this._updateRecordWithChanges()
+          }
+        } else {
+          result = await this._createNewRecord()
         }
-      } else {
-        result = await this._createNewRecord()
-      }
 
-      await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
+        await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
+      })
     })
 
     return result
