@@ -22,5 +22,4 @@ for (let i = 0; i < processArgs.length; i++) {
 const cli = new Cli({parsedProcessArgs, processArgs})
 
 await cli.execute()
-
 process.exit(0)
