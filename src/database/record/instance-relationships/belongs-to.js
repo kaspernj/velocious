@@ -1,10 +1,6 @@
 import BaseInstanceRelationship from "./base.js"
 
 export default class VelociousDatabaseRecordBelongsToInstanceRelationship extends BaseInstanceRelationship {
-  constructor(args) {
-    super(args)
-  }
-
   build(data) {
     const targetModelClass = this.getTargetModelClass()
     const newInstance = new targetModelClass(data)
@@ -16,5 +12,16 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
   getLoadedOrNull() {
     return this._loaded
+  }
+
+  async load() {
+    const foreignKey = this.getForeignKey()
+    const foreignModelID = this.getModel().readColumn(foreignKey)
+    const TargetModelClass = this.getTargetModelClass()
+    const foreignModel = await TargetModelClass.find(foreignModelID)
+
+    this.setLoaded(foreignModel)
+    this.setDirty(false)
+    this.setPreloaded(true)
   }
 }

@@ -78,23 +78,24 @@ class VelociousDatabaseRecord {
     if (actualData.type == "belongsTo") {
       relationship = new BelongsToRelationship(actualData)
 
-      const buildMethodName = `build${inflection.camelize(relationshipName)}`
-      const setMethodName = `set${inflection.camelize(relationshipName)}`
-
-      this.prototype[relationshipName] = function () {
+      this.prototype[relationshipName] = function() {
         const relationship = this.getRelationshipByName(relationshipName)
 
         return relationship.loaded()
       }
 
-      this.prototype[buildMethodName] = function (attributes) {
+      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
         const relationship = this.getRelationshipByName(relationshipName)
         const record = relationship.build(attributes)
 
         return record
       }
 
-      this.prototype[setMethodName] = function (model) {
+      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+        await this.getRelationshipByName(relationshipName).load()
+      }
+
+      this.prototype[`set${inflection.camelize(relationshipName)}`] = function(model) {
         const relationship = this.getRelationshipByName(relationshipName)
 
         relationship.setLoaded(model)
@@ -103,23 +104,29 @@ class VelociousDatabaseRecord {
     } else if (actualData.type == "hasMany") {
       relationship = new HasManyRelationship(actualData)
 
-      this.prototype[relationshipName] = function () {
+      this.prototype[relationshipName] = function() {
         return this.getRelationshipByName(relationshipName)
       }
-    } else if (actualData.type == "hasOne") {
-      const buildMethodName = `build${inflection.camelize(relationshipName)}`
 
+      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+        await this.getRelationshipByName(relationshipName).load()
+      }
+    } else if (actualData.type == "hasOne") {
       relationship = new HasOneRelationship(actualData)
 
-      this.prototype[relationshipName] = function () {
+      this.prototype[relationshipName] = function() {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      this.prototype[buildMethodName] = function (attributes) {
+      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
         const relationship = this.getRelationshipByName(relationshipName)
         const record = relationship.build(attributes)
 
         return record
+      }
+
+      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+        await this.getRelationshipByName(relationshipName).load()
       }
     } else {
       throw new Error(`Unknown relationship type: ${actualData.type}`)
@@ -285,13 +292,13 @@ class VelociousDatabaseRecord {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
 
-        this.prototype[name] = function () {
+        this.prototype[name] = function() {
           const locale = this._getConfiguration().getLocale()
 
           return this._getTranslatedAttributeWithFallback(name, locale)
         }
 
-        this.prototype[setterMethodName] = function (newValue) {
+        this.prototype[setterMethodName] = function(newValue) {
           const locale = this._getConfiguration().getLocale()
 
           return this._setTranslatedAttribute(name, locale, newValue)
@@ -302,11 +309,11 @@ class VelociousDatabaseRecord {
           const getterMethodNameLocalized = `${name}${localeCamelized}`
           const setterMethodNameLocalized = `${setterMethodName}${localeCamelized}`
 
-          this.prototype[getterMethodNameLocalized] = function () {
+          this.prototype[getterMethodNameLocalized] = function() {
             return this._getTranslatedAttribute(name, locale)
           }
 
-          this.prototype[setterMethodNameLocalized] = function (newValue) {
+          this.prototype[setterMethodNameLocalized] = function(newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
           }
         }
@@ -469,14 +476,16 @@ class VelociousDatabaseRecord {
 
       let useRelationship = false
 
-      for (const model of loaded) {
-        const foreignKey = instanceRelationship.getForeignKey()
+      if (loaded) {
+        for (const model of loaded) {
+          const foreignKey = instanceRelationship.getForeignKey()
 
-        model.setAttribute(foreignKey, this.id())
+          model.setAttribute(foreignKey, this.id())
 
-        if (model.isChanged()) {
-          useRelationship = true
-          continue
+          if (model.isChanged()) {
+            useRelationship = true
+            continue
+          }
         }
       }
 
@@ -827,7 +836,7 @@ class VelociousDatabaseRecord {
   readAttribute(attributeName) {
     const columnName = this.constructor._attributeNameToColumnName[attributeName]
 
-    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName}`)
+    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.constructor._attributeNameToColumnName)}`)
 
     return this.readColumn(columnName)
   }
@@ -929,9 +938,9 @@ class VelociousDatabaseRecord {
     }
   }
 
-  id = () => this.readAttribute(this.constructor.primaryKey())
-  isPersisted = () => !this._isNewRecord
-  isNewRecord = () => this._isNewRecord
+  id() { return this.readAttribute(this.constructor._columnNameToAttributeName[this.constructor.primaryKey()]) }
+  isPersisted() { return !this._isNewRecord }
+  isNewRecord() { return this._isNewRecord }
 
   setIsNewRecord(newIsNewRecord) {
     this._isNewRecord = newIsNewRecord
