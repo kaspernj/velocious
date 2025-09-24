@@ -37,6 +37,24 @@ Task.validates("name", {presence: true, uniqueness: true})
 export default Task
 ```
 
+## Load a relationship after init
+
+```js
+const task = await Task.find(5)
+
+await task.loadProject()
+
+const projects = task.project()
+```
+
+```js
+const project = await Project.find(4)
+
+await project.loadTasks()
+
+const tasks = project.tasks().loaded()
+```
+
 # Migrations
 
 Make a new migration from a template like this:
