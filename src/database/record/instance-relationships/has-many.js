@@ -10,6 +10,8 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     const targetModelClass = this.getTargetModelClass()
     const newInstance = new targetModelClass(data)
 
+    if (this._loaded === null) this._loaded = []
+
     this._loaded.push(newInstance)
 
     return newInstance
@@ -46,6 +48,8 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   addToLoaded(models) {
     if (Array.isArray(models)) {
       for (const model of models) {
+        if (this._loaded === null) this._loaded = []
+
         this._loaded.push(model)
       }
     } else {
