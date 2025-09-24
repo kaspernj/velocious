@@ -37,6 +37,13 @@ Task.validates("name", {presence: true, uniqueness: true})
 export default Task
 ```
 
+## Preloading relationships
+
+```js
+const tasks = await Task.preload({project: {translations: true}}).toArray()
+const projectNames = tasks.map((task) => task.project().name())
+```
+
 ## Load a relationship after init
 
 ```js
