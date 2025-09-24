@@ -3,7 +3,7 @@ import BaseInstanceRelationship from "./base.js"
 export default class VelociousDatabaseRecordHasManyInstanceRelationship extends BaseInstanceRelationship {
   constructor(args) {
     super(args)
-    this._loaded = []
+    this._loaded = null
   }
 
   build(data) {
@@ -13,6 +13,22 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     this._loaded.push(newInstance)
 
     return newInstance
+  }
+
+  async load() {
+    const foreignKey = this.getForeignKey()
+    const primaryKey = this.getPrimaryKey()
+    const primaryModelID = this.getModel().readColumn(primaryKey)
+    const TargetModelClass = this.getTargetModelClass()
+    const whereArgs = {}
+
+    whereArgs[foreignKey] = primaryModelID
+
+    const foreignModels = await TargetModelClass.where(whereArgs).toArray()
+
+    this.setLoaded(foreignModels)
+    this.setDirty(false)
+    this.setPreloaded(true)
   }
 
   loaded() {

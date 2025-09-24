@@ -15,6 +15,22 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     return newInstance
   }
 
+  async load() {
+    const foreignKey = this.getForeignKey()
+    const primaryKey = this.getPrimaryKey()
+    const primaryModelID = this.getModel().readColumn(primaryKey)
+    const TargetModelClass = this.getTargetModelClass()
+    const whereArgs = {}
+
+    whereArgs[foreignKey] = primaryModelID
+
+    const foreignModel = await TargetModelClass.where(whereArgs).first()
+
+    this.setLoaded(foreignModel)
+    this.setDirty(false)
+    this.setPreloaded(true)
+  }
+
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
       throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
