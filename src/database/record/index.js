@@ -89,16 +89,19 @@ class VelociousDatabaseRecord {
         const record = instanceRelationship.build(attributes)
 
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
-        const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
 
-        inverseInstanceRelationship.setAutoSave(false)
+        if (inverseOf) {
+          const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
 
-        if (inverseInstanceRelationship.getType() == "hasOne") {
-          inverseInstanceRelationship.setLoaded(this)
-        } else if (inverseInstanceRelationship.getType() == "hasMany") {
-          inverseInstanceRelationship.addToLoaded(this)
-        } else {
-          throw new Error(`Unknown relationship type: ${inverseInstanceRelationship.getType()}`)
+          inverseInstanceRelationship.setAutoSave(false)
+
+          if (inverseInstanceRelationship.getType() == "hasOne") {
+            inverseInstanceRelationship.setLoaded(this)
+          } else if (inverseInstanceRelationship.getType() == "hasMany") {
+            inverseInstanceRelationship.addToLoaded(this)
+          } else {
+            throw new Error(`Unknown relationship type: ${inverseInstanceRelationship.getType()}`)
+          }
         }
 
         return record
@@ -136,10 +139,13 @@ class VelociousDatabaseRecord {
         const record = instanceRelationship.build(attributes)
 
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
-        const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
 
-        inverseInstanceRelationship.setAutoSave(false)
-        inverseInstanceRelationship.setLoaded(this)
+        if (inverseOf) {
+          const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
+
+          inverseInstanceRelationship.setAutoSave(false)
+          inverseInstanceRelationship.setLoaded(this)
+        }
 
         return record
       }
@@ -168,6 +174,10 @@ class VelociousDatabaseRecord {
     if (this._relationships) return Object.values(this._relationships)
 
     return []
+  }
+
+  static getRelationshipNames() {
+    return this.getRelationships().map((relationship) => relationship.getRelationshipName())
   }
 
   getRelationshipByName(relationshipName) {

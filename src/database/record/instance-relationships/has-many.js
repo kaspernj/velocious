@@ -20,10 +20,13 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     // Set loaded on the models inversed relationship
     const inverseOf = this.getRelationship().getInverseOf()
-    const inverseInstanceRelationship = newInstance.getRelationshipByName(inverseOf)
 
-    inverseInstanceRelationship.setAutoSave(false)
-    inverseInstanceRelationship.setLoaded(this.getModel())
+    if (inverseOf) {
+      const inverseInstanceRelationship = newInstance.getRelationshipByName(inverseOf)
+
+      inverseInstanceRelationship.setAutoSave(false)
+      inverseInstanceRelationship.setLoaded(this.getModel())
+    }
 
 
     // Return the new contructed model
