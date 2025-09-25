@@ -23,7 +23,7 @@ export default class VelocuiousDatabaseQueryParserWhereParser {
     for (const whereKey in query._wheres) {
       const where = query._wheres[whereKey]
 
-      if (whereKey > 0) sql += " &&"
+      if (whereKey > 0) sql += " AND"
 
       if (pretty) {
         sql += "\n  "

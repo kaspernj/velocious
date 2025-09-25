@@ -108,8 +108,8 @@ export default class VelociousDatabaseQuery {
     return await this.clone().where(newConditions).first()
   }
 
-  async findOrCreateBy(conditions) {
-    const record = await this.findOrInitializeBy(conditions)
+  async findOrCreateBy(...args) {
+    const record = await this.findOrInitializeBy(...args)
 
     if (record.isNewRecord()) {
       await record.save()
@@ -118,12 +118,16 @@ export default class VelociousDatabaseQuery {
     return record
   }
 
-  async findOrInitializeBy(conditions) {
+  async findOrInitializeBy(conditions, callback) {
     const record = await this.findBy(conditions)
 
     if (record) return record
 
     const newRecord = new this.modelClass(conditions)
+
+    if (callback) {
+      callback(newRecord)
+    }
 
     return newRecord
   }
