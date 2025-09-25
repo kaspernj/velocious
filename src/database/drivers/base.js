@@ -125,7 +125,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   quoteTable(tableName) {
-    return this.options().quoteColumnName(tableName)
+    return this.options().quoteTableName(tableName)
   }
 
   newQuery() {
