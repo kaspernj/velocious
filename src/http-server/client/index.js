@@ -92,7 +92,9 @@ export default class VeoliciousHttpServerClient {
       response.addHeader("Connection", "Close")
     }
 
-    response.addHeader("Content-Length", response.body.length)
+    const textEncoded = new TextEncoder().encode(body)
+
+    response.addHeader("Content-Length", textEncoded.length)
     response.addHeader("Date", date.toUTCString())
     response.addHeader("Server", "Velocious")
 
