@@ -10,9 +10,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     return newInstance
   }
 
-  getLoadedOrNull() {
-    return this._loaded
-  }
+  getLoadedOrNull() { return this._loaded }
 
   async load() {
     const foreignKey = this.getForeignKey()

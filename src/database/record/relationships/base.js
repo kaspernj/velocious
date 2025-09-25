@@ -1,7 +1,7 @@
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseRecordBaseRelationship {
-  constructor({className, configuration, dependent, foreignKey, klass, modelClass, primaryKey = "id", relationshipName, through, type, ...restArgs}) {
+  constructor({className, configuration, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", relationshipName, through, type, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
@@ -11,6 +11,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this.configuration = configuration
     this._dependent = dependent
     this.foreignKey = foreignKey
+    this._inverseOf
     this.klass = klass
     this.modelClass = modelClass
     this._primaryKey = primaryKey

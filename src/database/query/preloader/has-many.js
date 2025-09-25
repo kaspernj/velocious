@@ -46,13 +46,13 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       for (const model of modelsByPrimaryKeyValue[modelValue]) {
         const modelRelationship = model.getRelationshipByName(this.relationship.getRelationshipName())
 
-        modelRelationship.setPreloaded(true)
-
         if (preloadedCollection.length == 0) {
           modelRelationship.setLoaded([])
         } else {
           modelRelationship.addToLoaded(preloadedCollection)
         }
+
+        modelRelationship.setPreloaded(true)
       }
     }
 
