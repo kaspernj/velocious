@@ -832,6 +832,10 @@ class VelociousDatabaseRecord {
         const instanceRelationship = this._instanceRelationships[instanceRelationshipName]
         let loaded = instanceRelationship._loaded
 
+        if (instanceRelationship.getAutoSave() === false) {
+          continue
+        }
+
         if (!loaded) continue
         if (!Array.isArray(loaded)) loaded = [loaded]
 
