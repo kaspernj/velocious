@@ -15,6 +15,8 @@ export default class VelociousDatabaseInitializerFromRequireContext {
 
       const modelClass = modelClassImport.default
 
+      if (!modelClass) throw new Error(`Model wasn't exported from: ${fileName}`)
+
       await modelClass.initializeRecord({configuration})
 
       if (await modelClass.hasTranslationsTable()) {

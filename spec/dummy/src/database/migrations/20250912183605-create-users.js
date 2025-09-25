@@ -5,6 +5,7 @@ export default class CreateUsers extends Migration {
     await this.createTable("users", (t) => {
       t.string("email", {index: {unique: true}, null: false})
       t.string("encrypted_password", {null: false})
+      t.string("reference")
       t.timestamps()
     })
   }

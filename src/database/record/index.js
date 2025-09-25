@@ -226,11 +226,14 @@ class VelociousDatabaseRecord {
     return this._getConfiguration().getTranslator()(`velocious.database.record.attributes.${modelNameKey}.${attributeName}`, {defaultValue: inflection.camelize(attributeName)})
   }
 
+  static getDatabaseType() { return this._databaseType }
+
   static async initializeRecord({configuration}) {
     if (!configuration) throw new Error(`No configuration given for ${this.name}`)
 
     this._configuration = configuration
     this._configuration.registerModelClass(this)
+    this._databaseType = this.connection().getType()
 
     this._table = await this.connection().getTableByName(this.tableName())
     this._columns = await this._getTable().getColumns()
@@ -853,7 +856,7 @@ class VelociousDatabaseRecord {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
 
-    if (column && this.constructor.connection().getType() == "sqlite") {
+    if (column && this.constructor.getDatabaseType() == "sqlite") {
       if (column.getType() == "date" || column.getType() == "datetime") {
         result = new Date(Date.parse(result))
       }
