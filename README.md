@@ -100,12 +100,13 @@ const task = await Task.findOrCreateBy({identifier: "task-5"}, (newTask) => {
 
 # Migrations
 
-Make a new migration from a template like this:
+## Make a new migration from a template
 
 ```bash
 npx velocious g:migration create-tasks
 ```
 
+## Write a migration
 ```js
 import Migration from "velocious/src/database/migration/index.js"
 
@@ -132,12 +133,13 @@ export default class CreateEvents extends Migration {
 }
 ```
 
-Run migrations from the command line like this:
+## Run migrations from the command line
+
 ```bash
 npx velocious db:migrate
 ```
 
-Run migrations from anywhere if you want to:
+## Run migrations from anywhere if you want to:
 
 ```js
 const migrationsPath = `/some/dir/migrations`
