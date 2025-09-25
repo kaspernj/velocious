@@ -62,14 +62,51 @@ await project.loadTasks()
 const tasks = project.tasks().loaded()
 ```
 
+### Create records
+
+```js
+const task = new Task({identifier: "task-4"})
+
+task.assign({name: "New task})
+
+await task.save()
+```
+
+```js
+const task = await Task.create({name: "Task 4"})
+```
+
+### Find or create records
+
+```js
+const task = await Task.findOrInitializeBy({identifier: "task-5"})
+
+if (task.isNewRecord()) {
+  console.log("Task didn't already exist")
+
+  await task.save()
+}
+
+if (task.isPersisted()) {
+  console.log("Task already exist")
+}
+```
+
+```js
+const task = await Task.findOrCreateBy({identifier: "task-5"}, (newTask) => {
+  newTask.assign({description: "This callback only happens if not already existing"})
+})
+```
+
 # Migrations
 
-Make a new migration from a template like this:
+## Make a new migration from a template
 
 ```bash
 npx velocious g:migration create-tasks
 ```
 
+## Write a migration
 ```js
 import Migration from "velocious/src/database/migration/index.js"
 
@@ -96,12 +133,13 @@ export default class CreateEvents extends Migration {
 }
 ```
 
-Run migrations from the command line like this:
+## Run migrations from the command line
+
 ```bash
 npx velocious db:migrate
 ```
 
-Run migrations from anywhere if you want to:
+## Run migrations from anywhere if you want to:
 
 ```js
 const migrationsPath = `/some/dir/migrations`
@@ -122,7 +160,10 @@ import {Task} from "@/src/models/task"
 
 const tasks = await Task
   .preload({project: {account: true}})
+  .joins({project: true})
   .where({projects: {public: true}})
+  .joins("JOIN task_details ON task_details.task_id = tasks.id")
+  .where("task_details.id IS NOT NULL")
   .order("name")
   .limit(5)
   .toArray()
@@ -138,7 +179,7 @@ npx velocious test
 If you are developing on Velocious, you can run the tests with:
 
 ```bash
-npm run test
+./run-tests.sh
 ```
 
 # Writing a request test
@@ -169,8 +210,63 @@ await describe("accounts - create", {type: "request"}, async () => {
 })
 ```
 
+# Routes
+
+Create or edit the file `src/config/routes.js` and do something like this:
+
+```js
+import Routes from "velocious/src/routes/index.js"
+
+const routes = new Routes()
+
+routes.draw((route) => {
+  route.resources("projects")
+
+  route.resources("tasks", (route) => {
+    route.get("users")
+  })
+
+  route.namespace("testing", (route) => {
+    route.post("truncate")
+  })
+
+  route.get("ping")
+})
+
+export default {routes}
+```
+
+# Controllers
+
+Create the file `src/routes/testing/controller.js` and do something like this:
+
+```js
+import Controller from "velocious/src/controller.js"
+
+export default class TestingController extends Controller {
+  async truncate() {
+    await doSomething()
+    this.renderJson({status: "database-truncated"})
+  }
+
+  async anotherAction() {
+    render("test-view")
+  }
+}
+```
+
+# Views
+
+Create the file `src/routes/testing/another-action.ejs` and so something like this:
+
+```ejs
+<p>
+  View for path: <%= controller.getRequest().path() %>
+</p>
+```
+
 # Running a server
 
 ```bash
-npx velocious server
+npx velocious server --host 0.0.0.0 --port 8082
 ```
