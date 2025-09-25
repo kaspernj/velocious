@@ -85,8 +85,21 @@ class VelociousDatabaseRecord {
       }
 
       this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
-        const relationship = this.getRelationshipByName(relationshipName)
-        const record = relationship.build(attributes)
+        const instanceRelationship = this.getRelationshipByName(relationshipName)
+        const record = instanceRelationship.build(attributes)
+
+        const inverseOf = instanceRelationship.getRelationship().getInverseOf()
+        const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
+
+        inverseInstanceRelationship.setAutoSave(false)
+
+        if (inverseInstanceRelationship.getType() == "hasOne") {
+          inverseInstanceRelationship.setLoaded(this)
+        } else if (inverseInstanceRelationship.getType() == "hasMany") {
+          inverseInstanceRelationship.addToLoaded(this)
+        } else {
+          throw new Error(`Unknown relationship type: ${inverseInstanceRelationship.getType()}`)
+        }
 
         return record
       }
@@ -119,8 +132,14 @@ class VelociousDatabaseRecord {
       }
 
       this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
-        const relationship = this.getRelationshipByName(relationshipName)
-        const record = relationship.build(attributes)
+        const instanceRelationship = this.getRelationshipByName(relationshipName)
+        const record = instanceRelationship.build(attributes)
+
+        const inverseOf = instanceRelationship.getRelationship().getInverseOf()
+        const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
+
+        inverseInstanceRelationship.setAutoSave(false)
+        inverseInstanceRelationship.setLoaded(this)
 
         return record
       }
@@ -435,6 +454,10 @@ class VelociousDatabaseRecord {
         continue
       }
 
+      if (instanceRelationship.getAutoSave() === false) {
+        continue
+      }
+
       const model = instanceRelationship.loaded()
 
       if (model?.isChanged()) {
@@ -443,6 +466,7 @@ class VelociousDatabaseRecord {
         const foreignKey = instanceRelationship.getForeignKey()
 
         this.setAttribute(foreignKey, model.id())
+
         instanceRelationship.setPreloaded(true)
         instanceRelationship.setDirty(false)
 
@@ -460,6 +484,10 @@ class VelociousDatabaseRecord {
       const instanceRelationship = this._instanceRelationships[relationshipName]
 
       if (instanceRelationship.getType() != "hasMany" && instanceRelationship.getType() != "hasOne") {
+        continue
+      }
+
+      if (instanceRelationship.getAutoSave() === false) {
         continue
       }
 
@@ -500,7 +528,7 @@ class VelociousDatabaseRecord {
 
   async _autoSaveHasManyAndHasOneRelationships({isNewRecord}) {
     for (const instanceRelationship of this._autoSaveHasManyAndHasOneRelationshipsToSave()) {
-      let loaded = instanceRelationship._loaded
+      let loaded = instanceRelationship.getLoadedOrNull()
 
       if (!Array.isArray(loaded)) loaded = [loaded]
 
@@ -914,6 +942,10 @@ class VelociousDatabaseRecord {
     // Mark all relationships as preloaded, since we don't expect anything to have magically appeared since we created the record.
     for (const relationship of this.constructor.getRelationships()) {
       const instanceRelationship = this.getRelationshipByName(relationship.getRelationshipName())
+
+      if (instanceRelationship.getType() == "hasMany" && instanceRelationship.getLoadedOrNull() === null) {
+        instanceRelationship.setLoaded([])
+      }
 
       instanceRelationship.setPreloaded(true)
     }

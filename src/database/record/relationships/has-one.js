@@ -9,4 +9,12 @@ export default class VelociousDatabaseRecordHasOneRelationship extends BaseRelat
 
     return this.foreignKey
   }
+
+  getInverseOf() {
+    if (this._inverseOf) {
+      return this._inverseOf
+    }
+
+    return `${this.modelClass.name.substring(0, 1).toLowerCase()}${this.modelClass.name.substring(1, this.modelClass.name.length)}`
+  }
 }

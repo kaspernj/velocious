@@ -39,9 +39,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     return this._loaded
   }
 
-  getLoadedOrNull() {
-    return this._loaded
-  }
+  getLoadedOrNull() { return this._loaded }
 
   setLoaded(model) {
     if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
@@ -49,5 +47,5 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     this._loaded = model
   }
 
-  getTargetModelClass = () => this.relationship.getTargetModelClass()
+  getTargetModelClass() { return this.relationship.getTargetModelClass() }
 }

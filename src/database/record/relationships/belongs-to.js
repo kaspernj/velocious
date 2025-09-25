@@ -9,4 +9,12 @@ export default class VelociousDatabaseRecordBelongsToRelationship extends BaseRe
 
     return this.foreignKey
   }
+
+  getInverseOf() {
+    if (this._inverseOf) {
+      return this._inverseOf
+    }
+
+    return inflection.pluralize(`${this.modelClass.name.substring(0, 1).toLowerCase()}${this.modelClass.name.substring(1, this.modelClass.name.length)}`)
+  }
 }

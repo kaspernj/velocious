@@ -29,12 +29,53 @@ describe("Record - create", () => {
       // 'name' is not a column but rather a column on the translation data model.
       expect(() => project.readColumn("name")).toThrowError("No such attribute or not selected Project#name")
 
-      // It saves a project note
+
+      // It saves a project note through a has one relationship
       const projectDetail = project.projectDetail()
 
+      expect(projectDetail.isNewRecord()).toBeFalse()
+      expect(projectDetail.isPersisted()).toBeTrue()
       expect(projectDetail.note()).toEqual("Test note")
       expect(projectDetail.projectId()).toEqual(project.id())
+
+
+      // It automatically sets the relationship that saved it on a has-one-relationship
+      const projectInstanceRelationship = projectDetail.getRelationshipByName("project")
+
+      expect(projectInstanceRelationship.getPreloaded()).toBeTrue()
+      expect(projectDetail.project().id()).toEqual(project.id())
+
+
+      // It automatically sets the relationship that saved it on a has-many-relationship
+      const tasksRelationship = project.getRelationshipByName("tasks")
+
+      expect(tasksRelationship.getPreloaded()).toBeTrue()
+
+      const projectTasksIDs = project.tasks().loaded().map((task) => task.id())
+
+      expect(projectTasksIDs).toEqual([task.id()])
     })
+  })
+
+  it("sets the inversed relationship on has-many-relationships", async () => {
+    const project = new Project({name: "Test project"})
+
+    project.tasks().build({name: "Test task 1"})
+    project.tasks().build({name: "Test task 2"})
+
+    await project.save()
+
+    const tasks = project.tasks().loaded()
+    const task1 = tasks.find((task) => task.name() == "Test task 1")
+    const task2 = tasks.find((task) => task.name() == "Test task 2")
+
+    expect(tasks.length).toEqual(2)
+
+    expect(task1.projectId()).toEqual(project.id())
+    expect(task1.project().id()).toEqual(project.id())
+
+    expect(task2.projectId()).toEqual(project.id())
+    expect(task2.project().id()).toEqual(project.id())
   })
 
   it("creates a new task with an existing project", async () => {
