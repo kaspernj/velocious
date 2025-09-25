@@ -1,4 +1,3 @@
-import * as inflection from "inflection"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderBelongsTo {
@@ -11,17 +10,12 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
   async run() {
     const foreignKeyValues = []
-    const modelsById = {}
     const foreignKey = this.relationship.getForeignKey()
-    const foreignKeyCamelized = inflection.camelize(foreignKey, true)
-    const preloadCollections = {}
 
     for (const model of this.models) {
-      const foreignKeyValue = model[foreignKeyCamelized]()
+      const foreignKeyValue = model.readColumn(foreignKey)
 
-      preloadCollections[model.id()] = []
-      foreignKeyValues.push(foreignKeyValue)
-      modelsById[model.id()] = model
+      if (!foreignKeyValues.includes(foreignKeyValue)) foreignKeyValues.push(foreignKeyValue)
     }
 
     const whereArgs = {}
@@ -34,12 +28,14 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     const targetModelsById = {}
 
     for (const targetModel of targetModels) {
-      targetModelsById[targetModel.id()] = targetModel
+      const primaryKeyValue = targetModel.readColumn(this.relationship.getPrimaryKey())
+
+      targetModelsById[primaryKeyValue] = targetModel
     }
 
     // Set the target preloaded models on the given models
     for (const model of this.models) {
-      const foreignKeyValue = model[foreignKeyCamelized]()
+      const foreignKeyValue = model.readColumn(foreignKey)
       const targetModel = targetModelsById[foreignKeyValue]
       const modelRelationship = model.getRelationshipByName(this.relationship.getRelationshipName())
 

@@ -138,8 +138,11 @@ export default class TestRunner {
 
       if (this._onlyFocussed && !testArgs.focus) continue
 
-      if (testArgs.type == "request") {
+      if (testArgs.type == "model" || testArgs.type == "request") {
         testArgs.application = await this.application()
+      }
+
+      if (testArgs.type == "request") {
         testArgs.client = await this.requestClient()
       }
 
@@ -147,7 +150,7 @@ export default class TestRunner {
 
       try {
         for (const beforeEachData of newBeforeEaches) {
-          await beforeEachData.callback({testArgs, testData})
+          await beforeEachData.callback({configuration: this.configuration, testArgs, testData})
         }
 
         await testData.function(testArgs)
@@ -167,7 +170,7 @@ export default class TestRunner {
         }
       } finally {
         for (const afterEachData of newAfterEaches) {
-          await afterEachData.callback({testArgs, testData})
+          await afterEachData.callback({configuration: this.configuration, testArgs, testData})
         }
       }
     }
