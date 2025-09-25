@@ -179,7 +179,7 @@ npx velocious test
 If you are developing on Velocious, you can run the tests with:
 
 ```bash
-npm run test
+./run-tests.sh
 ```
 
 # Writing a request test
