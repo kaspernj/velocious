@@ -114,10 +114,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return response.rows
   }
 
-  queryToSql(query) {
-    return new QueryParser({query}).toSql()
-  }
-
+  queryToSql(query) { return new QueryParser({query}).toSql() }
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
   escape(value) {

@@ -103,10 +103,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
     }
   }
 
-  queryToSql(query) {
-    return new QueryParser({query}).toSql()
-  }
-
+  queryToSql(query) { return new QueryParser({query}).toSql() }
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
   escape(value) {
