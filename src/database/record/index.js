@@ -569,7 +569,13 @@ class VelociousDatabaseRecord {
   }
 
   static async transaction(callback) {
-    return await this.connection().transaction(callback)
+    const useTransactions = this.connection().getConfiguration().record?.transactions
+
+    if (useTransactions !== false) {
+      await this.connection().transaction(callback)
+    } else {
+      return await callback()
+    }
   }
 
   static translates(...names) {
