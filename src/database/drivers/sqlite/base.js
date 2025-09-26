@@ -192,7 +192,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
       try {
         return await this._queryActual(sql)
       } catch (error) {
-        if (tries < 5 && error.message.includes("attempt to write a readonly database")) {
+        if (tries < 5 && this._retryableDatabaseError(error)) {
           await wait(100)
           this.logger.warn(`Retrying query because failed with: ${error.stack}`)
           // Retry
@@ -201,6 +201,13 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
         }
       }
     }
+  }
+
+  _retryableDatabaseError(error) {
+    if (error.message?.includes("attempt to write a readonly database")) return true
+    if (this.getType() == "sqlite" && error.message?.startsWith("SQLITE_BUSY: database is locked")) return true
+
+    return false
   }
 
   quote(value) {

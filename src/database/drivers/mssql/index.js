@@ -115,10 +115,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return result.recordsets[0]
   }
 
-  queryToSql(query) {
-    return new QueryParser({query}).toSql()
-  }
-
+  queryToSql(query) { return new QueryParser({query}).toSql() }
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
   escape(value) {
