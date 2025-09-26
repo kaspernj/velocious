@@ -569,7 +569,7 @@ class VelociousDatabaseRecord {
   }
 
   static async transaction(callback) {
-    const useTransactions = this.connection().getConfiguration().record?.transactions
+    const useTransactions = this.connection().getArgs().record?.transactions
 
     if (useTransactions !== false) {
       await this.connection().transaction(callback)
