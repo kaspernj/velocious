@@ -204,8 +204,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   _retryableDatabaseError(error) {
-    if (error.message?.includes("attempt to write a readonly database")) return true
-    if (this.getType() == "sqlite" && error.message?.startsWith("SQLITE_BUSY: database is locked")) return true
+    if (this.getType() == "sqlite" && error.message?.startsWith("attempt to write a readonly database")) return true
+    if (this.getType() == "sqlite" && error.message?.startsWith("database is locked")) return true
 
     return false
   }
