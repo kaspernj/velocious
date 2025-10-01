@@ -1,7 +1,7 @@
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryInsertBase {
-  constructor({columns, data, driver, multiple, tableName, returnLastInsertedColumnName, rows, ...restArgs}) {
+  constructor({columns, data, driver, multiple, tableName, returnLastInsertedColumnNames, rows, ...restArgs}) {
     if (!driver) throw new Error("No driver given to insert base")
     if (!tableName) throw new Error(`Invalid table name given to insert base: ${tableName}`)
 
@@ -11,7 +11,7 @@ export default class VelociousDatabaseQueryInsertBase {
     this.data = data
     this.driver = driver
     this.multiple = multiple
-    this.returnLastInsertedColumnName = returnLastInsertedColumnName
+    this.returnLastInsertedColumnNames = returnLastInsertedColumnNames
     this.rows = rows
     this.tableName = tableName
   }
@@ -27,15 +27,35 @@ export default class VelociousDatabaseQueryInsertBase {
     let count = 0
     let columns, lastInsertedSQL
 
-    if (this.returnLastInsertedColumnName) {
+    if (this.returnLastInsertedColumnNames) {
       if (driver.getType() == "mssql") {
-        lastInsertedSQL = ` OUTPUT INSERTED.${driver.quoteColumn(this.returnLastInsertedColumnName)} AS lastInsertID`
+        lastInsertedSQL = ` OUTPUT `
+
+        for (let i = 0; i < this.returnLastInsertedColumnNames.length; i++) {
+          const columnName = this.returnLastInsertedColumnNames[i]
+
+          if (i > 0) {
+            lastInsertedSQL += ", "
+          }
+
+          lastInsertedSQL += ` INSERTED.${driver.quoteColumn(columnName)}`
+        }
 
         if (Object.keys(this.data).length <= 0) {
           sql += lastInsertedSQL
         }
       } else if (driver.getType() == "mysql" || driver.getType() == "pgsql" || (driver.getType() == "sqlite" && driver.supportsInsertIntoReturning())) {
-        lastInsertedSQL = ` RETURNING ${driver.quoteColumn(this.returnLastInsertedColumnName)} AS lastInsertID`
+        lastInsertedSQL = " RETURNING "
+
+        for (let i = 0; i < this.returnLastInsertedColumnNames.length; i++) {
+          const columnName = this.returnLastInsertedColumnNames[i]
+
+          if (i > 0) {
+            lastInsertedSQL += ", "
+          }
+
+          lastInsertedSQL += ` ${driver.quoteColumn(columnName)}`
+        }
       }
     }
 
@@ -60,7 +80,7 @@ export default class VelociousDatabaseQueryInsertBase {
       sql += ")"
     }
 
-    if (this.returnLastInsertedColumnName && driver.getType() == "mssql" && Object.keys(this.data).length > 0) {
+    if (this.returnLastInsertedColumnNames && driver.getType() == "mssql" && Object.keys(this.data).length > 0) {
       sql += lastInsertedSQL
     }
 
@@ -88,8 +108,8 @@ export default class VelociousDatabaseQueryInsertBase {
       }
     }
 
-    if (this.returnLastInsertedColumnName) {
-      if (driver.getType() == "mysql" || (driver.getType() == "sqlite" && driver.supportsInsertIntoReturning())) {
+    if (this.returnLastInsertedColumnNames) {
+      if (driver.getType() == "pgsql" || driver.getType() == "mysql" || (driver.getType() == "sqlite" && driver.supportsInsertIntoReturning())) {
         sql += lastInsertedSQL
       }
     }

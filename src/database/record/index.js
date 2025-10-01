@@ -398,6 +398,14 @@ class VelociousDatabaseRecord {
     return this._columns
   }
 
+  static getColumnNames() {
+    if (!this._columnNames) {
+      this._columnNames = this.getColumns().map((column) => column.getName())
+    }
+
+    return this._columnNames
+  }
+
   static _getTable() {
     if (!this._table) throw new Error(`${this.name} hasn't been initialized yet`)
 
@@ -959,21 +967,24 @@ class VelociousDatabaseRecord {
     if (createdAtColumn) data.created_at = currentDate
     if (updatedAtColumn) data.updated_at = currentDate
 
+    const columnNames = this.constructor.getColumnNames()
     const sql = this._connection().insertSql({
-      returnLastInsertedColumnName: this.constructor.primaryKey(),
+      returnLastInsertedColumnNames: columnNames,
       tableName: this._tableName(),
       data
     })
     const insertResult = await this._connection().query(sql)
-    let id
+    const primaryKey = this.constructor.primaryKey()
 
-    if (insertResult && insertResult[0]?.lastInsertID) {
-      id = insertResult[0]?.lastInsertID
+    if (insertResult && insertResult[0][primaryKey]) {
+      this._attributes = insertResult[0]
+      this._changes = {}
     } else {
-      id = await this._connection().lastInsertID()
+      const id = await this._connection().lastInsertID()
+
+      await this._reloadWithId(id)
     }
 
-    await this._reloadWithId(id)
     this.setIsNewRecord(false)
 
     // Mark all relationships as preloaded, since we don't expect anything to have magically appeared since we created the record.
