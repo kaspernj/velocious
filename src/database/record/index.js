@@ -415,6 +415,19 @@ class VelociousDatabaseRecord {
     return record
   }
 
+  static async nextPrimaryKey() {
+    const primaryKey = this.primaryKey()
+    const tableName = this.tableName()
+    const connection = this.connection()
+    const newestRecord = await this.order(`${connection.quoteTable(tableName)}.${connection.quoteColumn(primaryKey)}`).last()
+
+    if (newestRecord) {
+      return newestRecord.id() + 1
+    } else {
+      return 1
+    }
+  }
+
   static setPrimaryKey(primaryKey) {
     this._primaryKey = primaryKey
   }
@@ -717,6 +730,10 @@ class VelociousDatabaseRecord {
     return this._newQuery().findBy(...args)
   }
 
+  static async findByOrFail(...args) {
+    return this._newQuery().findByOrFail(...args)
+  }
+
   static async findOrCreateBy(...args) {
     return this._newQuery().findOrCreateBy(...args)
   }
@@ -1010,7 +1027,7 @@ class VelociousDatabaseRecord {
     const query = this.constructor.where(whereObject)
     const reloadedModel = await query.first()
 
-    if (!reloadedModel) throw new Error(`${this.constructor.name}#${this.id()} couldn't be reloaded - record didn't exist`)
+    if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)
 
     this._attributes = reloadedModel.attributes()
     this._changes = {}

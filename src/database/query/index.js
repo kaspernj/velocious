@@ -118,6 +118,24 @@ export default class VelociousDatabaseQuery {
     return record
   }
 
+  async findByOrFail(conditions) {
+    const newConditions = {}
+
+    for (const key in conditions) {
+      const keyUnderscore = inflection.underscore(key)
+
+      newConditions[keyUnderscore] = conditions[key]
+    }
+
+    const model = await this.clone().where(newConditions).first()
+
+    if (!model) {
+      throw new Error("Record not found")
+    }
+
+    return model
+  }
+
   async findOrInitializeBy(conditions, callback) {
     const record = await this.findBy(conditions)
 
@@ -166,8 +184,10 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  last = async () => {
-    const results = await this.clone().reorder("id DESC").limit(1).toArray()
+  async last() {
+    const primaryKey = this.modelClass.primaryKey()
+    const tableName = this.modelClass.tableName()
+    const results = await this.clone().reorder(`${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(primaryKey)} DESC`).limit(1).toArray()
 
     return results[0]
   }
@@ -271,6 +291,7 @@ export default class VelociousDatabaseQuery {
     }
 
     this._wheres.push(where)
+
     return this
   }
 }
