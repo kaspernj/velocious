@@ -85,7 +85,7 @@ export default class VelociousDatabaseQueryInsertBase {
       sql += ")"
     }
 
-    if (this.returnLastInsertedColumnName && driver.getType() == "mssql" && Object.keys(this.data).length > 0) {
+    if (this.returnLastInsertedColumnNames && driver.getType() == "mssql" && Object.keys(this.data).length > 0) {
       sql += lastInsertedSQL
     }
 
