@@ -106,6 +106,13 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return false
   }
 
+  supportsInsertIntoReturning() {
+    if (this.versionMajor >= 4) return true
+    if (this.versionMajor == 3 && this.versionMinor >= 35) return true
+
+    return false
+  }
+
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
     const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
 

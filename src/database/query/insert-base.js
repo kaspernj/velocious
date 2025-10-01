@@ -34,7 +34,7 @@ export default class VelociousDatabaseQueryInsertBase {
         if (Object.keys(this.data).length <= 0) {
           sql += lastInsertedSQL
         }
-      } else if (driver.getType() == "mysql" || driver.getType() == "pgsql") {
+      } else if (driver.getType() == "mysql" || driver.getType() == "pgsql" || (driver.getType() == "sqlite" && driver.supportsInsertIntoReturning())) {
         lastInsertedSQL = ` RETURNING ${driver.quoteColumn(this.returnLastInsertedColumnName)} AS lastInsertID`
       }
     }
@@ -89,7 +89,7 @@ export default class VelociousDatabaseQueryInsertBase {
     }
 
     if (this.returnLastInsertedColumnName) {
-      if (driver.getType() == "mysql") {
+      if (driver.getType() == "mysql" || (driver.getType() == "sqlite" && driver.supportsInsertIntoReturning())) {
         sql += lastInsertedSQL
       }
     }
