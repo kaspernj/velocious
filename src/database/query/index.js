@@ -49,7 +49,7 @@ export default class VelociousDatabaseQuery {
 
   async count() {
     // Generate count SQL
-    let sql = "COUNT(id)"
+    let sql = `COUNT(${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.primaryKey())})`
 
     if (this.driver.getType() == "pgsql") sql += "::int"
 
@@ -151,8 +151,8 @@ export default class VelociousDatabaseQuery {
   }
 
   async first() {
-    const newQuery = this.clone()
-    const results = await newQuery.limit(1).reorder(this.modelClass.orderableColumn()).toArray()
+    const newQuery = this.clone().limit(1).reorder(this.modelClass.orderableColumn())
+    const results = await newQuery.toArray()
 
     return results[0]
   }
