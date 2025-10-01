@@ -5,7 +5,7 @@ import {ValidationError} from "../../../src/database/record/index.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 
 describe("Record - create", () => {
-  fit("creates a new simple record with relationships and translations", async () => {
+  it("creates a new simple record with relationships and translations", async () => {
     await Dummy.run(async () => {
       const task = new Task({name: "Test task"})
       const project = task.buildProject({nameEn: "Test project", nameDe: "Test projekt"})

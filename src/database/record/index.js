@@ -976,8 +976,6 @@ class VelociousDatabaseRecord {
     const insertResult = await this._connection().query(sql)
     const primaryKey = this.constructor.primaryKey()
 
-    console.log({sql, insertResult})
-
     if (insertResult && insertResult[0][primaryKey]) {
       this._attributes = insertResult[0]
       this._changes = {}
