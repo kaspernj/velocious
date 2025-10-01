@@ -1,7 +1,7 @@
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryInsertBase {
-  constructor({columns, data, driver, multiple, tableName, returnLastInsertedColumnName, returnLastInsertedColumnNames, rows, ...restArgs}) {
+  constructor({columns, data, driver, multiple, tableName, returnLastInsertedColumnNames, rows, ...restArgs}) {
     if (!driver) throw new Error("No driver given to insert base")
     if (!tableName) throw new Error(`Invalid table name given to insert base: ${tableName}`)
 
@@ -12,11 +12,6 @@ export default class VelociousDatabaseQueryInsertBase {
     this.driver = driver
     this.multiple = multiple
     this.returnLastInsertedColumnNames = returnLastInsertedColumnNames
-
-    if (returnLastInsertedColumnName) {
-      this.returnLastInsertedColumnNames = [returnLastInsertedColumnName]
-    }
-
     this.rows = rows
     this.tableName = tableName
   }
