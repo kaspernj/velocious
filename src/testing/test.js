@@ -225,6 +225,9 @@ class Expect {
 
     for (const key in result) {
       const value = result[key]
+
+      if (!(key in this._object)) throw new Error(`${this._object.constructor.name} doesn't respond to ${key}`)
+
       const objectValue = this._object[key]()
 
       if (value != objectValue) {
