@@ -1,7 +1,7 @@
 import {EventEmitter} from "events"
 import FormDataPart from "./form-data-part.js"
 import Header from "./header.js"
-import Incorporator from "incorporator"
+import {incorporate} from "incorporator"
 import {Logger} from "../../../logger.js"
 import ParamsToObject from "../params-to-object.js"
 import querystring from "querystring"
@@ -228,7 +228,6 @@ export default class RequestBuffer {
     delete this.postBodyChars
     delete this.postBodyBuffer
 
-    this.parseQueryStringPostParams()
     this.completeRequest()
   }
 
@@ -244,6 +243,8 @@ export default class RequestBuffer {
       this.parseApplicationJsonParams()
     } else if (this.multiPartyFormData) {
       // Done after each new form data part
+    } else {
+      this.parseQueryStringPostParams()
     }
 
     this.events.emit("completed")
@@ -251,17 +252,15 @@ export default class RequestBuffer {
 
   parseApplicationJsonParams() {
     const newParams = JSON.parse(this.postBody)
-    const incorporator = new Incorporator({objects: [this.params, newParams]})
 
-    incorporator.merge()
+    incorporate(this.params, newParams)
   }
 
   parseQueryStringPostParams() {
     const unparsedParams = querystring.parse(this.postBody)
     const paramsToObject = new ParamsToObject(unparsedParams)
     const newParams = paramsToObject.toObject()
-    const incorporator = new Incorporator({objects: [this.params, newParams]})
 
-    incorporator.merge()
+    incorporate(this.params, newParams)
   }
 }
