@@ -15,6 +15,10 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const primaryKey = this.relationship.getPrimaryKey()
     const preloadCollections = {}
 
+    if (!primaryKey) {
+      throw new Error(`${this.relationship.getModelClass().name}#${this.relationship.getRelationshipName()} doesn't have a primary key`)
+    }
+
     for (const model of this.models) {
       const primaryKeyValue = model.readColumn(primaryKey)
 
