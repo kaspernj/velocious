@@ -9,10 +9,10 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
   toSql() {
     const {pretty, query} = digs(this, "pretty", "query")
     const driver = query.driver
+    const options = this.query.getOptions()
     let sql = ""
 
-    if (query._limits.length == 0) return sql
-    if (query._limits.length >= 2) throw new Error(`Multiple limits found: ${query._limits.join(", ")}`)
+    if (query._limit === null) return sql
 
     if (pretty) {
       sql += "\n\n"
@@ -26,21 +26,28 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
       sql += "LIMIT"
     }
 
-    for (const limitKey in query._limits) {
-      const limit = query._limits[limitKey]
+    const limit = query._limit
+    const offset = query._offset
 
-      if (limitKey > 0) sql += ","
+    if (pretty) {
+      sql += "\n  "
+    } else {
+      sql += " "
+    }
 
-      if (pretty) {
-        sql += "\n  "
-      } else {
-        sql += " "
-      }
+    if (driver.getType() == "mssql") {
+      sql += `OFFSET ${options.quote(offset === null ? 0 : offset)} ROWS FETCH FIRST ${options.quote(limit)} ROWS ONLY`
+    } else {
+      sql += options.quote(limit)
 
-      if (driver.getType() == "mssql") {
-        sql += `OFFSET 0 ROWS FETCH FIRST ${this.query.getOptions().quote(limit)} ROWS ONLY`
-      } else {
-        sql += this.query.getOptions().quote(limit)
+      if (offset !== null) {
+        if (pretty) {
+          sql += "\n  "
+        } else {
+          sql += " "
+        }
+
+        sql += `OFFSET ${options.quote(offset)}`
       }
     }
 

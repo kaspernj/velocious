@@ -21,6 +21,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
   }
 
   getDependent() { return this._dependent }
+  getModelClass() { return this.modelClass }
   getRelationshipName() { return this.relationshipName }
   getPrimaryKey() { return this._primaryKey }
   getType() { return this.type }

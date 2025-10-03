@@ -9,11 +9,14 @@ import RecordNotFoundError from "../record/record-not-found-error.js"
 import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
+import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQuery {
-  constructor({driver, froms = [], groups = [], joins = [], handler, limits = [], modelClass, orders = [], preload = {}, selects = [], wheres = []}) {
+  constructor({driver, froms = [], groups = [], joins = [], handler, limit = null, modelClass, offset = null, orders = [], page = null, perPage, preload = {}, selects = [], wheres = [], ...restArgs}) {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
+
+    restArgsError(restArgs)
 
     this.driver = driver
     this.handler = handler
@@ -22,8 +25,11 @@ export default class VelociousDatabaseQuery {
     this._froms = froms
     this._groups = groups
     this._joins = joins
-    this._limits = limits
+    this._limit = limit
+    this._offset = offset
     this._orders = orders
+    this._page = page
+    this._perPage = perPage
     this._preload = preload
     this._selects = selects
     this._wheres = wheres
@@ -36,9 +42,12 @@ export default class VelociousDatabaseQuery {
       handler: this.handler.clone(),
       groups: [...this._groups],
       joins: [...this._joins],
-      limits: [...this._limits],
+      limit: this._limit,
       modelClass: this.modelClass,
+      offset: this._offset,
       orders: [...this._orders],
+      page: this._page,
+      perPage: this._perPage,
       preload: {...this._preload},
       selects: [...this._selects],
       wheres: [...this._wheres]
@@ -64,11 +73,25 @@ export default class VelociousDatabaseQuery {
 
     const results = await countQuery._executeQuery()
 
+
+    // The query isn't grouped and a single result has been given
     if (results.length == 1) {
       return results[0].count
     }
 
-    throw new Error("count multiple stub")
+
+    // The query may be grouped and a lot of different counts a given
+    let countResult = 0
+
+    for (const result of results) {
+      if (!("count" in result)) {
+        throw new Error("Invalid count result")
+      }
+
+      countResult += result.count
+    }
+
+    return countResult
   }
 
   getOptions() { return this.driver.options() }
@@ -193,7 +216,12 @@ export default class VelociousDatabaseQuery {
   }
 
   limit(value) {
-    this._limits.push(value)
+    this._limit = value
+    return this
+  }
+
+  offset(value) {
+    this._offset = value
     return this
   }
 
@@ -203,6 +231,22 @@ export default class VelociousDatabaseQuery {
     order.query = this
 
     this._orders.push(order)
+    return this
+  }
+
+  page(pageNumber) {
+    const perPage = this._perPage || 30
+    const offset = (pageNumber - 1) * perPage
+    const limit = perPage
+
+    this._page = pageNumber
+    this.limit(limit)
+    this.offset(offset)
+    return this
+  }
+
+  perPage(perPage) {
+    this._perPage = perPage
     return this
   }
 
