@@ -290,20 +290,24 @@ class VelociousDatabaseRecord {
       this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
         let value = this[camelizedColumnName]()
 
-        if (typeof value == "string") {
-          value = value.trim()
-        }
-
-        if (value) {
-          return true
-        }
-
-        return false
+        return this._hasAttribute(value)
       }
     }
 
     await this._defineTranslationMethods()
     this._initialized = true
+  }
+
+  _hasAttribute(value) {
+    if (typeof value == "string") {
+      value = value.trim()
+    }
+
+    if (value) {
+      return true
+    }
+
+    return false
   }
 
   static isInitialized() {
@@ -324,13 +328,19 @@ class VelociousDatabaseRecord {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
 
-        this.prototype[name] = function() {
+        this.prototype[name] = function getTranslatedAttribute() {
           const locale = this._getConfiguration().getLocale()
 
           return this._getTranslatedAttributeWithFallback(name, locale)
         }
 
-        this.prototype[setterMethodName] = function(newValue) {
+        this.prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
+          const value = this[name]()
+
+          return this._hasAttribute(value)
+        }
+
+        this.prototype[setterMethodName] = function setTranslatedAttribute(newValue) {
           const locale = this._getConfiguration().getLocale()
 
           return this._setTranslatedAttribute(name, locale, newValue)
@@ -341,11 +351,11 @@ class VelociousDatabaseRecord {
           const getterMethodNameLocalized = `${name}${localeCamelized}`
           const setterMethodNameLocalized = `${setterMethodName}${localeCamelized}`
 
-          this.prototype[getterMethodNameLocalized] = function() {
+          this.prototype[getterMethodNameLocalized] = function getTranslatedAttributeWithLocale() {
             return this._getTranslatedAttribute(name, locale)
           }
 
-          this.prototype[setterMethodNameLocalized] = function(newValue) {
+          this.prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
           }
         }
@@ -930,7 +940,7 @@ class VelociousDatabaseRecord {
     }
 
     if (column && this.constructor.getDatabaseType() == "sqlite") {
-      if (column.getType() == "date" || column.getType() == "datetime") {
+      if (result && (column.getType() == "date" || column.getType() == "datetime")) {
         result = new Date(Date.parse(result))
       }
     }
