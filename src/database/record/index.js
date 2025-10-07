@@ -1029,6 +1029,10 @@ class VelociousDatabaseRecord {
   }
 
   id() {
+    if (!this.constructor._columnNameToAttributeName) {
+      throw new Error(`Column names mapping hasn't been set on ${this.constructor.name}. Has the model been initialized?`)
+    }
+
     const primaryKey = this.constructor.primaryKey()
     const attributeName = this.constructor._columnNameToAttributeName[primaryKey]
 
