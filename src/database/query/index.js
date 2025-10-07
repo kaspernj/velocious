@@ -174,7 +174,7 @@ export default class VelociousDatabaseQuery {
   }
 
   async first() {
-    const newQuery = this.clone().limit(1).reorder(this.modelClass.orderableColumn())
+    const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.orderableColumn())}`)
     const results = await newQuery.toArray()
 
     return results[0]

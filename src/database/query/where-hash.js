@@ -16,19 +16,18 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
     return sql
   }
 
-  _whereSQLFromHash(hash, tableName) {
+  _whereSQLFromHash(hash, tableName, index = 0) {
     const options = this.getOptions()
     let sql = ""
-    let index = 0
 
     for (const whereKey in hash) {
       const whereValue = hash[whereKey]
 
-      if (index > 0) sql += " AND "
-
-      if (!Array.isArray(whereValue) && typeof whereValue == "object") {
-        sql += this._whereSQLFromHash(whereValue, whereKey)
+      if (!Array.isArray(whereValue) && whereValue !== null && typeof whereValue == "object") {
+        sql += this._whereSQLFromHash(whereValue, whereKey, index)
       } else {
+        if (index > 0) sql += " AND "
+
         if (tableName) {
           sql += `${options.quoteTableName(tableName)}.`
         }
@@ -37,6 +36,8 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
 
         if (Array.isArray(whereValue)) {
           sql += ` IN (${whereValue.map((value) => options.quote(value)).join(", ")})`
+        } else if (whereValue === null) {
+          sql += " IS NULL"
         } else {
           sql += ` = ${options.quote(whereValue)}`
         }
