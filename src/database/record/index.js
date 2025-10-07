@@ -426,13 +426,6 @@ class VelociousDatabaseRecord {
     return await this.connection().insertMultiple(this.tableName(), columns, rows)
   }
 
-  static async last() {
-    const query = this._newQuery().order(this.primaryKey())
-    const record = await query.last()
-
-    return record
-  }
-
   static async nextPrimaryKey() {
     const primaryKey = this.primaryKey()
     const tableName = this.tableName()
@@ -768,6 +761,10 @@ class VelociousDatabaseRecord {
     return this._newQuery().joins(...args)
   }
 
+  static async last(...args) {
+    return await this._newQuery().last(...args)
+  }
+
   static limit(...args) {
     return this._newQuery().limit(...args)
   }
@@ -1031,7 +1028,17 @@ class VelociousDatabaseRecord {
     }
   }
 
-  id() { return this.readAttribute(this.constructor._columnNameToAttributeName[this.constructor.primaryKey()]) }
+  id() {
+    const primaryKey = this.constructor.primaryKey()
+    const attributeName = this.constructor._columnNameToAttributeName[primaryKey]
+
+    if (attributeName === undefined) {
+      throw new Error(`Primary key ${primaryKey} doesn't exist in columns: ${Object.keys(this.constructor._columnNameToAttributeName).join(", ")}`)
+    }
+
+    return this.readAttribute(attributeName)
+  }
+
   isPersisted() { return !this._isNewRecord }
   isNewRecord() { return this._isNewRecord }
 
