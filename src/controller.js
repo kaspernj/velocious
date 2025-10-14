@@ -86,7 +86,7 @@ export default class VelociousController {
   renderJsonArg(json) {
     const body = JSON.stringify(json)
 
-    this._response.addHeader("Content-Type", "application/json")
+    this._response.setHeader("Content-Type", "application/json; charset=UTF-8")
     this._response.setBody(body)
   }
 
@@ -100,7 +100,7 @@ export default class VelociousController {
         if (err) {
           reject(err)
         } else {
-          this._response.addHeader("Content-Type", "text/html")
+          this._response.setHeader("Content-Type", "text/html; charset=UTF-8")
           this._response.setBody(str)
 
           resolve()
