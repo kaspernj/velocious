@@ -14,6 +14,10 @@ export default class VelociousHttpServerClientResponse {
     this.headers[key].push(value)
   }
 
+  setHeader(key, value) {
+    this.headers[key] = [value]
+  }
+
   getBody() {
     if (this.body !== undefined) {
       return this.body
@@ -35,8 +39,8 @@ export default class VelociousHttpServerClientResponse {
   }
 
   setErrorBody(error) {
-    this.body = `${error.message}\n\n${error.stack}`
-    this.addHeader("Content-Type", "text/plain")
+    this.setHeader("Content-Type", "text/plain; charset=UTF-8")
+    this.setBody(`${error.message}\n\n${error.stack}`)
   }
 
   setStatus(status) {

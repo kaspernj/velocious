@@ -87,16 +87,16 @@ export default class VeoliciousHttpServerClient {
     this.logger.debug("sendResponse", {clientCount: this.clientCount, connectionHeader, httpVersion})
 
     if (httpVersion == "1.0" && connectionHeader == "keep-alive") {
-      response.addHeader("Connection", "Keep-Alive")
+      response.setHeader("Connection", "Keep-Alive")
     } else {
-      response.addHeader("Connection", "Close")
+      response.setHeader("Connection", "Close")
     }
 
-    const textEncoded = new TextEncoder().encode(body)
+    const contentLength = new TextEncoder().encode(body).length
 
-    response.addHeader("Content-Length", textEncoded.length)
-    response.addHeader("Date", date.toUTCString())
-    response.addHeader("Server", "Velocious")
+    response.setHeader("Content-Length", contentLength)
+    response.setHeader("Date", date.toUTCString())
+    response.setHeader("Server", "Velocious")
 
     let headers = ""
 
