@@ -17,9 +17,11 @@ export default class ServerClient {
 
   listen = () => this.socket.on("data", this.onSocketData)
 
-  close() {
-    this.socket.destroy()
-    this.events.emit("close", this)
+  end() {
+    return new Promise((resolve) => {
+      this.socket.once("close", () => resolve())
+      this.socket.end()
+    })
   }
 
   onSocketData = (chunk) => {
@@ -37,8 +39,12 @@ export default class ServerClient {
     this.events.emit("close", this)
   }
 
-  send(data) {
-    this.logger.debug("Send", data)
-    this.socket.write(data)
+  async send(data) {
+    return new Promise((resolve) => {
+      this.logger.debug("Send", data)
+      this.socket.write(data, () => {
+        resolve()
+      })
+    })
   }
 }

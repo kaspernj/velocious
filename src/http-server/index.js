@@ -52,11 +52,15 @@ export default class VelociousHttpServer {
   }
 
   async stopClients() {
+    const promises = []
+
     for (const clientCount in this.clients) {
       const client = this.clients[clientCount]
 
-      await client.close()
+      promises.push(client.end())
     }
+
+    await Promise.all(promises)
   }
 
   stopServer() {
