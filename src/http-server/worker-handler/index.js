@@ -78,7 +78,7 @@ export default class VelociousHttpServerWorker {
     } else if (command == "clientClose") {
       const {clientCount} = digs(data, "clientCount")
 
-      this.clients[clientCount]?.close()
+      this.clients[clientCount]?.end()
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
