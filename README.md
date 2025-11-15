@@ -190,7 +190,7 @@ First create a test file under something like the following path 'src/routes/acc
 import {describe, expect, it} from "velocious/src/testing/test.js"
 import Account from "../../models/account.js"
 
-await describe("accounts - create", {type: "request"}, async () => {
+describe("accounts - create", {type: "request"}, async () => {
   it("creates an account", async ({client}) => {
     const response = await client.post("/accounts", {account: {name: "My event company"}})
 
