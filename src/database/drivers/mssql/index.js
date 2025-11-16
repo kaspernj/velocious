@@ -85,7 +85,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   getType() { return "mssql" }
   primaryKeyType() { return "bigint" }
 
-  async query(sql) {
+  async _queryActual(sql) {
     let result, request, tries = 0
 
     if (this._currentTransaction) {

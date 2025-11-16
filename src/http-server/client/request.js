@@ -14,6 +14,7 @@ export default class VelociousHttpServerClientRequest {
   baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
   feed(data) { return this.requestParser.feed(data) }
   header(headerName) { return this.getRequestBuffer().getHeader(headerName)?.getValue() }
+  headers() { return this.getRequestBuffer().getHeadersHash() }
   httpMethod() { return this.requestParser.getHttpMethod() }
   httpVersion() { return this.requestParser.getHttpVersion() }
   host() { return this.requestParser.getHost() }

@@ -12,7 +12,6 @@ import Options from "./options.js"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import Update from "./sql/update.js"
-import wait from "awaitery/src/wait.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   async alterTableSql(tableData) {
@@ -190,29 +189,10 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return result
   }
 
-  async query(sql) {
-    let tries = 0
-
-    while(tries < 5) {
-      tries++
-
-      try {
-        return await this._queryActual(sql)
-      } catch (error) {
-        if (tries < 5 && this._retryableDatabaseError(error)) {
-          await wait(100)
-          this.logger.warn(`Retrying query because failed with: ${error.stack}`)
-          // Retry
-        } else {
-          throw error
-        }
-      }
-    }
-  }
-
-  _retryableDatabaseError(error) {
-    if (this.getType() == "sqlite" && error.message?.startsWith("attempt to write a readonly database")) return true
-    if (this.getType() == "sqlite" && error.message?.startsWith("database is locked")) return true
+  retryableDatabaseError(error) {
+    if (error.message?.startsWith("attempt to write a readonly database")) return true
+    if (error.message?.startsWith("database is locked")) return true
+    if (error.message?.includes("→ Caused by: Error code : database is locked")) return true
 
     return false
   }

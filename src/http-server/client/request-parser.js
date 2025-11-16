@@ -39,6 +39,7 @@ export default class VelociousHttpServerClientRequestParser {
 
   feed = (data) => this.requestBuffer.feed(data)
   getHeader(name) { return this.requestBuffer.getHeader(name)?.value }
+  getHeaders() { return this.requestBuffer.getHeadersHash() }
   getHttpMethod() { return digg(this, "requestBuffer", "httpMethod") }
   getHttpVersion() { return digg(this, "requestBuffer", "httpVersion") }
 
