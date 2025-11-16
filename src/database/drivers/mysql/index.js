@@ -94,7 +94,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   getType() { return "mysql" }
   primaryKeyType() { return "bigint" }
 
-  async query(sql) {
+  async _queryActual(sql) {
     try {
       return await query(this.connection, sql)
     } catch (error) {

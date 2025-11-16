@@ -7,6 +7,7 @@ import UUID from "pure-uuid"
 import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
+import wait from "awaitery/src/wait.js"
 
 export default class VelociousDatabaseDriversBase {
   constructor(config, configuration) {
@@ -228,6 +229,30 @@ export default class VelociousDatabaseDriversBase {
 
   async _commitTransactionAction() {
     await this.query("COMMIT")
+  }
+
+  async query(sql) {
+    let tries = 0
+
+    while(tries < 5) {
+      tries++
+
+      try {
+        return await this._queryActual(sql)
+      } catch (error) {
+        if (tries < 5 && this.retryableDatabaseError(error)) {
+          await wait(100)
+          this.logger.warn(`Retrying query because failed with: ${error.stack}`)
+          // Retry
+        } else {
+          throw error
+        }
+      }
+    }
+  }
+
+  retryableDatabaseError(_error) {
+    return false
   }
 
   async rollbackTransaction() {
