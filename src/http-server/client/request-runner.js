@@ -29,7 +29,10 @@ export default class VelociousHttpServerClientRequestRunner {
     try {
       // Before we checked if the sec-fetch-mode was "cors", but it seems the sec-fetch-mode isn't always present
       await this.logger.debug(() => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
-      await configuration.cors({request, response})
+
+      if (configuration.cors) {
+        await configuration.cors({request, response})
+      }
 
       if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
         response.setStatus(200)
