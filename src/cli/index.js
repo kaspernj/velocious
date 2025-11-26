@@ -1,7 +1,6 @@
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
-import {glob} from "glob"
 
 import configurationResolver from "../configuration-resolver.js"
 import fileExists from "../utils/file-exists.js"
@@ -41,9 +40,9 @@ export default class VelociousCli {
 
     if (!fileFound) {
       const possibleCommands = []
-      const commandFiles = await glob("**/*.js", {cwd: commandsPath})
+      const commandFiles = fs.glob(`${commandsPath}/**/*.js`)
 
-      for (const aFilePath of commandFiles) {
+      for await (const aFilePath of commandFiles) {
         const aFilePathParts = aFilePath.split("/")
         const lastPart = aFilePathParts[aFilePathParts.length - 1]
 
