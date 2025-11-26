@@ -332,7 +332,7 @@ export default class VelociousDatabaseMigrator {
         configuration: this.configuration,
         db
       })
-      const dateString = digg(migration, "date")
+      const dateString = `${digg(migration, "date")}`
 
       if (direction == "up") {
         if (migrationInstance.change) {
@@ -345,7 +345,7 @@ export default class VelociousDatabaseMigrator {
 
         const existingSchemaMigrations = await db.newQuery()
           .from("schema_migrations")
-          .where({version: `${dateString}`})
+          .where({version: dateString})
           .results()
 
         if (existingSchemaMigrations.length == 0) {
