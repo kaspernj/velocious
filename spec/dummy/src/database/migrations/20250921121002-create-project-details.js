@@ -10,6 +10,8 @@ export default class CreateProjectDetails extends Migration {
   }
 
   async down() {
-    await this.dropTable("project_details")
+    if (await this.tableExists("project_details")) {
+      await this.dropTable("project_details")
+    }
   }
 }

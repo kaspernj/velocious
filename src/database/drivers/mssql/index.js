@@ -33,6 +33,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     this.connection = undefined
   }
 
+  /**
+   * @returns {string}
+   */
   async alterTableSql(tableData) {
     const alterArgs = {tableData, driver: this}
     const alterTable = new AlterTable(alterArgs)
@@ -40,6 +43,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return await alterTable.toSqls()
   }
 
+  /**
+   * @returns {string}
+   */
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
     const createDatabase = new CreateDatabase(createArgs)
@@ -47,6 +53,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return createDatabase.toSql()
   }
 
+  /**
+   * @returns {string}
+   */
   createIndexSql(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
@@ -54,6 +63,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return createIndex.toSql()
   }
 
+  /**
+   * @returns {string}
+   */
   createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
     const createTable = new CreateTable(createArgs)
@@ -61,6 +73,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return createTable.toSql()
   }
 
+  /**
+   * @returns {Promise<string>}
+   */
   async currentDatabase() {
     const rows = await this.query("SELECT DB_NAME() AS db_name")
 
@@ -75,6 +90,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     await this.query("EXEC sp_MSforeachtable @command1=\"print '?'\", @command2=\"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\"")
   }
 
+  /**
+   * @returns {string}
+   */
   dropTableSql(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
@@ -82,7 +100,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return dropTable.toSql()
   }
 
+  /**
+   * @returns {string}
+   */
   getType() { return "mssql" }
+
+  /**
+   * @returns {string}
+   */
   primaryKeyType() { return "bigint" }
 
   async _queryActual(sql) {
@@ -115,9 +140,17 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return result.recordsets[0]
   }
 
+  /**
+   * @returns {string}
+   */
   queryToSql(query) { return new QueryParser({query}).toSql() }
+
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
+  /**
+   * @param {*} value
+   * @returns {string}
+   */
   escape(value) {
     value = this._convertValue(value)
 
@@ -131,6 +164,10 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return result
   }
 
+  /**
+   * @param {*} value
+   * @returns {string}
+   */
   quote(value) {
     value = this._convertValue(value)
 
@@ -142,19 +179,42 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return escapeString(value)
   }
 
+  /**
+   * @param {*} string
+   * @returns {string}
+   */
   quoteColumn(string) { return this.options().quoteColumnName(string) }
+
+  /**
+   * @param {string|number} string
+   * @returns {string}
+   */
   quoteTable(string) { return this.options().quoteTableName(string) }
 
+  /**
+   * @param {string} tableName
+   * @param {string} oldColumnName
+   * @param {string} newColumnName
+   * @returns {Promise<void>}
+   */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     await this.query(`EXEC sp_rename ${this.quote(`${tableName}.${oldColumnName}`)}, ${this.quote(newColumnName)}, 'COLUMN'`)
   }
 
+  /**
+   * @param {Object} args
+   * @param {string} args.tableName
+   * @param {conditions} args.conditions
+   */
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
 
     return deleteInstruction.toSql()
   }
 
+  /**
+   * @returns {string} SQL statement
+   */
   insertSql(args) {
     const insertArgs = Object.assign({driver: this}, args)
     const insert = new Insert(insertArgs)
@@ -240,6 +300,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return `sp${new UUID(4).format().replaceAll("-", "")}`.substring(0, 32)
   }
 
+  /**
+   * @returns {string}
+   */
   updateSql({conditions, data, tableName}) {
     const update = new Update({conditions, data, driver: this, tableName})
 

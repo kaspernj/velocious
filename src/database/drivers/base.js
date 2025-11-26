@@ -90,6 +90,16 @@ export default class VelociousDatabaseDriversBase {
     return table
   }
 
+  /**
+   * @param {Object} args
+   * @param {Array} args.columns
+   * @param {Object} args.data
+   * @param {boolean} args.multiple
+   * @param {boolean} args.returnLastInsertedColumnNames
+   * @param {Array} args.rows
+   * @param {string} args.tableName
+   * @returns {Promise<void>}
+   */
   async insert(...args) {
     const sql = this.insertSql(...args)
 
@@ -108,6 +118,10 @@ export default class VelociousDatabaseDriversBase {
     return value
   }
 
+  /**
+   * @param {string} value
+   * @returns {string}
+   */
   quote(value) {
     if (typeof value == "number") return value
 
@@ -117,18 +131,33 @@ export default class VelociousDatabaseDriversBase {
     return result
   }
 
+  /**
+   * @param {string} columnName
+   * @returns {string}
+   */
   quoteColumn(columnName) {
     return this.options().quoteColumnName(columnName)
   }
 
+  /**
+   * @param {string} columnName
+   * @returns {string}
+   */
   quoteIndex(columnName) {
     return this.options().quoteIndexName(columnName)
   }
 
+  /**
+   * @param {string} tableName
+   * @returns {string}
+   */
   quoteTable(tableName) {
     return this.options().quoteTableName(tableName)
   }
 
+  /**
+   * @returns {Query}
+   */
   newQuery() {
     const handler = new Handler()
 
@@ -138,6 +167,10 @@ export default class VelociousDatabaseDriversBase {
     })
   }
 
+  /**
+   * @param {string} tableName
+   * @returns {Promise<Array>}
+   */
   async select(tableName) {
     const query = this.newQuery()
 
@@ -152,6 +185,10 @@ export default class VelociousDatabaseDriversBase {
     this.idSeq = id
   }
 
+  /**
+   * @param {string} tableName
+   * @returns {Promise<boolean>}
+   */
   async tableExists(tableName) {
     const tables = await this.getTables()
     const table = tables.find((table) => table.getName() == tableName)
@@ -231,6 +268,10 @@ export default class VelociousDatabaseDriversBase {
     await this.query("COMMIT")
   }
 
+  /**
+   * @param {string} sql
+   * @returns {Promise<Array>}
+   */
   async query(sql) {
     let tries = 0
 
@@ -280,6 +321,12 @@ export default class VelociousDatabaseDriversBase {
     await this.query(`SAVEPOINT ${savePointName}`)
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string} oldColumnName
+   * @param {string} newColumnName
+   * @returns {Promise<void>}
+   */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     const tableColumn = new TableColumn(oldColumnName)
 
@@ -348,6 +395,13 @@ export default class VelociousDatabaseDriversBase {
     })
   }
 
+  /**
+   * @param {Object} args
+   * @param {Object} args.conditions
+   * @param {Object} args.data
+   * @param {String} args.tableName
+   * @returns {Promise<void>}
+   */
   async update(...args) {
     const sql = this.updateSql(...args)
 

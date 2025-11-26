@@ -2,6 +2,10 @@ import TableColumn from "../table-data/table-column.js"
 import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseColumn {
+  /**
+   * @param {TableColumn} tableColumn
+   * @returns {Promise<import('../table-data/table-index.js').default>}
+   */
   async getIndexByName(indexName) {
     const indexes = await this.getIndexes()
     const index = indexes.find((index) => index.getName() == indexName)
@@ -9,6 +13,10 @@ export default class VelociousDatabaseDriversBaseColumn {
     return index
   }
 
+  /**
+   * @param {boolean} nullable Whether the column should be nullable or not.
+   * @returns {Promise<void>}
+   */
   async changeNullable(nullable) {
     const tableData = new TableData(this.getTable().getName())
     const column = this.getTableDataColumn()
@@ -38,6 +46,9 @@ export default class VelociousDatabaseDriversBaseColumn {
     return this.table
   }
 
+  /**
+   * @returns {TableColumn} The table column data for this column. This is used for altering tables and such.
+   */
   getTableDataColumn() {
     return new TableColumn(this.getName(), {
       autoIncrement: this.getAutoIncrement(),
