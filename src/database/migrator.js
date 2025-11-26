@@ -69,6 +69,10 @@ export default class VelociousDatabaseMigrator {
     })
   }
 
+  /**
+   * @param {*} requireContext
+   * @returns {Promise<void>}
+   */
   async migrateFilesFromRequireContext(requireContext) {
     const files = requireContext
       .keys()
@@ -111,6 +115,9 @@ export default class VelociousDatabaseMigrator {
     })
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async loadMigrationsVersions() {
     this.migrationsVersions = {}
 
@@ -142,6 +149,9 @@ export default class VelociousDatabaseMigrator {
     }
   }
 
+  /**
+   * @returns {Promise<boolean>}
+   */
   async migrationsTableExist(db) {
     const schemaTable = await db.getTableByName("schema_migrations", {throwError: false})
 
@@ -150,6 +160,9 @@ export default class VelociousDatabaseMigrator {
     return true
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async executeRequireContext(requireContext) {
     const migrationFiles = requireContext.keys()
 
@@ -181,6 +194,9 @@ export default class VelociousDatabaseMigrator {
     }
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async reset() {
     const dbs = await this.configuration.getCurrentConnections()
 
@@ -217,7 +233,52 @@ export default class VelociousDatabaseMigrator {
     }
   }
 
-  async runMigrationFile({migration, requireMigration}) {
+  /**
+   * @param {{date: number}[]} files
+   * @param {Function} importFile Function to import a file
+   * @returns {Promise<void>}
+   */
+  async rollback(files, importFile) {
+    const latestMigrationVersion = await this._latestMigrationVersion()
+
+    if (!latestMigrationVersion) {
+      throw new Error("No migrations have been run yet")
+    }
+
+    const latestMigrationVersionNumber = parseInt(latestMigrationVersion)
+    const migrationFile = files.find((file) => file.date == latestMigrationVersionNumber)
+
+    if (!migrationFile) {
+      throw new Error(`Migration file for version ${latestMigrationVersionNumber} not found`)
+    }
+
+    await this.runMigrationFile(migrationFile, importFile, "down")
+  }
+
+  /**
+   * @returns {Promise<string | null>} The latest migration version
+   */
+  async _latestMigrationVersion() {
+    let highestVersion
+
+    for (const dbIdentifier of this.migrationsVersions) {
+      for (const migrationVersion of this.migrationsVersions[dbIdentifier]) {
+        if (!highestVersion || migrationVersion > highestVersion) {
+          highestVersion = migrationVersion
+        }
+      }
+    }
+
+    return highestVersion
+  }
+
+  /**
+   * @param {object} migration
+   * @param {string} migration.date
+   * @param {string} migration.file
+   * @param {Function} requireMigration
+   */
+  async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
     if (!this.migrationsVersions) await this.loadMigrationsVersions()
@@ -239,9 +300,18 @@ export default class VelociousDatabaseMigrator {
         continue
       }
 
-      if (this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
-        this.logger.debug(`${dbIdentifier} has already run migration ${migration.file}`)
-        continue
+      if (direction == "up") {
+        if (this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
+          this.logger.debug(`${dbIdentifier} has already run migration ${migration.file}`)
+          continue
+        }
+      } else if (direction == "down") {
+        if (!this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
+          this.logger.debug(`${dbIdentifier} hasn't run migration ${migration.file}`)
+          continue
+        }
+      } else {
+        throw new Error(`Unknown direction: ${direction}`)
       }
 
       this.logger.debug(`Running migration on ${dbIdentifier}: ${migration.file}`, {migrationDatabaseIdentifiers})
@@ -252,23 +322,35 @@ export default class VelociousDatabaseMigrator {
         configuration: this.configuration,
         db
       })
-
-      if (migrationInstance.change) {
-        await migrationInstance.change()
-      } else if (migrationInstance.up) {
-        await migrationInstance.up()
-      } else {
-        throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
-      }
-
       const dateString = digg(migration, "date")
-      const existingSchemaMigrations = await db.newQuery()
-        .from("schema_migrations")
-        .where({version: `${dateString}`})
-        .results()
 
-      if (existingSchemaMigrations.length == 0) {
-        await db.insert({tableName: "schema_migrations", data: {version: dateString}})
+      if (direction == "up") {
+        if (migrationInstance.change) {
+          await migrationInstance.change()
+        } else if (migrationInstance.up) {
+          await migrationInstance.up()
+        } else {
+          throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
+        }
+
+        const existingSchemaMigrations = await db.newQuery()
+          .from("schema_migrations")
+          .where({version: `${dateString}`})
+          .results()
+
+        if (existingSchemaMigrations.length == 0) {
+          await db.insert({tableName: "schema_migrations", data: {version: dateString}})
+        }
+      } else if (direction == "down") {
+        if (migrationInstance.down) {
+          await migrationInstance.down()
+        } else {
+          throw new Error(`'down' didn't exist on migration: ${migration.file}`)
+        }
+
+        await db.delete({tableName: "schema_migrations", where: {version: dateString}})
+      } else {
+        throw new Error(`Unknown direction: ${direction}`)
       }
     }
   }

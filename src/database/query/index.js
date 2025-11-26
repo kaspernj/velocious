@@ -35,6 +35,9 @@ export default class VelociousDatabaseQuery {
     this._wheres = wheres
   }
 
+  /**
+   * @returns {VelociousDatabaseQuery}
+   */
   clone() {
     const newQuery = new VelociousDatabaseQuery({
       driver: this.driver,
@@ -56,6 +59,9 @@ export default class VelociousDatabaseQuery {
     return newQuery
   }
 
+  /**
+   * @returns {Promise<number>}
+   */
   async count() {
     // Generate count SQL
     let sql = `COUNT(${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.primaryKey())})`
@@ -96,6 +102,9 @@ export default class VelociousDatabaseQuery {
 
   getOptions() { return this.driver.options() }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async destroyAll() {
     const records = await this.toArray()
 
@@ -104,6 +113,10 @@ export default class VelociousDatabaseQuery {
     }
   }
 
+  /**
+   * @param {number|string} recordId
+   * @returns {Promise<Object>}
+   */
   async find(recordId) {
     const conditions = {}
 
@@ -119,6 +132,10 @@ export default class VelociousDatabaseQuery {
     return record
   }
 
+  /**
+   * @param {Object} conditions
+   * @returns {Promise<Object>}
+   */
   async findBy(conditions) {
     const newConditions = {}
 
@@ -131,6 +148,11 @@ export default class VelociousDatabaseQuery {
     return await this.clone().where(newConditions).first()
   }
 
+  /**
+   * @param {Object} conditions
+   * @param {Function} callback
+   * @returns {Promise<Object>}
+   */
   async findOrCreateBy(...args) {
     const record = await this.findOrInitializeBy(...args)
 
@@ -141,6 +163,10 @@ export default class VelociousDatabaseQuery {
     return record
   }
 
+  /**
+   * @param {Object} conditions
+   * @returns {Promise<Object>}
+   */
   async findByOrFail(conditions) {
     const newConditions = {}
 
@@ -159,6 +185,11 @@ export default class VelociousDatabaseQuery {
     return model
   }
 
+  /**
+   * @param {Object} conditions
+   * @param {Function} callback
+   * @returns {Promise<Object>}
+   */
   async findOrInitializeBy(conditions, callback) {
     const record = await this.findBy(conditions)
 
@@ -173,6 +204,9 @@ export default class VelociousDatabaseQuery {
     return newRecord
   }
 
+  /**
+   * @returns {Promise<Object>}
+   */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.orderableColumn())}`)
     const results = await newQuery.toArray()
@@ -180,6 +214,10 @@ export default class VelociousDatabaseQuery {
     return results[0]
   }
 
+  /**
+   * @param {string|FromPlain} from
+   * @returns {this}
+   */
   from(from) {
     if (typeof from == "string") from = new FromPlain({plain: from, query: this})
 
@@ -189,11 +227,19 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  /**
+   * @param {string|GroupPlain} group
+   * @returns {this}
+   */
   group(group) {
     this._groups.push(group)
     return this
   }
 
+  /**
+   * @param {string|JoinPlain} join
+   * @returns {this}
+   */
   joins(join) {
     if (typeof join == "string") {
       join = new JoinPlain({plain: join, query: this})
@@ -207,6 +253,9 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  /**
+   * @returns {Promise<Object>}
+   */
   async last() {
     const primaryKey = this.modelClass.primaryKey()
     const tableName = this.modelClass.tableName()
@@ -215,16 +264,28 @@ export default class VelociousDatabaseQuery {
     return results[0]
   }
 
+  /**
+   * @param {number} value
+   * @returns {this}
+   */
   limit(value) {
     this._limit = value
     return this
   }
 
+  /**
+   * @param {number} value
+   * @returns {this}
+   */
   offset(value) {
     this._offset = value
     return this
   }
 
+  /**
+   * @param {*} order
+   * @returns {this}
+   */
   order(order) {
     if (typeof order == "number" || typeof order == "string") order = new OrderPlain({plain: order, query: this})
 
@@ -234,6 +295,10 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  /**
+   * @param {number} pageNumber
+   * @returns {this}
+   */
   page(pageNumber) {
     const perPage = this._perPage || 30
     const offset = (pageNumber - 1) * perPage
@@ -245,22 +310,37 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  /**
+   * @param {number} perPage
+   * @returns {this}
+   */
   perPage(perPage) {
     this._perPage = perPage
     return this
   }
 
+  /**
+   * @param {string|SelectPlain} select
+   * @returns {this}
+   */
   preload(data) {
     incorporate(this._preload, data)
     return this
   }
 
+  /**
+   * @param {string|OrderPlain} order
+   * @returns {this}
+   */
   reorder(order) {
     this._orders = []
     this.order(order)
     return this
   }
 
+  /**
+   * @returns {this}
+   */
   reverseOrder() {
     for (const order of this._orders) {
       order.setReverseOrder(true)
@@ -269,6 +349,10 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  /**
+   * @param {string|SelectPlain} select
+   * @returns {this}
+   */
   select(select) {
     if (Array.isArray(select)) {
       for (const selectInArray of select) {
@@ -286,6 +370,9 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
+  /**
+   * @returns {Promise<Array>} Array of results from the database
+   */
   async _executeQuery() {
     const sql = this.toSql()
     const results = await this.driver.query(sql)
@@ -295,6 +382,9 @@ export default class VelociousDatabaseQuery {
     return results
   }
 
+  /**
+   * @returns {Promise<Array>} Array of results from the database
+   */
   async results() {
     return await this._executeQuery()
   }

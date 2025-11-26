@@ -11,6 +11,12 @@ export default class VelociousDatabaseMigration {
     return this._databaseIdentifiers
   }
 
+  /**
+   * @param {Object} args
+   * @param {string} args.configuration
+   * @param {string} args.databaseIdentifier
+   * @param {Object} args.db
+   */
   constructor({configuration, databaseIdentifier = "default", db}) {
     if (!databaseIdentifier) throw new Error("No database identifier given")
     if (!db) throw new Error("No 'db' given")
@@ -29,10 +35,26 @@ export default class VelociousDatabaseMigration {
   getDriver() { return this._db }
   connection() { return this.getDriver() }
 
+  /**
+   * @param {string} sql
+   * @returns {Promise<Array>}
+   */
   async execute(sql) {
-    await this.connection().query(sql)
+    return await this.connection().query(sql)
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string} columnName
+   * @param {string} columnType
+   * @param {Object} args
+   * @param {Object} args.default
+   * @param {Object} args.foreignKey
+   * @param {Object} args.nullable
+   * @param {Object} args.primaryKey
+   * @param {Object} args.unique
+   * @returns {Promise<void>}
+   */
   async addColumn(tableName, columnName, columnType, args) {
     if (!columnType) throw new Error("No column type given")
 
@@ -48,6 +70,15 @@ export default class VelociousDatabaseMigration {
     }
   }
 
+  /**
+   * @param {string} tableName
+   * @param {Array} columns
+   * @param {Object} args
+   * @param {boolean} args.ifNotExists
+   * @param {string} args.name
+   * @param {boolean} args.unique
+   * @returns {Promise<void>}
+   */
   async addIndex(tableName, columns, args) {
     const createIndexArgs = Object.assign(
       {
@@ -61,6 +92,11 @@ export default class VelociousDatabaseMigration {
     await this.getDriver().query(sql)
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string} referenceName
+   * @returns {Promise<void>}
+   */
   async addForeignKey(tableName, referenceName) {
     const referenceNameUnderscore = inflection.underscore(referenceName)
     const tableNameUnderscore = inflection.underscore(tableName)
@@ -79,6 +115,15 @@ export default class VelociousDatabaseMigration {
     )
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string} referenceName
+   * @param {Bbject} args
+   * @param {boolean} args.foreignKey
+   * @param {string} args.type
+   * @param {boolean} args.unique
+   * @returns {Promise<void>}
+   */
   async addReference(tableName, referenceName, args) {
     const {foreignKey, type, unique, ...restArgs} = args
     const columnName = `${inflection.underscore(referenceName)}_id`
@@ -93,6 +138,12 @@ export default class VelociousDatabaseMigration {
     }
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string} columnName
+   * @param {boolean} nullable
+   * @returns {Promise<void>}
+   */
   async changeColumnNull(tableName, columnName, nullable) {
     const table = await this.getDriver().getTableByName(tableName)
     const column = await table.getColumnByName(columnName)
@@ -100,6 +151,16 @@ export default class VelociousDatabaseMigration {
     await column.changeNullable(nullable)
   }
 
+  /**
+   * @param {string} tableName
+   * @param {function} arg1
+   * @returns {Promise<void>}
+   *//**
+   * @param {string} tableName
+   * @param {Object} arg1
+   * @param {function} arg2
+   * @returns {Promise<void>}
+   */
   async createTable(tableName, arg1, arg2) {
     let args
     let callback
@@ -138,10 +199,20 @@ export default class VelociousDatabaseMigration {
     }
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string} oldColumnName
+   * @param {string} newColumnName
+   * @returns {Promise<void>}
+   */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     await this.getDriver().renameColumn(tableName, oldColumnName, newColumnName)
   }
 
+  /**
+   * @param {string} tableName
+   * @returns {Promise<boolean>}
+   */
   async tableExists(tableName) {
     const exists = await this.getDriver().tableExists(tableName)
 

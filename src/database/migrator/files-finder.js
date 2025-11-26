@@ -12,6 +12,14 @@ export default class VelociousDatabaseMigratorFilesFinder {
     this.path = path
   }
 
+  /**
+   * @returns {Promise<Array<{
+   *   file: string,
+   *   fullPath: string,
+   *   date: number,
+   *   migrationClassName: string
+   * }}
+   */
   async findFiles() {
     let files = await fs.readdir(this.path)
 

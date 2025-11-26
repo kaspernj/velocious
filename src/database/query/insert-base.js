@@ -20,6 +20,9 @@ export default class VelociousDatabaseQueryInsertBase {
     return this.driver.options()
   }
 
+  /**
+   * @returns {string} SQL statement
+   */
   toSql() {
     const {driver} = this
 
