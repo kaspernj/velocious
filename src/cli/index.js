@@ -1,6 +1,7 @@
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
+import {glob} from "glob"
 
 import configurationResolver from "../configuration-resolver.js"
 import fileExists from "../utils/file-exists.js"
@@ -11,11 +12,11 @@ export default class VelociousCli {
   }
 
   async execute() {
-    const __filename = fileURLToPath(import.meta.url)
-    const basePath = await fs.realpath(`${dirname(__filename)}/../..`)
     const commandParts = this.args.processArgs[0].split(":")
     const filePaths = []
-    let filePath = `${basePath}/src/cli/commands`
+    const basePath = await this.getBasePath()
+    const commandsPath = `${basePath}/src/cli/commands`
+    let filePath = commandsPath
 
     for (let commandPart of commandParts) {
       if (commandPart == "d") commandPart = "destroy"
@@ -38,7 +39,23 @@ export default class VelociousCli {
       }
     }
 
-    if (!fileFound) throw new Error(`Unknown command: ${this.args.processArgs[0]} which should have been one of ${filePaths.join(", ")}`)
+    if (!fileFound) {
+      const possibleCommands = []
+      const commandFiles = await glob("**/*.js", {cwd: commandsPath})
+
+      for (const aFilePath of commandFiles) {
+        const aFilePathParts = aFilePath.split("/")
+        const lastPart = aFilePathParts[aFilePathParts.length - 1]
+
+        if (lastPart == "index.js") {
+          possibleCommands.push(aFilePathParts[aFilePathParts.length - 2])
+        } else {
+          possibleCommands.push(lastPart.replace(".js", ""))
+        }
+      }
+
+      throw new Error(`Unknown command: ${this.args.processArgs[0]} which should have been one of: ${possibleCommands.sort().join(", ")}`)
+    }
 
     const commandClassImport = await import(fileFound)
     const CommandClass = commandClassImport.default
@@ -52,6 +69,13 @@ export default class VelociousCli {
     }
 
     return await commandInstance.execute()
+  }
+
+  async getBasePath() {
+    const __filename = fileURLToPath(import.meta.url)
+    const basePath = await fs.realpath(`${dirname(__filename)}/../..`)
+
+    return basePath
   }
 
   async loadConfiguration() {
