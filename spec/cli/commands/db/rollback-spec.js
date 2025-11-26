@@ -3,6 +3,17 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
+  afterEach(async () => {
+    const directory = dummyDirectory()
+    const cliMigrate = new Cli({
+      directory,
+      processArgs: ["db:migrate"],
+      testing: true
+    })
+
+    await cliMigrate.execute()
+  })
+
   it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cliMigrate = new Cli({
