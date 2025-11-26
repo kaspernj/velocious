@@ -20,10 +20,11 @@ export default class VelociousCliCommandsServer extends BaseCommand{
       },
       type: "server"
     })
+    const environment = this.configuration.getEnvironment()
 
     await application.initialize()
     await application.startHttpServer()
-    console.log(`Started Velocious HTTP server on ${host}:${port}`)
+    console.log(`Started Velocious HTTP server on ${host}:${port} in ${environment} environment`)
     await application.wait()
   }
 }
