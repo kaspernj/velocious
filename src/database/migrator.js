@@ -238,7 +238,7 @@ export default class VelociousDatabaseMigrator {
    * @param {Function} importFile Function to import a file
    * @returns {Promise<void>}
    */
-  async rollback(files, importFile) {
+  async rollback(files, importCallback) {
     const latestMigrationVersion = await this._latestMigrationVersion()
 
     if (!latestMigrationVersion) {
@@ -246,23 +246,33 @@ export default class VelociousDatabaseMigrator {
     }
 
     const latestMigrationVersionNumber = parseInt(latestMigrationVersion)
-    const migrationFile = files.find((file) => file.date == latestMigrationVersionNumber)
+    const migration = files.find((file) => file.date == latestMigrationVersionNumber)
 
-    if (!migrationFile) {
+    if (!migration) {
       throw new Error(`Migration file for version ${latestMigrationVersionNumber} not found`)
     }
 
-    await this.runMigrationFile(migrationFile, importFile, "down")
+    await this.runMigrationFile({
+      migration,
+      requireMigration: async () => {
+        const migrationImport = await importCallback(migration.fullPath)
+
+        return migrationImport.default
+      },
+      direction: "down"
+    })
   }
 
   /**
    * @returns {Promise<string | null>} The latest migration version
    */
   async _latestMigrationVersion() {
+    if (!this.migrationsVersions) await this.loadMigrationsVersions()
+
     let highestVersion
 
-    for (const dbIdentifier of this.migrationsVersions) {
-      for (const migrationVersion of this.migrationsVersions[dbIdentifier]) {
+    for (const dbIdentifier in this.migrationsVersions) {
+      for (const migrationVersion in this.migrationsVersions[dbIdentifier]) {
         if (!highestVersion || migrationVersion > highestVersion) {
           highestVersion = migrationVersion
         }
@@ -348,7 +358,7 @@ export default class VelociousDatabaseMigrator {
           throw new Error(`'down' didn't exist on migration: ${migration.file}`)
         }
 
-        await db.delete({tableName: "schema_migrations", where: {version: dateString}})
+        await db.delete({tableName: "schema_migrations", conditions: {version: dateString}})
       } else {
         throw new Error(`Unknown direction: ${direction}`)
       }

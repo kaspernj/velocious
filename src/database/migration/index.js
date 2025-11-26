@@ -201,6 +201,14 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
+   * @returns
+   */
+  async dropTable(tableName) {
+    await this.getDriver().dropTable(tableName)
+  }
+
+  /**
+   * @param {string} tableName
    * @param {string} oldColumnName
    * @param {string} newColumnName
    * @returns {Promise<void>}

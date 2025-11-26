@@ -54,10 +54,27 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return dropTable.toSql()
   }
 
+  /**
+   * @returns {string}
+   */
   deleteSql(args) { return new Delete(Object.assign({driver: this}, args)).toSql() }
+
+  /**
+   * @returns {string}
+   */
   getType() { return "sqlite" }
+
+  /**
+   * @returns {string}
+   */
   insertSql(args) { return new Insert(Object.assign({driver: this}, args)).toSql() }
 
+  /**
+   * @param {string} tableName
+   * @param {object} args
+   * @param {boolean} args.throwError
+   * @returns {Promise<Table>}
+   */
   async getTableByName(tableName, args) {
     const result = await this.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${this.quote(tableName)} LIMIT 1`)
     const row = result[0]
@@ -74,6 +91,9 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     }
   }
 
+  /**
+   * @returns {Promise<Table[]>}
+   */
   async getTables() {
     const result = await this.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
     const tables = []
@@ -97,6 +117,9 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     }
   }
 
+  /**
+   * @returns {boolean}
+   */
   supportsMultipleInsertValues() {
     if (this.versionMajor >= 4) return true
     if (this.versionMajor == 3 && this.versionMinor >= 8) return true
@@ -105,6 +128,9 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return false
   }
 
+  /**
+   * @returns {boolean}
+   */
   supportsInsertIntoReturning() {
     if (this.versionMajor >= 4) return true
     if (this.versionMajor == 3 && this.versionMinor >= 35) return true
@@ -112,6 +138,12 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return false
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string[]} columns
+   * @param {any[][]} rows
+   * @returns {Promise<any[]>}
+   */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
     const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
 
@@ -155,7 +187,14 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return this._options
   }
 
+  /**
+   * @returns {string} - The type of the primary key for this driver.
+   */
   primaryKeyType() { return "integer" } // Because bigint on SQLite doesn't support auto increment
+
+  /**
+   * @returns {string}
+   */
   queryToSql(query) { return new QueryParser({query}).toSql() }
 
   async registerVersion() {
