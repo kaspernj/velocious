@@ -3,7 +3,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
-  fit("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
+  it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cliMigrate = new Cli({
       directory,
