@@ -3,42 +3,30 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
-  afterEach(async () => {
-    const directory = dummyDirectory()
+  const runMigrations = async () => {
     const cliMigrate = new Cli({
-      directory,
-      processArgs: ["db:migrate"],
-      testing: true
-    })
-
-    await cliMigrate.execute()
-  })
-
-  it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
-    const directory = dummyDirectory()
-    const cliMigrate = new Cli({
-      directory,
+      directory: dummyDirectory(),
       processArgs: ["db:migrate"],
       testing: true
     })
 
     await cliMigrate.loadConfiguration()
+    await cliMigrate.execute()
+  }
 
+  const getTestData = async () => {
     const cliRollback = new Cli({
-      directory,
+      directory: dummyDirectory(),
       processArgs: ["db:rollback"],
       testing: true
     })
 
     await cliRollback.loadConfiguration()
 
-    let defaultDatabaseType, defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
+    let defaultDatabaseType, defaultSchemaMigrations = [], tablesResult = []
 
     await cliRollback.configuration.ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
-
-      await cliMigrate.execute()
-      await cliRollback.execute()
 
       for (const dbIdentifier in dbs) {
         const db = dbs[dbIdentifier]
@@ -55,6 +43,29 @@ describe("Cli - Commands - db:rollback", () => {
         }
       }
     })
+
+    return {defaultDatabaseType, defaultSchemaMigrations, tablesResult}
+  }
+
+  it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
+    const directory = dummyDirectory()
+
+    await runMigrations()
+
+    const cliRollback = new Cli({
+      directory,
+      processArgs: ["db:rollback"],
+      testing: true
+    })
+
+    await cliRollback.loadConfiguration()
+
+    await cliRollback.configuration.ensureConnections(async () => {
+      await runMigrations()
+      await cliRollback.execute()
+    })
+
+    const {defaultDatabaseType, defaultSchemaMigrations, tablesResult} = await getTestData()
 
     if (defaultDatabaseType == "mssql") {
       expect(uniqunize(tablesResult.sort())).toEqual(
@@ -102,6 +113,63 @@ describe("Cli - Commands - db:rollback", () => {
         "20250912183606",
         "20250915085450",
         "20250916111330"
+      ])
+    }
+
+    await runMigrations()
+
+    const {defaultSchemaMigrations: newDefaultSchemaMigrations, tablesResult: newTablesResult} = await getTestData()
+
+    if (defaultDatabaseType == "mssql") {
+      expect(uniqunize(newTablesResult.sort())).toEqual(
+        [
+          "accounts",
+          "authentication_tokens",
+          "project_details",
+          "project_translations",
+          "projects",
+          "schema_migrations",
+          "tasks",
+          "users"
+        ]
+      )
+
+      expect(uniqunize(newDefaultSchemaMigrations.sort())).toEqual([
+        "20230728075328",
+        "20230728075329",
+        "20250605133926",
+        "20250903112845",
+        "20250912183605",
+        "20250912183606",
+        "20250915085450",
+        "20250916111330",
+        "20250921121002"
+      ])
+    } else {
+      expect(newTablesResult.sort()).toEqual(
+        [
+          "accounts",
+          "authentication_tokens",
+          "project_details",
+          "project_translations",
+          "projects",
+          "schema_migrations",
+          "schema_migrations",
+          "tasks",
+          "users"
+        ]
+      )
+
+      expect(newDefaultSchemaMigrations.sort()).toEqual([
+        "20230728075328",
+        "20230728075329",
+        "20250605133926",
+        "20250903112845",
+        "20250912183605",
+        "20250912183606",
+        "20250915085450",
+        "20250916111330",
+        "20250921121002"
       ])
     }
   })
