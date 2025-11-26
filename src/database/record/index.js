@@ -204,6 +204,12 @@ class VelociousDatabaseRecord {
     return this._instanceRelationships[relationshipName]
   }
 
+  /**
+   * Adds a belongs-to-relationship to the model.
+   *
+   * @param {string} relationshipName The name of the relationship.
+   * @param {object} options The options for the relationship.
+   */
   static belongsTo(relationshipName, options) {
     this._defineRelationship(relationshipName, Object.assign({type: "belongsTo"}, options))
   }
@@ -241,10 +247,22 @@ class VelociousDatabaseRecord {
     return this.constructor._getConfiguration()
   }
 
+  /**
+   * Adds a has-many-relationship to the model class.
+   *
+   * @param {string} relationshipName The name of the relationship (e.g. "posts")
+   * @param {object} options The options for the relationship (e.g. {className: "Post"})
+   */
   static hasMany(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasMany"}, options))
   }
 
+  /**
+   * Adds a has-one-relationship to the model class.
+   *
+   * @param {string} relationshipName The name of the relationship (e.g. "post")
+   * @param {object} options The options for the relationship (e.g. {className: "Post"})
+   */
   static hasOne(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasOne"}, options))
   }
@@ -650,6 +668,12 @@ class VelociousDatabaseRecord {
     }
   }
 
+  /**
+   * Adds a validation to an attribute.
+   *
+   * @param {string} attributeName The name of the attribute to validate.
+   * @param {object} validators The validators to add. Key is the validator name, value is the validator arguments.
+   */
   static async validates(attributeName, validators) {
     for (const validatorName in validators) {
       const validatorArgs = validators[validatorName]
@@ -805,12 +829,18 @@ class VelociousDatabaseRecord {
     this._isNewRecord = false
   }
 
+  /**
+   * Assigns the given attributes to the record.
+   */
   assign(attributesToAssign) {
     for (const attributeToAssign in attributesToAssign) {
       this.setAttribute(attributeToAssign, attributesToAssign[attributeToAssign])
     }
   }
 
+  /**
+   * Returns a the current attributes of the record (original attributes from database plus changes)
+   */
   attributes() {
     return Object.assign({}, this._attributes, this._changes)
   }
@@ -821,6 +851,9 @@ class VelociousDatabaseRecord {
     return this.constructor.connection()
   }
 
+  /**
+   * Destroys the record in the database and all of its dependent records.
+   */
   async destroy() {
     for (const relationship of this.constructor.getRelationships()) {
       if (relationship.getDependent() != "destroy") {
@@ -867,8 +900,11 @@ class VelociousDatabaseRecord {
     await this._connection().query(sql)
   }
 
-  _hasChanges = () => Object.keys(this._changes).length > 0
+  _hasChanges() { return Object.keys(this._changes).length > 0 }
 
+  /**
+   * Returns true if the model has been changed since it was loaded from the database.
+   */
   isChanged() {
     if (this.isNewRecord() || this._hasChanges()){
       return true
@@ -898,6 +934,9 @@ class VelociousDatabaseRecord {
     return false
   }
 
+  /**
+   * Returns the changes that have been made to this record since it was loaded from the database.
+   */
   changes() {
     const changes = {}
 
@@ -916,6 +955,11 @@ class VelociousDatabaseRecord {
     return this.constructor.tableName()
   }
 
+  /**
+   * Reads an attribute value from the record.
+   *
+   * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
+   */
   readAttribute(attributeName) {
     const columnName = this.constructor._attributeNameToColumnName[attributeName]
 
@@ -924,6 +968,11 @@ class VelociousDatabaseRecord {
     return this.readColumn(columnName)
   }
 
+  /**
+   * Reads a column value from the record.
+   *
+   * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
+   */
   readColumn(attributeName) {
     const column = this.constructor.getColumns().find((column) => column.getName() == attributeName)
     let result
@@ -1110,6 +1159,11 @@ class VelociousDatabaseRecord {
     return validationErrorMessages
   }
 
+  /**
+   * Assigns the attributes to the record and saves it.
+   *
+   * @param {Object} attributesToAssign - The attributes to assign to the record.
+   */
   async update(attributesToAssign) {
     if (attributesToAssign) this.assign(attributesToAssign)
 

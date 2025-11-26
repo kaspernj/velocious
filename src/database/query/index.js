@@ -299,6 +299,11 @@ export default class VelociousDatabaseQuery {
     return await this._executeQuery()
   }
 
+  /**
+   * Converts query results to array of model instances
+   *
+   * @returns {Promise<Array>} Array of model instances
+   */
   async toArray() {
     const models = []
     const results = await this.results()
@@ -323,8 +328,17 @@ export default class VelociousDatabaseQuery {
     return models
   }
 
+  /**
+   * Generates SQL string representing this query
+   *
+   * @returns {String} SQL string representing this query
+   */
   toSql() { return this.driver.queryToSql(this) }
 
+  /**
+   * @param {Object|String} where
+   * @returns {VelociousDatabaseQuery} This query instance
+   */
   where(where) {
     if (typeof where == "string") {
       where = new WherePlain(this, where)
