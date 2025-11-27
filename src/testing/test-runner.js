@@ -2,10 +2,15 @@ import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
+import restArgsError from "../utils/rest-args-error.js"
 import {tests} from "./test.js"
 
 export default class TestRunner {
-  constructor({configuration, testFiles}) {
+  constructor({configuration, testFiles, ...restArgs}) {
+    restArgsError(restArgs)
+
+    if (!configuration) throw new Error("configuration is required")
+
     this.configuration = configuration
     this.testFiles = testFiles
   }

@@ -8,7 +8,7 @@ export default class VelociousCliCommandsInit extends BaseCommand {
   async execute() {
     const __filename = fileURLToPath(`${import.meta.url}/../../..`)
     const velocipusPath = dirname(__filename)
-    const projectPath = this.configuration?.getDirectory() || process.cwd()
+    const projectPath = this.getConfiguration()?.getDirectory() || process.cwd()
     const projectConfigPath = `${projectPath}/src/config`
     const fileMappings = [
       {

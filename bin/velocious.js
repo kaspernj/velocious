@@ -22,6 +22,7 @@ for (let i = 0; i < processArgs.length; i++) {
 }
 
 const configuration = await configurationResolver()
+const environmentHandler = new NodeEnvironmentHandler()
 
 configuration.setCurrent()
 
@@ -29,7 +30,7 @@ const cli = new Cli({
   configuration,
   parsedProcessArgs,
   processArgs,
-  environmentHandler: NodeEnvironmentHandler
+  environmentHandler
 })
 
 await cli.execute()

@@ -1,10 +1,15 @@
 import {digg} from "diggerize"
 import * as inflection from "inflection"
 import {Logger} from "../logger.js"
+import restArgsError from "../utils/rest-args-error.js"
 import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
-  constructor({configuration}) {
+  constructor({configuration, ...restArgs}) {
+    restArgsError(restArgs)
+
+    if (!configuration) throw new Error("configuration argument is required")
+
     this.configuration = configuration
     this.logger = new Logger(this)
   }

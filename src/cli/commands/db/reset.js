@@ -3,7 +3,7 @@ import Migrator from "../../../database/migrator.js"
 
 export default class DbReset extends BaseCommand {
   async execute() {
-    const environment = this.configuration.getEnvironment()
+    const environment = this.getConfiguration().getEnvironment()
 
     if (environment != "development" && environment != "test") {
       throw new Error(`This command should only be executed on development and test environments and not: ${environment}`)
@@ -16,9 +16,9 @@ export default class DbReset extends BaseCommand {
     if (!migrationsRequire) throw new Error("migrationsRequire is required")
 
     const migrations = await migrationsFinder({configuration: this.getConfiguration()})
-    const migrator = new Migrator({configuration: this.configuration})
+    const migrator = new Migrator({configuration: this.getConfiguration()})
 
-    await this.configuration.ensureConnections(async () => {
+    await this.getConfiguration().ensureConnections(async () => {
       await migrator.reset()
       await migrator.prepare()
       await migrator.migrateFiles(migrations, migrationsRequire)

@@ -9,7 +9,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     const directory = process.env.VELOCIOUS_TEST_DIR || this.directory()
     const testFilesFinder = new TestFilesFinder({directory, processArgs: this.processArgs})
     const testFiles = await testFilesFinder.findTestFiles()
-    const testRunner = new TestRunner({configuration: this.configuration, testFiles})
+    const testRunner = new TestRunner({configuration: this.getConfiguration(), testFiles})
 
     await testRunner.prepare()
 

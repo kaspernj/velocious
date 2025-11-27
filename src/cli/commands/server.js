@@ -3,7 +3,7 @@ import BaseCommand from "../base-command.js"
 
 export default class VelociousCliCommandsServer extends BaseCommand{
   async execute() {
-    this.databasePool = this.configuration.getDatabasePool()
+    this.databasePool = this.getConfiguration().getDatabasePool()
     this.newConfiguration = Object.assign({}, this.databasePool.getConfiguration())
     this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
 
@@ -13,14 +13,14 @@ export default class VelociousCliCommandsServer extends BaseCommand{
     const host = parsedProcessArgs.h || parsedProcessArgs.host || "127.0.0.1"
     const port = parsedProcessArgs.p || parsedProcessArgs.port || 3006
     const application = new Application({
-      configuration: this.configuration,
+      configuration: this.getConfiguration(),
       httpServer: {
         host,
         port
       },
       type: "server"
     })
-    const environment = this.configuration.getEnvironment()
+    const environment = this.getConfiguration().getEnvironment()
 
     await application.initialize()
     await application.startHttpServer()

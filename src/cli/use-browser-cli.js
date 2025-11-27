@@ -1,23 +1,23 @@
 import React from "react"
 import BrowserCli from "./browser-cli.js"
+import VelociousEnvironmentsHandlerBrowser from "../environment-handlers/browser.js"
+import restArgsError from "../utils/rest-args-error.js"
 
 const shared = {}
 
-export default function velociousUseBrowserCli() {
-  const browserCli = useMemo(async () => {
+export default function velociousUseBrowserCli({migrationsRequireContextCallback, ...restArgs}) {
+  const browserCli = React.useMemo(async () => {
     if (!shared.browserCli) {
-      const commands = commandsFinderBrowser()
+      const environmentHandler = new VelociousEnvironmentsHandlerBrowser({migrationsRequireContextCallback})
 
-      const requireCommand = React.useCallback(async (command) => {
-        throw new Error("Not implemented")
-      }, [])
-
-      shared.browserCli = new BrowserCli({commands, requireCommand})
+      shared.browserCli = new BrowserCli({environmentHandler})
       shared.browserCli.enable()
     }
 
     return shared.browserCli
   })
+
+  restArgsError(restArgs)
 
   return browserCli
 }

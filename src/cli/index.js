@@ -4,7 +4,10 @@ export default class VelociousCli {
 
     this.args = args
     this.configuration = args.configuration
-    this.environmentHandler = new args.environmentHandler({args: this.args, configuration: args.configuration})
+
+    this.environmentHandler = args.environmentHandler
+    this.environmentHandler.setArgs(args)
+    this.environmentHandler.setConfiguration(args.configuration)
   }
 
   async execute() {

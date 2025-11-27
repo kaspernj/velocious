@@ -1,19 +1,11 @@
+import Base from "./base.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 import path from "path"
-import restArgsError from "../utils/rest-args-error.js"
 
-export default class VelociousEnvironmentHandlerNode {
-  constructor({args, configuration, processArgs, ...restArgs}) {
-    this.args = args
-    this.configuration = configuration
-    this.processArgs = processArgs
-
-    restArgsError(restArgs)
-  }
-
+export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * @returns {Promise<Array<{name: string, file: string}>>}
    */
@@ -115,10 +107,12 @@ export default class VelociousEnvironmentHandlerNode {
   */
   async requireMigration(filePath) {
     const migrationImport = await import(filePath)
+    const migrationImportDefault = migrationImport.default
 
-    if (!migrationImport.default) throw new Error("Migration file must export a default migration class")
+    if (!migrationImportDefault) throw new Error("Migration file must export a default migration class")
+    if (typeof migrationImportDefault !== "function") throw new Error("Migration default export isn't a function (should be a class which is a function in JS)")
 
-    return migrationImport.default
+    return migrationImportDefault
   }
 
   async getBasePath() {
