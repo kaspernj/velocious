@@ -1,5 +1,4 @@
 import BaseCommand from "../../base-command.js"
-import FilesFinder from "../../../database/migrator/files-finder.js"
 import Migrator from "../../../database/migrator.js"
 
 export default class DbReset extends BaseCommand {
@@ -17,13 +16,12 @@ export default class DbReset extends BaseCommand {
     if (!migrationsRequire) throw new Error("migrationsRequire is required")
 
     const migrations = await migrationsFinder({configuration: this.getConfiguration()})
-
-    this.migrator = new Migrator({configuration: this.configuration})
+    const migrator = new Migrator({configuration: this.configuration})
 
     await this.configuration.ensureConnections(async () => {
-      await this.migrator.reset()
-      await this.migrator.prepare()
-      await this.migrator.migrateFiles(migrations, migrationsRequire)
+      await migrator.reset()
+      await migrator.prepare()
+      await migrator.migrateFiles(migrations, migrationsRequire)
     })
   }
 }

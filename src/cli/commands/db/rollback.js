@@ -1,5 +1,4 @@
 import BaseCommand from "../../base-command.js"
-import FilesFinder from "../../../database/migrator/files-finder.js"
 import Migrator from "../../../database/migrator.js"
 
 export default class DbRollback extends BaseCommand {

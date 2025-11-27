@@ -1,5 +1,4 @@
 import BaseCommand from "../../base-command.js"
-import FilesFinder from "../../../database/migrator/files-finder.js"
 import Migrator from "../../../database/migrator.js"
 
 export default class DbDrop extends BaseCommand {
@@ -10,10 +9,10 @@ export default class DbDrop extends BaseCommand {
       throw new Error(`This command should only be executed on development and test environments and not: ${environment}`)
     }
 
-    this.migrator = new Migrator({configuration: this.configuration})
+    const migrator = new Migrator({configuration: this.configuration})
 
     await this.configuration.ensureConnections(async () => {
-      await this.migrator.dropDatabase()
+      await migrator.dropDatabase()
     })
   }
 }
