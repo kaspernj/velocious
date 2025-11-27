@@ -4,18 +4,12 @@ import Migrator from "../../../database/migrator.js"
 
 export default class DbMigrate extends BaseCommand {
   async execute() {
-    const migrationsFinder = digg(this, "args", "migrationsFinder")
-    const migrationsRequire = digg(this, "args", "migrationsRequire")
-
-    if (!migrationsFinder) throw new Error("migrationsFinder is required")
-    if (!migrationsRequire) throw new Error("migrationsRequire is required")
-
-    const migrations = await migrationsFinder({configuration: this.getConfiguration()})
+    const migrations = await this.getEnvironmentHandler().findMigrations()
     const migrator = new Migrator({configuration: this.getConfiguration()})
 
-    await this.configuration.ensureConnections(async () => {
+    await this.getConfiguration().ensureConnections(async () => {
       await migrator.prepare()
-      await migrator.migrateFiles(migrations, migrationsRequire)
+      await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
     })
   }
 }

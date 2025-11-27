@@ -1,17 +1,10 @@
 export default class VelociousCli {
   constructor(args = {}) {
-    const {commands, configuration, requireCommand, ...restArgs} = args
+    if (!args.configuration) throw new Error("configuration argument is required")
 
-    if (!commands) throw new Error("commands argument is required")
-    if (!configuration) throw new Error("configuration argument is required")
-    if (!requireCommand) throw new Error("requireCommand argument is required")
-
-    this.args = restArgs
-    this.args.configuration = configuration
-
-    this.commands = commands
-    this.configuration = configuration
-    this.requireCommand = requireCommand
+    this.args = args
+    this.configuration = args.configuration
+    this.environmentHandler = new args.environmentHandler({args: this.args, configuration: args.configuration})
   }
 
   async execute() {
@@ -26,8 +19,8 @@ export default class VelociousCli {
       parsedCommandParts.push(commandPart)
     }
 
-    const CommandClass = await this.requireCommand({commands: this.commands, commandParts: parsedCommandParts})
-    const commandInstance = new CommandClass(this.args)
+    const CommandClass = await this.environmentHandler.requireCommand({commandParts})
+    const commandInstance = new CommandClass({args: this.args, environmentHandler: this.environmentHandler})
 
     if (commandInstance.initialize) {
       await commandInstance.initialize()
