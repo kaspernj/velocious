@@ -1,27 +1,35 @@
 import Cli from "../../../../src/cli/index.js"
+import commandsFinderNode from "../../../../src/cli/commands-finder-node.js"
+import commandsRequireNode from "../../../../src/cli/commands-require-node.js"
+import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
   const runMigrations = async () => {
     const cliMigrate = new Cli({
+      commands: await commandsFinderNode(),
+      configuration: dummyConfiguration,
+      configuration: dummyConfiguration,
       directory: dummyDirectory(),
       processArgs: ["db:migrate"],
+      requireCommand: commandsRequireNode,
       testing: true
     })
 
-    await cliMigrate.loadConfiguration()
     await cliMigrate.execute()
   }
 
   const getTestData = async () => {
     const cliRollback = new Cli({
+      commands: await commandsFinderNode(),
+      configuration: dummyConfiguration,
+      configuration: dummyConfiguration,
       directory: dummyDirectory(),
       processArgs: ["db:rollback"],
+      requireCommand: commandsRequireNode,
       testing: true
     })
-
-    await cliRollback.loadConfiguration()
 
     let defaultDatabaseType, defaultSchemaMigrations = [], tablesResult = []
 
@@ -53,12 +61,14 @@ describe("Cli - Commands - db:rollback", () => {
     await runMigrations()
 
     const cliRollback = new Cli({
+      commands: await commandsFinderNode(),
+      configuration: dummyConfiguration,
+      configuration: dummyConfiguration,
       directory,
       processArgs: ["db:rollback"],
+      requireCommand: commandsRequireNode,
       testing: true
     })
-
-    await cliRollback.loadConfiguration()
 
     await cliRollback.configuration.ensureConnections(async () => {
       await runMigrations()

@@ -10,6 +10,7 @@ export default class VelociousCli {
     this.args.configuration = configuration
 
     this.commands = commands
+    this.configuration = configuration
     this.requireCommand = requireCommand
   }
 
@@ -34,4 +35,6 @@ export default class VelociousCli {
 
     return await commandInstance.execute()
   }
+
+  getConfiguration() { return this.configuration }
 }

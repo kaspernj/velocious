@@ -21,7 +21,5 @@ export default async function commandsRequireNode({commands, commandParts, ...re
   const commandClassImport = await import(command.file)
   const CommandClass = commandClassImport.default
 
-  console.log({CommandClass})
-
   return CommandClass
 }

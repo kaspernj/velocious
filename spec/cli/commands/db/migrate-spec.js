@@ -1,4 +1,7 @@
 import Cli from "../../../../src/cli/index.js"
+import commandsFinderNode from "../../../../src/cli/commands-finder-node.js"
+import commandsRequireNode from "../../../../src/cli/commands-require-node.js"
+import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import uniqunize from "uniqunize"
 
@@ -6,12 +9,14 @@ describe("Cli - Commands - db:migrate", () => {
   it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
+      commands: await commandsFinderNode(),
+      configuration: dummyConfiguration,
+      configuration: dummyConfiguration,
       directory,
       processArgs: ["db:migrate"],
+      requireCommand: commandsRequireNode,
       testing: true
     })
-
-    await cli.loadConfiguration()
 
     let defaultDatabaseType, defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
 
