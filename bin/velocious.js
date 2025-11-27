@@ -22,7 +22,7 @@ for (let i = 0; i < processArgs.length; i++) {
   }
 }
 
-const configuration = await configurationResolver({directory: this.args.directory})
+const configuration = await configurationResolver()
 
 configuration.setCurrent()
 

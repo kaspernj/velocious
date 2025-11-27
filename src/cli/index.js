@@ -25,11 +25,7 @@ export default class VelociousCli {
       parsedCommandParts.push(commandPart)
     }
 
-    const commandClassImport = await this.requireCommand({commands: this.commands, commandParts: parsedCommandParts})
-    const CommandClass = commandClassImport.default
-
-    await this.loadConfiguration()
-
+    const CommandClass = await this.requireCommand({commands: this.commands, commandParts: parsedCommandParts})
     const commandInstance = new CommandClass(this.args)
 
     if (commandInstance.initialize) {
@@ -38,6 +34,4 @@ export default class VelociousCli {
 
     return await commandInstance.execute()
   }
-
-  getConfiguration() { return this.configuration }
 }

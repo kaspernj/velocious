@@ -2,7 +2,7 @@ import Configuration from "./configuration.js"
 import envSense from "env-sense/src/use-env-sense.js"
 import fileExists from "./utils/file-exists.js"
 
-const configurationResolver = async (args) => {
+const configurationResolver = async (args = {}) => {
   if (Configuration.current(false)) {
     return Configuration.current()
   }
