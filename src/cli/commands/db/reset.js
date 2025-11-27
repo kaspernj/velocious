@@ -10,17 +10,20 @@ export default class DbReset extends BaseCommand {
       throw new Error(`This command should only be executed on development and test environments and not: ${environment}`)
     }
 
-    const projectPath = this.configuration.getDirectory()
-    const migrationsPath = `${projectPath}/src/database/migrations`
-    const filesFinder = new FilesFinder({path: migrationsPath})
-    const files = await filesFinder.findFiles()
+    const migrationsFinder = digg(this, "args", "migrationsFinder")
+    const migrationsRequire = digg(this, "args", "migrationsRequire")
+
+    if (!migrationsFinder) throw new Error("migrationsFinder is required")
+    if (!migrationsRequire) throw new Error("migrationsRequire is required")
+
+    const migrations = await migrationsFinder({configuration: this.getConfiguration()})
 
     this.migrator = new Migrator({configuration: this.configuration})
 
     await this.configuration.ensureConnections(async () => {
       await this.migrator.reset()
       await this.migrator.prepare()
-      await this.migrator.migrateFiles(files, async (importPath) => await import(importPath))
+      await this.migrator.migrateFiles(migrations, migrationsRequire)
     })
   }
 }

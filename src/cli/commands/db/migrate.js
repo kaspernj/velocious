@@ -1,19 +1,21 @@
 import BaseCommand from "../../base-command.js"
-import FilesFinder from "../../../database/migrator/files-finder.js"
+import {digg} from "diggerize"
 import Migrator from "../../../database/migrator.js"
 
 export default class DbMigrate extends BaseCommand {
   async execute() {
-    const projectPath = this.configuration.getDirectory()
-    const migrationsPath = `${projectPath}/src/database/migrations`
-    const filesFinder = new FilesFinder({path: migrationsPath})
-    const files = await filesFinder.findFiles()
+    const migrationsFinder = digg(this, "args", "migrationsFinder")
+    const migrationsRequire = digg(this, "args", "migrationsRequire")
 
-    this.migrator = new Migrator({configuration: this.configuration})
+    if (!migrationsFinder) throw new Error("migrationsFinder is required")
+    if (!migrationsRequire) throw new Error("migrationsRequire is required")
+
+    const migrations = await migrationsFinder({configuration: this.getConfiguration()})
+    const migrator = new Migrator({configuration: this.getConfiguration()})
 
     await this.configuration.ensureConnections(async () => {
-      await this.migrator.prepare()
-      await this.migrator.migrateFiles(files, async (importPath) => await import(importPath))
+      await migrator.prepare()
+      await migrator.migrateFiles(migrations, migrationsRequire)
     })
   }
 }

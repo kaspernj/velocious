@@ -4,16 +4,19 @@ import Migrator from "../../../database/migrator.js"
 
 export default class DbRollback extends BaseCommand {
   async execute() {
-    const projectPath = this.configuration.getDirectory()
-    const migrationsPath = `${projectPath}/src/database/migrations`
-    const filesFinder = new FilesFinder({path: migrationsPath})
-    const files = await filesFinder.findFiles()
+    const migrationsFinder = digg(this, "args", "migrationsFinder")
+    const migrationsRequire = digg(this, "args", "migrationsRequire")
 
-    this.migrator = new Migrator({configuration: this.configuration})
+    if (!migrationsFinder) throw new Error("migrationsFinder is required")
+    if (!migrationsRequire) throw new Error("migrationsRequire is required")
 
-    await this.configuration.ensureConnections(async () => {
-      await this.migrator.prepare()
-      await this.migrator.rollback(files, async (importPath) => await import(importPath))
+    const migrations = await migrationsFinder({configuration: this.getConfiguration()})
+
+    const migrator = new Migrator({configuration: this.configuration})
+
+    await this.getConfiguration().ensureConnections(async () => {
+      await migrator.prepare()
+      await migrator.rollback(migrations, migrationsRequire)
     })
   }
 }

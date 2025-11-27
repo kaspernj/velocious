@@ -4,6 +4,8 @@ import Cli from "../src/cli/index.js"
 import commandsFinderNode from "../src/cli/commands-finder-node.js"
 import commandsRequireNode from "../src/cli/commands-require-node.js"
 import configurationResolver from "../src/configuration-resolver.js"
+import migrationsFinderNode from "../src/database/migrator/migrations-finder-node.js"
+import migrationsRequireNode from "../src/database/migrator/migrations-require-node.js"
 
 const processArgs = process.argv.slice(2)
 const parsedProcessArgs = {}
@@ -30,9 +32,12 @@ const commands = await commandsFinderNode()
 const cli = new Cli({
   commands,
   configuration,
+  migrationsFinder: migrationsFinderNode,
+  migrationsRequire: migrationsRequireNode,
   parsedProcessArgs,
   processArgs,
-  requireCommand: commandsRequireNode
+  requireCommand: commandsRequireNode,
+  requireContextMigrations
 })
 
 await cli.execute()
