@@ -5,7 +5,7 @@ export default class VelociousCli {
     this.args = args
     this.configuration = args.configuration
 
-    this.environmentHandler = args.environmentHandler
+    this.environmentHandler = args.configuration.getEnvironmentHandler()
     this.environmentHandler.setArgs(args)
     this.environmentHandler.setConfiguration(args.configuration)
   }
@@ -22,7 +22,7 @@ export default class VelociousCli {
       parsedCommandParts.push(commandPart)
     }
 
-    const CommandClass = await this.environmentHandler.requireCommand({commandParts})
+    const CommandClass = await this.environmentHandler.requireCommand({commandParts: parsedCommandParts})
     const commandInstance = new CommandClass({args: this.args, environmentHandler: this.environmentHandler})
 
     if (commandInstance.initialize) {

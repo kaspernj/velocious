@@ -101,6 +101,15 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * @return {Promise<void>}
+   */
+  async importTestFiles(testFiles) {
+    for (const testFile of testFiles) {
+      await import(testFile)
+    }
+  }
+
+  /**
    * @param {string} filePath
    * @template T extends import ("../migration/index.js").default
    * @returns {Promise<T>}

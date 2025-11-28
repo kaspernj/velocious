@@ -263,11 +263,7 @@ export default class VelociousDatabaseMigrator {
 
     await this.runMigrationFile({
       migration,
-      requireMigration: async () => {
-        const migrationImport = await importCallback(migration.fullPath)
-
-        return migrationImport.default
-      },
+      requireMigration: async () => await importCallback(migration.fullPath),
       direction: "down"
     })
   }
@@ -305,7 +301,9 @@ export default class VelociousDatabaseMigrator {
     const dbs = await this.configuration.getCurrentConnections()
     const migrationClass = await requireMigration()
 
-    if (!migrationClass) throw new Error(`Migration ${migration.file} must export a default migration`)
+    if (!migrationClass || typeof migrationClass !== "function") {
+      throw new Error(`Migration ${migration.file} must export a default migration class`)
+    }
 
     const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
 

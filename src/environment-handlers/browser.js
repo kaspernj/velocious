@@ -58,7 +58,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {Array<{name: string, file: string}>} commands
    * @param {Array<string>} commandParts
-   * @template T extends import ("./base-command.js").default
+   * @template T extends import("./base-command.js").default
    * @returns {Promise<T>}
   */
   async requireCommand({commandParts, ...restArgs}) {
