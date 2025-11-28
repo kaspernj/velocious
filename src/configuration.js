@@ -3,13 +3,16 @@ import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
 export default class VelociousConfiguration {
+  /**
+   * @returns {VelociousConfiguration}
+   */
   static current(throwError = true) {
     if (!this.velociousConfiguration && throwError) throw new Error("A Velocious configuration hasn't been set")
 
     return this.velociousConfiguration
   }
 
-  constructor({cors, database, debug, directory, environment, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
+  constructor({cors, database, debug, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -17,6 +20,7 @@ export default class VelociousConfiguration {
     this.databasePools = {}
     this.debug = debug
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
+    this._environmentHandler = environmentHandler
     this._directory = directory
     this._initializeModels = initializeModels
     this._initializers = initializers
@@ -26,14 +30,22 @@ export default class VelociousConfiguration {
     this.locales = locales
     this.modelClasses = {}
     this._testing = testing
+
+    this.getEnvironmentHandler().setConfiguration(this)
   }
 
+  /**
+   * @returns {object}
+   */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
 
     return digg(this, "database", this.getEnvironment())
   }
 
+  /**
+   * @returns {Array<string>}
+   */
   getDatabaseIdentifiers() {
     return Object.keys(this.getDatabaseConfiguration())
   }
@@ -62,6 +74,9 @@ export default class VelociousConfiguration {
     return poolTypeClass
   }
 
+  /**
+   * @returns {string} The database type.
+   */
   getDatabaseType(identifier = "default") {
     const databaseType = digg(this.getDatabaseIdentifier(identifier), "type")
 
@@ -70,6 +85,9 @@ export default class VelociousConfiguration {
     return databaseType
   }
 
+  /**
+   * @returns {string}
+   */
   getDirectory() {
     if (!this._directory) {
       this._directory = process.cwd()
@@ -78,12 +96,33 @@ export default class VelociousConfiguration {
     return this._directory
   }
 
+  /**
+   * @returns {string}
+   */
   getEnvironment() { return digg(this, "_environment") }
+
+  /**
+   * @param {string} newEnvironment
+   * @returns {void}
+   */
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
+
+  /**
+   * @template T extends import("./environment-handlers/base.js").default
+   * @returns {T}
+   */
+  getEnvironmentHandler() {
+    if (!this._environmentHandler) throw new Error("No environment handler set")
+
+    return this._environmentHandler
+  }
 
   getLocaleFallbacks() { return this.localeFallbacks }
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
 
+  /**
+   * @returns {string}
+   */
   getLocale() {
     if (typeof this.locale == "function") {
       return this.locale()
@@ -94,8 +133,16 @@ export default class VelociousConfiguration {
     }
   }
 
+  /**
+   * @returns {Array<string>}
+   */
   getLocales() { return digg(this, "locales") }
 
+  /**
+   * @param {string} name
+   * @template T extends import("./database/record/index.js").default
+   * @returns {T}
+   */
   getModelClass(name) {
     const modelClass = this.modelClasses[name]
 
@@ -104,8 +151,14 @@ export default class VelociousConfiguration {
     return modelClass
   }
 
+  /**
+   * @returns {string} The path to a config file that should be used for testing.
+   */
   getTesting() { return this._testing }
 
+  /**
+   * @returns {void}
+   */
   initializeDatabasePool(identifier = "default") {
     if (!this.database) throw new Error("No 'database' was given")
     if (this.databasePools[identifier]) throw new Error("DatabasePool has already been initialized")
@@ -117,6 +170,10 @@ export default class VelociousConfiguration {
   }
 
   isDatabasePoolInitialized(identifier = "default") { return Boolean(this.databasePools[identifier]) }
+
+  /**
+   * @returns {boolean}
+   */
   isInitialized() { return this._isInitialized }
 
   async initialize({type} = {}) {
@@ -145,32 +202,53 @@ export default class VelociousConfiguration {
     }
   }
 
+  /**
+   * @param {Function} modelClass
+   */
   registerModelClass(modelClass) {
     this.modelClasses[modelClass.name] = modelClass
   }
 
+  /**
+   * @returns {void}
+   */
   setCurrent() {
     this.constructor.velociousConfiguration = this
   }
 
-  setRoutes(newRoutes) {
-    this.routes = newRoutes
-  }
+  /**
+   * @returns {void}
+   */
+  setRoutes(newRoutes) { this.routes = newRoutes }
 
-  setTranslator(callback) {
-    this._translator = callback
-  }
+  /**
+   * @param {Function} callback
+   * @returns {void}
+   */
+  setTranslator(callback) { this._translator = callback }
 
+  /**
+   * @param {string} msgID
+   * @param {Object} args
+   * @returns {string}
+   */
   _defaultTranslator(msgID, args) {
     if (args?.defaultValue) return args.defaultValue
 
     return msgID
   }
 
+  /**
+   * @returns {Function}
+   */
   getTranslator() {
     return this._translator || this._defaultTranslator
   }
 
+  /**
+   * @param {Function} callback
+   * @returns {Promise<void>}
+   */
   async withConnections(callback) {
     const dbs = {}
     const stack = Error().stack
@@ -199,6 +277,10 @@ export default class VelociousConfiguration {
     await runRequest()
   }
 
+  /**
+   * @template T extends import("./database/record/index.js").default
+   * @returns {Record<string, T>} A map of database connections with identifier as key
+   */
   getCurrentConnections() {
     const dbs = {}
 
@@ -217,6 +299,10 @@ export default class VelociousConfiguration {
     return dbs
   }
 
+  /**
+   * @param {Function} callback
+   * @returns {Promise<void>}
+   */
   async ensureConnections(callback) {
     let dbs = this.getCurrentConnections()
 

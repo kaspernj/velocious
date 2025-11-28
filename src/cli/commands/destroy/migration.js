@@ -4,7 +4,7 @@ import fs from "node:fs/promises"
 export default class DbDestroyMigration extends BaseCommand {
   async execute() {
     const migrationName = this.processArgs[1]
-    const migrationDir = `${this.configuration.getDirectory()}/src/database/migrations`
+    const migrationDir = `${this.getConfiguration().getDirectory()}/src/database/migrations`
     const migrationFiles = await fs.readdir(migrationDir)
     const destroyed = []
 

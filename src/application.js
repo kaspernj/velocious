@@ -4,6 +4,11 @@ import {Logger} from "./logger.js"
 import HttpServer from "./http-server/index.js"
 
 export default class VelociousApplication {
+  /**
+   * @param {Object} args
+   * @param {import("./configuration.js").default} args.configuration
+   * @param {string} args.type
+   */
   constructor({configuration, httpServer, type}) {
     this.configuration = configuration
     this.httpServerConfiguration = httpServer ?? {}
@@ -11,6 +16,9 @@ export default class VelociousApplication {
     this._type = type
   }
 
+  /**
+   * @returns {string}
+   */
   getType() { return this._type }
 
   async initialize() {
@@ -25,6 +33,9 @@ export default class VelociousApplication {
     }
   }
 
+  /**
+   * @returns {Boolean}
+   */
   isActive() {
     return this.httpServer?.isActive()
   }

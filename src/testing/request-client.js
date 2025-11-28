@@ -3,21 +3,39 @@ class Response {
     this.fetchResponse = fetchResponse
   }
 
+  /**
+   * @returns {void}
+   */
   async parse() {
     this._body = await this.fetchResponse.text()
 
     if (this.statusCode() != 200) throw new Error(`Request failed with code ${this.statusCode()} and body: ${this.body()}`)
   }
 
-  body = () => this._body
-  contentType = () => this.fetchResponse.headers.get("content-type")
-  statusCode = () => this.fetchResponse.status
+  /**
+   * @returns {string}
+   */
+  body() { return this._body }
+
+  /**
+   * @returns {string}
+   */
+  contentType() { return this.fetchResponse.headers.get("content-type") }
+
+  /**
+   * @returns {string}
+   */
+  statusCode() { return this.fetchResponse.status }
 }
 
 export default class RequestClient {
   host = "localhost"
   port = 31006
 
+  /**
+   * @param {string} path
+   * @returns {Response}
+   */
   async get(path) {
     const fetchResponse = await fetch(`http://${this.host}:${this.port}${path}`)
     const response = new Response(fetchResponse)
@@ -27,6 +45,11 @@ export default class RequestClient {
     return response
   }
 
+  /**
+   * @param {string} path
+   * @param {Object} data
+   * @returns {Response}
+   */
   async post(path, data) {
     const fetchResponse = await fetch(
       `http://${this.host}:${this.port}${path}`,

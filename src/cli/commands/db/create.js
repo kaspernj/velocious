@@ -5,9 +5,9 @@ import TableData from "../../../database/table-data/index.js"
 
 export default class DbCreate extends BaseCommand{
   async execute() {
-    for (const databaseIdentifier of this.configuration.getDatabaseIdentifiers()) {
-      const databaseType = this.configuration.getDatabaseType(databaseIdentifier)
-      const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
+    for (const databaseIdentifier of this.getConfiguration().getDatabaseIdentifiers()) {
+      const databaseType = this.getConfiguration().getDatabaseType(databaseIdentifier)
+      const databasePool = this.getConfiguration().getDatabasePool(databaseIdentifier)
       const newConfiguration = incorporate({}, databasePool.getConfiguration())
       const DriverClass = digg(newConfiguration, "driver")
 
@@ -21,7 +21,7 @@ export default class DbCreate extends BaseCommand{
         delete newConfiguration.sqlConfig.database
       }
 
-      this.databaseConnection = new DriverClass(newConfiguration, this.configuration)
+      this.databaseConnection = new DriverClass(newConfiguration, this.getConfiguration())
 
       await this.databaseConnection.connect()
 
@@ -42,7 +42,7 @@ export default class DbCreate extends BaseCommand{
   }
 
   async createDatabase(databaseIdentifier) {
-    const databaseName = digg(this.configuration.getDatabaseConfiguration(), databaseIdentifier, "database")
+    const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
     const sqls = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
 
     for (const sql of sqls) {

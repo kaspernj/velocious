@@ -1,6 +1,7 @@
 import Application from "../../src/application.js"
+import {digg} from "diggerize"
 import dummyConfiguration from "./src/config/configuration.js"
-import FilesFinder from "../../src/database/migrator/files-finder.js"
+import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import Migrator from "../../src/database/migrator.js"
 
 export default class Dummy {
@@ -25,12 +26,14 @@ export default class Dummy {
   }
 
   static async runMigrations() {
-    const migrationsPath = `${import.meta.dirname}/src/database/migrations`
-    const files = await new FilesFinder({path: migrationsPath}).findFiles()
+    const environmentHandlerNode = new EnvironmentHandlerNode()
+
+    environmentHandlerNode.setConfiguration(dummyConfiguration)
+
     const migrator = new Migrator({configuration: dummyConfiguration})
 
     await migrator.prepare()
-    await migrator.migrateFiles(files, async (path) => await import(path))
+    await migrator.migrateFiles(await environmentHandlerNode.findMigrations(), digg(environmentHandlerNode, "requireMigration"))
   }
 
   static async run(callback) {

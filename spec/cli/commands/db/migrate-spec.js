@@ -1,17 +1,19 @@
 import Cli from "../../../../src/cli/index.js"
+import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
+import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
   it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
+      configuration: dummyConfiguration,
       directory,
+      environmentHandler: new EnvironmentHandlerNode(),
       processArgs: ["db:migrate"],
       testing: true
     })
-
-    await cli.loadConfiguration()
 
     let defaultDatabaseType, defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
 

@@ -1,10 +1,14 @@
 import Cli from "../../../../src/cli/index.js"
+import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
+import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 
 describe("Cli - Commands - db:create", () => {
   it("generates SQL to create a new database", async () => {
     const cli = new Cli({
+      configuration: dummyConfiguration,
       directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
       processArgs: ["db:create"],
       testing: true
     })

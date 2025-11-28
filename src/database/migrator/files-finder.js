@@ -4,6 +4,10 @@ import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseMigratorFilesFinder {
+  /**
+   * @param {Object} args
+   * @param {string} args.path
+   */
   constructor({path, ...restArgs}) {
     restArgsError(restArgs)
 

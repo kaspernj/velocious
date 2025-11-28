@@ -74,6 +74,9 @@ class Logger {
     }
   }
 
+  /**
+   * @returns {import("./configuration.js").default}
+   */
   getConfiguration() {
     if (!this._configuration) {
       this._configuration = this._object?.configuration || Configuration.current()

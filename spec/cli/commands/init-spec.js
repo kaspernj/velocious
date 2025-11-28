@@ -1,10 +1,14 @@
 import Cli from "../../../src/cli/index.js"
+import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../dummy/dummy-directory.js"
+import EnvironmentHandlerNode from "../../../src/environment-handlers/node.js"
 
 describe("Cli - Commands - init", () => {
   it("inits files and dirs", async () => {
     const cli = new Cli({
+      configuration: dummyConfiguration,
       directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
       processArgs: ["init"],
       testing: true
     })

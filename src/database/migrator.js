@@ -1,10 +1,15 @@
 import {digg} from "diggerize"
 import * as inflection from "inflection"
 import {Logger} from "../logger.js"
+import restArgsError from "../utils/rest-args-error.js"
 import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
-  constructor({configuration}) {
+  constructor({configuration, ...restArgs}) {
+    restArgsError(restArgs)
+
+    if (!configuration) throw new Error("configuration argument is required")
+
     this.configuration = configuration
     this.logger = new Logger(this)
   }
@@ -62,7 +67,11 @@ export default class VelociousDatabaseMigrator {
           requireMigration: async () => {
             const migrationImport = await importCallback(migration.fullPath)
 
-            return migrationImport.default
+            if (!migrationImport) {
+              throw new Error(`Migration file must export migration class: ${migration.fullPath}`)
+            }
+
+            return migrationImport
           }
         })
       }
@@ -254,11 +263,7 @@ export default class VelociousDatabaseMigrator {
 
     await this.runMigrationFile({
       migration,
-      requireMigration: async () => {
-        const migrationImport = await importCallback(migration.fullPath)
-
-        return migrationImport.default
-      },
+      requireMigration: async () => await importCallback(migration.fullPath),
       direction: "down"
     })
   }
@@ -295,6 +300,11 @@ export default class VelociousDatabaseMigrator {
 
     const dbs = await this.configuration.getCurrentConnections()
     const migrationClass = await requireMigration()
+
+    if (!migrationClass || typeof migrationClass !== "function") {
+      throw new Error(`Migration ${migration.file} must export a default migration class`)
+    }
+
     const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
 
     for (const dbIdentifier in dbs) {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import Cli from "../src/cli/index.js"
+import configurationResolver from "../src/configuration-resolver.js"
 
 const processArgs = process.argv.slice(2)
 const parsedProcessArgs = {}
@@ -19,7 +20,15 @@ for (let i = 0; i < processArgs.length; i++) {
   }
 }
 
-const cli = new Cli({parsedProcessArgs, processArgs})
+const configuration = await configurationResolver()
+
+configuration.setCurrent()
+
+const cli = new Cli({
+  configuration,
+  parsedProcessArgs,
+  processArgs
+})
 
 await cli.execute()
 process.exit(0)

@@ -2,18 +2,41 @@ import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
+import restArgsError from "../utils/rest-args-error.js"
 import {tests} from "./test.js"
 
 export default class TestRunner {
-  constructor({configuration, testFiles}) {
-    this.configuration = configuration
-    this.testFiles = testFiles
+  /**
+   * @param {Object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @param {Array<string>} args.testFiles
+   */
+  constructor({configuration, testFiles, ...restArgs}) {
+    restArgsError(restArgs)
+
+    if (!configuration) throw new Error("configuration is required")
+
+    this._configuration = configuration
+    this._testFiles = testFiles
   }
 
+  /**
+   * @returns {import("../configuration.js").default}
+   */
+  getConfiguration() { return this._configuration }
+
+  /**
+   * @returns {Array<string>}
+   */
+  getTestFiles() { return this._testFiles }
+
+  /**
+   * @returns {Promise<Application>}
+   */
   async application() {
     if (!this._application) {
       this._application = new Application({
-        configuration: this.configuration,
+        configuration: this.getConfiguration(),
         databases: {
           default: {
             host: "mysql",
@@ -32,6 +55,9 @@ export default class TestRunner {
     return this._application
   }
 
+  /**
+   * @returns {RequestClient}
+   */
   async requestClient() {
     if (!this._requestClient) {
       this._requestClient = new RequestClient()
@@ -40,28 +66,36 @@ export default class TestRunner {
     return this._requestClient
   }
 
+  /**
+   * @returns {void}
+   */
   async importTestFiles() {
-    for (const testFile of this.testFiles) {
-      await import(testFile)
-    }
+    await this.getConfiguration().getEnvironmentHandler().importTestFiles(this.getTestFiles())
   }
 
-  isFailed() {
-    return this._failedTests > 0
-  }
+  /**
+   * @returns {boolean}
+   */
+  isFailed() { return this._failedTests > 0 }
 
-  getFailedTests() {
-    return this._failedTests
-  }
+  /**
+   * @returns {number}
+   */
+  getFailedTests() { return this._failedTests }
 
-  getSuccessfulTests() {
-    return this._successfulTests
-  }
+  /**
+   * @returns {number}
+   */
+  getSuccessfulTests() { return this._successfulTests }
 
-  getTestsCount() {
-    return this._testsCount
-  }
+  /**
+   * @returns {number}
+   */
+  getTestsCount() { return this._testsCount }
 
+  /**
+   * @returns {void}
+   */
   async prepare() {
     this.anyTestsFocussed = false
     this._failedTests = 0
@@ -71,13 +105,16 @@ export default class TestRunner {
     await this.analyzeTests(tests)
     this._onlyFocussed = this.anyTestsFocussed
 
-    const testingConfigPath = this.configuration.getTesting()
+    const testingConfigPath = this.getConfiguration().getTesting()
 
     if (testingConfigPath) {
-      await import(testingConfigPath)
+      await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
     }
   }
 
+  /**
+   * @returns {boolean}
+   */
   areAnyTestsFocussed() {
     if (this.anyTestsFocussed === undefined) {
       throw new Error("Hasn't been detected yet")
@@ -86,8 +123,11 @@ export default class TestRunner {
     return this.anyTestsFocussed
   }
 
+  /**
+   * @returns {void}
+   */
   async run() {
-    await this.configuration.ensureConnections(async () => {
+    await this.getConfiguration().ensureConnections(async () => {
       await this.runTests({
         afterEaches: [],
         beforeEaches: [],
@@ -98,6 +138,9 @@ export default class TestRunner {
     })
   }
 
+  /**
+   * @returns {Object}
+   */
   analyzeTests(tests) {
     let anyTestsFocussedFound = false
 
@@ -127,6 +170,9 @@ export default class TestRunner {
     return {anyTestsFocussed: anyTestsFocussedFound}
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {
     const leftPadding = " ".repeat(indentLevel * 2)
     const newAfterEaches = [...afterEaches, ...tests.afterEaches]
@@ -150,7 +196,7 @@ export default class TestRunner {
 
       try {
         for (const beforeEachData of newBeforeEaches) {
-          await beforeEachData.callback({configuration: this.configuration, testArgs, testData})
+          await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
         }
 
         await testData.function(testArgs)
@@ -170,7 +216,7 @@ export default class TestRunner {
         }
       } finally {
         for (const afterEachData of newAfterEaches) {
-          await afterEachData.callback({configuration: this.configuration, testArgs, testData})
+          await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
         }
       }
     }

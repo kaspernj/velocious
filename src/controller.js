@@ -6,6 +6,10 @@ import {Logger} from "./logger.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousController {
+  /**
+   * @param {string} methodName
+   * @returns {void}
+   */
   static beforeAction(methodName) {
     if (!this._beforeActions) this._beforeActions = []
 
@@ -32,9 +36,24 @@ export default class VelociousController {
     this._viewPath = viewPath
   }
 
+  /**
+   * @returns {string}
+   */
   getAction() { return this._action }
+
+  /**
+   * @returns {import("./configuration.js").default}
+   */
   getConfiguration() { return this._configuration }
+
+  /**
+   * @returns {Object}
+   */
   getParams() { return this._params }
+
+  /**
+   * @returns {import("./http-server/client/request.js").default}
+   */
   getRequest() { return this._request }
 
   async _runBeforeCallbacks() {
@@ -67,6 +86,9 @@ export default class VelociousController {
     await this.logger.debug("After runBeforeCallbacks")
   }
 
+  /**
+   * @returns {Object}
+   */
   params() { return this._params }
 
   render({json, status, ...restArgs} = {}) {
@@ -113,6 +135,13 @@ export default class VelociousController {
     throw new Error("renderText stub")
   }
 
+  /**
+   * @returns {import("./http-server/client/request.js").default}
+   */
   request() { return this._request }
+
+  /**
+   * @returns {import("./http-server/client/response.js").default}
+   */
   response() { return this._response }
 }

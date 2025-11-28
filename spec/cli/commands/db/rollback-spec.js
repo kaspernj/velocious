@@ -1,27 +1,30 @@
 import Cli from "../../../../src/cli/index.js"
+import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
+import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
   const runMigrations = async () => {
     const cliMigrate = new Cli({
+      configuration: dummyConfiguration,
       directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
       processArgs: ["db:migrate"],
       testing: true
     })
 
-    await cliMigrate.loadConfiguration()
     await cliMigrate.execute()
   }
 
   const getTestData = async () => {
     const cliRollback = new Cli({
+      configuration: dummyConfiguration,
       directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
       processArgs: ["db:rollback"],
       testing: true
     })
-
-    await cliRollback.loadConfiguration()
 
     let defaultDatabaseType, defaultSchemaMigrations = [], tablesResult = []
 
@@ -53,12 +56,12 @@ describe("Cli - Commands - db:rollback", () => {
     await runMigrations()
 
     const cliRollback = new Cli({
+      configuration: dummyConfiguration,
       directory,
+      environmentHandler: new EnvironmentHandlerNode(),
       processArgs: ["db:rollback"],
       testing: true
     })
-
-    await cliRollback.loadConfiguration()
 
     await cliRollback.configuration.ensureConnections(async () => {
       await runMigrations()

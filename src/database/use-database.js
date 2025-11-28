@@ -5,7 +5,7 @@ import Configuration from "../configuration.js"
 import Migrator from "./migrator.js"
 import restArgsError from "../utils/rest-args-error.js"
 
-const loadMigrations = function loadMigrations({migrationsRequireContext, ...restArgs}) {
+const loadMigrations = function loadMigrations({migrationsRequireContextCallback, ...restArgs}) {
   const instance = React.useMemo(() => ({running: false}), [])
   const {isServer} = useEnvSense()
   const [loaded, setLoaded] = React.useState(false)
@@ -18,7 +18,7 @@ const loadMigrations = function loadMigrations({migrationsRequireContext, ...res
         const migrator = new Migrator({configuration: Configuration.current()})
 
         await migrator.prepare()
-        await migrator.migrateFilesFromRequireContext(migrationsRequireContext)
+        await migrator.migrateFilesFromRequireContext(await migrationsRequireContextCallback())
       })
 
       await Configuration.current().initialize()
