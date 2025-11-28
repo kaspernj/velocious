@@ -101,12 +101,25 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * @returns {Promise<import("../routes/index.js").default>}
+   */
+  async importApplicationRoutes() {
+    return await import(`${configuration.getDirectory()}/src/config/routes.js`).default
+  }
+
+  /**
    * @return {Promise<void>}
    */
   async importTestFiles(testFiles) {
     for (const testFile of testFiles) {
       await import(testFile)
     }
+  }
+
+  async importTestingConfigPath() {
+    const testingConfigPath = this.configuration.getTesting()
+
+    await import(testingConfigPath)
   }
 
   /**

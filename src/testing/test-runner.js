@@ -100,7 +100,7 @@ export default class TestRunner {
     const testingConfigPath = this.getConfiguration().getTesting()
 
     if (testingConfigPath) {
-      await import(testingConfigPath)
+      await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
     }
   }
 

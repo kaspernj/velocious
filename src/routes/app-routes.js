@@ -1,9 +1,13 @@
 import {digg} from "diggerize"
 
 export default class VelociousRoutesAppRoutes {
+  /**
+   * @param {import("../configuration.js")} configuration
+   * @returns {import("./index.js").default}
+   */
   static async getRoutes(configuration) {
     // Every client need to make their own routes because they probably can't be shared across different worker threads
-    const routesImport = await import(`${configuration.getDirectory()}/src/config/routes.js`)
+    const routesImport = await configuration.getEnvironmentHandler().importApplicationRoutes()
 
     return digg(routesImport, "default", "routes")
   }

@@ -150,7 +150,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {boolean}
+   * @returns {string} The path to a config file that should be used for testing.
    */
   getTesting() { return this._testing }
 
