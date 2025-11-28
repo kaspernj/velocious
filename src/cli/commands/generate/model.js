@@ -1,6 +1,4 @@
 import BaseCommand from "../../base-command.js"
-import {dirname} from "path"
-import {fileURLToPath} from "url"
 import fileExists from "../../../utils/file-exists.js"
 import fs from "node:fs/promises"
 import * as inflection from "inflection"
@@ -11,9 +9,8 @@ export default class DbGenerateModel extends BaseCommand {
     const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
     const date = new Date()
     const modelFileName = `${inflection.dasherize(inflection.underscore(modelName))}.js`
-    const __filename = fileURLToPath(`${import.meta.url}/../../..`)
-    const __dirname = dirname(__filename)
-    const templateFilePath = `${__dirname}/templates/generate-model.js`
+    const velociousPath = await this.getEnvironmentHandler().getVelociousPath()
+    const templateFilePath = `${velociousPath}/src/templates/generate-model.js`
     const modelContentBuffer = await fs.readFile(templateFilePath)
     const modelContent = modelContentBuffer.toString().replaceAll("__MODEL_NAME__", modelNameCamelized)
     const modelsDir = `${process.cwd()}/src/models`

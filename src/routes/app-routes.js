@@ -9,6 +9,6 @@ export default class VelociousRoutesAppRoutes {
     // Every client need to make their own routes because they probably can't be shared across different worker threads
     const routesImport = await configuration.getEnvironmentHandler().importApplicationRoutes()
 
-    return digg(routesImport, "default", "routes")
+    return digg(routesImport, "routes")
   }
 }

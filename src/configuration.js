@@ -30,6 +30,8 @@ export default class VelociousConfiguration {
     this.locales = locales
     this.modelClasses = {}
     this._testing = testing
+
+    this.getEnvironmentHandler().setConfiguration(this)
   }
 
   /**
@@ -106,7 +108,7 @@ export default class VelociousConfiguration {
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
 
   /**
-   * @template T extends import("./environment-handlers/base.js")
+   * @template T extends import("./environment-handlers/base.js").default
    * @returns {T}
    */
   getEnvironmentHandler() {

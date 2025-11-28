@@ -67,7 +67,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<Array<{name: string, file: string}>>}
    */
   async findMigrations() {
-    const migrationsPath = `${this.configuration.getDirectory()}/src/database/migrations`
+    const migrationsPath = `${this.getConfiguration().getDirectory()}/src/database/migrations`
     const glob = await fs.glob(`${migrationsPath}/**/*.js`)
     const files = []
 
@@ -104,7 +104,23 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<import("../routes/index.js").default>}
    */
   async importApplicationRoutes() {
-    return await import(`${configuration.getDirectory()}/src/config/routes.js`).default
+    const routesImport = await import(`${this.getConfiguration().getDirectory()}/src/config/routes.js`)
+
+    return routesImport.default
+  }
+
+  /**
+   * @returns {string}
+   */
+  async getVelociousPath() {
+    if (!this._velociousPath) {
+      const __filename = fileURLToPath(import.meta.url)
+      const __dirname = dirname(__filename)
+
+      this._velociousPath = await fs.realpath(`${__dirname}/../..`)
+    }
+
+    return this._velociousPath
   }
 
   /**
@@ -117,7 +133,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   async importTestingConfigPath() {
-    const testingConfigPath = this.configuration.getTesting()
+    const testingConfigPath = this.getConfiguration().getTesting()
 
     await import(testingConfigPath)
   }

@@ -1,6 +1,4 @@
 import {digg, digs} from "diggerize"
-import {dirname} from "path"
-import {fileURLToPath} from "url"
 import {Logger} from "../../logger.js"
 import {Worker} from "worker_threads"
 
@@ -13,14 +11,13 @@ export default class VelociousHttpServerWorker {
   }
 
   async start() {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       const {debug} = digs(this.configuration, "debug")
       const directory = this.configuration.getDirectory()
-      const __filename = fileURLToPath(import.meta.url)
-      const __dirname = dirname(__filename)
+      const velociousPath = await this.configuration.getEnvironmentHandler().getVelociousPath()
 
       this.onStartCallback = resolve
-      this.worker = new Worker(`${__dirname}/worker-script.js`, {
+      this.worker = new Worker(`${velociousPath}/src/http-server/worker-handler/worker-script.js`, {
         workerData: {
           debug,
           directory,

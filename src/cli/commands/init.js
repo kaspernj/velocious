@@ -1,22 +1,19 @@
 import BaseCommand from "../base-command.js"
-import {dirname} from "path"
 import fileExists from "../../utils/file-exists.js"
-import {fileURLToPath} from "url"
 import fs from "node:fs/promises"
 
 export default class VelociousCliCommandsInit extends BaseCommand {
   async execute() {
-    const __filename = fileURLToPath(`${import.meta.url}/../../..`)
-    const velocipusPath = dirname(__filename)
+    const velociousPath = await this.getEnvironmentHandler().getVelociousPath()
     const projectPath = this.getConfiguration()?.getDirectory() || process.cwd()
     const projectConfigPath = `${projectPath}/src/config`
     const fileMappings = [
       {
-        source: `${velocipusPath}/src/templates/configuration.js`,
+        source: `${velociousPath}/src/templates/configuration.js`,
         target: `${projectConfigPath}/configuration.js`
       },
       {
-        source: `${velocipusPath}/src/templates/routes.js`,
+        source: `${velociousPath}/src/templates/routes.js`,
         target: `${projectConfigPath}/routes.js`
       }
     ]
