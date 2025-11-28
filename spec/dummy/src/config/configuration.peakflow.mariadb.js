@@ -6,6 +6,7 @@ import fs from "fs/promises"
 import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
 import MssqlDriver from "../../../../src/database/drivers/mssql/index.js"
 import MysqlDriver from "../../../../src/database/drivers/mysql/index.js"
+import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js"
 import path from "path"
 import requireContext from "require-context"
 
@@ -44,6 +45,7 @@ export default new Configuration({
     }
   },
   directory: dummyDirectory(),
+  environmentHandler: new NodeEnvironmentHandler(),
   initializeModels: async ({configuration}) => {
     const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/../src/models`)
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
