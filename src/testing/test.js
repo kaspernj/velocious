@@ -31,6 +31,9 @@ class ExpectToChange {
     this.changeCallback = changeCallback
   }
 
+  /**
+   * @returns {Expect}
+   */
   by(count) {
     this.count = count
 
@@ -60,16 +63,25 @@ class Expect {
     this.expectations = []
   }
 
+  /**
+   * @returns {ExpectToChange}
+   */
   andChange(...args) {
     return this.toChange(...args)
   }
 
+  /**
+   * @returns {this}
+   */
   get not() {
     this._not = true
 
     return this
   }
 
+  /**
+   * @returns {void}
+   */
   toBe(result) {
     if (this._not) {
       if (this._object === result) {
@@ -82,6 +94,9 @@ class Expect {
     }
   }
 
+  /**
+   * @returns {void}
+   */
   toBeDefined() {
     if (this._not) {
       if (this._object !== undefined) {
@@ -94,24 +109,40 @@ class Expect {
     }
   }
 
+  /**
+   * @returns {void}
+   */
   toBeInstanceOf(klass) {
     if (!(this._object instanceof klass)) {
       throw new Error(`Expected ${this._object?.constructor?.name || "null"} to be a ${klass.name} but it wasn't`)
     }
   }
 
+  /**
+   * @returns {void}
+   */
   toBeFalse() {
     this.toBe(false)
   }
 
+  /**
+   * @returns {void}
+   */
   toBeUndefined() {
     this.toBe(undefined)
   }
 
+  /**
+   * @returns {void}
+   */
   toBeTrue() {
     this.toBe(true)
   }
 
+  /**
+   * @param {function} changeCallback
+   * @returns {ExpectToChange}
+   */
   toChange(changeCallback) {
     if (this._not) throw new Error("not stub")
 
@@ -122,6 +153,9 @@ class Expect {
     return expectToChange
   }
 
+  /**
+   * @returns {void}
+   */
   toContain(valueToContain) {
     if (this._not) throw new Error("not stub")
 
@@ -130,6 +164,9 @@ class Expect {
     }
   }
 
+  /**
+   * @returns {void}
+   */
   toEqual(result) {
     if (this._not) {
       if (typeof this._object == "object" && typeof result == "object") {
@@ -154,6 +191,9 @@ class Expect {
     }
   }
 
+  /**
+   * @returns {void}
+   */
   toMatch(regex) {
     const match = this._object.match(regex)
 
@@ -168,6 +208,9 @@ class Expect {
     }
   }
 
+  /**
+   * @returns {void}
+   */
   async toThrowError(expectedError) {
     if (this._not) throw new Error("not stub")
 
@@ -218,6 +261,10 @@ class Expect {
     return result
   }
 
+  /**
+   * @param {Object} result
+   * @returns {void}
+   */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
 
@@ -241,6 +288,10 @@ class Expect {
   }
 }
 
+/**
+ * @param {string} description
+ * @returns {void}
+ */
 async function describe(description, arg1, arg2) {
   let testArgs, testFunction
 
@@ -273,10 +324,17 @@ async function describe(description, arg1, arg2) {
   }
 }
 
+/**
+ * @returns {Expect}
+ */
 function expect(arg) {
   return new Expect(arg)
 }
 
+/**
+ * @param {string} description
+ * @returns {void}
+ */
 function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
   let testArgs, testFunction
@@ -296,6 +354,10 @@ function it(description, arg1, arg2) {
   currentTest.tests[description] = {args: newTestArgs, function: testFunction}
 }
 
+/**
+ * @param {string} description
+ * @returns {void}
+ */
 function fit(description, arg1, arg2) {
   let testArgs, testFunction
 

@@ -1,6 +1,10 @@
 import fs from "node:fs/promises"
 
-async function fileExists(path) {
+/**
+ * @param {string} path
+ * @returns {Boolean}
+ */
+export default async function fileExists(path) {
   try {
     await fs.access(path)
 
@@ -9,5 +13,3 @@ async function fileExists(path) {
     return false
   }
 }
-
-export default fileExists

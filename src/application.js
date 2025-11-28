@@ -16,6 +16,9 @@ export default class VelociousApplication {
     this._type = type
   }
 
+  /**
+   * @returns {string}
+   */
   getType() { return this._type }
 
   async initialize() {
