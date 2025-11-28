@@ -77,7 +77,15 @@ export default class TestRunner {
    * @returns {boolean}
    */
   isFailed() { return this._failedTests > 0 }
+
+  /**
+   * @returns {number}
+   */
   getFailedTests() { return this._failedTests }
+
+  /**
+   * @returns {number}
+   */
   getSuccessfulTests() { return this._successfulTests }
 
   /**
@@ -104,6 +112,9 @@ export default class TestRunner {
     }
   }
 
+  /**
+   * @returns {boolean}
+   */
   areAnyTestsFocussed() {
     if (this.anyTestsFocussed === undefined) {
       throw new Error("Hasn't been detected yet")
@@ -127,6 +138,9 @@ export default class TestRunner {
     })
   }
 
+  /**
+   * @returns {Object}
+   */
   analyzeTests(tests) {
     let anyTestsFocussedFound = false
 
@@ -156,6 +170,9 @@ export default class TestRunner {
     return {anyTestsFocussed: anyTestsFocussedFound}
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {
     const leftPadding = " ".repeat(indentLevel * 2)
     const newAfterEaches = [...afterEaches, ...tests.afterEaches]
