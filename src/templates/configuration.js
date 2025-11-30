@@ -1,6 +1,10 @@
 import AsyncTrackedMultiConnection from "velocious/src/database/pool/async-tracked-multi-connection.js"
 import Configuration from "velocious/src/configuration.js"
+import fs from "fs/promises"
+import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
 import MysqlDriver from "velocious/src/database/drivers/mysql/index.js"
+import path from "path"
+import requireContext from "require-context"
 
 export default new Configuration({
   database: {

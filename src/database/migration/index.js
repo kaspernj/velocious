@@ -12,10 +12,10 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {Object} args
+   * @param {object} args
    * @param {string} args.configuration
    * @param {string} args.databaseIdentifier
-   * @param {Object} args.db
+   * @param {object} args.db
    */
   constructor({configuration, databaseIdentifier = "default", db}) {
     if (!databaseIdentifier) throw new Error("No database identifier given")
@@ -47,12 +47,12 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {string} columnName
    * @param {string} columnType
-   * @param {Object} args
-   * @param {Object} args.default
-   * @param {Object} args.foreignKey
-   * @param {Object} args.nullable
-   * @param {Object} args.primaryKey
-   * @param {Object} args.unique
+   * @param {object} args
+   * @param {object} args.default
+   * @param {object} args.foreignKey
+   * @param {object} args.nullable
+   * @param {object} args.primaryKey
+   * @param {object} args.unique
    * @returns {Promise<void>}
    */
   async addColumn(tableName, columnName, columnType, args) {
@@ -73,7 +73,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {Array} columns
-   * @param {Object} args
+   * @param {object} args
    * @param {boolean} args.ifNotExists
    * @param {string} args.name
    * @param {boolean} args.unique
@@ -118,7 +118,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} referenceName
-   * @param {Bbject} args
+   * @param {object} args
    * @param {boolean} args.foreignKey
    * @param {string} args.type
    * @param {boolean} args.unique
@@ -153,12 +153,13 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
-   * @param {function} arg1
+   * @param {function() : void} arg1
    * @returns {Promise<void>}
-   *//**
+   */
+  /**
    * @param {string} tableName
-   * @param {Object} arg1
-   * @param {function} arg2
+   * @param {object} arg1
+   * @param {function() : void} arg2
    * @returns {Promise<void>}
    */
   async createTable(tableName, arg1, arg2) {
@@ -201,7 +202,7 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
-   * @returns
+   * @returns {Promise<void>}
    */
   async dropTable(tableName) {
     await this.getDriver().dropTable(tableName)

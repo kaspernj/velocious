@@ -1,7 +1,7 @@
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
-  checkin(connection) {
+  checkin(connection) { // eslint-disable-line no-unused-vars
     // Do nothing
   }
 

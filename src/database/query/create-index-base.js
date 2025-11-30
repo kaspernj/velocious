@@ -1,4 +1,3 @@
-import {digs} from "diggerize"
 import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {

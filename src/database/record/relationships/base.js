@@ -1,7 +1,7 @@
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseRecordBaseRelationship {
-  constructor({className, configuration, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", relationshipName, through, type, ...restArgs}) {
+  constructor({className, configuration, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", relationshipName, through, type, ...restArgs}) { // eslint-disable-line no-unused-vars
     restArgsError(restArgs)
 
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
@@ -20,12 +20,52 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this.type = type
   }
 
+  /**
+   * @returns {string} What will be done when the parent record is destroyed. E.g. "destroy", "nullify", "restrict" etc.
+   */
   getDependent() { return this._dependent }
+
+  /**
+   * @interface
+   * @returns {string} The name of the foreign key, e.g. "user_id", "post_id" etc.
+   */
+  getForeignKey() {
+    throw new Error("getForeignKey not implemented")
+  }
+
+  /**
+   * @interface
+   * @returns {string} The name of the inverse relationship, e.g. "posts", "comments" etc.
+   */
+  getInverseOf() {
+    throw new Error("getInverseOf not implemented")
+  }
+
+  /**
+   * @template T extends import("../index.js").default
+   * @returns {typeof T}
+   */
   getModelClass() { return this.modelClass }
+
+  /**
+   * @returns {string} The name of the relationship, e.g. "posts", "user", "comments" etc.
+   */
   getRelationshipName() { return this.relationshipName }
+
+  /**
+   * @returns {string} The name of the foreign key, e.g. "id" etc.
+   */
   getPrimaryKey() { return this._primaryKey }
+
+  /**
+   * @returns {string} The type of the relationship, e.g. "has_many", "belongs_to", "has_one", "has_and_belongs_to_many" etc.
+   */
   getType() { return this.type }
 
+  /**
+   * @template T extends import("../index.js").default
+   * @returns {typeof T} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class.
+   */
   getTargetModelClass() {
     if (this.className) {
       return this.modelClass._getConfiguration().getModelClass(this.className)

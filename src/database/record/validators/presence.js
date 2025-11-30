@@ -1,7 +1,7 @@
 import Base from "./base.js"
 
 export default class VelociousDatabaseRecordValidatorsPresence extends Base {
-  validate({model, attributeName}) {
+  async validate({model, attributeName}) {
     const attributeValue = model.readAttribute(attributeName)?.trim()
 
     if (!attributeValue) {

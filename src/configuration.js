@@ -12,6 +12,21 @@ export default class VelociousConfiguration {
     return this.velociousConfiguration
   }
 
+  /**
+   * @template T extends import("./environment-handlers/base.js").default
+   * @param {object} args
+   * @param {function() : void} args.cors
+   * @param {object} args.database
+   * @param {boolean} args.debug
+   * @param {string} args.directory
+   * @param {string} args.environment
+   * @param {T} args.environmentHandler
+   * @param {function() : void} args.initializeModels
+   * @param {function() : void} args.initializers
+   * @param {string} args.locale
+   * @param {object} args.localeFallbacks
+   * @param {string} args.testing
+   */
   constructor({cors, database, debug, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -117,7 +132,15 @@ export default class VelociousConfiguration {
     return this._environmentHandler
   }
 
+  /**
+   * @returns {object}
+   */
   getLocaleFallbacks() { return this.localeFallbacks }
+
+  /**
+   * @param {object} newLocaleFallbacks
+   * @returns {void}
+   */
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
 
   /**
@@ -229,7 +252,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} msgID
-   * @param {Object} args
+   * @param {object} args
    * @returns {string}
    */
   _defaultTranslator(msgID, args) {
@@ -278,7 +301,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @template T extends import("./database/record/index.js").default
+   * @template T extends import("./database/drivers/base.js").default
    * @returns {Record<string, T>} A map of database connections with identifier as key
    */
   getCurrentConnections() {

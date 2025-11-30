@@ -22,7 +22,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * @interface
    */
-  async requireCommand({commandParts}) { throw new Error("requireCommand not implemented") }
+  async requireCommand({commandParts}) { throw new Error("requireCommand not implemented") } // eslint-disable-line no-unused-vars
 
   setArgs(newArgs) { this.args = newArgs }
 

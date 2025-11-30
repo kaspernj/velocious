@@ -97,7 +97,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       // Register foreign key on the column
       const tableDataColumn = newTableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == foreignKey.getColumnName())
 
-      if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
+      if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${foreignKey.getName()}`)
 
       this.logger.debug(() => [`Setting foreign key on column ${tableDataColumn.getName()}`])
       tableDataColumn.setForeignKey(foreignKey)

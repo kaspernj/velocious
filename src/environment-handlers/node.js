@@ -46,7 +46,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @param {Array<string>} commandParts
    * @template T extends import ("./base-command.js").default
    * @returns {Promise<T>}
-  */
+   */
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()
     const command = commands.find((aCommand) => aCommand.name === commandParts.join(":"))
@@ -124,7 +124,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @return {Promise<void>}
+   * @returns {Promise<void>}
    */
   async importTestFiles(testFiles) {
     for (const testFile of testFiles) {
@@ -142,7 +142,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @param {string} filePath
    * @template T extends import ("../migration/index.js").default
    * @returns {Promise<T>}
-  */
+   */
   async requireMigration(filePath) {
     const migrationImport = await import(filePath)
     const migrationImportDefault = migrationImport.default

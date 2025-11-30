@@ -40,17 +40,17 @@ export default class RequestBuffer {
 
           break
         case "multi-part-form-data-body":
-          const body = this.formDataPart.body
+          const body = this.formDataPart.body // eslint-disable-line no-case-declarations
 
           body.push(char)
 
-          const possibleBoundaryEndPosition = body.length - this.boundaryLineEnd.length
-          const possibleBoundaryEndChars = body.slice(possibleBoundaryEndPosition, body.length)
-          const possibleBoundaryEnd = String.fromCharCode.apply(null, possibleBoundaryEndChars)
+          const possibleBoundaryEndPosition = body.length - this.boundaryLineEnd.length // eslint-disable-line no-case-declarations
+          const possibleBoundaryEndChars = body.slice(possibleBoundaryEndPosition, body.length) // eslint-disable-line no-case-declarations
+          const possibleBoundaryEnd = String.fromCharCode.apply(null, possibleBoundaryEndChars) // eslint-disable-line no-case-declarations
 
-          const possibleBoundaryNextPosition = body.length - this.boundaryLineNext.length
-          const possibleBoundaryNextChars = body.slice(possibleBoundaryNextPosition, body.length)
-          const possibleBoundaryNext = String.fromCharCode.apply(null, possibleBoundaryNextChars)
+          const possibleBoundaryNextPosition = body.length - this.boundaryLineNext.length // eslint-disable-line no-case-declarations
+          const possibleBoundaryNextChars = body.slice(possibleBoundaryNextPosition, body.length) // eslint-disable-line no-case-declarations
+          const possibleBoundaryNext = String.fromCharCode.apply(null, possibleBoundaryNextChars) // eslint-disable-line no-case-declarations
 
           if (possibleBoundaryEnd == this.boundaryLineEnd) {
             this.formDataPart.removeFromBody(possibleBoundaryEnd)
@@ -150,9 +150,9 @@ export default class RequestBuffer {
   }
 
   readHeaderFromLine(line) {
-    let match
+    const match = line.match(/^(.+): (.+)\r\n/)
 
-    if (match = line.match(/^(.+): (.+)\r\n/)) {
+    if (match) {
       const header = new Header(match[1], match[2])
 
       return header

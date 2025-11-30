@@ -2,7 +2,7 @@ import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousInitializer {
   /**
-   * @param {Object} args
+   * @param {object} args
    * @param {import("./configuration.js").default} args.configuration
    * @param {string} args.type
    */

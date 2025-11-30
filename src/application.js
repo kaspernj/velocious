@@ -5,7 +5,8 @@ import HttpServer from "./http-server/index.js"
 
 export default class VelociousApplication {
   /**
-   * @param {Object} args
+   * @param {object} args
+   * @param {import("./http-server/index.js").default} args.httpServer
    * @param {import("./configuration.js").default} args.configuration
    * @param {string} args.type
    */
@@ -34,7 +35,7 @@ export default class VelociousApplication {
   }
 
   /**
-   * @returns {Boolean}
+   * @returns {boolean}
    */
   isActive() {
     return this.httpServer?.isActive()

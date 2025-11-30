@@ -1,11 +1,11 @@
-import fs from "node:fs/promises"
+import fs from "fs/promises"
 import * as inflection from "inflection"
 
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseMigratorFilesFinder {
   /**
-   * @param {Object} args
+   * @param {object} args
    * @param {string} args.path
    */
   constructor({path, ...restArgs}) {
@@ -22,7 +22,7 @@ export default class VelociousDatabaseMigratorFilesFinder {
    *   fullPath: string,
    *   date: number,
    *   migrationClassName: string
-   * }}
+   * }>>}
    */
   async findFiles() {
     let files = await fs.readdir(this.path)

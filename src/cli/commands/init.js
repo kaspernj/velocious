@@ -1,6 +1,6 @@
 import BaseCommand from "../base-command.js"
 import fileExists from "../../utils/file-exists.js"
-import fs from "node:fs/promises"
+import fs from "fs/promises"
 
 export default class VelociousCliCommandsInit extends BaseCommand {
   async execute() {

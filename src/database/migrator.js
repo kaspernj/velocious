@@ -174,8 +174,7 @@ export default class VelociousDatabaseMigrator {
    */
   async executeRequireContext(requireContext) {
     const migrationFiles = requireContext.keys()
-
-    files = migrationFiles
+    const files = migrationFiles
       .map((file) => {
         const match = file.match(/^(\d{14})-(.+)\.js$/)
 
@@ -187,7 +186,7 @@ export default class VelociousDatabaseMigrator {
 
         return {
           file,
-          fullPath: `${migrationsPath}/${file}`,
+          fullPath: `${migrationsPath}/${file}`, // eslint-disable-line no-undef
           date,
           migrationClassName
         }
@@ -230,7 +229,7 @@ export default class VelociousDatabaseMigrator {
             }
 
             break
-          } catch (error) {
+          } catch (error) { // eslint-disable-line no-unused-vars
             if (errors.length > 0 && anyTableDropped) {
               // Retry
             } else {
@@ -244,7 +243,7 @@ export default class VelociousDatabaseMigrator {
 
   /**
    * @param {{date: number}[]} files
-   * @param {Function} importFile Function to import a file
+   * @param {function(string) : void} importCallback Function to import a file
    * @returns {Promise<void>}
    */
   async rollback(files, importCallback) {
@@ -288,10 +287,10 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {object} migration
-   * @param {string} migration.date
-   * @param {string} migration.file
-   * @param {Function} requireMigration
+   * @param {object} args
+   * @param {object} args.migration
+   * @param {function() : void} args.requireMigration
+   * @param {string} args.direction
    */
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")

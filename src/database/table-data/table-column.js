@@ -5,7 +5,7 @@ import TableForeignKey from "./table-foreign-key.js"
 export default class TableColumn {
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, default: columnDefault, foreignKey, index, isNewColumn, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args
+      const {autoIncrement, default: columnDefault, foreignKey, index, isNewColumn, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
 
       if (Object.keys(args).length == 0) {
         throw new Error("Empty args given")

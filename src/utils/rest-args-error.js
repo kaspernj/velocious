@@ -1,5 +1,5 @@
 /**
- * @param {Object} restArgs
+ * @param {object} restArgs
  * @returns {void}
  */
 export default function restArgsError(restArgs) {

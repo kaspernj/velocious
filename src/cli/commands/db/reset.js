@@ -1,4 +1,5 @@
 import BaseCommand from "../../base-command.js"
+import {digg} from "diggerize"
 import Migrator from "../../../database/migrator.js"
 
 export default class DbReset extends BaseCommand {
@@ -9,19 +10,13 @@ export default class DbReset extends BaseCommand {
       throw new Error(`This command should only be executed on development and test environments and not: ${environment}`)
     }
 
-    const migrationsFinder = digg(this, "args", "migrationsFinder")
-    const migrationsRequire = digg(this, "args", "migrationsRequire")
-
-    if (!migrationsFinder) throw new Error("migrationsFinder is required")
-    if (!migrationsRequire) throw new Error("migrationsRequire is required")
-
-    const migrations = await migrationsFinder({configuration: this.getConfiguration()})
+    const migrations = await this.getEnvironmentHandler().findMigrations()
     const migrator = new Migrator({configuration: this.getConfiguration()})
 
     await this.getConfiguration().ensureConnections(async () => {
       await migrator.reset()
       await migrator.prepare()
-      await migrator.migrateFiles(migrations, migrationsRequire)
+      await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
     })
   }
 }

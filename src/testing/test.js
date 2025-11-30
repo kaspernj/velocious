@@ -140,7 +140,7 @@ class Expect {
   }
 
   /**
-   * @param {function} changeCallback
+   * @param {function(): void} changeCallback
    * @returns {ExpectToChange}
    */
   toChange(changeCallback) {
@@ -262,7 +262,7 @@ class Expect {
   }
 
   /**
-   * @param {Object} result
+   * @param {object} result
    * @returns {void}
    */
   toHaveAttributes(result) {

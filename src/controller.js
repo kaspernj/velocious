@@ -47,7 +47,7 @@ export default class VelociousController {
   getConfiguration() { return this._configuration }
 
   /**
-   * @returns {Object}
+   * @returns {object}
    */
   getParams() { return this._params }
 
@@ -87,7 +87,7 @@ export default class VelociousController {
   }
 
   /**
-   * @returns {Object}
+   * @returns {object}
    */
   params() { return this._params }
 

@@ -33,7 +33,7 @@ export default class VelociousRoutesResolver {
       controller = "errors"
       controllerPath = "./built-in/errors/controller.js"
       action = "notFound"
-      viewPath = await fs.realpath(`${__dirname}/built-in/errors`) // eslint-disable-line no-undef
+      viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
     } else if (action) {
       if (!controller) controller = "_root"
 
