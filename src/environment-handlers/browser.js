@@ -1,5 +1,6 @@
 import Base from "./base.js"
 import {digg} from "diggerize"
+import * as inflection from "inflection"
 import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
@@ -112,28 +113,39 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
    */
   async findMigrations() {
     const migrationsRequireContext = await this.migrationsRequireContext()
-    const migrations = []
+    const files = migrationsRequireContext
+      .keys()
+      .map((file) => {
+        // "13,14" because somes "require-context"-npm-module deletes first character!?
+        const match = file.match(/(\d{13,14})-(.+)\.js$/)
 
-    for await (const aFilePath of migrationsRequireContext.keys()) {
-      const aFilePathParts = aFilePath.split("/")
-      const commandPathLocation = aFilePathParts.indexOf("commands") + 1
-      const lastPart = aFilePathParts[aFilePathParts.length - 1]
-      let name, paths
+        if (!match) return null
 
-      if (lastPart == "index.js") {
-        name = aFilePathParts[aFilePathParts.length - 2]
-        paths = aFilePathParts.slice(commandPathLocation, -2)
-      } else {
-        name = lastPart.replace(".js", "")
-        paths = aFilePathParts.slice(commandPathLocation, -1)
-      }
+        // Fix require-context-npm-module deletes first character
+        let fileName = file
+        let dateNumber = match[1]
 
-      const commandName = `${paths.join(":")}${paths.length > 0 ? ":" : ""}${name}`
+        if (dateNumber.length == 13) {
+          dateNumber = `2${dateNumber}`
+          fileName = `2${fileName}`
+        }
 
-      migrations.push({name: commandName, file: aFilePath})
-    }
+        // Parse regex
+        const date = parseInt(dateNumber)
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
 
-    return migrations
+        return {
+          file: fileName,
+          fullPath: file,
+          date,
+          migrationClassName
+        }
+      })
+      .filter((migration) => Boolean(migration))
+      .sort((migration1, migration2) => migration1.date - migration2.date)
+
+    return files
   }
 
   /**
@@ -141,9 +153,14 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
    * @template T extends import ("../migration/index.js").default
    * @returns {Promise<T>}
    */
-  async requireMigration(filePath) {
+  requireMigration = async (filePath) => {
+    if (!filePath) throw new Error("filePath is required")
+
     const migrationsRequireContext = await this.migrationsRequireContext()
     const migrationImport = migrationsRequireContext(filePath)
+
+    if (!migrationImport) throw new Error(`Migration file ${filePath} not found`)
+
     const migrationImportDefault = migrationImport.default
 
     if (!migrationImportDefault) throw new Error("Migration file must export a default migration class")

@@ -15,6 +15,9 @@ export default class VelociousDatabaseDriversBaseTable {
     return this.driver
   }
 
+  /**
+   * @returns {import("../query-parser/options.js").default}
+   */
   getOptions() {
     return this.getDriver().options()
   }

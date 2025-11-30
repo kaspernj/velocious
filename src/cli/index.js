@@ -32,5 +32,8 @@ export default class VelociousCli {
     return await commandInstance.execute()
   }
 
+  /**
+   * @returns {import("../configuration.js").default} configuration
+   */
   getConfiguration() { return this.configuration }
 }

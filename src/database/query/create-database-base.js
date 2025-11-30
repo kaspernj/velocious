@@ -7,6 +7,9 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
     this.ifNotExists = ifNotExists
   }
 
+  /**
+   * @returns {string[]}
+   */
   toSql() {
     const {databaseName} = this
     let sql = "CREATE DATABASE"

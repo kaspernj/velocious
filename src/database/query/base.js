@@ -18,6 +18,9 @@ export default class VelociousDatabaseQueryBase {
     return this._driver
   }
 
+  /**
+   * @returns {import("../query-parser/options.js").default}
+   */
   getOptions() {
     return this._options
   }
@@ -26,6 +29,10 @@ export default class VelociousDatabaseQueryBase {
     return this.getDriver().getType()
   }
 
+  /**
+   * @interface
+   * @returns {string[]}
+   */
   toSql() {
     throw new Error("'toSql' wasn't implemented")
   }

@@ -24,6 +24,10 @@ export default class VelociousEnvironmentHandlerBase {
    */
   async requireCommand({commandParts}) { throw new Error("requireCommand not implemented") } // eslint-disable-line no-unused-vars
 
+  /**
+   * @param {object} newArgs
+   * @returns {void}
+   */
   setArgs(newArgs) { this.args = newArgs }
 
   /**
@@ -41,5 +45,9 @@ export default class VelociousEnvironmentHandlerBase {
     return this.configuration
   }
 
+  /**
+   * @param {string[]} newProcess
+   * @returns {void}
+   */
   setProcessArgs(newProcessArgs) { this.processArgs = newProcessArgs }
 }

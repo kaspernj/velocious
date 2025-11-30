@@ -34,6 +34,9 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     return indexName
   }
 
+  /**
+   * @returns {string}
+   */
   toSql() {
     const databaseType = this.getDriver().getType()
     const indexName = this.name || this.generateIndexName()

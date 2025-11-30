@@ -72,6 +72,24 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
+   * @param {string} columnName
+   * @returns {Promise<void>}
+   */
+  async removeColumn(tableName, columnName) {
+    const tableColumnArgs = Object.assign({dropColumn: true})
+    const tableData = new TableData(tableName)
+
+    tableData.addColumn(columnName, tableColumnArgs)
+
+    const sqls = await this.getDriver().alterTableSql(tableData)
+
+    for (const sql of sqls) {
+      await this.getDriver().query(sql)
+    }
+  }
+
+  /**
+   * @param {string} tableName
    * @param {Array} columns
    * @param {object} args
    * @param {boolean} args.ifNotExists
@@ -140,6 +158,17 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
+   * @param {string} referenceName
+   * @returns {Promise<void>}
+   */
+  async removeReference(tableName, referenceName) {
+    const columnName = `${inflection.underscore(referenceName)}_id`
+
+    this.removeColumn(tableName, columnName)
+  }
+
+  /**
+   * @param {string} tableName
    * @param {string} columnName
    * @param {boolean} nullable
    * @returns {Promise<void>}
@@ -149,6 +178,18 @@ export default class VelociousDatabaseMigration {
     const column = await table.getColumnByName(columnName)
 
     await column.changeNullable(nullable)
+  }
+
+  /**
+   * @param {string} tableName
+   * @param {string} columnName
+   * @returns {Promise<boolean>}
+   */
+  async columnExists(tableName, columnName) {
+    const table = await this.getDriver().getTableByName(tableName)
+    const column = await table.getColumnByName(columnName)
+
+    return Boolean(column)
   }
 
   /**

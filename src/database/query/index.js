@@ -100,6 +100,9 @@ export default class VelociousDatabaseQuery {
     return countResult
   }
 
+  /**
+   * @returns {import("../query-parser/options.js").default}
+   */
   getOptions() { return this.driver.options() }
 
   /**

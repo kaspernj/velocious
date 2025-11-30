@@ -1,4 +1,7 @@
 export default class VelociousDatabaseQuerySelectBase {
+  /**
+   * @returns {import("../query-parser/options.js").default}
+   */
   getOptions() {
     return this.query.driver.options()
   }
