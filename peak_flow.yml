@@ -80,3 +80,9 @@ builds:
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
       - cd spec/dummy && npx velocious test
+  build_5:
+    name: ESLint
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - sleep 5
+      - npm run lint

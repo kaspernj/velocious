@@ -17,7 +17,7 @@ export function initBaseRoute() {
       this.routes.push(route)
     }
 
-    matchWithPath(_path) {
+    matchWithPath(_path) { // eslint-disable-line no-unused-vars
       throw new Error(`No 'matchWithPath' implemented on ${this.constructor.name}`)
     }
 

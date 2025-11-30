@@ -115,7 +115,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {number|string} recordId
-   * @returns {Promise<Object>}
+   * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async find(recordId) {
     const conditions = {}
@@ -134,7 +134,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {Object} conditions
-   * @returns {Promise<Object>}
+   * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findBy(conditions) {
     const newConditions = {}
@@ -151,7 +151,7 @@ export default class VelociousDatabaseQuery {
   /**
    * @param {Object} conditions
    * @param {Function} callback
-   * @returns {Promise<Object>}
+   * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findOrCreateBy(...args) {
     const record = await this.findOrInitializeBy(...args)
@@ -165,7 +165,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {Object} conditions
-   * @returns {Promise<Object>}
+   * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findByOrFail(conditions) {
     const newConditions = {}
@@ -188,7 +188,7 @@ export default class VelociousDatabaseQuery {
   /**
    * @param {Object} conditions
    * @param {Function} callback
-   * @returns {Promise<Object>}
+   * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findOrInitializeBy(conditions, callback) {
     const record = await this.findBy(conditions)
@@ -205,7 +205,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<Object>}
+   * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.orderableColumn())}`)
@@ -254,7 +254,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<Object>}
+   * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async last() {
     const primaryKey = this.modelClass.primaryKey()
@@ -371,19 +371,19 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<Array>} Array of results from the database
+   * @returns {Promise<Array<Object>>} Array of results from the database
    */
   async _executeQuery() {
     const sql = this.toSql()
     const results = await this.driver.query(sql)
 
-    this.logger.debug("SQL:", sql)
+    this.logger.debug(() => ["SQL:", sql])
 
     return results
   }
 
   /**
-   * @returns {Promise<Array>} Array of results from the database
+   * @returns {Promise<Array<Object>>} Array of results from the database
    */
   async results() {
     return await this._executeQuery()
@@ -392,7 +392,7 @@ export default class VelociousDatabaseQuery {
   /**
    * Converts query results to array of model instances
    *
-   * @returns {Promise<Array>} Array of model instances
+   * @returns {Promise<Array<InstanceType<this["modelClass"]>>>}
    */
   async toArray() {
     const models = []

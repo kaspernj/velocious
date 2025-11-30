@@ -14,7 +14,7 @@ export default class VelociousRoutePostRoute extends BaseRoute {
     const match = path.match(this.regExp)
 
     if (match) {
-      const [_beginnigSlash, _matchedName, restPath] = match
+      const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
 
       params.action = this.name
 

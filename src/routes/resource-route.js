@@ -14,7 +14,7 @@ export default class VelociousRouteResourceRoute extends BaseRoute {
     const match = path.match(this.regExp)
 
     if (match) {
-      const [_beginnigSlash, _matchedName, restPath] = match
+      const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
 
       let action = "index"
       let subRoutesMatchesRestPath = false

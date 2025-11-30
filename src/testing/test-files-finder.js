@@ -75,7 +75,7 @@ export default class TestFilesFinder {
         if (isDir) {
           this.findTestFilesInDir(fullPath)
         } else {
-          if (this.isFileMatchingRequirements(file, localPath, fullPath)) {
+          if (this.isFileMatchingRequirements(file, localPath)) {
             this.foundFiles.push(fullPath)
           }
         }
@@ -83,7 +83,7 @@ export default class TestFilesFinder {
     })
   }
 
-  isFileMatchingRequirements(file, localPath, fullPath) {
+  isFileMatchingRequirements(file, localPath) {
     if (this.testArgs.length > 0) {
       for (const testArg of this.testArgs) {
         if (testArg == localPath) {

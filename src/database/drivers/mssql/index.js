@@ -288,7 +288,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     await this.query(`SAVE TRANSACTION [${savePointName}]`)
   }
 
-  async _releaseSavePointAction(savePointName) {
+  async _releaseSavePointAction(savePointName) { // eslint-disable-line no-unused-vars
     // Do nothing in MS-SQL.
   }
 

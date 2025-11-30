@@ -1,5 +1,5 @@
 import BaseCommand from "../../base-command.js"
-import fs from "node:fs/promises"
+import fs from "fs/promises"
 
 export default class DbDestroyMigration extends BaseCommand {
   async execute() {

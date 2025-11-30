@@ -1,10 +1,9 @@
 import Base from "./base.js"
 import {digg} from "diggerize"
-import fileExists from "../utils/file-exists.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
-  constructor({migrationsRequireContextCallback, ...restArgs}) {
+  constructor({migrationsRequireContextCallback, ...restArgs} = {}) {
     super()
     restArgsError(restArgs)
 
@@ -74,26 +73,27 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
       filePath += `/${commandPart}`
     }
 
+    const filePaths = []
+
     filePaths.push(`${filePath}/index.js`)
     filePath += ".js"
     filePaths.push(filePath)
 
-    let fileFound
+    let commandClassImport
 
     for (const aFilePath of filePaths) {
-      if (await fileExists(aFilePath)) {
-        fileFound = aFilePath
+      try {
+        commandClassImport = this._findCommandsRequireContext()(aFilePath)
         break
+      } catch (error) { // eslint-disable-line no-unused-vars
+        // Try next file path
       }
     }
 
-    if (!fileFound) {
-      throw new Error(`Unknown command: ${this.args.processArgs[0]} which should have been one of: ${possibleCommands.sort().join(", ")}`)
+    if (!commandClassImport) {
+      throw new Error(`Unknown command: ${commandParts.join(":")}}`)
     }
 
-    console.log({fileFound})
-
-    const commandClassImport = this._findCommandsRequireContext()(fileFound)
     const CommandClass = commandClassImport.default
 
     return CommandClass
@@ -134,20 +134,14 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
    * @template T extends import ("../migration/index.js").default
    * @returns {Promise<T>}
   */
-  async requireMigration() {
-    restArgsError(restArgs)
+  async requireMigration(filePath) {
+    const migrationsRequireContext = await this.migrationsRequireContext()
+    const migrationImport = migrationsRequireContext(filePath)
+    const migrationImportDefault = migrationImport.default
 
-    const command = commands.find((aCommand) => aCommand.name === commandParts.join(":"))
+    if (!migrationImportDefault) throw new Error("Migration file must export a default migration class")
+    if (typeof migrationImportDefault !== "function") throw new Error("Migration default export isn't a function (should be a class which is a function in JS)")
 
-    if (!command) {
-      const possibleCommands = commands.map(aCommand => aCommand.name)
-
-      throw new Error(`Unknown command: ${processArgs[0]} which should have been one of: ${possibleCommands.sort().join(", ")}`)
-    }
-
-    const commandClassImport = this.migrationsRequireContextCallback(digg(command, "file"))
-    const CommandClass = commandClassImport.default
-
-    return CommandClass
+    return migrationImportDefault
   }
 }

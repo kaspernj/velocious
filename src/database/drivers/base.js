@@ -292,7 +292,7 @@ export default class VelociousDatabaseDriversBase {
     }
   }
 
-  retryableDatabaseError(_error) {
+  retryableDatabaseError(_error) { // eslint-disable-line no-unused-vars
     return false
   }
 

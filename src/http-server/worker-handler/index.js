@@ -10,25 +10,29 @@ export default class VelociousHttpServerWorker {
     this.workerCount = workerCount
   }
 
-  async start() {
-    return new Promise(async (resolve) => {
-      const {debug} = digs(this.configuration, "debug")
-      const directory = this.configuration.getDirectory()
-      const velociousPath = await this.configuration.getEnvironmentHandler().getVelociousPath()
-
+  start() {
+    return new Promise((resolve) => {
       this.onStartCallback = resolve
-      this.worker = new Worker(`${velociousPath}/src/http-server/worker-handler/worker-script.js`, {
-        workerData: {
-          debug,
-          directory,
-          environment: this.configuration.getEnvironment(),
-          workerCount: this.workerCount
-        }
-      })
-      this.worker.on("error", this.onWorkerError)
-      this.worker.on("exit", this.onWorkerExit)
-      this.worker.on("message", this.onWorkerMessage)
+      this._spawnWorker()
     })
+  }
+
+  async _spawnWorker() {
+    const {debug} = digs(this.configuration, "debug")
+    const directory = this.configuration.getDirectory()
+    const velociousPath = await this.configuration.getEnvironmentHandler().getVelociousPath()
+
+    this.worker = new Worker(`${velociousPath}/src/http-server/worker-handler/worker-script.js`, {
+      workerData: {
+        debug,
+        directory,
+        environment: this.configuration.getEnvironment(),
+        workerCount: this.workerCount
+      }
+    })
+    this.worker.on("error", this.onWorkerError)
+    this.worker.on("exit", this.onWorkerExit)
+    this.worker.on("message", this.onWorkerMessage)
   }
 
   addSocketConnection(client) {
