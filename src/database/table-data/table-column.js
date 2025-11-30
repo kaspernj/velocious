@@ -5,7 +5,7 @@ import TableForeignKey from "./table-foreign-key.js"
 export default class TableColumn {
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, default: columnDefault, foreignKey, index, isNewColumn, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
+      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
 
       if (Object.keys(args).length == 0) {
         throw new Error("Empty args given")
@@ -18,18 +18,49 @@ export default class TableColumn {
     this.name = name
   }
 
+  /**
+   * @returns {string} name
+   */
   getName() { return this.name }
 
+  /**
+   * @returns {string}
+   */
   getNewName() { return this._newName }
+
+  /**
+   * @param {string} newName
+   * @returns {void}
+   */
   setNewName(newName) { this._newName = newName }
 
+  /**
+   * @returns {string}
+   */
   getActualName() { return this.getNewName() || this.getName() }
 
-  getAutoIncrement() { return this.args?.autoIncrement }
+  /**
+   * @returns {boolean}
+   */
+  getAutoIncrement() { return this.args?.autoIncrement || false }
+
+  /**
+   * @param {boolean} newAutoIncrement
+   * @returns {void}
+   */
   setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
 
   getDefault() { return this.args?.default }
+
+  /**
+   * @returns {void}
+   */
   setDefault(newDefault) { this.args.default = newDefault }
+
+  /**
+   * @returns {boolean}
+   */
+  getDropColumn() { return this.args?.dropColumn || false }
 
   getForeignKey() { return this.args?.foreignKey }
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
@@ -49,7 +80,10 @@ export default class TableColumn {
   getType() { return this.args?.type }
   setType(newType) { this.args.type = newType }
 
-  isNewColumn() { return this.args?.isNewColumn }
+  /**
+   * @returns {boolean}
+   */
+  isNewColumn() { return this.args?.isNewColumn || false }
 
   getSQL({forAlterTable, driver}) {
     const databaseType = driver.getType()

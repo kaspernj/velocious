@@ -13,6 +13,9 @@ export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
     this.tableName = tableName
   }
 
+  /**
+   * @returns {string[]}
+   */
   toSql() {
     const databaseType = this.getDatabaseType()
     const options = this.getOptions()
@@ -40,6 +43,6 @@ export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
 
     sqls.push(sql)
 
-    return [sql]
+    return sqls
   }
 }

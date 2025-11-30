@@ -20,6 +20,9 @@ export default class VelociousHttpServer {
     this.maxWorkers = maxWorkers || 16
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async start() {
     await this._ensureAtLeastOneWorker()
     this.netServer = new Net.Server()
@@ -47,6 +50,9 @@ export default class VelociousHttpServer {
     }
   }
 
+  /**
+   * @returns {boolean}
+   */
   isActive() {
     return this.netServer.listening
   }

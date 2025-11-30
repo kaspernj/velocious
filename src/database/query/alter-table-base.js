@@ -4,6 +4,12 @@ import restArgsError from "../../utils/rest-args-error.js"
 import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
+  /**
+   * @param {object} args
+   * @template Tdriver extends import("../driver/base.js").default
+   * @param {Tdriver} args.driver
+   * @param {TableData} args.tableData
+   */
   constructor({driver, tableData, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -13,6 +19,9 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
     this.tableData = tableData
   }
 
+  /**
+   * @returns {string[]}
+   */
   toSqls() {
     const databaseType = this.getDriver().getType()
     const sqls = []
@@ -30,6 +39,8 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
         sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
       } else if (column.getNewName()) {
         sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(column.getNewName())}`
+      } else if (column.getDropColumn()) {
+        sql += `DROP COLUMN ${options.quoteColumnName}`
       } else {
         if (databaseType == "mssql" || databaseType == "pgsql") {
           sql += "ALTER COLUMN "

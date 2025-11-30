@@ -9,6 +9,9 @@ export default class VelociousDatabaseDriversBaseForeignKey {
     return this.getTable().getDriver()
   }
 
+  /**
+   * @returns {import("../query-parser/options.js").default}
+   */
   getOptions() {
     return this.getDriver().options()
   }

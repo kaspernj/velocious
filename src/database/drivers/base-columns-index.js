@@ -14,6 +14,9 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
     return digg(this, "data", "index_name")
   }
 
+  /**
+   * @returns {import("../query-parser/options.js").default}
+   */
   getOptions() {
     return this.getDriver().options()
   }

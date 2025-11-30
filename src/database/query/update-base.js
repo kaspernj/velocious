@@ -6,6 +6,9 @@ export default class VelociousDatabaseQueryUpdateBase {
     this.tableName = tableName
   }
 
+  /**
+   * @returns {import("../query-parser/options.js").default}
+   */
   getOptions() {
     return this.driver.options()
   }
