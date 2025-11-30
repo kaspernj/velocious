@@ -3,6 +3,10 @@ import {digg} from "diggerize"
 import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
+  /**
+   * @param {object} args
+   * @param {function() : void} args.migrations
+   */
   constructor({migrationsRequireContextCallback, ...restArgs} = {}) {
     super()
     restArgsError(restArgs)
@@ -10,6 +14,9 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     this.migrationsRequireContextCallback = migrationsRequireContextCallback
   }
 
+  /**
+   * @returns {object}
+   */
   migrationsRequireContext() {
     const migrationsRequireContextCallback = digg(this, "migrationsRequireContextCallback")
 
@@ -31,6 +38,8 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
   _findCommandsRequireContext() {
     this.findCommandsRequireContextResult ||= require.context("../cli/commands", true, /\.js$/)
+
+    return this.findCommandsRequireContextResult
   }
 
   _actualFindCommands() {
@@ -62,7 +71,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   async requireCommand({commandParts, ...restArgs}) {
     restArgsError(restArgs)
 
-    let filePath = ""
+    let filePath = "."
 
     for (let commandPart of commandParts) {
       if (commandPart == "d") commandPart = "destroy"
@@ -78,19 +87,19 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     filePath += ".js"
     filePaths.push(filePath)
 
+    const commandsRequireContext = await this._findCommandsRequireContext()
     let commandClassImport
 
     for (const aFilePath of filePaths) {
-      try {
-        commandClassImport = this._findCommandsRequireContext()(aFilePath)
+      commandClassImport = commandsRequireContext(aFilePath)
+
+      if (commandClassImport) {
         break
-      } catch (error) { // eslint-disable-line no-unused-vars
-        // Try next file path
       }
     }
 
     if (!commandClassImport) {
-      throw new Error(`Unknown command: ${commandParts.join(":")}}`)
+      throw new Error(`Unknown command: ${commandParts.join(":")}. Possible commands: ${commandsRequireContext.keys()}`)
     }
 
     const CommandClass = commandClassImport.default
