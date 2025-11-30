@@ -70,7 +70,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @template T extends import("../index.js").default
-   * @param {T} model
+   * @returns {T} model
    */
   getModel() { return this.model }
 

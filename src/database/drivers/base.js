@@ -91,9 +91,9 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {Object} args
+   * @param {object} args
    * @param {Array} args.columns
-   * @param {Object} args.data
+   * @param {object} args.data
    * @param {boolean} args.multiple
    * @param {boolean} args.returnLastInsertedColumnNames
    * @param {Array} args.rows
@@ -396,10 +396,10 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {Object} args
-   * @param {Object} args.conditions
-   * @param {Object} args.data
-   * @param {String} args.tableName
+   * @param {object} args
+   * @param {object} args.conditions
+   * @param {object} args.data
+   * @param {string} args.tableName
    * @returns {Promise<void>}
    */
   async update(...args) {

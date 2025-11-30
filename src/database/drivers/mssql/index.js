@@ -202,9 +202,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {Object} args
+   * @param {object} args
    * @param {string} args.tableName
-   * @param {conditions} args.conditions
+   * @param {object} args.conditions
    */
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})

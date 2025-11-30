@@ -3,7 +3,7 @@ import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseColumn {
   /**
-   * @param {TableColumn} tableColumn
+   * @param {string} indexName
    * @returns {Promise<import('../table-data/table-index.js').default>}
    */
   async getIndexByName(indexName) {

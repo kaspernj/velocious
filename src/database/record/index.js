@@ -248,7 +248,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Adds a belongs-to-relationship to the model.
-   *
    * @param {string} relationshipName The name of the relationship.
    * @param {object} options The options for the relationship.
    */
@@ -270,7 +269,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Object} attributes
+   * @param {object} attributes
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async create(attributes) {
@@ -305,7 +304,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Adds a has-many-relationship to the model class.
-   *
    * @param {string} relationshipName The name of the relationship (e.g. "posts")
    * @param {object} options The options for the relationship (e.g. {className: "Post"})
    */
@@ -315,7 +313,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Adds a has-one-relationship to the model class.
-   *
    * @param {string} relationshipName The name of the relationship (e.g. "post")
    * @param {object} options The options for the relationship (e.g. {className: "Post"})
    */
@@ -537,7 +534,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {Array<string>} columns
-   * @param {Array<Array<string>>}
+   * @param {Array<Array<string>>} rows
    * @returns {void}
    */
   static async insertMultiple(columns, rows) {
@@ -723,7 +720,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {stirng} tableName
+   * @param {string} tableName
    * @returns {void}
    */
   static setTableName(tableName) {
@@ -731,8 +728,8 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {function} callback
-   * @return {*}
+   * @param {function() : void} callback
+   * @returns {*}
    */
   static async transaction(callback) {
     const useTransactions = this.connection().getArgs().record?.transactions
@@ -745,7 +742,6 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Array<string>}
    * @returns {void}
    */
   static translates(...names) {
@@ -807,7 +803,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Adds a validation to an attribute.
-   *
    * @param {string} attributeName The name of the attribute to validate.
    * @param {object} validators The validators to add. Key is the validator name, value is the validator arguments.
    */
@@ -923,7 +918,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {number|string} id Primary key of the record
+   * @param {...Parameters<Query["find"]>} args
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async find(...args) {
@@ -931,7 +926,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Object} findByArgs
+   * @param {...Parameters<Query["findBy"]>} args
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async findBy(...args) {
@@ -939,7 +934,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Object} findByArgs
+   * @param {...Parameters<Query["findByOrFail"]>} args
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async findByOrFail(...args) {
@@ -947,7 +942,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Object} findByArgs
+   * @param {...Parameters<Query["findOrCreateBy"]>} args
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async findOrCreateBy(...args) {
@@ -955,7 +950,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Object} findByArgs
+   * @param {...Parameters<Query["findOrInitializeBy"]>} args
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async findOrInitializeBy(...args) {
@@ -1026,7 +1021,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Object} changes
+   * @param {object} changes
    */
   constructor(changes = {}) {
     this._attributes = {}
@@ -1040,7 +1035,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Object} attributes
+   * @param {object} attributes
    * @returns {void}
    */
   loadExistingRecord(attributes) {
@@ -1050,8 +1045,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the given attributes to the record.
-   *
-   * @param {Object} attributesToAssign
+   * @param {object} attributesToAssign
    * @returns {void}
    */
   assign(attributesToAssign) {
@@ -1062,7 +1056,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns a the current attributes of the record (original attributes from database plus changes)
-   *
    * @returns {void}
    */
   attributes() {
@@ -1080,7 +1073,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Destroys the record in the database and all of its dependent records.
-   *
    * @returns {void}
    */
   async destroy() {
@@ -1136,7 +1128,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns true if the model has been changed since it was loaded from the database.
-   *
    * @returns {boolean}
    */
   isChanged() {
@@ -1170,8 +1161,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns the changes that have been made to this record since it was loaded from the database.
-   *
-   * @return {Object}
+   * @returns {object}
    */
   changes() {
     const changes = {}
@@ -1196,7 +1186,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Reads an attribute value from the record.
-   *
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
    * @returns {void}
    */
@@ -1210,7 +1199,6 @@ class VelociousDatabaseRecord {
 
   /**
    * Reads a column value from the record.
-   *
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
    */
   readColumn(attributeName) {
@@ -1407,7 +1395,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Array<String>}
+   * @returns {Array<string>}
    */
   fullErrorMessages() {
     const validationErrorMessages = []
@@ -1427,8 +1415,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the attributes to the record and saves it.
-   *
-   * @param {Object} attributesToAssign - The attributes to assign to the record.
+   * @param {object} attributesToAssign - The attributes to assign to the record.
    */
   async update(attributesToAssign) {
     if (attributesToAssign) this.assign(attributesToAssign)

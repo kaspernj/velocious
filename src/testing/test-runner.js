@@ -7,7 +7,7 @@ import {tests} from "./test.js"
 
 export default class TestRunner {
   /**
-   * @param {Object} args
+   * @param {object} args
    * @param {import("../configuration.js").default} args.configuration
    * @param {Array<string>} args.testFiles
    */
@@ -139,7 +139,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {Object}
+   * @returns {object}
    */
   analyzeTests(tests) {
     let anyTestsFocussedFound = false

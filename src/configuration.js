@@ -14,17 +14,17 @@ export default class VelociousConfiguration {
 
   /**
    * @template T extends import("./environment-handlers/base.js").default
-   * @param {Object} args
-   * @param {function} args.cors
-   * @param {Object} args.database
+   * @param {object} args
+   * @param {function() : void} args.cors
+   * @param {object} args.database
    * @param {boolean} args.debug
    * @param {string} args.directory
    * @param {string} args.environment
    * @param {T} args.environmentHandler
-   * @param {function} args.initializeModels
-   * @param {function} args.initializers
+   * @param {function() : void} args.initializeModels
+   * @param {function() : void} args.initializers
    * @param {string} args.locale
-   * @param {Object} args.localeFallbacks
+   * @param {object} args.localeFallbacks
    * @param {string} args.testing
    */
   constructor({cors, database, debug, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
@@ -133,12 +133,12 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {Object}
+   * @returns {object}
    */
   getLocaleFallbacks() { return this.localeFallbacks }
 
   /**
-   * @param {Object} newLocaleFallbacks
+   * @param {object} newLocaleFallbacks
    * @returns {void}
    */
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
@@ -252,7 +252,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} msgID
-   * @param {Object} args
+   * @param {object} args
    * @returns {string}
    */
   _defaultTranslator(msgID, args) {

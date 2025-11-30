@@ -47,7 +47,7 @@ export default class RequestClient {
 
   /**
    * @param {string} path
-   * @param {Object} data
+   * @param {object} data
    * @returns {Response}
    */
   async post(path, data) {

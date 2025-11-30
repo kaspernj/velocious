@@ -2,7 +2,7 @@ import fs from "fs/promises"
 
 /**
  * @param {string} path
- * @returns {Boolean}
+ * @returns {boolean}
  */
 export default async function fileExists(path) {
   try {

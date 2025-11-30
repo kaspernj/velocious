@@ -55,11 +55,10 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @param {Array<{name: string, file: string}>} commands
    * @param {Array<string>} commandParts
    * @template T extends import("./base-command.js").default
    * @returns {Promise<T>}
-  */
+   */
   async requireCommand({commandParts, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -129,11 +128,10 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @param {Array<{name: string, file: string}>} commands
-   * @param {Array<string>} commandParts
+   * @param {string} filePath
    * @template T extends import ("../migration/index.js").default
    * @returns {Promise<T>}
-  */
+   */
   async requireMigration(filePath) {
     const migrationsRequireContext = await this.migrationsRequireContext()
     const migrationImport = migrationsRequireContext(filePath)

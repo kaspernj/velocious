@@ -133,7 +133,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {Object} conditions
+   * @param {object} conditions
    * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findBy(conditions) {
@@ -149,8 +149,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {Object} conditions
-   * @param {Function} callback
+   * @param {...Parameters<this["findOrInitializeBy"]>} args
    * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findOrCreateBy(...args) {
@@ -164,7 +163,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {Object} conditions
+   * @param {object} conditions
    * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findByOrFail(conditions) {
@@ -186,8 +185,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {Object} conditions
-   * @param {Function} callback
+   * @param {object} conditions
+   * @param {function() : void} callback
    * @returns {Promise<InstanceType<this["modelClass"]>>}
    */
   async findOrInitializeBy(conditions, callback) {
@@ -228,7 +227,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|GroupPlain} group
+   * @param {string} group
    * @returns {this}
    */
   group(group) {
@@ -320,7 +319,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|SelectPlain} select
+   * @param {string} data
    * @returns {this}
    */
   preload(data) {
@@ -371,7 +370,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<Array<Object>>} Array of results from the database
+   * @returns {Promise<Array<object>>} Array of results from the database
    */
   async _executeQuery() {
     const sql = this.toSql()
@@ -383,7 +382,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<Array<Object>>} Array of results from the database
+   * @returns {Promise<Array<object>>} Array of results from the database
    */
   async results() {
     return await this._executeQuery()
@@ -391,7 +390,6 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Converts query results to array of model instances
-   *
    * @returns {Promise<Array<InstanceType<this["modelClass"]>>>}
    */
   async toArray() {
@@ -420,13 +418,12 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Generates SQL string representing this query
-   *
-   * @returns {String} SQL string representing this query
+   * @returns {string} SQL string representing this query
    */
   toSql() { return this.driver.queryToSql(this) }
 
   /**
-   * @param {Object|String} where
+   * @param {object|string} where
    * @returns {VelociousDatabaseQuery} This query instance
    */
   where(where) {

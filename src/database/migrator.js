@@ -243,7 +243,7 @@ export default class VelociousDatabaseMigrator {
 
   /**
    * @param {{date: number}[]} files
-   * @param {Function} importFile Function to import a file
+   * @param {function(string) : void} importCallback Function to import a file
    * @returns {Promise<void>}
    */
   async rollback(files, importCallback) {
@@ -287,10 +287,10 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {object} migration
-   * @param {string} migration.date
-   * @param {string} migration.file
-   * @param {Function} requireMigration
+   * @param {object} args
+   * @param {object} args.migration
+   * @param {function() : void} args.requireMigration
+   * @param {string} args.direction
    */
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")
