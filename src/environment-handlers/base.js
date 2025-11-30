@@ -46,7 +46,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {string[]} newProcess
+   * @param {string[]} newProcessArgs
    * @returns {void}
    */
   setProcessArgs(newProcessArgs) { this.processArgs = newProcessArgs }

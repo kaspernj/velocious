@@ -6,7 +6,7 @@ import restArgsError from "../utils/rest-args-error.js"
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args
-   * @param {function() : void} args.migrations
+   * @param {function() : void} args.migrationsRequireContextCallback
    */
   constructor({migrationsRequireContextCallback, ...restArgs} = {}) {
     super()
