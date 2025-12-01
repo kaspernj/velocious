@@ -150,7 +150,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
   /**
    * @param {string} filePath
-   * @template T extends import ("../migration/index.js").default
+   * @template T extends import("../migration/index.js").default
    * @returns {Promise<T>}
    */
   requireMigration = async (filePath) => {

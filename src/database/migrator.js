@@ -301,7 +301,7 @@ export default class VelociousDatabaseMigrator {
     const migrationClass = await requireMigration()
 
     if (!migrationClass || typeof migrationClass !== "function") {
-      throw new Error(`Migration ${migration.file} must export a default migration class`)
+      throw new Error(`Migration ${migration.file} must export a default migration class. Type: ${typeof migrationClass}`)
     }
 
     const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
