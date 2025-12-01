@@ -900,10 +900,10 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Promise<Array<InstanceType<typeof this>>>}
+   * @returns {Query}
    */
-  static async all() {
-    return await this._newQuery()
+  static all() {
+    return this._newQuery()
   }
 
   /**
