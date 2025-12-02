@@ -3,7 +3,7 @@
     "velocious": "bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.91",
+  "version": "1.0.92",
   "main": "index.js",
   "scripts": {
     "lint": "eslint",
