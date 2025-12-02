@@ -1,5 +1,5 @@
 import BaseCommand from "../../../../../cli/base-command.js"
-import fileExists from "../../../utils/file-exists.js"
+import fileExists from "../../../../../utils/file-exists.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 import strftime from "strftime"
