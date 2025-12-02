@@ -3,6 +3,7 @@ import CliCommandsDestroyMigration from "./node/cli/commands/destroy/migration.j
 import CliCommandsInit from "./node/cli/commands/init.js"
 import CliCommandsGenerateMigration from "./node/cli/commands/generate/migration.js"
 import CliCommandsGenerateModel from "./node/cli/commands/generate/model.js"
+import CliCommandsTest from "./node/cli/commands/test.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
@@ -60,6 +61,10 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   async cliCommandsModelGenerate(command) {
     return await this.forwardCommand(command, CliCommandsGenerateModel)
+  }
+
+  async cliCommandsTest(command) {
+    return await this.forwardCommand(command, CliCommandsTest)
   }
 
   /**
