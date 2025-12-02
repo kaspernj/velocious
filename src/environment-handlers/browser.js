@@ -31,6 +31,10 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     throw new Error("Unsupported on browser")
   }
 
+  async cliCommandsServer(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("Unsupported on browser")
+  }
+
   async cliCommandsTest(_command) { // eslint-disable-line no-unused-vars
     throw new Error("Unsupported on browser")
   }
