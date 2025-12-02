@@ -83,6 +83,11 @@ export default class TestFilesFinder {
     })
   }
 
+  /**
+   * @param {string} file
+   * @param {string} localPath
+   * @returns {boolean}
+   */
   isFileMatchingRequirements(file, localPath) {
     if (this.testArgs.length > 0) {
       for (const testArg of this.testArgs) {

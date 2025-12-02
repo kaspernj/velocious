@@ -5,7 +5,12 @@ import Configuration from "../configuration.js"
 import Migrator from "./migrator.js"
 import restArgsError from "../utils/rest-args-error.js"
 
-const loadMigrations = function loadMigrations({migrationsRequireContextCallback, ...restArgs}) {
+/**
+ * @param {object} args
+ * @param {object} args.migrationsRequireContextCallback
+ * @returns {Promise<{loaded: boolean}>}
+ */
+export default function loadMigrations({migrationsRequireContextCallback, ...restArgs}) {
   const instance = React.useMemo(() => ({running: false}), [])
   const {isServer} = useEnvSense()
   const [loaded, setLoaded] = React.useState(false)
@@ -38,5 +43,3 @@ const loadMigrations = function loadMigrations({migrationsRequireContextCallback
 
   return {loaded}
 }
-
-export default loadMigrations

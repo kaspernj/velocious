@@ -1,13 +1,24 @@
-export default class VelociousDatabaseInitializerFromRequireContext {
-  constructor({requireContext, ...restProps}) {
-    const restPropsKeys = Object.keys(restProps)
+import restArgsError from "../utils/rest-args-error.js"
 
-    if (restPropsKeys.length > 0) throw new Error(`Unknown arguments: ${restPropsKeys.join(", ")}`)
+export default class VelociousDatabaseInitializerFromRequireContext {
+  /**
+   * @param {object} args
+   * @param {object} args.requireContext
+   */
+  constructor({requireContext, ...restArgs}) {
+    restArgsError(restArgs)
 
     this.requireContext = requireContext
   }
 
-  async initialize({configuration}) {
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @returns {Promise<void>}
+   */
+  async initialize({configuration, ...restArgs}) {
+    restArgsError(restArgs)
+
     for (const fileName of this.requireContext.keys()) {
       const modelClassImport = this.requireContext(fileName)
 

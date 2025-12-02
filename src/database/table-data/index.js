@@ -8,6 +8,10 @@ export default class TableData {
   _indexes = []
   _references = []
 
+  /**
+   * @param {string} name
+   * @param {object} args
+   */
   constructor(name, args = {}) {
     if (!name) throw new Error(`Invalid table name: ${name}`)
 
@@ -15,6 +19,10 @@ export default class TableData {
     this._name = name
   }
 
+  /**
+   * @param {string} name
+   * @param {object} args
+   */
   addColumn(name, args = {}) {
     if (name instanceof TableColumn) {
       this._columns.push(name)
@@ -33,8 +41,20 @@ export default class TableData {
   addIndex(index) { this._indexes.push(index) }
   getIndexes() { return this._indexes }
 
+  /**
+   * @returns {string}
+   */
   getName() { return this._name }
+
+  /**
+   * @param {string} newName
+   * @returns {void}
+   */
   setName(newName) { this._name = newName }
+
+  /**
+   * @returns {boolean}
+   */
   getIfNotExists() { return this.args.ifNotExists }
   getReferences() { return this._references }
 

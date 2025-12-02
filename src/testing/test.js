@@ -11,12 +11,20 @@ const tests = {
 
 let currentPath = [tests]
 
+/**
+ * @param {function() : void} callback
+ * @returns {void}
+ */
 function beforeEach(callback) {
   const currentTest = currentPath[currentPath.length - 1]
 
   currentTest.beforeEaches.push({callback})
 }
 
+/**
+ * @param {function() : void} callback
+ * @returns {void}
+ */
 function afterEach(callback) {
   const currentTest = currentPath[currentPath.length - 1]
 
@@ -32,6 +40,7 @@ class ExpectToChange {
   }
 
   /**
+   * @param {number} count
    * @returns {Expect}
    */
   by(count) {
@@ -48,6 +57,9 @@ class ExpectToChange {
     this.newCount = await this.changeCallback()
   }
 
+  /**
+   * @returns {void}
+   */
   async execute() {
     const difference = this.newCount - this.oldCount
 
@@ -58,6 +70,9 @@ class ExpectToChange {
 }
 
 class Expect {
+  /**
+   * @param {any} object
+   */
   constructor(object) {
     this._object = object
     this.expectations = []
@@ -80,6 +95,7 @@ class Expect {
   }
 
   /**
+   * @param {any} result
    * @returns {void}
    */
   toBe(result) {
@@ -154,6 +170,7 @@ class Expect {
   }
 
   /**
+   * @param {any} valueToContain
    * @returns {void}
    */
   toContain(valueToContain) {
@@ -165,6 +182,7 @@ class Expect {
   }
 
   /**
+   * @param {any} result
    * @returns {void}
    */
   toEqual(result) {
@@ -192,6 +210,7 @@ class Expect {
   }
 
   /**
+   * @param {RegExp} regex
    * @returns {void}
    */
   toMatch(regex) {
@@ -209,6 +228,8 @@ class Expect {
   }
 
   /**
+   * @template T extends Error
+   * @param {string|T} expectedError
    * @returns {void}
    */
   async toThrowError(expectedError) {
@@ -243,6 +264,9 @@ class Expect {
     }
   }
 
+  /**
+   * @returns {any}
+   */
   async execute() {
     for (const expectation of this.expectations) {
       await expectation.runBefore()
@@ -290,6 +314,8 @@ class Expect {
 
 /**
  * @param {string} description
+ * @param {object|() => Promise<void>} arg1
+ * @param {undefined|() => Promise<void>} arg2
  * @returns {void}
  */
 async function describe(description, arg1, arg2) {
@@ -325,6 +351,7 @@ async function describe(description, arg1, arg2) {
 }
 
 /**
+ * @param {any} arg
  * @returns {Expect}
  */
 function expect(arg) {
@@ -333,6 +360,8 @@ function expect(arg) {
 
 /**
  * @param {string} description
+ * @param {object|() => Promise<void>} arg1
+ * @param {undefined|() => Promise<void>} arg2
  * @returns {void}
  */
 function it(description, arg1, arg2) {
@@ -356,6 +385,8 @@ function it(description, arg1, arg2) {
 
 /**
  * @param {string} description
+ * @param {object|() => Promise<void>} arg1
+ * @param {undefined|() => Promise<void>} arg2
  * @returns {void}
  */
 function fit(description, arg1, arg2) {
