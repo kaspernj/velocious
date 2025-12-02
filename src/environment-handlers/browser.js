@@ -15,8 +15,8 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     this.migrationsRequireContextCallback = migrationsRequireContextCallback
   }
 
-  async cliCommandsInit(command) {
-    throw new Error("Unsupported on browser")
+  async cliCommandsInit(_command) {
+    throw new Error("Unsupported on browser") // eslint-disable-line no-unused-vars
   }
 
   async cliCommandsMigrationGenerate(_command) { // eslint-disable-line no-unused-vars
