@@ -10,6 +10,20 @@ export default class VelociousEnvironmentHandlerBase {
   async findMigrations() { throw new Error("findMigrations not implemneted") }
 
   /**
+   * @template T extends import("../cli/base-command.js").default
+   * @param {T} command
+   * @param {typeof T} CommandClass
+   * @returns {any}
+   */
+  async forwardCommand(command, CommandClass) {
+    const newCommand = new CommandClass({
+      args: command.args
+    })
+
+    return await newCommand.execute()
+  }
+
+  /**
    * @interface
    */
   async getVelociousPath() { throw new Error("getVelociousPath not implemented") }

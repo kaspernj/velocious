@@ -23,7 +23,7 @@ export default class VelociousCli {
     }
 
     const CommandClass = await this.environmentHandler.requireCommand({commandParts: parsedCommandParts})
-    const commandInstance = new CommandClass({args: this.args, environmentHandler: this.environmentHandler})
+    const commandInstance = new CommandClass({args: this.args})
 
     if (commandInstance.initialize) {
       await commandInstance.initialize()

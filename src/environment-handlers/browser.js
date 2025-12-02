@@ -15,6 +15,18 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     this.migrationsRequireContextCallback = migrationsRequireContextCallback
   }
 
+  async cliCommandsMigrationGenerate(command) {
+    throw new Error("Unsupported on browser")
+  }
+
+  async cliCommandsMigrationDestroy(command) {
+    throw new Error("Unsupported on browser")
+  }
+
+  async cliCommandsModelGenerate(command) {
+    throw new Error("Unsupported on browser")
+  }
+
   /**
    * @returns {object}
    */
