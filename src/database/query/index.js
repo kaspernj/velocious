@@ -11,13 +11,33 @@ import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
+/**
+ * @typedef {Record<string, boolean|NestedPreloadRecord>} NestedPreloadRecord
+ */
+
 export default class VelociousDatabaseQuery {
   /**
    * @param {object} args
-   * @template Tdriver extends import("../drivers/base.js").default
-   * @param {T} args.driver
-   * @template TfromBase extends import("./from-base.js").default
-   * @param {Array<TfromBase>} args.froms
+   * @template {import("../drivers/base.js").default} Tdriver
+   * @param {Tdriver} args.driver
+   * @template {import("./from-base.js").default} TfromBase
+   * @param {TfromBase[]} args.froms
+   * @param {string[]} args.groups
+   * @template {import("./join-base.js").default} TjoinBase
+   * @param {TjoinBase[]} args.joins
+   * @param {import("../handler.js").default} args.handler
+   * @param {number} args.limit
+   * @template {import("../record/index.js").default} Trecord
+   * @param {typeof Trecord} args.modelClass
+   * @param {number} args.offset
+   * @template {import("./order-basejs").default} TorderBase
+   * @param {TorderBase[]} args.orders
+   * @param {number} args.page
+   * @param {number} args.perPage
+   * @param {NestedPreloadRecord} args.preload
+   * @param {Record<string, Array<string>>} args.selects
+   * @template {import("./where-base.js").default} TwhereBase
+   * @param {TwhereBase[]} args.wheres
    */
   constructor({driver, froms = [], groups = [], joins = [], handler, limit = null, modelClass, offset = null, orders = [], page = null, perPage, preload = {}, selects = [], wheres = [], ...restArgs}) {
     if (!driver) throw new Error("No driver given to query")
