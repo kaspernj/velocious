@@ -17,15 +17,17 @@ import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversMysql extends Base{
   async connect() {
-    const connection = mysql.createConnection(this.connectArgs())
+    this.pool = mysql.createPool(Object.assign({connectionLimit: 1}, this.connectArgs()))
+    this.pool.on("error", this.onPoolError)
+  }
 
-    await connectConnection(connection)
-    this.connection = connection
+  onPoolError = (error) => {
+    console.error("Velocious / MySQL driver / Pool error", error)
   }
 
   async close() {
-    await this.connection.end()
-    this.connection = undefined
+    await this.pool.end()
+    this.pool = undefined
   }
 
   connectArgs() {
@@ -96,7 +98,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   async _queryActual(sql) {
     try {
-      return await query(this.connection, sql)
+      return await query(this.pool, sql)
     } catch (error) {
       // Re-throw to un-corrupt stacktrace
       throw new Error(error.message)
@@ -107,17 +109,17 @@ export default class VelociousDatabaseDriversMysql extends Base{
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
   escape(value) {
-    if (!this.connection) throw new Error("Can't escape before connected")
+    if (!this.pool) throw new Error("Can't escape before connected")
 
-    const escapedValueWithQuotes = this.connection.escape(this._convertValue(value))
+    const escapedValueWithQuotes = this.pool.escape(this._convertValue(value))
 
     return escapedValueWithQuotes.slice(1, escapedValueWithQuotes.length - 1)
   }
 
   quote(value) {
-    if (!this.connection) throw new Error("Can't escape before connected")
+    if (!this.pool) throw new Error("Can't escape before connected")
 
-    return this.connection.escape(this._convertValue(value))
+    return this.pool.escape(this._convertValue(value))
   }
 
   deleteSql({tableName, conditions}) {
