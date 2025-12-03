@@ -1,24 +1,37 @@
-import {digs} from "diggerize"
+// @ts-check
+
+import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryParserFromParser {
-  constructor({pretty, query}) {
+  /**
+   * @param {object} args
+   * @param {boolean} args.pretty
+   * @param {import("../query/index.js").default} args.query
+   */
+  constructor({pretty, query, ...restArgs}) {
+    restArgsError(restArgs)
+
     this.pretty = pretty
     this.query = query
   }
 
+  /**
+   * @returns {string}
+   */
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
+    const groups = query.getGroups()
 
-    if (query._groups.length == 0) {
+    if (groups.length == 0) {
       return ""
     }
 
     let sql = " GROUP BY"
 
-    for (const groupKey in query._groups) {
-      const group = query._groups[groupKey]
+    for (const groupKey in groups) {
+      const group = groups[groupKey]
 
-      if (groupKey > 0) {
+      if (typeof groupKey == "number" && groupKey > 0) {
         sql += ","
       }
 
@@ -31,7 +44,7 @@ export default class VelociousDatabaseQueryParserFromParser {
       if (typeof group == "string") {
         sql += group
       } else {
-        sql += group.toSql()
+        throw new Error(`Unsupported group type: ${typeof group}`)
       }
     }
 

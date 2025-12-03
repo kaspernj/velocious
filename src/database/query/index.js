@@ -12,6 +12,13 @@ import WherePlain from "./where-plain.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQuery {
+  /**
+   * @param {object} args
+   * @template Tdriver extends import("../drivers/base.js").default
+   * @param {T} args.driver
+   * @template TfromBase extends import("./from-base.js").default
+   * @param {Array<TfromBase>} args.froms
+   */
   constructor({driver, froms = [], groups = [], joins = [], handler, limit = null, modelClass, offset = null, orders = [], page = null, perPage, preload = {}, selects = [], wheres = [], ...restArgs}) {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
@@ -98,6 +105,21 @@ export default class VelociousDatabaseQuery {
     }
 
     return countResult
+  }
+
+  /**
+   * @template {import("./from-base.js").default} T
+   * @returns {T[]}
+   */
+  getFroms() {
+    return this._froms
+  }
+
+  /**
+   * @returns {string[]}
+   */
+  getGroups() {
+    return this._groups
   }
 
   /**

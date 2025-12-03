@@ -1,20 +1,31 @@
-import {digs} from "diggerize"
+// @ts-check
+
+import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryParserFromParser {
-  constructor({pretty, query}) {
+  /**
+   * @param {object} args
+   * @param {boolean} args.pretty
+   * @param {import("../query/index.js").default} args.query
+   */
+  constructor({pretty, query, ...restArgs}) {
+    restArgsError(restArgs)
+
     this.pretty = pretty
     this.query = query
   }
 
+  /** @returns {string} */
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
+    const froms = query.getFroms()
 
     let sql = " FROM"
 
-    for (const fromKey in query._froms) {
-      const from = query._froms[fromKey]
+    for (const fromKey in froms) {
+      const from = froms[fromKey]
 
-      if (fromKey > 0) {
+      if (typeof fromKey == "number" && fromKey > 0) {
         sql += ","
       }
 
