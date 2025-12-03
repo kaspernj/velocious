@@ -175,6 +175,13 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * @returns {Record<string, typeof import("./database/record/index.js").default>} A hash of all model classes, keyed by model name, as they were defined in the configuration. This is a direct reference to the model classes, not a copy.
+   */
+  getModelClasses() {
+    return this.modelClasses
+  }
+
+  /**
    * @returns {string} The path to a config file that should be used for testing.
    */
   getTesting() { return this._testing }
