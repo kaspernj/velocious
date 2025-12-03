@@ -5,6 +5,8 @@ import * as inflection from "inflection"
 
 export default class DbGenerateModel extends BaseCommand {
   async execute() {
+    await this.getConfiguration().initializeModels()
+
     const modelsDir = `${process.cwd()}/src/models`
     const modelClasses = this.getConfiguration().getModelClasses()
 

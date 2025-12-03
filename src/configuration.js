@@ -206,13 +206,26 @@ export default class VelociousConfiguration {
    */
   isInitialized() { return this._isInitialized }
 
+  /**
+   * @param {object} args
+   * @param {string} args.type
+   * @returns {void}
+   */
+  async initializeModels(args = {type: "server"}) {
+    if (!this._modelsInitialized) {
+      this._modelsInitialized = true
+
+      if (this._initializeModels) {
+        await this._initializeModels({configuration: this, type: args.type})
+      }
+    }
+  }
+
   async initialize({type} = {}) {
     if (!this.isInitialized()) {
       this._isInitialized = true
 
-      if (this._initializeModels) {
-        await this._initializeModels({configuration: this, type})
-      }
+      await this.initializeModels({type})
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})

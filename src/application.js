@@ -22,6 +22,9 @@ export default class VelociousApplication {
    */
   getType() { return this._type }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async initialize() {
     const routes = await AppRoutes.getRoutes(this.configuration)
 
@@ -41,6 +44,10 @@ export default class VelociousApplication {
     return this.httpServer?.isActive()
   }
 
+  /**
+   * @param {function() : void} callback
+   * @returns {Promise<void>}
+   */
   async run(callback) {
     await this.start()
 
@@ -51,6 +58,9 @@ export default class VelociousApplication {
     }
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async startHttpServer() {
     const {configuration, httpServerConfiguration} = digs(this, "configuration", "httpServerConfiguration")
     const port = httpServerConfiguration.port || 3006
@@ -63,11 +73,17 @@ export default class VelociousApplication {
     await this.httpServer.start()
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async stop() {
     await this.logger.debug("Stopping server")
     await this.httpServer.stop()
   }
 
+  /**
+   * @returns {void}
+   */
   onHttpServerClose = () => {
     this.logger.debug("HTTP server closed")
 
@@ -76,6 +92,9 @@ export default class VelociousApplication {
     }
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   wait() {
     return new Promise((resolve) => {
       this.waitResolve = resolve

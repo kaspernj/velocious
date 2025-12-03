@@ -23,6 +23,10 @@ export default class VelociousInitializer {
    */
   getType() { return this._type }
 
+  /**
+   * @interface
+   * @returns {Promise<void>}
+   */
   run() {
     throw new Error(`'run' hasn't been implemented on ${this.constructor.name})`)
   }

@@ -2,7 +2,12 @@ import Configuration from "./configuration.js"
 import envSense from "env-sense/src/use-env-sense.js"
 import fileExists from "./utils/file-exists.js"
 
-const configurationResolver = async (args = {}) => {
+/**
+ * @param {object} args
+ * @param {string} args.directory
+ * @returns {Promise<Configuration>}
+ */
+export default async function configurationResolver(args = {}) {
   if (Configuration.current(false)) {
     return Configuration.current()
   }
@@ -35,5 +40,3 @@ const configurationResolver = async (args = {}) => {
 
   return configuration
 }
-
-export default configurationResolver
