@@ -1,6 +1,5 @@
 import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
-import connectConnection from "./connect-connection.js"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
