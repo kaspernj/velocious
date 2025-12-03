@@ -15,6 +15,9 @@ import Table from "./table.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversMysql extends Base{
+  /**
+   * @returns {Promise<void>}
+   */
   async connect() {
     this.pool = mysql.createPool(Object.assign({connectionLimit: 1}, this.connectArgs()))
     this.pool.on("error", this.onPoolError)
@@ -24,11 +27,17 @@ export default class VelociousDatabaseDriversMysql extends Base{
     console.error("Velocious / MySQL driver / Pool error", error)
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async close() {
     await this.pool.end()
     this.pool = undefined
   }
 
+  /**
+   * @returns {Record<string, any>}
+   */
   connectArgs() {
     const args = this.getArgs()
     const connectArgs = []
@@ -43,6 +52,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return connectArgs
   }
 
+  /**
+   * @returns {Promise<string[]>}
+   */
   async alterTableSql(tableData) {
     const alterArgs = {tableData, driver: this}
     const alterTable = new AlterTable(alterArgs)
@@ -50,6 +62,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return await alterTable.toSqls()
   }
 
+  /**
+   * @returns {Promise<string[]>}
+   */
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
     const createDatabase = new CreateDatabase(createArgs)
@@ -57,6 +72,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createDatabase.toSql()
   }
 
+  /**
+   * @returns {string}
+   */
   createIndexSql(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
@@ -64,6 +82,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createIndex.toSql()
   }
 
+  /**
+   * @returns {string[]}
+   */
   createTableSql(tableData) {
     const createArgs = {tableData, driver: this}
     const createTable = new CreateTable(createArgs)
@@ -71,20 +92,32 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return createTable.toSql()
   }
 
+  /**
+   * @returns {Promise<string>}
+   */
   async currentDatabase() {
     const rows = await this.query("SELECT DATABASE() AS db_name")
 
     return digg(rows, 0, "db_name")
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async disableForeignKeys() {
     await this.query("SET FOREIGN_KEY_CHECKS = 0")
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async enableForeignKeys() {
     await this.query("SET FOREIGN_KEY_CHECKS = 1")
   }
 
+  /**
+   * @returns {string[]}
+   */
   dropTableSql(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
@@ -92,9 +125,19 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return dropTable.toSql()
   }
 
+  /**
+   * @returns {string}
+   */
   getType() { return "mysql" }
+
+  /**
+   * @returns {string}
+   */
   primaryKeyType() { return "bigint" }
 
+  /**
+   * @returns {Array<Record<string, any>>}
+   */
   async _queryActual(sql) {
     try {
       return await query(this.pool, sql)
@@ -104,9 +147,19 @@ export default class VelociousDatabaseDriversMysql extends Base{
     }
   }
 
+  /**
+   * @returns {string}
+   */
   queryToSql(query) { return new QueryParser({query}).toSql() }
+
+  /**
+   * @returns {boolean}
+   */
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
+  /**
+   * @returns {string}
+   */
   escape(value) {
     if (!this.pool) throw new Error("Can't escape before connected")
 
@@ -115,18 +168,27 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return escapedValueWithQuotes.slice(1, escapedValueWithQuotes.length - 1)
   }
 
+  /**
+   * @returns {string}
+   */
   quote(value) {
     if (!this.pool) throw new Error("Can't escape before connected")
 
     return this.pool.escape(this._convertValue(value))
   }
 
+  /**
+   * @returns {string}
+   */
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
 
     return deleteInstruction.toSql()
   }
 
+  /**
+   * @returns {string}
+   */
   insertSql(args) {
     const insertArgs = Object.assign({driver: this}, args)
     const insert = new Insert(insertArgs)
@@ -134,6 +196,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return insert.toSql()
   }
 
+  /**
+   * @returns {Array<Table>}
+   */
   async getTables() {
     const result = await this.query("SHOW FULL TABLES")
     const tables = []
@@ -147,22 +212,34 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return tables
   }
 
+  /**
+   * @returns {number}
+   */
   async lastInsertID() {
     const result = await this.query("SELECT LAST_INSERT_ID() AS last_insert_id")
 
     return digg(result, 0, "last_insert_id")
   }
 
+  /**
+   * @returns {Options}
+   */
   options() {
     if (!this._options) this._options = new Options({driver: this})
 
     return this._options
   }
 
+  /**
+   * @returns {void}
+   */
   async _startTransactionAction() {
     await this.query("START TRANSACTION")
   }
 
+  /**
+   * @returns {string}
+   */
   updateSql({conditions, data, tableName}) {
     const update = new Update({conditions, data, driver: this, tableName})
 
