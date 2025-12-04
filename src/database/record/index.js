@@ -306,6 +306,7 @@ class VelociousDatabaseRecord {
    * Adds a has-many-relationship to the model class.
    * @param {string} relationshipName The name of the relationship (e.g. "posts")
    * @param {object} options The options for the relationship (e.g. {className: "Post"})
+   * @returns {void}
    */
   static hasMany(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasMany"}, options))
@@ -315,6 +316,7 @@ class VelociousDatabaseRecord {
    * Adds a has-one-relationship to the model class.
    * @param {string} relationshipName The name of the relationship (e.g. "post")
    * @param {object} options The options for the relationship (e.g. {className: "Post"})
+   * @returns {void}
    */
   static hasOne(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasOne"}, options))
@@ -526,6 +528,9 @@ class VelociousDatabaseRecord {
     return this._columnNames
   }
 
+  /**
+   * @returns {import("../drivers/base-table.js").default}
+   */
   static _getTable() {
     if (!this._table) throw new Error(`${this.name} hasn't been initialized yet`)
 

@@ -1,5 +1,61 @@
 export default class VelociousEnvironmentHandlerBase {
   /**
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsGenerateBaseModels(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsGenerateBaseModels not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsInit(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsInit not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsMigrationGenerate(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsMigrationGenerate not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsMigrationDestroy(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsMigrationDestroy not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsGenerateModel(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsGenerateModel not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsServer(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsServer not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsTest(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsTest not implemented")
+  }
+
+  /**
    * @interface
    */
   async findCommands() { throw new Error("findCommands not implemented") }
@@ -34,6 +90,8 @@ export default class VelociousEnvironmentHandlerBase {
   async importApplicationRoutes() { throw new Error("importApplicationRoutes not implemented") }
 
   /**
+   * @param {object} args
+   * @param {string[]} args.commandParts
    * @interface
    */
   async requireCommand({commandParts}) { throw new Error("requireCommand not implemented") } // eslint-disable-line no-unused-vars

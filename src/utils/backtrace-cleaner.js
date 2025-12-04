@@ -1,12 +1,22 @@
 export default class BacktraceCleaner {
+  /**
+   * @param {Error} error
+   * @returns {string}
+   */
   static getCleanedStack(error) {
     return new BacktraceCleaner(error).getCleanedStack()
   }
 
+  /**
+   * @param {Error} error
+   */
   constructor(error) {
     this.error = error
   }
 
+  /**
+   * @returns {string}
+   */
   getCleanedStack() {
     const backtrace = this.error.stack.split("\n")
 

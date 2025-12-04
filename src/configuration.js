@@ -50,10 +50,13 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {object}
+   * @returns {Record<string, any>}
    */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
+    if (!this.database[this.getEnvironment()]) {
+      throw new Error(`No database configuration for environment: ${this.getEnvironment()} - ${Object.keys(this.database).join(", ")}`)
+    }
 
     return digg(this, "database", this.getEnvironment())
   }
@@ -175,6 +178,13 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * @returns {Record<string, typeof import("./database/record/index.js").default>} A hash of all model classes, keyed by model name, as they were defined in the configuration. This is a direct reference to the model classes, not a copy.
+   */
+  getModelClasses() {
+    return this.modelClasses
+  }
+
+  /**
    * @returns {string} The path to a config file that should be used for testing.
    */
   getTesting() { return this._testing }
@@ -199,13 +209,26 @@ export default class VelociousConfiguration {
    */
   isInitialized() { return this._isInitialized }
 
+  /**
+   * @param {object} args
+   * @param {string} args.type
+   * @returns {void}
+   */
+  async initializeModels(args = {type: "server"}) {
+    if (!this._modelsInitialized) {
+      this._modelsInitialized = true
+
+      if (this._initializeModels) {
+        await this._initializeModels({configuration: this, type: args.type})
+      }
+    }
+  }
+
   async initialize({type} = {}) {
     if (!this.isInitialized()) {
       this._isInitialized = true
 
-      if (this._initializeModels) {
-        await this._initializeModels({configuration: this, type})
-      }
+      await this.initializeModels({type})
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})

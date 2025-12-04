@@ -2,6 +2,10 @@ import {digg} from "diggerize"
 import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseTable {
+  /**
+   * @param {string} columnName
+   * @returns {import("./base-column.js").default}
+   */
   async getColumnByName(columnName) {
     const columnes = await this.getColumns()
     const column = columnes.find((column) => column.getName() == columnName)
@@ -9,10 +13,29 @@ export default class VelociousDatabaseDriversBaseTable {
     return column
   }
 
+  /**
+   * @interface
+   * @returns {Promise<Array<import("./base-column.js").default>>}
+   */
+  getColumns() {
+    throw new Error("getColumns not implemented")
+  }
+
+  /**
+   * @returns {import("./base.js").default}
+   */
   getDriver() {
     if (!this.driver) throw new Error("No driver set on table")
 
     return this.driver
+  }
+
+  /**
+   * @interface
+   * @returns {string}
+   */
+  getName() {
+    throw new Error("getName not implemented")
   }
 
   /**
@@ -22,6 +45,9 @@ export default class VelociousDatabaseDriversBaseTable {
     return this.getDriver().options()
   }
 
+  /**
+   * @returns {Promise<TableData>}
+   */
   async getTableData() {
     const tableData = new TableData(this.getName())
     const tableDataColumns = []
@@ -50,12 +76,18 @@ export default class VelociousDatabaseDriversBaseTable {
     return tableData
   }
 
+  /**
+   * @returns {Promise<number>}
+   */
   async rowsCount() {
     const result = await this.getDriver().query(`SELECT COUNT(*) AS count FROM ${this.getOptions().quoteTableName(this.getName())}`)
 
     return digg(result, 0, "count")
   }
 
+  /**
+   * @returns {Promise<Array<Record<string, any>>>}
+   */
   async truncate(args) {
     const databaseType = this.getDriver().getType()
     let sql

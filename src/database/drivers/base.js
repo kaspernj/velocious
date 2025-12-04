@@ -10,6 +10,10 @@ import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/src/wait.js"
 
 export default class VelociousDatabaseDriversBase {
+  /**
+   * @param {object} config
+   * @param {import("../../configuration.js").default} configuration
+   */
   constructor(config, configuration) {
     this._args = config
     this.configuration = configuration
@@ -19,6 +23,14 @@ export default class VelociousDatabaseDriversBase {
     this._transactionsActionsMutex = new Mutex()
   }
 
+  /**
+   * @param {string} tableName
+   * @param {string} columnName
+   * @param {string} referencedTableName
+   * @param {string} referencedColumnName
+   * @param {object} args
+   * @returns {Promise<void>}
+   */
   async addForeignKey(tableName, columnName, referencedTableName, referencedColumnName, args) {
     const tableForeignKeyArgs = Object.assign(
       {
@@ -41,6 +53,18 @@ export default class VelociousDatabaseDriversBase {
     }
   }
 
+  /**
+   * @interface
+   * @returns {Promise<string[]>}
+   */
+  alterTableSql() {
+    throw new Error("alterTableSql not implemented")
+  }
+
+  /**
+   * @param {...Parameters<this["createTableSql"]>} args
+   * @returns {void}
+   */
   async createTable(...args) {
     const sqls = this.createTableSql(...args)
 
@@ -49,12 +73,20 @@ export default class VelociousDatabaseDriversBase {
     }
   }
 
+  /**
+   * @param {...Parameters<this["deleteSql"]>} args
+   * @returns {void}
+   */
   async delete(...args) {
     const sql = this.deleteSql(...args)
 
     await this.query(sql)
   }
 
+  /**
+   * @param {...Parameters<this['dropTableSql']>} args
+   * @returns {void}
+   */
   async dropTable(...args) {
     const sqls = this.dropTableSql(...args)
 
@@ -63,20 +95,45 @@ export default class VelociousDatabaseDriversBase {
     }
   }
 
+  /**
+   * @interface
+   * @param {string} _tableName
+   * @param {object} _args
+   * @param {boolean} _args.cascade
+   * @param {boolean} _args.ifExists
+   * @returns {string}
+   */
+  dropTableSql(_tableName, _args) { // eslint-disable-line no-unused-vars
+    throw new Error("dropTableSql not implemented")
+  }
+
+  /**
+   * @returns {object}
+   */
   getArgs() {
     return this._args
   }
 
+  /**
+   * @returns {import("../../configuration.js").default}
+   */
   getConfiguration() {
     if (!this.configuration) throw new Error("No configuration set")
 
     return this.configuration
   }
 
+  /**
+   * @returns {number}
+   */
   getIdSeq() {
     return this.idSeq
   }
 
+  /**
+   * @interface
+   * @returns {Array<import("./base-table.js").default>}
+   */
   getTables() {
     throw new Error(`${this.constructor.name}#getTables not implemented`)
   }
@@ -106,6 +163,10 @@ export default class VelociousDatabaseDriversBase {
     await this.query(sql)
   }
 
+  /**
+   * @interface
+   * @returns {Promise<number>}
+   */
   lastInsertID() {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
   }
@@ -181,8 +242,12 @@ export default class VelociousDatabaseDriversBase {
     return await this.query(sql)
   }
 
-  setIdSeq(id) {
-    this.idSeq = id
+  /**
+   * @param {number} newIdSeq
+   * @returns {void}
+   */
+  setIdSeq(newIdSeq) {
+    this.idSeq = newIdSeq
   }
 
   /**
@@ -246,6 +311,9 @@ export default class VelociousDatabaseDriversBase {
     return result
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async startTransaction() {
     await this._transactionsActionsMutex.sync(async () => {
       await this._startTransactionAction()
@@ -253,10 +321,16 @@ export default class VelociousDatabaseDriversBase {
     })
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async _startTransactionAction() {
     await this.query("BEGIN TRANSACTION")
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async commitTransaction() {
     await this._transactionsActionsMutex.sync(async () => {
       await this._commitTransactionAction()
@@ -264,13 +338,16 @@ export default class VelociousDatabaseDriversBase {
     })
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async _commitTransactionAction() {
     await this.query("COMMIT")
   }
 
   /**
    * @param {string} sql
-   * @returns {Promise<Array>}
+   * @returns {Promise<Array<Record<string, any>>>}
    */
   async query(sql) {
     let tries = 0
@@ -292,10 +369,18 @@ export default class VelociousDatabaseDriversBase {
     }
   }
 
+  /**
+   * @interface
+   * @param {Error} _error
+   * @returns {boolean}
+   */
   retryableDatabaseError(_error) { // eslint-disable-line no-unused-vars
     return false
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async rollbackTransaction() {
     await this._transactionsActionsMutex.sync(async () => {
       await this._rollbackTransactionAction()
@@ -303,20 +388,34 @@ export default class VelociousDatabaseDriversBase {
     })
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async _rollbackTransactionAction() {
     await this.query("ROLLBACK")
   }
 
+  /**
+   * @returns {string}
+   */
   generateSavePointName() {
     return `sp${new UUID(4).format().replaceAll("-", "")}`
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async startSavePoint(savePointName) {
     await this._transactionsActionsMutex.sync(async () => {
       await this._startSavePointAction(savePointName)
     })
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async _startSavePointAction(savePointName) {
     await this.query(`SAVEPOINT ${savePointName}`)
   }
@@ -343,26 +442,45 @@ export default class VelociousDatabaseDriversBase {
     }
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async releaseSavePoint(savePointName) {
     await this._transactionsActionsMutex.sync(async () => {
       await this._releaseSavePointAction(savePointName)
     })
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async _releaseSavePointAction(savePointName) {
     await this.query(`RELEASE SAVEPOINT ${savePointName}`)
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async rollbackSavePoint(savePointName) {
     await this._transactionsActionsMutex.sync(async () => {
       await this._rollbackSavePointAction(savePointName)
     })
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async _rollbackSavePointAction(savePointName) {
     await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async truncateAllTables() {
     await this.withDisabledForeignKeys(async () => {
       let tries = 0
@@ -408,6 +526,10 @@ export default class VelociousDatabaseDriversBase {
     await this.query(sql)
   }
 
+  /**
+   * @param {function() : void} callback
+   * @returns {Promise<any>}
+   */
   async withDisabledForeignKeys(callback) {
     await this.disableForeignKeys()
 
