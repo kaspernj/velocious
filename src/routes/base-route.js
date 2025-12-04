@@ -13,10 +13,9 @@ export function initBaseRoute() {
 
     /**
      * @param {string} name
-     * @param {object} args
      */
-    get(name, args) {
-      const route = new GetRoute({name, args})
+    get(name) {
+      const route = new GetRoute({name})
 
       this.routes.push(route)
     }

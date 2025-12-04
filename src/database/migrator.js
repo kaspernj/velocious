@@ -5,21 +5,30 @@ import restArgsError from "../utils/rest-args-error.js"
 import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   */
   constructor({configuration, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration argument is required")
 
     this.configuration = configuration
-    this.logger = new Logger(this)
-    this.logger.setDebug(true)
+    this.logger = new Logger(this, {debug: true})
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async prepare() {
     await this.createMigrationsTable()
     await this.loadMigrationsVersions()
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async createMigrationsTable() {
     const dbs = await this.configuration.getCurrentConnections()
 
@@ -49,6 +58,11 @@ export default class VelociousDatabaseMigrator {
     }
   }
 
+  /**
+   * @param {string} dbIdentifier
+   * @param {string} version
+   * @returns {Promise<boolean>}
+   */
   hasRunMigrationVersion(dbIdentifier, version) {
     if (!this.migrationsVersions) throw new Error("Migrations versions hasn't been loaded yet")
     if (!this.migrationsVersions[dbIdentifier]) throw new Error(`Migrations versions hasn't been loaded yet for db: ${dbIdentifier}`)
