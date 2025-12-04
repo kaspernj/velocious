@@ -15,7 +15,7 @@ export default class VelociousDatabaseMigrator {
     if (!configuration) throw new Error("configuration argument is required")
 
     this.configuration = configuration
-    this.logger = new Logger(this, {debug: true})
+    this.logger = new Logger(this, {debug: false})
   }
 
   /**

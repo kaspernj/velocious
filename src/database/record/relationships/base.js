@@ -1,7 +1,22 @@
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseRecordBaseRelationship {
-  constructor({className, configuration, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", relationshipName, through, type, ...restArgs}) { // eslint-disable-line no-unused-vars
+  /**
+   * @param {object} args
+   * @param {string} args.className
+   * @param {import("../../../configuration.js").default} args.configuration
+   * @param {string} args.dependent
+   * @param {boolean|object} args.foreignKey
+   * @param {string} args.inverseOf
+   * @param {typeof import("../index.js").default} args.klass
+   * @param {typeof import("../index.js").default} args.modelClass
+   * @param {string} args.primaryKey
+   * @param {boolean} args.polymorphic
+   * @param {string} args.relationshipName
+   * @param {string} args.through
+   * @param {string} args.type
+   */
+  constructor({className, configuration, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, through, type, ...restArgs}) { // eslint-disable-line no-unused-vars
     restArgsError(restArgs)
 
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
@@ -14,6 +29,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this._inverseOf
     this.klass = klass
     this.modelClass = modelClass
+    this._polymorphic = polymorphic
     this._primaryKey = primaryKey
     this.relationshipName = relationshipName
     this.through = through
@@ -42,8 +58,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
   }
 
   /**
-   * @template T extends import("../index.js").default
-   * @returns {typeof T}
+   * @returns {typeof import("../index.js").default}
    */
   getModelClass() { return this.modelClass }
 

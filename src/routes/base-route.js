@@ -45,11 +45,10 @@ export function initBaseRoute() {
 
     /**
      * @param {string} name
-     * @param {object} args
      * @returns {void}
      */
-    post(name, args) {
-      const route = new PostRoute({name, args})
+    post(name) {
+      const route = new PostRoute({name})
 
       this.routes.push(route)
     }

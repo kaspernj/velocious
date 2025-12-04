@@ -167,6 +167,21 @@ export default class TableData {
    * @param {boolean} args.primaryKey
    * @returns {void}
    */
+  json(name, args = {}) { this.addColumn(name, Object.assign({isNewColumn: true, type: "json"}, args)) }
+
+  /**
+   * @param {string} name
+   * @param {object} args
+   * @param {boolean} args.autoIncrement
+   * @param {any} args.default
+   * @param {boolean} args.dropColumn
+   * @param {boolean|object} args.foreignKey
+   * @param {boolean|object} args.index
+   * @param {number} args.maxLength
+   * @param {boolean} args.null
+   * @param {boolean} args.primaryKey
+   * @returns {void}
+   */
   tinyint(name, args = {}) { this.addColumn(name, Object.assign({isNewColumn: true, type: "tinyint"}, args)) }
 
   /**
