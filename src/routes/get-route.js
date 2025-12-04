@@ -1,11 +1,13 @@
 import BaseRoute, {initBaseRoute} from "./base-route.js"
 import escapeStringRegexp from "escape-string-regexp"
+import restArgsError from "../utils/rest-args-error.js"
 
 initBaseRoute()
 
 export default class VelociousRouteGetRoute extends BaseRoute {
-  constructor({name}) {
+  constructor({name, ...restArgs}) {
     super()
+    restArgsError(restArgs)
     this.name = name
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
   }

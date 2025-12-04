@@ -1,6 +1,6 @@
 export default class VelociousEnvironmentHandlerBase {
   /**
-   * @param {import("../cli/base-command.js").default} configuration
+   * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
   async cliCommandsGenerateBaseModels(_command) { // eslint-disable-line no-unused-vars
@@ -8,7 +8,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} configuration
+   * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
   async cliCommandsInit(_command) { // eslint-disable-line no-unused-vars
@@ -16,7 +16,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} configuration
+   * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
   async cliCommandsMigrationGenerate(_command) { // eslint-disable-line no-unused-vars
@@ -24,7 +24,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} configuration
+   * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
   async cliCommandsMigrationDestroy(_command) { // eslint-disable-line no-unused-vars
@@ -32,7 +32,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} configuration
+   * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
   async cliCommandsGenerateModel(_command) { // eslint-disable-line no-unused-vars
@@ -40,7 +40,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} configuration
+   * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
   async cliCommandsServer(_command) { // eslint-disable-line no-unused-vars
@@ -48,7 +48,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} configuration
+   * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
   async cliCommandsTest(_command) { // eslint-disable-line no-unused-vars

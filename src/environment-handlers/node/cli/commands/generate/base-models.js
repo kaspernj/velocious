@@ -23,7 +23,7 @@ export default class DbGenerateModel extends BaseCommand {
 
       console.log(`create src/models/${modelBaseFileName}`)
 
-      const fileContent = `import Record from "velocious/src/database/record/index.js"\n\n`
+      let fileContent = `import Record from "velocious/src/database/record/index.js"\n\n`
 
       fileContent += `export default class ${modelNameCamelized} extends Record\n`
 

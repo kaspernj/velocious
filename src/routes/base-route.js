@@ -11,16 +11,29 @@ export function initBaseRoute() {
   VelociousBaseRoute = class VelociousBaseRoute {
     routes = []
 
+    /**
+     * @param {string} name
+     * @param {object} args
+     */
     get(name, args) {
       const route = new GetRoute({name, args})
 
       this.routes.push(route)
     }
 
+    /**
+     * @interface
+     * @param {string} _path
+     */
     matchWithPath(_path) { // eslint-disable-line no-unused-vars
       throw new Error(`No 'matchWithPath' implemented on ${this.constructor.name}`)
     }
 
+    /**
+     * @param {string} name
+     * @param {function(NamespaceRoute) : void} callback
+     * @returns {void}
+     */
     namespace(name, callback) {
       const route = new NamespaceRoute({name})
 
@@ -31,12 +44,22 @@ export function initBaseRoute() {
       }
     }
 
+    /**
+     * @param {string} name
+     * @param {object} args
+     * @returns {void}
+     */
     post(name, args) {
       const route = new PostRoute({name, args})
 
       this.routes.push(route)
     }
 
+    /**
+     * @param {string} name
+     * @param {function(ResourceRoute) : void} callback
+     * @returns {void}
+     */
     resources(name, callback) {
       const route = new ResourceRoute({name})
 

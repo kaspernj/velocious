@@ -50,10 +50,13 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {object}
+   * @returns {Record<string, any>}
    */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
+    if (!this.database[this.getEnvironment()]) {
+      throw new Error(`No database configuration for environment: ${this.getEnvironment()} - ${Object.keys(this.database).join(", ")}`)
+    }
 
     return digg(this, "database", this.getEnvironment())
   }

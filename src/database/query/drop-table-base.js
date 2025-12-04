@@ -3,6 +3,14 @@ import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
+  /**
+   * @param {object} args
+   * @param {boolean} args.cascade
+   * @param {import("./../drivers/base.js").default} args.driver
+   * @param {boolean} args.ifExists
+   * @param {object} args.options
+   * @param {string} args.tableName
+   */
   constructor({cascade, driver, ifExists, options, tableName, ...restArgs}) {
     super({driver, options})
 

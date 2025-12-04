@@ -12,6 +12,7 @@ export default class VelociousDatabaseMigrator {
 
     this.configuration = configuration
     this.logger = new Logger(this)
+    this.logger.setDebug(true)
   }
 
   async prepare() {
@@ -197,7 +198,7 @@ export default class VelociousDatabaseMigrator {
     for (const migration of files) {
       await this.runMigrationFile({
         migration,
-        require: requireContext(migration.file).default
+        require: () => requireContext(migration.file).default
       })
     }
   }

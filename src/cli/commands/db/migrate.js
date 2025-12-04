@@ -7,6 +7,8 @@ export default class DbMigrate extends BaseCommand {
     const migrations = await this.getEnvironmentHandler().findMigrations()
     const migrator = new Migrator({configuration: this.getConfiguration()})
 
+    console.log(`Running ${migrations.length} migrations`)
+
     await this.getConfiguration().ensureConnections(async () => {
       await migrator.prepare()
       await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
