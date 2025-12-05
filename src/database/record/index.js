@@ -199,7 +199,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Array<import("./relationships/base.js").default}
+   * @returns {Array<import("./relationships/base.js").default>}
    */
   static getRelationships() {
     if (this._relationships) return Object.values(this._relationships)

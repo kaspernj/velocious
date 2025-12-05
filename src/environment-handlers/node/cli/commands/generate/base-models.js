@@ -90,9 +90,9 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
 
           if (fullFilePath && await fileExists(fullFilePath)) {
-            fileContent += `   * @returns {import(\"../models/${fileName}.js\").default}\n`
+            fileContent += `   * @returns {import("../models/${fileName}.js").default}\n`
           } else {
-            fileContent += `   * @returns {import(\"velocious/src/database/record/index.js\").default}\n`
+            fileContent += `   * @returns {import("velocious/src/database/record/index.js").default}\n`
           }
 
           fileContent += "   */\n"
@@ -101,9 +101,9 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
 
           if (fullFilePath && await fileExists(fullFilePath)) {
-            fileContent += `   * @returns {Array<import(\"../models/${fileName}.js\").default>}\n`
+            fileContent += `   * @returns {Array<import("../models/${fileName}.js").default>}\n`
           } else {
-            fileContent += `   * @returns {Array<import(\"velocious/src/database/record/index.js\").default>}\n`
+            fileContent += `   * @returns {Array<import("velocious/src/database/record/index.js").default>}\n`
           }
 
           fileContent += "   */\n"
