@@ -44,8 +44,7 @@ class ValidationError extends Error {
 
 class VelociousDatabaseRecord {
   /**
-   * @template T extends import("./validators/base.js").default
-   * @returns {Record<string, T>}
+   * @returns {Record<string, import("./validators/base.js").default>}
    */
   static validatorTypes() {
     if (!this._validatorTypes) this._validatorTypes = {}
@@ -55,16 +54,14 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name
-   * @template T extends import("./validators/base.js").default
-   * @param {T} validatorClass
+   * @param {import("./validators/base.js").default} validatorClass
    */
   static registerValidatorType(name, validatorClass) {
     this.validatorTypes()[name] = validatorClass
   }
 
   /**
-   * @template T extends import("./validators/base.js").default
-   * @returns {T}
+   * @returns {import("./validators/base.js").default}
    */
   static getValidatorType(validatorName) {
     if (!(validatorName in this.validatorTypes())) throw new Error(`Validator type ${validatorName} not found`)
@@ -189,8 +186,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @template T extends import("./relationships/index.js").default
-   * @returns {T}
+   * @returns {import("./relationships/base.js").default}
    */
   static getRelationshipByName(relationshipName) {
     if (!this._relationships) this._relationships = {}
@@ -203,7 +199,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Array}
+   * @returns {Array<import("./relationships/base.js").default}
    */
   static getRelationships() {
     if (this._relationships) return Object.values(this._relationships)
@@ -269,7 +265,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {object} attributes
+   * @param {Record<string, any>} attributes
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async create(attributes) {
@@ -1050,7 +1046,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the given attributes to the record.
-   * @param {object} attributesToAssign
+   * @param {Record<string, any>} attributesToAssign
    * @returns {void}
    */
   assign(attributesToAssign) {

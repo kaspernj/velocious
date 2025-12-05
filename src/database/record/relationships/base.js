@@ -68,6 +68,13 @@ export default class VelociousDatabaseRecordBaseRelationship {
   getRelationshipName() { return this.relationshipName }
 
   /**
+   * @returns {boolean}
+   */
+  getPolymorphic() {
+    return this._polymorphic
+  }
+
+  /**
    * @returns {string} The name of the foreign key, e.g. "id" etc.
    */
   getPrimaryKey() { return this._primaryKey }
@@ -78,11 +85,12 @@ export default class VelociousDatabaseRecordBaseRelationship {
   getType() { return this.type }
 
   /**
-   * @template T extends import("../index.js").default
-   * @returns {typeof T} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class.
+   * @returns {typeof import("../index.js").default} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class.
    */
   getTargetModelClass() {
-    if (this.className) {
+    if (this.getPolymorphic()) {
+      return null
+    } else if (this.className) {
       return this.modelClass._getConfiguration().getModelClass(this.className)
     } else if (this.klass) {
       return this.klass

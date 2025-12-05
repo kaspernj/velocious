@@ -25,7 +25,7 @@ export default class DbGenerateModel extends BaseCommand {
 
       let fileContent = `import Record from "velocious/src/database/record/index.js"\n\n`
 
-      fileContent += `export default class ${modelNameCamelized} extends Record {\n`
+      fileContent += `export default class ${modelNameCamelized}Base extends Record {\n`
 
       const columns = await modelClass._getTable().getColumns()
       let methodsCount = 0
@@ -68,6 +68,49 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += "   * @returns {boolean}\n"
         fileContent += "   */\n"
         fileContent += `  has${camelizedColumnNameBigFirst}() { return this._hasAttribute(this.${camelizedColumnName}()) }\n`
+
+        methodsCount++
+      }
+
+      for (const relationship of modelClass.getRelationships()) {
+        let fileName, fullFilePath
+
+        if (relationship.getPolymorphic()) {
+          fileName = "velocious/src/database/record/index.js"
+        } else {
+          fileName = inflection.dasherize(inflection.underscore(relationship.getTargetModelClass().name))
+          fullFilePath = `src/models/${fileName}.js`
+        }
+
+        if (methodsCount > 0) {
+          fileContent += "\n"
+        }
+
+        if (relationship.getType() == "belongsTo" || relationship.getType() == "hasOne") {
+          fileContent += "  /**\n"
+
+          if (fullFilePath && await fileExists(fullFilePath)) {
+            fileContent += `   * @returns {import(\"../models/${fileName}.js\").default}\n`
+          } else {
+            fileContent += `   * @returns {import(\"velocious/src/database/record/index.js\").default}\n`
+          }
+
+          fileContent += "   */\n"
+          fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
+        } else if (relationship.getType() == "hasMany") {
+          fileContent += "  /**\n"
+
+          if (fullFilePath && await fileExists(fullFilePath)) {
+            fileContent += `   * @returns {Array<import(\"../models/${fileName}.js\").default>}\n`
+          } else {
+            fileContent += `   * @returns {Array<import(\"velocious/src/database/record/index.js\").default>}\n`
+          }
+
+          fileContent += "   */\n"
+          fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
+        } else {
+          throw new Error(`Unknown relationship type: ${relationship.getType()}`)
+        }
 
         methodsCount++
       }
