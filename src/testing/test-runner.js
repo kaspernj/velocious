@@ -26,7 +26,7 @@ export default class TestRunner {
   getConfiguration() { return this._configuration }
 
   /**
-   * @returns {Array<string>}
+   * @returns {string[]}
    */
   getTestFiles() { return this._testFiles }
 

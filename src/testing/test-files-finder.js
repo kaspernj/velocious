@@ -12,45 +12,39 @@ export default class TestFilesFinder {
   /**
    * @param {object} args
    * @param {string} args.directory
+   * @param {string[]} args.directories
    * @param {string[]} args.processArgs
    */
-  constructor({directory, processArgs, ...restArgs}) {
+  constructor({directory, directories, processArgs, ...restArgs}) {
     restArgsError(restArgs)
 
     this.directory = directory
-    this.directories = [
-      `${directory}/__tests__`,
-      `${directory}/spec`,
-      `${directory}/tests`
-    ]
+    this.directories = directories
+    this.findingCount = 0
+    this.processArgs = processArgs
 
     /** @type {string[]} */
     this.foundFiles = []
 
-    this.findingCount = 0
-
     /** @type {Record<number, Promise<void>>} */
     this.findingPromises = {}
-
-    this.processArgs = processArgs
 
     /** @type {string[]} */
     this.testArgs = this.processArgs.filter((processArg, index) => index != 0)
 
-    /** @type {Array<{arg: string, type: string}>} */
-    this.parsedTestArgs = this.testArgs.map((testArg) => {
-      if (testArg.endsWith("/")) {
-        return {
-          arg: testArg,
-          type: "directory"
-        }
-      }
+    /** @type {string[]} */
+    this.directoryArgs = []
 
-      return {
-        arg: testArg,
-        type: "file"
+    /** @type {string[]} */
+    this.fileArgs = []
+
+    for (const testArg of this.testArgs) {
+      if (testArg.endsWith("/")) {
+        this.directoryArgs.push(testArg)
+      } else {
+        this.fileArgs.push(testArg)
       }
-    })
+    }
   }
 
   /**
@@ -59,7 +53,10 @@ export default class TestFilesFinder {
   async findTestFiles() {
     await this.withFindingCount(async () => {
       for (const directory of this.directories) {
+        console.log({directory})
+
         if (await fileExists(directory)) {
+          console.log("Exists!")
           await this.findTestFilesInDir(directory)
         }
       }
@@ -149,24 +146,32 @@ export default class TestFilesFinder {
    * @returns {boolean}
    */
   isFileMatchingRequirements(file, localPath) {
-    if (this.parsedTestArgs.length > 0) {
-      for (const parsedTestArg of this.parsedTestArgs) {
-        if (parsedTestArg.type == "file") {
-          if (parsedTestArg.arg == localPath) {
-            return true
-          }
-        } else if (parsedTestArg.type == "directory") {
-          if (localPath.startsWith(parsedTestArg.arg)) {
-            return true
-          }
-        } else {
-          throw new Error(`Unknown arg type: ${parsedTestArg.type}`)
+    if (this.directoryArgs.length > 0) {
+      for (const directoryArg of this.directoryArgs) {
+        if (localPath.startsWith(directoryArg) && this.looksLikeTestFile(file)) {
+          return true
         }
       }
-    } else if (file.match(/-(spec|test)\.(m|)js$/)) {
+    }
+
+    if (this.fileArgs.length > 0) {
+      for (const fileArg of this.fileArgs) {
+        if (fileArg == localPath) {
+          return true
+        }
+      }
+    } else if (this.looksLikeTestFile(file)) {
       return true
     }
 
     return false
+  }
+
+  /**
+   * @param {string} file
+   * @returns {boolean}
+   */
+  looksLikeTestFile(file) {
+    return Boolean(file.match(/-(spec|test)\.(m|)js$/))
   }
 }
