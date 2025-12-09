@@ -2,6 +2,7 @@
 
 import fs from "fs/promises"
 
+import fileExists from "../utils/file-exists.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 // Incredibly complex class to find files in multiple simultanious running promises to do it as fast as possible.
@@ -58,7 +59,9 @@ export default class TestFilesFinder {
   async findTestFiles() {
     await this.withFindingCount(async () => {
       for (const directory of this.directories) {
-        await this.findTestFilesInDir(directory)
+        if (await fileExists(directory)) {
+          await this.findTestFilesInDir(directory)
+        }
       }
     })
 
