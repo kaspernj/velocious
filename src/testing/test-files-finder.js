@@ -19,7 +19,17 @@ export default class TestFilesFinder {
     restArgsError(restArgs)
 
     this.directory = directory
-    this.directories = directories
+
+    if (directories) {
+      this.directories = directories
+    } else {
+      this.directories = [
+        `${this.directory}/__tests__`,
+        `${this.directory}/tests`,
+        `${this.directory}/spec`
+      ]
+    }
+
     this.findingCount = 0
     this.processArgs = processArgs
 
