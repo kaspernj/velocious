@@ -87,27 +87,77 @@ export default class DbGenerateModel extends BaseCommand {
         }
 
         if (relationship.getType() == "belongsTo" || relationship.getType() == "hasOne") {
-          fileContent += "  /**\n"
+          let modelFilePath
 
           if (fullFilePath && await fileExists(fullFilePath)) {
-            fileContent += `   * @returns {import("../models/${fileName}.js").default}\n`
+            modelFilePath = `../models/${fileName}.js`
           } else {
-            fileContent += `   * @returns {import("velocious/src/database/record/index.js").default}\n`
+            modelFilePath = "velocious/src/database/record/index.js"
           }
 
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += `   * @returns {import("${modelFilePath}").default}\n`
+          fileContent += "   */\n"
+          fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += "   * @returns {Promise<void>}\n"
+          fileContent += "   */\n"
+          fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += `   * @param {import("${modelFilePath}").default} newModel\n`
+          fileContent += `   * @returns {void}\n`
+          fileContent += "   */\n"
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
         } else if (relationship.getType() == "hasMany") {
-          fileContent += "  /**\n"
+          let recordImport
 
           if (fullFilePath && await fileExists(fullFilePath)) {
-            fileContent += `   * @returns {Array<import("../models/${fileName}.js").default>}\n`
+            recordImport = `../models/${fileName}.js`
           } else {
-            fileContent += `   * @returns {Array<import("velocious/src/database/record/index.js").default>}\n`
+            recordImport = "velocious/src/database/record/index.js"
           }
 
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += `   * @returns {import("velocious/src/database/query/index.js").default<import("${recordImport}").default>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += `   * @returns {Array<import("${recordImport}").default>}\n`
+          fileContent += "   */\n"
+          fileContent += `  ${relationship.getRelationshipName()}Loaded() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += "   * @returns {Promise<void>}\n"
+          fileContent += "   */\n"
+          fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @interface\n"
+          fileContent += `   * @param {Array<import("${recordImport}").default>} newModels\n`
+          fileContent += "   * @returns {void>}\n"
+          fileContent += "   */\n"
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
         } else {
           throw new Error(`Unknown relationship type: ${relationship.getType()}`)
         }
