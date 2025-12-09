@@ -14,7 +14,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     await testRunner.prepare()
 
     if (testRunner.getTestsCount() === 0) {
-      throw new Error("No tests has been found")
+      throw new Error(`${testRunner.getTestsCount()} tests was found in ${testFiles.length} file(s)`)
     }
 
     await testRunner.run()

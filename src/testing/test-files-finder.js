@@ -1,21 +1,64 @@
+// @ts-check
+
 import fs from "fs/promises"
+
+import restArgsError from "../utils/rest-args-error.js"
 
 // Incredibly complex class to find files in multiple simultanious running promises to do it as fast as possible.
 export default class TestFilesFinder {
   static IGNORED_NAMES = [".git", "node_modules"]
 
-  constructor({directory, processArgs}) {
+  /**
+   * @param {object} args
+   * @param {string} args.directory
+   * @param {string[]} args.processArgs
+   */
+  constructor({directory, processArgs, ...restArgs}) {
+    restArgsError(restArgs)
+
     this.directory = directory
+    this.directories = [
+      `${directory}/__tests__`,
+      `${directory}/tests`
+    ]
+
+    /** @type {string[]} */
     this.foundFiles = []
+
     this.findingCount = 0
+
+    /** @type {Record<number, Promise<void>>} */
     this.findingPromises = {}
+
     this.processArgs = processArgs
+
+    /** @type {string[]} */
     this.testArgs = this.processArgs.filter((processArg, index) => index != 0)
+
+    /** @type {Array<{arg: string, type: string}>} */
+    this.parsedTestArgs = this.testArgs.map((testArg) => {
+      if (testArg.endsWith("/")) {
+        return {
+          arg: testArg,
+          type: "directory"
+        }
+      }
+
+      return {
+        arg: testArg,
+        type: "file"
+      }
+    })
   }
 
+  /**
+   * @returns {Promise<string[]>}
+   */
   async findTestFiles() {
     await this.withFindingCount(async () => {
-      await this.findTestFilesInDir(this.directory)
+      for (const directory of this.directories) {
+        await this.findTestFilesInDir(directory)
+      }
     })
 
     await this.waitForFindingPromises()
@@ -23,6 +66,9 @@ export default class TestFilesFinder {
     return this.foundFiles
   }
 
+  /**
+   * @returns {number}
+   */
   findingPromisesLength() { return Object.keys(this.findingPromises).length }
 
   async waitForFindingPromises() {
@@ -31,6 +77,9 @@ export default class TestFilesFinder {
     }
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async waitForFindingPromisesIteration() {
     const unfinishedPromises = []
 
@@ -43,6 +92,9 @@ export default class TestFilesFinder {
     await Promise.all(unfinishedPromises)
   }
 
+  /**
+   * @param {function() : Promise<void>} callback
+   */
   withFindingCount(callback) {
     return new Promise((resolve) => {
       const findingPromise = callback()
@@ -54,11 +106,15 @@ export default class TestFilesFinder {
       findingPromise.finally(() => {
         delete this.findingPromises[findingCount]
 
-        resolve()
+        resolve(undefined)
       })
     })
   }
 
+  /**
+   * @param {string} dir
+   * @returns {Promise<void>}
+   */
   async findTestFilesInDir(dir) {
     await this.withFindingCount(async () => {
       const files = await fs.readdir(dir)
@@ -89,10 +145,18 @@ export default class TestFilesFinder {
    * @returns {boolean}
    */
   isFileMatchingRequirements(file, localPath) {
-    if (this.testArgs.length > 0) {
-      for (const testArg of this.testArgs) {
-        if (testArg == localPath) {
-          return true
+    if (this.parsedTestArgs.length > 0) {
+      for (const parsedTestArg of this.parsedTestArgs) {
+        if (parsedTestArg.type == "file") {
+          if (parsedTestArg.arg == localPath) {
+            return true
+          }
+        } else if (parsedTestArg.type == "directory") {
+          if (localPath.startsWith(parsedTestArg.arg)) {
+            return true
+          }
+        } else {
+          throw new Error(`Unknown arg type: ${parsedTestArg.type}`)
         }
       }
     } else if (file.match(/-(spec|test)\.(m|)js$/)) {
