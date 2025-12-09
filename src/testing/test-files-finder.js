@@ -19,6 +19,7 @@ export default class TestFilesFinder {
     this.directory = directory
     this.directories = [
       `${directory}/__tests__`,
+      `${directory}/spec`,
       `${directory}/tests`
     ]
 
