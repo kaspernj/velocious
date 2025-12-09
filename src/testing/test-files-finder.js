@@ -1,21 +1,75 @@
+// @ts-check
+
 import fs from "fs/promises"
+
+import fileExists from "../utils/file-exists.js"
+import restArgsError from "../utils/rest-args-error.js"
 
 // Incredibly complex class to find files in multiple simultanious running promises to do it as fast as possible.
 export default class TestFilesFinder {
   static IGNORED_NAMES = [".git", "node_modules"]
 
-  constructor({directory, processArgs}) {
+  /**
+   * @param {object} args
+   * @param {string} args.directory
+   * @param {string[]} args.directories
+   * @param {string[]} args.processArgs
+   */
+  constructor({directory, directories, processArgs, ...restArgs}) {
+    restArgsError(restArgs)
+
     this.directory = directory
-    this.foundFiles = []
+
+    if (directories) {
+      this.directories = directories
+    } else {
+      this.directories = [
+        `${this.directory}/__tests__`,
+        `${this.directory}/tests`,
+        `${this.directory}/spec`
+      ]
+    }
+
     this.findingCount = 0
-    this.findingPromises = {}
     this.processArgs = processArgs
+
+    /** @type {string[]} */
+    this.foundFiles = []
+
+    /** @type {Record<number, Promise<void>>} */
+    this.findingPromises = {}
+
+    /** @type {string[]} */
     this.testArgs = this.processArgs.filter((processArg, index) => index != 0)
+
+    /** @type {string[]} */
+    this.directoryArgs = []
+
+    /** @type {string[]} */
+    this.fileArgs = []
+
+    for (const testArg of this.testArgs) {
+      if (testArg.endsWith("/")) {
+        this.directoryArgs.push(testArg)
+      } else {
+        this.fileArgs.push(testArg)
+      }
+    }
   }
 
+  /**
+   * @returns {Promise<string[]>}
+   */
   async findTestFiles() {
     await this.withFindingCount(async () => {
-      await this.findTestFilesInDir(this.directory)
+      for (const directory of this.directories) {
+        console.log({directory})
+
+        if (await fileExists(directory)) {
+          console.log("Exists!")
+          await this.findTestFilesInDir(directory)
+        }
+      }
     })
 
     await this.waitForFindingPromises()
@@ -23,6 +77,9 @@ export default class TestFilesFinder {
     return this.foundFiles
   }
 
+  /**
+   * @returns {number}
+   */
   findingPromisesLength() { return Object.keys(this.findingPromises).length }
 
   async waitForFindingPromises() {
@@ -31,6 +88,9 @@ export default class TestFilesFinder {
     }
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async waitForFindingPromisesIteration() {
     const unfinishedPromises = []
 
@@ -43,6 +103,9 @@ export default class TestFilesFinder {
     await Promise.all(unfinishedPromises)
   }
 
+  /**
+   * @param {function() : Promise<void>} callback
+   */
   withFindingCount(callback) {
     return new Promise((resolve) => {
       const findingPromise = callback()
@@ -54,11 +117,15 @@ export default class TestFilesFinder {
       findingPromise.finally(() => {
         delete this.findingPromises[findingCount]
 
-        resolve()
+        resolve(undefined)
       })
     })
   }
 
+  /**
+   * @param {string} dir
+   * @returns {Promise<void>}
+   */
   async findTestFilesInDir(dir) {
     await this.withFindingCount(async () => {
       const files = await fs.readdir(dir)
@@ -89,16 +156,32 @@ export default class TestFilesFinder {
    * @returns {boolean}
    */
   isFileMatchingRequirements(file, localPath) {
-    if (this.testArgs.length > 0) {
-      for (const testArg of this.testArgs) {
-        if (testArg == localPath) {
+    if (this.directoryArgs.length > 0) {
+      for (const directoryArg of this.directoryArgs) {
+        if (localPath.startsWith(directoryArg) && this.looksLikeTestFile(file)) {
           return true
         }
       }
-    } else if (file.match(/-(spec|test)\.(m|)js$/)) {
+    }
+
+    if (this.fileArgs.length > 0) {
+      for (const fileArg of this.fileArgs) {
+        if (fileArg == localPath) {
+          return true
+        }
+      }
+    } else if (this.looksLikeTestFile(file)) {
       return true
     }
 
     return false
+  }
+
+  /**
+   * @param {string} file
+   * @returns {boolean}
+   */
+  looksLikeTestFile(file) {
+    return Boolean(file.match(/-(spec|test)\.(m|)js$/))
   }
 }
