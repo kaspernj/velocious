@@ -1,13 +1,21 @@
 import {digs} from "diggerize"
+import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryParserSelectParser {
-  constructor({pretty, query}) {
+  /**
+   * @param {object} args
+   * @param {boolean} args.pretty
+   * @param {import("../query/index.js").default} args.query
+   */
+  constructor({pretty, query, ...restArgs}) {
+    restArgsError(restArgs)
+
     this.pretty = pretty
     this.query = query
   }
 
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
 
     let sql = ""
 
@@ -34,7 +42,7 @@ export default class VelociousDatabaseQueryParserSelectParser {
       }
     }
 
-    if (query._selects.length == 0) {
+    if (query.getSelects().length == 0) {
       if (query.modelClass) {
         sql += `${query.modelClass.connection().quoteTable(query.modelClass.tableName())}.*`
       } else {

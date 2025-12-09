@@ -15,50 +15,86 @@ import restArgsError from "../../utils/rest-args-error.js"
  * @typedef {Record<string, boolean|NestedPreloadRecord>} NestedPreloadRecord
  */
 
+/**
+ * A generic query over some model type.
+ *
+ * @template TRecord extends {import("../record/index.js").default}
+ * @template TDriver extends {import("../drivers/base.js").default}
+ * @template TFromBase extends {import("./from-base.js").default}
+ * @template TJoinBase extends {import("./join-base.js").default}
+ * @template TOrderBase extends {import("./order-base.js").default}
+ * @template TSelectBase extends {import("./select-base.js").default}
+ * @template TWhereBase extends {import("./where-base.js").default}
+ */
 export default class VelociousDatabaseQuery {
   /**
    * @param {object} args
-   * @template {import("../drivers/base.js").default} Tdriver
-   * @param {Tdriver} args.driver
-   * @template {import("./from-base.js").default} TfromBase
-   * @param {TfromBase[]} args.froms
-   * @param {string[]} args.groups
-   * @template {import("./join-base.js").default} TjoinBase
-   * @param {TjoinBase[]} args.joins
+   * @param {TDriver} args.driver
+   * @param {TFromBase[]} [args.froms]
+   * @param {string[]} [args.groups]
+   * @param {TJoinBase[]} [args.joins]
    * @param {import("../handler.js").default} args.handler
-   * @param {number} args.limit
-   * @template {import("../record/index.js").default} Trecord
-   * @param {typeof Trecord} args.modelClass
-   * @param {number} args.offset
-   * @template {import("./order-basejs").default} TorderBase
-   * @param {TorderBase[]} args.orders
-   * @param {number} args.page
+   * @param {number | null} [args.limit]
+   * @param {new (...args: any[]) => TRecord} args.modelClass
+   * @param {number | null} [args.offset]
+   * @param {TOrderBase[]} [args.orders]
+   * @param {number | null} [args.page]
    * @param {number} args.perPage
-   * @param {NestedPreloadRecord} args.preload
-   * @param {Record<string, Array<string>>} args.selects
-   * @template {import("./where-base.js").default} TwhereBase
-   * @param {TwhereBase[]} args.wheres
+   * @param {NestedPreloadRecord} [args.preload]
+   * @param {Array<TSelectBase>} [args.selects]
+   * @param {TWhereBase[]} [args.wheres]
    */
-  constructor({driver, froms = [], groups = [], joins = [], handler, limit = null, modelClass, offset = null, orders = [], page = null, perPage, preload = {}, selects = [], wheres = [], ...restArgs}) {
+  constructor({
+    driver,
+    froms = [],
+    groups = [],
+    joins = [],
+    handler,
+    limit = null,
+    modelClass,
+    offset = null,
+    orders = [],
+    page = null,
+    perPage,
+    preload = {},
+    selects = [],
+    wheres = [],
+    ...restArgs
+  }) {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
 
     restArgsError(restArgs)
 
+    /** @type {TDriver} */
     this.driver = driver
+
     this.handler = handler
     this.logger = new Logger(this)
+
+    /** @type {new (...args: any[]) => TRecord} */
     this.modelClass = modelClass
+
+    /** @type {TFromBase[]} */
     this._froms = froms
+
     this._groups = groups
+
+    /** @type {TJoinBase[]} */
     this._joins = joins
+
     this._limit = limit
     this._offset = offset
+
+    /** @type {TOrderBase[]} */
     this._orders = orders
+
     this._page = page
     this._perPage = perPage
     this._preload = preload
     this._selects = selects
+
+    /** @type {TWhereBase[]} */
     this._wheres = wheres
   }
 
@@ -148,6 +184,11 @@ export default class VelociousDatabaseQuery {
   getOptions() { return this.driver.options() }
 
   /**
+   * @returns {Array<TSelectBase>}
+   */
+  getSelects() { return this._selects }
+
+  /**
    * @returns {Promise<void>}
    */
   async destroyAll() {
@@ -160,7 +201,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {number|string} recordId
-   * @returns {Promise<InstanceType<this["modelClass"]>>}
+   * @returns {Promise<TRecord>}
    */
   async find(recordId) {
     const conditions = {}
@@ -179,7 +220,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {object} conditions
-   * @returns {Promise<InstanceType<this["modelClass"]>>}
+   * @returns {Promise<TRecord|null>}
    */
   async findBy(conditions) {
     const newConditions = {}
@@ -195,7 +236,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {...Parameters<this["findOrInitializeBy"]>} args
-   * @returns {Promise<InstanceType<this["modelClass"]>>}
+   * @returns {Promise<TRecord>}
    */
   async findOrCreateBy(...args) {
     const record = await this.findOrInitializeBy(...args)
@@ -209,7 +250,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {object} conditions
-   * @returns {Promise<InstanceType<this["modelClass"]>>}
+   * @returns {Promise<TRecord>}
    */
   async findByOrFail(conditions) {
     const newConditions = {}
@@ -232,7 +273,7 @@ export default class VelociousDatabaseQuery {
   /**
    * @param {object} conditions
    * @param {function() : void} callback
-   * @returns {Promise<InstanceType<this["modelClass"]>>}
+   * @returns {Promise<TRecord>}
    */
   async findOrInitializeBy(conditions, callback) {
     const record = await this.findBy(conditions)
@@ -249,7 +290,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<InstanceType<this["modelClass"]>>}
+   * @returns {Promise<TRecord>}
    */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.orderableColumn())}`)
@@ -298,7 +339,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<InstanceType<this["modelClass"]>>}
+   * @returns {Promise<TRecord>}
    */
   async last() {
     const primaryKey = this.modelClass.primaryKey()
@@ -435,7 +476,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Converts query results to array of model instances
-   * @returns {Promise<Array<InstanceType<this["modelClass"]>>>}
+   * @returns {Promise<Array<TRecord>>}
    */
   async toArray() {
     const models = []

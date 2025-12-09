@@ -149,6 +149,10 @@ class VelociousDatabaseRecord {
         return this.getRelationshipByName(relationshipName)
       }
 
+      this.prototype[`${relationshipName}Loaded`] = function() {
+        return this.getRelationshipByName(relationshipName).loaded()
+      }
+
       this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
