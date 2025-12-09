@@ -73,15 +73,13 @@ export default class DbGenerateModel extends BaseCommand {
       }
 
       for (const relationship of modelClass.getRelationships()) {
-        let fileName, fullFilePath, targetModelName
+        let fileName, fullFilePath
 
         if (relationship.getPolymorphic()) {
           fileName = "velocious/src/database/record/index.js"
-          targetModelName = "BaseRecord"
         } else {
           fileName = inflection.dasherize(inflection.underscore(relationship.getTargetModelClass().name))
           fullFilePath = `src/models/${fileName}.js`
-          targetModelName = relationship.getTargetModelClass().name
         }
 
         if (methodsCount > 0) {

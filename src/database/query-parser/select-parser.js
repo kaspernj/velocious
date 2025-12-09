@@ -15,7 +15,7 @@ export default class VelociousDatabaseQueryParserSelectParser {
   }
 
   toSql() {
-    const {pretty, query} = this
+    const {pretty, query} = digs(this, "pretty", "query")
 
     let sql = ""
 

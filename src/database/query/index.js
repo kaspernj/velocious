@@ -17,32 +17,24 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 /**
  * A generic query over some model type.
- *
- * @template TRecord extends {import("../record/index.js").default}
- * @template TDriver extends {import("../drivers/base.js").default}
- * @template TFromBase extends {import("./from-base.js").default}
- * @template TJoinBase extends {import("./join-base.js").default}
- * @template TOrderBase extends {import("./order-base.js").default}
- * @template TSelectBase extends {import("./select-base.js").default}
- * @template TWhereBase extends {import("./where-base.js").default}
  */
 export default class VelociousDatabaseQuery {
   /**
    * @param {object} args
-   * @param {TDriver} args.driver
-   * @param {TFromBase[]} [args.froms]
+   * @param {import("../drivers/base.js").default} args.driver
+   * @param {Array<import("./from-base.js").default>} [args.froms]
    * @param {string[]} [args.groups]
-   * @param {TJoinBase[]} [args.joins]
+   * @param {Array<import("./join-base.js").default>} [args.joins]
    * @param {import("../handler.js").default} args.handler
    * @param {number | null} [args.limit]
-   * @param {new (...args: any[]) => TRecord} args.modelClass
+   * @param {typeof import("../record/index.js").default} args.modelClass
    * @param {number | null} [args.offset]
-   * @param {TOrderBase[]} [args.orders]
+   * @param {Array<import("./order-base.js").default>} [args.orders]
    * @param {number | null} [args.page]
    * @param {number} args.perPage
    * @param {NestedPreloadRecord} [args.preload]
-   * @param {Array<TSelectBase>} [args.selects]
-   * @param {TWhereBase[]} [args.wheres]
+   * @param {Array<import("./select-base.js").default>} [args.selects]
+   * @param {Array<import("./where-base.js").default>} [args.wheres]
    */
   constructor({
     driver,
@@ -66,35 +58,21 @@ export default class VelociousDatabaseQuery {
 
     restArgsError(restArgs)
 
-    /** @type {TDriver} */
     this.driver = driver
 
     this.handler = handler
     this.logger = new Logger(this)
-
-    /** @type {new (...args: any[]) => TRecord} */
     this.modelClass = modelClass
-
-    /** @type {TFromBase[]} */
     this._froms = froms
-
     this._groups = groups
-
-    /** @type {TJoinBase[]} */
     this._joins = joins
-
     this._limit = limit
     this._offset = offset
-
-    /** @type {TOrderBase[]} */
     this._orders = orders
-
     this._page = page
     this._perPage = perPage
     this._preload = preload
     this._selects = selects
-
-    /** @type {TWhereBase[]} */
     this._wheres = wheres
   }
 
@@ -184,7 +162,7 @@ export default class VelociousDatabaseQuery {
   getOptions() { return this.driver.options() }
 
   /**
-   * @returns {Array<TSelectBase>}
+   * @returns {Array<import("./select-base.js").default>}
    */
   getSelects() { return this._selects }
 
@@ -201,7 +179,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {number|string} recordId
-   * @returns {Promise<TRecord>}
+   * @returns {Promise<import("../record/index.js").default>}
    */
   async find(recordId) {
     const conditions = {}
@@ -220,7 +198,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {object} conditions
-   * @returns {Promise<TRecord|null>}
+   * @returns {Promise<import("../record/index.js").default|null>}
    */
   async findBy(conditions) {
     const newConditions = {}
@@ -236,7 +214,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {...Parameters<this["findOrInitializeBy"]>} args
-   * @returns {Promise<TRecord>}
+   * @returns {Promise<import("../record/index.js").default>}
    */
   async findOrCreateBy(...args) {
     const record = await this.findOrInitializeBy(...args)
@@ -250,7 +228,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {object} conditions
-   * @returns {Promise<TRecord>}
+   * @returns {Promise<import("../record/index.js").default>}
    */
   async findByOrFail(conditions) {
     const newConditions = {}
@@ -273,7 +251,7 @@ export default class VelociousDatabaseQuery {
   /**
    * @param {object} conditions
    * @param {function() : void} callback
-   * @returns {Promise<TRecord>}
+   * @returns {Promise<import("../record/index.js").default>}
    */
   async findOrInitializeBy(conditions, callback) {
     const record = await this.findBy(conditions)
@@ -290,7 +268,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<TRecord>}
+   * @returns {Promise<import("../record/index.js").default>}
    */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.orderableColumn())}`)
@@ -339,7 +317,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @returns {Promise<TRecord>}
+   * @returns {Promise<import("../record/index.js").default>}
    */
   async last() {
     const primaryKey = this.modelClass.primaryKey()
@@ -476,7 +454,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Converts query results to array of model instances
-   * @returns {Promise<Array<TRecord>>}
+   * @returns {Promise<Array<import("../record/index.js").default>>}
    */
   async toArray() {
     const models = []
