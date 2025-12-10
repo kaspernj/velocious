@@ -43,7 +43,7 @@ export default class VelociousHttpServerWorker {
       delete this.clients[clientCount]
     })
 
-    client.worker = this.worker
+    client.setWorker(this.worker)
     client.listen()
 
     this.clients[clientCount] = client

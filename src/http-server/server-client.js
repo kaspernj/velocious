@@ -23,7 +23,9 @@ export default class ServerClient {
     socket.on("end", this.onSocketEnd)
   }
 
-  listen = () => this.socket.on("data", this.onSocketData)
+  listen() {
+    this.socket.on("data", this.onSocketData)
+  }
 
   end() {
     return new Promise((resolve) => {
@@ -38,6 +40,8 @@ export default class ServerClient {
    */
   onSocketData = (chunk) => {
     this.logger.debug(() => [`Socket ${this.clientCount}: ${chunk}`])
+
+    if (!this.worker) throw new Error("No worker")
 
     this.worker.postMessage({
       command: "clientWrite",
@@ -65,5 +69,13 @@ export default class ServerClient {
         resolve()
       })
     })
+  }
+
+  /**
+   * @param {import("worker_threads").Worker} newWorker
+   * @returns {void}
+   */
+  setWorker(newWorker) {
+    this.worker = newWorker
   }
 }
