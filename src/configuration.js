@@ -50,6 +50,13 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * @returns {function({request: import("./http-server/client/request.js").default, response: import("./http-server/client/response.js").default}): Promise<void>}
+   */
+  getCors() {
+    return this.cors
+  }
+
+  /**
    * @returns {Record<string, any>}
    */
   getDatabaseConfiguration() {

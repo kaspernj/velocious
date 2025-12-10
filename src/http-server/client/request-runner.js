@@ -1,4 +1,7 @@
+// @ts-check
+
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
+import ensureError from "../../utils/ensure-error.js"
 import EventEmitter from "events"
 import {Logger} from "../../logger.js"
 import Response from "./response.js"
@@ -7,6 +10,11 @@ import RoutesResolver from "../../routes/resolver.js"
 export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
+  /**
+   * @param {object} args
+   * @param {import("../../configuration.js").default} args.configuration
+   * @param {import("./request.js").default} args.request
+   */
   constructor({configuration, request}) {
     if (!configuration) throw new Error("No configuration given")
     if (!request) throw new Error("No request given")
@@ -30,8 +38,10 @@ export default class VelociousHttpServerClientRequestRunner {
       // Before we checked if the sec-fetch-mode was "cors", but it seems the sec-fetch-mode isn't always present
       await this.logger.debug(() => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
 
-      if (configuration.cors) {
-        await configuration.cors({request, response})
+      const cors = configuration.getCors()
+
+      if (cors) {
+        await cors({request, response})
       }
 
       if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
@@ -43,7 +53,9 @@ export default class VelociousHttpServerClientRequestRunner {
 
         await routesResolver.resolve()
       }
-    } catch (error) {
+    } catch (e) {
+      const error = ensureError(e)
+
       await this.logger.error(() => [`Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`])
 
       response.setStatus(500)

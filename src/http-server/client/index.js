@@ -1,3 +1,5 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import {EventEmitter} from "events"
 import {Logger} from "../../logger.js"
@@ -19,19 +21,22 @@ export default class VeoliciousHttpServerClient {
     this.logger = new Logger(this)
     this.clientCount = clientCount
     this.configuration = configuration
+
+    /** @type {RequestRunner[]} */
     this.requestRunners = []
   }
 
   executeCurrentRequest = () => {
     this.logger.debug("executeCurrentRequest")
 
+    if (!this.currentRequest) throw new Error("No current request")
+
     // We are done parsing the given request and can theoretically start parsing a new one, before the current request is done - so reset the state.
     this.state = "initial"
 
     const requestRunner = new RequestRunner({
       configuration: this.configuration,
-      request: this.currentRequest,
-      routes: this.routes
+      request: this.currentRequest
     })
 
     this.requestRunners.push(requestRunner)
@@ -40,6 +45,9 @@ export default class VeoliciousHttpServerClient {
     requestRunner.run()
   }
 
+  /**
+   * @param {string} data
+   */
   onWrite(data) {
     if (this.state == "initial") {
       this.currentRequest = new Request({client: this, configuration: this.configuration})
@@ -47,6 +55,8 @@ export default class VeoliciousHttpServerClient {
       this.currentRequest.feed(data)
       this.state = "requestStarted"
     } else if (this.state == "requestStarted") {
+      if (!this.currentRequest) throw new Error("No current request")
+
       this.currentRequest.feed(data)
     } else {
       throw new Error(`Unknown state for client: ${this.state}`)
@@ -80,7 +90,13 @@ export default class VeoliciousHttpServerClient {
     }
   }
 
+  /**
+   * @param {RequestRunner} requestRunner
+   * @returns {void}
+   */
   sendResponse(requestRunner) {
+    if (!this.currentRequest) throw new Error("No current request")
+
     const response = digg(requestRunner, "response")
     const request = requestRunner.getRequest()
     const body = response.getBody()
