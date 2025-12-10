@@ -1,3 +1,5 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import EventEmitter from "events"
 import {Logger} from "../logger.js"
@@ -7,9 +9,14 @@ import WorkerHandler from "./worker-handler/index.js"
 
 export default class VelociousHttpServer {
   clientCount = 0
+
+  /** @type {Record<string, ServerClient>}  */
   clients = {}
+
   events = new EventEmitter()
   workerCount = 0
+
+  /** @type {WorkerHandler[]} */
   workerHandlers = []
 
   /**
@@ -40,10 +47,12 @@ export default class VelociousHttpServer {
 
   _netServerListen() {
     return new Promise((resolve, reject) => {
+      if (!this.netServer) throw new Error("No netServer")
+
       try {
         this.netServer.listen(this.port, this.host, () => {
           this.logger.debug(`Velocious listening on ${this.host}:${this.port}`)
-          resolve()
+          resolve(null)
         })
       } catch (error) {
         reject(error)
@@ -61,7 +70,11 @@ export default class VelociousHttpServer {
    * @returns {boolean}
    */
   isActive() {
-    return this.netServer.listening
+    if (this.netServer) {
+      return this.netServer.listening
+    }
+
+    return false
   }
 
   async stopClients() {
@@ -78,11 +91,13 @@ export default class VelociousHttpServer {
 
   stopServer() {
     return new Promise((resolve, reject) => {
+      if (!this.netServer) throw new Error("No netServer to stop")
+
       this.netServer.close((error) => {
         if (error) {
           reject(error)
         } else {
-          resolve()
+          resolve(null)
         }
       })
     })
@@ -97,6 +112,9 @@ export default class VelociousHttpServer {
     this.events.emit("close")
   }
 
+  /**
+   * @param {import("net").Socket} socket
+   */
   onConnection = (socket) => {
     const clientCount = this.clientCount
 
@@ -117,6 +135,9 @@ export default class VelociousHttpServer {
     this.clients[clientCount] = client
   }
 
+  /**
+   * @param {ServerClient} client
+   */
   onClientClose = (client) => {
     const clientCount = digg(client, "clientCount")
     const oldClientsLength = Object.keys(this.clients).length
@@ -147,7 +168,7 @@ export default class VelociousHttpServer {
   workerHandlerToUse() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 
-    const randomWorkerNumber = parseInt(Math.random() * this.workerHandlers.length)
+    const randomWorkerNumber = Number(Math.random() * this.workerHandlers.length)
     const workerHandler = this.workerHandlers[randomWorkerNumber]
 
     if (!workerHandler) {
