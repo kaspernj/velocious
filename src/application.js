@@ -1,23 +1,32 @@
-import {digs} from "diggerize"
+// @ts-check
 
 import AppRoutes from "./routes/app-routes.js"
 import {Logger} from "./logger.js"
 import HttpServer from "./http-server/index.js"
 import restArgsError from "./utils/rest-args-error.js"
 
+/**
+ * @typedef {object} HttpServerConfiguration
+ * @property {number} [port]
+ */
+
 export default class VelociousApplication {
   /**
    * @param {object} args
    * @param {import("./configuration.js").default} args.configuration
-   * @param {object} [args.httpServer]
-   * @param {number} args.httpServer.port
+   * @param {HttpServerConfiguration} [args.httpServer]
    * @param {string} args.type
    */
   constructor({configuration, httpServer, type, ...restArgs}) {
     restArgsError(restArgs)
 
+    if (!configuration) throw new Error("configuration is required")
+
     this.configuration = configuration
-    this.httpServerConfiguration = httpServer ?? {}
+
+    /** @type {HttpServerConfiguration} */
+    this.httpServerConfiguration = httpServer ?? {port: undefined}
+
     this.logger = new Logger(this)
     this._type = type
   }
@@ -46,7 +55,11 @@ export default class VelociousApplication {
    * @returns {boolean}
    */
   isActive() {
-    return this.httpServer?.isActive()
+    if (this.httpServer) {
+      return this.httpServer?.isActive()
+    }
+
+    return false
   }
 
   /**
@@ -54,7 +67,7 @@ export default class VelociousApplication {
    * @returns {Promise<void>}
    */
   async run(callback) {
-    await this.start()
+    await this.startHttpServer()
 
     try {
       await callback()
@@ -67,7 +80,7 @@ export default class VelociousApplication {
    * @returns {Promise<void>}
    */
   async startHttpServer() {
-    const {configuration, httpServerConfiguration} = digs(this, "configuration", "httpServerConfiguration")
+    const {configuration, httpServerConfiguration} = this
     const port = httpServerConfiguration.port || 3006
 
     await this.logger.debug(`Starting server on port ${port}`)
@@ -83,7 +96,7 @@ export default class VelociousApplication {
    */
   async stop() {
     await this.logger.debug("Stopping server")
-    await this.httpServer.stop()
+    await this.httpServer?.stop()
   }
 
   /**

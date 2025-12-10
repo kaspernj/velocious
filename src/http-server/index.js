@@ -12,6 +12,13 @@ export default class VelociousHttpServer {
   workerCount = 0
   workerHandlers = []
 
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @param {string} [args.host]
+   * @param {number} [args.port]
+   * @param {number} [args.maxWorkers]
+   */
   constructor({configuration, host, maxWorkers, port}) {
     this.configuration = configuration
     this.logger = new Logger(this)

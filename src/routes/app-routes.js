@@ -2,7 +2,7 @@ import {digg} from "diggerize"
 
 export default class VelociousRoutesAppRoutes {
   /**
-   * @param {import("../configuration.js")} configuration
+   * @param {import("../configuration.js").default} configuration
    * @returns {import("./index.js").default}
    */
   static async getRoutes(configuration) {
