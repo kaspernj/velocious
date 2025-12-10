@@ -8,13 +8,17 @@ export default class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
 
-  constructor({clientCount, configuration, onExecuteRequest}) {
+  /**
+   * @param {object} args
+   * @param {number} args.clientCount
+   * @param {import("../../configuration.js").default} args.configuration
+   */
+  constructor({clientCount, configuration}) {
     if (!configuration) throw new Error("No configuration given")
 
     this.logger = new Logger(this)
     this.clientCount = clientCount
     this.configuration = configuration
-    this.onExecuteRequest = onExecuteRequest
     this.requestRunners = []
   }
 

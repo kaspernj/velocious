@@ -8,9 +8,9 @@ import restArgsError from "./utils/rest-args-error.js"
 export default class VelociousApplication {
   /**
    * @param {object} args
-   * @param {object} args.httpServer
-   * @param {number} args.httpServer.port
    * @param {import("./configuration.js").default} args.configuration
+   * @param {object} [args.httpServer]
+   * @param {number} args.httpServer.port
    * @param {string} args.type
    */
   constructor({configuration, httpServer, type, ...restArgs}) {
