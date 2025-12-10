@@ -20,6 +20,7 @@ export default defineConfig([
       "jsdoc/require-jsdoc": "off",
       "jsdoc/require-param": "off",
       "jsdoc/require-param-description": "off",
+      "jsdoc/require-property-description": "off",
       "jsdoc/require-returns": "off",
       "jsdoc/require-returns-description": "off"
     }

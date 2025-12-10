@@ -1,16 +1,21 @@
-import AppRoutes from "../src/routes/app-routes.js"
 import {digs} from "diggerize"
+
+import AppRoutes from "./routes/app-routes.js"
 import {Logger} from "./logger.js"
 import HttpServer from "./http-server/index.js"
+import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousApplication {
   /**
    * @param {object} args
-   * @param {import("./http-server/index.js").default} args.httpServer
+   * @param {object} args.httpServer
+   * @param {number} args.httpServer.port
    * @param {import("./configuration.js").default} args.configuration
    * @param {string} args.type
    */
-  constructor({configuration, httpServer, type}) {
+  constructor({configuration, httpServer, type, ...restArgs}) {
+    restArgsError(restArgs)
+
     this.configuration = configuration
     this.httpServerConfiguration = httpServer ?? {}
     this.logger = new Logger(this)
