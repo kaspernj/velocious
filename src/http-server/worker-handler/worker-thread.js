@@ -33,7 +33,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     this.configuration.setEnvironment(environment)
     this.configuration.setCurrent()
 
-    this.application = new Application({configuration: this.configuration, debug, directory, type: "worker-handler"})
+    this.application = new Application({configuration: this.configuration, type: "worker-handler"})
 
     if (this.configuration.isInitialized()) {
       await this.configuration.initialize({type: "worker-handler"})
