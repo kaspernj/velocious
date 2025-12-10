@@ -168,7 +168,7 @@ export default class VelociousHttpServer {
   workerHandlerToUse() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 
-    const randomWorkerNumber = Number(Math.random() * this.workerHandlers.length)
+    const randomWorkerNumber = Math.floor(Math.random() * this.workerHandlers.length)
     const workerHandler = this.workerHandlers[randomWorkerNumber]
 
     if (!workerHandler) {
