@@ -1,9 +1,39 @@
+// @ts-check
+
 import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
 import restArgsError from "../utils/rest-args-error.js"
 import {tests} from "./test.js"
+
+/**
+ * @typedef {object} TestArgs
+ * @property {Application} application
+ * @property {RequestClient} client
+ * @property {boolean} focus
+ * @property {string} type
+ */
+
+/**
+ * @typedef {object} TestData
+ * @property {TestArgs} args
+ * @property {function(TestArgs) : Promise<void>} function
+ */
+
+/**
+ * @typedef {object} AfterBeforeEachCallback
+ * @property {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : Promise<void>} callback
+ */
+
+/**
+ * @typedef {object} TestsArgument
+ * @property {boolean} [anyTestsFocussed]
+ * @property {AfterBeforeEachCallback[]} afterEaches
+ * @property {AfterBeforeEachCallback[]} beforeEaches
+ * @property {Record<string, TestData>} tests - A unique identifier for the node.
+ * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
+ */
 
 export default class TestRunner {
   /**
@@ -18,6 +48,10 @@ export default class TestRunner {
 
     this._configuration = configuration
     this._testFiles = testFiles
+
+    this._failedTests = 0
+    this._successfulTests = 0
+    this._testsCount = 0
   }
 
   /**
@@ -37,13 +71,6 @@ export default class TestRunner {
     if (!this._application) {
       this._application = new Application({
         configuration: this.getConfiguration(),
-        databases: {
-          default: {
-            host: "mysql",
-            username: "user",
-            password: ""
-          }
-        },
         httpServer: {port: 31006},
         type: "test-runner"
       })
@@ -56,7 +83,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {RequestClient}
+   * @returns {Promise<RequestClient>}
    */
   async requestClient() {
     if (!this._requestClient) {
@@ -67,7 +94,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async importTestFiles() {
     await this.getConfiguration().getEnvironmentHandler().importTestFiles(this.getTestFiles())
@@ -76,25 +103,37 @@ export default class TestRunner {
   /**
    * @returns {boolean}
    */
-  isFailed() { return this._failedTests > 0 }
+  isFailed() { return this._failedTests !== undefined && this._failedTests > 0 }
 
   /**
    * @returns {number}
    */
-  getFailedTests() { return this._failedTests }
+  getFailedTests() {
+    if (this._failedTests === undefined) throw new Error("Tests hasn't been run yet")
+
+    return this._failedTests
+  }
 
   /**
    * @returns {number}
    */
-  getSuccessfulTests() { return this._successfulTests }
+  getSuccessfulTests() {
+    if (this._successfulTests === undefined) throw new Error("Tests hasn't been run yet")
+
+    return this._successfulTests
+  }
 
   /**
    * @returns {number}
    */
-  getTestsCount() { return this._testsCount }
+  getTestsCount() {
+    if (this._testsCount === undefined) throw new Error("Tests hasn't been run yet")
+
+    return this._testsCount
+  }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async prepare() {
     this.anyTestsFocussed = false
@@ -124,7 +163,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async run() {
     await this.getConfiguration().ensureConnections(async () => {
@@ -139,7 +178,8 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {object}
+   * @param {TestsArgument} tests
+   * @returns {{anyTestsFocussed: boolean}}
    */
   analyzeTests(tests) {
     let anyTestsFocussedFound = false
@@ -171,6 +211,12 @@ export default class TestRunner {
   }
 
   /**
+   * @param {object} args
+   * @param {Array<AfterBeforeEachCallback>} args.afterEaches
+   * @param {Array<AfterBeforeEachCallback>} args.beforeEaches
+   * @param {TestsArgument} args.tests
+   * @param {string[]} args.descriptions
+   * @param {number} args.indentLevel
    * @returns {Promise<void>}
    */
   async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {
@@ -180,7 +226,7 @@ export default class TestRunner {
 
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
-      const testArgs = Object.assign({}, testData.args)
+      const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
 
       if (this._onlyFocussed && !testArgs.focus) continue
 
@@ -204,15 +250,19 @@ export default class TestRunner {
       } catch (error) {
         this._failedTests++
 
-        console.error(`${leftPadding}  Test failed: ${error.message}`)
-        addTrackedStackToError(error)
+        if (error instanceof Error) {
+          console.error(`${leftPadding}  Test failed:`, error.message)
+          addTrackedStackToError(error)
 
-        const backtraceCleaner = new BacktraceCleaner(error)
-        const cleanedStack = backtraceCleaner.getCleanedStack()
-        const stackLines = cleanedStack.split("\n")
+          const backtraceCleaner = new BacktraceCleaner(error)
+          const cleanedStack = backtraceCleaner.getCleanedStack()
+          const stackLines = cleanedStack.split("\n")
 
-        for (const stackLine of stackLines) {
-          console.error(`${leftPadding}  ${stackLine}`)
+          for (const stackLine of stackLines) {
+            console.error(`${leftPadding}  ${stackLine}`)
+          }
+        } else {
+          console.error(`${leftPadding}  Test failed with a ${typeof error}:`, error)
         }
       } finally {
         for (const afterEachData of newAfterEaches) {

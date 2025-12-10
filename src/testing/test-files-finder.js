@@ -3,6 +3,7 @@
 import fs from "fs/promises"
 
 import fileExists from "../utils/file-exists.js"
+import {Logger} from "../logger.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 // Incredibly complex class to find files in multiple simultanious running promises to do it as fast as possible.
@@ -19,6 +20,7 @@ export default class TestFilesFinder {
     restArgsError(restArgs)
 
     this.directory = directory
+    this.logger = new Logger(this)
 
     if (directories) {
       this.directories = directories
@@ -159,6 +161,7 @@ export default class TestFilesFinder {
     if (this.directoryArgs.length > 0) {
       for (const directoryArg of this.directoryArgs) {
         if (localPath.startsWith(directoryArg) && this.looksLikeTestFile(file)) {
+          this.logger.debug("Found test file because matching dir and looks like this file:", file)
           return true
         }
       }
@@ -167,10 +170,14 @@ export default class TestFilesFinder {
     if (this.fileArgs.length > 0) {
       for (const fileArg of this.fileArgs) {
         if (fileArg == localPath) {
+          this.logger.debug("Found test file because matching file arg:", file)
           return true
         }
       }
-    } else if (this.looksLikeTestFile(file)) {
+    }
+
+    if (this.fileArgs.length == 0 && this.directoryArgs.length == 0 && this.looksLikeTestFile(file)) {
+      this.logger.debug("Found test file because looks like this file:", file)
       return true
     }
 

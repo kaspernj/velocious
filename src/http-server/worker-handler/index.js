@@ -1,11 +1,21 @@
-import {digg, digs} from "diggerize"
+// @ts-check
+
 import {Logger} from "../../logger.js"
 import {Worker} from "worker_threads"
+import ensureError from "../../utils/ensure-error.js"
 
 export default class VelociousHttpServerWorker {
+  /**
+   * @param {object} args
+   * @param {import("../../configuration.js").default} args.configuration
+   * @param {number} args.workerCount
+   */
   constructor({configuration, workerCount}) {
     this.configuration = configuration
+
+    /** @type {Record<number, import("../server-client.js").default>} */
     this.clients = {}
+
     this.logger = new Logger(this)
     this.workerCount = workerCount
   }
@@ -18,7 +28,7 @@ export default class VelociousHttpServerWorker {
   }
 
   async _spawnWorker() {
-    const {debug} = digs(this.configuration, "debug")
+    const debug = this.configuration.debug
     const directory = this.configuration.getDirectory()
     const velociousPath = await this.configuration.getEnvironmentHandler().getVelociousPath()
 
@@ -35,25 +45,38 @@ export default class VelociousHttpServerWorker {
     this.worker.on("message", this.onWorkerMessage)
   }
 
+  /**
+   * @param {import("../server-client.js").default} client
+   * @returns {void}
+   */
   addSocketConnection(client) {
-    const clientCount = digg(client, "clientCount")
+    const clientCount = client.clientCount
 
     client.socket.on("end", () => {
       this.logger.debug(`Removing ${clientCount} from clients`)
       delete this.clients[clientCount]
     })
 
-    client.worker = this.worker
+    if (!this.worker) throw new Error("Worker not initialized")
+
+    client.setWorker(this.worker)
     client.listen()
 
     this.clients[clientCount] = client
     this.worker.postMessage({command: "newClient", clientCount})
   }
 
+  /**
+   * @param {any} error
+   */
   onWorkerError = (error) => {
-    throw error // Throws original error with backtrace and everything into the console
+    throw ensureError(error) // Throws original error with backtrace and everything into the console
   }
 
+  /**
+   * @param {number} code
+   * @returns {void}
+   */
   onWorkerExit = (code) => {
     if (code !== 0) {
       throw new Error(`Client worker stopped with exit code ${code}`)
@@ -62,22 +85,32 @@ export default class VelociousHttpServerWorker {
     }
   }
 
+  /**
+   * @param {object} data
+   * @param {string} data.command
+   * @param {number} data.clientCount
+   * @param {string} data.output
+   * @returns {void}
+   */
   onWorkerMessage = (data) => {
     this.logger.debug(`Worker message`, data)
 
-    const {command} = digs(data, "command")
+    const {command} = data
 
     if (command == "started") {
-      this.onStartCallback()
+      if (this.onStartCallback) {
+        this.onStartCallback(null)
+      }
+
       this.onStartCallback = null
     } else if (command == "clientOutput") {
       this.logger.debug("CLIENT OUTPUT", data)
 
-      const {clientCount, output} = digs(data, "clientCount", "output")
+      const {clientCount, output} = data
 
       this.clients[clientCount]?.send(output)
     } else if (command == "clientClose") {
-      const {clientCount} = digs(data, "clientCount")
+      const {clientCount} = data
 
       this.clients[clientCount]?.end()
     } else {

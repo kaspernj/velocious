@@ -1,3 +1,5 @@
+// @ts-check
+
 import Configuration from "./configuration.js"
 import restArgsError from "./utils/rest-args-error.js"
 
@@ -8,9 +10,10 @@ import restArgsError from "./utils/rest-args-error.js"
 function consoleLog(message) {
   return new Promise((resolve) => {
     if (process.stdout) {
-      process.stdout.write(`${message}\n`, "utf8", resolve)
+      process.stdout.write(`${message}\n`, "utf8", () => resolve())
     } else {
       console.log(message)
+      resolve()
     }
   })
 }
@@ -22,9 +25,10 @@ function consoleLog(message) {
 function consoleError(message) {
   return new Promise((resolve) => {
     if (process.stderr) {
-      process.stderr.write(`${message}\n`, "utf8", resolve)
+      process.stderr.write(`${message}\n`, "utf8", () => resolve())
     } else {
       console.error(message)
+      resolve()
     }
   })
 }
@@ -36,17 +40,19 @@ function consoleError(message) {
 function consoleWarn(message) {
   return new Promise((resolve) => {
     if (process.stderr) {
-      process.stderr.write(`${message}\n`, "utf8", resolve)
+      process.stderr.write(`${message}\n`, "utf8", () => resolve())
     } else {
       console.warn(message)
+      resolve()
     }
   })
 }
 
 /**
- * @param {Array} messages
+ * @param {...any|function() : Array<any>} messages
+ * @returns {Array<any>} - Either the function result or the messages
  */
-function functionOrMessages(messages) {
+function functionOrMessages(...messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
     messages = messages[0]()
   }
@@ -65,7 +71,7 @@ function messagesToMessage(...messages) {
   for (const messagePartIndex in messages) {
     const messagePart = messages[messagePartIndex]
 
-    if (messagePartIndex > 0) {
+    if (typeof messagePartIndex == "number" && messagePartIndex > 0) {
       message += " "
     }
 
@@ -85,7 +91,7 @@ class Logger {
    * @param {object} args
    * @param {boolean} args.debug
    */
-  constructor(object, {debug, ...restArgs} = {}) {
+  constructor(object, {debug, ...restArgs} = {debug: false}) {
     restArgsError(restArgs)
 
     this._debug = debug
@@ -114,7 +120,7 @@ class Logger {
   }
 
   /**
-   * @param {...Parameters<typeof consoleLog>} messages - forwarded args
+   * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
    */
   async debug(...messages) {
     if (this._debug || this.getConfiguration()?.debug) {
@@ -123,17 +129,17 @@ class Logger {
   }
 
   /**
-   * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
+   * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
    */
   async log(...messages) {
-    await consoleLog(messagesToMessage(this._subject, ...functionOrMessages(messages)))
+    await consoleLog(messagesToMessage(this._subject, ...functionOrMessages(...messages)))
   }
 
   /**
-   * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
+   * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
    */
   async error(...messages) {
-    await consoleError(messagesToMessage(this._subject, ...functionOrMessages(messages)))
+    await consoleError(messagesToMessage(this._subject, ...functionOrMessages(...messages)))
   }
 
   /**
@@ -145,10 +151,10 @@ class Logger {
   }
 
   /**
-   * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
+   * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
    */
   async warn(...messages) {
-    await consoleWarn(messagesToMessage(this._subject, ...functionOrMessages(messages)))
+    await consoleWarn(messagesToMessage(this._subject, ...functionOrMessages(...messages)))
   }
 }
 
@@ -163,6 +169,6 @@ export default async function logger(object, ...messages) {
   const configuration = object.configuration || Configuration.current()
 
   if (configuration.debug) {
-    await consoleLog(messagesToMessage(className, ...functionOrMessages(messages)))
+    await consoleLog(messagesToMessage(className, ...functionOrMessages(...messages)))
   }
 }
