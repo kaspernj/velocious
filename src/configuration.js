@@ -4,24 +4,6 @@ import {digg} from "diggerize"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
-/**
- * @typedef {(id: string) => {default: typeof import("./initializer.js").default}} InitializersRequireContextType
- */
-
-/**
- * @typedef {InitializersRequireContextType & {
- *   keys: () => string[],
- *   id: string
- * }} WebpackRequireContext
- */
-
-/**
- * @typedef {function({request: import("./http-server/client/request.js").default, response: import("./http-server/client/response.js").default}): Promise<void>} CorsType
- *
- * @typedef {{requireContext: WebpackRequireContext}} InitializersExportType
- * @typedef {function({configuration: VelociousConfiguration}) : Promise<InitializersExportType>} InitializersType
- */
-
 /** @type {{currentConfiguration: VelociousConfiguration | null}} */
 const shared = {
   currentConfiguration: null
@@ -42,7 +24,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {import("./configuration-args-type.js").ConfigurationArgsType} args
+   * @param {import("./configuration-types.js").ConfigurationArgsType} args
    */
   constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
     restArgsError(restArgs)
@@ -71,7 +53,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {CorsType | undefined}
+   * @returns {import("./configuration-types.js").CorsType | undefined}
    */
   getCors() {
     return this.cors

@@ -39,7 +39,7 @@ class VelociousDatabasePoolBase {
    * @interface
    * @param {import("../drivers/base.js").default} _connection
    */
-  checkin(_connection) {
+  checkin(_connection) { // eslint-disable-line no-unused-vars
     throw new Error("'checkin' not implemented")
   }
 
@@ -52,6 +52,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * @interface
    * @returns {import("../drivers/base.js").default}
    */
   getCurrentConnection() {
@@ -114,7 +115,7 @@ class VelociousDatabasePoolBase {
    * @param {function(import("../drivers/base.js").default) : void} _callback
    * @returns {Promise<void>}
    */
-  withConnection(_callback) {
+  withConnection(_callback) { // eslint-disable-line no-unused-vars
     throw new Error("'withConnection' not implemented")
   }
 }
