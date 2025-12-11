@@ -10,6 +10,9 @@ import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/src/wait.js"
 
 export default class VelociousDatabaseDriversBase {
+  /** @type {number | undefined} */
+  idSeq = undefined
+
   /**
    * @param {object} config
    * @param {import("../../configuration.js").default} configuration
@@ -59,6 +62,14 @@ export default class VelociousDatabaseDriversBase {
    */
   alterTableSql() {
     throw new Error("alterTableSql not implemented")
+  }
+
+  /**
+   * @interface
+   * @returns {Promise<void>}
+   */
+  connect() {
+    throw new Error("'connect' not implemented")
   }
 
   /**
@@ -124,7 +135,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {number}
+   * @returns {number | undefined}
    */
   getIdSeq() {
     return this.idSeq
@@ -259,7 +270,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {number} newIdSeq
+   * @param {number | undefined} newIdSeq
    * @returns {void}
    */
   setIdSeq(newIdSeq) {
