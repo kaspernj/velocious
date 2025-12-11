@@ -1,7 +1,12 @@
+// @ts-check
+
 import TableColumn from "../table-data/table-column.js"
 import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseColumn {
+  /** @type {import("./base-table.js").default | undefined} */
+  table = undefined
+
   /**
    * @interface
    * @returns {boolean}
@@ -19,7 +24,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @param {string} indexName
-   * @returns {Promise<import('../table-data/table-index.js').default>}
+   * @returns {Promise<import("./base-columns-index.js").default | undefined>}
    */
   async getIndexByName(indexName) {
     const indexes = await this.getIndexes()

@@ -1,3 +1,5 @@
+// @ts-check
+
 export default class VelociousEnvironmentHandlerBase {
   /**
    * @param {import("../cli/base-command.js").default} _command
@@ -66,10 +68,9 @@ export default class VelociousEnvironmentHandlerBase {
   async findMigrations() { throw new Error("findMigrations not implemneted") }
 
   /**
-   * @template T extends import("../cli/base-command.js").default
-   * @param {T} command
-   * @param {typeof T} CommandClass
-   * @returns {any}
+   * @param {import("../cli/base-command.js").default} command
+   * @param {typeof import("../cli/base-command.js").default} CommandClass
+   * @returns {Promise<any>}
    */
   async forwardCommand(command, CommandClass) {
     const newCommand = new CommandClass({
@@ -88,6 +89,19 @@ export default class VelociousEnvironmentHandlerBase {
    * @interface
    */
   async importApplicationRoutes() { throw new Error("importApplicationRoutes not implemented") }
+
+  /**
+   * @interface
+   * @param {string[]} _testFiles
+   * @returns {Promise<void>}
+   */
+  importTestFiles(_testFiles) { throw new Error("'importTestFiles' not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @interface
+   * @returns {Promise<void>}
+   */
+  importTestingConfigPath() { throw new Error(`'importTestingConfigPath' not implemented`) }
 
   /**
    * @param {object} args

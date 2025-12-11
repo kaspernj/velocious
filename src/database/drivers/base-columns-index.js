@@ -1,4 +1,6 @@
-import { digg } from "diggerize"
+// @ts-check
+
+import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversBaseColumnsIndex {
   /**
@@ -38,6 +40,14 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
     if (!this.table) throw new Error("No table set on column")
 
     return this.table
+  }
+
+  /**
+   * @interface
+   * @returns {import("../table-data/table-index.js").default}
+   */
+  getTableDataIndex() {
+    throw new Error("'getTableDataIndex' not implemented")
   }
 
   /**

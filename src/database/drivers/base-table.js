@@ -1,10 +1,15 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseTable {
+  /** @type {import("./base.js").default | undefined} */
+  driver = undefined
+
   /**
    * @param {string} columnName
-   * @returns {import("./base-column.js").default}
+   * @returns {Promise<import("./base-column.js").default | undefined>}
    */
   async getColumnByName(columnName) {
     const columnes = await this.getColumns()
@@ -28,6 +33,22 @@ export default class VelociousDatabaseDriversBaseTable {
     if (!this.driver) throw new Error("No driver set on table")
 
     return this.driver
+  }
+
+  /**
+   * @interface
+   * @returns {Promise<import("./base-foreign-key.js").default[]>}
+   */
+  getForeignKeys() {
+    throw new Error("'getForeignKeys' not implemented")
+  }
+
+  /**
+   * @interface
+   * @returns {Promise<import("./base-columns-index.js").default[]>}
+   */
+  getIndexes() {
+    throw new Error("'getForeignKeys' not implemented")
   }
 
   /**
@@ -86,6 +107,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * @param {{cascade: boolean}} [args]
    * @returns {Promise<Array<Record<string, any>>>}
    */
   async truncate(args) {
@@ -102,6 +124,6 @@ export default class VelociousDatabaseDriversBaseTable {
       }
     }
 
-    await this.getDriver().query(sql)
+    return await this.getDriver().query(sql)
   }
 }

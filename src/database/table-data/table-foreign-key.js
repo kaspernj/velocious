@@ -1,10 +1,12 @@
+// @ts-check
+
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class TableForeignKey {
   /**
    * @param {object} args
    * @param {string} args.columnName
-   * @param {boolean} args.isNewForeignKey
+   * @param {boolean} [args.isNewForeignKey]
    * @param {string} args.name
    * @param {string} args.tableName
    * @param {string} args.referencedColumnName
@@ -29,7 +31,7 @@ export default class TableForeignKey {
   /**
    * @returns {boolean}
    */
-  getIsNewForeignKey() { return this._isNewForeignKey }
+  getIsNewForeignKey() { return this._isNewForeignKey || false }
 
   /**
    * @returns {string}

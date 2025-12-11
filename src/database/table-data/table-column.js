@@ -1,26 +1,32 @@
+// @ts-check
+
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
 import TableForeignKey from "./table-foreign-key.js"
 
+/**
+ * @typedef {object} TableColumnArgsType
+ * @property {boolean} [autoIncrement]
+ * @property {any} [default]
+ * @property {boolean} [dropColumn]
+ * @property {boolean|object} [foreignKey]
+ * @property {boolean|object} [index]
+ * @property {boolean} [isNewColumn]
+ * @property {number} [maxLength]
+ * @property {boolean} [null]
+ * @property {boolean} [polymorphic]
+ * @property {boolean} [primaryKey]
+ * @property {string} [type]
+ */
+
 export default class TableColumn {
   /**
    * @param {string} name
-   * @param {object} args
-   * @param {boolean} args.autoIncrement
-   * @param {any} args.default
-   * @param {boolean} args.dropColumn
-   * @param {boolean|object} args.foreignKey
-   * @param {boolean|object} args.index
-   * @param {boolean} args.isNewColumn
-   * @param {number} args.maxLength
-   * @param {string} args.name
-   * @param {boolean} args.null
-   * @param {boolean} args.primaryKey
-   * @param {string} args.type
+   * @param {TableColumnArgsType} [args]
    */
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, name, null: argsNull, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
+      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, null: argsNull, polymorphic, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
 
       if (Object.keys(args).length == 0) {
         throw new Error("Empty args given")
@@ -39,7 +45,7 @@ export default class TableColumn {
   getName() { return this.name }
 
   /**
-   * @returns {string}
+   * @returns {string | undefined}
    */
   getNewName() { return this._newName }
 
@@ -71,6 +77,7 @@ export default class TableColumn {
   getDefault() { return this.args?.default }
 
   /**
+   * @param {any} newDefault
    * @returns {void}
    */
   setDefault(newDefault) { this.args.default = newDefault }
@@ -81,18 +88,18 @@ export default class TableColumn {
   getDropColumn() { return this.args?.dropColumn || false }
 
   /**
-   * @returns {boolean|object}
+   * @returns {boolean | object | undefined}
    */
   getForeignKey() { return this.args?.foreignKey }
 
   /**
-   * @param {boolean|object} newForeignKey
+   * @param {boolean | object} newForeignKey
    * @returns {void}
    */
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
 
   /**
-   * @returns {boolean|object}
+   * @returns {boolean | object | undefined}
    */
   getIndex() { return this.args?.index }
 
@@ -103,7 +110,7 @@ export default class TableColumn {
   setIndex(newIndex) { this.args.index = newIndex }
 
   /**
-   * @returns {number}
+   * @returns {number | undefined}
    */
   getMaxLength() { return this.args?.maxLength }
 
@@ -114,7 +121,7 @@ export default class TableColumn {
   setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean | undefined}
    */
   getNull() { return this.args?.null }
 
@@ -127,7 +134,7 @@ export default class TableColumn {
   /**
    * @returns {boolean}
    */
-  getPrimaryKey() { return this.args?.primaryKey }
+  getPrimaryKey() { return this.args?.primaryKey || false }
 
   /**
    * @param {boolean} newPrimaryKey
@@ -136,7 +143,7 @@ export default class TableColumn {
   setPrimaryKey(newPrimaryKey) { this.args.primaryKey = newPrimaryKey }
 
   /**
-   * @returns {string}
+   * @returns {string | undefined}
    */
   getType() { return this.args?.type }
 
@@ -154,8 +161,7 @@ export default class TableColumn {
   /**
    * @param {object} args
    * @param {boolean} args.forAlterTable
-   * @template T extends import("../drivers/base.js").default
-   * @param {T} args.driver
+   * @param {import("../drivers/base.js").default} args.driver
    * @returns {string}
    */
   getSQL({forAlterTable, driver, ...restArgs}) {
