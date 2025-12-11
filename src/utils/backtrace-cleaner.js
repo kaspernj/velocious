@@ -1,7 +1,9 @@
+// @ts-check
+
 export default class BacktraceCleaner {
   /**
    * @param {Error} error
-   * @returns {string}
+   * @returns {string | undefined}
    */
   static getCleanedStack(error) {
     return new BacktraceCleaner(error).getCleanedStack()
@@ -15,11 +17,11 @@ export default class BacktraceCleaner {
   }
 
   /**
-   * @returns {string}
+   * @returns {string | undefined}
    */
   getCleanedStack() {
-    const backtrace = this.error.stack.split("\n")
+    const backtrace = this.error?.stack?.split("\n")
 
-    return backtrace.filter((line) => !line.includes("node_modules") && !line.includes("(node:internal/process/")).join("\n")
+    return backtrace?.filter((line) => !line.includes("node_modules") && !line.includes("(node:internal/process/")).join("\n")
   }
 }

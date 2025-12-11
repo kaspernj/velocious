@@ -256,10 +256,12 @@ export default class TestRunner {
 
           const backtraceCleaner = new BacktraceCleaner(error)
           const cleanedStack = backtraceCleaner.getCleanedStack()
-          const stackLines = cleanedStack.split("\n")
+          const stackLines = cleanedStack?.split("\n")
 
-          for (const stackLine of stackLines) {
-            console.error(`${leftPadding}  ${stackLine}`)
+          if (stackLines) {
+            for (const stackLine of stackLines) {
+              console.error(`${leftPadding}  ${stackLine}`)
+            }
           }
         } else {
           console.error(`${leftPadding}  Test failed with a ${typeof error}:`, error)

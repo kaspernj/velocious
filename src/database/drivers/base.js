@@ -58,9 +58,10 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @interface
+   * @param {import("../table-data/index.js").default} _tableData
    * @returns {Promise<string[]>}
    */
-  alterTableSql() {
+  alterTableSql(_tableData) { // eslint-disable-line no-unused-vars
     throw new Error("alterTableSql not implemented")
   }
 
@@ -275,6 +276,14 @@ export default class VelociousDatabaseDriversBase {
    */
   setIdSeq(newIdSeq) {
     this.idSeq = newIdSeq
+  }
+
+  /**
+   * @interface
+   * @returns {boolean}
+   */
+  shouldSetAutoIncrementWhenPrimaryKey() {
+    throw new Error(`'shouldSetAutoIncrementWhenPrimaryKey' not implemented`)
   }
 
   /**

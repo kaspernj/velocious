@@ -1,8 +1,10 @@
+// @ts-check
+
 import fs from "fs/promises"
 
 /**
  * @param {string} path
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
 export default async function fileExists(path) {
   try {
