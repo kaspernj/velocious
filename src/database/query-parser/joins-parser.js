@@ -1,8 +1,5 @@
 // @ts-check
 
-import {isPlainObject} from "is-plain-object"
-import JoinPlain from "../query/join-plain.js"
-
 export default class VelocuiousDatabaseQueryParserJoinsParser {
   /**
    * @param {object} args
