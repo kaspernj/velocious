@@ -391,7 +391,7 @@ export default class VelociousDatabaseMigrator {
             try {
               await migrationInstance.up()
             } catch (upError) {
-              if (changeError instanceof NotImplementedError) {
+              if (upError instanceof NotImplementedError) {
                 throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
               } else {
                 throw upError
