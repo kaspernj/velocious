@@ -35,6 +35,8 @@ export default class VelociousDatabaseQueryParserFromParser {
         sql += " "
       }
 
+      from.setQuery(query)
+
       sql += from.toSql()
     }
 

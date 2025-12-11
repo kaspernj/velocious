@@ -1,9 +1,27 @@
+// @ts-check
+
 export default class VelociousDatabaseQueryOrderBase {
+  /**
+   * @param {import("./index.js").default} query
+   */
+  constructor(query) {
+    this.query = query
+  }
+
   /**
    * @returns {import("../query-parser/options.js").default}
    */
   getOptions() {
     return this.query.driver.options()
+  }
+
+  /**
+   * @interface
+   * @param {boolean} _reverseOrder
+   * @returns {void}
+   */
+  setReverseOrder(_reverseOrder) { // eslint-disable-line no-unused-vars
+    throw new Error("setReverseOrder not implemented")
   }
 
   toSql() {

@@ -30,6 +30,8 @@ export default class VelociousDatabaseQueryParserSelectParser {
     for (const selectKey in query._selects) {
       const selectValue = query._selects[selectKey]
 
+      selectValue.setQuery(query)
+
       sql += selectValue.toSql()
 
       if (selectKey + 1 < query._selects.length) {

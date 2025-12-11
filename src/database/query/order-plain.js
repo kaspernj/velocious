@@ -1,8 +1,14 @@
+// @ts-check
+
 import OrderBase from "./order-base.js"
 
 export default class VelociousDatabaseQueryOrderPlain extends OrderBase {
-  constructor({plain}) {
-    super()
+  /**
+   * @param {import("./index.js").default} query
+   * @param {string} plain
+   */
+  constructor(query, plain) {
+    super(query)
     this.plain = plain
     this.reverseOrder = false
   }

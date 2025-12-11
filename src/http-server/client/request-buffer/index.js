@@ -296,7 +296,7 @@ export default class RequestBuffer {
     }
 
     delete this.postBodyChars
-    delete this.postBodyBuffer
+    // delete this.postBodyBuffer
 
     this.completeRequest()
   }

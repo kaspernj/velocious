@@ -1,4 +1,5 @@
-import {digs} from "diggerize"
+// @ts-check
+
 import FromParser from "./from-parser.js"
 import GroupParser from "./group-parser.js"
 import JoinsParser from "./joins-parser.js"
@@ -8,6 +9,11 @@ import SelectParser from "./select-parser.js"
 import WhereParser from "./where-parser.js"
 
 export default class VelociousDatabaseBaseQueryParser {
+  /**
+   * @param {object} args
+   * @param {boolean} args.pretty
+   * @param {import("../query/index.js").default} args.query
+   */
   constructor({pretty, query}) {
     if (!query) throw new Error("No query given")
 
@@ -16,7 +22,7 @@ export default class VelociousDatabaseBaseQueryParser {
   }
 
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
 
     let sql = ""
 

@@ -1,6 +1,16 @@
+// @ts-check
+
 import WhereBase from "./where-base.js"
 
+/**
+ * @typedef {{[key: string]: any}} WhereHash
+ */
+
 export default class VelociousDatabaseQueryWhereHash extends WhereBase {
+  /**
+   * @param {import("./index.js").default} query
+   * @param {WhereHash} hash
+   */
   constructor(query, hash) {
     super()
     this.hash = hash
@@ -16,6 +26,11 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
     return sql
   }
 
+  /**
+   * @param {WhereHash} hash
+   * @param {string} [tableName]
+   * @param {number} index
+   */
   _whereSQLFromHash(hash, tableName, index = 0) {
     const options = this.getOptions()
     let sql = ""

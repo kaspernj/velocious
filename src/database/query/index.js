@@ -1,18 +1,23 @@
+// @ts-check
+
 import FromPlain from "./from-plain.js"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
+import {isPlainObject} from "is-plain-object"
+import JoinObject from "./join-object.js"
 import JoinPlain from "./join-plain.js"
 import {Logger} from "../../logger.js"
 import OrderPlain from "./order-plain.js"
 import Preloader from "./preloader.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
+import SelectBase from "./select-base.js"
 import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 /**
- * @typedef {Record<string, boolean|NestedPreloadRecord>} NestedPreloadRecord
+ * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
  */
 
 /**
@@ -73,6 +78,8 @@ export default class VelociousDatabaseQuery {
     this._perPage = perPage
     this._preload = preload
     this._selects = selects
+
+    /** @type {import("./where-base.js").default[]} */
     this._wheres = wheres
   }
 
@@ -118,7 +125,7 @@ export default class VelociousDatabaseQuery {
     countQuery._selects = []
     countQuery.select(sql)
 
-    const results = await countQuery._executeQuery()
+    const results = /** @type {{ count: number }[]} */ (await countQuery._executeQuery())
 
 
     // The query isn't grouped and a single result has been given
@@ -142,8 +149,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @template {import("./from-base.js").default} T
-   * @returns {T[]}
+   * @returns {import("./from-base.js").default[]}
    */
   getFroms() {
     return this._froms
@@ -182,6 +188,7 @@ export default class VelociousDatabaseQuery {
    * @returns {Promise<import("../record/index.js").default>}
    */
   async find(recordId) {
+    /** @type {{[key: string]: number | string}} */
     const conditions = {}
 
     conditions[this.modelClass.primaryKey()] = recordId
@@ -197,10 +204,11 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {object} conditions
+   * @param {{[key: string]: any}} conditions
    * @returns {Promise<import("../record/index.js").default|null>}
    */
   async findBy(conditions) {
+    /** @type {{[key: string]: number | string}} */
     const newConditions = {}
 
     for (const key in conditions) {
@@ -213,11 +221,12 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {...Parameters<this["findOrInitializeBy"]>} args
+   * @param {{[key: string]: any}} conditions
+   * @param {function() : void} callback
    * @returns {Promise<import("../record/index.js").default>}
    */
-  async findOrCreateBy(...args) {
-    const record = await this.findOrInitializeBy(...args)
+  async findOrCreateBy(conditions, callback) {
+    const record = await this.findOrInitializeBy(conditions, callback)
 
     if (record.isNewRecord()) {
       await record.save()
@@ -227,10 +236,11 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {object} conditions
+   * @param {{[key: string]: any}} conditions
    * @returns {Promise<import("../record/index.js").default>}
    */
   async findByOrFail(conditions) {
+    /** @type {{[key: string]: number | string}} */
     const newConditions = {}
 
     for (const key in conditions) {
@@ -250,7 +260,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {object} conditions
-   * @param {function() : void} callback
+   * @param {function(import("../record/index.js").default) : void} callback
    * @returns {Promise<import("../record/index.js").default>}
    */
   async findOrInitializeBy(conditions, callback) {
@@ -282,9 +292,7 @@ export default class VelociousDatabaseQuery {
    * @returns {this}
    */
   from(from) {
-    if (typeof from == "string") from = new FromPlain({plain: from, query: this})
-
-    from.query = this
+    if (typeof from == "string") from = new FromPlain(from)
 
     this._froms.push(from)
     return this
@@ -300,19 +308,18 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|JoinPlain} join
+   * @param {string|{[key: string]: any}} join
    * @returns {this}
    */
   joins(join) {
     if (typeof join == "string") {
-      join = new JoinPlain({plain: join, query: this})
-    } else if (typeof join == "object") {
-      // Do nothing
+      this._joins.push(new JoinPlain(join))
+    } else if (isPlainObject(join)) {
+      this._joins.push(new JoinObject(join))
     } else {
       throw new Error(`Unknown type of join: ${typeof join}`)
     }
 
-    this._joins.push(join)
     return this
   }
 
@@ -350,11 +357,14 @@ export default class VelociousDatabaseQuery {
    * @returns {this}
    */
   order(order) {
-    if (typeof order == "number" || typeof order == "string") order = new OrderPlain({plain: order, query: this})
+    if (typeof order == "string") {
+      this._orders.push(new OrderPlain(this, order))
+    } else if (typeof order == "number") {
+      this._orders.push(new OrderPlain(this, `${order}`))
+    } else {
+      throw new Error(`Unknown order type: ${typeof order}`)
+    }
 
-    order.query = this
-
-    this._orders.push(order)
     return this
   }
 
@@ -425,11 +435,14 @@ export default class VelociousDatabaseQuery {
       return this
     }
 
-    if (typeof select == "string") select = new SelectPlain({plain: select})
+    if (typeof select == "string") {
+      this._selects.push(new SelectPlain(select))
+    } else if (select instanceof SelectBase) {
+      this._selects.push(select)
+    } else {
+      throw new Error(`Invalid select type: ${typeof select}`)
+    }
 
-    select.query = this
-
-    this._selects.push(select)
     return this
   }
 
@@ -492,14 +505,12 @@ export default class VelociousDatabaseQuery {
    */
   where(where) {
     if (typeof where == "string") {
-      where = new WherePlain(this, where)
+      this._wheres.push(new WherePlain(this, where))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
-      where = new WhereHash(this, where)
+      this._wheres.push(new WhereHash(this, where))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }
-
-    this._wheres.push(where)
 
     return this
   }
