@@ -1,8 +1,14 @@
+// @ts-check
+
 import SelectBase from "./select-base.js"
 
 export default class VelociousDatabaseQuerySelectTableAndColumn extends SelectBase {
-  constructor({query, tableName, columnName}) {
-    super({query})
+  /**
+   * @param {string} tableName
+   * @param {string} columnName
+   */
+  constructor(tableName, columnName) {
+    super()
     this.columnName = columnName
     this.tableName = tableName
   }

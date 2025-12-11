@@ -1,7 +1,12 @@
+// @ts-check
+
 import SelectBase from "./select-base.js"
 
 export default class VelociousDatabaseQuerySelectPlain extends SelectBase {
-  constructor({plain}) {
+  /**
+   * @param {string} plain
+   */
+  constructor(plain) {
     super()
     this.plain = plain
   }

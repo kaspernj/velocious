@@ -1,7 +1,12 @@
+// @ts-check
+
 import JoinBase from "./join-base.js"
 
 export default class VelociousDatabaseQueryJoinPlain extends JoinBase {
-  constructor({plain}) {
+  /**
+   * @param {string} plain
+   */
+  constructor(plain) {
     super()
     this.plain = plain
   }

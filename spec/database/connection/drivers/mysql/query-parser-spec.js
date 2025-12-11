@@ -22,14 +22,14 @@ describe("database - connection - drivers - mysql - query parser", () => {
     expect(sql).toEqual("SELECT tasks.id, tasks.name FROM tasks LEFT JOIN projects ON projects.id = tasks.project_id")
   })
 
-  it("generates sql with selects, joins and orders", () => {
+  it("generates sql with selects, joins and orders with SelectTableAndColumn", () => {
     const handler = new DatabaseHandler()
     const query = new DatabaseQuery({driver: mysqlDriver, handler})
       .select([
-        new SelectTableAndColumn({tableName: "tasks", columnName: "id"}),
-        new SelectTableAndColumn({tableName: "tasks", columnName: "name"})
+        new SelectTableAndColumn("tasks", "id"),
+        new SelectTableAndColumn("tasks", "name")
       ])
-      .from(new FromTable({tableName: "tasks"}))
+      .from(new FromTable("tasks"))
       .joins("LEFT JOIN projects ON projects.id = tasks.project_id")
 
     const sql = new MysqlQueryParser({query}).toSql()

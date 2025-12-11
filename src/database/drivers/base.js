@@ -148,6 +148,14 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @interface
+   * @returns {string}
+   */
+  getType() {
+    throw new Error("'type' not implemented")
+  }
+
+  /**
    * @param {object} args
    * @param {Array} args.columns
    * @param {object} args.data
@@ -177,6 +185,14 @@ export default class VelociousDatabaseDriversBase {
     }
 
     return value
+  }
+
+  /**
+   * @interface
+   * @returns {import("../query-parser/options.js").default}
+   */
+  options() {
+    throw new Error("'options' not implemented.")
   }
 
   /**
@@ -368,6 +384,13 @@ export default class VelociousDatabaseDriversBase {
       }
     }
   }
+
+  /**
+   * @interface
+   * @param {Query} _query
+   * @returns {string}
+   */
+  queryToSql(_query) { throw new Error("queryToSql not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface

@@ -892,7 +892,7 @@ class VelociousDatabaseRecord {
       modelClass: this
     })
 
-    return query.from(new FromTable({driver: this.connection(), tableName: this.tableName()}))
+    return query.from(new FromTable(this.tableName()))
   }
 
   /**

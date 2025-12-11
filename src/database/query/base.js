@@ -1,6 +1,13 @@
+// @ts-check
+
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryBase {
+  /**
+   * @param {object} args
+   * @param {import("../drivers/base.js").default} args.driver
+   * @param {import("../query-parser/options.js").default} args.options
+   */
   constructor({driver, options, ...restArgs}) {
     restArgsError(restArgs)
 
