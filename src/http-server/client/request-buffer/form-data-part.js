@@ -1,7 +1,15 @@
+// @ts-check
+
 export default class FormDataPart {
+  /** @type {Record<string, import("./header.js").default>} */
   headers = {}
+
+  /** @type {number[]} */
   body = []
 
+  /**
+   * @param {import("./header.js").default} header
+   */
   addHeader(header) {
     const name = header.formattedName
 
@@ -36,6 +44,9 @@ export default class FormDataPart {
     return this.value
   }
 
+  /**
+   * @param {string} text
+   */
   removeFromBody(text) {
     this.body = this.body.slice(0, this.body.length - text.length)
   }

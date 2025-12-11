@@ -1,3 +1,5 @@
+// @ts-check
+
 import {EventEmitter} from "events"
 import FormDataPart from "./form-data-part.js"
 import Header from "./header.js"
@@ -8,18 +10,38 @@ import querystring from "querystring"
 
 export default class RequestBuffer {
   bodyLength = 0
+
+  /** @type {number[]} */
   data = []
+
   events = new EventEmitter()
+
+  /** @type {Record<string, Header>} */
   headersByName = {}
+
+  multiPartyFormData = false
+
   params = {}
   readingBody = false
   state = "status"
 
+  /**
+   * @param {object} args
+   * @param {import("../../../configuration.js").default} args.configuration
+   */
   constructor({configuration}) {
     this.configuration = configuration
     this.logger = new Logger(this, {debug: false})
   }
 
+  destroy() {
+    // Do nothing for now...
+  }
+
+  /**
+   * @param {Buffer} data
+   * @returns {void}
+   */
   feed(data) {
     for (const char of data) {
       if (this.readingBody) this.bodyLength += 1
@@ -40,6 +62,10 @@ export default class RequestBuffer {
 
           break
         case "multi-part-form-data-body":
+          if (!this.formDataPart) throw new Error("FormData part not initialized")
+          if (!this.boundaryLineEnd) throw new Error("Boundary line end not initialized")
+          if (!this.boundaryLineNext) throw new Error("Boundary line next not initialized")
+
           const body = this.formDataPart.body // eslint-disable-line no-case-declarations
 
           body.push(char)
@@ -71,6 +97,8 @@ export default class RequestBuffer {
 
           break
         case "post-body":
+          if (!this.postBodyChars) throw new Error("postBodyChars not initialized")
+
           this.postBodyChars[this.bodyLength - 1] = char
 
           if (this.contentLength && this.bodyLength >= this.contentLength) {
@@ -84,6 +112,10 @@ export default class RequestBuffer {
     }
   }
 
+  /**
+   * @param {string} name
+   * @returns {Header}
+   */
   getHeader(name) {
     const result = this.headersByName[name.toLowerCase().trim()]
 
@@ -92,7 +124,11 @@ export default class RequestBuffer {
     return result
   }
 
+  /**
+   * @returns {Record<string, string>}
+   */
   getHeadersHash() {
+    /** @type {Record<string, string>} */
     const result = {}
 
     for (const headerFormattedName in this.headersByName) {
@@ -104,8 +140,13 @@ export default class RequestBuffer {
     return result
   }
 
+  /**
+   * @returns {void}
+   */
   formDataPartDone() {
     const formDataPart = this.formDataPart
+
+    if (!formDataPart) throw new Error("formDataPart wasnt set")
 
     this.formDataPart = undefined
     formDataPart.finish()
@@ -117,11 +158,18 @@ export default class RequestBuffer {
     return this.multiPartyFormData
   }
 
+  /**
+   * @returns {void}
+   */
   newFormDataPart() {
     this.formDataPart = new FormDataPart()
     this.setState("multi-part-form-data-header")
   }
 
+  /**
+   * @param {string} line
+   * @returns {void}
+   */
   parse(line) {
     if (this.state == "status") {
       this.parseStatusLine(line)
@@ -139,8 +187,10 @@ export default class RequestBuffer {
       const header = this.readHeaderFromLine(line)
 
       if (header) {
+        if (!this.formDataPart) throw new Error("formDataPart not set")
+
         this.formDataPart.addHeader(header)
-        this.state == "multi-part-form-data"
+        //this.state == "multi-part-form-data"
       } else if (line == "\r\n") {
         this.setState("multi-part-form-data-body")
       }
@@ -149,6 +199,10 @@ export default class RequestBuffer {
     }
   }
 
+  /**
+   * @param {string} line
+   * @returns {Header | undefined}
+   */
   readHeaderFromLine(line) {
     const match = line.match(/^(.+): (.+)\r\n/)
 
@@ -159,6 +213,9 @@ export default class RequestBuffer {
     }
   }
 
+  /**
+   * @param {Header} header
+   */
   addHeader(header) {
     const formattedName = header.getFormattedName()
 
@@ -167,6 +224,10 @@ export default class RequestBuffer {
     if (formattedName == "content-length") this.contentLength = parseInt(header.getValue())
   }
 
+  /**
+   * @param {string} line
+   * @returns {void}
+   */
   parseHeader(line) {
     const header = this.readHeaderFromLine(line)
 
@@ -175,9 +236,9 @@ export default class RequestBuffer {
       this.addHeader(header)
       this.events.emit("header", header)
     } else if (line == "\r\n") {
-      if (this.httpMethod.toUpperCase() == "GET" || this.httpMethod.toUpperCase() == "OPTIONS") {
+      if (this.httpMethod?.toUpperCase() == "GET" || this.httpMethod?.toUpperCase() == "OPTIONS") {
         this.completeRequest()
-      } else if (this.httpMethod.toUpperCase() == "POST") {
+      } else if (this.httpMethod?.toUpperCase() == "POST") {
         this.readingBody = true
         this.bodyLength = 0
 
@@ -196,8 +257,11 @@ export default class RequestBuffer {
           } else if (!this.contentLength) {
             throw new Error("Content length hasn't been set")
           } else {
-            this.postBodyBuffer = new ArrayBuffer(this.contentLength)
-            this.postBodyChars = new Uint8Array(this.postBodyBuffer)
+            /** @type {number[]} */
+            this.postBodyChars = []
+
+            // this.postBodyBuffer = new ArrayBuffer(this.contentLength)
+            // this.postBodyChars = new Uint8Array(this.postBodyBuffer)
 
             this.setState("post-body")
           }
@@ -208,6 +272,10 @@ export default class RequestBuffer {
     }
   }
 
+  /**
+   * @param {string} line
+   * @returns {void}
+   */
   parseStatusLine(line) {
     const match = line.match(/^(GET|OPTIONS|POST) (.+?) HTTP\/(.+)\r\n/)
 
@@ -223,7 +291,9 @@ export default class RequestBuffer {
   }
 
   postRequestDone() {
-    this.postBody = String.fromCharCode.apply(null, this.postBodyChars)
+    if (this.postBodyChars) {
+      this.postBody = String.fromCharCode.apply(null, this.postBodyChars)
+    }
 
     delete this.postBodyChars
     delete this.postBodyBuffer
@@ -231,6 +301,10 @@ export default class RequestBuffer {
     this.completeRequest()
   }
 
+  /**
+   * @param {string} newState
+   * @returns {void}
+   */
   setState(newState) {
     this.logger.debug(() => [`Changing state from ${this.state} to ${newState}`])
     this.state = newState
@@ -251,16 +325,20 @@ export default class RequestBuffer {
   }
 
   parseApplicationJsonParams() {
-    const newParams = JSON.parse(this.postBody)
+    if (this.postBody) {
+      const newParams = JSON.parse(this.postBody)
 
-    incorporate(this.params, newParams)
+      incorporate(this.params, newParams)
+    }
   }
 
   parseQueryStringPostParams() {
-    const unparsedParams = querystring.parse(this.postBody)
-    const paramsToObject = new ParamsToObject(unparsedParams)
-    const newParams = paramsToObject.toObject()
+    if (this.postBody) {
+      const unparsedParams = querystring.parse(this.postBody)
+      const paramsToObject = new ParamsToObject(unparsedParams)
+      const newParams = paramsToObject.toObject()
 
-    incorporate(this.params, newParams)
+      incorporate(this.params, newParams)
+    }
   }
 }

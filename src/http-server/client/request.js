@@ -1,8 +1,15 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import RequestParser from "./request-parser.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousHttpServerClientRequest {
+  /**
+   * @param {object} args
+   * @param {import("./index.js").default} args.client
+   * @param {import("../../configuration.js").default} args.configuration
+   */
   constructor({client, configuration, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -12,7 +19,17 @@ export default class VelociousHttpServerClientRequest {
   }
 
   baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
+
+  /**
+   * @param {Buffer} data
+   * @returns {void}
+   */
   feed(data) { return this.requestParser.feed(data) }
+
+  /**
+   * @param {string} headerName
+   * @returns {string | null}
+   */
   header(headerName) { return this.getRequestBuffer().getHeader(headerName)?.getValue() }
   headers() { return this.getRequestBuffer().getHeadersHash() }
   httpMethod() { return this.requestParser.getHttpMethod() }

@@ -1,4 +1,10 @@
+// @ts-check
+
 export default class Header {
+  /**
+   * @param {string} name
+   * @param {string} value
+   */
   constructor(name, value) {
     this.formattedName = name.toLowerCase().trim()
     this.name = name

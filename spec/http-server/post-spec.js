@@ -67,6 +67,7 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
       for (let i = 0; i <= 5; i++) {
         const body = new FormData()
 
+        body.append("project[creating_user_reference]", 150123)
         body.append("project[name]", "Test create project")
 
         const response = await fetch(
@@ -84,6 +85,7 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
 
         const createdProject = await Project.preload({translations: true}).last()
 
+        expect(createdProject.creatingUserReference()).toEqual("150123")
         expect(createdProject.name()).toEqual("Test create project")
       }
     })

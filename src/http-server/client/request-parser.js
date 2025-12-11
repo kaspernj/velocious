@@ -1,3 +1,5 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import {EventEmitter} from "events"
 import {incorporate} from "incorporator"
@@ -5,6 +7,10 @@ import ParamsToObject from "./params-to-object.js"
 import RequestBuffer from "./request-buffer/index.js"
 
 export default class VelociousHttpServerClientRequestParser {
+  /**
+   * @param {object} args
+   * @param {import("../../configuration.js").default} args.configuration
+   */
   constructor({configuration}) {
     if (!configuration) throw new Error("No configuration given")
 
@@ -26,7 +32,12 @@ export default class VelociousHttpServerClientRequestParser {
     this.requestBuffer.destroy()
   }
 
+  /**
+   * @param {import("./request-buffer/form-data-part.js").default} formDataPart
+   * @returns {void}
+   */
   onFormDataPart = (formDataPart) => {
+    /** @type {Record<string, string>} */
     const unorderedParams = {}
 
     unorderedParams[formDataPart.getName()] = formDataPart.getValue()
@@ -37,10 +48,25 @@ export default class VelociousHttpServerClientRequestParser {
     incorporate(this.params, newParams)
   }
 
+  /**
+   * @param {Buffer} data
+   */
   feed = (data) => this.requestBuffer.feed(data)
+
+  /**
+   * @param {string} name
+   */
   getHeader(name) { return this.requestBuffer.getHeader(name)?.value }
   getHeaders() { return this.requestBuffer.getHeadersHash() }
+
+  /**
+   * @returns {string}
+   */
   getHttpMethod() { return digg(this, "requestBuffer", "httpMethod") }
+
+  /**
+   * @returns {string}
+   */
   getHttpVersion() { return digg(this, "requestBuffer", "httpVersion") }
 
   _getHostMatch() {
