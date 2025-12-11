@@ -65,8 +65,6 @@ export default class TestFilesFinder {
   async findTestFiles() {
     await this.withFindingCount(async () => {
       for (const directory of this.directories) {
-        console.log({directory})
-
         if (await fileExists(directory)) {
           console.log("Exists!")
           await this.findTestFilesInDir(directory)
