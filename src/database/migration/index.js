@@ -1,9 +1,17 @@
 // @ts-check
 
+/**
+ * @typedef {object} AddColumnArgsType
+ * @property {any} default
+ * @property {object} foreignKey
+ * @property {boolean} nullable
+ * @property {boolean} primaryKey
+ * @property {boolean} unique
+ */
+
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
 import TableData from "../table-data/index.js"
-
 class NotImplementedError extends Error {}
 
 export {NotImplementedError}
@@ -61,20 +69,13 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} sql
-   * @returns {Promise<Array<{}>>}
+   * @returns {Promise<import("../drivers/base.js").QueryResultType>}
    */
   async execute(sql) {
     return await this.connection().query(sql)
   }
 
   /**
-   * @typedef {object} AddColumnArgsType
-   * @property {any} default
-   * @property {object} foreignKey
-   * @property {boolean} nullable
-   * @property {boolean} primaryKey
-   * @property {boolean} unique
-   *
    * @param {string} tableName
    * @param {string} columnName
    * @param {string} columnType
@@ -119,7 +120,8 @@ export default class VelociousDatabaseMigration {
    * @property {boolean} [ifNotExists]
    * @property {string} [name]
    * @property {boolean} [unique]
-   *
+   */
+  /**
    * @param {string} tableName
    * @param {Array<string | import("../table-data/table-column.js").default>} columns
    * @param {AddIndexArgsType} [args]
@@ -234,7 +236,8 @@ export default class VelociousDatabaseMigration {
    * @typedef {object} CreateTableIdArgsType
    * @property {any} [default]
    * @property {string} [type]
-   *
+   */
+  /**
    * @typedef {object} CreateTableArgsType
    * @property {CreateTableIdArgsType | false} [id]
    */

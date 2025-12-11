@@ -1,3 +1,35 @@
+/**
+ * @typedef {object} CreateIndexSqlArgs
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns
+ * @property {boolean} [ifNotExists]
+ * @property {string} [name]
+ * @property {boolean} [unique]
+ * @property {string} tableName
+ */
+/**
+ * @typedef {object} DropTableSqlArgsType
+ * @property {boolean} [cascade]
+ * @property {boolean} [ifExists]
+ */
+/**
+ * @typedef {object} DeleteSqlArgsType
+ * @property {string} tableName
+ * @property {{[key: string]: any}} conditions
+ */
+/**
+ * @typedef {object} InsertSqlArgsType
+ * @property {Array} [columns]
+ * @property {{[key: string]: any}} [data]
+ * @property {boolean} [multiple]
+ * @property {boolean} [returnLastInsertedColumnNames]
+ * @property {Array} [rows]
+ * @property {string} tableName
+ */
+/**
+ * @typedef {Record<string, any>} QueryRowType
+ * @typedef {Array<QueryRowType>} QueryResultType
+ */
+
 import {Logger} from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
@@ -74,17 +106,11 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @typedef {object} CreateIndexSqlArgs
-   * @property {Array<string | import("./../table-data/table-column.js").default>} columns
-   * @property {boolean} [ifNotExists]
-   * @property {string} [name]
-   * @property {boolean} [unique]
-   * @property {string} tableName
-   *
-   * @param {CreateIndexSqlArgs} _indexData
+   * @interface
+   * @param {CreateIndexSqlArgs} indexData
    * @returns {string}
    */
-  createIndexSql(_indexData) {
+  createIndexSql(indexData) { // eslint-disable-line no-unused-vars
     throw new Error("'createIndexSql' not implemented")
   }
 
@@ -105,15 +131,11 @@ export default class VelociousDatabaseDriversBase {
    * @param {import("../table-data/index.js").default} tableData
    * @returns {string[]}
    */
-  createTableSql(tableData) {
+  createTableSql(tableData) { // eslint-disable-line no-unused-vars
     throw new Error("'createTableSql' not implemented")
   }
 
   /**
-   * @typedef {object} DeleteSqlArgsType
-   * @property {string} tableName
-   * @property {{[key: string]: any}} conditions
-   *
    * @param {DeleteSqlArgsType} args
    * @returns {void}
    */
@@ -128,21 +150,17 @@ export default class VelociousDatabaseDriversBase {
    * @param {DeleteSqlArgsType} args
    * @returns {string}
    */
-  deleteSql(args) {
+  deleteSql(args) { // eslint-disable-line no-unused-vars
     throw new Error(`'deleteSql' not implemented`)
   }
 
   /**
-   * @typedef {object} DropTableSqlArgsType
-   * @param {boolean} [cascade]
-   * @param {boolean} [ifExists]
-   *
    * @param {string} tableName
    * @param {DropTableSqlArgsType} [args]
    * @returns {string}
    */
-  async dropTable(...args) {
-    const sqls = this.dropTableSql(...args)
+  async dropTable(tableName, args) {
+    const sqls = this.dropTableSql(tableName, args)
 
     for (const sql of sqls) {
       await this.query(sql)
@@ -208,14 +226,6 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @typedef {object} InsertSqlArgsType
-   * @property {Array} [columns]
-   * @property {{[key: string]: any}} [data]
-   * @property {boolean} [multiple]
-   * @property {boolean} [returnLastInsertedColumnNames]
-   * @property {Array} [rows]
-   * @property {string} tableName
-   *
    * @param {InsertSqlArgsType} args
    * @returns {Promise<void>}
    */
@@ -226,14 +236,12 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @interface
    * @param {InsertSqlArgsType} args
    * @returns {string}
    */
-  insertSql(args) {
-    const insertArgs = Object.assign({driver: this}, args)
-    const insert = new Insert(insertArgs)
-
-    return insert.toSql()
+  insertSql(args) { // eslint-disable-line no-unused-vars
+    throw new Error("'insertSql' not implemented")
   }
 
   /**
@@ -436,7 +444,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {string} sql
-   * @returns {Promise<Array<Record<string, any>>>}
+   * @returns {Promise<QueryResultType>}
    */
   async query(sql) {
     let tries = 0
