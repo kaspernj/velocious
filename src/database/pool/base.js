@@ -67,6 +67,14 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * @interface
+   * @returns {string}
+   */
+  primaryKeyType() {
+    throw new Error("'primaryKeyType' not implemented")
+  }
+
+  /**
    * @returns {void}
    */
   setCurrent() {

@@ -93,7 +93,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} identifier
-   * @returns {object}
+   * @returns {import("./configuration-types.js").DatabaseConfigurationType})
    */
   getDatabaseIdentifier(identifier) {
     if (!this.getDatabaseConfiguration()[identifier]) throw new Error(`No such database identifier configured: ${identifier}`)

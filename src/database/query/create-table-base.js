@@ -113,9 +113,11 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           tableName: tableData.getName(),
           unique: index.getUnique()
         }
-        const sql = new CreateIndexBase(createIndexArgs).toSql()
+        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
 
-        sqls.push(sql)
+        for (const createIndexSQL of createIndexSQLs) {
+          sqls.push(createIndexSQL)
+        }
       }
 
       // Create indexes for all columns with the index argument
@@ -139,9 +141,11 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           tableName: tableData.getName(),
           unique
         }
-        const sql = new CreateIndexBase(createIndexArgs).toSql()
+        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
 
-        sqls.push(sql)
+        for (const createIndexSQL of createIndexSQLs) {
+          sqls.push(createIndexSQL)
+        }
       }
     }
 

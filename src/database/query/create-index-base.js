@@ -1,6 +1,21 @@
+// @ts-check
+
 import QueryBase from "./base.js"
 
+/**
+ * @typedef {object} CreateIndexBaseArgsType
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns
+ * @property {import("../drivers/base.js").default} driver
+ * @property {boolean} [ifNotExists]
+ * @property {string} [name]
+ * @property {boolean} [unique]
+ * @property {string} tableName
+ */
+
 export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
+  /**
+   * @param {CreateIndexBaseArgsType} args
+   */
   constructor({columns, driver, ifNotExists, name, unique, tableName}) {
     super({driver})
     this.columns = columns
@@ -17,7 +32,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     if (databaseType == "sqlite") indexName += `${this.tableName}_`
 
     for (const columnIndex in this.columns) {
-      if (columnIndex > 0) indexName += "_and_"
+      if (typeof columnIndex == "number" && columnIndex > 0) indexName += "_and_"
 
       const column = this.columns[columnIndex]
       let columnName
@@ -35,9 +50,9 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   /**
-   * @returns {string}
+   * @returns {string[]}
    */
-  toSql() {
+  toSqls() {
     const databaseType = this.getDriver().getType()
     const indexName = this.name || this.generateIndexName()
     const options = this.getOptions()
@@ -69,7 +84,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     sql += ` ON ${options.quoteTableName(tableName)} (`
 
     for (const columnIndex in this.columns) {
-      if (columnIndex > 0) sql += ", "
+      if (typeof columnIndex == "number" && columnIndex > 0) sql += ", "
 
       const column = this.columns[columnIndex]
       let columnName
@@ -89,6 +104,6 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
       sql += " END"
     }
 
-    return sql
+    return [sql]
   }
 }

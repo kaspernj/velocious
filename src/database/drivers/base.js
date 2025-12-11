@@ -1,3 +1,37 @@
+// @ts-check
+
+/**
+ * @typedef {object} CreateIndexSqlArgs
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns
+ * @property {boolean} [ifNotExists]
+ * @property {string} [name]
+ * @property {boolean} [unique]
+ * @property {string} tableName
+ */
+/**
+ * @typedef {object} DropTableSqlArgsType
+ * @property {boolean} [cascade]
+ * @property {boolean} [ifExists]
+ */
+/**
+ * @typedef {object} DeleteSqlArgsType
+ * @property {string} tableName
+ * @property {{[key: string]: any}} conditions
+ */
+/**
+ * @typedef {object} InsertSqlArgsType
+ * @property {string[]} [columns]
+ * @property {{[key: string]: any}} [data]
+ * @property {boolean} [multiple]
+ * @property {boolean} [returnLastInsertedColumnNames]
+ * @property {Array<Array<any>>} [rows]
+ * @property {string} tableName
+ */
+/**
+ * @typedef {Record<string, any>} QueryRowType
+ * @typedef {Array<QueryRowType>} QueryResultType
+ */
+
 import {Logger} from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
@@ -74,33 +108,20 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {...Parameters<this["createTableSql"]>} args
-   * @returns {void}
+   * @interface
+   * @param {CreateIndexSqlArgs} indexData
+   * @returns {string}
    */
-  async createTable(...args) {
-    const sqls = this.createTableSql(...args)
-
-    for (const sql of sqls) {
-      await this.query(sql)
-    }
+  createIndexSql(indexData) { // eslint-disable-line no-unused-vars
+    throw new Error("'createIndexSql' not implemented")
   }
 
   /**
-   * @param {...Parameters<this["deleteSql"]>} args
-   * @returns {void}
+   * @param {import("../table-data/index.js").default} tableData
+   * @returns {Promise<void>}
    */
-  async delete(...args) {
-    const sql = this.deleteSql(...args)
-
-    await this.query(sql)
-  }
-
-  /**
-   * @param {...Parameters<this['dropTableSql']>} args
-   * @returns {void}
-   */
-  async dropTable(...args) {
-    const sqls = this.dropTableSql(...args)
+  async createTable(tableData) {
+    const sqls = this.createTableSql(tableData)
 
     for (const sql of sqls) {
       await this.query(sql)
@@ -109,14 +130,62 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @interface
-   * @param {string} _tableName
-   * @param {object} _args
-   * @param {boolean} _args.cascade
-   * @param {boolean} _args.ifExists
+   * @param {import("../table-data/index.js").default} tableData
+   * @returns {string[]}
+   */
+  createTableSql(tableData) { // eslint-disable-line no-unused-vars
+    throw new Error("'createTableSql' not implemented")
+  }
+
+  /**
+   * @param {DeleteSqlArgsType} args
+   * @returns {Promise<void>}
+   */
+  async delete(args) {
+    const sql = this.deleteSql(args)
+
+    await this.query(sql)
+  }
+
+  /**
+   * @interface
+   * @param {DeleteSqlArgsType} args
    * @returns {string}
    */
-  dropTableSql(_tableName, _args) { // eslint-disable-line no-unused-vars
+  deleteSql(args) { // eslint-disable-line no-unused-vars
+    throw new Error(`'deleteSql' not implemented`)
+  }
+
+  /**
+   * @param {string} tableName
+   * @param {DropTableSqlArgsType} [args]
+   * @returns {Promise<void>}
+   */
+  async dropTable(tableName, args) {
+    const sqls = this.dropTableSql(tableName, args)
+
+    for (const sql of sqls) {
+      await this.query(sql)
+    }
+  }
+
+  /**
+   * @interface
+   * @param {string} tableName
+   * @param {DropTableSqlArgsType} [args]
+   * @returns {string}
+   */
+  dropTableSql(tableName, args) { // eslint-disable-line no-unused-vars
     throw new Error("dropTableSql not implemented")
+  }
+
+  /**
+   * @interface
+   * @param {any} value
+   * @returns {any}
+   */
+  escape(value) { // eslint-disable-line no-unused-vars
+    throw new Error("'escape' not implemented")
   }
 
   /**
@@ -150,6 +219,12 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#getTables not implemented`)
   }
 
+  /**
+   * @param {string} name
+   * @param {object} [args]
+   * @param {boolean} args.throwError
+   * @returns {Promise<import("./base-table.js").default | undefined>}
+   */
   async getTableByName(name, args) {
     const tables = await this.getTables()
     const table = tables.find((table) => table.getName() == name)
@@ -168,19 +243,22 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {object} args
-   * @param {Array} args.columns
-   * @param {object} args.data
-   * @param {boolean} args.multiple
-   * @param {boolean} args.returnLastInsertedColumnNames
-   * @param {Array} args.rows
-   * @param {string} args.tableName
+   * @param {InsertSqlArgsType} args
    * @returns {Promise<void>}
    */
-  async insert(...args) {
-    const sql = this.insertSql(...args)
+  async insert(args) {
+    const sql = this.insertSql(args)
 
     await this.query(sql)
+  }
+
+  /**
+   * @interface
+   * @param {InsertSqlArgsType} args
+   * @returns {string}
+   */
+  insertSql(args) { // eslint-disable-line no-unused-vars
+    throw new Error("'insertSql' not implemented")
   }
 
   /**
@@ -191,6 +269,10 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
   }
 
+  /**
+   * @param {any} value
+   * @returns {any}
+   */
   _convertValue(value) {
     if (value instanceof Date) {
       return strftime("%F %T.%L", value)
@@ -258,7 +340,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {string} tableName
-   * @returns {Promise<Array>}
+   * @returns {Promise<QueryResultType>}
    */
   async select(tableName) {
     const query = this.newQuery()
@@ -299,6 +381,10 @@ export default class VelociousDatabaseDriversBase {
     return false
   }
 
+  /**
+   * @param {() => Promise<void>} callback
+   * @returns {Promise<any>}
+   */
   async transaction(callback) {
     const savePointName = this.generateSavePointName()
     let transactionStarted = false
@@ -329,7 +415,11 @@ export default class VelociousDatabaseDriversBase {
         await this.commitTransaction()
       }
     } catch (error) {
-      this.logger.debug("Transaction error", error.message)
+      if (error instanceof Error) {
+        this.logger.debug("Transaction error", error.message)
+      } else {
+        this.logger.debug("Transaction error", error)
+      }
 
       if (savePointStarted) {
         this.logger.debug("Rollback savepoint", savePointName)
@@ -383,7 +473,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {string} sql
-   * @returns {Promise<Array<Record<string, any>>>}
+   * @returns {Promise<QueryResultType>}
    */
   async query(sql) {
     let tries = 0
@@ -394,7 +484,7 @@ export default class VelociousDatabaseDriversBase {
       try {
         return await this._queryActual(sql)
       } catch (error) {
-        if (tries < 5 && this.retryableDatabaseError(error)) {
+        if (error instanceof Error && tries < 5 && this.retryableDatabaseError(error)) {
           await wait(100)
           this.logger.warn(`Retrying query because failed with: ${error.stack}`)
           // Retry
@@ -403,6 +493,17 @@ export default class VelociousDatabaseDriversBase {
         }
       }
     }
+
+    throw new Error("'query' unexpected came here")
+  }
+
+  /**
+   * @interface
+   * @param {string} sql
+   * @returns {Promise<QueryResultType>}
+   */
+  _queryActual(sql) { // eslint-disable-line no-unused-vars
+    throw new Error(`queryActual not implemented`)
   }
 
   /**
@@ -557,16 +658,44 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {object} args
-   * @param {object} args.conditions
-   * @param {object} args.data
-   * @param {string} args.tableName
+   * @typedef {object}UpdateSqlArgsType
+   * @property {object} conditions
+   * @property {object} data
+   * @property {string} tableName
+   */
+  /**
+   * @param {UpdateSqlArgsType} args
    * @returns {Promise<void>}
    */
-  async update(...args) {
-    const sql = this.updateSql(...args)
+  async update(args) {
+    const sql = this.updateSql(args)
 
     await this.query(sql)
+  }
+
+  /**
+   * @interface
+   * @param {UpdateSqlArgsType} args
+   * @returns {string}
+   */
+  updateSql(args) { // eslint-disable-line no-unused-vars
+    throw new Error("'disableForeignKeys' not implemented")
+  }
+
+  /**
+   * @interface
+   * @returns {Promise<void>}
+   */
+  disableForeignKeys() {
+    throw new Error("'disableForeignKeys' not implemented")
+  }
+
+  /**
+   * @interface
+   * @returns {Promise<void>}
+   */
+  enableForeignKeys() {
+    throw new Error("'enableForeignKeys' not implemented")
   }
 
   /**

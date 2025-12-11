@@ -1,21 +1,40 @@
+// @ts-check
+
+/**
+ * @typedef {object} AddColumnArgsType
+ * @property {any} default
+ * @property {object} foreignKey
+ * @property {boolean} nullable
+ * @property {boolean} primaryKey
+ * @property {boolean} unique
+ */
+
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
 import TableData from "../table-data/index.js"
+class NotImplementedError extends Error {}
+
+export {NotImplementedError}
 
 export default class VelociousDatabaseMigration {
+  /**
+   * @param {string[]} databaseIdentifiers
+   * @returns {void}
+   */
   static onDatabases(databaseIdentifiers) {
     this._databaseIdentifiers = databaseIdentifiers
   }
 
+  /** @returns {string[] | undefined} */
   static getDatabaseIdentifiers() {
     return this._databaseIdentifiers
   }
 
   /**
    * @param {object} args
-   * @param {string} args.configuration
+   * @param {import("../../configuration.js").default} args.configuration
    * @param {string} args.databaseIdentifier
-   * @param {object} args.db
+   * @param {import("../drivers/base.js").default} args.db
    */
   constructor({configuration, databaseIdentifier = "default", db}) {
     if (!databaseIdentifier) throw new Error("No database identifier given")
@@ -32,12 +51,25 @@ export default class VelociousDatabaseMigration {
     return this._databaseIdentifier
   }
 
+  /** @returns {import("../drivers/base.js").default} */
   getDriver() { return this._db }
   connection() { return this.getDriver() }
 
+  async change() {
+    throw new NotImplementedError("'change' not implemented")
+  }
+
+  async up() {
+    throw new NotImplementedError("'change' not implemented")
+  }
+
+  async down() {
+    throw new NotImplementedError("'change' not implemented")
+  }
+
   /**
    * @param {string} sql
-   * @returns {Promise<Array>}
+   * @returns {Promise<import("../drivers/base.js").QueryResultType>}
    */
   async execute(sql) {
     return await this.connection().query(sql)
@@ -47,12 +79,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {string} columnName
    * @param {string} columnType
-   * @param {object} args
-   * @param {object} args.default
-   * @param {object} args.foreignKey
-   * @param {object} args.nullable
-   * @param {object} args.primaryKey
-   * @param {object} args.unique
+   * @param {AddColumnArgsType} [args]
    * @returns {Promise<void>}
    */
   async addColumn(tableName, columnName, columnType, args) {
@@ -89,12 +116,15 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * @typedef {object} AddIndexArgsType
+   * @property {boolean} [ifNotExists]
+   * @property {string} [name]
+   * @property {boolean} [unique]
+   */
+  /**
    * @param {string} tableName
-   * @param {Array} columns
-   * @param {object} args
-   * @param {boolean} args.ifNotExists
-   * @param {string} args.name
-   * @param {boolean} args.unique
+   * @param {Array<string | import("../table-data/table-column.js").default>} columns
+   * @param {AddIndexArgsType} [args]
    * @returns {Promise<void>}
    */
   async addIndex(tableName, columns, args) {
@@ -175,7 +205,12 @@ export default class VelociousDatabaseMigration {
    */
   async changeColumnNull(tableName, columnName, nullable) {
     const table = await this.getDriver().getTableByName(tableName)
+
+    if (!table) throw new Error(`Table ${tableName} does not exist`)
+
     const column = await table.getColumnByName(columnName)
+
+    if (!column) throw new Error(`Column ${columnName} does not exist in table ${tableName}`)
 
     await column.changeNullable(nullable)
   }
@@ -187,20 +222,34 @@ export default class VelociousDatabaseMigration {
    */
   async columnExists(tableName, columnName) {
     const table = await this.getDriver().getTableByName(tableName)
+
+    if (!table) throw new Error(`Table ${tableName} does not exist`)
+
     const column = await table.getColumnByName(columnName)
+
+    if (!column) throw new Error(`Column ${columnName} does not exist in table ${tableName}`)
 
     return Boolean(column)
   }
 
   /**
+   * @typedef {object} CreateTableIdArgsType
+   * @property {any} [default]
+   * @property {string} [type]
+   */
+  /**
+   * @typedef {object} CreateTableArgsType
+   * @property {CreateTableIdArgsType | false} [id]
+   */
+  /**
    * @param {string} tableName
-   * @param {function() : void} arg1
+   * @param {function(TableData) : void} arg1
    * @returns {Promise<void>}
    */
   /**
    * @param {string} tableName
-   * @param {object} arg1
-   * @param {function() : void} arg2
+   * @param {CreateTableArgsType} arg1
+   * @param {function(TableData) : void} arg2
    * @returns {Promise<void>}
    */
   async createTable(tableName, arg1, arg2) {
@@ -218,7 +267,16 @@ export default class VelociousDatabaseMigration {
     const {id = {}, ...restArgs} = args
     const databaseIdentifier = this._getDatabaseIdentifier()
     const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
-    const {default: idDefault, type: idType = databasePool.primaryKeyType(), ...restArgsId} = id
+    let idDefault, idType, restArgsId
+
+    if (id !== false) {
+      ({default: idDefault, type: idType, ...restArgsId} = id)
+    }
+
+    if (!idType) {
+      idType = databasePool.primaryKeyType()
+    }
+
     const tableData = new TableData(tableName)
 
     restArgsError(restArgs)
@@ -227,7 +285,7 @@ export default class VelociousDatabaseMigration {
     if (!(idType in tableData)) throw new Error(`Unsupported primary key type: ${idType}`)
 
     if (id !== false) {
-      tableData[idType]("id", {autoIncrement: true, default: idDefault, null: false, primaryKey: true})
+      tableData.addColumn("id", {autoIncrement: true, default: idDefault, null: false, primaryKey: true, type: idType})
     }
 
     if (callback) {

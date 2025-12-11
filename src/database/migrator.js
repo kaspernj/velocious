@@ -1,10 +1,16 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import * as inflection from "inflection"
 import {Logger} from "../logger.js"
+import {NotImplementedError} from "./migration/index.js"
 import restArgsError from "../utils/rest-args-error.js"
 import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
+  /** @type {Record<string, Record<string, boolean>>} */
+  migrationsVersions = {}
+
   /**
    * @param {object} args
    * @param {import("../configuration.js").default} args.configuration
@@ -60,8 +66,8 @@ export default class VelociousDatabaseMigrator {
 
   /**
    * @param {string} dbIdentifier
-   * @param {string} version
-   * @returns {Promise<boolean>}
+   * @param {number} version
+   * @returns {boolean}
    */
   hasRunMigrationVersion(dbIdentifier, version) {
     if (!this.migrationsVersions) throw new Error("Migrations versions hasn't been loaded yet")
@@ -74,12 +80,18 @@ export default class VelociousDatabaseMigrator {
     return false
   }
 
+  /**
+   * @param {import("./migrator/types.js").MigrationObjectType[]} files
+   * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback
+   */
   async migrateFiles(files, importCallback) {
     await this.configuration.ensureConnections(async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,
           requireMigration: async () => {
+            if (!migration.fullPath) throw new Error(`Migration didn't have a fullPath key: ${Object.keys(migration).join(", ")}`)
+
             const migrationImport = await importCallback(migration.fullPath)
 
             if (!migrationImport) {
@@ -94,46 +106,47 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {*} requireContext
+   * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext
    * @returns {Promise<void>}
    */
   async migrateFilesFromRequireContext(requireContext) {
-    const files = requireContext
-      .keys()
-      .map((file) => {
-        // "13,14" because somes "require-context"-npm-module deletes first character!?
-        const match = file.match(/(\d{13,14})-(.+)\.js$/)
+    /** @type {import("./migrator/types.js").MigrationObjectType[]} */
+    let files = []
 
-        if (!match) return null
+    for (const file of requireContext.keys()) {
+      // "13,14" because somes "require-context"-npm-module deletes first character!?
+      const match = file.match(/(\d{13,14})-(.+)\.js$/)
 
-        // Fix require-context-npm-module deletes first character
-        let fileName = file
-        let dateNumber = match[1]
+      if (!match) continue
 
-        if (dateNumber.length == 13) {
-          dateNumber = `2${dateNumber}`
-          fileName = `2${fileName}`
-        }
+      // Fix require-context-npm-module deletes first character
+      let fileName = file
+      let dateNumber = match[1]
 
-        // Parse regex
-        const date = parseInt(dateNumber)
-        const migrationName = match[2]
-        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+      if (dateNumber.length == 13) {
+        dateNumber = `2${dateNumber}`
+        fileName = `2${fileName}`
+      }
 
-        return {
-          file: fileName,
-          date,
-          migrationClassName
-        }
+      // Parse regex
+      const date = parseInt(dateNumber)
+      const migrationName = match[2]
+      const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+
+      files.push({
+        file: fileName,
+        date,
+        migrationClassName
       })
-      .filter((migration) => Boolean(migration))
-      .sort((migration1, migration2) => migration1.date - migration2.date)
+    }
+
+    files = files.sort((migration1, migration2) => migration1.date - migration2.date)
 
     await this.configuration.ensureConnections(async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,
-          requireMigration: () => requireContext(migration.file).default
+          requireMigration: async () => requireContext(migration.file).default
         })
       }
     })
@@ -174,6 +187,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
+   * @param {import("./drivers/base.js").default} db
    * @returns {Promise<boolean>}
    */
   async migrationsTableExist(db) {
@@ -185,34 +199,39 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
+   * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext
    * @returns {Promise<void>}
    */
   async executeRequireContext(requireContext) {
     const migrationFiles = requireContext.keys()
-    const files = migrationFiles
-      .map((file) => {
-        const match = file.match(/^(\d{14})-(.+)\.js$/)
 
-        if (!match) return null
+    /** @type {import("./migrator/types.js").MigrationObjectType[]} */
+    let files = []
 
-        const date = parseInt(match[1])
-        const migrationName = match[2]
-        const migrationClassName = inflection.camelize(migrationName)
+    for (const file of migrationFiles) {
+      const match = file.match(/^(\d{14})-(.+)\.js$/)
 
-        return {
-          file,
-          fullPath: `${migrationsPath}/${file}`, // eslint-disable-line no-undef
-          date,
-          migrationClassName
-        }
+      if (!match) continue
+
+      const date = parseInt(match[1])
+      const migrationName = match[2]
+      const migrationClassName = inflection.camelize(migrationName)
+
+      const migrationObject = /** @type {import("./migrator/types.js").MigrationObjectType} */ ({
+        file,
+        date,
+        migrationClassName
       })
-      .filter((migration) => Boolean(migration))
-      .sort((migration1, migration2) => migration1.date - migration2.date)
+
+      files.push(migrationObject)
+    }
+
+    files = files.sort((migration1, migration2) => migration1.date - migration2.date)
 
     for (const migration of files) {
       await this.runMigrationFile({
         migration,
-        require: () => requireContext(migration.file).default
+        requireMigration: async () => requireContext(migration.file).default
       })
     }
   }
@@ -257,8 +276,8 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {{date: number}[]} files
-   * @param {function(string) : void} importCallback Function to import a file
+   * @param {import("./migrator/types.js").MigrationObjectType[]} files
+   * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback Function to import a file
    * @returns {Promise<void>}
    */
   async rollback(files, importCallback) {
@@ -277,17 +296,22 @@ export default class VelociousDatabaseMigrator {
 
     await this.runMigrationFile({
       migration,
-      requireMigration: async () => await importCallback(migration.fullPath),
+      requireMigration: async () => {
+        if (!migration.fullPath) throw new Error(`Migration didn't have a fullPath key: ${Object.keys(migration).join(", ")}`)
+
+        return await importCallback(migration.fullPath)
+      },
       direction: "down"
     })
   }
 
   /**
-   * @returns {Promise<string | null>} The latest migration version
+   * @returns {Promise<string | undefined>} The latest migration version
    */
   async _latestMigrationVersion() {
     if (!this.migrationsVersions) await this.loadMigrationsVersions()
 
+    /** @type {string | undefined} */
     let highestVersion
 
     for (const dbIdentifier in this.migrationsVersions) {
@@ -303,9 +327,9 @@ export default class VelociousDatabaseMigrator {
 
   /**
    * @param {object} args
-   * @param {object} args.migration
-   * @param {function() : void} args.requireMigration
-   * @param {string} args.direction
+   * @param {import("./migrator/types.js").MigrationObjectType} args.migration
+   * @param {import("./migrator/types.js").RequireMigrationType} args.requireMigration
+   * @param {string} [args.direction]
    */
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")
@@ -354,17 +378,28 @@ export default class VelociousDatabaseMigrator {
       const MigrationClass = migrationClass
       const migrationInstance = new MigrationClass({
         configuration: this.configuration,
+        databaseIdentifier: dbIdentifier,
         db
       })
       const dateString = `${digg(migration, "date")}`
 
       if (direction == "up") {
-        if (migrationInstance.change) {
+        try {
           await migrationInstance.change()
-        } else if (migrationInstance.up) {
-          await migrationInstance.up()
-        } else {
-          throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
+        } catch (changeError) {
+          if (changeError instanceof NotImplementedError) {
+            try {
+              await migrationInstance.up()
+            } catch (upError) {
+              if (upError instanceof NotImplementedError) {
+                throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
+              } else {
+                throw upError
+              }
+            }
+          } else {
+            throw changeError
+          }
         }
 
         const existingSchemaMigrations = await db.newQuery()
@@ -376,10 +411,14 @@ export default class VelociousDatabaseMigrator {
           await db.insert({tableName: "schema_migrations", data: {version: dateString}})
         }
       } else if (direction == "down") {
-        if (migrationInstance.down) {
+        try {
           await migrationInstance.down()
-        } else {
-          throw new Error(`'down' didn't exist on migration: ${migration.file}`)
+        } catch (downError) {
+          if (downError instanceof NotImplementedError) {
+            throw new Error(`'down' didn't exist on migration: ${migration.file} or migrating down with a change method isn't currently supported`)
+          } else {
+            throw downError
+          }
         }
 
         await db.delete({tableName: "schema_migrations", conditions: {version: dateString}})

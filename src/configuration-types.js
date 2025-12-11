@@ -17,10 +17,18 @@
  */
 
 /**
+ * @typedef {object} DatabaseConfigurationType
+ * @property {string} [host]
+ * @property {boolean} [migrations]
+ * @property {string} [password]
+ * @property {string} [username]
+ */
+
+/**
  * @typedef {object} ConfigurationArgsType
  * @property {object} args
  * @property {CorsType} [cors]
- * @property {{[key: string]: object}} database
+ * @property {{[key: string]: DatabaseConfigurationType}} database
  * @property {boolean} debug
  * @property {string} directory
  * @property {string} environment
