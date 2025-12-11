@@ -1,56 +1,77 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
+
+/**
+ * @typedef {(id: string) => {default: typeof import("./initializer.js").default}} InitializersRequireContextType
+ */
+
+/**
+ * @typedef {InitializersRequireContextType & {
+ *   keys: () => string[],
+ *   id: string
+ * }} WebpackRequireContext
+ */
+
+/**
+ * @typedef {function({request: import("./http-server/client/request.js").default, response: import("./http-server/client/response.js").default}): Promise<void>} CorsType
+ *
+ * @typedef {{requireContext: WebpackRequireContext}} InitializersExportType
+ * @typedef {function({configuration: VelociousConfiguration}) : Promise<InitializersExportType>} InitializersType
+ */
+
+/** @type {{currentConfiguration: VelociousConfiguration | null}} */
+const shared = {
+  currentConfiguration: null
+}
+
+class CurrentConfigurationNotSetError extends Error {}
+
+export {CurrentConfigurationNotSetError}
 
 export default class VelociousConfiguration {
   /**
    * @returns {VelociousConfiguration}
    */
-  static current(throwError = true) {
-    if (!this.velociousConfiguration && throwError) throw new Error("A Velocious configuration hasn't been set")
+  static current() {
+    if (!shared.currentConfiguration) throw new CurrentConfigurationNotSetError("A current configuration hasn't been set")
 
-    return this.velociousConfiguration
+    return shared.currentConfiguration
   }
 
   /**
-   * @template T extends import("./environment-handlers/base.js").default
-   * @param {object} args
-   * @param {function() : void} args.cors
-   * @param {object} args.database
-   * @param {boolean} args.debug
-   * @param {string} args.directory
-   * @param {string} args.environment
-   * @param {T} args.environmentHandler
-   * @param {function() : void} args.initializeModels
-   * @param {function() : void} args.initializers
-   * @param {string} args.locale
-   * @param {object} args.localeFallbacks
-   * @param {string} args.testing
+   * @param {import("./configuration-args-type.js").ConfigurationArgsType} args
    */
-  constructor({cors, database, debug, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
     this.database = database
-    this.databasePools = {}
     this.debug = debug
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
     this._directory = directory
     this._initializeModels = initializeModels
-    this._initializers = initializers
     this._isInitialized = false
     this.locale = locale
     this.localeFallbacks = localeFallbacks
     this.locales = locales
-    this.modelClasses = {}
+    this._initializers = initializers
     this._testing = testing
+
+    /** @type {{[key: string]: import("./database/pool/base.js").default}} */
+    this.databasePools = {}
+
+    /** @type {{[key: string]: typeof import("./database/record/index.js").default}} */
+    this.modelClasses = {}
 
     this.getEnvironmentHandler().setConfiguration(this)
   }
 
   /**
-   * @returns {function({request: import("./http-server/client/request.js").default, response: import("./http-server/client/response.js").default}): Promise<void>}
+   * @returns {CorsType | undefined}
    */
   getCors() {
     return this.cors
@@ -61,6 +82,7 @@ export default class VelociousConfiguration {
    */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
+
     if (!this.database[this.getEnvironment()]) {
       throw new Error(`No database configuration for environment: ${this.getEnvironment()} - ${Object.keys(this.database).join(", ")}`)
     }
@@ -75,6 +97,10 @@ export default class VelociousConfiguration {
     return Object.keys(this.getDatabaseConfiguration())
   }
 
+  /**
+   * @param {string} identifier
+   * @returns {import("./database/pool/base.js").default}
+   */
   getDatabasePool(identifier = "default") {
     if (!this.isDatabasePoolInitialized(identifier)) {
       this.initializeDatabasePool(identifier)
@@ -83,12 +109,20 @@ export default class VelociousConfiguration {
     return digg(this, "databasePools", identifier)
   }
 
+  /**
+   * @param {string} identifier
+   * @returns {object}
+   */
   getDatabaseIdentifier(identifier) {
     if (!this.getDatabaseConfiguration()[identifier]) throw new Error(`No such database identifier configured: ${identifier}`)
 
     return this.getDatabaseConfiguration()[identifier]
   }
 
+  /**
+   * @param {string} identifier
+   * @returns {typeof import("./database/pool/base.js").default}
+   */
   getDatabasePoolType(identifier = "default") {
     const poolTypeClass = digg(this.getDatabaseIdentifier(identifier), "poolType")
 
@@ -133,8 +167,7 @@ export default class VelociousConfiguration {
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
 
   /**
-   * @template T extends import("./environment-handlers/base.js").default
-   * @returns {T}
+   * @returns {import("./environment-handlers/base.js").default}
    */
   getEnvironmentHandler() {
     if (!this._environmentHandler) throw new Error("No environment handler set")
@@ -173,8 +206,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} name
-   * @template T extends import("./database/record/index.js").default
-   * @returns {T}
+   * @returns {typeof import("./database/record/index.js").default}
    */
   getModelClass(name) {
     const modelClass = this.modelClasses[name]
@@ -219,7 +251,7 @@ export default class VelociousConfiguration {
   /**
    * @param {object} args
    * @param {string} args.type
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async initializeModels(args = {type: "server"}) {
     if (!this._modelsInitialized) {
@@ -231,7 +263,12 @@ export default class VelociousConfiguration {
     }
   }
 
-  async initialize({type} = {}) {
+  /**
+   * @param {object} args
+   * @param {string} args.type
+   * @returns {Promise<void>}
+   */
+  async initialize({type} = {type: "undefined"}) {
     if (!this.isInitialized()) {
       this._isInitialized = true
 
@@ -256,7 +293,8 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {Function} modelClass
+   * @param {typeof import("./database/record/index.js").default} modelClass
+   * @returns {void}
    */
   registerModelClass(modelClass) {
     this.modelClasses[modelClass.name] = modelClass
@@ -266,10 +304,11 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   setCurrent() {
-    this.constructor.velociousConfiguration = this
+    shared.currentConfiguration = this
   }
 
   /**
+   * @param {import("./routes/index.js").default} newRoutes
    * @returns {void}
    */
   setRoutes(newRoutes) { this.routes = newRoutes }
@@ -282,7 +321,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} msgID
-   * @param {object} args
+   * @param {undefined | {defaultValue: string}} args
    * @returns {string}
    */
   _defaultTranslator(msgID, args) {
@@ -303,7 +342,9 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>}
    */
   async withConnections(callback) {
+    /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
+
     const stack = Error().stack
     const actualCallback = async () => {
       await withTrackedStack(stack, async () => {
@@ -331,17 +372,17 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @template T extends import("./database/drivers/base.js").default
-   * @returns {Record<string, T>} A map of database connections with identifier as key
+   * @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key
    */
   getCurrentConnections() {
+    /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
     for (const identifier of this.getDatabaseIdentifiers()) {
       try {
         dbs[identifier] = this.getDatabasePool(identifier).getCurrentConnection()
       } catch (error) {
-        if (error.message == "ID hasn't been set for this async context" || error.message == "A connection hasn't been made yet") {
+        if (error instanceof Error && (error.message == "ID hasn't been set for this async context" || error.message == "A connection hasn't been made yet")) {
           // Ignore
         } else {
           throw error

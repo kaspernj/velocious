@@ -1,10 +1,18 @@
+// @ts-check
+
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
-  checkin(connection) { // eslint-disable-line no-unused-vars
+  /**
+   * @param {import("../drivers/base.js").default} _connection
+   */
+  checkin(_connection) { // eslint-disable-line no-unused-vars
     // Do nothing
   }
 
+  /**
+   * @returns {Promise<import("../drivers/base.js").default>}
+   */
   async checkout() {
     if (!this.connection) {
       this.connection = await this.spawnConnection()
@@ -13,11 +21,18 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     return this.connection
   }
 
+  /**
+   * @param {function(import("../drivers/base.js").default) : void} callback
+   */
   async withConnection(callback) {
-    await this.checkout() // Ensure a connection is present
-    await callback(this.connection)
+    const connection = await this.checkout()
+
+    await callback(connection)
   }
 
+  /**
+   * @returns {import("../drivers/base.js").default}
+   */
   getCurrentConnection() {
     if (!this.connection) {
       throw new Error("A connection hasn't been made yet")
