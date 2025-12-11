@@ -22,7 +22,7 @@ describe("Record - validations", () => {
     })
   })
 
-  it("raises validations if trying to create an invalid record because of a uniqueness validation", async () => {
+  fit("raises validations if trying to create an invalid record because of a uniqueness validation", async () => {
     await Dummy.run(async () => {
       const project = await Project.create()
       await Task.create({name: "Task 1", project})

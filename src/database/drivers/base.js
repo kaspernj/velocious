@@ -74,6 +74,21 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @typedef {object} CreateIndexSqlArgs
+   * @property {Array<string | import("./../table-data/table-column.js").default>} columns
+   * @property {boolean} [ifNotExists]
+   * @property {string} [name]
+   * @property {boolean} [unique]
+   * @property {string} tableName
+   *
+   * @param {CreateIndexSqlArgs} _indexData
+   * @returns {string}
+   */
+  createIndexSql(_indexData) {
+    throw new Error("'createIndexSql' not implemented")
+  }
+
+  /**
    * @param {...Parameters<this["createTableSql"]>} args
    * @returns {void}
    */
@@ -86,18 +101,45 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {...Parameters<this["deleteSql"]>} args
+   * @interface
+   * @param {import("../table-data/index.js").default} tableData
+   * @returns {string[]}
+   */
+  createTableSql(tableData) {
+    throw new Error("'createTableSql' not implemented")
+  }
+
+  /**
+   * @typedef {object} DeleteSqlArgsType
+   * @property {string} tableName
+   * @property {{[key: string]: any}} conditions
+   *
+   * @param {DeleteSqlArgsType} args
    * @returns {void}
    */
-  async delete(...args) {
-    const sql = this.deleteSql(...args)
+  async delete(args) {
+    const sql = this.deleteSql(args)
 
     await this.query(sql)
   }
 
   /**
-   * @param {...Parameters<this['dropTableSql']>} args
-   * @returns {void}
+   * @interface
+   * @param {DeleteSqlArgsType} args
+   * @returns {string}
+   */
+  deleteSql(args) {
+    throw new Error(`'deleteSql' not implemented`)
+  }
+
+  /**
+   * @typedef {object} DropTableSqlArgsType
+   * @param {boolean} [cascade]
+   * @param {boolean} [ifExists]
+   *
+   * @param {string} tableName
+   * @param {DropTableSqlArgsType} [args]
+   * @returns {string}
    */
   async dropTable(...args) {
     const sqls = this.dropTableSql(...args)
@@ -109,13 +151,11 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @interface
-   * @param {string} _tableName
-   * @param {object} _args
-   * @param {boolean} _args.cascade
-   * @param {boolean} _args.ifExists
+   * @param {string} tableName
+   * @param {DropTableSqlArgsType} [args]
    * @returns {string}
    */
-  dropTableSql(_tableName, _args) { // eslint-disable-line no-unused-vars
+  dropTableSql(tableName, args) { // eslint-disable-line no-unused-vars
     throw new Error("dropTableSql not implemented")
   }
 
@@ -168,19 +208,32 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {object} args
-   * @param {Array} args.columns
-   * @param {object} args.data
-   * @param {boolean} args.multiple
-   * @param {boolean} args.returnLastInsertedColumnNames
-   * @param {Array} args.rows
-   * @param {string} args.tableName
+   * @typedef {object} InsertSqlArgsType
+   * @property {Array} [columns]
+   * @property {{[key: string]: any}} [data]
+   * @property {boolean} [multiple]
+   * @property {boolean} [returnLastInsertedColumnNames]
+   * @property {Array} [rows]
+   * @property {string} tableName
+   *
+   * @param {InsertSqlArgsType} args
    * @returns {Promise<void>}
    */
-  async insert(...args) {
-    const sql = this.insertSql(...args)
+  async insert(args) {
+    const sql = this.insertSql(args)
 
     await this.query(sql)
+  }
+
+  /**
+   * @param {InsertSqlArgsType} args
+   * @returns {string}
+   */
+  insertSql(args) {
+    const insertArgs = Object.assign({driver: this}, args)
+    const insert = new Insert(insertArgs)
+
+    return insert.toSql()
   }
 
   /**
