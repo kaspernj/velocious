@@ -138,7 +138,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       }
       const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
 
-      for (createIndexSQL of createIndexSQLs) {
+      for (const createIndexSQL of createIndexSQLs) {
         sqls.push(createIndexSQL)
       }
     }
