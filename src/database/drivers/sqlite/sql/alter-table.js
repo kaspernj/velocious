@@ -136,9 +136,11 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
         tableName,
         unique: actualTableIndex.getUnique()
       }
-      const sql = new CreateIndexBase(createIndexArgs).toSql()
+      const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
 
-      sqls.push(sql)
+      for (createIndexSQL of createIndexSQLs) {
+        sqls.push(createIndexSQL)
+      }
     }
 
     return sqls
