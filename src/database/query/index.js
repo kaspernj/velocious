@@ -32,11 +32,11 @@ export default class VelociousDatabaseQuery {
    * @param {Array<import("./join-base.js").default>} [args.joins]
    * @param {import("../handler.js").default} args.handler
    * @param {number | null} [args.limit]
-   * @param {typeof import("../record/index.js").default} args.modelClass
+   * @param {typeof import("../record/index.js").default} [args.modelClass]
    * @param {number | null} [args.offset]
    * @param {Array<import("./order-base.js").default>} [args.orders]
    * @param {number | null} [args.page]
-   * @param {number} args.perPage
+   * @param {number} [args.perPage]
    * @param {NestedPreloadRecord} [args.preload]
    * @param {Array<import("./select-base.js").default>} [args.selects]
    * @param {Array<import("./where-base.js").default>} [args.wheres]

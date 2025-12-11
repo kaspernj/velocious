@@ -7,7 +7,7 @@ export default class TableForeignKey {
    * @param {object} args
    * @param {string} args.columnName
    * @param {boolean} [args.isNewForeignKey]
-   * @param {string} args.name
+   * @param {string} [args.name]
    * @param {string} args.tableName
    * @param {string} args.referencedColumnName
    * @param {string} args.referencedTableName

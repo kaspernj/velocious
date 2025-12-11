@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * @typedef {object} CreateIndexSqlArgs
  * @property {Array<string | import("./../table-data/table-column.js").default>} columns
@@ -18,11 +20,11 @@
  */
 /**
  * @typedef {object} InsertSqlArgsType
- * @property {Array} [columns]
+ * @property {string[]} [columns]
  * @property {{[key: string]: any}} [data]
  * @property {boolean} [multiple]
  * @property {boolean} [returnLastInsertedColumnNames]
- * @property {Array} [rows]
+ * @property {Array<Array<any>>} [rows]
  * @property {string} tableName
  */
 /**
@@ -115,11 +117,11 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {...Parameters<this["createTableSql"]>} args
-   * @returns {void}
+   * @param {import("../table-data/index.js").default} tableData
+   * @returns {Promise<void>}
    */
-  async createTable(...args) {
-    const sqls = this.createTableSql(...args)
+  async createTable(tableData) {
+    const sqls = this.createTableSql(tableData)
 
     for (const sql of sqls) {
       await this.query(sql)
@@ -137,7 +139,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {DeleteSqlArgsType} args
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async delete(args) {
     const sql = this.deleteSql(args)
@@ -157,7 +159,7 @@ export default class VelociousDatabaseDriversBase {
   /**
    * @param {string} tableName
    * @param {DropTableSqlArgsType} [args]
-   * @returns {string}
+   * @returns {Promise<void>}
    */
   async dropTable(tableName, args) {
     const sqls = this.dropTableSql(tableName, args)
@@ -175,6 +177,15 @@ export default class VelociousDatabaseDriversBase {
    */
   dropTableSql(tableName, args) { // eslint-disable-line no-unused-vars
     throw new Error("dropTableSql not implemented")
+  }
+
+  /**
+   * @interface
+   * @param {any} value
+   * @returns {any}
+   */
+  escape(value) { // eslint-disable-line no-unused-vars
+    throw new Error("'escape' not implemented")
   }
 
   /**
@@ -208,6 +219,12 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#getTables not implemented`)
   }
 
+  /**
+   * @param {string} name
+   * @param {object} [args]
+   * @param {boolean} args.throwError
+   * @returns {Promise<import("./base-table.js").default | undefined>}
+   */
   async getTableByName(name, args) {
     const tables = await this.getTables()
     const table = tables.find((table) => table.getName() == name)
@@ -252,6 +269,10 @@ export default class VelociousDatabaseDriversBase {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
   }
 
+  /**
+   * @param {any} value
+   * @returns {any}
+   */
   _convertValue(value) {
     if (value instanceof Date) {
       return strftime("%F %T.%L", value)
@@ -319,7 +340,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {string} tableName
-   * @returns {Promise<Array>}
+   * @returns {Promise<QueryResultType>}
    */
   async select(tableName) {
     const query = this.newQuery()
@@ -360,6 +381,10 @@ export default class VelociousDatabaseDriversBase {
     return false
   }
 
+  /**
+   * @param {() => Promise<void>} callback
+   * @returns {Promise<any>}
+   */
   async transaction(callback) {
     const savePointName = this.generateSavePointName()
     let transactionStarted = false
@@ -390,7 +415,11 @@ export default class VelociousDatabaseDriversBase {
         await this.commitTransaction()
       }
     } catch (error) {
-      this.logger.debug("Transaction error", error.message)
+      if (error instanceof Error) {
+        this.logger.debug("Transaction error", error.message)
+      } else {
+        this.logger.debug("Transaction error", error)
+      }
 
       if (savePointStarted) {
         this.logger.debug("Rollback savepoint", savePointName)
@@ -455,7 +484,7 @@ export default class VelociousDatabaseDriversBase {
       try {
         return await this._queryActual(sql)
       } catch (error) {
-        if (tries < 5 && this.retryableDatabaseError(error)) {
+        if (error instanceof Error && tries < 5 && this.retryableDatabaseError(error)) {
           await wait(100)
           this.logger.warn(`Retrying query because failed with: ${error.stack}`)
           // Retry
@@ -464,6 +493,17 @@ export default class VelociousDatabaseDriversBase {
         }
       }
     }
+
+    throw new Error("'query' unexpected came here")
+  }
+
+  /**
+   * @interface
+   * @param {string} sql
+   * @returns {Promise<QueryResultType>}
+   */
+  _queryActual(sql) { // eslint-disable-line no-unused-vars
+    throw new Error(`queryActual not implemented`)
   }
 
   /**
@@ -618,16 +658,44 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {object} args
-   * @param {object} args.conditions
-   * @param {object} args.data
-   * @param {string} args.tableName
+   * @typedef {object}UpdateSqlArgsType
+   * @property {object} conditions
+   * @property {object} data
+   * @property {string} tableName
+   */
+  /**
+   * @param {UpdateSqlArgsType} args
    * @returns {Promise<void>}
    */
-  async update(...args) {
-    const sql = this.updateSql(...args)
+  async update(args) {
+    const sql = this.updateSql(args)
 
     await this.query(sql)
+  }
+
+  /**
+   * @interface
+   * @param {UpdateSqlArgsType} args
+   * @returns {string}
+   */
+  updateSql(args) { // eslint-disable-line no-unused-vars
+    throw new Error("'disableForeignKeys' not implemented")
+  }
+
+  /**
+   * @interface
+   * @returns {Promise<void>}
+   */
+  disableForeignKeys() {
+    throw new Error("'disableForeignKeys' not implemented")
+  }
+
+  /**
+   * @interface
+   * @returns {Promise<void>}
+   */
+  enableForeignKeys() {
+    throw new Error("'enableForeignKeys' not implemented")
   }
 
   /**
