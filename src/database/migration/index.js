@@ -135,9 +135,11 @@ export default class VelociousDatabaseMigration {
       },
       args
     )
-    const sql = this.getDriver().createIndexSQLs(createIndexArgs)
+    const sqls = this.getDriver().createIndexSQLs(createIndexArgs)
 
-    await this.getDriver().query(sql)
+    for (const sql of sqls) {
+      await this.getDriver().query(sql)
+    }
   }
 
   /**
