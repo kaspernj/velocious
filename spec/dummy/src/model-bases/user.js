@@ -108,7 +108,7 @@ export default class UserBase extends Record {
    * @param {Record<string, any>} attributes
    * @returns {import("../models/project.js").default}
    */
-  buildCreatedProject(attributes) { throw new Error("Not implemented") }
+  buildCreatedProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -121,7 +121,7 @@ export default class UserBase extends Record {
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */
-  setCreatedProject() { throw new Error("Not implemented") }
+  setCreatedProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -144,9 +144,9 @@ export default class UserBase extends Record {
   /**
    * @interface
    * @param {Array<import("../models/authentication-token.js").default>} newModels
-   * @returns {void>}
+   * @returns {void}
    */
-  setAuthenticationTokens() { throw new Error("Not implemented") }
+  setAuthenticationTokens(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -169,7 +169,7 @@ export default class UserBase extends Record {
   /**
    * @interface
    * @param {Array<import("../models/project.js").default>} newModels
-   * @returns {void>}
+   * @returns {void}
    */
-  setCreatedProjects() { throw new Error("Not implemented") }
+  setCreatedProjects(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }

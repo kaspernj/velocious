@@ -68,17 +68,17 @@ export default class ProjectBase extends Record {
   /**
    * @returns {string | null}
    */
-  name() { throw new Error("name not implemented") }
+  name() { return this._getTranslatedAttributeWithFallback("name", this._getConfiguration().getLocale()) }
 
   /**
    * @returns {string | null}
    */
-  nameDe() { throw new Error("nameDe not implemented") }
+  nameDe() { return this._getTranslatedAttributeWithFallback("name", "de") }
 
   /**
    * @returns {string | null}
    */
-  nameEn() { throw new Error("nameEn not implemented") }
+  nameEn() { return this._getTranslatedAttributeWithFallback("name", "en") }
 
   /**
    * @interface
@@ -91,7 +91,7 @@ export default class ProjectBase extends Record {
    * @param {Record<string, any>} attributes
    * @returns {import("../models/user.js").default}
    */
-  buildCreatingUser(attributes) { throw new Error("Not implemented") }
+  buildCreatingUser(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -104,7 +104,7 @@ export default class ProjectBase extends Record {
    * @param {import("../models/user.js").default} newModel
    * @returns {void}
    */
-  setCreatingUser() { throw new Error("Not implemented") }
+  setCreatingUser(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -127,9 +127,9 @@ export default class ProjectBase extends Record {
   /**
    * @interface
    * @param {Array<import("../models/task.js").default>} newModels
-   * @returns {void>}
+   * @returns {void}
    */
-  setTasks() { throw new Error("Not implemented") }
+  setTasks(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -142,7 +142,7 @@ export default class ProjectBase extends Record {
    * @param {Record<string, any>} attributes
    * @returns {import("../models/project-detail.js").default}
    */
-  buildProjectDetail(attributes) { throw new Error("Not implemented") }
+  buildProjectDetail(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -155,7 +155,7 @@ export default class ProjectBase extends Record {
    * @param {import("../models/project-detail.js").default} newModel
    * @returns {void}
    */
-  setProjectDetail() { throw new Error("Not implemented") }
+  setProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -178,7 +178,7 @@ export default class ProjectBase extends Record {
   /**
    * @interface
    * @param {Array<import("velocious/src/database/record/index.js").default>} newModels
-   * @returns {void>}
+   * @returns {void}
    */
-  setTranslations() { throw new Error("Not implemented") }
+  setTranslations(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }

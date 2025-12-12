@@ -95,7 +95,7 @@ export default class DbGenerateModel extends BaseCommand {
             fileContent += "   */\n"
           }
 
-          fileContent += `  ${name}() { throw new Error("${name} not implemented") }\n`
+          fileContent += `  ${name}() { return this._getTranslatedAttributeWithFallback("${name}", this._getConfiguration().getLocale()) }\n`
           methodsCount++
 
           for (const locale of this.getConfiguration().getLocales()) {
@@ -108,7 +108,8 @@ export default class DbGenerateModel extends BaseCommand {
               fileContent += "   */\n"
             }
 
-            fileContent += `  ${localeMethodName}() { throw new Error("${localeMethodName} not implemented") }\n`
+            fileContent += `  ${localeMethodName}() { return this._getTranslatedAttributeWithFallback("${name}", "${locale}") }\n`
+
             methodsCount++
           }
         }
@@ -149,7 +150,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "   * @param {Record<string, any>} attributes\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
-          fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") }\n`
+          fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -164,7 +165,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `   * @param {import("${modelFilePath}").default} newModel\n`
           fileContent += `   * @returns {void}\n`
           fileContent += "   */\n"
-          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
         } else if (relationship.getType() == "hasMany") {
           let recordImport
 
@@ -198,9 +199,9 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += "   * @interface\n"
           fileContent += `   * @param {Array<import("${recordImport}").default>} newModels\n`
-          fileContent += "   * @returns {void>}\n"
+          fileContent += "   * @returns {void}\n"
           fileContent += "   */\n"
-          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
         } else {
           throw new Error(`Unknown relationship type: ${relationship.getType()}`)
         }
@@ -215,7 +216,8 @@ export default class DbGenerateModel extends BaseCommand {
   }
 
   /**
-   * @param {import("../../../../../database/drivers/base-column.js").default}
+   * @param {import("../../../../../database/drivers/base-column.js").default} column
+   * @returns {string | undefined}
    */
   jsDocTypeFromColumn(column) {
     if (column.getType() == "varchar") {

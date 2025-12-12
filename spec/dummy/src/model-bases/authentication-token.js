@@ -92,7 +92,7 @@ export default class AuthenticationTokenBase extends Record {
    * @param {Record<string, any>} attributes
    * @returns {import("../models/user.js").default}
    */
-  buildUser(attributes) { throw new Error("Not implemented") }
+  buildUser(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -105,5 +105,5 @@ export default class AuthenticationTokenBase extends Record {
    * @param {import("../models/user.js").default} newModel
    * @returns {void}
    */
-  setUser() { throw new Error("Not implemented") }
+  setUser(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }

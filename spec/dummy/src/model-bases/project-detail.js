@@ -85,7 +85,7 @@ export default class ProjectDetailBase extends Record {
    * @param {Record<string, any>} attributes
    * @returns {import("../models/project.js").default}
    */
-  buildProject(attributes) { throw new Error("Not implemented") }
+  buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @interface
@@ -98,5 +98,5 @@ export default class ProjectDetailBase extends Record {
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */
-  setProject() { throw new Error("Not implemented") }
+  setProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }
