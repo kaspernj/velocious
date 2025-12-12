@@ -91,7 +91,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {import("../table-data/index.js").default} _tableData
    * @returns {Promise<string[]>}
    */
@@ -100,7 +100,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   connect() {
@@ -108,7 +108,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {CreateIndexSqlArgs} indexData
    * @returns {string}
    */
@@ -129,7 +129,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {import("../table-data/index.js").default} tableData
    * @returns {string[]}
    */
@@ -148,7 +148,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {DeleteSqlArgsType} args
    * @returns {string}
    */
@@ -170,7 +170,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {string} tableName
    * @param {DropTableSqlArgsType} [args]
    * @returns {string}
@@ -180,7 +180,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {any} value
    * @returns {any}
    */
@@ -212,7 +212,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Array<import("./base-table.js").default>}
    */
   getTables() {
@@ -235,7 +235,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getType() {
@@ -253,7 +253,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {InsertSqlArgsType} args
    * @returns {string}
    */
@@ -262,7 +262,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<number>}
    */
   lastInsertID() {
@@ -282,7 +282,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {import("../query-parser/options.js").default}
    */
   options() {
@@ -361,7 +361,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {boolean}
    */
   shouldSetAutoIncrementWhenPrimaryKey() {
@@ -498,7 +498,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {string} sql
    * @returns {Promise<QueryResultType>}
    */
@@ -507,14 +507,13 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {Query} _query
    * @returns {string}
    */
   queryToSql(_query) { throw new Error("queryToSql not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @interface
    * @param {Error} _error
    * @returns {boolean}
    */
@@ -674,7 +673,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {UpdateSqlArgsType} args
    * @returns {string}
    */
@@ -683,7 +682,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   disableForeignKeys() {
@@ -691,7 +690,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   enableForeignKeys() {

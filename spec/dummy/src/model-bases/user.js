@@ -98,76 +98,71 @@ export default class UserBase extends Record {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @interface
    * @returns {import("../models/project.js").default}
    */
   createdProject() { return this.getRelationshipByName("createdProject").loaded() }
 
   /**
-   * @interface
+   * @abstract
    * @param {Record<string, any>} attributes
    * @returns {import("../models/project.js").default}
    */
   buildCreatedProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   loadCreatedProject() { throw new Error("Not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */
   setCreatedProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @interface
    * @returns {import("velocious/src/database/query/index.js").default<import("../models/authentication-token.js").default>}
    */
   authenticationTokens() { return this.getRelationshipByName("authenticationTokens") }
 
   /**
-   * @interface
    * @returns {Array<import("../models/authentication-token.js").default>}
    */
   authenticationTokensLoaded() { return this.getRelationshipByName("authenticationTokens").loaded() }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   loadAuthenticationTokens() { throw new Error("Not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @param {Array<import("../models/authentication-token.js").default>} newModels
    * @returns {void}
    */
   setAuthenticationTokens(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @interface
    * @returns {import("velocious/src/database/query/index.js").default<import("../models/project.js").default>}
    */
   createdProjects() { return this.getRelationshipByName("createdProjects") }
 
   /**
-   * @interface
    * @returns {Array<import("../models/project.js").default>}
    */
   createdProjectsLoaded() { return this.getRelationshipByName("createdProjects").loaded() }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   loadCreatedProjects() { throw new Error("Not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @param {Array<import("../models/project.js").default>} newModels
    * @returns {void}
    */

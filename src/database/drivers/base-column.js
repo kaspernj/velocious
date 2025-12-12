@@ -8,7 +8,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   table = undefined
 
   /**
-   * @interface
+   * @abstract
    * @returns {boolean}
    */
   getAutoIncrement() {
@@ -16,6 +16,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
+   * @abstract
    * @returns {any}
    */
   getDefault() {
@@ -60,7 +61,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<Array<import("./base-columns-index.js").default>>}
    */
   getIndexes() {
@@ -68,7 +69,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {number}
    */
   getMaxLength() {
@@ -76,7 +77,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getName() {
@@ -84,7 +85,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {boolean}
    */
   getNull() {
@@ -99,7 +100,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {boolean}
    */
   getPrimaryKey() {
@@ -131,7 +132,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getType() {

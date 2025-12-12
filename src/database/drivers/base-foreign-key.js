@@ -14,7 +14,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getColumnName() {
@@ -29,7 +29,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getName() {
@@ -44,7 +44,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getReferencedColumnName() {
@@ -52,7 +52,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getReferencedTableName() {
@@ -69,7 +69,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getTableName() {

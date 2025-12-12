@@ -42,7 +42,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
   getDependent() { return this._dependent }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string} The name of the foreign key, e.g. "user_id", "post_id" etc.
    */
   getForeignKey() {
@@ -50,7 +50,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string} The name of the inverse relationship, e.g. "posts", "comments" etc.
    */
   getInverseOf() {

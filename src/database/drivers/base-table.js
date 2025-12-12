@@ -19,7 +19,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<Array<import("./base-column.js").default>>}
    */
   getColumns() {
@@ -36,7 +36,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<import("./base-foreign-key.js").default[]>}
    */
   getForeignKeys() {
@@ -44,7 +44,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<import("./base-columns-index.js").default[]>}
    */
   getIndexes() {
@@ -52,7 +52,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   getName() {

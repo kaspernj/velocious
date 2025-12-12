@@ -36,7 +36,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {import("../drivers/base.js").default} _connection
    */
   checkin(_connection) { // eslint-disable-line no-unused-vars
@@ -44,7 +44,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<import("../drivers/base.js").default>}
    */
   checkout() {
@@ -52,7 +52,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {import("../drivers/base.js").default}
    */
   getCurrentConnection() {
@@ -67,7 +67,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   primaryKeyType() {
@@ -119,7 +119,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {function(import("../drivers/base.js").default) : void} _callback
    * @returns {Promise<void>}
    */

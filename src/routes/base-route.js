@@ -21,7 +21,7 @@ export function initBaseRoute() {
     }
 
     /**
-     * @interface
+     * @abstract
      * @param {string} _path
      */
     matchWithPath(_path) { // eslint-disable-line no-unused-vars

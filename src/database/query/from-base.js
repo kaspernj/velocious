@@ -1,9 +1,7 @@
 // @ts-check
 
-import Query from "./index.js"
-
 export default class VelociousDatabaseQueryFromBase {
-  /** @type {Query | null} */
+  /** @type {import("./index.js").default  | null} */
   query = null
 
   /**
@@ -24,7 +22,7 @@ export default class VelociousDatabaseQueryFromBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string[]}
    */
   toSql() {

@@ -25,7 +25,7 @@ export default class VelociousDatabaseQueryWhereBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string}
    */
   toSql() {

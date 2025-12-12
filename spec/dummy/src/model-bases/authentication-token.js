@@ -82,26 +82,25 @@ export default class AuthenticationTokenBase extends Record {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @interface
    * @returns {import("../models/user.js").default}
    */
   user() { return this.getRelationshipByName("user").loaded() }
 
   /**
-   * @interface
+   * @abstract
    * @param {Record<string, any>} attributes
    * @returns {import("../models/user.js").default}
    */
   buildUser(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   loadUser() { throw new Error("Not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @param {import("../models/user.js").default} newModel
    * @returns {void}
    */

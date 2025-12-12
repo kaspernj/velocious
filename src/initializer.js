@@ -24,7 +24,7 @@ export default class VelociousInitializer {
   getType() { return this._type }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   run() {
