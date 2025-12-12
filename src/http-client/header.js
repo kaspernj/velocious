@@ -1,4 +1,10 @@
+// @ts-check
+
 export default class Header {
+  /**
+   * @param {string} name
+   * @param {string | number} value
+   */
   constructor(name, value) {
     this.name = name
     this.value = value

@@ -1,4 +1,16 @@
+// @ts-check
+
+import Header from "./header.js"
+
 export default class Request {
+  /**
+   * @param {object} args
+   * @param {string} args.body
+   * @param {string} args.method
+   * @param {Header[]} args.headers
+   * @param {string} args.path
+   * @param {string} args.version
+   */
   constructor({body, method = "GET", headers = [], path, version = "1.1"}) {
     this.body = body
     this.headers = headers
@@ -17,26 +29,40 @@ export default class Request {
     return requestString
   }
 
-  getHeader(key) {
-    const compareName = key.toLowerCase().trim()
+  /**
+   * @param {string} name
+   */
+  getHeader(name) {
+    const compareName = name.toLowerCase().trim()
 
     for (const header of this.headers) {
-      const headerCompareName = header.key.toLowerCase().trim()
+      const headerCompareName = header.getName().toLowerCase().trim()
 
       if (compareName == headerCompareName) {
         return header
       }
     }
 
-    throw new Error(`Header ${key} not found`)
+    throw new Error(`Header ${name} not found`)
+  }
+
+  /**
+   * @param {string} name
+   * @param {string | number} value
+   */
+  addHeader(name, value) {
+    this.headers.push(new Header(name, value))
   }
 
   prepare() {
     if (this.body) {
-      this.addHeader("Content-Length", this.body.byteLength)
+      this.addHeader("Content-Length", Buffer.from(this.body).byteLength)
     }
   }
 
+  /**
+   * @param {function(string) : void} callback
+   */
   stream(callback) {
     this.prepare()
 

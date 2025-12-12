@@ -1,10 +1,19 @@
+// @ts-check
+
 import CreateIndexBase from "./create-index-base.js"
-import {digs} from "diggerize"
 import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import TableData from "../table-data/index.js"
+import TableColumn from "../table-data/table-column.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
+  /**
+   * @param {object} args
+   * @param {import("../drivers/base.js").default} args.driver
+   * @param {boolean} args.ifNotExists
+   * @param {boolean} args.indexInCreateTable
+   * @param {TableData} args.tableData
+   */
   constructor({driver, ifNotExists, indexInCreateTable = true, tableData}) {
     if (!(tableData instanceof TableData)) throw new Error("Invalid table data was given")
 
@@ -21,7 +30,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     const databaseType = this.getDatabaseType()
     const driver = this.getDriver()
     const options = this.getOptions()
-    const {tableData} = digs(this, "tableData")
+    const {tableData} = this
     const sqls = []
     const ifNotExists = this.ifNotExists || tableData.getIfNotExists()
     let sql = ""
@@ -65,7 +74,13 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         index.getColumns().forEach((column, columnIndex) => {
           if (columnIndex > 0) sql += ", "
 
-          sql += driver.quoteColumn(column.name)
+          if (column instanceof TableColumn) {
+            sql += driver.quoteColumn(column.getName())
+          } else if (typeof column == "string") {
+            sql += driver.quoteColumn(column)
+          } else {
+            throw new Error(`Unknown column type: ${typeof column}`)
+          }
         })
 
         sql += ")"
@@ -83,7 +98,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
         sql += ","
 
-        const {unique, ...restIndexArgs} = column.getIndex()
+        const {unique, ...restIndexArgs} = column.getIndexArgs()
 
         restArgsError(restIndexArgs)
 
@@ -124,7 +139,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
       for (const column of tableData.getColumns()) {
         if (!column.getIndex()) continue
 
-        const {unique, ...restIndexArgs} = column.getIndex()
+        const {unique, ...restIndexArgs} = column.getIndexArgs()
 
         restArgsError(restIndexArgs)
 

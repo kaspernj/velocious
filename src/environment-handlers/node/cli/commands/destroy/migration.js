@@ -2,6 +2,9 @@ import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
 
 export default class DbDestroyMigration extends BaseCommand {
+  /**
+   * @returns {Promise<void>}
+   */
   async execute() {
     const migrationName = this.processArgs[1]
     const migrationDir = `${this.getConfiguration().getDirectory()}/src/database/migrations`

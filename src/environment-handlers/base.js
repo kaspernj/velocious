@@ -1,5 +1,19 @@
 // @ts-check
 
+/**
+ * @typedef {object} CommandFileObjectType
+ * @property {string} name
+ * @property {string} file
+ */
+
+/**
+ * @typedef {object} MigrationObjectType
+ * @property {number} date
+ * @property {string} [fullPath]
+ * @property {string} migrationClassName
+ * @property {string} file
+ */
+
 export default class VelociousEnvironmentHandlerBase {
   /**
    * @param {import("../cli/base-command.js").default} _command
@@ -10,10 +24,10 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} command
    * @returns {Promise<void>}
    */
-  async cliCommandsInit(_command) { // eslint-disable-line no-unused-vars
+  async cliCommandsInit(command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsInit not implemented")
   }
 
@@ -59,11 +73,13 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @interface
+   * @returns {Promise<CommandFileObjectType[]>}
    */
   async findCommands() { throw new Error("findCommands not implemented") }
 
   /**
    * @interface
+   * @returns {Promise<Array<MigrationObjectType>>}
    */
   async findMigrations() { throw new Error("findMigrations not implemneted") }
 
@@ -82,11 +98,13 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @interface
+   * @returns {Promise<string>}
    */
-  async getVelociousPath() { throw new Error("getVelociousPath not implemented") }
+  getVelociousPath() { throw new Error("getVelociousPath not implemented") }
 
   /**
    * @interface
+   * @returns {Promise<import("../routes/index.js").default>}
    */
   async importApplicationRoutes() { throw new Error("importApplicationRoutes not implemented") }
 
@@ -106,9 +124,10 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * @param {object} args
    * @param {string[]} args.commandParts
+   * @returns {Promise<import ("../cli/base-command.js").default>}
    * @interface
    */
-  async requireCommand({commandParts}) { throw new Error("requireCommand not implemented") } // eslint-disable-line no-unused-vars
+  async requireCommand({commandParts}) { throw new Error("'requireCommand' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @param {object} newArgs

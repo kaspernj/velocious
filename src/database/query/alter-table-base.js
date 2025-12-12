@@ -1,4 +1,5 @@
-import {digs} from "diggerize"
+// @ts-check
+
 import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import TableData from "../table-data/index.js"
@@ -6,8 +7,7 @@ import TableData from "../table-data/index.js"
 export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   /**
    * @param {object} args
-   * @template Tdriver extends import("../driver/base.js").default
-   * @param {Tdriver} args.driver
+   * @param {import("../drivers/base.js").default} args.driver
    * @param {TableData} args.tableData
    */
   constructor({driver, tableData, ...restArgs}) {
@@ -25,7 +25,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   toSqls() {
     const databaseType = this.getDriver().getType()
     const sqls = []
-    const {tableData} = digs(this, "tableData")
+    const {tableData} = this
     const options = this.getOptions()
 
     let sql = `ALTER TABLE ${options.quoteTableName(tableData.getName())} `

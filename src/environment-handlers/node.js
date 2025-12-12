@@ -1,3 +1,5 @@
+// @ts-check
+
 import Base from "./base.js"
 import CliCommandsDestroyMigration from "./node/cli/commands/destroy/migration.js"
 import CliCommandsInit from "./node/cli/commands/init.js"
@@ -13,11 +15,16 @@ import * as inflection from "inflection"
 import path from "path"
 
 export default class VelociousEnvironmentHandlerNode extends Base{
+  /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
+  _findCommandsResult = undefined
+
   /**
-   * @returns {Promise<Array<{name: string, file: string}>>}
+   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>}
    */
   async findCommands() {
-    this._findCommandsResult ||= this._actualFindCommands()
+    this._findCommandsResult ||= await this._actualFindCommands()
+
+    if (!this._findCommandsResult) throw new Error("Could not get commands")
 
     return this._findCommandsResult
   }
@@ -49,38 +56,66 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     return commands
   }
 
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<void>}
+   */
   async cliCommandsInit(command) {
     return await this.forwardCommand(command, CliCommandsInit)
   }
 
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<any>}
+   */
   async cliCommandsMigrationGenerate(command) {
     return await this.forwardCommand(command, CliCommandsGenerateMigration)
   }
 
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<any>}
+   */
   async cliCommandsMigrationDestroy(command) {
     return await this.forwardCommand(command, CliCommandsDestroyMigration)
   }
 
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<any>}
+   */
   async cliCommandsGenerateBaseModels(command) {
     return await this.forwardCommand(command, CliCommandsGenerateBaseModels)
   }
 
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<any>}
+   */
   async cliCommandsGenerateModel(command) {
     return await this.forwardCommand(command, CliCommandsGenerateModel)
   }
 
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<any>}
+   */
   async cliCommandsServer(command) {
     return await this.forwardCommand(command, CliCommandsServer)
   }
 
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<any>}
+   */
   async cliCommandsTest(command) {
     return await this.forwardCommand(command, CliCommandsTest)
   }
 
   /**
-   * @param {Array<string>} commandParts
-   * @template T extends import ("./base-command.js").default
-   * @returns {Promise<T>}
+   * @param {object} args
+   * @param {string[]} args.commandParts
+   * @returns {Promise<import ("../cli/base-command.js").default>}
    */
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()
@@ -89,7 +124,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     if (!command) {
       const possibleCommands = commands.map(aCommand => aCommand.name)
 
-      throw new Error(`Unknown command: ${this.args.processArgs[0]} which should have been one of: ${possibleCommands.sort().join(", ")}`)
+      throw new Error(`Unknown command: ${commandParts.join(":")} which should have been one of: ${possibleCommands.sort().join(", ")}`)
     }
 
     const commandClassImport = await import(command.file)
@@ -99,40 +134,35 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @returns {Promise<Array<{name: string, file: string}>>}
+   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>}
    */
   async findMigrations() {
     const migrationsPath = `${this.getConfiguration().getDirectory()}/src/database/migrations`
     const glob = await fs.glob(`${migrationsPath}/**/*.js`)
-    const files = []
+    let files = []
 
     for await (const fullPath of glob) {
       const file = await path.basename(fullPath)
 
-      files.push(file)
+      const match = file.match(/^(\d{14})-(.+)\.js$/)
+
+      if (!match) continue
+
+      const date = parseInt(match[1])
+      const migrationName = match[2]
+      const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+
+      files.push({
+        file,
+        fullPath: `${migrationsPath}/${file}`,
+        date,
+        migrationClassName
+      })
     }
 
-    const migrationFiles = files
-      .map((file) => {
-        const match = file.match(/^(\d{14})-(.+)\.js$/)
+    files = files.sort((migration1, migration2) => migration1.date - migration2.date)
 
-        if (!match) return null
-
-        const date = parseInt(match[1])
-        const migrationName = match[2]
-        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
-
-        return {
-          file,
-          fullPath: `${migrationsPath}/${file}`,
-          date,
-          migrationClassName
-        }
-      })
-      .filter((migration) => Boolean(migration))
-      .sort((migration1, migration2) => migration1.date - migration2.date)
-
-    return migrationFiles
+    return files
   }
 
   /**
@@ -145,7 +175,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @returns {string}
+   * @returns {Promise<string>}
    */
   async getVelociousPath() {
     if (!this._velociousPath) {
@@ -159,6 +189,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * @param {string[]} testFiles
    * @returns {Promise<void>}
    */
   async importTestFiles(testFiles) {

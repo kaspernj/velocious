@@ -5,6 +5,9 @@ import * as inflection from "inflection"
 import strftime from "strftime"
 
 export default class DbGenerateMigration extends BaseCommand {
+  /**
+   * @returns {Promise<void>}
+   */
   async execute() {
     const migrationName = this.processArgs[1]
     const migrationNameCamelized = inflection.camelize(migrationName.replaceAll("-", "_"))

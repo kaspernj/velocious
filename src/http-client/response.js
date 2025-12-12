@@ -1,23 +1,37 @@
+// @ts-check
+
 import Header from "./header.js"
 
 export default class Response {
+  /**
+   * @param {object} args
+   * @param {string} args.method
+   * @param {function() : void} args.onComplete
+   */
   constructor({method = "GET", onComplete}) {
     if (!method) throw new Error(`Invalid method given: ${method}`)
 
+    /** @type {Header[]} */
     this.headers = []
+
     this.method = method.toUpperCase().trim()
     this.onComplete = onComplete
     this.state = "status-line"
 
-    this.arrayBuffer = new ArrayBuffer()
-    this.response = new Uint8Array(this.arrayBuffer)
+    /** @type {Buffer} */
+    this.response = Buffer.alloc(0);
   }
 
+  /** @param {Buffer} data */
   feed(data) {
-    this.response += data
+    this.response = Buffer.concat([this.response, data])
     this.tryToParse()
   }
 
+  /**
+   * @param {string} name
+   * @returns {Header}
+   */
   getHeader(name) {
     const compareName = name.toLowerCase().trim()
 
@@ -33,9 +47,11 @@ export default class Response {
   }
 
   json() {
-    const contentTypeHeader = this.getHeader("Content-Type")?.getValue()?.toLowerCase()?.trim()
+    const contentTypeHeader = this.getHeader("Content-Type")?.getValue()
 
-    if (!contentTypeHeader.startsWith("application/json")) {
+    if (typeof contentTypeHeader != "string") throw new Error(`Content-Type wasn't a string: ${contentTypeHeader}`)
+
+    if (!contentTypeHeader.toLowerCase().trim().startsWith("application/json")) {
       throw new Error(`Content-Type is not JSON: ${contentTypeHeader}`)
     }
 
@@ -48,13 +64,21 @@ export default class Response {
   tryToParse() {
     while (true) {
       if (this.state == "body") {
-        const contentLengthValue = this.getHeader("Content-Length")?.value
+        const contentLengthValue = this.getHeader("Content-Length")?.getValue()
 
         if (contentLengthValue === undefined) {
           throw new Error("No content length given")
         }
 
-        const contentLengthNumber = parseInt(contentLengthValue)
+        let contentLengthNumber
+
+        if (typeof contentLengthValue == "number") {
+          contentLengthNumber = contentLengthValue
+        } else if (contentLengthValue == "string") {
+          contentLengthNumber = parseInt(contentLengthValue)
+        } else {
+          throw new Error(`Content-Length is not a number: ${contentLengthValue}`)
+        }
 
         if (this.response.byteLength >= contentLengthNumber) {
           this.completeResponse()

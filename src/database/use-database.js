@@ -1,3 +1,5 @@
+// @ts-check
+
 import React from "react"
 import useEnvSense from "env-sense/src/use-env-sense.js"
 
@@ -7,8 +9,8 @@ import restArgsError from "../utils/rest-args-error.js"
 
 /**
  * @param {object} args
- * @param {object} args.migrationsRequireContextCallback
- * @returns {Promise<{loaded: boolean}>}
+ * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback
+ * @returns {{loaded: boolean}}
  */
 export default function loadMigrations({migrationsRequireContextCallback, ...restArgs}) {
   const instance = React.useMemo(() => ({running: false}), [])
