@@ -22,7 +22,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   /**
    * @returns {string[]}
    */
-  toSqls() {
+  toSQLs() {
     const databaseType = this.getDriver().getType()
     const sqls = []
     const {tableData} = this

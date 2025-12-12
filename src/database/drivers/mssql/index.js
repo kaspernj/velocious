@@ -1,3 +1,5 @@
+// @ts-check
+
 import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
 import CreateDatabase from "./sql/create-database.js"
@@ -24,27 +26,36 @@ export default class VelociousDatabaseDriversMssql extends Base{
       this.connection = new mssql.ConnectionPool(sqlConfig)
       await this.connection.connect()
     } catch (error) {
-      throw new Error(`Couldn't connect to database: ${error.message}`) // Re-throw to fix unuseable stack trace.
+      // Re-throw to fix unuseable stack trace.
+      if (error instanceof Error) {
+        throw new Error(`Couldn't connect to database: ${error.message}`)
+      } else {
+        throw new Error(`Couldn't connect to database: ${error}`)
+      }
     }
   }
 
   async close() {
-    await this.connection.close()
+    await this.connection?.close()
     this.connection = undefined
   }
 
   /**
-   * @returns {string}
+   * @param {import("../../table-data/index.js").default} tableData
+   * @returns {Promise<string[]>}
    */
-  async alterTableSql(tableData) {
+  async alterTableSQLs(tableData) {
     const alterArgs = {tableData, driver: this}
     const alterTable = new AlterTable(alterArgs)
 
-    return await alterTable.toSqls()
+    return await alterTable.toSQLs()
   }
 
   /**
-   * @returns {string}
+   * @param {string} databaseName
+   * @param {object} [args]
+   * @param {boolean} [args.ifNotExists]
+   * @returns {string[]}
    */
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
@@ -54,17 +65,19 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @returns {string}
+   * @param {import("../base.js").CreateIndexSqlArgs} indexData
+   * @returns {string[]}
    */
-  createIndexSql(indexData) {
+  createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
 
-    return createIndex.toSql()
+    return createIndex.toSQLs()
   }
 
   /**
-   * @returns {string}
+   * @param {import("../../table-data/index.js").default} tableData
+   * @returns {string[]}
    */
   createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
@@ -91,13 +104,15 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @returns {string}
+   * @param {string} tableName
+   * @param {import("../base.js").DropTableSqlArgsType} [args]
+   * @returns {string[]}
    */
-  dropTableSql(tableName, args = {}) {
+  dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
 
-    return dropTable.toSql()
+    return dropTable.toSQLs()
   }
 
   /**
@@ -110,8 +125,13 @@ export default class VelociousDatabaseDriversMssql extends Base{
    */
   primaryKeyType() { return "bigint" }
 
+  /**
+   * @param {string} sql
+   * @returns {Promise<import("../base.js").QueryResultType>}
+   */
   async _queryActual(sql) {
-    let result, request, tries = 0
+    let result
+    let request, tries = 0
 
     if (this._currentTransaction) {
       request = new mssql.Request(this._currentTransaction)
@@ -126,21 +146,25 @@ export default class VelociousDatabaseDriversMssql extends Base{
         result = await request.query(sql)
         break
       } catch (error) {
-        if (error.message == "No connection is specified for that request." && tries <= 3) {
+        if (error instanceof Error && error.message == "No connection is specified for that request." && tries <= 3) {
           this.logger.log("Reconnecting to database")
           await this.connect()
           // Retry
-        } else {
+        } else if (error instanceof Error) {
           // Re-throw error because the stack-trace is broken and can't be used for app-development.
           throw new Error(`Query failed '${error.message}': ${sql}`)
+        } else {
+          throw new Error(`Query failed '${error}': ${sql}`)
         }
       }
     }
 
+    // @ts-expect-error
     return result.recordsets[0]
   }
 
   /**
+   * @param {import("../../query/index.js").default} query
    * @returns {string}
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
@@ -158,7 +182,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
     if (type != "string") value = `${value}`
 
-    const resultWithQuotes = escapeString(value)
+    const resultWithQuotes = escapeString(value, null)
     const result = resultWithQuotes.substring(1, resultWithQuotes.length - 1)
 
     return result
@@ -176,7 +200,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (type == "number") return value
     if (type != "string") value = `${value}`
 
-    return escapeString(value)
+    return escapeString(value, null)
   }
 
   /**
@@ -211,7 +235,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @returns {string} SQL statement
+   * @abstract
+   * @param {import("../base.js").InsertSqlArgsType} args
+   * @returns {string}
    */
   insertSql(args) {
     const insertArgs = Object.assign({driver: this}, args)
@@ -220,6 +246,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return insert.toSql()
   }
 
+  /**
+   * @returns {Promise<Array<import("../base-table.js").default>>}
+   */
   async getTables() {
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo'`)
     const tables = []
@@ -233,14 +262,20 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return tables
   }
 
-  async getTableByName(tableName, args) {
-    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(tableName)}`)
+  /**
+   * @param {string} name
+   * @param {object} [args]
+   * @param {boolean} args.throwError
+   * @returns {Promise<import("../base-table.js").default | undefined>}
+   */
+  async getTableByName(name, args) {
+    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(name)}`)
 
     if (result[0]) {
       return new Table(this, result[0])
     }
 
-    if (args?.throwError !== false) throw new Error(`Couldn't find a table by that name: ${tableName}`)
+    if (args?.throwError !== false) throw new Error(`Couldn't find a table by that name: ${name}`)
   }
 
   async lastInsertID() {
@@ -282,14 +317,26 @@ export default class VelociousDatabaseDriversMssql extends Base{
     this._currentTransaction = null
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async _startSavePointAction(savePointName) {
     await this.query(`SAVE TRANSACTION [${savePointName}]`)
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async _releaseSavePointAction(savePointName) { // eslint-disable-line no-unused-vars
     // Do nothing in MS-SQL.
   }
 
+  /**
+   * @param {string} savePointName
+   * @returns {Promise<void>}
+   */
   async _rollbackSavePointAction(savePointName) {
     await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
   }
@@ -299,6 +346,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+   * @param {import("../base.js").UpdateSqlArgsType} args
    * @returns {string}
    */
   updateSql({conditions, data, tableName}) {

@@ -1,18 +1,18 @@
-import {digs} from "diggerize"
+// @ts-check
+
 import QueryBase from "./base.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
   /**
    * @param {object} args
-   * @param {boolean} args.cascade
+   * @param {boolean} [args.cascade]
    * @param {import("./../drivers/base.js").default} args.driver
-   * @param {boolean} args.ifExists
-   * @param {object} args.options
+   * @param {boolean} [args.ifExists]
    * @param {string} args.tableName
    */
-  constructor({cascade, driver, ifExists, options, tableName, ...restArgs}) {
-    super({driver, options})
+  constructor({cascade, driver, ifExists, tableName, ...restArgs}) {
+    super({driver})
 
     restArgsError(restArgs)
 
@@ -24,10 +24,10 @@ export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
   /**
    * @returns {string[]}
    */
-  toSql() {
+  toSQLs() {
     const databaseType = this.getDatabaseType()
     const options = this.getOptions()
-    const {cascade, ifExists, tableName} = digs(this, "cascade", "ifExists", "tableName")
+    const {cascade, ifExists, tableName} = this
     const sqls = []
     let sql = ""
 

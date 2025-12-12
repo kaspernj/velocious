@@ -46,7 +46,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
     tableData.addColumn(column)
 
-    const sqls = await this.getDriver().alterTableSql(tableData)
+    const sqls = await this.getDriver().alterTableSQLs(tableData)
 
     for (const sql of sqls) {
       await this.getDriver().query(sql)
@@ -70,7 +70,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {number}
+   * @returns {number | undefined}
    */
   getMaxLength() {
     throw new Error("getMaxLength not implemented")

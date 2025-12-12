@@ -1,12 +1,17 @@
+// @ts-check
+
 import AlterTableBase from "../../../query/alter-table-base.js"
 import CreateIndexBase from "../../../query/create-index-base.js"
-import {digs} from "diggerize"
-import * as inflection from "inflection"
 import {Logger} from "../../../../logger.js"
 import restArgsError from "../../../../utils/rest-args-error.js"
 import TableData from "../../../table-data/index.js"
 
 export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable extends AlterTableBase {
+  /**
+   * @param {object} args
+   * @param {import("../../base.js").default} args.driver
+   * @param {import("../../../table-data/index.js").default} args.tableData
+   */
   constructor({driver, tableData, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -17,9 +22,15 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     this.tableData = tableData
   }
 
-  async toSqls() {
-    const {tableData} = digs(this, "tableData")
+  /**
+   * @returns {string[]}
+   */
+  async toSQLs() {
+    const {tableData} = this
     const table = await this.getDriver().getTableByName(tableData.getName())
+
+    if (!table) throw new Error(`Table ${tableData.getName()} does not exist`)
+
     const currentTableData = await table.getTableData()
     const options = this.getOptions()
     const tableName = tableData.getName()
@@ -43,19 +54,13 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       const newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
 
       if (newTableDataColumn) {
-        const settingsToClone = ["autoIncrement", "default", "index", "foreignKey", "maxLength", "primaryKey", "type"]
-
-        for (const settingToClone of settingsToClone) {
-          const camelizedSettingToClone = inflection.camelize(settingToClone)
-
-          if (!newTableDataColumn[`get${camelizedSettingToClone}`]) {
-            throw new Error(`No such method on column: get${camelizedSettingToClone}`)
-          }
-
-          if (!newTableDataColumn[`get${camelizedSettingToClone}`]()) {
-            newTableDataColumn[`set${camelizedSettingToClone}`](tableDataColumn[`get${camelizedSettingToClone}`]())
-          }
-        }
+        newTableDataColumn.setAutoIncrement(tableDataColumn.getAutoIncrement())
+        newTableDataColumn.setDefault(tableDataColumn.getDefault())
+        newTableDataColumn.setIndex(tableDataColumn.getIndex())
+        newTableDataColumn.setForeignKey(tableDataColumn.getForeignKey())
+        newTableDataColumn.setMaxLength(tableDataColumn.getMaxLength())
+        newTableDataColumn.setPrimaryKey(tableDataColumn.getPrimaryKey())
+        newTableDataColumn.setType(tableDataColumn.getType())
       }
 
       newTableData.addColumn(newTableDataColumn || tableDataColumn)
@@ -105,7 +110,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
     const createNewTableSQL = this.getDriver().createTableSql(newTableData)
     const insertSQL = `INSERT INTO ${options.quoteTableName(tempTableName)} (${newColumnsSQL}) SELECT ${oldColumnsSQL} FROM ${options.quoteTableName(tableName)}`
-    const dropTableSQL = `DROP TABLE ${options.quoteTableName(tableName)}`
+    const dropTableSQLs = `DROP TABLE ${options.quoteTableName(tableName)}`
     const renameTableSQL = `ALTER TABLE ${options.quoteTableName(tempTableName)} RENAME TO ${options.quoteTableName(tableName)}`
     const sqls = []
 
@@ -114,7 +119,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     }
 
     sqls.push(insertSQL)
-    sqls.push(dropTableSQL)
+    sqls.push(dropTableSQLs)
     sqls.push(renameTableSQL)
 
     for (const tableDataIndex of currentTableData.getIndexes()) {
@@ -136,7 +141,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
         tableName,
         unique: actualTableIndex.getUnique()
       }
-      const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
+      const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSQLs()
 
       for (const createIndexSQL of createIndexSQLs) {
         sqls.push(createIndexSQL)
