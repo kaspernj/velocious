@@ -1,6 +1,13 @@
+// @ts-check
+
 import Base from "./base.js"
 
 export default class VelociousDatabaseRecordValidatorsPresence extends Base {
+  /**
+   * @param {object} args
+   * @param {import("../index.js").default} args.model
+   * @param {string} args.attributeName
+   */
   async validate({model, attributeName}) {
     const attributeValue = model.readAttribute(attributeName)?.trim()
 

@@ -162,12 +162,12 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {object}
+   * @returns {import("./configuration-types.js").LocaleFallbacksType | undefined}
    */
   getLocaleFallbacks() { return this.localeFallbacks }
 
   /**
-   * @param {object} newLocaleFallbacks
+   * @param {import("./configuration-types.js").LocaleFallbacksType} newLocaleFallbacks
    * @returns {void}
    */
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }

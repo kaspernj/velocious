@@ -1,12 +1,18 @@
+// @ts-check
+
+/**
+ * @typedef {{type: string, message: string}} ValidationErrorObjectType
+ */
+
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
 import Configuration from "../../configuration.js"
 import FromTable from "../query/from-table.js"
 import Handler from "../handler.js"
-import HasManyRelationship from "./relationships/has-many.js"
 import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
-import HasOneRelationship from "./relationships/has-one.js"
+import HasManyRelationship from "./relationships/has-many.js"
 import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
+import HasOneRelationship from "./relationships/has-one.js"
 import * as inflection from "inflection"
 import Query from "../query/index.js"
 import restArgsError from "../../utils/rest-args-error.js"
@@ -15,53 +21,120 @@ import ValidatorsUniqueness from "./validators/uniqueness.js"
 
 class ValidationError extends Error {
   /**
-   * @template T extends VelociousDatabaseRecord
-   * @returns {T}
+   * @returns {VelociousDatabaseRecord}
    */
   getModel() {
+    if (!this._model) throw new Error("Model hasn't been set")
+
     return this._model
   }
 
   /**
-   * @template T extends VelociousDatabaseRecord
-   * @param {T} model
+   * @param {VelociousDatabaseRecord} model
    */
   setModel(model) {
     this._model = model
   }
 
   /**
-   * @returns {Array}
+   * @returns {Record<string, ValidationErrorObjectType[]>}
    */
   getValidationErrors() {
+    if (!this._validationErrors) throw new Error("Validation errors hasn't been set")
+
     return this._validationErrors
   }
 
+  /**
+   * @param {Record<string, ValidationErrorObjectType[]>} validationErrors
+   */
   setValidationErrors(validationErrors) {
     this._validationErrors = validationErrors
   }
 }
 
 class VelociousDatabaseRecord {
-  /**
-   * @returns {Record<string, import("./validators/base.js").default>}
-   */
-  static validatorTypes() {
-    if (!this._validatorTypes) this._validatorTypes = {}
+  static getAttributeNameToColumnNameMap() {
+    if (!this._attributeNameToColumnName) {
+      /** @type {Record<string, string>} */
+      this._attributeNameToColumnName = {}
+    }
+
+    return this._attributeNameToColumnName
+  }
+
+  static getColumnNameToAttributeNameMap() {
+    if (!this._columnNameToAttributeName) {
+      /** @type {Record<string, string>} */
+      this._columnNameToAttributeName = {}
+    }
+
+    return this._columnNameToAttributeName
+  }
+
+  static getTranslationsMap() {
+    if (!this._translations) {
+      /** @type {Record<string, object>} */
+      this._translations = {}
+    }
+
+    return this._translations
+  }
+
+  static getValidatorsMap() {
+    if (!this._validators) {
+      /** @type {Record<string, import("./validators/base.js").default[]>} */
+      this._validators = {}
+    }
+
+    return this._validators
+  }
+
+  static getValidatorTypesMap() {
+    if (!this._validatorTypes) {
+      /** @type {Record<string, typeof import("./validators/base.js").default>} */
+      this._validatorTypes = {}
+    }
 
     return this._validatorTypes
   }
 
+  /** @type {Record<string, any>} */
+  _attributes = {}
+
+  /** @type {Record<string, any>} */
+  _changes = {}
+
+  /** @type {Record<string, import("../drivers/base-column.js").default>} */
+  _columnsAsHash = {}
+
+  /** @type {import("../drivers/base.js").default | undefined} */
+  __connection = undefined
+
+  /** @type {Record<string, import("./instance-relationships/base.js").default>} */
+  _instanceRelationships = {}
+
+  /** @type {string | undefined} */
+  __tableName = undefined
+
+  /** @type {Record<string, ValidationErrorObjectType[]>} */
+  _validationErrors = {}
+
+  static validatorTypes() {
+    return this.getValidatorTypesMap()
+  }
+
   /**
    * @param {string} name
-   * @param {import("./validators/base.js").default} validatorClass
+   * @param {typeof import("./validators/base.js").default} validatorClass
    */
   static registerValidatorType(name, validatorClass) {
     this.validatorTypes()[name] = validatorClass
   }
 
   /**
-   * @returns {import("./validators/base.js").default}
+   * @param {string} validatorName
+   * @returns {typeof import("./validators/base.js").default}
    */
   static getValidatorType(validatorName) {
     if (!(validatorName in this.validatorTypes())) throw new Error(`Validator type ${validatorName} not found`)
@@ -70,19 +143,29 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {string} relationshipName
    * @returns {boolean}
    */
   static _relationshipExists(relationshipName) {
-    if (this._relationships && relationshipName in this._relationships) {
+    if (relationshipName in this.getRelationshipsMap()) {
       return true
     }
 
     return false
   }
 
+  /**
+   * @typedef {object} RelationshipDataArgumentType
+   * @property {string} [className]
+   * @property {typeof VelociousDatabaseRecord} [klass]
+   * @property {string} [type]
+   */
+  /**
+   * @param {string} relationshipName
+   * @param {RelationshipDataArgumentType} data
+   */
   static _defineRelationship(relationshipName, data) {
     if (!relationshipName) throw new Error(`Invalid relationship name given: ${relationshipName}`)
-    if (!this._relationships) this._relationships = {}
     if (this._relationshipExists(relationshipName)) throw new Error(`Relationship ${relationshipName} already exists`)
 
     const actualData = Object.assign(
@@ -98,21 +181,29 @@ class VelociousDatabaseRecord {
       actualData.className = inflection.camelize(inflection.singularize(relationshipName))
     }
 
+    /** @type {Record<string, (this: VelociousDatabaseRecord) => unknown>} */
+    const proto = /** @type {any} */ (this.prototype);
+
     let relationship
 
     if (actualData.type == "belongsTo") {
       relationship = new BelongsToRelationship(actualData)
 
-      this.prototype[relationshipName] = function() {
+      proto[relationshipName] = function() {
         const relationship = this.getRelationshipByName(relationshipName)
 
         return relationship.loaded()
       }
 
-      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
+      // @ts-expect-error
+      proto[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
+        // @ts-expect-error
         const instanceRelationship = this.getRelationshipByName(relationshipName)
+
+        // @ts-expect-error
         const record = instanceRelationship.build(attributes)
 
+        // @ts-expect-error
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
 
         if (inverseOf) {
@@ -132,41 +223,51 @@ class VelociousDatabaseRecord {
         return record
       }
 
-      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+      proto[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
 
-      this.prototype[`set${inflection.camelize(relationshipName)}`] = function(model) {
+      // @ts-expect-error
+      proto[`set${inflection.camelize(relationshipName)}`] = function(model) {
+        // @ts-expect-error
         const relationship = this.getRelationshipByName(relationshipName)
 
+        // @ts-expect-error
         relationship.setLoaded(model)
+
+        // @ts-expect-error
         relationship.setDirty(true)
       }
     } else if (actualData.type == "hasMany") {
       relationship = new HasManyRelationship(actualData)
 
-      this.prototype[relationshipName] = function() {
+      proto[relationshipName] = function() {
         return this.getRelationshipByName(relationshipName)
       }
 
-      this.prototype[`${relationshipName}Loaded`] = function() {
+      proto[`${relationshipName}Loaded`] = function() {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+      proto[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
     } else if (actualData.type == "hasOne") {
       relationship = new HasOneRelationship(actualData)
 
-      this.prototype[relationshipName] = function() {
+      proto[relationshipName] = function() {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
+      // @ts-expect-error
+      proto[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
+        // @ts-expect-error
         const instanceRelationship = this.getRelationshipByName(relationshipName)
+
+        // @ts-expect-error
         const record = instanceRelationship.build(attributes)
 
+        // @ts-expect-error
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
 
         if (inverseOf) {
@@ -179,23 +280,22 @@ class VelociousDatabaseRecord {
         return record
       }
 
-      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+      proto[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
     } else {
       throw new Error(`Unknown relationship type: ${actualData.type}`)
     }
 
-    this._relationships[relationshipName] = relationship
+    this.getRelationshipsMap()[relationshipName] = relationship
   }
 
   /**
+   * @param {string} relationshipName
    * @returns {import("./relationships/base.js").default}
    */
   static getRelationshipByName(relationshipName) {
-    if (!this._relationships) this._relationships = {}
-
-    const relationship = this._relationships[relationshipName]
+    const relationship = this.getRelationshipsMap()[relationshipName]
 
     if (!relationship) throw new Error(`No relationship by that name: ${relationshipName}`)
 
@@ -206,9 +306,16 @@ class VelociousDatabaseRecord {
    * @returns {Array<import("./relationships/base.js").default>}
    */
   static getRelationships() {
-    if (this._relationships) return Object.values(this._relationships)
+    return Object.values(this.getRelationshipsMap())
+  }
 
-    return []
+  static getRelationshipsMap() {
+    if (!this._relationships) {
+      /** @type {Record<string, import("./relationships/base.js").default>} */
+      this._relationships = {}
+    }
+
+    return this._relationships
   }
 
   /**
@@ -219,14 +326,12 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @template T extends import("./instance-relationships/index.js").default
-   * @returns {T}
+   * @param {string} relationshipName
+   * @returns {import("./instance-relationships/base.js").default}
    */
   getRelationshipByName(relationshipName) {
-    if (!this._instanceRelationships) this._instanceRelationships = {}
-
     if (!(relationshipName in this._instanceRelationships)) {
-      const modelClassRelationship = this.constructor.getRelationshipByName(relationshipName)
+      const modelClassRelationship = this.getModelClass().getRelationshipByName(relationshipName)
       const relationshipType = modelClassRelationship.getType()
       let instanceRelationship
 
@@ -249,15 +354,14 @@ class VelociousDatabaseRecord {
   /**
    * Adds a belongs-to-relationship to the model.
    * @param {string} relationshipName The name of the relationship.
-   * @param {object} options The options for the relationship.
+   * @param {object} [options] The options for the relationship.
    */
   static belongsTo(relationshipName, options) {
     this._defineRelationship(relationshipName, Object.assign({type: "belongsTo"}, options))
   }
 
   /**
-   * @template T extends import("./database/drivers/base").default
-   * @returns {T}
+   * @returns {import("../drivers/base.js").default}
    */
   static connection() {
     const databasePool = this._getConfiguration().getDatabasePool(this.getDatabaseIdentifier())
@@ -299,7 +403,7 @@ class VelociousDatabaseRecord {
    * @returns {import("../../configuration.js").default}
    */
   _getConfiguration() {
-    return this.constructor._getConfiguration()
+    return this.getModelClass()._getConfiguration()
   }
 
   /**
@@ -335,12 +439,16 @@ class VelociousDatabaseRecord {
   /**
    * @returns {string}
    */
-  static getDatabaseType() { return this._databaseType }
+  static getDatabaseType() {
+    if (!this._databaseType) throw new Error("Database type hasn't been set")
+
+    return this._databaseType
+  }
 
   /**
    * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @returns {void}
+   * @param {import("../../configuration.js").default} args.configuration
+   * @returns {Promise<void>}
    */
   static async initializeRecord({configuration, ...restArgs}) {
     restArgsError(restArgs)
@@ -353,9 +461,15 @@ class VelociousDatabaseRecord {
 
     this._table = await this.connection().getTableByName(this.tableName())
     this._columns = await this._getTable().getColumns()
+
+    /** @type {Record<string, import("../drivers/base-column.js").default>} */
     this._columnsAsHash = {}
-    this._columnNameToAttributeName = {}
-    this._attributeNameToColumnName = {}
+
+    const columnNameToAttributeName = this.getColumnNameToAttributeNameMap()
+    const attributeNameToColumnName = this.getAttributeNameToColumnNameMap()
+
+    /** @type {Record<string, (this: VelociousDatabaseRecord) => unknown>} */
+    const proto = /** @type {any} */ (this.prototype);
 
     for (const column of this._columns) {
       this._columnsAsHash[column.getName()] = column
@@ -363,18 +477,21 @@ class VelociousDatabaseRecord {
       const camelizedColumnName = inflection.camelize(column.getName(), true)
       const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
 
-      this._attributeNameToColumnName[camelizedColumnName] = column.getName()
-      this._columnNameToAttributeName[column.getName()] = camelizedColumnName
+      attributeNameToColumnName[camelizedColumnName] = column.getName()
+      columnNameToAttributeName[column.getName()] = camelizedColumnName
 
-      this.prototype[camelizedColumnName] = function() {
+      proto[camelizedColumnName] = function() {
         return this.readAttribute(camelizedColumnName)
       }
 
-      this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
+      // @ts-expect-error
+      proto[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
+        // @ts-expect-error
         return this._setColumnAttribute(camelizedColumnName, newValue)
       }
 
-      this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
+      proto[`has${camelizedColumnNameBigFirst}`] = function() {
+        // @ts-expect-error
         let value = this[camelizedColumnName]()
 
         return this._hasAttribute(value)
@@ -386,6 +503,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {any} value
    * @returns {boolean}
    */
   _hasAttribute(value) {
@@ -421,21 +539,37 @@ class VelociousDatabaseRecord {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
 
-        this.prototype[name] = function getTranslatedAttribute() {
+        /** @type {Record<string, unknown>} */
+        // @ts-expect-error
+        const self = this
+
+        /** @type {Record<string, (this: VelociousDatabaseRecord) => unknown>} */
+        const proto = /** @type {any} */ (this.prototype);
+
+        proto[name] = function getTranslatedAttribute() {
           const locale = this._getConfiguration().getLocale()
 
           return this._getTranslatedAttributeWithFallback(name, locale)
         }
 
-        this.prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
-          const value = this[name]()
+        proto[`has${nameCamelized}`] = function hasTranslatedAttribute() {
+          const candidate = self[name]
 
-          return this._hasAttribute(value)
+          if (typeof candidate == "function") {
+            const value = candidate()
+
+            return this._hasAttribute(value)
+          } else {
+            throw new Error(`Expected candidate to be a function but it was: ${typeof candidate}`)
+          }
         }
 
-        this.prototype[setterMethodName] = function setTranslatedAttribute(newValue) {
+        // @ts-expect-error
+        proto[setterMethodName] = function setTranslatedAttribute(newValue) {
+          // @ts-expect-error
           const locale = this._getConfiguration().getLocale()
 
+          // @ts-expect-error
           return this._setTranslatedAttribute(name, locale, newValue)
         }
 
@@ -444,10 +578,12 @@ class VelociousDatabaseRecord {
           const getterMethodNameLocalized = `${name}${localeCamelized}`
           const setterMethodNameLocalized = `${setterMethodName}${localeCamelized}`
 
+          // @ts-expect-error
           this.prototype[getterMethodNameLocalized] = function getTranslatedAttributeWithLocale() {
             return this._getTranslatedAttribute(name, locale)
           }
 
+          // @ts-expect-error
           this.prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
           }
@@ -486,6 +622,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   *
+   * @returns {typeof VelociousDatabaseRecord}
+   */
+  getModelClass() {
+    const modelClass = /** @type {typeof VelociousDatabaseRecord} */ (this.constructor)
+
+    return modelClass
+  }
+
+  /**
    * @param {string} name
    * @param {*} newValue
    * @returns {void}
@@ -493,16 +639,21 @@ class VelociousDatabaseRecord {
   setAttribute(name, newValue) {
     const setterName = `set${inflection.camelize(name)}`
 
-    if (!this.constructor.isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
+    if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
     if (!(setterName in this)) throw new Error(`No such setter method: ${this.constructor.name}#${setterName}`)
 
+    // @ts-expect-error
     this[setterName](newValue)
   }
 
+  /**
+   * @param {string} name
+   * @param {any} newValue
+   */
   _setColumnAttribute(name, newValue) {
-    if (!this.constructor._attributeNameToColumnName) throw new Error("No attribute-to-column mapping. Has record been initialized?")
+    if (!this.getModelClass()._attributeNameToColumnName) throw new Error("No attribute-to-column mapping. Has record been initialized?")
 
-    const columnName = this.constructor._attributeNameToColumnName[name]
+    const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[name]
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${name}`)
 
@@ -543,14 +694,14 @@ class VelociousDatabaseRecord {
   /**
    * @param {Array<string>} columns
    * @param {Array<Array<string>>} rows
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   static async insertMultiple(columns, rows) {
     return await this.connection().insertMultiple(this.tableName(), columns, rows)
   }
 
   /**
-   * @returns {number}
+   * @returns {Promise<number>}
    */
   static async nextPrimaryKey() {
     const primaryKey = this.primaryKey()
@@ -559,7 +710,13 @@ class VelociousDatabaseRecord {
     const newestRecord = await this.order(`${connection.quoteTable(tableName)}.${connection.quoteColumn(primaryKey)}`).last()
 
     if (newestRecord) {
-      return newestRecord.id() + 1
+      const id = newestRecord.id()
+
+      if (typeof id == "number") {
+        return id + 1
+      } else {
+        throw new Error("ID from newest record wasn't a number")
+      }
     } else {
       return 1
     }
@@ -583,16 +740,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {boolean}
+   * @returns {Promise<void>}
    */
   async save() {
     const isNewRecord = this.isNewRecord()
     let result
 
-    await this.constructor._getConfiguration().ensureConnections(async () => {
+    await this._getConfiguration().ensureConnections(async () => {
       await this._runValidations()
 
-      await this.constructor.transaction(async () => {
+      await this.getModelClass().transaction(async () => {
         // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
         const {savedCount} = await this._autoSaveBelongsToRelationships()
 
@@ -630,17 +787,23 @@ class VelociousDatabaseRecord {
 
       const model = instanceRelationship.loaded()
 
-      if (model?.isChanged()) {
-        await model.save()
+      if (model) {
+        if (model instanceof VelociousDatabaseRecord) {
+          if (model.isChanged()) {
+            await model.save()
 
-        const foreignKey = instanceRelationship.getForeignKey()
+            const foreignKey = instanceRelationship.getForeignKey()
 
-        this.setAttribute(foreignKey, model.id())
+            this.setAttribute(foreignKey, model.id())
 
-        instanceRelationship.setPreloaded(true)
-        instanceRelationship.setDirty(false)
+            instanceRelationship.setPreloaded(true)
+            instanceRelationship.setDirty(false)
 
-        savedCount++
+            savedCount++
+          }
+        } else {
+          throw new Error(`Expected a record but got: ${typeof model}`)
+        }
       }
     }
 
@@ -661,18 +824,21 @@ class VelociousDatabaseRecord {
         continue
       }
 
+      /** @type {VelociousDatabaseRecord[]} */
       let loaded
 
-      if (instanceRelationship.getType() == "hasOne") {
-        const hasOneLoaded = instanceRelationship.getLoadedOrNull()
+      const hasManyOrOneLoaded = instanceRelationship.getLoadedOrUndefined()
 
-        if (hasOneLoaded) {
-          loaded = [hasOneLoaded]
+      if (hasManyOrOneLoaded) {
+        if (Array.isArray(hasManyOrOneLoaded)) {
+          loaded = hasManyOrOneLoaded
+        } else if (hasManyOrOneLoaded instanceof VelociousDatabaseRecord) {
+          loaded = [hasManyOrOneLoaded]
         } else {
-          continue
+          throw new Error(`Expected hasOneLoaded to be a record but it wasn't: ${typeof hasManyOrOneLoaded}`)
         }
       } else {
-        loaded = instanceRelationship.getLoadedOrNull()
+        continue
       }
 
       let useRelationship = false
@@ -696,11 +862,26 @@ class VelociousDatabaseRecord {
     return relationships
   }
 
+  /**
+   * @param {object} args
+   * @param {boolean} args.isNewRecord
+   */
   async _autoSaveHasManyAndHasOneRelationships({isNewRecord}) {
     for (const instanceRelationship of this._autoSaveHasManyAndHasOneRelationshipsToSave()) {
-      let loaded = instanceRelationship.getLoadedOrNull()
+      let hasManyOrOneLoaded = instanceRelationship.getLoadedOrUndefined()
 
-      if (!Array.isArray(loaded)) loaded = [loaded]
+      /** @type {VelociousDatabaseRecord[]} */
+      let loaded
+
+      if (hasManyOrOneLoaded === undefined) {
+        loaded = []
+      } else if (hasManyOrOneLoaded instanceof VelociousDatabaseRecord) {
+        loaded = [hasManyOrOneLoaded]
+      } else if (Array.isArray(hasManyOrOneLoaded)) {
+        loaded = hasManyOrOneLoaded
+      } else {
+        throw new Error(`Unexpected type for hasManyOrOneLoaded: ${typeof hasManyOrOneLoaded}`)
+      }
 
       for (const model of loaded) {
         const foreignKey = instanceRelationship.getForeignKey()
@@ -736,8 +917,8 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {function() : void} callback
-   * @returns {*}
+   * @param {function() : Promise<void>} callback
+   * @returns {Promise<*>}
    */
   static async transaction(callback) {
     const useTransactions = this.connection().getArgs().record?.transactions
@@ -750,14 +931,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {...string} names
    * @returns {void}
    */
   static translates(...names) {
-    for (const name of names) {
-      if (!this._translations) this._translations = {}
-      if (name in this._translations) throw new Error(`Translation already exists: ${name}`)
+    const translations = this.getTranslationsMap()
 
-      this._translations[name] = {}
+    for (const name of names) {
+      if (name in translations) throw new Error(`Translation already exists: ${name}`)
+
+      translations[name] = {}
 
       if (!this._relationshipExists("translations")) {
         this._defineRelationship("translations", {klass: this.getTranslationClass(), type: "hasMany"})
@@ -812,11 +995,33 @@ class VelociousDatabaseRecord {
   /**
    * Adds a validation to an attribute.
    * @param {string} attributeName The name of the attribute to validate.
-   * @param {object} validators The validators to add. Key is the validator name, value is the validator arguments.
+   * @param {Record<string, boolean | Record<string, any>>} validators The validators to add. Key is the validator name, value is the validator arguments.
    */
   static async validates(attributeName, validators) {
     for (const validatorName in validators) {
-      const validatorArgs = validators[validatorName]
+      /** @type {Record<string, any>} */
+      let validatorArgs
+
+      /** @type {boolean} */
+      let useValidator = true
+
+      const validatorArgsCandidate = validators[validatorName]
+
+      if (typeof validatorArgsCandidate == "boolean") {
+        validatorArgs = {}
+        useValidator
+
+        if (!validatorArgsCandidate) {
+          useValidator = false
+        }
+      } else {
+        validatorArgs = validatorArgsCandidate
+      }
+
+      if (!useValidator) {
+        continue
+      }
+
       const ValidatorClass = this.getValidatorType(validatorName)
       const validator = new ValidatorClass({attributeName, args: validatorArgs})
 
@@ -828,15 +1033,33 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @abstract
+   * @returns {TranslationBase[]}
+   */
+  translationsLoaded() {
+    throw new Error("'translationsLoaded' not implemented")
+  }
+
+  /**
    * @param {string} name
    * @param {string} locale
    * @returns {*}
    */
   _getTranslatedAttribute(name, locale) {
-    const translation = this.translations().loaded().find((translation) => translation.locale() == locale)
+    const translation = this.translationsLoaded().find((translation) => translation.locale() == locale)
 
     if (translation) {
-      return translation[name]()
+      /** @type {Record<string, unknown>} */
+      // @ts-expect-error
+      const dict = translation
+
+      const attributeMethod = /** @type {function() : any | undefined} */ (dict[name])
+
+      if (typeof attributeMethod == "function") {
+        return attributeMethod.bind(translation)()
+      } else {
+        throw new Error(`No such translated method: ${name} (${typeof attributeMethod})`)
+      }
     }
   }
 
@@ -871,12 +1094,18 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setTranslatedAttribute(name, locale, newValue) {
-    let translation = this.translations().loaded()?.find((translation) => translation.locale() == locale)
+    /** @type {VelociousDatabaseRecord | TranslationBase | undefined} */
+    let translation
+
+    translation = this.translationsLoaded()?.find((translation) => translation.locale() == locale)
 
     if (!translation) {
-      translation = this.translations().build({locale})
+      const instanceRelationship = this.getRelationshipByName("translations")
+
+      translation = instanceRelationship.build({locale})
     }
 
+    /** @type {Record<string, any>} */
     const assignments = {}
 
     assignments[name] = newValue
@@ -915,54 +1144,56 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {number}
+   * @returns {Promise<number>}
    */
   static async count() {
     return await this._newQuery().count()
   }
 
-  static async destroyAll(...args) {
-    return await this._newQuery().destroyAll(...args)
+  static async destroyAll() {
+    return await this._newQuery().destroyAll()
   }
 
   /**
-   * @param {...Parameters<Query["find"]>} args
+   * @param {number|string} recordId
    * @returns {Promise<InstanceType<typeof this>>}
    */
-  static async find(...args) {
-    return await this._newQuery().find(...args)
+  static async find(recordId) {
+    return await this._newQuery().find(recordId)
   }
 
   /**
-   * @param {...Parameters<Query["findBy"]>} args
-   * @returns {Promise<InstanceType<typeof this>>}
+   * @param {{[key: string]: any}} conditions
+   * @returns {Promise<InstanceType<typeof this> | null>}
    */
-  static async findBy(...args) {
-    return await this._newQuery().findBy(...args)
+  static async findBy(conditions) {
+    return await this._newQuery().findBy(conditions)
   }
 
   /**
-   * @param {...Parameters<Query["findByOrFail"]>} args
+   * @param {{[key: string]: any}} conditions
    * @returns {Promise<InstanceType<typeof this>>}
    */
-  static async findByOrFail(...args) {
-    return await this._newQuery().findByOrFail(...args)
+  static async findByOrFail(conditions) {
+    return await this._newQuery().findByOrFail(conditions)
   }
 
   /**
-   * @param {...Parameters<Query["findOrCreateBy"]>} args
+   * @param {{[key: string]: any}} conditions
+   * @param {function() : void} callback
    * @returns {Promise<InstanceType<typeof this>>}
    */
-  static async findOrCreateBy(...args) {
-    return await this._newQuery().findOrCreateBy(...args)
+  static async findOrCreateBy(conditions, callback) {
+    return await this._newQuery().findOrCreateBy(conditions, callback)
   }
 
   /**
-   * @param {...Parameters<Query["findOrInitializeBy"]>} args
+   * @param {object} conditions
+   * @param {function(import("../record/index.js").default) : void} callback
    * @returns {Promise<InstanceType<typeof this>>}
    */
-  static async findOrInitializeBy(...args) {
-    return await this._newQuery().findOrInitializeBy(...args)
+  static async findOrInitializeBy(conditions, callback) {
+    return await this._newQuery().findOrInitializeBy(conditions, callback)
   }
 
   /**
@@ -973,69 +1204,74 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {string|{[key: string]: any}} join
    * @returns {Query}
    */
-  static joins(...args) {
-    return this._newQuery().joins(...args)
+  static joins(join) {
+    return this._newQuery().joins(join)
   }
 
   /**
    * @returns {Promise<InstanceType<typeof this>>}
    */
-  static async last(...args) {
-    return await this._newQuery().last(...args)
+  static async last() {
+    return await this._newQuery().last()
   }
 
   /**
+   * @param {number} value
    * @returns {Query}
    */
-  static limit(...args) {
-    return this._newQuery().limit(...args)
+  static limit(value) {
+    return this._newQuery().limit(value)
   }
 
   /**
+   * @param {string | number} order
    * @returns {Query}
    */
-  static order(...args) {
-    return this._newQuery().order(...args)
+  static order(order) {
+    return this._newQuery().order(order)
   }
 
   /**
+   * @param {import("../query/index.js").NestedPreloadRecord} preload
    * @returns {Query}
    */
-  static preload(...args) {
-    return this._newQuery().preload(...args)
+  static preload(preload) {
+    return this._newQuery().preload(preload)
   }
 
   /**
+   * @param {import("../query/index.js").SelectArgumentType} select
    * @returns {Query}
    */
-  static select(...args) {
-    return this._newQuery().select(...args)
+  static select(select) {
+    return this._newQuery().select(select)
   }
 
   /**
+   * @returns {Promise<VelociousDatabaseRecord[]>}
+   */
+  static toArray() {
+    return this._newQuery().toArray()
+  }
+
+  /**
+   * @param {import("../query/index.js").WhereArgumentType} where
    * @returns {Query}
    */
-  static toArray(...args) {
-    return this._newQuery().toArray(...args)
+  static where(where) {
+    return this._newQuery().where(where)
   }
 
   /**
-   * @returns {Query}
-   */
-  static where(...args) {
-    return this._newQuery().where(...args)
-  }
-
-  /**
-   * @param {object} changes
+   * @param {Record<string, any>} changes
    */
   constructor(changes = {}) {
     this._attributes = {}
     this._changes = {}
     this._isNewRecord = true
-    this._relationships = {}
 
     for (const key in changes) {
       this.setAttribute(key, changes[key])
@@ -1064,7 +1300,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns a the current attributes of the record (original attributes from database plus changes)
-   * @returns {void}
+   * @returns {Record<string, any>}
    */
   attributes() {
     return Object.assign({}, this._attributes, this._changes)
@@ -1076,20 +1312,22 @@ class VelociousDatabaseRecord {
   _connection() {
     if (this.__connection) return this.__connection
 
-    return this.constructor.connection()
+    return this.getModelClass().connection()
   }
 
   /**
    * Destroys the record in the database and all of its dependent records.
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async destroy() {
-    for (const relationship of this.constructor.getRelationships()) {
+    for (const relationship of this.getModelClass().getRelationships()) {
       if (relationship.getDependent() != "destroy") {
         continue
       }
 
       const instanceRelationship = this.getRelationshipByName(relationship.getRelationshipName())
+
+      /** @type {VelociousDatabaseRecord[]} */
       let models
 
       if (instanceRelationship.getType() == "belongsTo") {
@@ -1099,13 +1337,23 @@ class VelociousDatabaseRecord {
 
         const model = instanceRelationship.loaded()
 
-        models = [model]
+        if (model instanceof VelociousDatabaseRecord) {
+          models = [model]
+        } else {
+          throw new Error(`Unexpected loaded type: ${typeof model}`)
+        }
       } else if (instanceRelationship.getType() == "hasMany") {
         if (!instanceRelationship.isLoaded()) {
           await instanceRelationship.load()
         }
 
-        models = instanceRelationship.loaded()
+        const loadedModels = instanceRelationship.loaded()
+
+        if (Array.isArray(loadedModels)) {
+          models = loadedModels
+        } else {
+          throw new Error(`Unexpected loaded type: ${typeof loadedModels}`)
+        }
       } else {
         throw new Error(`Unhandled relationship type: ${instanceRelationship.getType()}`)
       }
@@ -1117,9 +1365,10 @@ class VelociousDatabaseRecord {
       }
     }
 
+    /** @type {Record<string, any>} */
     const conditions = {}
 
-    conditions[this.constructor.primaryKey()] = this.id()
+    conditions[this.getModelClass().primaryKey()] = this.id()
 
     const sql = this._connection().deleteSql({
       conditions,
@@ -1129,9 +1378,7 @@ class VelociousDatabaseRecord {
     await this._connection().query(sql)
   }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   _hasChanges() { return Object.keys(this._changes).length > 0 }
 
   /**
@@ -1167,11 +1414,9 @@ class VelociousDatabaseRecord {
     return false
   }
 
-  /**
-   * Returns the changes that have been made to this record since it was loaded from the database.
-   * @returns {object}
-   */
+  /** Returns the changes that have been made to this record since it was loaded from the database. */
   changes() {
+    /** @type {Record<string, any[]>} */
     const changes = {}
 
     for (const changeKey in this._changes) {
@@ -1189,18 +1434,18 @@ class VelociousDatabaseRecord {
   _tableName() {
     if (this.__tableName) return this.__tableName
 
-    return this.constructor.tableName()
+    return this.getModelClass().tableName()
   }
 
   /**
    * Reads an attribute value from the record.
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
-   * @returns {void}
+   * @returns {any}
    */
   readAttribute(attributeName) {
-    const columnName = this.constructor._attributeNameToColumnName[attributeName]
+    const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[attributeName]
 
-    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.constructor._attributeNameToColumnName)}`)
+    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
 
     return this.readColumn(columnName)
   }
@@ -1210,7 +1455,7 @@ class VelociousDatabaseRecord {
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
    */
   readColumn(attributeName) {
-    const column = this.constructor.getColumns().find((column) => column.getName() == attributeName)
+    const column = this.getModelClass().getColumns().find((column) => column.getName() == attributeName)
     let result
 
     if (attributeName in this._changes) {
@@ -1221,7 +1466,7 @@ class VelociousDatabaseRecord {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
 
-    if (column && this.constructor.getDatabaseType() == "sqlite") {
+    if (column && this.getModelClass().getDatabaseType() == "sqlite") {
       if (result && (column.getType() == "date" || column.getType() == "datetime")) {
         result = new Date(Date.parse(result))
       }
@@ -1231,6 +1476,7 @@ class VelociousDatabaseRecord {
   }
 
   _belongsToChanges() {
+    /** @type {Record<string, any>} */
     const belongsToChanges = {}
 
     if (this._instanceRelationships) {
@@ -1238,7 +1484,15 @@ class VelociousDatabaseRecord {
         const relationship = this._instanceRelationships[relationshipName]
 
         if (relationship.getType() == "belongsTo" && relationship.getDirty()) {
-          belongsToChanges[relationship.getForeignKey()] = relationship.loaded()?.id()
+          const model = relationship.loaded()
+
+          if (model) {
+            if (model instanceof VelociousDatabaseRecord) {
+              belongsToChanges[relationship.getForeignKey()] = model?.id()
+            } else {
+              throw new Error(`Unexpected model type: ${typeof model}`)
+            }
+          }
         }
       }
     }
@@ -1247,29 +1501,29 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async _createNewRecord() {
-    if (!this.constructor.connection()["insertSql"]) {
-      throw new Error(`No insertSql on ${this.constructor.connection().constructor.name}`)
+    if (!this.getModelClass().connection()["insertSql"]) {
+      throw new Error(`No insertSql on ${this.getModelClass().connection().constructor.name}`)
     }
 
-    const createdAtColumn = this.constructor.getColumns().find((column) => column.getName() == "created_at")
-    const updatedAtColumn = this.constructor.getColumns().find((column) => column.getName() == "updated_at")
+    const createdAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "created_at")
+    const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
     const data = Object.assign({}, this._belongsToChanges(), this.attributes())
     const currentDate = new Date()
 
     if (createdAtColumn) data.created_at = currentDate
     if (updatedAtColumn) data.updated_at = currentDate
 
-    const columnNames = this.constructor.getColumnNames()
+    const columnNames = this.getModelClass().getColumnNames()
     const sql = this._connection().insertSql({
       returnLastInsertedColumnNames: columnNames,
       tableName: this._tableName(),
       data
     })
     const insertResult = await this._connection().query(sql)
-    const primaryKey = this.constructor.primaryKey()
+    const primaryKey = this.getModelClass().primaryKey()
 
     if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
       this._attributes = insertResult[0]
@@ -1283,10 +1537,10 @@ class VelociousDatabaseRecord {
     this.setIsNewRecord(false)
 
     // Mark all relationships as preloaded, since we don't expect anything to have magically appeared since we created the record.
-    for (const relationship of this.constructor.getRelationships()) {
+    for (const relationship of this.getModelClass().getRelationships()) {
       const instanceRelationship = this.getRelationshipByName(relationship.getRelationshipName())
 
-      if (instanceRelationship.getType() == "hasMany" && instanceRelationship.getLoadedOrNull() === null) {
+      if (instanceRelationship.getType() == "hasMany" && instanceRelationship.getLoadedOrUndefined() === null) {
         instanceRelationship.setLoaded([])
       }
 
@@ -1295,15 +1549,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async _updateRecordWithChanges() {
+    /** @type {Record<string, any>} */
     const conditions = {}
 
-    conditions[this.constructor.primaryKey()] = this.id()
+    conditions[this.getModelClass().primaryKey()] = this.id()
 
     const changes = Object.assign({}, this._belongsToChanges(), this._changes)
-    const updatedAtColumn = this.constructor.getColumns().find((column) => column.getName() == "updated_at")
+    const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
     const currentDate = new Date()
 
     if (updatedAtColumn) changes.updated_at = currentDate
@@ -1323,15 +1578,15 @@ class VelociousDatabaseRecord {
    * @returns {number|string}
    */
   id() {
-    if (!this.constructor._columnNameToAttributeName) {
+    if (!this.getModelClass()._columnNameToAttributeName) {
       throw new Error(`Column names mapping hasn't been set on ${this.constructor.name}. Has the model been initialized?`)
     }
 
-    const primaryKey = this.constructor.primaryKey()
-    const attributeName = this.constructor._columnNameToAttributeName[primaryKey]
+    const primaryKey = this.getModelClass().primaryKey()
+    const attributeName = this.getModelClass().getColumnNameToAttributeNameMap()[primaryKey]
 
     if (attributeName === undefined) {
-      throw new Error(`Primary key ${primaryKey} doesn't exist in columns: ${Object.keys(this.constructor._columnNameToAttributeName).join(", ")}`)
+      throw new Error(`Primary key ${primaryKey} doesn't exist in columns: ${Object.keys(this.getModelClass().getColumnNameToAttributeNameMap()).join(", ")}`)
     }
 
     return this.readAttribute(attributeName)
@@ -1355,13 +1610,18 @@ class VelociousDatabaseRecord {
     this._isNewRecord = newIsNewRecord
   }
 
+  /**
+   * @param {string | number} id
+   */
   async _reloadWithId(id) {
-    const primaryKey = this.constructor.primaryKey()
+    const primaryKey = this.getModelClass().primaryKey()
+
+    /** @type {Record<string, any>} */
     const whereObject = {}
 
     whereObject[primaryKey] = id
 
-    const query = this.constructor.where(whereObject)
+    const query = this.getModelClass().where(whereObject)
     const reloadedModel = await query.first()
 
     if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)
@@ -1371,16 +1631,17 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async reload() {
     this._reloadWithId(this.readAttribute("id"))
   }
 
   async _runValidations() {
+    /** @type {Record<string, {type: string, message: string}>} */
     this._validationErrors = {}
 
-    const validators = this.constructor._validators
+    const validators = this.getModelClass()._validators
 
     if (validators) {
       for (const attributeName in validators) {
@@ -1403,15 +1664,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Array<string>}
+   * @returns {string[]}
    */
   fullErrorMessages() {
+    /** @type {string[]} */
     const validationErrorMessages = []
 
     if (this._validationErrors) {
       for (const attributeName in this._validationErrors) {
         for (const validationError of this._validationErrors[attributeName]) {
-          const message = `${this.constructor.humanAttributeName(attributeName)} ${validationError.message}`
+          const message = `${this.getModelClass().humanAttributeName(attributeName)} ${validationError.message}`
 
           validationErrorMessages.push(message)
         }
@@ -1429,6 +1691,16 @@ class VelociousDatabaseRecord {
     if (attributesToAssign) this.assign(attributesToAssign)
 
     await this.save()
+  }
+}
+
+class TranslationBase extends VelociousDatabaseRecord {
+  /**
+   * @abstract
+   * @returns {string}
+   */
+  locale() {
+    throw new Error("'locale' not implemented")
   }
 }
 
