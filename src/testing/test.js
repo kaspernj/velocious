@@ -315,7 +315,7 @@ class Expect {
 /**
  * @param {string} description
  * @param {object|() => Promise<void>} arg1
- * @param {undefined|() => Promise<void>} arg2
+ * @param {undefined|() => Promise<void>} [arg2]
  * @returns {void}
  */
 async function describe(description, arg1, arg2) {
@@ -361,7 +361,7 @@ function expect(arg) {
 /**
  * @param {string} description
  * @param {object|() => Promise<void>} arg1
- * @param {undefined|() => Promise<void>} arg2
+ * @param {undefined|() => Promise<void>} [arg2]
  * @returns {void}
  */
 function it(description, arg1, arg2) {
@@ -386,7 +386,7 @@ function it(description, arg1, arg2) {
 /**
  * @param {string} description
  * @param {object|() => Promise<void>} arg1
- * @param {undefined|() => Promise<void>} arg2
+ * @param {undefined|() => Promise<void>} [arg2]
  * @returns {void}
  */
 function fit(description, arg1, arg2) {

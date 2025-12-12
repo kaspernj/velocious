@@ -1,6 +1,6 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import ProjectBase from "../model-bases/project.js"
 
-class Project extends DatabaseRecord {
+class Project extends ProjectBase {
 }
 
 Project.belongsTo("creatingUser", {className: "User", foreignKey: "creating_user_reference", primaryKey: "reference"})

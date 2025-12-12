@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import TaskBase from "../model-bases/task.js"
 
-class Task extends Record {
+class Task extends TaskBase {
 }
 
 Task.belongsTo("project")

@@ -1,3 +1,5 @@
+// @ts-check
+
 import Dummy from "../dummy/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Project from "../dummy/src/models/project.js"
@@ -26,7 +28,12 @@ describe("database - transactions", () => {
               })
             } catch (error) {
               expect(error).toBeInstanceOf(ValidationError)
-              expect(error.message).toEqual("Name can't be blank")
+
+              if (error instanceof Error) {
+                expect(error.message).toEqual("Name can't be blank")
+              } else {
+                throw new Error(`'error' wasn't an 'Error': ${typeof error}`)
+              }
             }
           })
         })

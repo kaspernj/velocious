@@ -269,7 +269,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Record<string, any>} attributes
+   * @param {Record<string, any>} [attributes]
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async create(attributes) {
@@ -511,6 +511,9 @@ class VelociousDatabaseRecord {
     }
   }
 
+  /**
+   * @returns {import("../drivers/base-column.js").default[]}
+   */
   static getColumns() {
     if (!this._columns) throw new Error(`${this.name} hasn't been initialized yet`)
 
@@ -763,7 +766,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {VelociousDatabaseRecord}
+   * @returns {typeof VelociousDatabaseRecord}
    */
   static getTranslationClass() {
     if (this._translationClass) return this._translationClass

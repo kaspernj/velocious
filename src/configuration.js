@@ -1,5 +1,9 @@
 // @ts-check
 
+/**
+ * @typedef {function(Record<string, import("./database/drivers/base.js").default>) : Promise<void>} WithConnectionsCallbackType
+ */
+
 import {digg} from "diggerize"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -320,7 +324,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {Function} callback
+   * @param {WithConnectionsCallbackType} callback
    * @returns {Promise<void>}
    */
   async withConnections(callback) {
@@ -376,7 +380,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {Function} callback
+   * @param {WithConnectionsCallbackType} callback
    * @returns {Promise<void>}
    */
   async ensureConnections(callback) {

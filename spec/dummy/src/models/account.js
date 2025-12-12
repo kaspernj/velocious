@@ -1,6 +1,6 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import AccountBase from "../model-bases/account.js"
 
-class Account extends DatabaseRecord {
+class Account extends AccountBase {
 }
 
 Account.setDatabaseIdentifier("mssql")

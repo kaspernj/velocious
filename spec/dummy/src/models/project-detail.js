@@ -1,6 +1,6 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import ProjectDetailsBase from "../model-bases/project-detail.js"
 
-class ProjectDetail extends DatabaseRecord {
+class ProjectDetail extends ProjectDetailsBase {
 }
 
 ProjectDetail.belongsTo("project")

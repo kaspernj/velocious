@@ -1,3 +1,5 @@
+// @ts-check
+
 import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
@@ -51,7 +53,7 @@ describe("Record - create", () => {
 
       expect(tasksRelationship.getPreloaded()).toBeTrue()
 
-      const projectTasksIDs = project.tasks().loaded().map((task) => task.id())
+      const projectTasksIDs = project.tasksLoaded().map((task) => task.id())
 
       expect(projectTasksIDs).toEqual([task.id()])
     })
@@ -65,17 +67,17 @@ describe("Record - create", () => {
 
     await project.save()
 
-    const tasks = project.tasks().loaded()
+    const tasks = project.tasksLoaded()
     const task1 = tasks.find((task) => task.name() == "Test task 1")
     const task2 = tasks.find((task) => task.name() == "Test task 2")
 
     expect(tasks.length).toEqual(2)
 
-    expect(task1.projectId()).toEqual(project.id())
-    expect(task1.project().id()).toEqual(project.id())
+    expect(task1?.projectId()).toEqual(project.id())
+    expect(task1?.project().id()).toEqual(project.id())
 
-    expect(task2.projectId()).toEqual(project.id())
-    expect(task2.project().id()).toEqual(project.id())
+    expect(task2?.projectId()).toEqual(project.id())
+    expect(task2?.project().id()).toEqual(project.id())
   })
 
   it("creates a new task with an existing project", async () => {
@@ -111,7 +113,12 @@ describe("Record - create", () => {
         throw new Error("Didnt expect to succeed")
       } catch (error) {
         expect(error).toBeInstanceOf(ValidationError)
-        expect(error.message).toEqual("Name can't be blank")
+
+        if (error instanceof Error) {
+          expect(error.message).toEqual("Name can't be blank")
+        } else {
+          throw new Error(`Expected error to be an instance of Error: ${typeof error}`)
+        }
       }
 
       const projectsCount = await Project.count()

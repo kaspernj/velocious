@@ -1,7 +1,7 @@
-import Record from "../../../../src/database/record/index.js"
+import UserBase from "../model-bases/user.js"
 import UserModule from "../../../../src/database/record/user-module.js"
 
-class User extends Record {
+class User extends UserBase {
 }
 
 User.hasOne("createdProject", {className: "Project", foreignKey: "creating_user_reference", primaryKey: "reference"})
