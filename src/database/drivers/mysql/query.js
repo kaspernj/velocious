@@ -1,12 +1,17 @@
-export default async function query(connection, sql) {
+/**
+ * @param {import("mysql").Pool} pool
+ * @param {string} sql
+ */
+export default async function query(pool, sql) {
   return new Promise((resolve, reject) => {
-    connection.query(sql, (error, results, fields) => {
+    pool.query(sql, (error, results, fields) => {
       if (error) {
         reject(new Error(`Query failed because of ${error}: ${sql}`))
       } else {
         const rows = []
 
         for (const resultIndex in results) {
+          /** @type {Record<string, any>} */
           const result = {}
 
           for (const fieldKey in fields) {

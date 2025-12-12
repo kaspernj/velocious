@@ -153,6 +153,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<import("../base.js").QueryResultType>}
    */
   async _queryActual(sql) {
+    if (!this.pool) throw new Error("Not connected to a pool yet")
+
     try {
       return await query(this.pool, sql)
     } catch (error) {

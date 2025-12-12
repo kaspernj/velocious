@@ -1,9 +1,15 @@
+// @ts-check
+
 import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import ColumnsIndex from "./columns-index.js"
 import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversMysqlTable extends BaseTable {
+  /**
+   * @param {import("../base.js").default} driver
+   * @param {Record<string, any>} data
+   */
   constructor(driver, data) {
     super()
     this.data = data
