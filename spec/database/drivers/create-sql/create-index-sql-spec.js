@@ -14,6 +14,8 @@ describe("database - create sql - create index sql", () => {
         expect(createIndexSQLs).toEqual("CREATE INDEX `index_on_projects_id_and_created_at` ON `projects` (`id`, `created_at`)")
       } else if (dbs.default.getType() == "mssql") {
         expect(createIndexSQLs).toEqual("CREATE INDEX [index_on_id_and_created_at] ON [projects] ([id], [created_at])")
+      } else if (dbs.default.getType() == "pgsql") {
+        expect(createIndexSQLs).toEqual(`CREATE INDEX "index_on_id_and_created_at" ON "projects" ("id", "created_at")`)
       } else {
         expect(createIndexSQLs).toEqual("CREATE INDEX `index_on_id_and_created_at` ON `projects` (`id`, `created_at`)")
       }
