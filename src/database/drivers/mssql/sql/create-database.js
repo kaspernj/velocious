@@ -1,9 +1,16 @@
+// @ts-check
+
 import CreateDatabaseBase from "../../../query/create-database-base.js"
 
 export default class VelociousDatabaseConnectionDriversMssqlSqlCreateDatabase extends CreateDatabaseBase {
+  /**
+   * @param {object} args
+   * @param {import("../../base.js").default} args.driver
+   * @param {string} args.databaseName
+   * @param {boolean} [args.ifNotExists]
+   */
   constructor({driver, databaseName, ifNotExists}) {
-    super({driver})
-    this.databaseName = databaseName
+    super({databaseName, driver})
     this.ifNotExists = ifNotExists
   }
 

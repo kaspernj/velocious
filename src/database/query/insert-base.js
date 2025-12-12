@@ -1,6 +1,18 @@
+// @ts-check
+
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryInsertBase {
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} [args.data]
+   * @param {import("../drivers/base.js").default} args.driver
+   * @param {string} args.tableName
+   * @param {Array<string>} [args.columns]
+   * @param {boolean} [args.multiple]
+   * @param {string[]} [args.returnLastInsertedColumnNames]
+   * @param {Array<Array<string>>} [args.rows]
+   */
   constructor({columns, data, driver, multiple, tableName, returnLastInsertedColumnNames, rows, ...restArgs}) {
     if (!driver) throw new Error("No driver given to insert base")
     if (!tableName) throw new Error(`Invalid table name given to insert base: ${tableName}`)
@@ -47,7 +59,7 @@ export default class VelociousDatabaseQueryInsertBase {
           lastInsertedSQL += ` INSERTED.${driver.quoteColumn(columnName)}`
         }
 
-        if (Object.keys(this.data).length <= 0) {
+        if (this.data && Object.keys(this.data).length <= 0) {
           sql += lastInsertedSQL
         }
       } else if (driver.getType() == "mysql" || driver.getType() == "pgsql" || (driver.getType() == "sqlite" && driver.supportsInsertIntoReturning())) {
@@ -86,7 +98,7 @@ export default class VelociousDatabaseQueryInsertBase {
       sql += ")"
     }
 
-    if (this.returnLastInsertedColumnNames && driver.getType() == "mssql" && Object.keys(this.data).length > 0) {
+    if (this.returnLastInsertedColumnNames && driver.getType() == "mssql" && this.data && Object.keys(this.data).length > 0) {
       sql += lastInsertedSQL
     }
 
@@ -104,7 +116,7 @@ export default class VelociousDatabaseQueryInsertBase {
         sql += this._valuesSql(row)
       }
     } else {
-      if (Object.keys(this.data).length > 0) {
+      if (this.data && Object.keys(this.data).length > 0) {
         sql += " VALUES "
         sql += this._valuesSql(Object.values(this.data))
       } else if (driver.getType() == "sqlite" || driver.getType() == "mssql") {
@@ -123,6 +135,9 @@ export default class VelociousDatabaseQueryInsertBase {
     return sql
   }
 
+  /**
+   * @param {any[]} data
+   */
   _valuesSql(data) {
     let count = 0
     let sql = "("

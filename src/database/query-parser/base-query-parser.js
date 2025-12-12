@@ -11,10 +11,10 @@ import WhereParser from "./where-parser.js"
 export default class VelociousDatabaseBaseQueryParser {
   /**
    * @param {object} args
-   * @param {boolean} args.pretty
+   * @param {boolean} [args.pretty]
    * @param {import("../query/index.js").default} args.query
    */
-  constructor({pretty, query}) {
+  constructor({pretty = false, query}) {
     if (!query) throw new Error("No query given")
 
     this.pretty = pretty

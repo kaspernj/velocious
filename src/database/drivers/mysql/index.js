@@ -55,11 +55,11 @@ export default class VelociousDatabaseDriversMysql extends Base{
   /**
    * @returns {Promise<string[]>}
    */
-  async alterTableSql(tableData) {
+  async alterTableSQLs(tableData) {
     const alterArgs = {tableData, driver: this}
     const alterTable = new AlterTable(alterArgs)
 
-    return await alterTable.toSqls()
+    return await alterTable.toSQLs()
   }
 
   /**
@@ -75,7 +75,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   /**
    * @returns {string}
    */
-  createIndexSql(indexData) {
+  createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
 
@@ -118,7 +118,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   /**
    * @returns {string[]}
    */
-  dropTableSql(tableName, args = {}) {
+  dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
 

@@ -28,13 +28,15 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   generateIndexName() {
     const databaseType = this.getDriver().getType()
     let indexName = `index_on_`
+    let columnCount = 0
 
     if (databaseType == "sqlite") indexName += `${this.tableName}_`
 
-    for (const columnIndex in this.columns) {
-      if (typeof columnIndex == "number" && columnIndex > 0) indexName += "_and_"
+    for (const column of this.columns) {
+      columnCount++
 
-      const column = this.columns[columnIndex]
+      if (columnCount > 1) indexName += "_and_"
+
       let columnName
 
       if (typeof column == "string") {
@@ -52,7 +54,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   /**
    * @returns {string[]}
    */
-  toSqls() {
+  toSQLs() {
     const databaseType = this.getDriver().getType()
     const indexName = this.name || this.generateIndexName()
     const options = this.getOptions()
@@ -83,10 +85,13 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     sql += ` ${options.quoteIndexName(indexName)}`
     sql += ` ON ${options.quoteTableName(tableName)} (`
 
-    for (const columnIndex in this.columns) {
-      if (typeof columnIndex == "number" && columnIndex > 0) sql += ", "
+    let columnCount = 0
 
-      const column = this.columns[columnIndex]
+    for (const column of this.columns) {
+      columnCount++
+
+      if (columnCount > 1) sql += ", "
+
       let columnName
 
       if (typeof column == "string") {

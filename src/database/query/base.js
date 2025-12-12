@@ -40,7 +40,7 @@ export default class VelociousDatabaseQueryBase {
    * @abstract
    * @returns {string[]}
    */
-  toSqls() {
-    throw new Error("'toSqls' wasn't implemented")
+  toSQLs() {
+    throw new Error("'toSQLs' wasn't implemented")
   }
 }

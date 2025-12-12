@@ -90,7 +90,7 @@ export default class VelociousDatabaseMigration {
 
     tableData.addColumn(columnName, tableColumnArgs)
 
-    const sqls = await this.getDriver().alterTableSql(tableData)
+    const sqls = await this.getDriver().alterTableSQLs(tableData)
 
     for (const sql of sqls) {
       await this.getDriver().query(sql)
@@ -108,7 +108,7 @@ export default class VelociousDatabaseMigration {
 
     tableData.addColumn(columnName, tableColumnArgs)
 
-    const sqls = await this.getDriver().alterTableSql(tableData)
+    const sqls = await this.getDriver().alterTableSQLs(tableData)
 
     for (const sql of sqls) {
       await this.getDriver().query(sql)
@@ -135,7 +135,7 @@ export default class VelociousDatabaseMigration {
       },
       args
     )
-    const sql = this.getDriver().createIndexSql(createIndexArgs)
+    const sql = this.getDriver().createIndexSQLs(createIndexArgs)
 
     await this.getDriver().query(sql)
   }

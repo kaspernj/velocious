@@ -13,6 +13,12 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+   * @abstract
+   * @returns {string[]}
+   */
+  getColumnNames() { throw new Error("'getColumnNames' not implemented") }
+
+  /**
    * @returns {import("./base.js").default}
    */
   getDriver() {

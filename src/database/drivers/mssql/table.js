@@ -1,3 +1,5 @@
+// @ts-check
+
 import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import ColumnsIndex from "./columns-index.js"
@@ -5,6 +7,10 @@ import {digg} from "diggerize"
 import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
+  /**
+   * @param {import("../base.js").default} driver
+   * @param {Record<string, any>} data
+   */
   constructor(driver, data) {
     super()
     this.data = data
@@ -107,13 +113,17 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
     return digg(this.data, "TABLE_NAME")
   }
 
-  async truncate() {
+  /**
+   * @param {{cascade: boolean}} [args]
+   * @returns {Promise<Array<Record<string, any>>>}
+   */
+  async truncate(args) { // eslint-disable-line no-unused-vars
     try {
-      await this.getDriver().query(`TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`)
+      return await this.getDriver().query(`TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`)
     } catch (error) {
-      if (error.message.startsWith("Query failed 'Cannot truncate table")) {
+      if (error instanceof Error && error.message.startsWith("Query failed 'Cannot truncate table")) {
         // Truncate table is really buggy for some reason - fall back to delete all rows instead
-        await this.getDriver().query(`DELETE FROM ${this.getOptions().quoteTableName(this.getName())}`)
+        return await this.getDriver().query(`DELETE FROM ${this.getOptions().quoteTableName(this.getName())}`)
       } else {
         throw error
       }

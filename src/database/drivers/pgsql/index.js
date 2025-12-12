@@ -50,11 +50,11 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     this.connection = undefined
   }
 
-  async alterTableSql(tableData) {
+  async alterTableSQLs(tableData) {
     const alterArgs = {tableData, driver: this}
     const alterTable = new AlterTable(alterArgs)
 
-    return await alterTable.toSqls()
+    return await alterTable.toSQLs()
   }
 
   createDatabaseSql(databaseName, args) {
@@ -64,7 +64,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return createDatabase.toSql()
   }
 
-  createIndexSql(indexData) {
+  createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
 
@@ -92,7 +92,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     await this.query("SET session_replication_role = 'origin'")
   }
 
-  dropTableSql(tableName, args = {}) {
+  dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
 

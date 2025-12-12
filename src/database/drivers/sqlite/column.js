@@ -1,7 +1,15 @@
+// @ts-check
+
 import {digg} from "diggerize"
 import BaseColumn from "../base-column.js"
 
 export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} args.column
+   * @param {import("../base.js").default} args.driver
+   * @param {import("../base-table.js").default} args.table
+   */
   constructor({column, driver, table}) {
     super()
     this.column = column

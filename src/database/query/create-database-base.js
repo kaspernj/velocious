@@ -1,13 +1,17 @@
 // @ts-check
 
+/**
+ * @typedef {object} CreateDatabaseArgsType
+ * @property {import("../drivers/base.js").default} driver
+ * @property {string} databaseName
+ * @property {boolean} [ifNotExists]
+ */
+
 import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase {
   /**
-   * @param {object} args
-   * @param {import("../drivers/base.js").default} args.driver
-   * @param {string} args.databaseName
-   * @param {boolean} [args.ifNotExists]
+   * @param {CreateDatabaseArgsType} args
    */
   constructor({driver, databaseName, ifNotExists}) {
     super({driver})

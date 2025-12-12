@@ -23,13 +23,19 @@
  * @property {string[]} [columns]
  * @property {{[key: string]: any}} [data]
  * @property {boolean} [multiple]
- * @property {boolean | string[]} [returnLastInsertedColumnNames]
+ * @property {string[]} [returnLastInsertedColumnNames]
  * @property {Array<Array<any>>} [rows]
  * @property {string} tableName
  */
 /**
  * @typedef {Record<string, any>} QueryRowType
  * @typedef {Array<QueryRowType>} QueryResultType
+ */
+/**
+ * @typedef {object}UpdateSqlArgsType
+ * @property {object} conditions
+ * @property {object} data
+ * @property {string} tableName
  */
 
 import {Logger} from "../../logger.js"
@@ -83,7 +89,7 @@ export default class VelociousDatabaseDriversBase {
 
     tableData.addForeignKey(tableForeignKey)
 
-    const alterTableSQLs = await this.alterTableSql(tableData)
+    const alterTableSQLs = await this.alterTableSQLs(tableData)
 
     for (const alterTableSQL of alterTableSQLs) {
       await this.query(alterTableSQL)
@@ -95,8 +101,8 @@ export default class VelociousDatabaseDriversBase {
    * @param {import("../table-data/index.js").default} _tableData
    * @returns {Promise<string[]>}
    */
-  alterTableSql(_tableData) { // eslint-disable-line no-unused-vars
-    throw new Error("alterTableSql not implemented")
+  alterTableSQLs(_tableData) { // eslint-disable-line no-unused-vars
+    throw new Error("alterTableSQLs not implemented")
   }
 
   /**
@@ -109,11 +115,20 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {CreateIndexSqlArgs} indexData
-   * @returns {string}
+   * @param {string} databaseName
+   * @param {object} [args]
+   * @param {boolean} [args.ifNotExists]
+   * @returns {string[]}
    */
-  createIndexSql(indexData) { // eslint-disable-line no-unused-vars
-    throw new Error("'createIndexSql' not implemented")
+  createDatabaseSql(databaseName, args) { throw new Error("'createDatabaseSql' not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
+   * @param {CreateIndexSqlArgs} indexData
+   * @returns {string[]}
+   */
+  createIndexSQLs(indexData) { // eslint-disable-line no-unused-vars
+    throw new Error("'createIndexSQLs' not implemented")
   }
 
   /**
@@ -162,7 +177,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>}
    */
   async dropTable(tableName, args) {
-    const sqls = this.dropTableSql(tableName, args)
+    const sqls = this.dropTableSQLs(tableName, args)
 
     for (const sql of sqls) {
       await this.query(sql)
@@ -173,10 +188,10 @@ export default class VelociousDatabaseDriversBase {
    * @abstract
    * @param {string} tableName
    * @param {DropTableSqlArgsType} [args]
-   * @returns {string}
+   * @returns {string[]}
    */
-  dropTableSql(tableName, args) { // eslint-disable-line no-unused-vars
-    throw new Error("dropTableSql not implemented")
+  dropTableSQLs(tableName, args) { // eslint-disable-line no-unused-vars
+    throw new Error("dropTableSQLs not implemented")
   }
 
   /**
@@ -213,7 +228,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {Array<import("./base-table.js").default>}
+   * @returns {Promise<Array<import("./base-table.js").default>>}
    */
   getTables() {
     throw new Error(`${this.constructor.name}#getTables not implemented`)
@@ -390,6 +405,12 @@ export default class VelociousDatabaseDriversBase {
   shouldSetAutoIncrementWhenPrimaryKey() {
     throw new Error(`'shouldSetAutoIncrementWhenPrimaryKey' not implemented`)
   }
+
+  /**
+   * @abstract
+   * @returns {boolean}
+   */
+  supportsInsertIntoReturning() { return false }
 
   /**
    * @param {string} tableName
@@ -601,7 +622,7 @@ export default class VelociousDatabaseDriversBase {
 
     tableData.addColumn(tableColumn)
 
-    const alterTableSQLs = await this.alterTableSql(tableData)
+    const alterTableSQLs = await this.alterTableSQLs(tableData)
 
     for (const alterTableSQL of alterTableSQLs) {
       await this.query(alterTableSQL)
@@ -679,12 +700,6 @@ export default class VelociousDatabaseDriversBase {
     })
   }
 
-  /**
-   * @typedef {object}UpdateSqlArgsType
-   * @property {object} conditions
-   * @property {object} data
-   * @property {string} tableName
-   */
   /**
    * @param {UpdateSqlArgsType} args
    * @returns {Promise<void>}

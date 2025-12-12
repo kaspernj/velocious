@@ -17,7 +17,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     this.tableData = tableData
   }
 
-  async toSqls() {
+  async toSQLs() {
     const {tableData} = digs(this, "tableData")
     const table = await this.getDriver().getTableByName(tableData.getName())
     const currentTableData = await table.getTableData()
@@ -105,7 +105,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
     const createNewTableSQL = this.getDriver().createTableSql(newTableData)
     const insertSQL = `INSERT INTO ${options.quoteTableName(tempTableName)} (${newColumnsSQL}) SELECT ${oldColumnsSQL} FROM ${options.quoteTableName(tableName)}`
-    const dropTableSQL = `DROP TABLE ${options.quoteTableName(tableName)}`
+    const dropTableSQLs = `DROP TABLE ${options.quoteTableName(tableName)}`
     const renameTableSQL = `ALTER TABLE ${options.quoteTableName(tempTableName)} RENAME TO ${options.quoteTableName(tableName)}`
     const sqls = []
 
@@ -114,7 +114,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     }
 
     sqls.push(insertSQL)
-    sqls.push(dropTableSQL)
+    sqls.push(dropTableSQLs)
     sqls.push(renameTableSQL)
 
     for (const tableDataIndex of currentTableData.getIndexes()) {
@@ -136,7 +136,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
         tableName,
         unique: actualTableIndex.getUnique()
       }
-      const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
+      const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSQLs()
 
       for (const createIndexSQL of createIndexSQLs) {
         sqls.push(createIndexSQL)

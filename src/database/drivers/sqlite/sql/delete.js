@@ -1,3 +1,5 @@
+// @ts-check
+
 import DeleteBase from "../../../query/delete-base.js"
 
 export default class VelociousDatabaseConnectionDriversMysqlSqlDelete extends DeleteBase {
@@ -17,8 +19,8 @@ export default class VelociousDatabaseConnectionDriversMysqlSqlDelete extends De
         sql += this.getOptions().quote(this.conditions[columnName])
         count++
       }
-
-      return sql
     }
+
+    return sql
   }
 }

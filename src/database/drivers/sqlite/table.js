@@ -1,15 +1,23 @@
+// @ts-check
+
 import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import ColumnsIndex from "./columns-index.js"
 import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
+  /**
+   * @param {object} args
+   * @param {import("../base.js").default} args.driver
+   * @param {Record<string, any>} args.row
+   */
   constructor({driver, row}) {
     super()
     this.driver = driver
     this.row = row
   }
 
+  /** @returns {Promise<Array<import("../base-column.js").default>>} */
   async getColumns() {
     const result = await this.driver.query(`PRAGMA table_info('${this.getName()}')`)
     const columns = []
@@ -52,8 +60,14 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     return indexes
   }
 
+  /** @param {string} sql */
   _parseColumnsFromSQL(sql) {
     const columnsSQLMatch = sql.match(/\((.+?)\)/)
+
+    if (!columnsSQLMatch) {
+      throw new Error(`Could not match columns from SQL: ${sql}`)
+    }
+
     const columnsSQL = columnsSQLMatch[1].split(",")
     const columnNames = []
 

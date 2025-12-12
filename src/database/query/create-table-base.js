@@ -10,8 +10,8 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   /**
    * @param {object} args
    * @param {import("../drivers/base.js").default} args.driver
-   * @param {boolean} args.ifNotExists
-   * @param {boolean} args.indexInCreateTable
+   * @param {boolean} [args.ifNotExists]
+   * @param {boolean} [args.indexInCreateTable]
    * @param {TableData} args.tableData
    */
   constructor({driver, ifNotExists, indexInCreateTable = true, tableData}) {
@@ -128,7 +128,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           tableName: tableData.getName(),
           unique: index.getUnique()
         }
-        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
+        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSQLs()
 
         for (const createIndexSQL of createIndexSQLs) {
           sqls.push(createIndexSQL)
@@ -156,7 +156,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           tableName: tableData.getName(),
           unique
         }
-        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSqls()
+        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSQLs()
 
         for (const createIndexSQL of createIndexSQLs) {
           sqls.push(createIndexSQL)
