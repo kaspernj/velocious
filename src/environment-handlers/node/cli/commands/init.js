@@ -3,6 +3,9 @@ import fileExists from "../../../../utils/file-exists.js"
 import fs from "fs/promises"
 
 export default class VelociousCliCommandsInit extends BaseCommand {
+  /**
+   * @returns {Promise<void>}
+   */
   async execute() {
     const velociousPath = await this.getEnvironmentHandler().getVelociousPath()
     const projectPath = this.getConfiguration()?.getDirectory() || process.cwd()

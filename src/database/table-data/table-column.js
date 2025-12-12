@@ -1,5 +1,9 @@
 // @ts-check
 
+/**
+ * @typedef {{unique: boolean}} IndexArgType
+ */
+
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
 import TableForeignKey from "./table-foreign-key.js"
@@ -10,7 +14,7 @@ import TableForeignKey from "./table-foreign-key.js"
  * @property {any} [default]
  * @property {boolean} [dropColumn]
  * @property {boolean|object} [foreignKey]
- * @property {boolean|object} [index]
+ * @property {boolean|IndexArgType} [index]
  * @property {boolean} [isNewColumn]
  * @property {number} [maxLength]
  * @property {boolean} [null]
@@ -99,12 +103,31 @@ export default class TableColumn {
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
 
   /**
-   * @returns {boolean | object | undefined}
+   * @returns {boolean|IndexArgType}
    */
-  getIndex() { return this.args?.index }
+  getIndex() { return this.args?.index || false }
 
   /**
-   * @param {boolean|object} newIndex
+   * @returns {IndexArgType}
+   */
+  getIndexArgs() {
+    if (typeof this.args?.index == "object") {
+      return this.args.index
+    } else {
+      return {unique: false}
+    }
+  }
+
+  getIndexUnique() {
+    const index = this.args?.index
+
+    if (typeof index == "object" && index.unique === true) return true
+
+    return false
+  }
+
+  /**
+   * @param {boolean|IndexArgType} newIndex
    * @returns {void}
    */
   setIndex(newIndex) { this.args.index = newIndex }

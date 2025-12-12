@@ -1,3 +1,5 @@
+// @ts-check
+
 import fs from "fs/promises"
 import * as inflection from "inflection"
 
@@ -17,36 +19,33 @@ export default class VelociousDatabaseMigratorFilesFinder {
   }
 
   /**
-   * @returns {Promise<Array<{
-   *   file: string,
-   *   fullPath: string,
-   *   date: number,
-   *   migrationClassName: string
-   * }>>}
+   * @returns {Promise<Array<import("./types.js").MigrationObjectType>>}
    */
   async findFiles() {
     let files = await fs.readdir(this.path)
 
-    files = files
-      .map((file) => {
-        const match = file.match(/^(\d{14})-(.+)\.js$/)
+    /** @type {import("./types.js").MigrationObjectType[]} */
+    let result = []
 
-        if (!match) return null
+    for (const file of files) {
+      const match = file.match(/^(\d{14})-(.+)\.js$/)
 
-        const date = parseInt(match[1])
-        const migrationName = match[2]
-        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+      if (!match) continue
 
-        return {
-          file,
-          fullPath: `${this.path}/${file}`,
-          date,
-          migrationClassName
-        }
+      const date = parseInt(match[1])
+      const migrationName = match[2]
+      const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+
+      result.push({
+        file,
+        fullPath: `${this.path}/${file}`,
+        date,
+        migrationClassName
       })
-      .filter((migration) => Boolean(migration))
-      .sort((migration1, migration2) => migration1.date - migration2.date)
+    }
 
-    return files
+    result = result.sort((migration1, migration2) => migration1.date - migration2.date)
+
+    return result
   }
 }
