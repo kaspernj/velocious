@@ -1,3 +1,5 @@
+// @ts-check
+
 import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
 import {Client} from "pg"
@@ -21,20 +23,26 @@ export default class VelociousDatabaseDriversPgsql extends Base{
       await client.connect()
     } catch (error) {
       // Re-throw to recover real stack trace
-      throw new Error(`Connect to Postgres server failed: ${error.message}`)
+      if (error instanceof Error) {
+        throw new Error(`Connect to Postgres server failed: ${error.message}`)
+      } else {
+        throw new Error(`Connect to Postgres server failed: ${error}`)
+      }
     }
 
     this.connection = client
   }
 
   async disconnect() {
-    await this.connection.end()
+    await this.connection?.end()
   }
 
   connectArgs() {
     const args = this.getArgs()
-    const connectArgs = []
     const forward = ["database", "host", "password", "port"]
+
+    /** @type {Record<string, any>} */
+    const connectArgs = {}
 
     for (const forwardValue of forward) {
       if (forwardValue in args) connectArgs[forwardValue] = digg(args, forwardValue)
@@ -46,10 +54,14 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   async close() {
-    await this.connection.end()
+    await this.connection?.end()
     this.connection = undefined
   }
 
+  /**
+   * @param {import("../../table-data/index.js").default} tableData
+   * @returns {Promise<string[]>}
+   */
   async alterTableSQLs(tableData) {
     const alterArgs = {tableData, driver: this}
     const alterTable = new AlterTable(alterArgs)
@@ -57,6 +69,12 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return await alterTable.toSQLs()
   }
 
+  /**
+   * @param {string} databaseName
+   * @param {object} [args]
+   * @param {boolean} [args.ifNotExists]
+   * @returns {string[]}
+   */
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
     const createDatabase = new CreateDatabase(createArgs)
@@ -64,13 +82,21 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return createDatabase.toSql()
   }
 
+  /**
+   * @param {import("../base.js").CreateIndexSqlArgs} indexData
+   * @returns {string[]}
+   */
   createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
 
-    return createIndex.toSql()
+    return createIndex.toSQLs()
   }
 
+  /**
+   * @param {import("../../table-data/index.js").default} tableData
+   * @returns {string[]}
+   */
   createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
     const createTable = new CreateTable(createArgs)
@@ -92,31 +118,54 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     await this.query("SET session_replication_role = 'origin'")
   }
 
+  /**
+   * @param {string} tableName
+   * @param {import("../base.js").DropTableSqlArgsType} [args]
+   * @returns {string[]}
+   */
   dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
 
-    return dropTable.toSql()
+    return dropTable.toSQLs()
   }
 
   getType() { return "pgsql" }
   primaryKeyType() { return "bigint" }
 
+  /**
+   * @param {string} sql
+   * @returns {Promise<import("../base.js").QueryResultType>}
+   */
   async _queryActual(sql) {
     let response
+
+    if (!this.connection) throw new Error("Not yet connected")
 
     try {
       response = await this.connection.query(sql)
     } catch (error) {
-      throw new Error(`Query failed: ${error.message} with SQL: ${sql}`)
+      if (error instanceof Error) {
+        throw new Error(`Query failed: ${error.message} with SQL: ${sql}`)
+      } else {
+        throw new Error(`Query failed: ${error} with SQL: ${sql}`)
+      }
     }
 
     return response.rows
   }
 
+  /**
+   * @param {import("../../query/index.js").default} query
+   * @returns {string}
+   */
   queryToSql(query) { return new QueryParser({query}).toSql() }
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
 
+  /**
+   * @param {any} value
+   * @returns {any}
+   */
   escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
     if (typeof value === "number") return value
@@ -126,6 +175,10 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return escapedValueWithQuotes.slice(1, escapedValueWithQuotes.length - 1)
   }
 
+  /**
+   * @param {string} value
+   * @returns {string}
+   */
   quote(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
     if (typeof value === "number") return value
@@ -133,12 +186,21 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return this.connection.escapeLiteral(this._convertValue(value))
   }
 
+  /**
+   * @param {import("../base.js").DeleteSqlArgsType} args
+   * @returns {string}
+   */
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
 
     return deleteInstruction.toSql()
   }
 
+  /**
+   * @abstract
+   * @param {import("../base.js").InsertSqlArgsType} args
+   * @returns {string}
+   */
   insertSql(args) {
     const insertArgs = Object.assign({driver: this}, args)
     const insert = new Insert(insertArgs)
@@ -175,6 +237,11 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     await this.query("START TRANSACTION")
   }
 
+  /**
+   * @abstract
+   * @param {import("../base.js").UpdateSqlArgsType} args
+   * @returns {string}
+   */
   updateSql({conditions, data, tableName}) {
     const update = new Update({conditions, data, driver: this, tableName})
 

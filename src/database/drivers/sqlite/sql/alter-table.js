@@ -1,12 +1,17 @@
+// @ts-check
+
 import AlterTableBase from "../../../query/alter-table-base.js"
 import CreateIndexBase from "../../../query/create-index-base.js"
-import {digs} from "diggerize"
-import * as inflection from "inflection"
 import {Logger} from "../../../../logger.js"
 import restArgsError from "../../../../utils/rest-args-error.js"
 import TableData from "../../../table-data/index.js"
 
 export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable extends AlterTableBase {
+  /**
+   * @param {object} args
+   * @param {import("../../base.js").default} args.driver
+   * @param {import("../../../table-data/index.js").default} args.tableData
+   */
   constructor({driver, tableData, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -17,9 +22,15 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     this.tableData = tableData
   }
 
+  /**
+   * @returns {string[]}
+   */
   async toSQLs() {
-    const {tableData} = digs(this, "tableData")
+    const {tableData} = this
     const table = await this.getDriver().getTableByName(tableData.getName())
+
+    if (!table) throw new Error(`Table ${tableData.getName()} does not exist`)
+
     const currentTableData = await table.getTableData()
     const options = this.getOptions()
     const tableName = tableData.getName()
@@ -43,19 +54,13 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       const newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
 
       if (newTableDataColumn) {
-        const settingsToClone = ["autoIncrement", "default", "index", "foreignKey", "maxLength", "primaryKey", "type"]
-
-        for (const settingToClone of settingsToClone) {
-          const camelizedSettingToClone = inflection.camelize(settingToClone)
-
-          if (!newTableDataColumn[`get${camelizedSettingToClone}`]) {
-            throw new Error(`No such method on column: get${camelizedSettingToClone}`)
-          }
-
-          if (!newTableDataColumn[`get${camelizedSettingToClone}`]()) {
-            newTableDataColumn[`set${camelizedSettingToClone}`](tableDataColumn[`get${camelizedSettingToClone}`]())
-          }
-        }
+        newTableDataColumn.setAutoIncrement(tableDataColumn.getAutoIncrement())
+        newTableDataColumn.setDefault(tableDataColumn.getDefault())
+        newTableDataColumn.setIndex(tableDataColumn.getIndex())
+        newTableDataColumn.setForeignKey(tableDataColumn.getForeignKey())
+        newTableDataColumn.setMaxLength(tableDataColumn.getMaxLength())
+        newTableDataColumn.setPrimaryKey(tableDataColumn.getPrimaryKey())
+        newTableDataColumn.setType(tableDataColumn.getType())
       }
 
       newTableData.addColumn(newTableDataColumn || tableDataColumn)

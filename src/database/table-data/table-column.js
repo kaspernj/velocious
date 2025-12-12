@@ -97,7 +97,7 @@ export default class TableColumn {
   getForeignKey() { return this.args?.foreignKey }
 
   /**
-   * @param {boolean | object} newForeignKey
+   * @param {boolean | object | undefined} newForeignKey
    * @returns {void}
    */
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
@@ -138,7 +138,7 @@ export default class TableColumn {
   getMaxLength() { return this.args?.maxLength }
 
   /**
-   * @param {number} newMaxLength
+   * @param {number | undefined} newMaxLength
    * @returns {void}
    */
   setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
@@ -171,7 +171,7 @@ export default class TableColumn {
   getType() { return this.args?.type }
 
   /**
-   * @param {string} newType
+   * @param {string | undefined} newType
    * @returns {void}
    */
   setType(newType) { this.args.type = newType }
