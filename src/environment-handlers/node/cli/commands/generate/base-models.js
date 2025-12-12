@@ -139,14 +139,13 @@ export default class DbGenerateModel extends BaseCommand {
           }
 
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
+          fileContent += "   * @abstract\n"
           fileContent += "   * @param {Record<string, any>} attributes\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
@@ -154,14 +153,14 @@ export default class DbGenerateModel extends BaseCommand {
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
+          fileContent += "   * @abstract\n"
           fileContent += "   * @returns {Promise<void>}\n"
           fileContent += "   */\n"
           fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
+          fileContent += "   * @abstract\n"
           fileContent += `   * @param {import("${modelFilePath}").default} newModel\n`
           fileContent += `   * @returns {void}\n`
           fileContent += "   */\n"
@@ -176,28 +175,26 @@ export default class DbGenerateModel extends BaseCommand {
           }
 
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
           fileContent += `   * @returns {import("velocious/src/database/query/index.js").default<import("${recordImport}").default>}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
           fileContent += `   * @returns {Array<import("${recordImport}").default>}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}Loaded() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
+          fileContent += "   * @abstract\n"
           fileContent += "   * @returns {Promise<void>}\n"
           fileContent += "   */\n"
           fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += "   * @interface\n"
+          fileContent += "   * @abstract\n"
           fileContent += `   * @param {Array<import("${recordImport}").default>} newModels\n`
           fileContent += "   * @returns {void}\n"
           fileContent += "   */\n"

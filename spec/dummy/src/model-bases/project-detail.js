@@ -75,26 +75,25 @@ export default class ProjectDetailBase extends Record {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @interface
    * @returns {import("../models/project.js").default}
    */
   project() { return this.getRelationshipByName("project").loaded() }
 
   /**
-   * @interface
+   * @abstract
    * @param {Record<string, any>} attributes
    * @returns {import("../models/project.js").default}
    */
   buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   loadProject() { throw new Error("Not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */

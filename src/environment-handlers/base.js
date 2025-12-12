@@ -72,13 +72,13 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<CommandFileObjectType[]>}
    */
   async findCommands() { throw new Error("findCommands not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<Array<MigrationObjectType>>}
    */
   async findMigrations() { throw new Error("findMigrations not implemneted") }
@@ -97,26 +97,26 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<string>}
    */
   getVelociousPath() { throw new Error("getVelociousPath not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<import("../routes/index.js").default>}
    */
   async importApplicationRoutes() { throw new Error("importApplicationRoutes not implemented") }
 
   /**
-   * @interface
+   * @abstract
    * @param {string[]} _testFiles
    * @returns {Promise<void>}
    */
   importTestFiles(_testFiles) { throw new Error("'importTestFiles' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   importTestingConfigPath() { throw new Error(`'importTestingConfigPath' not implemented`) }
@@ -125,7 +125,7 @@ export default class VelociousEnvironmentHandlerBase {
    * @param {object} args
    * @param {string[]} args.commandParts
    * @returns {Promise<import ("../cli/base-command.js").default>}
-   * @interface
+   * @abstract
    */
   async requireCommand({commandParts}) { throw new Error("'requireCommand' not implemented") } // eslint-disable-line no-unused-vars
 

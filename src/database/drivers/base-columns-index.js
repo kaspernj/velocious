@@ -43,7 +43,7 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {import("../table-data/table-index.js").default}
    */
   getTableDataIndex() {

@@ -20,7 +20,7 @@ export default class VelociousCliBaseCommand {
   directory() { return this.getConfiguration().getDirectory() }
 
   /**
-   * @interface
+   * @abstract
    * @returns {Promise<void>}
    */
   execute() {

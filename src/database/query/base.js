@@ -37,7 +37,7 @@ export default class VelociousDatabaseQueryBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @returns {string[]}
    */
   toSqls() {

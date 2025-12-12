@@ -1,6 +1,6 @@
 export default class VelociousDatabaseRecordValidatorsBase {
   /**
-   * @interface
+   * @abstract
    * @template T extends import("../index.js").default
    * @param {object} args
    * @param {T} args.model

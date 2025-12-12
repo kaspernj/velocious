@@ -16,7 +16,7 @@ export default class VelociousDatabaseQueryOrderBase {
   }
 
   /**
-   * @interface
+   * @abstract
    * @param {boolean} _reverseOrder
    * @returns {void}
    */
