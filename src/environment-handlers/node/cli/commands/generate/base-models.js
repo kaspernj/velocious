@@ -9,6 +9,11 @@ export default class DbGenerateModel extends BaseCommand {
 
     const modelsDir = `${process.cwd()}/src/model-bases`
     const modelClasses = this.getConfiguration().getModelClasses()
+    let devMode = false
+
+    if (modelsDir.endsWith("velocious/spec/dummy/src/model-bases")) {
+      devMode = true
+    }
 
     if (!await fileExists(modelsDir)) {
       await fs.mkdir(modelsDir, {recursive: true})
@@ -23,7 +28,13 @@ export default class DbGenerateModel extends BaseCommand {
 
       console.log(`create src/model-bases/${modelBaseFileName}`)
 
-      let fileContent = `import Record from "velocious/src/database/record/index.js"\n\n`
+      let fileContent = ""
+
+      if (devMode) {
+        fileContent += `import Record from "../../../../src/database/record/index.js"\n\n`
+      } else {
+        fileContent += `import Record from "velocious/src/database/record/index.js"\n\n`
+      }
 
       fileContent += `export default class ${modelNameCamelized}Base extends Record {\n`
 
@@ -33,15 +44,7 @@ export default class DbGenerateModel extends BaseCommand {
       for (const column of columns) {
         const camelizedColumnName = inflection.camelize(column.getName(), true)
         const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
-        let jsdocType
-
-        if (column.getType() == "varchar") {
-          jsdocType = "string"
-        } else if (["bigint", "int", "integer", "smallint"].includes(column.getType())) {
-          jsdocType = "number"
-        } else if (["date", "datetime"].includes(column.getType())) {
-          jsdocType = "Date"
-        }
+        const jsdocType = this.jsDocTypeFromColumn(column)
 
         if (methodsCount > 0) {
           fileContent += "\n"
@@ -49,7 +52,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         if (jsdocType) {
           fileContent += "  /**\n"
-          fileContent += `   * @returns {${jsdocType}}\n`
+          fileContent += `   * @returns {${jsdocType}${column.getNull() ? " | null" : ""}}\n`
           fileContent += "   */\n"
         }
 
@@ -57,7 +60,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         if (jsdocType) {
           fileContent += "  /**\n"
-          fileContent += `   * @param {${jsdocType}} newValue\n`
+          fileContent += `   * @param {${jsdocType}${column.getNull() ? " | null" : ""}} newValue\n`
           fileContent += "   * @returns {void}\n"
           fileContent += "   */\n"
         }
@@ -70,6 +73,46 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += `  has${camelizedColumnNameBigFirst}() { return this._hasAttribute(this.${camelizedColumnName}()) }\n`
 
         methodsCount++
+      }
+
+      if (modelClass._translations) {
+        const TranslationClass = modelClass.getTranslationClass()
+        const translationColumns = TranslationClass.getColumns()
+
+        for (const name in modelClass._translations) {
+          const nameUnderscore = inflection.underscore(name)
+          const column = translationColumns.find((translationColumn) => translationColumn.getName() === nameUnderscore)
+          let translationJsdocType
+
+          if (column) {
+            translationJsdocType = this.jsDocTypeFromColumn(column)
+          }
+
+          if (translationJsdocType) {
+            fileContent += `\n`
+            fileContent += "  /**\n"
+            fileContent += `   * @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
+            fileContent += "   */\n"
+          }
+
+          fileContent += `  ${name}() { return this._getTranslatedAttributeWithFallback("${name}", this._getConfiguration().getLocale()) }\n`
+          methodsCount++
+
+          for (const locale of this.getConfiguration().getLocales()) {
+            const localeMethodName = `${name}${inflection.camelize(locale)}`
+
+            if (translationJsdocType) {
+              fileContent += `\n`
+              fileContent += "  /**\n"
+              fileContent += `   * @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
+              fileContent += "   */\n"
+            }
+
+            fileContent += `  ${localeMethodName}() { return this._getTranslatedAttributeWithFallback("${name}", "${locale}") }\n`
+
+            methodsCount++
+          }
+        }
       }
 
       for (const relationship of modelClass.getRelationships()) {
@@ -104,9 +147,10 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @interface\n"
+          fileContent += "   * @param {Record<string, any>} attributes\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
-          fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+          fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -121,7 +165,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `   * @param {import("${modelFilePath}").default} newModel\n`
           fileContent += `   * @returns {void}\n`
           fileContent += "   */\n"
-          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
         } else if (relationship.getType() == "hasMany") {
           let recordImport
 
@@ -155,9 +199,9 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += "   * @interface\n"
           fileContent += `   * @param {Array<import("${recordImport}").default>} newModels\n`
-          fileContent += "   * @returns {void>}\n"
+          fileContent += "   * @returns {void}\n"
           fileContent += "   */\n"
-          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
         } else {
           throw new Error(`Unknown relationship type: ${relationship.getType()}`)
         }
@@ -168,6 +212,20 @@ export default class DbGenerateModel extends BaseCommand {
       fileContent += "}\n"
 
       await fs.writeFile(modelPath, fileContent)
+    }
+  }
+
+  /**
+   * @param {import("../../../../../database/drivers/base-column.js").default} column
+   * @returns {string | undefined}
+   */
+  jsDocTypeFromColumn(column) {
+    if (column.getType() == "varchar") {
+      return "string"
+    } else if (["bigint", "int", "integer", "smallint"].includes(column.getType())) {
+      return "number"
+    } else if (["date", "datetime"].includes(column.getType())) {
+      return "Date"
     }
   }
 }

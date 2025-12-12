@@ -83,7 +83,15 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
 
   getType() {
     const type = digg(this, "data", "Type")
+
+    if (type.match(/^[a-z]+$/)) {
+      return type
+    }
+
     const match = type.match(/^(.+)\((\d+)\)$/)
+
+    if (!match) throw new Error(`Couldn't match column type from: ${type}`)
+
     const columnType = match[1]
 
     return columnType

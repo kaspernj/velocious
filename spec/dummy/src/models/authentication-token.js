@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import AuthenticationTokenBase from "../model-bases/authentication-token.js"
 
-class AuthenticationToken extends Record {
+class AuthenticationToken extends AuthenticationTokenBase {
 }
 
 AuthenticationToken.belongsTo("user")

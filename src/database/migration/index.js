@@ -223,13 +223,15 @@ export default class VelociousDatabaseMigration {
   async columnExists(tableName, columnName) {
     const table = await this.getDriver().getTableByName(tableName)
 
-    if (!table) throw new Error(`Table ${tableName} does not exist`)
+    if (table) {
+      const column = await table.getColumnByName(columnName)
 
-    const column = await table.getColumnByName(columnName)
+      if (column) {
+        return true
+      }
+    }
 
-    if (!column) throw new Error(`Column ${columnName} does not exist in table ${tableName}`)
-
-    return Boolean(column)
+    return Boolean(false)
   }
 
   /**
