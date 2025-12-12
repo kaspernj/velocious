@@ -71,14 +71,32 @@ export default class ProjectBase extends Record {
   name() { return this._getTranslatedAttributeWithFallback("name", this._getConfiguration().getLocale()) }
 
   /**
+   * @abstract
+   * @returns {boolean}
+   */
+  hasName() { throw new Error("hasName not implemented") }
+
+  /**
    * @returns {string | null}
    */
   nameDe() { return this._getTranslatedAttributeWithFallback("name", "de") }
 
   /**
+   * @abstract
+   * @returns {boolean}
+   */
+  hasNameDe() { throw new Error("hasNameDe not implemented") }
+
+  /**
    * @returns {string | null}
    */
   nameEn() { return this._getTranslatedAttributeWithFallback("name", "en") }
+
+  /**
+   * @abstract
+   * @returns {boolean}
+   */
+  hasNameEn() { throw new Error("hasNameEn not implemented") }
 
   /**
    * @returns {import("../models/user.js").default}

@@ -14,6 +14,13 @@ describe("Record - create", () => {
 
       project.buildProjectDetail({note: "Test note"})
 
+      expect(task.hasName()).toBeTrue()
+      expect(task.hasCreatedAt()).toBeFalse()
+      expect(project.hasName()).toBeTrue()
+      expect(project.hasNameEn()).toBeTrue()
+      expect(project.hasNameDe()).toBeTrue()
+      expect(project.hasUpdatedAt()).toBeFalse()
+
       await task.save()
 
       expect(task.id()).not.toBeUndefined()

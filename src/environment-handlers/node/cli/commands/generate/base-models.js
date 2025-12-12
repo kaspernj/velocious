@@ -98,6 +98,16 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `  ${name}() { return this._getTranslatedAttributeWithFallback("${name}", this._getConfiguration().getLocale()) }\n`
           methodsCount++
 
+          const hasName = `has${inflection.camelize(name)}`
+
+          fileContent += `\n`
+          fileContent += "  /**\n"
+          fileContent += `   * @abstract\n`
+          fileContent += `   * @returns {boolean}\n`
+          fileContent += "   */\n"
+          fileContent += `  ${hasName}() { throw new Error("${hasName} not implemented") }\n`
+          methodsCount++
+
           for (const locale of this.getConfiguration().getLocales()) {
             const localeMethodName = `${name}${inflection.camelize(locale)}`
 
@@ -109,7 +119,16 @@ export default class DbGenerateModel extends BaseCommand {
             }
 
             fileContent += `  ${localeMethodName}() { return this._getTranslatedAttributeWithFallback("${name}", "${locale}") }\n`
+            methodsCount++
 
+            const localeHasName = `has${inflection.camelize(localeMethodName)}`
+
+            fileContent += `\n`
+            fileContent += "  /**\n"
+            fileContent += `   * @abstract\n`
+            fileContent += `   * @returns {boolean}\n`
+            fileContent += "   */\n"
+            fileContent += `  ${localeHasName}() { throw new Error("${localeHasName} not implemented") }\n`
             methodsCount++
           }
         }

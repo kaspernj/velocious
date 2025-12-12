@@ -468,9 +468,6 @@ class VelociousDatabaseRecord {
     const columnNameToAttributeName = this.getColumnNameToAttributeNameMap()
     const attributeNameToColumnName = this.getAttributeNameToColumnNameMap()
 
-    /** @type {Record<string, (this: VelociousDatabaseRecord) => unknown>} */
-    const proto = /** @type {any} */ (this.prototype);
-
     for (const column of this._columns) {
       this._columnsAsHash[column.getName()] = column
 
@@ -480,17 +477,18 @@ class VelociousDatabaseRecord {
       attributeNameToColumnName[camelizedColumnName] = column.getName()
       columnNameToAttributeName[column.getName()] = camelizedColumnName
 
-      proto[camelizedColumnName] = function() {
+      // @ts-expect-error
+      this.prototype[camelizedColumnName] = function() {
         return this.readAttribute(camelizedColumnName)
       }
 
       // @ts-expect-error
-      proto[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
-        // @ts-expect-error
+      this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
         return this._setColumnAttribute(camelizedColumnName, newValue)
       }
 
-      proto[`has${camelizedColumnNameBigFirst}`] = function() {
+      // @ts-expect-error
+      this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
         // @ts-expect-error
         let value = this[camelizedColumnName]()
 
@@ -539,24 +537,20 @@ class VelociousDatabaseRecord {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
 
-        /** @type {Record<string, unknown>} */
         // @ts-expect-error
-        const self = this
-
-        /** @type {Record<string, (this: VelociousDatabaseRecord) => unknown>} */
-        const proto = /** @type {any} */ (this.prototype);
-
-        proto[name] = function getTranslatedAttribute() {
+        this.prototype[name] = function getTranslatedAttribute() {
           const locale = this._getConfiguration().getLocale()
 
           return this._getTranslatedAttributeWithFallback(name, locale)
         }
 
-        proto[`has${nameCamelized}`] = function hasTranslatedAttribute() {
-          const candidate = self[name]
+        // @ts-expect-error
+        this.prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
+          // @ts-expect-error
+          const candidate = this[name]
 
           if (typeof candidate == "function") {
-            const value = candidate()
+            const value = candidate.bind(this)()
 
             return this._hasAttribute(value)
           } else {
@@ -565,11 +559,9 @@ class VelociousDatabaseRecord {
         }
 
         // @ts-expect-error
-        proto[setterMethodName] = function setTranslatedAttribute(newValue) {
-          // @ts-expect-error
+        this.prototype[setterMethodName] = function setTranslatedAttribute(newValue) {
           const locale = this._getConfiguration().getLocale()
 
-          // @ts-expect-error
           return this._setTranslatedAttribute(name, locale, newValue)
         }
 
@@ -577,6 +569,7 @@ class VelociousDatabaseRecord {
           const localeCamelized = inflection.camelize(locale)
           const getterMethodNameLocalized = `${name}${localeCamelized}`
           const setterMethodNameLocalized = `${setterMethodName}${localeCamelized}`
+          const hasMethodNameLocalized = `has${inflection.camelize(name)}${localeCamelized}`
 
           // @ts-expect-error
           this.prototype[getterMethodNameLocalized] = function getTranslatedAttributeWithLocale() {
@@ -586,6 +579,20 @@ class VelociousDatabaseRecord {
           // @ts-expect-error
           this.prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
+          }
+
+          // @ts-expect-error
+          this.prototype[hasMethodNameLocalized] = function hasTranslatedAttribute() {
+            // @ts-expect-error
+            const candidate = this[getterMethodNameLocalized]
+
+            if (typeof candidate == "function") {
+              const value = candidate.bind(this)()
+
+              return this._hasAttribute(value)
+            } else {
+              throw new Error(`Expected candidate to be a function but it was: ${typeof candidate}`)
+            }
           }
         }
       }
