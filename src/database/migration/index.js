@@ -271,6 +271,8 @@ export default class VelociousDatabaseMigration {
 
     if (id !== false) {
       ({default: idDefault, type: idType, ...restArgsId} = id)
+
+      restArgsError(restArgsId)
     }
 
     if (!idType) {
@@ -280,7 +282,6 @@ export default class VelociousDatabaseMigration {
     const tableData = new TableData(tableName)
 
     restArgsError(restArgs)
-    restArgsError(restArgsId)
 
     if (!(idType in tableData)) throw new Error(`Unsupported primary key type: ${idType}`)
 
