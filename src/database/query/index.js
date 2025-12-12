@@ -1,5 +1,11 @@
 // @ts-check
 
+/**
+ * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
+ * @typedef {string|SelectPlain} SelectArgumentType
+ * @typedef {object|string} WhereArgumentType
+ */
+
 import FromPlain from "./from-plain.js"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
@@ -15,10 +21,6 @@ import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
 import restArgsError from "../../utils/rest-args-error.js"
-
-/**
- * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
- */
 
 /**
  * A generic query over some model type.
@@ -112,7 +114,7 @@ export default class VelociousDatabaseQuery {
    */
   async count() {
     // Generate count SQL
-    let sql = `COUNT(${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.primaryKey())})`
+    let sql = `COUNT(${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())})`
 
     if (this.driver.getType() == "pgsql") sql += "::int"
 
@@ -163,6 +165,15 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * @returns {typeof import("../record/index.js").default}
+   */
+  getModelClass() {
+    if (!this.modelClass) throw new Error("modelClass not set")
+
+    return this.modelClass
+  }
+
+  /**
    * @returns {import("../query-parser/options.js").default}
    */
   getOptions() { return this.driver.options() }
@@ -191,13 +202,13 @@ export default class VelociousDatabaseQuery {
     /** @type {{[key: string]: number | string}} */
     const conditions = {}
 
-    conditions[this.modelClass.primaryKey()] = recordId
+    conditions[this.getModelClass().primaryKey()] = recordId
 
     const query = this.clone().where(conditions)
     const record = await query.first()
 
     if (!record) {
-      throw new RecordNotFoundError(`Couldn't find ${this.modelClass.name} with '${this.modelClass.primaryKey()}'=${recordId}`)
+      throw new RecordNotFoundError(`Couldn't find ${this.getModelClass().name} with '${this.getModelClass().primaryKey()}'=${recordId}`)
     }
 
     return record
@@ -268,7 +279,8 @@ export default class VelociousDatabaseQuery {
 
     if (record) return record
 
-    const newRecord = new this.modelClass(conditions)
+    const ModelClass = this.getModelClass()
+    const newRecord = new ModelClass(conditions)
 
     if (callback) {
       callback(newRecord)
@@ -281,14 +293,14 @@ export default class VelociousDatabaseQuery {
    * @returns {Promise<import("../record/index.js").default>}
    */
   async first() {
-    const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.modelClass.tableName())}.${this.driver.quoteColumn(this.modelClass.orderableColumn())}`)
+    const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
     const results = await newQuery.toArray()
 
     return results[0]
   }
 
   /**
-   * @param {string|FromPlain} from
+   * @param {string|import("./from-base.js").default} from
    * @returns {this}
    */
   from(from) {
@@ -327,8 +339,8 @@ export default class VelociousDatabaseQuery {
    * @returns {Promise<import("../record/index.js").default>}
    */
   async last() {
-    const primaryKey = this.modelClass.primaryKey()
-    const tableName = this.modelClass.tableName()
+    const primaryKey = this.getModelClass().primaryKey()
+    const tableName = this.getModelClass().tableName()
     const results = await this.clone().reorder(`${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(primaryKey)} DESC`).limit(1).toArray()
 
     return results[0]
@@ -353,7 +365,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {*} order
+   * @param {string | number} order
    * @returns {this}
    */
   order(order) {
@@ -393,7 +405,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string} data
+   * @param {NestedPreloadRecord} data
    * @returns {this}
    */
   preload(data) {
@@ -402,7 +414,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|OrderPlain} order
+   * @param {string | number} order
    * @returns {this}
    */
   reorder(order) {
@@ -423,7 +435,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|SelectPlain} select
+   * @param {SelectArgumentType} select
    * @returns {this}
    */
   select(select) {
@@ -474,7 +486,8 @@ export default class VelociousDatabaseQuery {
     const results = await this.results()
 
     for (const result of results) {
-      const model = new this.modelClass()
+      const ModelClass = this.getModelClass()
+      const model = new ModelClass()
 
       model.loadExistingRecord(result)
       models.push(model)
@@ -500,7 +513,7 @@ export default class VelociousDatabaseQuery {
   toSql() { return this.driver.queryToSql(this) }
 
   /**
-   * @param {object|string} where
+   * @param {WhereArgumentType} where
    * @returns {VelociousDatabaseQuery} This query instance
    */
   where(where) {

@@ -1,32 +1,34 @@
+// @ts-check
+
 import restArgsError from "../../../utils/rest-args-error.js"
 
+/**
+ * @typedef {object} RelationshipBaseArgsType
+ * @property {string} [className]
+ * @property {string} [dependent]
+ * @property {string | undefined} [foreignKey]
+ * @property {string} [inverseOf]
+ * @property {typeof import("../index.js").default} [klass]
+ * @property {typeof import("../index.js").default} modelClass
+ * @property {string} [primaryKey]
+ * @property {boolean} [polymorphic]
+ * @property {string} relationshipName
+ * @property {string} [through]
+ * @property {string} type
+ */
+
 export default class VelociousDatabaseRecordBaseRelationship {
-  /**
-   * @param {object} args
-   * @param {string} args.className
-   * @param {import("../../../configuration.js").default} args.configuration
-   * @param {string} args.dependent
-   * @param {boolean|object} args.foreignKey
-   * @param {string} args.inverseOf
-   * @param {typeof import("../index.js").default} args.klass
-   * @param {typeof import("../index.js").default} args.modelClass
-   * @param {string} args.primaryKey
-   * @param {boolean} args.polymorphic
-   * @param {string} args.relationshipName
-   * @param {string} args.through
-   * @param {string} args.type
-   */
-  constructor({className, configuration, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, through, type, ...restArgs}) { // eslint-disable-line no-unused-vars
+  /** @param {RelationshipBaseArgsType} args */
+  constructor({className, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, through, type, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
     if (!className && !klass) throw new Error(`Neither 'className' or 'klass' was given for ${modelClass.name}#${relationshipName}`)
 
     this.className = className
-    this.configuration = configuration
     this._dependent = dependent
     this.foreignKey = foreignKey
-    this._inverseOf
+    this._inverseOf = inverseOf
     this.klass = klass
     this.modelClass = modelClass
     this._polymorphic = polymorphic
@@ -36,9 +38,9 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this.type = type
   }
 
-  /**
-   * @returns {string} What will be done when the parent record is destroyed. E.g. "destroy", "nullify", "restrict" etc.
-   */
+  getConfiguration() { return this.modelClass._getConfiguration() }
+
+  /** @returns {string | undefined} What will be done when the parent record is destroyed. E.g. "destroy", "nullify", "restrict" etc. */
   getDependent() { return this._dependent }
 
   /**
@@ -51,47 +53,35 @@ export default class VelociousDatabaseRecordBaseRelationship {
 
   /**
    * @abstract
-   * @returns {string} The name of the inverse relationship, e.g. "posts", "comments" etc.
+   * @returns {string | undefined} The name of the inverse relationship, e.g. "posts", "comments" etc.
    */
   getInverseOf() {
     throw new Error("getInverseOf not implemented")
   }
 
-  /**
-   * @returns {typeof import("../index.js").default}
-   */
+  /** @returns {typeof import("../index.js").default} */
   getModelClass() { return this.modelClass }
 
-  /**
-   * @returns {string} The name of the relationship, e.g. "posts", "user", "comments" etc.
-   */
+  /** @returns {string} The name of the relationship, e.g. "posts", "user", "comments" etc. */
   getRelationshipName() { return this.relationshipName }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   getPolymorphic() {
-    return this._polymorphic
+    return this._polymorphic || false
   }
 
-  /**
-   * @returns {string} The name of the foreign key, e.g. "id" etc.
-   */
+  /** @returns {string} The name of the foreign key, e.g. "id" etc. */
   getPrimaryKey() { return this._primaryKey }
 
-  /**
-   * @returns {string} The type of the relationship, e.g. "has_many", "belongs_to", "has_one", "has_and_belongs_to_many" etc.
-   */
+  /** @returns {string} The type of the relationship, e.g. "has_many", "belongs_to", "has_one", "has_and_belongs_to_many" etc. */
   getType() { return this.type }
 
-  /**
-   * @returns {typeof import("../index.js").default} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class.
-   */
+  /** @returns {typeof import("../index.js").default | undefined} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class. */
   getTargetModelClass() {
     if (this.getPolymorphic()) {
-      return null
+      return undefined
     } else if (this.className) {
-      return this.modelClass._getConfiguration().getModelClass(this.className)
+      return this.getConfiguration().getModelClass(this.className)
     } else if (this.klass) {
       return this.klass
     }

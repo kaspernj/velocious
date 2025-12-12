@@ -21,7 +21,13 @@
  * @property {string} [host]
  * @property {boolean} [migrations]
  * @property {string} [password]
+ * @property {object} [record]
+ * @property {boolean} [record.transactions]
  * @property {string} [username]
+ */
+
+/**
+ * @typedef {Record<string, string[]>} LocaleFallbacksType
  */
 
 /**
@@ -37,7 +43,7 @@
  * @property {InitializersType} initializers
  * @property {string | function() : string} locale
  * @property {string[]} locales
- * @property {object} localeFallbacks
+ * @property {LocaleFallbacksType} localeFallbacks
  * @property {string} testing
  */
 

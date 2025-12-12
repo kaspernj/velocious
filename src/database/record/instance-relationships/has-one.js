@@ -1,14 +1,21 @@
+// @ts-check
+
 import BaseInstanceRelationship from "./base.js"
 
 export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
-  constructor(args) {
-    super(args)
-    this._loaded = null
-  }
+  /** @type {import("../index.js").default | undefined} */
+  _loaded = undefined
 
+  /**
+   * @param {Record<string, any>} data
+   * @returns {import("../index.js").default}
+   */
   build(data) {
-    const targetModelClass = this.getTargetModelClass()
-    const newInstance = new targetModelClass(data)
+    const TargetModelClass = this.getTargetModelClass()
+
+    if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
+
+    const newInstance = new TargetModelClass(data)
 
     this._loaded = newInstance
 
@@ -20,6 +27,10 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = this.getModel().readColumn(primaryKey)
     const TargetModelClass = this.getTargetModelClass()
+
+    if (!TargetModelClass) throw new Error("Can't load without a target model class")
+
+    /** @type {Record<string, any>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = primaryModelID
@@ -31,6 +42,9 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     this.setPreloaded(true)
   }
 
+  /**
+   * @returns {import("../index.js").default | Array<import("../index.js").default> | undefined} The loaded model or models (depending on relationship type)
+   */
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
       throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
@@ -39,8 +53,9 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     return this._loaded
   }
 
-  getLoadedOrNull() { return this._loaded }
+  getLoadedOrUndefined() { return this._loaded }
 
+  /** @param {import("../index.js").default|Array<import("../index.js").default>} model */
   setLoaded(model) {
     if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
 

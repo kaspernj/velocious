@@ -206,8 +206,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {string} filePath
-   * @template T extends import ("../migration/index.js").default
-   * @returns {Promise<T>}
+   * @returns {Promise<import("../database/migration/index.js").default>}
    */
   async requireMigration(filePath) {
     const migrationImport = await import(filePath)

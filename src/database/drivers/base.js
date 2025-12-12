@@ -23,7 +23,7 @@
  * @property {string[]} [columns]
  * @property {{[key: string]: any}} [data]
  * @property {boolean} [multiple]
- * @property {boolean} [returnLastInsertedColumnNames]
+ * @property {boolean | string[]} [returnLastInsertedColumnNames]
  * @property {Array<Array<any>>} [rows]
  * @property {string} tableName
  */
@@ -189,7 +189,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {object}
+   * @returns {import("../../configuration-types.js").DatabaseConfigurationType}
    */
   getArgs() {
     return this._args
@@ -227,9 +227,21 @@ export default class VelociousDatabaseDriversBase {
    */
   async getTableByName(name, args) {
     const tables = await this.getTables()
-    const table = tables.find((table) => table.getName() == name)
+    const tableNames = []
+    let table
 
-    if (!table && args?.throwError !== false) throw new Error(`Couldn't find a table by that name: ${name}`)
+    for (const candidate of tables) {
+      const candidateName = candidate.getName()
+
+      if (candidateName == name) {
+        table = candidate
+        break
+      }
+
+      tableNames.push(candidateName)
+    }
+
+    if (!table && args?.throwError !== false) throw new Error(`Couldn't find a table by that name "${name}" in: ${tableNames.join(", ")}`)
 
     return table
   }
@@ -250,6 +262,17 @@ export default class VelociousDatabaseDriversBase {
     const sql = this.insertSql(args)
 
     await this.query(sql)
+  }
+
+  /**
+   * @abstract
+   * @param {string} tableName
+   * @param {Array<string>} columns
+   * @param {Array<Array<string>>} rows
+   * @returns {Promise<void>}
+   */
+  async insertMultiple(tableName, columns, rows) { // eslint-disable-line no-unused-vars
+    throw new Error("'insertMultiple' not implemented")
   }
 
   /**
