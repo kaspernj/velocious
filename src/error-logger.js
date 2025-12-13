@@ -1,13 +1,27 @@
+// @ts-check
+
+/**
+ * @param {(...args: any[]) => Promise<void>} callback
+ */
 export default function errorLogger(callback) {
+  /**
+   * @param  {...any} args
+   * @returns {Promise<void>}
+   */
   return async function(...args) {
     try {
       await callback(...args)
     } catch (error) {
-      console.error(`ErrorLogger: ${error.message}`)
+      if (error instanceof Error) {
+        console.error(`ErrorLogger: ${error.message}`)
 
-      if (error.stack) {
-        console.error("Stack", error.stack)
+        if (error.stack) {
+          console.error("Stack", error.stack)
+        } else {
+          console.error("No stack")
+        }
       } else {
+        console.error(`ErrorLogger: ${error}`)
         console.error("No stack")
       }
 

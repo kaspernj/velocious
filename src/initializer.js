@@ -1,3 +1,5 @@
+// @ts-check
+
 import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousInitializer {

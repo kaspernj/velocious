@@ -1,73 +1,82 @@
-import GetRoute from "./get-route.js"
-import NamespaceRoute from "./namespace-route.js"
-import PostRoute from "./post-route.js"
-import ResourceRoute from "./resource-route.js"
+// @ts-check
 
-var VelociousBaseRoute
+export default class VelociousBaseRoute {
+  /** @type {typeof import("./get-route.js").default} */
+  static GetRouteType
 
-export function initBaseRoute() {
-  if (VelociousBaseRoute) return
+  /** @type {typeof import("./namespace-route.js").default} */
+  static NameSpaceRouteType
 
-  VelociousBaseRoute = class VelociousBaseRoute {
-    routes = []
+  /** @type {typeof import("./post-route.js").default} */
+  static PostRouteType
 
-    /**
-     * @param {string} name
-     */
-    get(name) {
-      const route = new GetRoute({name})
+  /** @type {typeof import("./resource-route.js").default} */
+  static ResourceRouteType
 
-      this.routes.push(route)
-    }
-
-    /**
-     * @abstract
-     * @param {string} _path
-     */
-    matchWithPath(_path) { // eslint-disable-line no-unused-vars
-      throw new Error(`No 'matchWithPath' implemented on ${this.constructor.name}`)
-    }
-
-    /**
-     * @param {string} name
-     * @param {function(NamespaceRoute) : void} callback
-     * @returns {void}
-     */
-    namespace(name, callback) {
-      const route = new NamespaceRoute({name})
-
-      this.routes.push(route)
-
-      if (callback) {
-        callback(route)
-      }
-    }
-
-    /**
-     * @param {string} name
-     * @returns {void}
-     */
-    post(name) {
-      const route = new PostRoute({name})
-
-      this.routes.push(route)
-    }
-
-    /**
-     * @param {string} name
-     * @param {function(ResourceRoute) : void} callback
-     * @returns {void}
-     */
-    resources(name, callback) {
-      const route = new ResourceRoute({name})
-
-      this.routes.push(route)
-
-      if (callback) {
-        callback(route)
-      }
-    }
+  /** @param {typeof import("./get-route.js").default} RouteClass */
+  static registerRouteGetType(RouteClass) {
+    this.GetRouteType = RouteClass
   }
-}
 
-export {VelociousBaseRoute as default}
+  /** @param {typeof import("./namespace-route.js").default} RouteClass */
+  static registerRouteNamespaceType(RouteClass) {
+    this.NameSpaceRouteType = RouteClass
+  }
+
+  /** @param {typeof import("./post-route.js").default} RouteClass */
+  static registerRoutePostType(RouteClass) {
+    this.PostRouteType = RouteClass
+  }
+
+  /** @param {typeof import("./resource-route.js").default} RouteClass */
+  static registerRouteResourceType(RouteClass) {
+    this.ResourceRouteType = RouteClass
+  }
+
+  constructor() {
+    // Nothing
+  }
+
+  /** @type {Array<VelociousBaseRoute>} */
+  routes = []
+
+  /**
+   * @abstract
+   * @param {string} name
+   */
+  get(name) { throw new Error("'get' not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} args.params
+   * @param {string} args.path
+   * @param {import("../http-server/client/request.js").default} args.request
+   * @returns {{restPath: string} | undefined}
+   */
+  matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars
+    throw new Error(`No 'matchWithPath' implemented on ${this.constructor.name}`)
+  }
+
+  /**
+   * @abstract
+   * @param {string} name
+   * @param {function(import("./namespace-route.js").default) : void} callback
+   * @returns {void}
+   */
+  namespace(name, callback) { throw new Error("'namespace' not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
+   * @param {string} name
+   * @returns {void}
+   */
+  post(name) { throw new Error("'post' not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
+   * @param {string} name
+   * @param {function(import("./resource-route.js").default) : void} callback
+   * @returns {void}
+   */
+  resources(name, callback) { throw new Error("'resources' not implemented") } // eslint-disable-line no-unused-vars
+}

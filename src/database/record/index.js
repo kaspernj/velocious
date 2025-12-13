@@ -628,10 +628,7 @@ class VelociousDatabaseRecord {
     return this._attributes[columnName]
   }
 
-  /**
-   *
-   * @returns {typeof VelociousDatabaseRecord}
-   */
+  /** @returns {typeof VelociousDatabaseRecord} */
   getModelClass() {
     const modelClass = /** @type {typeof VelociousDatabaseRecord} */ (this.constructor)
 

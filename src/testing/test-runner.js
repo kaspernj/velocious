@@ -9,10 +9,11 @@ import {tests} from "./test.js"
 
 /**
  * @typedef {object} TestArgs
- * @property {Application} application
- * @property {RequestClient} client
- * @property {boolean} focus
- * @property {string} type
+ * @property {Application} [application]
+ * @property {RequestClient} [client]
+ * @property {boolean} [focus]
+ * @property {() => Promise<void>} [function]
+ * @property {string} [type]
  */
 
 /**
@@ -22,15 +23,20 @@ import {tests} from "./test.js"
  */
 
 /**
- * @typedef {object} AfterBeforeEachCallback
- * @property {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : Promise<void>} callback
+ * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : Promise<void>} AfterBeforeEachCallbackType
+ */
+
+/**
+ * @typedef {object} AfterBeforeEachCallbackObjectType
+ * @property {AfterBeforeEachCallbackType} callback
  */
 
 /**
  * @typedef {object} TestsArgument
+ * @property {Record<string, TestData>} args
  * @property {boolean} [anyTestsFocussed]
- * @property {AfterBeforeEachCallback[]} afterEaches
- * @property {AfterBeforeEachCallback[]} beforeEaches
+ * @property {AfterBeforeEachCallbackObjectType[]} afterEaches
+ * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches
  * @property {Record<string, TestData>} tests - A unique identifier for the node.
  * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
  */
@@ -212,8 +218,8 @@ export default class TestRunner {
 
   /**
    * @param {object} args
-   * @param {Array<AfterBeforeEachCallback>} args.afterEaches
-   * @param {Array<AfterBeforeEachCallback>} args.beforeEaches
+   * @param {Array<AfterBeforeEachCallbackObjectType>} args.afterEaches
+   * @param {Array<AfterBeforeEachCallbackObjectType>} args.beforeEaches
    * @param {TestsArgument} args.tests
    * @param {string[]} args.descriptions
    * @param {number} args.indentLevel
