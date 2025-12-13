@@ -1,3 +1,10 @@
+// @ts-check
+
+/**
+ * @param {import("sql.js").Database} connection
+ * @param {string} sql
+ * @returns {Promise<Record<string, any>[]>}
+ */
 export default async function query(connection, sql) {
   const rows = []
   let result
@@ -11,7 +18,11 @@ export default async function query(connection, sql) {
       sqlInErrorMessage = `${sqlInErrorMessage.substring(0, 4096)}...`
     }
 
-    error.message += `\n\n${sqlInErrorMessage}`
+    if (error instanceof Error) {
+      error.message += `\n\n${sqlInErrorMessage}`
+    } else {
+      throw new Error(`An error occurred: ${error}\n\n${sqlInErrorMessage}`)
+    }
 
     throw error
   }
@@ -20,6 +31,7 @@ export default async function query(connection, sql) {
     const columns = result[0].columns
 
     for (const rowValues of result[0].values) {
+      /** @type {Record<string, any>} */
       const row = {}
 
       for (const columnIndex in columns) {

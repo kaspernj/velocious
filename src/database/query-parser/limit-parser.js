@@ -1,13 +1,18 @@
-import {digs} from "diggerize"
+// @ts-check
 
 export default class VelocuiousDatabaseQueryParserLimitParser {
+  /**
+   * @param {object} args
+   * @param {boolean} args.pretty
+   * @param {import("../query/index.js").default} args.query
+   */
   constructor({pretty, query}) {
     this.pretty = pretty
     this.query = query
   }
 
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
     const driver = query.driver
     const options = this.query.getOptions()
     let sql = ""

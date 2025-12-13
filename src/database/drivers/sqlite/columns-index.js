@@ -1,14 +1,10 @@
+// @ts-check
+
 import BaseColumnsIndex from "../base-columns-index.js"
 import {digg} from "diggerize"
 import TableIndex from "../../table-data/table-index.js"
 
 export default class VelociousDatabaseDriversSqliteColumnsIndex extends BaseColumnsIndex {
-  constructor(table, data) {
-    super()
-    this.data = data
-    this.table = table
-  }
-
   getColumnNames() {
     return digg(this, "data", "columnNames")
   }

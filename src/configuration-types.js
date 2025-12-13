@@ -20,11 +20,15 @@
 
 /**
  * @typedef {object} DatabaseConfigurationType
+ * @property {function() : void} [getConnection]
  * @property {string} [host]
  * @property {boolean} [migrations]
  * @property {string} [password]
+ * @property {number} [port]
+ * @property {string} [name]
  * @property {object} [record]
  * @property {boolean} [record.transactions]
+ * @property {boolean} [reset]
  * @property {string} [username]
  */
 

@@ -1,13 +1,18 @@
-import {digs} from "diggerize"
+// @ts-check
 
 export default class VelocuiousDatabaseQueryParserWhereParser {
+  /**
+   * @param {object} args
+   * @param {boolean} args.pretty
+   * @param {import("../query/index.js").default} args.query
+   */
   constructor({pretty, query}) {
     this.pretty = pretty
     this.query = query
   }
 
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
     let sql = ""
 
     if (query._wheres.length == 0) return sql
@@ -20,10 +25,10 @@ export default class VelocuiousDatabaseQueryParserWhereParser {
 
     sql += "WHERE"
 
-    for (const whereKey in query._wheres) {
-      const where = query._wheres[whereKey]
+    let count = 0
 
-      if (whereKey > 0) sql += " AND"
+    for (const where of query._wheres) {
+      if (count > 0) sql += " AND"
 
       if (pretty) {
         sql += "\n  "
@@ -32,6 +37,7 @@ export default class VelocuiousDatabaseQueryParserWhereParser {
       }
 
       sql += where.toSql()
+      count++
     }
 
     return sql

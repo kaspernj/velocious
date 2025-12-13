@@ -328,8 +328,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} value
-   * @returns {string}
+   * @param {any} value
+   * @returns {number | string}
    */
   quote(value) {
     if (typeof value == "number") return value

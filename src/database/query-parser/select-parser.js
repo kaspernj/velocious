@@ -1,4 +1,5 @@
-import {digs} from "diggerize"
+// @ts-check
+
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryParserSelectParser {
@@ -15,7 +16,7 @@ export default class VelociousDatabaseQueryParserSelectParser {
   }
 
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
 
     let sql = ""
 
@@ -27,14 +28,14 @@ export default class VelociousDatabaseQueryParserSelectParser {
       sql += " "
     }
 
-    for (const selectKey in query._selects) {
-      const selectValue = query._selects[selectKey]
+    let count = 0
 
+    for (const selectValue of query._selects) {
       selectValue.setQuery(query)
 
       sql += selectValue.toSql()
 
-      if (selectKey + 1 < query._selects.length) {
+      if (count + 1 < query._selects.length) {
         if (pretty) {
           sql += ","
           sql += "  "
@@ -42,6 +43,8 @@ export default class VelociousDatabaseQueryParserSelectParser {
           sql += ", "
         }
       }
+
+      count++
     }
 
     if (query.getSelects().length == 0) {
