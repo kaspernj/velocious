@@ -20,7 +20,7 @@
 
 /**
  * @typedef {object} DatabaseConfigurationType
- * @property {function} [getConnection]
+ * @property {function() : void} [getConnection]
  * @property {string} [host]
  * @property {boolean} [migrations]
  * @property {string} [password]

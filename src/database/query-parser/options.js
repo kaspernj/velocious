@@ -69,7 +69,7 @@ export default class VelociousDatabaseQueryParserOptions {
    * @param {any} string
    * @returns {string}
    */
-  quoteString(string) {
+  quoteString(string) { // eslint-disable-line no-unused-vars
     throw new Error("quoteString not implemented")
   }
 
