@@ -1,10 +1,15 @@
+// @ts-check
+
 class Response {
+  /**
+   * @param {globalThis.Response} fetchResponse
+   */
   constructor(fetchResponse) {
     this.fetchResponse = fetchResponse
   }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async parse() {
     this._body = await this.fetchResponse.text()
@@ -12,19 +17,19 @@ class Response {
     if (this.statusCode() != 200) throw new Error(`Request failed with code ${this.statusCode()} and body: ${this.body()}`)
   }
 
-  /**
-   * @returns {string}
-   */
-  body() { return this._body }
+  /** @returns {string} */
+  body() {
+    if (!this._body) throw new Error("Response body not parsed yet. Call parse() first.")
 
-  /**
-   * @returns {string}
-   */
-  contentType() { return this.fetchResponse.headers.get("content-type") }
+    return this._body
+  }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string | null} */
+  contentType() {
+    return this.fetchResponse.headers.get("content-type")
+  }
+
+  /** @returns {number} */
   statusCode() { return this.fetchResponse.status }
 }
 
@@ -34,7 +39,7 @@ export default class RequestClient {
 
   /**
    * @param {string} path
-   * @returns {Response}
+   * @returns {Promise<Response>}
    */
   async get(path) {
     const fetchResponse = await fetch(`http://${this.host}:${this.port}${path}`)
@@ -48,7 +53,7 @@ export default class RequestClient {
   /**
    * @param {string} path
    * @param {object} data
-   * @returns {Response}
+   * @returns {Promise<Response>}
    */
   async post(path, data) {
     const fetchResponse = await fetch(

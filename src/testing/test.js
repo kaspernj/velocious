@@ -1,9 +1,15 @@
+// @ts-check
+
 import {anythingDifferent} from "set-state-compare/src/diff-utils.js"
 import restArgsError from "../utils/rest-args-error.js"
 
+/** @type {import("./test-runner.js").TestsArgument} */
 const tests = {
+  /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   afterEaches: [],
   args: {},
+
+  /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   beforeEaches: [],
   subs: {},
   tests: {}
@@ -12,7 +18,7 @@ const tests = {
 let currentPath = [tests]
 
 /**
- * @param {function() : void} callback
+ * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback
  * @returns {void}
  */
 function beforeEach(callback) {
@@ -22,7 +28,7 @@ function beforeEach(callback) {
 }
 
 /**
- * @param {function() : void} callback
+ * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback
  * @returns {void}
  */
 function afterEach(callback) {
@@ -31,8 +37,28 @@ function afterEach(callback) {
   currentTest.afterEaches.push({callback})
 }
 
-class ExpectToChange {
+class BaseExpect {
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  async runBefore() { /* do nothing */ }
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  async runAfter() { /* do nothing */ }
+}
+
+class ExpectToChange extends BaseExpect {
+  /**
+   * @param {object} args
+   * @param {function(): Promise<number>} args.changeCallback
+   * @param {Expect} args.expect
+   */
   constructor({changeCallback, expect, ...restArgs}) {
+    super()
     restArgsError(restArgs)
 
     this.expect = expect
@@ -58,9 +84,13 @@ class ExpectToChange {
   }
 
   /**
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async execute() {
+    if (this.newCount === undefined || this.oldCount === undefined) {
+      throw new Error("ExpectToChange not executed properly")
+    }
+
     const difference = this.newCount - this.oldCount
 
     if (difference != this.count) {
@@ -69,20 +99,24 @@ class ExpectToChange {
   }
 }
 
-class Expect {
+class Expect extends BaseExpect {
   /**
    * @param {any} object
    */
   constructor(object) {
+    super()
     this._object = object
+
+    /** @type {Array<Expect | ExpectToChange>} */
     this.expectations = []
   }
 
   /**
+   * @param {function(): Promise<number>} changeCallback
    * @returns {ExpectToChange}
    */
-  andChange(...args) {
-    return this.toChange(...args)
+  andChange(changeCallback) {
+    return this.toChange(changeCallback)
   }
 
   /**
@@ -126,6 +160,7 @@ class Expect {
   }
 
   /**
+   * @param {Function} klass
    * @returns {void}
    */
   toBeInstanceOf(klass) {
@@ -156,7 +191,7 @@ class Expect {
   }
 
   /**
-   * @param {function(): void} changeCallback
+   * @param {function(): Promise<number>} changeCallback
    * @returns {ExpectToChange}
    */
   toChange(changeCallback) {
@@ -230,7 +265,7 @@ class Expect {
   /**
    * @template T extends Error
    * @param {string|T} expectedError
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   async toThrowError(expectedError) {
     if (this._not) throw new Error("not stub")
@@ -249,14 +284,18 @@ class Expect {
 
     if (typeof failedError == "string") {
       failedErrorMessage = failedError
-    } else {
+    } else if (failedError instanceof Error) {
       failedErrorMessage = failedError.message
+    } else {
+      failedErrorMessage = String(failedError)
     }
 
     if (typeof expectedError == "string") {
       expectedErrorMessage = expectedError
-    } else {
+    } else if (expectedError instanceof Error) {
       expectedErrorMessage = expectedError.message
+    } else {
+      expectedErrorMessage = String(expectedError)
     }
 
     if (failedErrorMessage != expectedErrorMessage) {
@@ -265,7 +304,7 @@ class Expect {
   }
 
   /**
-   * @returns {any}
+   * @returns {Promise<any>}
    */
   async execute() {
     for (const expectation of this.expectations) {
@@ -286,12 +325,13 @@ class Expect {
   }
 
   /**
-   * @param {object} result
+   * @param {Record<string, any>} result
    * @returns {void}
    */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
 
+    /** @type {Record<string, any[]>} */
     const differences = {}
 
     for (const key in result) {
@@ -314,9 +354,9 @@ class Expect {
 
 /**
  * @param {string} description
- * @param {object|() => Promise<void>} arg1
- * @param {undefined|() => Promise<void>} [arg2]
- * @returns {void}
+ * @param {object|(() => Promise<void>)} arg1
+ * @param {undefined|(() => Promise<void>)} [arg2]
+ * @returns {Promise<void>}
  */
 async function describe(description, arg1, arg2) {
   let testArgs, testFunction
@@ -360,15 +400,19 @@ function expect(arg) {
 
 /**
  * @param {string} description
- * @param {object|() => Promise<void>} arg1
- * @param {undefined|() => Promise<void>} [arg2]
+ * @param {object|(() => Promise<void>)} arg1
+ * @param {undefined|(() => Promise<void>)} [arg2]
  * @returns {void}
  */
 function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
-  let testArgs, testFunction
+  let testArgs
+
+  /** @type {() => Promise<void>} */
+  let testFunction
 
   if (typeof arg1 == "function") {
+    // @ts-expect-error
     testFunction = arg1
     testArgs = {}
   } else if (typeof arg2 == "function") {
@@ -385,14 +429,18 @@ function it(description, arg1, arg2) {
 
 /**
  * @param {string} description
- * @param {object|() => Promise<void>} arg1
- * @param {undefined|() => Promise<void>} [arg2]
+ * @param {object|(() => Promise<void>)} arg1
+ * @param {undefined|(() => Promise<void>)} [arg2]
  * @returns {void}
  */
 function fit(description, arg1, arg2) {
-  let testArgs, testFunction
+  let testArgs
+
+  /** @type {() => Promise<void>} */
+  let testFunction
 
   if (typeof arg1 == "function") {
+    // @ts-expect-error
     testFunction = arg1
     testArgs = {focus: true}
   } else if (typeof arg2 == "function") {

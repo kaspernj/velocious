@@ -1,10 +1,18 @@
-import {digg, digs} from "diggerize"
+// @ts-check
+
+import {digg} from "diggerize"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 
 export default class VelociousRoutesResolver {
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @param {import("../http-server/client/request.js").default} args.request
+   * @param {import("../http-server/client/response.js").default} args.response
+   */
   constructor({configuration, request, response}) {
     if (!configuration) throw new Error("No configuration given")
     if (!request) throw new Error("No request given")
@@ -65,6 +73,11 @@ export default class VelociousRoutesResolver {
     })
   }
 
+  /**
+   * @param {import("./base-route.js").default} route
+   * @param {string} path
+   * @returns {{restPath: string} | undefined}
+   */
   matchPathWithRoutes(route, path) {
     const pathWithoutSlash = path.replace(/^\//, "")
 
@@ -77,7 +90,7 @@ export default class VelociousRoutesResolver {
 
       if (!matchResult) continue
 
-      const {restPath} = digs(matchResult, "restPath")
+      const {restPath} = matchResult
 
       if (restPath) {
         return this.matchPathWithRoutes(subRoute, restPath)

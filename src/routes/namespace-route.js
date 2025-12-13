@@ -1,10 +1,15 @@
+// @ts-check
+
 import restArgsError from "../utils/rest-args-error.js"
-import BaseRoute, {initBaseRoute} from "./base-route.js"
+import BaseRoute from "./base-route.js"
+import BasicRoute from "./base-route.js"
 import escapeStringRegexp from "escape-string-regexp"
 
-initBaseRoute()
-
-export default class VelociousRouteNamespaceRoute extends BaseRoute {
+class VelociousRouteNamespaceRoute extends BasicRoute {
+  /**
+   * @param {object} args
+   * @param {string} args.name
+   */
   constructor({name, ...restArgs}) {
     super()
     restArgsError(restArgs)
@@ -12,7 +17,14 @@ export default class VelociousRouteNamespaceRoute extends BaseRoute {
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
   }
 
-  matchWithPath({params, path}) {
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} args.params
+   * @param {string} args.path
+   * @param {import("../http-server/client/request.js").default} args.request
+   * @returns {{restPath: string} | undefined}
+   */
+  matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars
     const match = path.match(this.regExp)
 
     if (match) {
@@ -24,3 +36,7 @@ export default class VelociousRouteNamespaceRoute extends BaseRoute {
     }
   }
 }
+
+BaseRoute.registerRouteNamespaceType(VelociousRouteNamespaceRoute)
+
+export default VelociousRouteNamespaceRoute

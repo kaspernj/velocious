@@ -1,4 +1,5 @@
-import {digs} from "diggerize"
+// @ts-check
+
 import ejs from "ejs"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
@@ -11,11 +12,24 @@ export default class VelociousController {
    * @returns {void}
    */
   static beforeAction(methodName) {
-    if (!this._beforeActions) this._beforeActions = []
+    if (!this._beforeActions) {
+      /** @type {Array<string>}  */
+      this._beforeActions = []
+    }
 
     this._beforeActions.push(methodName)
   }
 
+  /**
+   * @param {object} args
+   * @param {string} args.action
+   * @param {import("./configuration.js").default} args.configuration
+   * @param {string} args.controller
+   * @param {object} args.params
+   * @param {import("./http-server/client/request.js").default} args.request
+   * @param {import("./http-server/client/response.js").default} args.response
+   * @param {string} args.viewPath
+   */
   constructor({action, configuration, controller, params, request, response, viewPath}) {
     if (!action) throw new Error("No action given")
     if (!configuration) throw new Error("No configuration given")
@@ -36,30 +50,32 @@ export default class VelociousController {
     this._viewPath = viewPath
   }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   getAction() { return this._action }
 
-  /**
-   * @returns {import("./configuration.js").default}
-   */
+  /** @returns {import("./configuration.js").default} */
   getConfiguration() { return this._configuration }
 
-  /**
-   * @returns {object}
-   */
+  /** @returns {object} */
   getParams() { return this._params }
 
-  /**
-   * @returns {import("./http-server/client/request.js").default}
-   */
+  /** @returns {import("./http-server/client/request.js").default} */
   getRequest() { return this._request }
+
+  /**
+   * @private
+   * @returns {typeof VelociousController}
+   */
+  _getControllerClass() {
+    const controllerClass = /** @type {typeof VelociousController} */ (this.constructor)
+
+    return controllerClass
+  }
 
   async _runBeforeCallbacks() {
     await this.logger.debug("_runBeforeCallbacks")
 
-    let currentControllerClass = this.constructor
+    let currentControllerClass = this._getControllerClass()
 
     while (currentControllerClass) {
       await this.logger.debug(`Running callbacks for ${currentControllerClass.name}`)
@@ -68,6 +84,7 @@ export default class VelociousController {
 
       if (beforeActions) {
         for (const beforeActionName of beforeActions) {
+          // @ts-expect-error
           const beforeAction = currentControllerClass.prototype[beforeActionName]
 
           if (!beforeAction) throw new Error(`No such before action: ${beforeActionName}`)
@@ -91,7 +108,13 @@ export default class VelociousController {
    */
   params() { return this._params }
 
-  render({json, status, ...restArgs} = {}) {
+  /**
+   * @param {object} [args]
+   * @param {object} [args.json]
+   * @param {number} [args.status]
+   * @returns {Promise<void>}
+   */
+  async render({json, status, ...restArgs} = {}) {
     restArgsError(restArgs)
 
     if (json) {
@@ -102,9 +125,10 @@ export default class VelociousController {
       this._response.setStatus(status)
     }
 
-    return this.renderView()
+    return await this.renderView()
   }
 
+  /** @param {object} json */
   renderJsonArg(json) {
     const body = JSON.stringify(json)
 
@@ -115,7 +139,7 @@ export default class VelociousController {
   renderView() {
     return new Promise((resolve, reject) => {
       const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
-      const {viewParams} = digs(this, "viewParams")
+      const {viewParams} = this
       const actualViewParams = incorporate({controller: this}, viewParams)
 
       ejs.renderFile(viewPath, actualViewParams, {}, (err, str) => {
@@ -125,7 +149,7 @@ export default class VelociousController {
           this._response.setHeader("Content-Type", "text/html; charset=UTF-8")
           this._response.setBody(str)
 
-          resolve()
+          resolve(null)
         }
       })
     })
@@ -135,13 +159,9 @@ export default class VelociousController {
     throw new Error("renderText stub")
   }
 
-  /**
-   * @returns {import("./http-server/client/request.js").default}
-   */
+  /** @returns {import("./http-server/client/request.js").default} */
   request() { return this._request }
 
-  /**
-   * @returns {import("./http-server/client/response.js").default}
-   */
+  /** @returns {import("./http-server/client/response.js").default} */
   response() { return this._response }
 }

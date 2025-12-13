@@ -1,6 +1,6 @@
-import BaseRoute, {initBaseRoute} from "./base-route.js"
+// @ts-check
 
-initBaseRoute()
+import BasicRoute from "./basic-route.js"
 
-export default class VelociousRootRoute extends BaseRoute {
+export default class VelociousRootRoute extends BasicRoute {
 }

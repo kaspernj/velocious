@@ -1,11 +1,15 @@
+// @ts-check
+
 import {AsyncLocalStorage} from "async_hooks"
 
+/** @type {AsyncLocalStorage<Array<string[]>> | undefined} */
 let asyncLocalStorage
 
 if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
 }
 
+/** @param {Error} error */
 function addTrackedStackToError(error) {
   // Not supported
   if (!asyncLocalStorage) return
@@ -23,15 +27,27 @@ function addTrackedStackToError(error) {
   error.stack += "\n" + additionalStackLines.join("\n")
 }
 
+/**
+ *
+ * @param {() => Promise<void> | string} arg1
+ * @param {() => Promise<void> | Error} [arg2]
+ * @returns {Promise<void>}
+ */
 async function withTrackedStack(arg1, arg2) {
-  let callback, stack
+  /** @type {() => Promise<void>} */
+  let callback
 
-  if (arg2) {
+  /** @type {string} */
+  let stack
+
+  if (typeof arg2 == "function" && typeof arg1 == "string") {
+    // @ts-expect-error
     callback = arg2
     stack = arg1
   } else {
+    // @ts-expect-error
     callback = arg1
-    stack = Error().stack
+    stack = Error().stack || ""
   }
 
   // Not supported
@@ -56,13 +72,15 @@ async function withTrackedStack(arg1, arg2) {
   const newStacks = [additionalStackLines, ...parentStacks]
 
   await asyncLocalStorage.run(newStacks, async () => {
-    return await callback()
+    await callback()
   })
 }
 
+// @ts-expect-error
 if (globalThis.withTrackedStack) {
   console.warn("globalThis.withTrackedStack was already defined")
 } else {
+  // @ts-expect-error
   globalThis.withTrackedStack = {addTrackedStackToError, withTrackedStack}
 }
 

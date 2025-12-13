@@ -1,10 +1,15 @@
-import BaseRoute, {initBaseRoute} from "./base-route.js"
+// @ts-check
+
+import BaseRoute from "./base-route.js"
+import BasicRoute from "./basic-route.js"
 import escapeStringRegexp from "escape-string-regexp"
 import restArgsError from "../utils/rest-args-error.js"
 
-initBaseRoute()
-
-export default class VelociousRouteResourceRoute extends BaseRoute {
+class VelociousRouteResourceRoute extends BasicRoute {
+  /**
+   * @param {object} args
+   * @param {string} args.name
+   */
   constructor({name, ...restArgs}) {
     super()
     restArgsError(restArgs)
@@ -12,6 +17,13 @@ export default class VelociousRouteResourceRoute extends BaseRoute {
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
   }
 
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} args.params
+   * @param {string} args.path
+   * @param {import("../http-server/client/request.js").default} args.request
+   * @returns {{restPath: string} | undefined}
+   */
   matchWithPath({params, path, request}) {
     const match = path.match(this.regExp)
 
@@ -22,7 +34,7 @@ export default class VelociousRouteResourceRoute extends BaseRoute {
       let subRoutesMatchesRestPath = false
 
       for (const route of this.routes) {
-        if (route.matchWithPath({path: restPath})) {
+        if (route.matchWithPath({params, path: restPath, request})) {
           subRoutesMatchesRestPath = true
         }
       }
@@ -43,3 +55,7 @@ export default class VelociousRouteResourceRoute extends BaseRoute {
     }
   }
 }
+
+BaseRoute.registerRouteResourceType(VelociousRouteResourceRoute)
+
+export default VelociousRouteResourceRoute
