@@ -1,3 +1,5 @@
+// @ts-check
+
 import BaseForeignKey from "../base-foreign-key.js"
 import {digg} from "diggerize"
 

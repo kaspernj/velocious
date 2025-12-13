@@ -1,3 +1,5 @@
+// @ts-check
+
 import DeleteBase from "../../../query/delete-base.js"
 
 export default class VelociousDatabaseConnectionDriversPgsqlSqlDelete extends DeleteBase {

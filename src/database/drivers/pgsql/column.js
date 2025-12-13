@@ -1,8 +1,14 @@
+// @ts-check
+
 import BaseColumn from "../base-column.js"
 import ColumnsIndex from "./columns-index.js"
 import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
+  /**
+   * @param {import("../base-table.js").default} table
+   * @param {Record<string, any>} data
+   */
   constructor(table, data) {
     super()
     this.data = data

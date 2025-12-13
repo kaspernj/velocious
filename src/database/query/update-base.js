@@ -1,4 +1,13 @@
+// @ts-check
+
 export default class VelociousDatabaseQueryUpdateBase {
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} args.conditions
+   * @param {Record<string, any>} args.data
+   * @param {import("../drivers/base.js").default} args.driver
+   * @param {string} args.tableName
+   */
   constructor({conditions, data, driver, tableName}) {
     this.conditions = conditions
     this.data = data

@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * @typedef {object} MigrationObjectType
  * @property {number} date
