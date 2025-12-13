@@ -1,3 +1,5 @@
+// @ts-check
+
 import Application from "../../src/application.js"
 import {digg} from "diggerize"
 import dummyConfiguration from "./src/config/configuration.js"
@@ -36,10 +38,12 @@ export default class Dummy {
     await migrator.migrateFiles(await environmentHandlerNode.findMigrations(), digg(environmentHandlerNode, "requireMigration"))
   }
 
+  /** @param {function(): Promise<any>} callback */
   static async run(callback) {
     await this.current().run(callback)
   }
 
+  /** @param {function(): Promise<void>} callback */
   async run(callback) {
     await dummyConfiguration.ensureConnections(async () => {
       await Dummy.prepare()
@@ -72,7 +76,7 @@ export default class Dummy {
   }
 
   async stop() {
-    if (this.application.isActive()) {
+    if (this.application?.isActive()) {
       await this.application.stop()
     }
   }

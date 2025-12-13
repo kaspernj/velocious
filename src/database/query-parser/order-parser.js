@@ -1,13 +1,18 @@
-import {digs} from "diggerize"
+// @ts-check
 
 export default class VelocuiousDatabaseQueryParserOrderParser {
+  /**
+   * @param {object} args
+   * @param {boolean} args.pretty
+   * @param {import("../query/index.js").default} args.query
+   */
   constructor({pretty, query}) {
     this.pretty = pretty
     this.query = query
   }
 
   toSql() {
-    const {pretty, query} = digs(this, "pretty", "query")
+    const {pretty, query} = this
     let sql = ""
 
     if (query._orders.length == 0) return sql
@@ -19,11 +24,10 @@ export default class VelocuiousDatabaseQueryParserOrderParser {
     }
 
     sql += "ORDER BY"
+    let count = 0
 
-    for (const orderKey in query._orders) {
-      const order = query._orders[orderKey]
-
-      if (orderKey > 0) sql += " ,"
+    for (const order of query._orders) {
+      if (count > 0) sql += " ,"
 
       if (pretty) {
         sql += "\n  "
@@ -32,6 +36,7 @@ export default class VelocuiousDatabaseQueryParserOrderParser {
       }
 
       sql += order.toSql()
+      count++
     }
 
     return sql

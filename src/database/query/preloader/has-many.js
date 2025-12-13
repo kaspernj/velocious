@@ -1,6 +1,13 @@
+// @ts-check
+
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasMany {
+  /**
+   * @param {object} args
+   * @param {import("../../record/index.js").default[]} args.models
+   * @param {import("../../record/relationships/has-many.js").default} args.relationship
+   */
   constructor({models, relationship, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -9,10 +16,16 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
   }
 
   async run() {
+    /** @type {Array<number | string>} */
     const modelsPrimaryKeyValues = []
+
+    /** @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const modelsByPrimaryKeyValue = {}
+
     const foreignKey = this.relationship.getForeignKey()
     const primaryKey = this.relationship.getPrimaryKey()
+
+    /** @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const preloadCollections = {}
 
     if (!primaryKey) {
@@ -30,12 +43,17 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       modelsByPrimaryKeyValue[primaryKeyValue].push(model)
     }
 
+    /** @type {Record<string, any>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = modelsPrimaryKeyValues
 
+    const targetModelClass = this.relationship.getTargetModelClass()
+
+    if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+
     // Load target models to be preloaded on the given models
-    const targetModels = await this.relationship.getTargetModelClass().where(whereArgs).toArray()
+    const targetModels = await targetModelClass.where(whereArgs).toArray()
 
     for (const targetModel of targetModels) {
       const foreignKeyValue = targetModel.readColumn(foreignKey)

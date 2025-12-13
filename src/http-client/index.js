@@ -1,9 +1,17 @@
+// @ts-check
+
 import net from "net"
 import Request from "./request.js"
 import Response from "./response.js"
 import {Logger} from "../logger.js"
 
 export default class HttpClient {
+  /**
+   * @param {object} args
+   * @param {boolean} [args.debug]
+   * @param {Array<import("./header.js").default>} [args.headers]
+   * @param {string} [args.version]
+   */
   constructor({debug = false, headers, version = "1.1"}) {
     this.headers = headers || []
     this.logger = new Logger(this, {debug})
@@ -15,7 +23,7 @@ export default class HttpClient {
       this.connectionReject = reject
       this.connection = net.createConnection(3006, "127.0.0.1", () => {
         this.connectionReject = null
-        resolve()
+        resolve(null)
       })
 
       this.connection.on("data", this.onConnectionData)
@@ -24,6 +32,12 @@ export default class HttpClient {
     })
   }
 
+  /**
+   * @param {string} path
+   * @param {object} [options]
+   * @param {Array<import("./header.js").default>} [options.headers]
+   * @returns {Promise<{request: import("./request.js").default, response: import("./response.js").default}>}
+   */
   get(path, {headers} = {}) {
     if (!this.connection) throw new Error("Not connected yet")
 
@@ -41,7 +55,7 @@ export default class HttpClient {
 
       for (const header of this.headers) {
         const existingNewHeader = newHeaders.find((newHeader) => {
-          return newHeader.key.toLowerCase().trim() === header.key.toLowerCase().trim()
+          return newHeader.getName().toLowerCase().trim() === header.getName().toLowerCase().trim()
         })
 
         if (!existingNewHeader) {
@@ -56,8 +70,14 @@ export default class HttpClient {
       this.currentRequest.stream((chunk) => {
         this.logger.debug(() => [`Writing: ${chunk}`])
 
+        if (!this.connection) {
+          throw new Error("No connection to write to")
+        }
+
         this.connection.write(chunk, "utf8", (error) => {
           if (error) {
+            if (!this.currentRequestReject) throw new Error("No current request reject function")
+
             this.currentRequestReject(error)
           }
         })
@@ -65,7 +85,12 @@ export default class HttpClient {
     })
   }
 
+  /**
+   * @param {Buffer} data
+   */
   onConnectionData = (data) => {
+    if (!this.currentResponse) throw new Error("No current response to feed data to")
+
     this.currentResponse.feed(data)
   }
 
@@ -73,6 +98,9 @@ export default class HttpClient {
     this.connection = null
   }
 
+  /**
+   * @param {Error} error
+   */
   onConnectionError = (error) => {
     if (this.connectionReject) {
       this.connectionReject(error)
@@ -90,6 +118,10 @@ export default class HttpClient {
   }
 
   onResponseComplete = () => {
+    if (!this.currentRequestResolve) throw new Error("No current request resolve function")
+    if (!this.currentRequest) throw new Error("No current request")
+    if (!this.currentResponse) throw new Error("No current response")
+
     this.currentRequestResolve({
       request: this.currentRequest,
       response: this.currentResponse

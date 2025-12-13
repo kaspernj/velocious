@@ -1,8 +1,19 @@
-export default async function query(connection, sql) {
-  let result
+// @ts-check
 
+/**
+ * @param {import("sqlite3").Database} connection
+ * @param {string} sql
+ * @returns {Promise<Record<string, any>[]>}
+ */
+export default async function query(connection, sql) {
   try {
+    /** @type {Record<string, any>[]} */
+    let result
+
+    // @ts-expect-error
     result = await connection.all(sql)
+
+    return result
   } catch (error) {
     let sqlInErrorMessage = `${sql}`
 
@@ -10,10 +21,12 @@ export default async function query(connection, sql) {
       sqlInErrorMessage = `${sqlInErrorMessage.substring(0, 4096)}...`
     }
 
-    error.message += `\n\n${sqlInErrorMessage}`
+    if (error instanceof Error) {
+      error.message += `\n\n${sqlInErrorMessage}`
 
-    throw new Error(error.message)
+      throw new Error(error.message)
+    } else {
+      throw new Error(`An error occurred: ${error}\n\n${sql}`)
+    }
   }
-
-  return result
 }

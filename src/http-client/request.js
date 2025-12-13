@@ -5,7 +5,7 @@ import Header from "./header.js"
 export default class Request {
   /**
    * @param {object} args
-   * @param {string} args.body
+   * @param {string} [args.body]
    * @param {string} args.method
    * @param {Header[]} args.headers
    * @param {string} args.path

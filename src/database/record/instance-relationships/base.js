@@ -17,6 +17,15 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
+   * @param {import("../index.js").default[]} records
+   * @returns {void}
+   */
+  addToLoaded(records) { // eslint-disable-line no-unused-vars
+    throw new Error("addToLoaded not implemented")
+  }
+
+  /**
+   * @abstract
    * @param {Record<string, any>} attributes
    * @returns {import("../index.js").default}
    */
@@ -62,7 +71,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     return this._loaded
   }
 
-  /** @param {import("../index.js").default|Array<import("../index.js").default>} model */
+  /** @param {import("../index.js").default|Array<import("../index.js").default>|undefined} model */
   setLoaded(model) { this._loaded = model }
 
   /** @returns {import("../index.js").default | import("../index.js").default[] | undefined} */

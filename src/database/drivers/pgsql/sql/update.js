@@ -1,3 +1,5 @@
+// @ts-check
+
 import UpdateBase from "../../../query/update-base.js"
 
 export default class VelociousDatabaseConnectionDriversPgsqlSqlUpdate extends UpdateBase {

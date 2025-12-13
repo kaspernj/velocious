@@ -1,3 +1,5 @@
+// @ts-check
+
 import fs from "fs/promises"
 import query from "./query.js"
 import sqlite3 from "sqlite3"
@@ -30,10 +32,14 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   async close() {
-    await this.connection.close()
+    await this.connection?.close()
     this.connection = undefined
   }
 
+  /**
+   * @param {string} sql
+   * @returns {Promise<Record<string, any>[]>}
+   */
   async _queryActual(sql) {
     return await query(this.connection, sql)
   }

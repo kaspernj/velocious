@@ -7,7 +7,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   table = undefined
 
   /**
-   * @param {object} data
+   * @param {Record<string, any>} data
    */
   constructor(data) {
     this.data = data

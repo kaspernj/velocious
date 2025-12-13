@@ -1,7 +1,14 @@
+// @ts-check
+
 import BaseForeignKey from "../base-foreign-key.js"
 import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversSqliteForeignKey extends BaseForeignKey {
+  /**
+   * @param {Record<string, any>} data
+   * @param {object} args
+   * @param {string} args.tableName
+   */
   constructor(data, {tableName}) {
     super(data)
     this.tableName = tableName

@@ -1,3 +1,5 @@
+// @ts-check
+
 import BetterLocalStorage from "better-localstorage"
 import ConnectionSqlJs from "./connection-sql-js"
 import initSqlJs from "sql.js"
@@ -5,6 +7,9 @@ import initSqlJs from "sql.js"
 import Base from "./base.js"
 
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
+  /** @type {BetterLocalStorage | undefined} */
+  betterLocalStorage = undefined
+
   async connect() {
     this.args = this.getArgs()
 
@@ -32,7 +37,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   }
 
   getConnection() {
-    if (this.args.getConnection) {
+    if (this.args?.getConnection) {
       return this.args.getConnection()
     } else {
       return this._connection
@@ -40,13 +45,17 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   }
 
   localStorageName() {
-    if (!this.args.name) {
+    if (!this.args?.name) {
       throw new Error("No name given in arguments for SQLite Web database")
     }
 
-    return `VelociousDatabaseDriversSqliteWeb---${this.args.name}`
+    return `VelociousDatabaseDriversSqliteWeb---${this.args?.name}`
   }
 
+  /**
+   * @param {string} sql
+   * @returns {Promise<Record<string, any>[]>}
+   */
   async _queryActual(sql) {
     return await this.getConnection().query(sql)
   }

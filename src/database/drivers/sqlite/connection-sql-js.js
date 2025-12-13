@@ -1,7 +1,13 @@
+// @ts-check
+
 import debounce from "debounce"
 import query from "./query"
 
 export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
+  /**
+   * @param {import("../base.js").default} driver
+   * @param {import("sql.js").Database} connection
+   */
   constructor(driver, connection) {
     this.connection = connection
     this.driver = driver
@@ -9,12 +15,15 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
 
   async close() {
     await this.saveDatabase()
-    await this.connection.end()
-    this.connection = undefined
+    await this.connection.close()
   }
 
   async disconnect() { await this.saveDatabase() }
 
+  /**
+   * @param {string} sql
+   * @returns {Promise<Record<string, any>[]>}
+   */
   async query(sql) {
     const result = await query(this.connection, sql)
     const downcasedSQL = sql.toLowerCase().trim()
@@ -30,6 +39,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   saveDatabase = async () => {
     const localStorageContent = this.connection.export()
 
+    // @ts-expect-error
     await this.driver.betterLocalStorage.set(this.driver.localStorageName(), localStorageContent)
   }
 
