@@ -461,4 +461,4 @@ globalThis.expect = expect
 globalThis.it = it
 globalThis.fit = fit
 
-export {describe, expect, fit, it, tests}
+export {afterEach, beforeEach, describe, expect, fit, it, tests}
