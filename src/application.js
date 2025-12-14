@@ -8,6 +8,7 @@ import restArgsError from "./utils/rest-args-error.js"
 /**
  * @typedef {object} HttpServerConfiguration
  * @property {number} [maxWorkers]
+ * @property {string} [host]
  * @property {number} [port]
  */
 

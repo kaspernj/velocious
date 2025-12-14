@@ -1,9 +1,13 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
 
+/**
+ * @typedef {{destroyed: string[]}} DestroyMigrationResult
+ */
+
 export default class DbDestroyMigration extends BaseCommand {
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void | DestroyMigrationResult>}
    */
   async execute() {
     const migrationName = this.processArgs[1]

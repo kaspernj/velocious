@@ -84,7 +84,6 @@ export default class VelociousController {
 
       if (beforeActions) {
         for (const beforeActionName of beforeActions) {
-          // @ts-expect-error
           const beforeAction = currentControllerClass.prototype[beforeActionName]
 
           if (!beforeAction) throw new Error(`No such before action: ${beforeActionName}`)
@@ -111,7 +110,7 @@ export default class VelociousController {
   /**
    * @param {object} [args]
    * @param {object} [args.json]
-   * @param {number} [args.status]
+   * @param {number | string} [args.status]
    * @returns {Promise<void>}
    */
   async render({json, status, ...restArgs} = {}) {

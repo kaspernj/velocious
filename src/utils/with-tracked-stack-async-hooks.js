@@ -76,11 +76,9 @@ async function withTrackedStack(arg1, arg2) {
   })
 }
 
-// @ts-expect-error
 if (globalThis.withTrackedStack) {
   console.warn("globalThis.withTrackedStack was already defined")
 } else {
-  // @ts-expect-error
   globalThis.withTrackedStack = {addTrackedStackToError, withTrackedStack}
 }
 

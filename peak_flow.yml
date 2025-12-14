@@ -86,3 +86,4 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - sleep 5
       - npm run lint
+      - npm run typecheck

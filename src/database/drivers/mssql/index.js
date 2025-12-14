@@ -159,7 +159,6 @@ export default class VelociousDatabaseDriversMssql extends Base{
       }
     }
 
-    // @ts-expect-error
     return result.recordsets[0]
   }
 

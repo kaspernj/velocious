@@ -13,7 +13,7 @@ export default class TestFilesFinder {
   /**
    * @param {object} args
    * @param {string} args.directory
-   * @param {string[]} args.directories
+   * @param {string[]} [args.directories]
    * @param {string[]} args.processArgs
    */
   constructor({directory, directories, processArgs, ...restArgs}) {

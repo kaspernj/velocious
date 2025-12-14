@@ -2,9 +2,13 @@ import BaseCommand from "../../../../cli/base-command.js"
 import fileExists from "../../../../utils/file-exists.js"
 import fs from "fs/promises"
 
+/**
+ * @typedef {{source: string, target: string}} FileMappingType
+ */
+
 export default class VelociousCliCommandsInit extends BaseCommand {
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void | {fileMappings: FileMappingType[]}>}
    */
   async execute() {
     const velociousPath = await this.getEnvironmentHandler().getVelociousPath()

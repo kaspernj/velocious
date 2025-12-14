@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+
+    "noEmit": true,
+    "target": "ES2024",
+
+    "moduleResolution": "nodenext",
+    "module": "nodenext",
+
+    "lib": ["dom", "ES2024"],
+    "types": ["node"]
+  },
+  "exclude": ["src/templates/**"]
+}

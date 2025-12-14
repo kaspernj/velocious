@@ -4,9 +4,13 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import strftime from "strftime"
 
+/**
+ * @typedef {{date: Date, migrationContent: string, migrationName: string, migrationNameCamelized: string, migrationNumber: string, migrationPath: string}} DbGenerateMigrationReturnType
+ */
+
 export default class DbGenerateMigration extends BaseCommand {
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void | DbGenerateMigrationReturnType>}
    */
   async execute() {
     const migrationName = this.processArgs[1]
