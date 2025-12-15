@@ -135,7 +135,7 @@ export default class VelociousDatabaseMigration {
       },
       args
     )
-    const sqls = this.getDriver().createIndexSQLs(createIndexArgs)
+    const sqls = await this.getDriver().createIndexSQLs(createIndexArgs)
 
     for (const sql of sqls) {
       await this.getDriver().query(sql)
@@ -246,14 +246,25 @@ export default class VelociousDatabaseMigration {
    * @property {CreateTableIdArgsType | false} [id]
    */
   /**
+   * @typedef {(TableData) => void} CreateTableCallbackType
+   */
+  /**
+   * @overload
    * @param {string} tableName
-   * @param {function(TableData) : void} arg1
+   * @param {CreateTableCallbackType} callback
+   * @returns {Promise<void>}
+   */
+  /**
+   * @overload
+   * @param {string} tableName
+   * @param {CreateTableArgsType} args
+   * @param {CreateTableCallbackType} callback
    * @returns {Promise<void>}
    */
   /**
    * @param {string} tableName
-   * @param {CreateTableArgsType} arg1
-   * @param {function(TableData) : void} arg2
+   * @param {CreateTableArgsType | CreateTableCallbackType} arg1
+   * @param {CreateTableCallbackType | undefined} [arg2]
    * @returns {Promise<void>}
    */
   async createTable(tableName, arg1, arg2) {
@@ -297,7 +308,7 @@ export default class VelociousDatabaseMigration {
       callback(tableData)
     }
 
-    const sqls = this.getDriver().createTableSql(tableData)
+    const sqls = await this.getDriver().createTableSql(tableData)
 
     for (const sql of sqls) {
       await this._db.query(sql)

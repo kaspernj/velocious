@@ -29,25 +29,25 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {import("../base.js").CreateIndexSqlArgs} indexData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createIndexSQLs(indexData) {
+  async createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
 
-    return createIndex.toSQLs()
+    return await createIndex.toSQLs()
   }
 
   /**
    * @abstract
    * @param {import("../../table-data/index.js").default} tableData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createTableSql(tableData) {
+  async createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
     const createTable = new CreateTable(createArgs)
 
-    return createTable.toSql()
+    return await createTable.toSql()
   }
 
   currentDatabase() {
@@ -65,14 +65,14 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName
    * @param {import("../base.js").DropTableSqlArgsType} [args]
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  dropTableSQLs(tableName, args = {}) {
+  async dropTableSQLs(tableName, args = {}) {
     const driver = /** @type {import("../base.js").default} */ (this)
     const dropArgs = Object.assign({tableName, driver}, args)
     const dropTable = new DropTable(dropArgs)
 
-    return dropTable.toSQLs()
+    return await dropTable.toSQLs()
   }
 
   /**
@@ -217,7 +217,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   options() {
-    if (!this._options) this._options = new Options({driver: this})
+    if (!this._options) this._options = new Options(this)
 
     return this._options
   }

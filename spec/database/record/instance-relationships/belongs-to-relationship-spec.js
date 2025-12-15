@@ -7,7 +7,7 @@ describe("Record - instance relationships - belongs to relationship", () => {
     await Dummy.run(async () => {
       const project = await Project.create()
       const task = await Task.create({name: "Test task", project})
-      const foundTask = await Task.find(task.id())
+      const foundTask = /** @type {Task} */ (await Task.find(task.id()))
       const projectInstanceRelationship = foundTask.getRelationshipByName("project")
 
       expect(projectInstanceRelationship.isLoaded()).toBeFalse()

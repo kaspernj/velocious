@@ -2,7 +2,6 @@
 
 /** @param {Error} error */
 function addTrackedStackToError(error) {
-  // @ts-expect-error
   globalThis.withTrackedStack?.addTrackedStackToError(error)
 }
 
@@ -11,7 +10,6 @@ function addTrackedStackToError(error) {
  * @returns {Promise<any>}
  */
 async function withTrackedStack(...args) {
-  // @ts-expect-error
   const withTrackedStack = globalThis.withTrackedStack?.withTrackedStack
 
   let callback

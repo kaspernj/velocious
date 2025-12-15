@@ -11,6 +11,9 @@ import {tests} from "./test.js"
  * @typedef {object} TestArgs
  * @property {Application} [application]
  * @property {RequestClient} [client]
+ * @property {object} [databaseCleaning]
+ * @property {boolean} [databaseCleaning.transaction]
+ * @property {boolean} [databaseCleaning.truncate]
  * @property {boolean} [focus]
  * @property {() => Promise<void>} [function]
  * @property {string} [type]

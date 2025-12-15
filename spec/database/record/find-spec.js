@@ -10,7 +10,7 @@ describe("Record - find", () => {
 
       await task.save()
 
-      const foundTask = await Task.find(task.id())
+      const foundTask = /** @type {Task} */ (await Task.find(task.id()))
 
       expect(foundTask.readAttribute("name")).toEqual("Test task")
       expect(foundTask.readColumn("name")).toEqual("Test task")

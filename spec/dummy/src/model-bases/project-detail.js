@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class ProjectDetailBase extends Record {
+export default class ProjectDetailBase extends DatabaseRecord {
   /**
    * @returns {number}
    */
@@ -77,7 +77,7 @@ export default class ProjectDetailBase extends Record {
   /**
    * @returns {import("../models/project.js").default}
    */
-  project() { return this.getRelationshipByName("project").loaded() }
+  project() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("project").loaded()) }
 
   /**
    * @abstract

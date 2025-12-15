@@ -13,7 +13,7 @@ describe("Record - translation fallbacks", () => {
 
       await task.save()
 
-      const sameTask = await Task.preload({project: {translations: true}}).find(task.id())
+      const sameTask = /** @type {Task} */ (await Task.preload({project: {translations: true}}).find(task.id()))
       const sameProject = sameTask.project()
 
       expect(sameProject.name()).toEqual("Test projekt")

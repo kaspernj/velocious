@@ -4,13 +4,16 @@ import QueryParserOptions from "../../query-parser/options.js"
 
 export default class VelociousDatabaseDriversPgsqlOptions extends QueryParserOptions {
   /**
-   * @param {import("../../query-parser/options.js").OptionsObjectArgsType} options
+   * @param {import("../base.js").default} driver
    */
-  constructor(options) {
-    options.columnQuote = "\""
-    options.indexQuote = "\""
-    options.stringQuote = "'"
-    options.tableQuote = "\""
+  constructor(driver) {
+    const options = {
+      driver,
+      columnQuote: "\"",
+      indexQuote: "\"",
+      stringQuote: "'",
+      tableQuote: "\""
+    }
 
     super(options)
   }

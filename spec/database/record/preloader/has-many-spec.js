@@ -7,8 +7,8 @@ describe("Record - preloader - has many", () => {
     await Dummy.run(async () => {
       const project = await Project.create({creating_user_reference: "User-65"})
       const user = await User.create({email: "user@example.com", encrypted_password: "password", reference: "User-65"})
-      const foundUser = await User.preload({createdProjects: true}).find(user.id())
-      const createdProjectsIDs = foundUser.createdProjects().loaded().map((createdProject) => createdProject.id())
+      const foundUser = /** @type {User} */ (await User.preload({createdProjects: true}).find(user.id()))
+      const createdProjectsIDs = foundUser.createdProjectsLoaded().map((createdProject) => createdProject.id())
 
       expect(createdProjectsIDs).toEqual([project.id()])
     })
@@ -20,8 +20,8 @@ describe("Record - preloader - has many", () => {
       await Project.create({creating_user_reference: "User-69"})
 
       const user = await User.create({email: "user@example.com", encrypted_password: "password", reference: "User-65"})
-      const foundUser = await User.preload({createdProjects: true}).find(user.id())
-      const createdProjectsIDs = foundUser.createdProjects().loaded().map((createdProject) => createdProject.id())
+      const foundUser = /** @type {User} */ (await User.preload({createdProjects: true}).find(user.id()))
+      const createdProjectsIDs = foundUser.createdProjectsLoaded().map((createdProject) => createdProject.id())
 
       expect(createdProjectsIDs).toEqual([])
     })

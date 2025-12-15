@@ -1,6 +1,8 @@
 // @ts-check
 
 import debounce from "debounce"
+
+// @ts-expect-error
 import query from "./query"
 
 export default class VelociousDatabaseDriversSqliteConnectionSqlJs {

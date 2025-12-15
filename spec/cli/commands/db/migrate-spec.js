@@ -1,3 +1,5 @@
+// @ts-check
+
 import Cli from "../../../../src/cli/index.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
@@ -15,9 +17,12 @@ describe("Cli - Commands - db:migrate", () => {
       testing: true
     })
 
-    let defaultDatabaseType, defaultSchemaMigrations = [], projectForeignKey = [], tablesResult = []
+    let defaultDatabaseType, defaultSchemaMigrations = [], tablesResult = []
 
-    await cli.configuration.ensureConnections(async (dbs) => {
+    /** @type {import("../../../../src/database/drivers/base-foreign-key.js").default} */
+    let projectForeignKey = undefined
+
+    await cli.getConfiguration().ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
 
       const tableNames = ["accounts", "authentication_tokens", "tasks", "project_details", "project_translations", "projects", "schema_migrations", "users"]

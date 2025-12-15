@@ -3,9 +3,13 @@ import fileExists from "../../../../../utils/file-exists.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 
+/**
+ * @typedef {{date: Date, modelContent: string, modelName: string, modelNameCamelized: string, modelPath: string}} DbGenerateModelResult
+ */
+
 export default class DbGenerateModel extends BaseCommand {
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void | DbGenerateModelResult>}
    */
   async execute() {
     const modelName = this.processArgs[1]

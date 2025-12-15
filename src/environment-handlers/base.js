@@ -122,10 +122,10 @@ export default class VelociousEnvironmentHandlerBase {
   importTestingConfigPath() { throw new Error(`'importTestingConfigPath' not implemented`) }
 
   /**
+   * @abstract
    * @param {object} args
    * @param {string[]} args.commandParts
-   * @returns {Promise<import ("../cli/base-command.js").default>}
-   * @abstract
+   * @returns {Promise<typeof import ("../cli/base-command.js").default>}
    */
   async requireCommand({commandParts}) { throw new Error("'requireCommand' not implemented") } // eslint-disable-line no-unused-vars
 

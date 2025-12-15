@@ -49,6 +49,7 @@ export default new Configuration({
     }
   },
   directory: dummyDirectory(),
+  environment: "development",
   environmentHandler: new NodeEnvironmentHandler(),
   initializeModels: async ({configuration}) => {
     const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/../src/models`)

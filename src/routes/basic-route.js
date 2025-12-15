@@ -57,7 +57,7 @@ export default class VelociousBasicRoute extends BaseRoute {
 
   /**
    * @param {string} name
-   * @param {function(import("./resource-route.js").default) : void} callback
+   * @param {function(import("./resource-route.js").default) : void} [callback]
    * @returns {void}
    */
   resources(name, callback) {

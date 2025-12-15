@@ -36,21 +36,17 @@ export default class ParamsToObject {
       let newResult
 
       if (inputName in result) {
-        // @ts-expect-error
         newResult = result[inputName]
       } else if (rest == "[]") {
         newResult = []
-        // @ts-expect-error
         result[inputName] = newResult
       } else {
         newResult = {}
-        // @ts-expect-error
         result[inputName] = newResult
       }
 
       this.treatSecond(value, rest, newResult)
     } else {
-      // @ts-expect-error
       result[key] = value
     }
   }
@@ -74,19 +70,15 @@ export default class ParamsToObject {
     if (rest == "[]") {
       result.push(value)
     } else if (newRest == "") {
-      // @ts-expect-error
       result[key] = value
     } else {
       if (typeof result == "object" && key in result) {
-        // @ts-expect-error
         newResult = result[key]
       } else if (newRest == "[]") {
         newResult = []
-        // @ts-expect-error
         result[key] = newResult
       } else {
         newResult = {}
-        // @ts-expect-error
         result[key] = newResult
       }
 

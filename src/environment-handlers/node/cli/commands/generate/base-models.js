@@ -29,14 +29,19 @@ export default class DbGenerateModel extends BaseCommand {
       console.log(`create src/model-bases/${modelBaseFileName}`)
 
       let fileContent = ""
+      let velociousPath = "velocious"
 
       if (devMode) {
-        fileContent += `import Record from "../../../../src/database/record/index.js"\n\n`
+        velociousPath = "../../../.."
+        fileContent += `import DatabaseRecord from "../../../../src/database/record/index.js"\n\n`
+        // /** @type {import("./instance-relationships/has-many.js").default} */
       } else {
-        fileContent += `import Record from "velocious/src/database/record/index.js"\n\n`
+        fileContent += `import DatabaseRecord from "velocious/src/database/record/index.js"\n\n`
       }
 
-      fileContent += `export default class ${modelNameCamelized}Base extends Record {\n`
+      const hasManyRelationFilePath = `${velociousPath}/src/database/record/instance-relationships/has-many.js`
+
+      fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
 
       const columns = await modelClass._getTable().getColumns()
       let methodsCount = 0
@@ -135,13 +140,15 @@ export default class DbGenerateModel extends BaseCommand {
       }
 
       for (const relationship of modelClass.getRelationships()) {
-        let fileName, fullFilePath
+        let baseFilePath, baseFullFilePath, fileName, fullFilePath
 
         if (relationship.getPolymorphic()) {
           fileName = "velocious/src/database/record/index.js"
         } else {
           fileName = inflection.dasherize(inflection.underscore(relationship.getTargetModelClass().name))
           fullFilePath = `src/models/${fileName}.js`
+          baseFilePath = `../model-bases/${fileName}.js`
+          baseFullFilePath = `src/model-bases/${fileName}.js`
         }
 
         if (methodsCount > 0) {
@@ -153,6 +160,8 @@ export default class DbGenerateModel extends BaseCommand {
 
           if (fullFilePath && await fileExists(fullFilePath)) {
             modelFilePath = `../models/${fileName}.js`
+          } else if (baseFullFilePath && await fileExists(baseFullFilePath)) {
+            modelFilePath = baseFilePath
           } else {
             modelFilePath = "velocious/src/database/record/index.js"
           }
@@ -160,7 +169,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${modelFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -189,20 +198,22 @@ export default class DbGenerateModel extends BaseCommand {
 
           if (fullFilePath && await fileExists(fullFilePath)) {
             recordImport = `../models/${fileName}.js`
+          } else if (baseFullFilePath && await fileExists(baseFullFilePath)) {
+            recordImport = `../model-bases/${fileName}.js`
           } else {
-            recordImport = "velocious/src/database/record/index.js"
+            recordImport = `${velociousPath}/src/database/record/index.js`
           }
 
           fileContent += "  /**\n"
-          fileContent += `   * @returns {import("velocious/src/database/query/index.js").default<import("${recordImport}").default>}\n`
+          fileContent += `   * @returns {import("${hasManyRelationFilePath}").default}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return this.getRelationshipByName("${relationship.getRelationshipName()}") }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${hasManyRelationFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += `   * @returns {Array<import("${recordImport}").default>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}Loaded() { return this.getRelationshipByName("${relationship.getRelationshipName()}").loaded() }\n`
+          fileContent += `  ${relationship.getRelationshipName()}Loaded() { return /** @type {Array<import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"

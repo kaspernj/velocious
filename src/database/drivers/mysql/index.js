@@ -83,20 +83,20 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   /**
    * @param {import("../base.js").CreateIndexSqlArgs} indexData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createIndexSQLs(indexData) {
+  async createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
 
-    return createIndex.toSQLs()
+    return await createIndex.toSQLs()
   }
 
   /**
    * @param {import("../../table-data/index.js").default} tableData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createTableSql(tableData) {
+  async createTableSql(tableData) {
     const createArgs = {tableData, driver: this}
     const createTable = new CreateTable(createArgs)
 
@@ -129,13 +129,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
   /**
    * @param {string} tableName
    * @param {import("../base.js").DropTableSqlArgsType} [args]
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  dropTableSQLs(tableName, args = {}) {
+  async dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
 
-    return dropTable.toSQLs()
+    return await dropTable.toSQLs()
   }
 
   /**

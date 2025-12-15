@@ -66,24 +66,24 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   /**
    * @param {import("../base.js").CreateIndexSqlArgs} indexData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createIndexSQLs(indexData) {
+  async createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
     const createIndex = new CreateIndex(createArgs)
 
-    return createIndex.toSQLs()
+    return await createIndex.toSQLs()
   }
 
   /**
    * @param {import("../../table-data/index.js").default} tableData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createTableSql(tableData) {
+  async createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
     const createTable = new CreateTable(createArgs)
 
-    return createTable.toSql()
+    return await createTable.toSql()
   }
 
   /**
@@ -106,13 +106,13 @@ export default class VelociousDatabaseDriversMssql extends Base{
   /**
    * @param {string} tableName
    * @param {import("../base.js").DropTableSqlArgsType} [args]
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  dropTableSQLs(tableName, args = {}) {
+  async dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
     const dropTable = new DropTable(dropArgs)
 
-    return dropTable.toSQLs()
+    return await dropTable.toSQLs()
   }
 
   /**
@@ -159,7 +159,6 @@ export default class VelociousDatabaseDriversMssql extends Base{
       }
     }
 
-    // @ts-expect-error
     return result.recordsets[0]
   }
 
@@ -210,7 +209,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   quoteColumn(string) { return this.options().quoteColumnName(string) }
 
   /**
-   * @param {string|number} string
+   * @param {string} string
    * @returns {string}
    */
   quoteTable(string) { return this.options().quoteTableName(string) }
@@ -287,6 +286,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return lastInsertID
   }
 
+  /** @returns {Options} */
   options() {
     if (!this._options) this._options = new Options({driver: this})
 

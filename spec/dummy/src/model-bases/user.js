@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class UserBase extends Record {
+export default class UserBase extends DatabaseRecord {
   /**
    * @returns {number}
    */
@@ -100,7 +100,7 @@ export default class UserBase extends Record {
   /**
    * @returns {import("../models/project.js").default}
    */
-  createdProject() { return this.getRelationshipByName("createdProject").loaded() }
+  createdProject() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("createdProject").loaded()) }
 
   /**
    * @abstract
@@ -123,14 +123,14 @@ export default class UserBase extends Record {
   setCreatedProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("velocious/src/database/query/index.js").default<import("../models/authentication-token.js").default>}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
    */
-  authenticationTokens() { return this.getRelationshipByName("authenticationTokens") }
+  authenticationTokens() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("authenticationTokens")) }
 
   /**
    * @returns {Array<import("../models/authentication-token.js").default>}
    */
-  authenticationTokensLoaded() { return this.getRelationshipByName("authenticationTokens").loaded() }
+  authenticationTokensLoaded() { return /** @type {Array<import("../models/authentication-token.js").default>} */ (this.getRelationshipByName("authenticationTokens").loaded()) }
 
   /**
    * @abstract
@@ -146,14 +146,14 @@ export default class UserBase extends Record {
   setAuthenticationTokens(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("velocious/src/database/query/index.js").default<import("../models/project.js").default>}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
    */
-  createdProjects() { return this.getRelationshipByName("createdProjects") }
+  createdProjects() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("createdProjects")) }
 
   /**
    * @returns {Array<import("../models/project.js").default>}
    */
-  createdProjectsLoaded() { return this.getRelationshipByName("createdProjects").loaded() }
+  createdProjectsLoaded() { return /** @type {Array<import("../models/project.js").default>} */ (this.getRelationshipByName("createdProjects").loaded()) }
 
   /**
    * @abstract

@@ -115,7 +115,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * @param {object} args
    * @param {string[]} args.commandParts
-   * @returns {Promise<import ("../cli/base-command.js").default>}
+   * @returns {Promise<typeof import ("../cli/base-command.js").default>}
    */
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()

@@ -181,29 +181,20 @@ class VelociousDatabaseRecord {
       actualData.className = inflection.camelize(inflection.singularize(relationshipName))
     }
 
-    /** @type {Record<string, (this: VelociousDatabaseRecord) => unknown>} */
-    const proto = /** @type {any} */ (this.prototype);
-
     let relationship
 
     if (actualData.type == "belongsTo") {
       relationship = new BelongsToRelationship(actualData)
 
-      proto[relationshipName] = function() {
+      this.prototype[relationshipName] = function() {
         const relationship = this.getRelationshipByName(relationshipName)
 
         return relationship.loaded()
       }
 
-      // @ts-expect-error
-      proto[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
-        // @ts-expect-error
+      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
         const instanceRelationship = this.getRelationshipByName(relationshipName)
-
-        // @ts-expect-error
         const record = instanceRelationship.build(attributes)
-
-        // @ts-expect-error
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
 
         if (inverseOf) {
@@ -223,51 +214,40 @@ class VelociousDatabaseRecord {
         return record
       }
 
-      proto[`load${inflection.camelize(relationshipName)}`] = async function() {
+      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
 
-      // @ts-expect-error
-      proto[`set${inflection.camelize(relationshipName)}`] = function(model) {
-        // @ts-expect-error
+      this.prototype[`set${inflection.camelize(relationshipName)}`] = function(model) {
         const relationship = this.getRelationshipByName(relationshipName)
 
-        // @ts-expect-error
         relationship.setLoaded(model)
-
-        // @ts-expect-error
         relationship.setDirty(true)
       }
     } else if (actualData.type == "hasMany") {
       relationship = new HasManyRelationship(actualData)
 
-      proto[relationshipName] = function() {
-        return this.getRelationshipByName(relationshipName)
+      this.prototype[relationshipName] = function() {
+        return /** @type {import("./instance-relationships/has-many.js").default} */ (this.getRelationshipByName(relationshipName))
       }
 
-      proto[`${relationshipName}Loaded`] = function() {
+      this.prototype[`${relationshipName}Loaded`] = function() {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      proto[`load${inflection.camelize(relationshipName)}`] = async function() {
+      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
     } else if (actualData.type == "hasOne") {
       relationship = new HasOneRelationship(actualData)
 
-      proto[relationshipName] = function() {
+      this.prototype[relationshipName] = function() {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      // @ts-expect-error
-      proto[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
-        // @ts-expect-error
+      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
         const instanceRelationship = this.getRelationshipByName(relationshipName)
-
-        // @ts-expect-error
         const record = instanceRelationship.build(attributes)
-
-        // @ts-expect-error
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
 
         if (inverseOf) {
@@ -280,7 +260,7 @@ class VelociousDatabaseRecord {
         return record
       }
 
-      proto[`load${inflection.camelize(relationshipName)}`] = async function() {
+      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
     } else {
@@ -477,19 +457,15 @@ class VelociousDatabaseRecord {
       attributeNameToColumnName[camelizedColumnName] = column.getName()
       columnNameToAttributeName[column.getName()] = camelizedColumnName
 
-      // @ts-expect-error
       this.prototype[camelizedColumnName] = function() {
         return this.readAttribute(camelizedColumnName)
       }
 
-      // @ts-expect-error
       this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
         return this._setColumnAttribute(camelizedColumnName, newValue)
       }
 
-      // @ts-expect-error
       this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
-        // @ts-expect-error
         let value = this[camelizedColumnName]()
 
         return this._hasAttribute(value)
@@ -537,16 +513,13 @@ class VelociousDatabaseRecord {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
 
-        // @ts-expect-error
         this.prototype[name] = function getTranslatedAttribute() {
           const locale = this._getConfiguration().getLocale()
 
           return this._getTranslatedAttributeWithFallback(name, locale)
         }
 
-        // @ts-expect-error
         this.prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
-          // @ts-expect-error
           const candidate = this[name]
 
           if (typeof candidate == "function") {
@@ -558,7 +531,6 @@ class VelociousDatabaseRecord {
           }
         }
 
-        // @ts-expect-error
         this.prototype[setterMethodName] = function setTranslatedAttribute(newValue) {
           const locale = this._getConfiguration().getLocale()
 
@@ -571,19 +543,15 @@ class VelociousDatabaseRecord {
           const setterMethodNameLocalized = `${setterMethodName}${localeCamelized}`
           const hasMethodNameLocalized = `has${inflection.camelize(name)}${localeCamelized}`
 
-          // @ts-expect-error
           this.prototype[getterMethodNameLocalized] = function getTranslatedAttributeWithLocale() {
             return this._getTranslatedAttribute(name, locale)
           }
 
-          // @ts-expect-error
           this.prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
           }
 
-          // @ts-expect-error
           this.prototype[hasMethodNameLocalized] = function hasTranslatedAttribute() {
-            // @ts-expect-error
             const candidate = this[getterMethodNameLocalized]
 
             if (typeof candidate == "function") {
@@ -646,7 +614,6 @@ class VelociousDatabaseRecord {
     if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
     if (!(setterName in this)) throw new Error(`No such setter method: ${this.constructor.name}#${setterName}`)
 
-    // @ts-expect-error
     this[setterName](newValue)
   }
 

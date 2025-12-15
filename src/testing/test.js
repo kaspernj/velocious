@@ -412,7 +412,6 @@ function it(description, arg1, arg2) {
   let testFunction
 
   if (typeof arg1 == "function") {
-    // @ts-expect-error
     testFunction = arg1
     testArgs = {}
   } else if (typeof arg2 == "function") {
@@ -440,7 +439,6 @@ function fit(description, arg1, arg2) {
   let testFunction
 
   if (typeof arg1 == "function") {
-    // @ts-expect-error
     testFunction = arg1
     testArgs = {focus: true}
   } else if (typeof arg2 == "function") {

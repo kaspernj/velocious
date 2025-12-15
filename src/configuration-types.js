@@ -20,6 +20,9 @@
 
 /**
  * @typedef {object} DatabaseConfigurationType
+ * @property {string} [database]
+ * @property {typeof import("./database/drivers/base.js").default} [driver]
+ * @property {typeof import("./database/pool/base.js").default} [poolType]
  * @property {function() : void} [getConnection]
  * @property {string} [host]
  * @property {boolean} [migrations]
@@ -29,6 +32,9 @@
  * @property {object} [record]
  * @property {boolean} [record.transactions]
  * @property {boolean} [reset]
+ * @property {object} [sqlConfig]
+ * @property {string} [type]
+ * @property {string} [useDatabase]
  * @property {string} [username]
  */
 
@@ -38,19 +44,18 @@
 
 /**
  * @typedef {object} ConfigurationArgsType
- * @property {object} args
  * @property {CorsType} [cors]
- * @property {{[key: string]: DatabaseConfigurationType}} database
- * @property {boolean} debug
+ * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database
+ * @property {boolean} [debug]
  * @property {string} directory
- * @property {string} environment
+ * @property {string} [environment]
  * @property {import("./environment-handlers/base.js").default} environmentHandler
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels
- * @property {InitializersType} initializers
+ * @property {InitializersType} [initializers]
  * @property {string | function() : string} locale
  * @property {string[]} locales
  * @property {LocaleFallbacksType} localeFallbacks
- * @property {string} testing
+ * @property {string} [testing]
  */
 
 export const nothing = {}

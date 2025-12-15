@@ -10,7 +10,7 @@ export default class ProjectsController extends Controller {
   }
 
   async show() {
-    const projectId = digg(params, "id")
+    const projectId = digg(this.params(), "id")
     const project = await Project.find(projectId)
 
     this.viewParams.project = project

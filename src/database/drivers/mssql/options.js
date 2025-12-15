@@ -4,13 +4,17 @@ import QueryParserOptions from "../../query-parser/options.js"
 
 export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOptions {
   /**
-   * @param {import("../../query-parser/options.js").OptionsObjectArgsType} options
+   * @param {object} args
+   * @param {import("../base.js").default} args.driver
    */
-  constructor(options) {
-    options.columnQuote = "\""
-    options.indexQuote = "\""
-    options.stringQuote = "'"
-    options.tableQuote = "\""
+  constructor({driver}) {
+    const options = {
+      driver,
+      columnQuote: "\"",
+      indexQuote: "\"",
+      stringQuote: "'",
+      tableQuote: "\""
+    }
 
     super(options)
   }

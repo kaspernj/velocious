@@ -2,8 +2,8 @@
 
 /**
  * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
- * @typedef {string|SelectPlain} SelectArgumentType
- * @typedef {object|string} WhereArgumentType
+ * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
+ * @typedef {object | string} WhereArgumentType
  */
 
 import FromPlain from "./from-plain.js"

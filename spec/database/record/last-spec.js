@@ -17,11 +17,11 @@ describe("Record - last", () => {
       await Task.create({name: "Test task 5", project: project2})
       await Task.create({name: "Test task 6", project: project2})
 
-      const foundTask = await Task.last()
+      const foundTask = /** @type {Task} */ (await Task.last())
 
       expect(foundTask.name()).toEqual("Test task 6")
 
-      const foundTaskWithFilter = await Task.where({project_id: project1.id()}).last()
+      const foundTaskWithFilter = /** @type {Task} */ (await Task.where({project_id: project1.id()}).last())
 
       expect(foundTaskWithFilter.name()).toEqual("Test task 3")
     })

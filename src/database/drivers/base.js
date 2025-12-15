@@ -54,7 +54,7 @@ export default class VelociousDatabaseDriversBase {
   idSeq = undefined
 
   /**
-   * @param {object} config
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} config
    * @param {import("../../configuration.js").default} configuration
    */
   constructor(config, configuration) {
@@ -125,9 +125,9 @@ export default class VelociousDatabaseDriversBase {
   /**
    * @abstract
    * @param {CreateIndexSqlArgs} indexData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createIndexSQLs(indexData) { // eslint-disable-line no-unused-vars
+  async createIndexSQLs(indexData) { // eslint-disable-line no-unused-vars
     throw new Error("'createIndexSQLs' not implemented")
   }
 
@@ -136,7 +136,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>}
    */
   async createTable(tableData) {
-    const sqls = this.createTableSql(tableData)
+    const sqls = await this.createTableSql(tableData)
 
     for (const sql of sqls) {
       await this.query(sql)
@@ -146,9 +146,9 @@ export default class VelociousDatabaseDriversBase {
   /**
    * @abstract
    * @param {import("../table-data/index.js").default} tableData
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  createTableSql(tableData) { // eslint-disable-line no-unused-vars
+  async createTableSql(tableData) { // eslint-disable-line no-unused-vars
     throw new Error("'createTableSql' not implemented")
   }
 
@@ -177,7 +177,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>}
    */
   async dropTable(tableName, args) {
-    const sqls = this.dropTableSQLs(tableName, args)
+    const sqls = await this.dropTableSQLs(tableName, args)
 
     for (const sql of sqls) {
       await this.query(sql)
@@ -188,9 +188,9 @@ export default class VelociousDatabaseDriversBase {
    * @abstract
    * @param {string} tableName
    * @param {DropTableSqlArgsType} [args]
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  dropTableSQLs(tableName, args) { // eslint-disable-line no-unused-vars
+  async dropTableSQLs(tableName, args) { // eslint-disable-line no-unused-vars
     throw new Error("dropTableSQLs not implemented")
   }
 

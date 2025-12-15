@@ -1,3 +1,5 @@
+// @ts-check
+
 import fs from "fs/promises"
 import TestFilesFinder from "../../../../src/testing/test-files-finder.js"
 

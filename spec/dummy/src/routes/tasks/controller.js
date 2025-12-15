@@ -1,5 +1,3 @@
-import {digg} from "diggerize"
-
 import Controller from "../../../../../src/controller.js"
 import Task from "../../models/task.js"
 
@@ -10,7 +8,7 @@ export default class TasksController extends Controller {
   }
 
   async show() {
-    const taskId = digg(params, "id")
+    const taskId = this.params().id
     const task = await Task.find(taskId)
 
     this.viewParams.task = task

@@ -17,10 +17,10 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @param {import("../index.js").default[]} records
+   * @param {import("../index.js").default[] | import("../index.js").default} models
    * @returns {void}
    */
-  addToLoaded(records) { // eslint-disable-line no-unused-vars
+  addToLoaded(models) { // eslint-disable-line no-unused-vars
     throw new Error("addToLoaded not implemented")
   }
 

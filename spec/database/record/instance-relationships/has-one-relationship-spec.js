@@ -7,7 +7,7 @@ describe("Record - instance relationships - has one relationship", () => {
     await Dummy.run(async () => {
       const project = await Project.create()
       const projectDetail = await ProjectDetail.create({note: "Test project", project})
-      const foundProject = await Project.find(project.id())
+      const foundProject = /** @type {Project} */ (await Project.find(project.id()))
       const projectDetailInstanceRelationship = foundProject.getRelationshipByName("projectDetail")
 
       expect(projectDetailInstanceRelationship.isLoaded()).toBeFalse()

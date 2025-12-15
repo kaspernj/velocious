@@ -46,7 +46,8 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
-   * @param {string} data
+   * @param {Buffer} data
+   * @returns {void}
    */
   onWrite(data) {
     if (this.state == "initial") {
