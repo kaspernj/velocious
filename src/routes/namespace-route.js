@@ -2,7 +2,7 @@
 
 import restArgsError from "../utils/rest-args-error.js"
 import BaseRoute from "./base-route.js"
-import BasicRoute from "./base-route.js"
+import BasicRoute from "./basic-route.js"
 import escapeStringRegexp from "escape-string-regexp"
 
 class VelociousRouteNamespaceRoute extends BasicRoute {
