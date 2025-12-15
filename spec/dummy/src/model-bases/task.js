@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class TaskBase extends Record {
+export default class TaskBase extends DatabaseRecord {
   /**
    * @returns {number}
    */
@@ -93,7 +93,7 @@ export default class TaskBase extends Record {
   /**
    * @returns {import("../models/project.js").default}
    */
-  project() { return this.getRelationshipByName("project").loaded() }
+  project() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("project").loaded()) }
 
   /**
    * @abstract

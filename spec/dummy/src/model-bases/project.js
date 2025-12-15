@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class ProjectBase extends Record {
+export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {number}
    */
@@ -101,7 +101,7 @@ export default class ProjectBase extends Record {
   /**
    * @returns {import("../models/user.js").default}
    */
-  creatingUser() { return this.getRelationshipByName("creatingUser").loaded() }
+  creatingUser() { return /** @type {import("../models/user.js").default} */ (this.getRelationshipByName("creatingUser").loaded()) }
 
   /**
    * @abstract
@@ -124,14 +124,14 @@ export default class ProjectBase extends Record {
   setCreatingUser(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("velocious/src/database/query/index.js").default<import("../models/task.js").default>}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
    */
-  tasks() { return this.getRelationshipByName("tasks") }
+  tasks() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("tasks")) }
 
   /**
    * @returns {Array<import("../models/task.js").default>}
    */
-  tasksLoaded() { return this.getRelationshipByName("tasks").loaded() }
+  tasksLoaded() { return /** @type {Array<import("../models/task.js").default>} */ (this.getRelationshipByName("tasks").loaded()) }
 
   /**
    * @abstract
@@ -149,7 +149,7 @@ export default class ProjectBase extends Record {
   /**
    * @returns {import("../models/project-detail.js").default}
    */
-  projectDetail() { return this.getRelationshipByName("projectDetail").loaded() }
+  projectDetail() { return /** @type {import("../models/project-detail.js").default} */ (this.getRelationshipByName("projectDetail").loaded()) }
 
   /**
    * @abstract
@@ -172,14 +172,14 @@ export default class ProjectBase extends Record {
   setProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("velocious/src/database/query/index.js").default<import("velocious/src/database/record/index.js").default>}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
    */
-  translations() { return this.getRelationshipByName("translations") }
+  translations() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("translations")) }
 
   /**
-   * @returns {Array<import("velocious/src/database/record/index.js").default>}
+   * @returns {Array<import("../model-bases/project-translation.js").default>}
    */
-  translationsLoaded() { return this.getRelationshipByName("translations").loaded() }
+  translationsLoaded() { return /** @type {Array<import("../model-bases/project-translation.js").default>} */ (this.getRelationshipByName("translations").loaded()) }
 
   /**
    * @abstract
@@ -189,7 +189,7 @@ export default class ProjectBase extends Record {
 
   /**
    * @abstract
-   * @param {Array<import("velocious/src/database/record/index.js").default>} newModels
+   * @param {Array<import("../model-bases/project-translation.js").default>} newModels
    * @returns {void}
    */
   setTranslations(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars

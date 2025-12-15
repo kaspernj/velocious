@@ -59,7 +59,7 @@ export default class DbCreate extends BaseCommand{
 
     schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
-    const createSchemaMigrationsTableSqls = this.databaseConnection.createTableSql(schemaMigrationsTable)
+    const createSchemaMigrationsTableSqls = await this.databaseConnection.createTableSql(schemaMigrationsTable)
 
     for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
       if (this.args.testing) {

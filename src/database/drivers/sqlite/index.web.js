@@ -1,7 +1,7 @@
 // @ts-check
 
 import BetterLocalStorage from "better-localstorage"
-import ConnectionSqlJs from "./connection-sql-js"
+import ConnectionSqlJs from "./connection-sql-js.js"
 import initSqlJs from "sql.js"
 
 import Base from "./base.js"
@@ -36,6 +36,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     await this.getConnection().close()
   }
 
+  /** @returns {ConnectionSqlJs | any} */
   getConnection() {
     if (this.args?.getConnection) {
       return this.args.getConnection()

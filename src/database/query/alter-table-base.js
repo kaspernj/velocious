@@ -20,9 +20,9 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   }
 
   /**
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  toSQLs() {
+  async toSQLs() {
     const databaseType = this.getDriver().getType()
     const sqls = []
     const {tableData} = this

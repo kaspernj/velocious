@@ -6,7 +6,7 @@ import wait from "awaitery/src/wait.js"
 import Dummy from "../dummy/index.js"
 import Project from "../dummy/src/models/project.js"
 
-describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
   it("handles post requests", async () => {
     await Dummy.run(async () => {
       for (let i = 0; i <= 5; i++) {
@@ -17,7 +17,7 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
             body: postData,
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
-              "Content-Length": Buffer.byteLength(postData)
+              "Content-Length": Buffer.byteLength(postData).toString()
             },
             method: "POST"
           }
@@ -27,7 +27,7 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
 
         await wait(100) // Wait a bit to ensure the database connections are in sync
 
-        const createdProject = await Project.preload({translations: true}).find(projectID)
+        const createdProject = /** @type {Project} */ (await Project.preload({translations: true}).find(projectID))
 
         expect(createdProject.name()).toEqual("Test create project")
       }
@@ -44,18 +44,18 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
             body: postData,
             headers: {
               "Content-Type": "application/json",
-              "Content-Length": Buffer.byteLength(postData)
+              "Content-Length": Buffer.byteLength(postData).toString()
             },
             method: "POST"
           }
         )
-        const data = await response.json()
+        const data = /** @type {Record<string, any>} */ (await response.json())
 
         expect(data.status).toEqual("success")
 
         await wait(100) // Wait a bit to ensure the database connections are in sync
 
-        const createdProject = await Project.preload({translations: true}).last()
+        const createdProject = /** @type {Project} */ (await Project.preload({translations: true}).last())
 
         expect(createdProject.name()).toEqual("Test create project")
       }
@@ -67,7 +67,7 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
       for (let i = 0; i <= 5; i++) {
         const body = new FormData()
 
-        body.append("project[creating_user_reference]", 150123)
+        body.append("project[creating_user_reference]", "150123")
         body.append("project[name]", "Test create project")
 
         const response = await fetch(
@@ -77,13 +77,13 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
             method: "POST"
           }
         )
-        const data = await response.json()
+        const data = /** @type {Record<string, any>} */ (await response.json())
 
         expect(data.status).toEqual("success")
 
         await wait(100) // Wait a bit to ensure the database connections are in sync
 
-        const createdProject = await Project.preload({translations: true}).last()
+        const createdProject = /** @type {Project} */ (await Project.preload({translations: true}).last())
 
         expect(createdProject.creatingUserReference()).toEqual("150123")
         expect(createdProject.name()).toEqual("Test create project")

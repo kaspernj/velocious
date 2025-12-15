@@ -23,7 +23,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
   }
 
   /**
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
   async toSQLs() {
     const {tableData} = this
@@ -108,7 +108,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       tableDataColumn.setForeignKey(foreignKey)
     }
 
-    const createNewTableSQL = this.getDriver().createTableSql(newTableData)
+    const createNewTableSQL = await this.getDriver().createTableSql(newTableData)
     const insertSQL = `INSERT INTO ${options.quoteTableName(tempTableName)} (${newColumnsSQL}) SELECT ${oldColumnsSQL} FROM ${options.quoteTableName(tableName)}`
     const dropTableSQLs = `DROP TABLE ${options.quoteTableName(tableName)}`
     const renameTableSQL = `ALTER TABLE ${options.quoteTableName(tempTableName)} RENAME TO ${options.quoteTableName(tableName)}`
@@ -141,7 +141,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
         tableName,
         unique: actualTableIndex.getUnique()
       }
-      const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSQLs()
+      const createIndexSQLs = await new CreateIndexBase(createIndexArgs).toSQLs()
 
       for (const createIndexSQL of createIndexSQLs) {
         sqls.push(createIndexSQL)

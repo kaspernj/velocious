@@ -1,3 +1,4 @@
+import configuration from "../../../../dummy/src/config/configuration.js"
 import DatabaseHandler from "../../../../../src/database/handler.js"
 import DatabaseQuery from "../../../../../src/database/query/index.js"
 import MysqlQueryParser from "../../../../../src/database/drivers/mysql/query-parser.js"
@@ -7,7 +8,8 @@ import SelectTableAndColumn from "../../../../../src/database/query/select-table
 
 import MysqlDriverClass from "../../../../../src/database/drivers/mysql/index.js"
 
-const mysqlDriver = new MysqlDriverClass()
+const mysqlConfig = configuration.database.test.default
+const mysqlDriver = new MysqlDriverClass(mysqlConfig, configuration)
 
 describe("database - connection - drivers - mysql - query parser", () => {
   it("generates sql with selects, joins and orders", () => {

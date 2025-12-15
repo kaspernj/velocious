@@ -4,11 +4,11 @@ import Task from "../../dummy/src/models/task.js"
 describe("Record - find or create", () => {
   it("doesnt find but then creates a record", async () => {
     await Dummy.run(async () => {
-      const task = await Task.findOrCreateBy({name: "Test task"}, (newTask) => {
+      const task = /** @type {Task} */ (await Task.findOrCreateBy({name: "Test task"}, (newTask) => {
         const project = newTask.buildProject({nameEn: "Test project", nameDe: "Test projekt"})
 
         project.buildProjectDetail({note: "Test note"})
-      })
+      }))
 
       const project = task.project()
 
@@ -51,7 +51,7 @@ describe("Record - find or create", () => {
 
       expect(tasksRelationship.getPreloaded()).toBeTrue()
 
-      const projectTasksIDs = project.tasks().loaded().map((task) => task.id())
+      const projectTasksIDs = project.tasksLoaded().map((task) => task.id())
 
       expect(projectTasksIDs).toEqual([task.id()])
     })

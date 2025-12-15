@@ -24,9 +24,9 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   }
 
   /**
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  toSql() {
+  async toSql() {
     const databaseType = this.getDatabaseType()
     const driver = this.getDriver()
     const options = this.getOptions()
@@ -128,7 +128,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           tableName: tableData.getName(),
           unique: index.getUnique()
         }
-        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSQLs()
+        const createIndexSQLs = await new CreateIndexBase(createIndexArgs).toSQLs()
 
         for (const createIndexSQL of createIndexSQLs) {
           sqls.push(createIndexSQL)
@@ -156,7 +156,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
           tableName: tableData.getName(),
           unique
         }
-        const createIndexSQLs = new CreateIndexBase(createIndexArgs).toSQLs()
+        const createIndexSQLs = await new CreateIndexBase(createIndexArgs).toSQLs()
 
         for (const createIndexSQL of createIndexSQLs) {
           sqls.push(createIndexSQL)

@@ -22,7 +22,7 @@ describe("Record - query", () => {
       expect(project.nameDe()).toEqual("Test projekt")
       expect(project.nameEn()).toEqual("Test project")
 
-      const tasks = await Task.preload({project: {projectDetail: true, translations: true}}).toArray()
+      const tasks = /** @type {Task[]} */ (await Task.preload({project: {projectDetail: true, translations: true}}).toArray())
       const newTask = tasks[0]
       const newProject = newTask.project()
       const newProjectDetail = newProject.projectDetail()
@@ -85,11 +85,13 @@ describe("Record - query", () => {
         await Task.create({name: `Task 2-${i}`, project: project2})
       }
 
-      const tasks = await Task
-        .joins({project: {translations: true}})
-        .where({tasks: {name: "Task 2-2"}, project_translations: {name: "Test project 2"}})
-        .preload({project: {translations: true}})
-        .toArray()
+      const tasks = /** @type {Task[]} */ (
+        await Task
+          .joins({project: {translations: true}})
+          .where({tasks: {name: "Task 2-2"}, project_translations: {name: "Test project 2"}})
+          .preload({project: {translations: true}})
+          .toArray()
+      )
 
       const task = tasks[0]
 

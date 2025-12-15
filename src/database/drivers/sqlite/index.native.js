@@ -1,9 +1,13 @@
 import {digg} from "diggerize"
 import envSense from "env-sense/src/use-env-sense.js"
+
+// @ts-expect-error
 import query from "./query"
+
+// @ts-expect-error
 import * as SQLite from "expo-sqlite"
 
-import Base from "./base"
+import Base from "./base.js"
 
 export default class VelociousDatabaseDriversSqliteNative extends Base {
   async connect() {

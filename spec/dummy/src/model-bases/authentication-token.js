@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class AuthenticationTokenBase extends Record {
+export default class AuthenticationTokenBase extends DatabaseRecord {
   /**
    * @returns {number}
    */
@@ -84,7 +84,7 @@ export default class AuthenticationTokenBase extends Record {
   /**
    * @returns {import("../models/user.js").default}
    */
-  user() { return this.getRelationshipByName("user").loaded() }
+  user() { return /** @type {import("../models/user.js").default} */ (this.getRelationshipByName("user").loaded()) }
 
   /**
    * @abstract

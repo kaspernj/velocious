@@ -4,7 +4,7 @@ import Header from "../../src/http-client/header.js"
 import HttpClient from "../../src/http-client/index.js"
 import {wait, waitFor} from "awaitery"
 
-describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
   it("handles get requests", async () => {
     await Dummy.run(async () => {
       for (let i = 0; i <= 5; i++) {

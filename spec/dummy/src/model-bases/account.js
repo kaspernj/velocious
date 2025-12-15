@@ -1,6 +1,6 @@
-import Record from "../../../../src/database/record/index.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class AccountBase extends Record {
+export default class AccountBase extends DatabaseRecord {
   /**
    * @returns {number}
    */

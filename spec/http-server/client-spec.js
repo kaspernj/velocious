@@ -3,7 +3,7 @@ import Client from "../../src/http-server/client/index.js"
 import {digg} from "diggerize"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
-describe("http server - client", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("http server - client", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
   it("spawns a request for each that it is fed", async () => {
     await dummyConfiguration.initialize()
 

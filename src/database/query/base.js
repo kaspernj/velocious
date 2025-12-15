@@ -38,9 +38,9 @@ export default class VelociousDatabaseQueryBase {
 
   /**
    * @abstract
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  toSQLs() {
+  async toSQLs() {
     throw new Error("'toSQLs' wasn't implemented")
   }
 }

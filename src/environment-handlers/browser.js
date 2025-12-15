@@ -3,10 +3,32 @@ import {digg} from "diggerize"
 import * as inflection from "inflection"
 import restArgsError from "../utils/rest-args-error.js"
 
+/**
+ * @typedef {(id: string) => {default: typeof import("../database/migration/index.js").default}} MigrationsRequireContextIDFunctionType
+ * @typedef {MigrationsRequireContextIDFunctionType & {
+ *   keys: () => string[],
+ *   id: string
+ * }} MigrationsRequireContextType
+ */
+
+/**
+ * @typedef {(id: string) => {default: typeof import("../cli/base-command.js").default}} CommandsRequireContextIDFunctionType
+ * @typedef {CommandsRequireContextIDFunctionType & {
+ *   keys: () => string[],
+ *   id: string
+ * }} CommandsRequireContextType
+ */
+
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
+  /** @type {CommandsRequireContextType | undefined} */
+  findCommandsRequireContextResult = undefined
+
+  /** @type {MigrationsRequireContextType | undefined} */
+  _migrationsRequireContextResult = undefined
+
   /**
    * @param {object} args
-   * @param {function() : void} args.migrationsRequireContextCallback
+   * @param {() => Promise<MigrationsRequireContextType>} [args.migrationsRequireContextCallback]
    */
   constructor({migrationsRequireContextCallback, ...restArgs} = {}) {
     super()
@@ -16,29 +38,33 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {object}
+   * @returns {Promise<MigrationsRequireContextType>}
    */
-  migrationsRequireContext() {
-    const migrationsRequireContextCallback = digg(this, "migrationsRequireContextCallback")
+  async migrationsRequireContext() {
+    const {migrationsRequireContextCallback} = this
 
     if (!migrationsRequireContextCallback) throw new Error("migrationsRequireContextCallback is required")
 
-    this._migrationsRequireContextResult ||= migrationsRequireContextCallback()
+    this._migrationsRequireContextResult ||= await migrationsRequireContextCallback()
 
     return this._migrationsRequireContextResult
   }
 
   /**
-   * @returns {Promise<Array<{name: string, file: string}>>}
+   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>}
    */
-  findCommands() {
+  async findCommands() {
     this._findCommandsResult = this._actualFindCommands()
 
     return this._findCommandsResult
   }
 
+  /**
+   * @returns {CommandsRequireContextType}
+   */
   _findCommandsRequireContext() {
-    this.findCommandsRequireContextResult ||= require.context("../cli/commands", true, /\.js$/)
+    // @ts-expect-error
+    this.findCommandsRequireContextResult ||= /** @type {CommandsRequireContextType} */ (require.context("../cli/commands", true, /\.js$/))
 
     return this.findCommandsRequireContextResult
   }
@@ -65,13 +91,11 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @param {Array<string>} commandParts
-   * @template T extends import("./base-command.js").default
-   * @returns {Promise<T>}
+   * @param {object} args
+   * @param {Array<string>} args.commandParts
+   * @returns {Promise<typeof import("../cli/base-command.js").default>}
    */
-  async requireCommand({commandParts, ...restArgs}) {
-    restArgsError(restArgs)
-
+  async requireCommand({commandParts}) {
     let filePath = "."
 
     for (let commandPart of commandParts) {
@@ -109,7 +133,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {Promise<Array<{name: string, file: string}>>}
+   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>}
    */
   async findMigrations() {
     const migrationsRequireContext = await this.migrationsRequireContext()
@@ -150,8 +174,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
   /**
    * @param {string} filePath
-   * @template T extends import("../migration/index.js").default
-   * @returns {Promise<T>}
+   * @returns {Promise<typeof import("../database/migration/index.js").default>}
    */
   requireMigration = async (filePath) => {
     if (!filePath) throw new Error("filePath is required")

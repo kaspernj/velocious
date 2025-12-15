@@ -22,9 +22,9 @@ export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
   }
 
   /**
-   * @returns {string[]}
+   * @returns {Promise<string[]>}
    */
-  toSQLs() {
+  async toSQLs() {
     const databaseType = this.getDatabaseType()
     const options = this.getOptions()
     const {cascade, ifExists, tableName} = this

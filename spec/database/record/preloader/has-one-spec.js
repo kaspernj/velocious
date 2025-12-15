@@ -7,7 +7,7 @@ describe("Record - preloader - has one", () => {
     await Dummy.run(async () => {
       const project = await Project.create({creating_user_reference: "User-65"})
       const user = await User.create({email: "user@example.com", encrypted_password: "password", reference: "User-65"})
-      const foundUser = await User.preload({createdProject: true}).find(user.id())
+      const foundUser = /** @type {User} */ (await User.preload({createdProject: true}).find(user.id()))
 
       expect(foundUser.createdProject().id()).toEqual([project.id()])
     })

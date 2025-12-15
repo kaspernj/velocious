@@ -78,7 +78,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {import("../index.js").default[]} models
+   * @param {import("../index.js").default[] | import("../index.js").default} models
    * @returns {void}
    */
   addToLoaded(models) {

@@ -1,4 +1,6 @@
+// @ts-expect-error
 import React from "react"
+
 import BrowserCli from "./browser-cli.js"
 import restArgsError from "../utils/rest-args-error.js"
 

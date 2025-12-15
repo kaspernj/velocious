@@ -56,12 +56,16 @@ export default class VelociousDatabaseMigrator {
 
       schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
-      const createSchemaMigrationsTableSqls = db.createTableSql(schemaMigrationsTable)
+      const createSchemaMigrationsTableSqls = await db.createTableSql(schemaMigrationsTable)
 
       for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
         await db.query(createSchemaMigrationsTableSql)
       }
     }
+  }
+
+  async dropDatabase() {
+    throw new Error("Not implemented yet")
   }
 
   /**
