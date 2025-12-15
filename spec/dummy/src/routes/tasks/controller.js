@@ -1,5 +1,3 @@
-import {digg} from "diggerize"
-
 import Controller from "../../../../../src/controller.js"
 import Task from "../../models/task.js"
 

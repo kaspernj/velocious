@@ -1,5 +1,4 @@
 import Base from "./base.js"
-import {digg} from "diggerize"
 import * as inflection from "inflection"
 import restArgsError from "../utils/rest-args-error.js"
 
