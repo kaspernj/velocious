@@ -43,6 +43,8 @@ export default async function configurationResolver(args) {
 
     configuration = configurationImport.default
   } catch (error) {
+    console.log(`Couldn't load configuration from ${configurationPath} because of: ${error instanceof Error ? error.message : error}`)
+
     if (error instanceof Error) {
       // This might happen during an "init" CLI command where we copy a sample configuration file.
       if (!error.message.match(/^Cannot find module '(.+)\/configuration\.js'/)) {

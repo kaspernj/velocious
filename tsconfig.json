@@ -11,5 +11,6 @@
     "lib": ["dom", "ES2024"],
     "types": ["node"]
   },
+  "include": ["index.js", "bin/**/*", "src/**/*"],
   "exclude": ["src/templates/**"]
 }
