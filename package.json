@@ -29,7 +29,7 @@
   "homepage": "https://github.com/kaspernj/velocious#readme",
   "description": "",
   "dependencies": {
-    "awaitery": "^1.0.3",
+    "awaitery": "^1.0.4",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",
     "debounce": "^3.0.0",
