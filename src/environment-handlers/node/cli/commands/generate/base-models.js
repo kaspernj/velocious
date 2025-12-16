@@ -29,17 +29,17 @@ export default class DbGenerateModel extends BaseCommand {
       console.log(`create src/model-bases/${modelBaseFileName}`)
 
       let fileContent = ""
-      let velociousPath = "velocious"
+      let velociousPath
 
       if (devMode) {
-        velociousPath = "../../../.."
-        fileContent += `import DatabaseRecord from "../../../../src/database/record/index.js"\n\n`
-        // /** @type {import("./instance-relationships/has-many.js").default} */
+        velociousPath = "../../../../src"
       } else {
-        fileContent += `import DatabaseRecord from "velocious/dist/src/database/record/index.js"\n\n`
+        velociousPath = "velocious/dist/src"
       }
 
-      const hasManyRelationFilePath = `${velociousPath}/src/database/record/instance-relationships/has-many.js`
+      fileContent += `import DatabaseRecord from "${velociousPath}/database/record/index.js"\n\n`
+
+      const hasManyRelationFilePath = `${velociousPath}/database/record/instance-relationships/has-many.js`
 
       fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
 
@@ -201,7 +201,7 @@ export default class DbGenerateModel extends BaseCommand {
           } else if (baseFullFilePath && await fileExists(baseFullFilePath)) {
             recordImport = `../model-bases/${fileName}.js`
           } else {
-            recordImport = `${velociousPath}/src/database/record/index.js`
+            recordImport = `${velociousPath}/database/record/index.js`
           }
 
           fileContent += "  /**\n"
@@ -253,6 +253,8 @@ export default class DbGenerateModel extends BaseCommand {
       return "number"
     } else if (["date", "datetime"].includes(column.getType())) {
       return "Date"
+    } else {
+      console.error(`Unknown column type: ${column.getType()}`)
     }
   }
 }

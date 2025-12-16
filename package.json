@@ -8,12 +8,13 @@
   "types": "dist/index.d.ts",
   "files": ["dist/**"],
   "scripts": {
-    "buildtypes": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "eslint",
     "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",
-    "prepublishOnly": "npm run buildtypes",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
-    "velocious": "asd"
+    "velocious": "asd",
+    "watch": "tsc -p tsconfig.build.json -w"
   },
   "type": "module",
   "repository": {
@@ -28,7 +29,7 @@
   "homepage": "https://github.com/kaspernj/velocious#readme",
   "description": "",
   "dependencies": {
-    "awaitery": "^1.0.1",
+    "awaitery": "^1.0.4",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",
     "debounce": "^3.0.0",
