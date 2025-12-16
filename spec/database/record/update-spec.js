@@ -1,7 +1,7 @@
 import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
-import wait from "awaitery/src/wait.js"
+import wait from "awaitery/dist/wait.js"
 
 describe("Record - update", () => {
   it("updates a record", async () => {
