@@ -1,0 +1,14 @@
+{
+  "include": ["index.js", "bin/**/*", "src/**/*"],
+  "exclude": ["src/templates/**"],
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "declaration": true,
+    "outDir": "dist",
+    "declarationMap": true,
+    "target": "ES2024",
+    "moduleResolution": "nodenext",
+    "module": "nodenext"
+  }
+}

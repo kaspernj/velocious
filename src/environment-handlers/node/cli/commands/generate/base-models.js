@@ -36,7 +36,7 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += `import DatabaseRecord from "../../../../src/database/record/index.js"\n\n`
         // /** @type {import("./instance-relationships/has-many.js").default} */
       } else {
-        fileContent += `import DatabaseRecord from "velocious/src/database/record/index.js"\n\n`
+        fileContent += `import DatabaseRecord from "velocious/dist/src/database/record/index.js"\n\n`
       }
 
       const hasManyRelationFilePath = `${velociousPath}/src/database/record/instance-relationships/has-many.js`
@@ -143,7 +143,7 @@ export default class DbGenerateModel extends BaseCommand {
         let baseFilePath, baseFullFilePath, fileName, fullFilePath
 
         if (relationship.getPolymorphic()) {
-          fileName = "velocious/src/database/record/index.js"
+          fileName = "velocious/dist/src/database/record/index.js"
         } else {
           fileName = inflection.dasherize(inflection.underscore(relationship.getTargetModelClass().name))
           fullFilePath = `src/models/${fileName}.js`
@@ -163,7 +163,7 @@ export default class DbGenerateModel extends BaseCommand {
           } else if (baseFullFilePath && await fileExists(baseFullFilePath)) {
             modelFilePath = baseFilePath
           } else {
-            modelFilePath = "velocious/src/database/record/index.js"
+            modelFilePath = "velocious/dist/src/database/record/index.js"
           }
 
           fileContent += "  /**\n"

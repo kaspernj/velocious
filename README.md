@@ -25,7 +25,7 @@ npx velocious g:model Task
 ```
 
 ```js
-import Record from "velocious/src/database/record/index.js"
+import Record from "velocious/dist/src/database/record/index.js"
 
 class Task extends Record {
 }
@@ -108,7 +108,7 @@ npx velocious g:migration create-tasks
 
 ## Write a migration
 ```js
-import Migration from "velocious/src/database/migration/index.js"
+import Migration from "velocious/dist/src/database/migration/index.js"
 
 export default class CreateEvents extends Migration {
   async up() {
@@ -187,7 +187,7 @@ If you are developing on Velocious, you can run the tests with:
 First create a test file under something like the following path 'src/routes/accounts/create-test.js' with something like the following content:
 
 ```js
-import {describe, expect, it} from "velocious/src/testing/test.js"
+import {describe, expect, it} from "velocious/dist/src/testing/test.js"
 import Account from "../../models/account.js"
 
 describe("accounts - create", {type: "request"}, async () => {
@@ -215,7 +215,7 @@ describe("accounts - create", {type: "request"}, async () => {
 Create or edit the file `src/config/routes.js` and do something like this:
 
 ```js
-import Routes from "velocious/src/routes/index.js"
+import Routes from "velocious/dist/src/routes/index.js"
 
 const routes = new Routes()
 
@@ -241,7 +241,7 @@ export default {routes}
 Create the file `src/routes/testing/controller.js` and do something like this:
 
 ```js
-import Controller from "velocious/src/controller.js"
+import Controller from "velocious/dist/src/controller.js"
 
 export default class TestingController extends Controller {
   async truncate() {
