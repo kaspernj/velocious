@@ -2,10 +2,22 @@
 
 import BaseInstanceRelationship from "./base.js"
 
+/**
+ * A generic query over some model type.
+ * @template {typeof import("../index.js").default} MC
+ * @template {typeof import("../index.js").default} TMC
+ */
 export default class VelociousDatabaseRecordHasManyInstanceRelationship extends BaseInstanceRelationship {
   /**
+   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args
+   */
+  constructor(args) {
+    super(args)
+  }
+
+  /**
    * @param {Record<string, any>} data
-   * @returns {import("../index.js").default}
+   * @returns {InstanceType<TMC>}
    */
   build(data) {
     // Spawn new model of the targeted class
@@ -63,7 +75,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @returns {import("../index.js").default | Array<import("../index.js").default> | undefined} The loaded model or models (depending on relationship type)
+   * @returns {Array<InstanceType<TMC>>} The loaded model or models (depending on relationship type)
    */
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
@@ -78,7 +90,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {import("../index.js").default[] | import("../index.js").default} models
+   * @param {InstanceType<MC>[] | InstanceType<MC>} models
    * @returns {void}
    */
   addToLoaded(models) {
@@ -106,7 +118,8 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {import("../index.js").default[]} models
+   * @param {InstanceType<TMC>[]} models
+   * @returns {void}
    */
   setLoaded(models) {
     if (!Array.isArray(models)) throw new Error(`Argument given to setLoaded wasn't an array: ${typeof models}`)

@@ -7,16 +7,17 @@ export default class DbGenerateModel extends BaseCommand {
   async execute() {
     await this.getConfiguration().initializeModels()
 
-    const modelsDir = `${process.cwd()}/src/model-bases`
+    const modelsDir = `${process.cwd()}/src/models`
+    const baseModelsDir = `${process.cwd()}/src/model-bases`
     const modelClasses = this.getConfiguration().getModelClasses()
     let devMode = false
 
-    if (modelsDir.endsWith("velocious/spec/dummy/src/model-bases")) {
+    if (baseModelsDir.endsWith("velocious/spec/dummy/src/model-bases")) {
       devMode = true
     }
 
-    if (!await fileExists(modelsDir)) {
-      await fs.mkdir(modelsDir, {recursive: true})
+    if (!await fileExists(baseModelsDir)) {
+      await fs.mkdir(baseModelsDir, {recursive: true})
     }
 
     for (const modelClassName in modelClasses) {
@@ -24,9 +25,18 @@ export default class DbGenerateModel extends BaseCommand {
       const modelName = inflection.dasherize(modelClassName)
       const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
       const modelBaseFileName = `${inflection.dasherize(inflection.underscore(modelName))}.js`
-      const modelPath = `${modelsDir}/${modelBaseFileName}`
+      const modelPath = `${baseModelsDir}/${modelBaseFileName}`
 
       console.log(`create src/model-bases/${modelBaseFileName}`)
+
+      const sourceModelFullFilePath = `${modelsDir}/${modelBaseFileName}`
+      let sourceModelFilePath
+
+      if (await fileExists(sourceModelFullFilePath)) {
+        sourceModelFilePath = `../models/${modelBaseFileName}`
+      } else {
+        sourceModelFilePath = "velocious/dist/src/database/record/index.js"
+      }
 
       let fileContent = ""
       let velociousPath
@@ -205,7 +215,7 @@ export default class DbGenerateModel extends BaseCommand {
           }
 
           fileContent += "  /**\n"
-          fileContent += `   * @returns {import("${hasManyRelationFilePath}").default}\n`
+          fileContent += `   * @returns {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${hasManyRelationFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
 

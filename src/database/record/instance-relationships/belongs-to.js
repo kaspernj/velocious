@@ -2,17 +2,29 @@
 
 import BaseInstanceRelationship from "./base.js"
 
+/**
+ * A generic query over some model type.
+ * @template {typeof import("../index.js").default} MC
+ * @template {typeof import("../index.js").default} TMC
+ */
 export default class VelociousDatabaseRecordBelongsToInstanceRelationship extends BaseInstanceRelationship {
   /**
+   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args
+   */
+  constructor(args) {
+    super(args)
+  }
+
+  /**
    * @param {Record<string, any>} data
-   * @returns {import("../index.js").default}
+   * @returns {InstanceType<TMC>}
    */
   build(data) {
-    const TargetModelClass = this.getTargetModelClass()
+    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model")
 
-    const newInstance = new TargetModelClass(data)
+    const newInstance = /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 

@@ -2,20 +2,32 @@
 
 import BaseInstanceRelationship from "./base.js"
 
+/**
+ * A generic query over some model type.
+ * @template {typeof import("../index.js").default} MC
+ * @template {typeof import("../index.js").default} TMC
+ */
 export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
-  /** @type {import("../index.js").default | undefined} */
+  /**
+   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args
+   */
+  constructor(args) {
+    super(args)
+  }
+
+  /** @type {InstanceType<TMC> | undefined} */
   _loaded = undefined
 
   /**
    * @param {Record<string, any>} data
-   * @returns {import("../index.js").default}
+   * @returns {InstanceType<TMC>}
    */
   build(data) {
-    const TargetModelClass = this.getTargetModelClass()
+    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
 
-    const newInstance = new TargetModelClass(data)
+    const newInstance = /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 
@@ -26,7 +38,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = this.getModel().readColumn(primaryKey)
-    const TargetModelClass = this.getTargetModelClass()
+    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't load without a target model class")
 
@@ -35,7 +47,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
     whereArgs[foreignKey] = primaryModelID
 
-    const foreignModel = await TargetModelClass.where(whereArgs).first()
+    const foreignModel = /** @type {InstanceType<TMC>} */ (await TargetModelClass.where(whereArgs).first())
 
     this.setLoaded(foreignModel)
     this.setDirty(false)
@@ -43,7 +55,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   }
 
   /**
-   * @returns {import("../index.js").default | Array<import("../index.js").default> | undefined} The loaded model or models (depending on relationship type)
+   * @returns {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} The loaded model or models (depending on relationship type)
    */
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
@@ -55,7 +67,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   getLoadedOrUndefined() { return this._loaded }
 
-  /** @param {import("../index.js").default|Array<import("../index.js").default>} model */
+  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>>} model */
   setLoaded(model) {
     if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
 
