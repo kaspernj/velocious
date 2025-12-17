@@ -350,11 +350,13 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {Record<string, any>} [attributes]
-   * @returns {Promise<InstanceType<typeof this>>}
+   * @returns {Promise<InstanceType<MC>>}
    */
   static async create(attributes) {
-    const record = new this(attributes)
+    const record = /** @type {InstanceType<MC>} */ (new this(attributes))
 
     await record.save()
 
@@ -593,7 +595,10 @@ class VelociousDatabaseRecord {
     return this._attributes[columnName]
   }
 
-  /** @returns {typeof VelociousDatabaseRecord} */
+  /**
+   * @abstract
+   * @returns {typeof VelociousDatabaseRecord}
+   */
   getModelClass() {
     const modelClass = /** @type {typeof VelociousDatabaseRecord} */ (this.constructor)
 
@@ -1081,7 +1086,11 @@ class VelociousDatabaseRecord {
     translation.assign(assignments)
   }
 
-  /** @returns {ModelClassQuery<typeof this>} */
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @returns {ModelClassQuery<MC>}
+   */
   static _newQuery() {
     const handler = new Handler()
     const query = new ModelClassQuery({
@@ -1100,7 +1109,11 @@ class VelociousDatabaseRecord {
     return this.primaryKey()
   }
 
-  /** @returns {ModelClassQuery<typeof this>} */
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @returns {ModelClassQuery<MC>}
+   */
   static all() {
     return this._newQuery()
   }
@@ -1115,109 +1128,141 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {number|string} recordId
-   * @returns {Promise<InstanceType<typeof this>>}
+   * @returns {Promise<InstanceType<MC>>}
    */
   static async find(recordId) {
     return await this._newQuery().find(recordId)
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {{[key: string]: any}} conditions
-   * @returns {Promise<InstanceType<typeof this> | null>}
+   * @returns {Promise<InstanceType<MC> | null>}
    */
   static async findBy(conditions) {
     return await this._newQuery().findBy(conditions)
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {{[key: string]: any}} conditions
-   * @returns {Promise<InstanceType<typeof this>>}
+   * @returns {Promise<InstanceType<MC>>}
    */
   static async findByOrFail(conditions) {
     return await this._newQuery().findByOrFail(conditions)
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {{[key: string]: any}} conditions
    * @param {function() : void} [callback]
-   * @returns {Promise<InstanceType<typeof this>>}
+   * @returns {Promise<InstanceType<MC>>}
    */
   static async findOrCreateBy(conditions, callback) {
     return await this._newQuery().findOrCreateBy(conditions, callback)
   }
 
   /**
-   * @param {object} conditions
-   * @param {function(InstanceType<typeof this>) : void} [callback]
-   * @returns {Promise<InstanceType<typeof this>>}
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {Record<string, any>} conditions
+   * @param {function(InstanceType<MC>) : void} [callback]
+   * @returns {Promise<InstanceType<MC>>}
    */
   static async findOrInitializeBy(conditions, callback) {
     return await this._newQuery().findOrInitializeBy(conditions, callback)
   }
 
-  /** @returns {Promise<InstanceType<typeof this>>} */
+
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @returns {Promise<InstanceType<MC>>}
+   */
   static async first() {
     return await this._newQuery().first()
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {string|{[key: string]: any}} join
-   * @returns {ModelClassQuery<typeof this>}
+   * @returns {ModelClassQuery<MC>}
    */
   static joins(join) {
     return this._newQuery().joins(join)
   }
 
-  /** @returns {Promise<InstanceType<typeof this>>} */
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @returns {Promise<InstanceType<MC>>}
+   */
   static async last() {
     return await this._newQuery().last()
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {number} value
-   * @returns {ModelClassQuery<typeof this>}
+   * @returns {ModelClassQuery<MC>}
    */
   static limit(value) {
     return this._newQuery().limit(value)
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {string | number} order
-   * @returns {ModelClassQuery<typeof this>}
+   * @returns {ModelClassQuery<MC>}
    */
   static order(order) {
     return this._newQuery().order(order)
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {import("../query/index.js").NestedPreloadRecord} preload
-   * @returns {ModelClassQuery<typeof this>}
    */
   static preload(preload) {
-    return this._newQuery().preload(preload)
+    const query = /** @type {ModelClassQuery<MC>} */ (this._newQuery().preload(preload))
+
+    return query
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {import("../query/index.js").SelectArgumentType} select
-   * @returns {ModelClassQuery<typeof this>}
+   * @returns {ModelClassQuery<MC>}
    */
   static select(select) {
     return this._newQuery().select(select)
   }
 
   /**
-   * @returns {Promise<InstanceType<typeof this>[]>}
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @returns {Promise<InstanceType<MC>[]>}
    */
   static async toArray() {
-    const modelClassQuery = /** @type {ModelClassQuery<typeof this>} */ (this._newQuery())
-
-    return await modelClassQuery.toArray()
+    return await this._newQuery().toArray()
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {import("../query/index.js").WhereArgumentType} where
-   * @returns {ModelClassQuery<typeof this>}
+   * @returns {ModelClassQuery<MC>}
    */
   static where(where) {
     return this._newQuery().where(where)

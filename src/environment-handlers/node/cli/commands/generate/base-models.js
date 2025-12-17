@@ -53,6 +53,23 @@ export default class DbGenerateModel extends BaseCommand {
 
       fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
 
+      // --- getModelClass() override (fixes polymorphic typing in JS/JSDoc) ---
+      if (await fileExists(sourceModelFullFilePath)) {
+        // Model file exists (e.g. src/models/ticket.js) → return typeof Ticket
+        fileContent += "  /**\n"
+        fileContent += `   * @returns {typeof import("${sourceModelFilePath}").default}\n`
+        fileContent += "   */\n"
+        fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
+        fileContent += `  getModelClass() { return /** @type {typeof import("${sourceModelFilePath}").default} */ (this.constructor) }\n\n`
+      } else {
+        // No model file yet → fall back to typeof TicketBase
+        fileContent += "  /**\n"
+        fileContent += `   * @returns {typeof ${modelNameCamelized}Base}\n`
+        fileContent += "   */\n"
+        fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
+        fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
+      }
+
       const columns = await modelClass._getTable().getColumns()
       let methodsCount = 0
 
@@ -217,7 +234,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${hasManyRelationFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
