@@ -1,4 +1,3 @@
-// @ts-expect-error
 import React from "react"
 
 import BrowserCli from "./browser-cli.js"

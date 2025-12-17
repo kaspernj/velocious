@@ -1,6 +1,5 @@
 // @ts-check
 
-// @ts-expect-error
 import React from "react"
 import useEnvSense from "env-sense/src/use-env-sense.js"
 
