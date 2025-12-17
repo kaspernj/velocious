@@ -1,6 +1,6 @@
 // @ts-check
 
-import {anythingDifferent} from "set-state-compare/src/diff-utils.js"
+import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 /** @type {import("./test-runner.js").TestsArgument} */
