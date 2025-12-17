@@ -8,40 +8,36 @@
 
 import FromPlain from "./from-plain.js"
 import {incorporate} from "incorporator"
-import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
 import JoinObject from "./join-object.js"
 import JoinPlain from "./join-plain.js"
 import {Logger} from "../../logger.js"
 import OrderPlain from "./order-plain.js"
-import Preloader from "./preloader.js"
-import RecordNotFoundError from "../record/record-not-found-error.js"
 import SelectBase from "./select-base.js"
 import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
-import restArgsError from "../../utils/rest-args-error.js"
 
 /**
- * A generic query over some model type.
+ * @typedef {object} QueryArgsType
+ * @property {import("../drivers/base.js").default} driver
+ * @property {Array<import("./from-base.js").default>} [froms]
+ * @property {string[]} [groups]
+ * @property {Array<import("./join-base.js").default>} [joins]
+ * @property {import("../handler.js").default} handler
+ * @property {number | null} [limit]
+ * @property {number | null} [offset]
+ * @property {Array<import("./order-base.js").default>} [orders]
+ * @property {number | null} [page]
+ * @property {number} [perPage]
+ * @property {NestedPreloadRecord} [preload]
+ * @property {Array<import("./select-base.js").default>} [selects]
+ * @property {Array<import("./where-base.js").default>} [wheres]
  */
+
 export default class VelociousDatabaseQuery {
   /**
-   * @param {object} args
-   * @param {import("../drivers/base.js").default} args.driver
-   * @param {Array<import("./from-base.js").default>} [args.froms]
-   * @param {string[]} [args.groups]
-   * @param {Array<import("./join-base.js").default>} [args.joins]
-   * @param {import("../handler.js").default} args.handler
-   * @param {number | null} [args.limit]
-   * @param {typeof import("../record/index.js").default} [args.modelClass]
-   * @param {number | null} [args.offset]
-   * @param {Array<import("./order-base.js").default>} [args.orders]
-   * @param {number | null} [args.page]
-   * @param {number} [args.perPage]
-   * @param {NestedPreloadRecord} [args.preload]
-   * @param {Array<import("./select-base.js").default>} [args.selects]
-   * @param {Array<import("./where-base.js").default>} [args.wheres]
+   * @param {QueryArgsType} args
    */
   constructor({
     driver,
@@ -50,26 +46,20 @@ export default class VelociousDatabaseQuery {
     joins = [],
     handler,
     limit = null,
-    modelClass,
     offset = null,
     orders = [],
     page = null,
     perPage,
     preload = {},
     selects = [],
-    wheres = [],
-    ...restArgs
+    wheres = []
   }) {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
 
-    restArgsError(restArgs)
-
     this.driver = driver
-
     this.handler = handler
     this.logger = new Logger(this)
-    this.modelClass = modelClass
     this._froms = froms
     this._groups = groups
     this._joins = joins
@@ -85,18 +75,16 @@ export default class VelociousDatabaseQuery {
     this._wheres = wheres
   }
 
-  /**
-   * @returns {VelociousDatabaseQuery}
-   */
+  /** @returns {this} */
   clone() {
-    const newQuery = new VelociousDatabaseQuery({
+    const QueryClass = /** @type {new (args: QueryArgsType) => this} */ (this.constructor)
+    const newQuery = new QueryClass({
       driver: this.driver,
       froms: [...this._froms],
       handler: this.handler.clone(),
       groups: [...this._groups],
       joins: [...this._joins],
       limit: this._limit,
-      modelClass: this.modelClass,
       offset: this._offset,
       orders: [...this._orders],
       page: this._page,
@@ -109,195 +97,21 @@ export default class VelociousDatabaseQuery {
     return newQuery
   }
 
-  /**
-   * @returns {Promise<number>}
-   */
-  async count() {
-    // Generate count SQL
-    let sql = `COUNT(${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())})`
-
-    if (this.driver.getType() == "pgsql") sql += "::int"
-
-    sql += " AS count"
-
-
-    // Clone query and execute count
-    const countQuery = this.clone()
-
-    countQuery._selects = []
-    countQuery.select(sql)
-
-    const results = /** @type {{ count: number }[]} */ (await countQuery._executeQuery())
-
-
-    // The query isn't grouped and a single result has been given
-    if (results.length == 1) {
-      return results[0].count
-    }
-
-
-    // The query may be grouped and a lot of different counts a given
-    let countResult = 0
-
-    for (const result of results) {
-      if (!("count" in result)) {
-        throw new Error("Invalid count result")
-      }
-
-      countResult += result.count
-    }
-
-    return countResult
-  }
-
-  /**
-   * @returns {import("./from-base.js").default[]}
-   */
+  /** @returns {import("./from-base.js").default[]} */
   getFroms() {
     return this._froms
   }
 
-  /**
-   * @returns {string[]}
-   */
+  /** @returns {string[]} */
   getGroups() {
     return this._groups
   }
 
-  /**
-   * @returns {typeof import("../record/index.js").default}
-   */
-  getModelClass() {
-    if (!this.modelClass) throw new Error("modelClass not set")
-
-    return this.modelClass
-  }
-
-  /**
-   * @returns {import("../query-parser/options.js").default}
-   */
+  /** @returns {import("../query-parser/options.js").default} */
   getOptions() { return this.driver.options() }
 
-  /**
-   * @returns {Array<import("./select-base.js").default>}
-   */
+  /** @returns {Array<import("./select-base.js").default>} */
   getSelects() { return this._selects }
-
-  /**
-   * @returns {Promise<void>}
-   */
-  async destroyAll() {
-    const records = await this.toArray()
-
-    for (const record of records) {
-      await record.destroy()
-    }
-  }
-
-  /**
-   * @param {number|string} recordId
-   * @returns {Promise<import("../record/index.js").default>}
-   */
-  async find(recordId) {
-    /** @type {{[key: string]: number | string}} */
-    const conditions = {}
-
-    conditions[this.getModelClass().primaryKey()] = recordId
-
-    const query = this.clone().where(conditions)
-    const record = await query.first()
-
-    if (!record) {
-      throw new RecordNotFoundError(`Couldn't find ${this.getModelClass().name} with '${this.getModelClass().primaryKey()}'=${recordId}`)
-    }
-
-    return record
-  }
-
-  /**
-   * @param {{[key: string]: any}} conditions
-   * @returns {Promise<import("../record/index.js").default|null>}
-   */
-  async findBy(conditions) {
-    /** @type {{[key: string]: number | string}} */
-    const newConditions = {}
-
-    for (const key in conditions) {
-      const keyUnderscore = inflection.underscore(key)
-
-      newConditions[keyUnderscore] = conditions[key]
-    }
-
-    return await this.clone().where(newConditions).first()
-  }
-
-  /**
-   * @param {{[key: string]: any}} conditions
-   * @param {function() : void} callback
-   * @returns {Promise<import("../record/index.js").default>}
-   */
-  async findOrCreateBy(conditions, callback) {
-    const record = await this.findOrInitializeBy(conditions, callback)
-
-    if (record.isNewRecord()) {
-      await record.save()
-    }
-
-    return record
-  }
-
-  /**
-   * @param {{[key: string]: any}} conditions
-   * @returns {Promise<import("../record/index.js").default>}
-   */
-  async findByOrFail(conditions) {
-    /** @type {{[key: string]: number | string}} */
-    const newConditions = {}
-
-    for (const key in conditions) {
-      const keyUnderscore = inflection.underscore(key)
-
-      newConditions[keyUnderscore] = conditions[key]
-    }
-
-    const model = await this.clone().where(newConditions).first()
-
-    if (!model) {
-      throw new Error("Record not found")
-    }
-
-    return model
-  }
-
-  /**
-   * @param {object} conditions
-   * @param {function(import("../record/index.js").default) : void} callback
-   * @returns {Promise<import("../record/index.js").default>}
-   */
-  async findOrInitializeBy(conditions, callback) {
-    const record = await this.findBy(conditions)
-
-    if (record) return record
-
-    const ModelClass = this.getModelClass()
-    const newRecord = new ModelClass(conditions)
-
-    if (callback) {
-      callback(newRecord)
-    }
-
-    return newRecord
-  }
-
-  /**
-   * @returns {Promise<import("../record/index.js").default>}
-   */
-  async first() {
-    const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
-    const results = await newQuery.toArray()
-
-    return results[0]
-  }
 
   /**
    * @param {string|import("./from-base.js").default} from
@@ -333,17 +147,6 @@ export default class VelociousDatabaseQuery {
     }
 
     return this
-  }
-
-  /**
-   * @returns {Promise<import("../record/index.js").default>}
-   */
-  async last() {
-    const primaryKey = this.getModelClass().primaryKey()
-    const tableName = this.getModelClass().tableName()
-    const results = await this.clone().reorder(`${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(primaryKey)} DESC`).limit(1).toArray()
-
-    return results[0]
   }
 
   /**
@@ -423,9 +226,7 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  /**
-   * @returns {this}
-   */
+  /** @returns {this} */
   reverseOrder() {
     for (const order of this._orders) {
       order.setReverseOrder(true)
@@ -470,40 +271,9 @@ export default class VelociousDatabaseQuery {
     return results
   }
 
-  /**
-   * @returns {Promise<Array<object>>} Array of results from the database
-   */
+  /** @returns {Promise<Array<object>>} Array of results from the database */
   async results() {
     return await this._executeQuery()
-  }
-
-  /**
-   * Converts query results to array of model instances
-   * @returns {Promise<Array<import("../record/index.js").default>>}
-   */
-  async toArray() {
-    const models = []
-    const results = await this.results()
-
-    for (const result of results) {
-      const ModelClass = this.getModelClass()
-      const model = new ModelClass()
-
-      model.loadExistingRecord(result)
-      models.push(model)
-    }
-
-    if (Object.keys(this._preload).length > 0 && models.length > 0) {
-      const preloader = new Preloader({
-        modelClass: this.modelClass,
-        models,
-        preload: this._preload
-      })
-
-      await preloader.run()
-    }
-
-    return models
   }
 
   /**
@@ -514,7 +284,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {WhereArgumentType} where
-   * @returns {VelociousDatabaseQuery} This query instance
+   * @returns {this} This query instance
    */
   where(where) {
     if (typeof where == "string") {

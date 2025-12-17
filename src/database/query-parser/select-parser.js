@@ -48,7 +48,9 @@ export default class VelociousDatabaseQueryParserSelectParser {
     }
 
     if (query.getSelects().length == 0) {
-      if (query.modelClass) {
+      // @ts-expect-error
+      if (query.constructor.name == "VelociousDatabaseQueryModelClassQuery" && query.modelClass) {
+        // @ts-expect-error
         sql += `${query.modelClass.connection().quoteTable(query.modelClass.tableName())}.*`
       } else {
         sql += "*"

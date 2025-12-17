@@ -247,14 +247,20 @@ export default class DbGenerateModel extends BaseCommand {
    * @returns {string | undefined}
    */
   jsDocTypeFromColumn(column) {
-    if (column.getType() == "varchar") {
+    const type = column.getType()
+
+    if (type == "boolean") {
+      return "boolean"
+    } else if (type == "json") {
+      return "Record<string, any>"
+    } else if (type == "blob" || type == "varchar" || type == "text" || type == "uuid") {
       return "string"
-    } else if (["bigint", "int", "integer", "smallint"].includes(column.getType())) {
+    } else if (["bigint", "int", "integer", "smallint"].includes(type)) {
       return "number"
-    } else if (["date", "datetime"].includes(column.getType())) {
+    } else if (["date", "datetime"].includes(type)) {
       return "Date"
     } else {
-      console.error(`Unknown column type: ${column.getType()}`)
+      console.error(`Unknown column type: ${type}`)
     }
   }
 }
