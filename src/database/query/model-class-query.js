@@ -4,7 +4,7 @@ import {incorporate} from "incorporator"
 import * as inflection from "inflection"
 import {Logger} from "../../logger.js"
 import Preloader from "./preloader.js"
-import Query from "./index.js"
+import DatabaseQuery from "./index.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
 import SelectBase from "./select-base.js"
 import SelectPlain from "./select-plain.js"
@@ -23,11 +23,12 @@ import SelectPlain from "./select-plain.js"
  * @typedef {import("./index.js").QueryArgsType & object} ModelClassQueryArgsType
  * @property {MC} modelClass
  */
+
 /**
  * A generic query over some model type.
  * @template {typeof import("../record/index.js").default} MC
  */
-export default class VelociousDatabaseQueryModelClassQuery extends Query {
+export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery {
   /**
    * @param {ModelClassQueryArgsType<MC>} args
    */

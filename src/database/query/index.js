@@ -17,7 +17,6 @@ import SelectBase from "./select-base.js"
 import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
-import restArgsError from "../../utils/rest-args-error.js"
 
 /**
  * @typedef {object} QueryArgsType
@@ -36,10 +35,6 @@ import restArgsError from "../../utils/rest-args-error.js"
  * @property {Array<import("./where-base.js").default>} [wheres]
  */
 
-/**
- * A generic query over some model type.
- * @template {typeof import("../record/index.js").default} MC
- */
 export default class VelociousDatabaseQuery {
   /**
    * @param {QueryArgsType} args
@@ -57,16 +52,12 @@ export default class VelociousDatabaseQuery {
     perPage,
     preload = {},
     selects = [],
-    wheres = [],
-    ...restArgs
+    wheres = []
   }) {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
 
-    restArgsError(restArgs)
-
     this.driver = driver
-
     this.handler = handler
     this.logger = new Logger(this)
     this._froms = froms

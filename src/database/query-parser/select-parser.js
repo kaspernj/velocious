@@ -1,6 +1,5 @@
 // @ts-check
 
-import ModelClassQuery from "../query/model-class-query.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryParserSelectParser {
@@ -49,7 +48,9 @@ export default class VelociousDatabaseQueryParserSelectParser {
     }
 
     if (query.getSelects().length == 0) {
-      if (query instanceof ModelClassQuery && query.modelClass) {
+      // @ts-expect-error
+      if (query.constructor.name == "ModelClassQuery" && query.modelClass) {
+        // @ts-expect-error
         sql += `${query.modelClass.connection().quoteTable(query.modelClass.tableName())}.*`
       } else {
         sql += "*"

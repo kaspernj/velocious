@@ -1,7 +1,6 @@
 // @ts-check
 
 import JoinBase from "./join-base.js"
-import ModelClassQuery from "./model-class-query.js"
 
 /**
  * @typedef {{[key: string]: boolean | JoinObject}} JoinObject
@@ -19,13 +18,14 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   toSql() {
     const query = this.getQuery()
 
-    if (!(query instanceof ModelClassQuery)) {
+    if (query.constructor.name != "ModelClassQuery") {
       throw new Error(`Query has to be a ModelClassQuery but was a ${query.constructor.name}`)
     }
 
-    const modelClass = query.modelClass
+    // @ts-expect-error
+    const ModelClass = /** @type {typeof import("../record/index.js").default} */ (query.modelClass)
 
-    return this.joinObject(this.object, modelClass, "", 0)
+    return this.joinObject(this.object, ModelClass, "", 0)
   }
 
   /**
