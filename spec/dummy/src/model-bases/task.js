@@ -49,8 +49,15 @@ export default class TaskBase extends DatabaseRecord {
    */
   hasName() { return this._hasAttribute(this.name()) }
 
+  /**
+   * @returns {string | null}
+   */
   description() { return this.readAttribute("description") }
 
+  /**
+   * @param {string | null} newValue
+   * @returns {void}
+   */
   setDescription(newValue) { return this._setColumnAttribute("description", newValue) }
 
   /**

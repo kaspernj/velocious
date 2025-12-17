@@ -1081,9 +1081,7 @@ class VelociousDatabaseRecord {
     translation.assign(assignments)
   }
 
-  /**
-   * @returns {ModelClassQuery<typeof this>}
-   */
+  /** @returns {ModelClassQuery<typeof this>} */
   static _newQuery() {
     const handler = new Handler()
     const query = new ModelClassQuery({
@@ -1095,25 +1093,19 @@ class VelociousDatabaseRecord {
     return query.from(new FromTable(this.tableName()))
   }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   static orderableColumn() {
     // FIXME: Allow to change to 'created_at' if using UUID?
 
     return this.primaryKey()
   }
 
-  /**
-   * @returns {ModelClassQuery<typeof this>}
-   */
+  /** @returns {ModelClassQuery<typeof this>} */
   static all() {
     return this._newQuery()
   }
 
-  /**
-   * @returns {Promise<number>}
-   */
+  /** @returns {Promise<number>} */
   static async count() {
     return await this._newQuery().count()
   }
@@ -1164,9 +1156,7 @@ class VelociousDatabaseRecord {
     return await this._newQuery().findOrInitializeBy(conditions, callback)
   }
 
-  /**
-   * @returns {Promise<InstanceType<typeof this>>}
-   */
+  /** @returns {Promise<InstanceType<typeof this>>} */
   static async first() {
     return await this._newQuery().first()
   }
@@ -1179,9 +1169,7 @@ class VelociousDatabaseRecord {
     return this._newQuery().joins(join)
   }
 
-  /**
-   * @returns {Promise<InstanceType<typeof this>>}
-   */
+  /** @returns {Promise<InstanceType<typeof this>>} */
   static async last() {
     return await this._newQuery().last()
   }
@@ -1219,10 +1207,12 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Promise<VelociousDatabaseRecord[]>}
+   * @returns {Promise<InstanceType<typeof this>[]>}
    */
-  static toArray() {
-    return this._newQuery().toArray()
+  static async toArray() {
+    const modelClassQuery = /** @type {ModelClassQuery<typeof this>} */ (this._newQuery())
+
+    return await modelClassQuery.toArray()
   }
 
   /**

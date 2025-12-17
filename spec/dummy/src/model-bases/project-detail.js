@@ -33,8 +33,15 @@ export default class ProjectDetailBase extends DatabaseRecord {
    */
   hasProjectId() { return this._hasAttribute(this.projectId()) }
 
+  /**
+   * @returns {string | null}
+   */
   note() { return this.readAttribute("note") }
 
+  /**
+   * @param {string | null} newValue
+   * @returns {void}
+   */
   setNote(newValue) { return this._setColumnAttribute("note", newValue) }
 
   /**

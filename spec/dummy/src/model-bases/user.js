@@ -123,7 +123,7 @@ export default class UserBase extends DatabaseRecord {
   setCreatedProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/authentication-token.js").default>}
    */
   authenticationTokens() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("authenticationTokens")) }
 
@@ -146,7 +146,7 @@ export default class UserBase extends DatabaseRecord {
   setAuthenticationTokens(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/project.js").default>}
    */
   createdProjects() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("createdProjects")) }
 

@@ -124,7 +124,7 @@ export default class ProjectBase extends DatabaseRecord {
   setCreatingUser(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}
    */
   tasks() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("tasks")) }
 
@@ -172,7 +172,7 @@ export default class ProjectBase extends DatabaseRecord {
   setProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../model-bases/project-translation.js").default>}
    */
   translations() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("translations")) }
 

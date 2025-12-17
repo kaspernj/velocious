@@ -1,13 +1,24 @@
 // @ts-check
 
+/**
+ * @template {typeof import("../index.js").default} MC
+ * @template {typeof import("../index.js").default} TMC
+ * @typedef {object} InstanceRelationshipsBaseArgs
+ * @property {InstanceType<MC>} model
+   @property {import("../relationships/base.js").default} relationship
+ */
+
+/**
+ * A generic query over some model type.
+ * @template {typeof import("../index.js").default} MC
+ * @template {typeof import("../index.js").default} TMC
+ */
 export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @type {boolean | undefined} */
   _autoSave = undefined
 
   /**
-   * @param {object} args
-   * @param {import("../index.js").default} args.model
-   * @param {import("../relationships/base.js").default} args.relationship
+   * @param {InstanceRelationshipsBaseArgs<MC, TMC>} args
    */
   constructor({model, relationship}) {
     this._dirty = false
@@ -17,7 +28,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @param {import("../index.js").default[] | import("../index.js").default} models
+   * @param {InstanceType<TMC>[] | InstanceType<TMC>} models
    * @returns {void}
    */
   addToLoaded(models) { // eslint-disable-line no-unused-vars
@@ -27,7 +38,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**
    * @abstract
    * @param {Record<string, any>} attributes
-   * @returns {import("../index.js").default}
+   * @returns {InstanceType<TMC>}
    */
   build(attributes) { // eslint-disable-line no-unused-vars
     throw new Error("'build' not implemented")
@@ -62,7 +73,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**  @returns {boolean} Whether the relationship has been preloaded */
   isLoaded() { return Boolean(this._loaded) }
 
-  /** @returns {import("../index.js").default | Array<import("../index.js").default> | undefined} The loaded model or models (depending on relationship type) */
+  /** @returns {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} The loaded model or models (depending on relationship type) */
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
       throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
@@ -71,10 +82,10 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     return this._loaded
   }
 
-  /** @param {import("../index.js").default|Array<import("../index.js").default>|undefined} model */
+  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model */
   setLoaded(model) { this._loaded = model }
 
-  /** @returns {import("../index.js").default | import("../index.js").default[] | undefined} */
+  /** @returns {InstanceType<TMC> | InstanceType<TMC>[] | undefined} */
   getLoadedOrUndefined() { return this._loaded }
 
   /** @returns {boolean} The loaded model or models (depending on relationship type) */
@@ -86,7 +97,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @returns {string} The foreign key for this relationship */
   getForeignKey() { return this.getRelationship().getForeignKey() }
 
-  /** @returns {import("../index.js").default} model */
+  /** @returns {InstanceType<MC>} */
   getModel() { return this.model }
 
   /** @returns {string} The primary key for this relationship's model */
@@ -95,8 +106,12 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @returns {import("../relationships/base.js").default} The relationship object that this instance relationship is based on */
   getRelationship() { return this.relationship }
 
-  /** @returns {typeof import("../index.js").default | undefined} The model class that this instance relationship */
-  getTargetModelClass() { return this.getRelationship().getTargetModelClass() }
+  /** @returns {TMC | undefined} The model class that this instance relationship */
+  getTargetModelClass() {
+    const TargetModelClass = /** @type {TMC} */ (this.getRelationship().getTargetModelClass())
+
+    return TargetModelClass
+  }
 
   /** @returns {string} The type of relationship (e.g. "has_many", "belongs_to", etc.) */
   getType() { return this.getRelationship().getType() }
