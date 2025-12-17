@@ -6,22 +6,13 @@ import {Logger} from "../../logger.js"
 import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
-import SelectBase from "./select-base.js"
-import SelectPlain from "./select-plain.js"
 
 /**
- * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
- * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
- * @typedef {object | string} WhereArgumentType
+ * @template {typeof import("../record/index.js").default} MC
  */
 /**
  * @template {typeof import("../record/index.js").default} MC
- * @typedef {InstanceType<MC>} ModelOf
- */
-/**
- * @template {typeof import("../record/index.js").default} MC
- * @typedef {import("./index.js").QueryArgsType & object} ModelClassQueryArgsType
- * @property {MC} modelClass
+ * @typedef {import("./index.js").QueryArgsType & {modelClass: MC}} ModelClassQueryArgsType
  */
 
 /**
@@ -29,9 +20,7 @@ import SelectPlain from "./select-plain.js"
  * @template {typeof import("../record/index.js").default} MC
  */
 export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery {
-  /**
-   * @param {ModelClassQueryArgsType<MC>} args
-   */
+  /** @param {ModelClassQueryArgsType<MC>} args */
   constructor(args) {
     const {modelClass} = args
 
@@ -39,13 +28,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     super(args)
     this.logger = new Logger(this)
+
+    /** @type {MC} */
     this.modelClass = modelClass
   }
 
   /** @returns {this} */
   clone() {
-    // @ts-expect-error
-    const newQuery = /** @type {new (args: ModelClassQueryArgsType<MC>) => this} */ (new VelociousDatabaseQueryModelClassQuery({
+    const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (new VelociousDatabaseQueryModelClassQuery({
       driver: this.driver,
       froms: [...this._froms],
       handler: this.handler.clone(),
@@ -82,14 +72,12 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     countQuery._selects = []
     countQuery.select(sql)
 
-    const results = /** @type {{ count: number }[]} */ (await countQuery._executeQuery())
-
+    const results = /** @type {{count: number}[]} */ (await countQuery._executeQuery())
 
     // The query isn't grouped and a single result has been given
     if (results.length == 1) {
       return results[0].count
     }
-
 
     // The query may be grouped and a lot of different counts a given
     let countResult = 0
@@ -167,7 +155,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {{[key: string]: any}} conditions
-   * @param {function() : void} callback
+   * @param {function(InstanceType<MC>) : void} callback
    * @returns {Promise<InstanceType<MC>>}
    */
   async findOrCreateBy(conditions, callback) {
@@ -209,7 +197,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {object} conditions
-   * @param {function(import("../record/index.js").default) : void} callback
+   * @param {function(InstanceType<MC>) : void} callback
    * @returns {Promise<InstanceType<MC>>}
    */
   async findOrInitializeBy(conditions, callback) {
@@ -227,9 +215,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return newRecord
   }
 
-  /**
-   * @returns {Promise<InstanceType<MC>>}
-   */
+  /** @returns {Promise<InstanceType<MC> | undefined>} */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
     const results = await newQuery.toArray()
@@ -237,9 +223,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return results[0]
   }
 
-  /**
-   * @returns {Promise<InstanceType<MC>>}
-   */
+  /** @returns {Promise<InstanceType<MC> | undefined>} */
   async last() {
     const primaryKey = this.getModelClass().primaryKey()
     const tableName = this.getModelClass().tableName()
@@ -249,35 +233,11 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {NestedPreloadRecord} data
+   * @param {import("./index.js").NestedPreloadRecord} data
    * @returns {this}
    */
   preload(data) {
     incorporate(this._preload, data)
-    return this
-  }
-
-  /**
-   * @param {SelectArgumentType} select
-   * @returns {this}
-   */
-  select(select) {
-    if (Array.isArray(select)) {
-      for (const selectInArray of select) {
-        this.select(selectInArray)
-      }
-
-      return this
-    }
-
-    if (typeof select == "string") {
-      this._selects.push(new SelectPlain(select))
-    } else if (select instanceof SelectBase) {
-      this._selects.push(select)
-    } else {
-      throw new Error(`Invalid select type: ${typeof select}`)
-    }
-
     return this
   }
 

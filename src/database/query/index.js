@@ -1,13 +1,6 @@
 // @ts-check
 
-/**
- * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
- * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
- * @typedef {object | string} WhereArgumentType
- */
-
 import FromPlain from "./from-plain.js"
-import {incorporate} from "incorporator"
 import {isPlainObject} from "is-plain-object"
 import JoinObject from "./join-object.js"
 import JoinPlain from "./join-plain.js"
@@ -17,6 +10,12 @@ import SelectBase from "./select-base.js"
 import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
 import WherePlain from "./where-plain.js"
+
+/**
+ * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
+ * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
+ * @typedef {object | string} WhereArgumentType
+ */
 
 /**
  * @typedef {object} QueryArgsType
@@ -204,15 +203,6 @@ export default class VelociousDatabaseQuery {
    */
   perPage(perPage) {
     this._perPage = perPage
-    return this
-  }
-
-  /**
-   * @param {NestedPreloadRecord} data
-   * @returns {this}
-   */
-  preload(data) {
-    incorporate(this._preload, data)
     return this
   }
 
