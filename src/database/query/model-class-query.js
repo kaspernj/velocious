@@ -209,7 +209,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {object} conditions
-   * @param {function(import("../record/index.js").default) : void} callback
+   * @param {function(InstanceType<MC>) : void} callback
    * @returns {Promise<InstanceType<MC>>}
    */
   async findOrInitializeBy(conditions, callback) {
