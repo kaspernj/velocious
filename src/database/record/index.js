@@ -593,7 +593,10 @@ class VelociousDatabaseRecord {
     return this._attributes[columnName]
   }
 
-  /** @returns {typeof VelociousDatabaseRecord} */
+  /**
+   * @abstract
+   * @returns {typeof VelociousDatabaseRecord}
+   */
   getModelClass() {
     const modelClass = /** @type {typeof VelociousDatabaseRecord} */ (this.constructor)
 
@@ -1081,7 +1084,11 @@ class VelociousDatabaseRecord {
     translation.assign(assignments)
   }
 
-  /** @returns {ModelClassQuery<typeof this>} */
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @returns {ModelClassQuery<MC>}
+   */
   static _newQuery() {
     const handler = new Handler()
     const query = new ModelClassQuery({
@@ -1191,11 +1198,14 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {import("../query/index.js").NestedPreloadRecord} preload
-   * @returns {ModelClassQuery<typeof this>}
    */
   static preload(preload) {
-    return this._newQuery().preload(preload)
+    const query = /** @type {ModelClassQuery<MC>} */ (this._newQuery().preload(preload))
+
+    return query
   }
 
   /**
