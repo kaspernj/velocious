@@ -208,15 +208,6 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {NestedPreloadRecord} data
-   * @returns {this}
-   */
-  preload(data) {
-    incorporate(this._preload, data)
-    return this
-  }
-
-  /**
    * @param {string | number} order
    * @returns {this}
    */
