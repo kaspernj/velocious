@@ -3,7 +3,7 @@
     "velocious": "dist/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.113",
+  "version": "1.0.114",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": ["dist/**"],
