@@ -18,7 +18,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   toSql() {
     const query = this.getQuery()
 
-    if (query.constructor.name != "ModelClassQuery") {
+    if (query.constructor.name != "VelociousDatabaseQueryModelClassQuery") {
       throw new Error(`Query has to be a ModelClassQuery but was a ${query.constructor.name}`)
     }
 
