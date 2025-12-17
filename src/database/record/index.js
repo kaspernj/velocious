@@ -1151,7 +1151,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {{[key: string]: any}} conditions
-   * @param {function() : void} callback
+   * @param {function() : void} [callback]
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async findOrCreateBy(conditions, callback) {
@@ -1160,7 +1160,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {object} conditions
-   * @param {function(import("../record/index.js").default) : void} callback
+   * @param {function(import("../record/index.js").default) : void} [callback]
    * @returns {Promise<InstanceType<typeof this>>}
    */
   static async findOrInitializeBy(conditions, callback) {
