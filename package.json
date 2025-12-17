@@ -3,7 +3,7 @@
     "velocious": "dist/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.114",
+  "version": "1.0.115",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": ["dist/**"],
@@ -11,7 +11,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/bin/velocious.js",
     "lint": "eslint",
     "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run build && chmod +x dist/bin/velocious.js",
     "typecheck": "tsc --noEmit",
     "velocious": "asd",
     "watch": "tsc -p tsconfig.build.json -w"
