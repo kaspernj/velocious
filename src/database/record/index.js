@@ -14,6 +14,7 @@ import HasManyRelationship from "./relationships/has-many.js"
 import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
 import * as inflection from "inflection"
+import ModelClassQuery from "../query/model-class-query.js"
 import Query from "../query/index.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import ValidatorsPresence from "./validators/presence.js"
@@ -31,23 +32,20 @@ class ValidationError extends Error {
 
   /**
    * @param {VelociousDatabaseRecord} model
+   * @returns {void}
    */
   setModel(model) {
     this._model = model
   }
 
-  /**
-   * @returns {Record<string, ValidationErrorObjectType[]>}
-   */
+  /** @returns {Record<string, ValidationErrorObjectType[]>} */
   getValidationErrors() {
     if (!this._validationErrors) throw new Error("Validation errors hasn't been set")
 
     return this._validationErrors
   }
 
-  /**
-   * @param {Record<string, ValidationErrorObjectType[]>} validationErrors
-   */
+  /** @param {Record<string, ValidationErrorObjectType[]>} validationErrors */
   setValidationErrors(validationErrors) {
     this._validationErrors = validationErrors
   }
@@ -1085,11 +1083,11 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static _newQuery() {
     const handler = new Handler()
-    const query = new Query({
+    const query = new ModelClassQuery({
       driver: this.connection(),
       handler,
       modelClass: this
@@ -1108,7 +1106,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static all() {
     return this._newQuery()
@@ -1176,7 +1174,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string|{[key: string]: any}} join
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static joins(join) {
     return this._newQuery().joins(join)
@@ -1191,7 +1189,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {number} value
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static limit(value) {
     return this._newQuery().limit(value)
@@ -1199,7 +1197,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string | number} order
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static order(order) {
     return this._newQuery().order(order)
@@ -1207,7 +1205,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {import("../query/index.js").NestedPreloadRecord} preload
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static preload(preload) {
     return this._newQuery().preload(preload)
@@ -1215,7 +1213,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {import("../query/index.js").SelectArgumentType} select
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static select(select) {
     return this._newQuery().select(select)
@@ -1230,7 +1228,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {import("../query/index.js").WhereArgumentType} where
-   * @returns {Query}
+   * @returns {ModelClassQuery<typeof this>}
    */
   static where(where) {
     return this._newQuery().where(where)
@@ -1471,9 +1469,7 @@ class VelociousDatabaseRecord {
     return belongsToChanges
   }
 
-  /**
-   * @returns {Promise<void>}
-   */
+  /** @returns {Promise<void>} */
   async _createNewRecord() {
     if (!this.getModelClass().connection()["insertSql"]) {
       throw new Error(`No insertSql on ${this.getModelClass().connection().constructor.name}`)
@@ -1519,9 +1515,7 @@ class VelociousDatabaseRecord {
     }
   }
 
-  /**
-   * @returns {Promise<void>}
-   */
+  /** @returns {Promise<void>} */
   async _updateRecordWithChanges() {
     /** @type {Record<string, any>} */
     const conditions = {}
@@ -1545,9 +1539,7 @@ class VelociousDatabaseRecord {
     }
   }
 
-  /**
-   * @returns {number|string}
-   */
+  /** @returns {number|string} */
   id() {
     if (!this.getModelClass()._columnNameToAttributeName) {
       throw new Error(`Column names mapping hasn't been set on ${this.constructor.name}. Has the model been initialized?`)
@@ -1563,14 +1555,10 @@ class VelociousDatabaseRecord {
     return this.readAttribute(attributeName)
   }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   isPersisted() { return !this._isNewRecord }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   isNewRecord() { return this._isNewRecord }
 
   /**
@@ -1582,7 +1570,9 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
    * @param {string | number} id
+   * @returns {Promise<void>}
    */
   async _reloadWithId(id) {
     const primaryKey = this.getModelClass().primaryKey()
@@ -1592,7 +1582,7 @@ class VelociousDatabaseRecord {
 
     whereObject[primaryKey] = id
 
-    const query = this.getModelClass().where(whereObject)
+    const query = /** @type {import("../query/model-class-query.js").default<MC>} */ (this.getModelClass().where(whereObject))
     const reloadedModel = await query.first()
 
     if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)
@@ -1605,7 +1595,7 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>}
    */
   async reload() {
-    this._reloadWithId(this.readAttribute("id"))
+    await this._reloadWithId(this.readAttribute("id"))
   }
 
   async _runValidations() {
@@ -1634,9 +1624,7 @@ class VelociousDatabaseRecord {
     }
   }
 
-  /**
-   * @returns {string[]}
-   */
+  /** @returns {string[]} */
   fullErrorMessages() {
     /** @type {string[]} */
     const validationErrorMessages = []
