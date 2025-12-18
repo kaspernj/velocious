@@ -155,7 +155,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {{[key: string]: any}} conditions
-   * @param {function(InstanceType<MC>) : void} callback
+   * @param {function(InstanceType<MC>) : void} [callback]
    * @returns {Promise<InstanceType<MC>>}
    */
   async findOrCreateBy(conditions, callback) {
@@ -197,7 +197,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {object} conditions
-   * @param {function(InstanceType<MC>) : void} callback
+   * @param {function(InstanceType<MC>) : void} [callback]
    * @returns {Promise<InstanceType<MC>>}
    */
   async findOrInitializeBy(conditions, callback) {

@@ -2,6 +2,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class AccountBase extends DatabaseRecord {
   /**
+   * @returns {typeof import("../models/account.js").default}
+   */
+  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
+  getModelClass() { return /** @type {typeof import("../models/account.js").default} */ (this.constructor) }
+
+  /**
    * @returns {number}
    */
   id() { return this.readAttribute("id") }
