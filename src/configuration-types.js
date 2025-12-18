@@ -19,6 +19,17 @@
  */
 
 /**
+ * @typedef {object} SqlConfig
+ * @property {string} [database]
+ * @property {object} [options]
+ * @property {boolean} [options.encrypt]
+ * @property {boolean} [options.trustServerCertificate]
+ * @property {string} [password]
+ * @property {string} [server]
+ * @property {string} [user]
+ */
+
+/**
  * @typedef {object} DatabaseConfigurationType
  * @property {string} [database]
  * @property {typeof import("./database/drivers/base.js").default} [driver]
@@ -32,7 +43,7 @@
  * @property {object} [record]
  * @property {boolean} [record.transactions]
  * @property {boolean} [reset]
- * @property {object} [sqlConfig]
+ * @property {SqlConfig} [sqlConfig]
  * @property {string} [type]
  * @property {string} [useDatabase]
  * @property {string} [username]

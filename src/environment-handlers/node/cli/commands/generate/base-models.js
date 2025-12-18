@@ -280,9 +280,9 @@ export default class DbGenerateModel extends BaseCommand {
       return "boolean"
     } else if (type == "json") {
       return "Record<string, any>"
-    } else if (type == "blob" || type == "varchar" || type == "text" || type == "uuid") {
+    } else if (["blob", "char", "nvarchar", "varchar", "text", "uuid"].includes(type)) {
       return "string"
-    } else if (["bigint", "int", "integer", "smallint"].includes(type)) {
+    } else if (["bit", "bigint", "float", "int", "integer", "smallint", "tinyint"].includes(type)) {
       return "number"
     } else if (["date", "datetime"].includes(type)) {
       return "Date"
