@@ -2,6 +2,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class ProjectBase extends DatabaseRecord {
   /**
+   * @returns {typeof import("../models/project.js").default}
+   */
+  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
+  getModelClass() { return /** @type {typeof import("../models/project.js").default} */ (this.constructor) }
+
+  /**
    * @returns {number}
    */
   id() { return this.readAttribute("id") }
@@ -105,7 +111,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} attributes
+   * @param {Record<string, any>} [attributes]
    * @returns {import("../models/user.js").default}
    */
   buildCreatingUser(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
@@ -126,7 +132,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}
    */
-  tasks() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("tasks")) }
+  tasks() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>} */ (this.getRelationshipByName("tasks")) }
 
   /**
    * @returns {Array<import("../models/task.js").default>}
@@ -153,7 +159,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} attributes
+   * @param {Record<string, any>} [attributes]
    * @returns {import("../models/project-detail.js").default}
    */
   buildProjectDetail(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
@@ -174,7 +180,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../model-bases/project-translation.js").default>}
    */
-  translations() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("translations")) }
+  translations() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../model-bases/project-translation.js").default>} */ (this.getRelationshipByName("translations")) }
 
   /**
    * @returns {Array<import("../model-bases/project-translation.js").default>}

@@ -2,6 +2,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class UserBase extends DatabaseRecord {
   /**
+   * @returns {typeof import("../models/user.js").default}
+   */
+  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
+  getModelClass() { return /** @type {typeof import("../models/user.js").default} */ (this.constructor) }
+
+  /**
    * @returns {number}
    */
   id() { return this.readAttribute("id") }
@@ -104,7 +110,7 @@ export default class UserBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} attributes
+   * @param {Record<string, any>} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildCreatedProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
@@ -125,7 +131,7 @@ export default class UserBase extends DatabaseRecord {
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/authentication-token.js").default>}
    */
-  authenticationTokens() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("authenticationTokens")) }
+  authenticationTokens() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/authentication-token.js").default>} */ (this.getRelationshipByName("authenticationTokens")) }
 
   /**
    * @returns {Array<import("../models/authentication-token.js").default>}
@@ -148,7 +154,7 @@ export default class UserBase extends DatabaseRecord {
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/project.js").default>}
    */
-  createdProjects() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default} */ (this.getRelationshipByName("createdProjects")) }
+  createdProjects() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/project.js").default>} */ (this.getRelationshipByName("createdProjects")) }
 
   /**
    * @returns {Array<import("../models/project.js").default>}

@@ -2,6 +2,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class ProjectDetailBase extends DatabaseRecord {
   /**
+   * @returns {typeof import("../models/project-detail.js").default}
+   */
+  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
+  getModelClass() { return /** @type {typeof import("../models/project-detail.js").default} */ (this.constructor) }
+
+  /**
    * @returns {number}
    */
   id() { return this.readAttribute("id") }
@@ -88,7 +94,7 @@ export default class ProjectDetailBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} attributes
+   * @param {Record<string, any>} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars

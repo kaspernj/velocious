@@ -47,7 +47,7 @@
  * @property {CorsType} [cors]
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database
  * @property {boolean} [debug]
- * @property {string} directory
+ * @property {string} [directory]
  * @property {string} [environment]
  * @property {import("./environment-handlers/base.js").default} environmentHandler
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels

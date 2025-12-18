@@ -201,7 +201,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += "   * @param {Record<string, any>} attributes\n"
+          fileContent += "   * @param {Record<string, any>} [attributes]\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
