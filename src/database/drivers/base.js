@@ -47,7 +47,7 @@ import UUID from "pure-uuid"
 import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
-import wait from "awaitery/dist/wait.js"
+import wait from "awaitery/build/wait.js"
 
 export default class VelociousDatabaseDriversBase {
   /** @type {number | undefined} */

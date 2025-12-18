@@ -3,7 +3,7 @@
 import {digg} from "diggerize"
 import fetch from "node-fetch"
 import querystring from "querystring"
-import wait from "awaitery/dist/wait.js"
+import wait from "awaitery/build/wait.js"
 
 import Dummy from "../dummy/index.js"
 import Project from "../dummy/src/models/project.js"
