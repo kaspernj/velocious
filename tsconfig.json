@@ -1,16 +1,14 @@
 {
   "compilerOptions": {
+    "allowJs": true,
     "checkJs": true,
-
-    "noEmit": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "build",
     "target": "ES2024",
-
     "moduleResolution": "nodenext",
-    "module": "nodenext",
-
-    "lib": ["dom", "ES2024"],
-    "types": ["node"]
+    "module": "nodenext"
   },
-  "include": ["index.js", "bin/**/*", "src/**/*"],
-  "exclude": ["src/templates/**"]
+  "exclude": ["src/templates/**"],
+  "include": ["index.js", "bin/**/*", "src/**/*"]
 }

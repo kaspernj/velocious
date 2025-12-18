@@ -1,4 +1,4 @@
-import Routes from "velocious/dist/src/routes/index.js"
+import Routes from "velocious/build/src/routes/index.js"
 
 const routes = new Routes()
 
