@@ -35,7 +35,7 @@ export default class DbGenerateModel extends BaseCommand {
       if (await fileExists(sourceModelFullFilePath)) {
         sourceModelFilePath = `../models/${modelBaseFileName}`
       } else {
-        sourceModelFilePath = "velocious/dist/src/database/record/index.js"
+        sourceModelFilePath = "velocious/build/src/database/record/index.js"
       }
 
       let fileContent = ""
@@ -44,7 +44,7 @@ export default class DbGenerateModel extends BaseCommand {
       if (devMode) {
         velociousPath = "../../../../src"
       } else {
-        velociousPath = "velocious/dist/src"
+        velociousPath = "velocious/build/src"
       }
 
       fileContent += `import DatabaseRecord from "${velociousPath}/database/record/index.js"\n\n`
@@ -170,7 +170,7 @@ export default class DbGenerateModel extends BaseCommand {
         let baseFilePath, baseFullFilePath, fileName, fullFilePath
 
         if (relationship.getPolymorphic()) {
-          fileName = "velocious/dist/src/database/record/index.js"
+          fileName = "velocious/build/src/database/record/index.js"
         } else {
           fileName = inflection.dasherize(inflection.underscore(relationship.getTargetModelClass().name))
           fullFilePath = `src/models/${fileName}.js`
@@ -190,7 +190,7 @@ export default class DbGenerateModel extends BaseCommand {
           } else if (baseFullFilePath && await fileExists(baseFullFilePath)) {
             modelFilePath = baseFilePath
           } else {
-            modelFilePath = "velocious/dist/src/database/record/index.js"
+            modelFilePath = "velocious/build/src/database/record/index.js"
           }
 
           fileContent += "  /**\n"
