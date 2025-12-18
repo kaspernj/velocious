@@ -56,7 +56,7 @@ export default class VelociousController {
   /** @returns {import("./configuration.js").default} */
   getConfiguration() { return this._configuration }
 
-  /** @returns {object} */
+  /** @returns {Record<string, any>} */
   getParams() { return this._params }
 
   /** @returns {import("./http-server/client/request.js").default} */
