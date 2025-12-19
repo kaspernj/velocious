@@ -25,6 +25,10 @@ export default class VelociousDatabaseRecordBaseRelationship {
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
     if (!className && !klass) throw new Error(`Neither 'className' or 'klass' was given for ${modelClass.name}#${relationshipName}`)
 
+    if (className == "EventSery") {
+      throw new Error(`Invalid model name: ${className}`)
+    }
+
     this.className = className
     this._dependent = dependent
     this.foreignKey = foreignKey

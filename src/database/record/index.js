@@ -16,6 +16,7 @@ import HasOneRelationship from "./relationships/has-one.js"
 import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
 import restArgsError from "../../utils/rest-args-error.js"
+import singularizeModelName from "../../utils/singularize-model-name.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 
@@ -175,7 +176,7 @@ class VelociousDatabaseRecord {
     )
 
     if (!actualData.className && !actualData.klass) {
-      actualData.className = inflection.camelize(inflection.singularize(relationshipName))
+      actualData.className = singularizeModelName(relationshipName)
     }
 
     let relationship
@@ -930,7 +931,7 @@ class VelociousDatabaseRecord {
 
     const className = `${this.name}Translation`
     const TranslationClass = class Translation extends VelociousDatabaseRecord {}
-    const belongsTo = `${inflection.camelize(inflection.singularize(this.tableName()), true)}`
+    const belongsTo = singularizeModelName(inflection.camelize(this.tableName(), true))
 
     Object.defineProperty(TranslationClass, "name", {value: className})
     TranslationClass.setTableName(this.getTranslationsTableName())
@@ -1178,7 +1179,6 @@ class VelociousDatabaseRecord {
   static async findOrInitializeBy(conditions, callback) {
     return await this._newQuery().findOrInitializeBy(conditions, callback)
   }
-
 
   /**
    * @template {typeof VelociousDatabaseRecord} MC
