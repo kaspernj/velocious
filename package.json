@@ -8,7 +8,8 @@
   "types": "build/index.d.ts",
   "files": ["build/**"],
   "scripts": {
-    "build": "rm -rf build && tsc && chmod +x build/bin/velocious.js",
+    "build": "rm -rf build && npm run compile",
+    "compile": "tsc && chmod +x build/bin/velocious.js",
     "lint": "eslint",
     "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",
     "prepublishOnly": "npm run build && chmod +x build/bin/velocious.js",
