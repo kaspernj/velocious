@@ -120,7 +120,8 @@ class Logger {
   }
 
   /**
-   * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
+   * @param {any[]} messages
+   * @returns {Promise<void>}
    */
   async debug(...messages) {
     if (this._debug || this.getConfiguration()?.debug) {
@@ -129,14 +130,16 @@ class Logger {
   }
 
   /**
-   * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
+   * @param {any[]} messages
+   * @returns {Promise<void>}
    */
   async log(...messages) {
     await consoleLog(messagesToMessage(this._subject, ...functionOrMessages(...messages)))
   }
 
   /**
-   * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
+   * @param {any[]} messages
+   * @returns {Promise<void>}
    */
   async error(...messages) {
     await consoleError(messagesToMessage(this._subject, ...functionOrMessages(...messages)))
