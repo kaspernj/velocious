@@ -1,7 +1,7 @@
 // @ts-check
 
 import React from "react"
-import useEnvSense from "env-sense/src/use-env-sense.js"
+import useEnvSense from "env-sense/build/use-env-sense.js"
 
 import Configuration from "../configuration.js"
 import Migrator from "./migrator.js"

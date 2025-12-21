@@ -1,5 +1,5 @@
 import {digg} from "diggerize"
-import envSense from "env-sense/src/use-env-sense.js"
+import envSense from "env-sense/build/use-env-sense.js"
 
 // @ts-expect-error
 import query from "./query"

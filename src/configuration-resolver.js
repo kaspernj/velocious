@@ -1,7 +1,7 @@
 // @ts-check
 
 import Configuration, {CurrentConfigurationNotSetError} from "./configuration.js"
-import envSense from "env-sense/src/use-env-sense.js"
+import envSense from "env-sense/build/use-env-sense.js"
 import fileExists from "./utils/file-exists.js"
 
 /**
