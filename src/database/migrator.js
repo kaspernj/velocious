@@ -24,17 +24,14 @@ export default class VelociousDatabaseMigrator {
     this.logger = new Logger(this, {debug: false})
   }
 
-  /**
-   * @returns {Promise<void>}
-   */
+
+  /** @returns {Promise<void>} */
   async prepare() {
     await this.createMigrationsTable()
     await this.loadMigrationsVersions()
   }
 
-  /**
-   * @returns {Promise<void>}
-   */
+  /** @returns {Promise<void>} */
   async createMigrationsTable() {
     const dbs = await this.configuration.getCurrentConnections()
 
@@ -47,19 +44,22 @@ export default class VelociousDatabaseMigrator {
         continue
       }
 
-      if (await this.migrationsTableExist(db)) {
+      const exists = await this.migrationsTableExist(db)
+
+      if (exists) {
         this.logger.debug(`${dbIdentifier} migrations table already exists - skipping`)
-        continue
-      }
+      } else {
+        this.logger.debug("New TableData for schema_migrations")
+        const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
 
-      const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
+        schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
-      schemaMigrationsTable.string("version", {null: false, primaryKey: true})
+        const createSchemaMigrationsTableSqls = await db.createTableSql(schemaMigrationsTable)
 
-      const createSchemaMigrationsTableSqls = await db.createTableSql(schemaMigrationsTable)
-
-      for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
-        await db.query(createSchemaMigrationsTableSql)
+        for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
+          this.logger.debug(`Creating migrations table with SQL`, createSchemaMigrationsTableSql)
+          await db.query(createSchemaMigrationsTableSql)
+        }
       }
     }
   }
@@ -156,9 +156,7 @@ export default class VelociousDatabaseMigrator {
     })
   }
 
-  /**
-   * @returns {Promise<void>}
-   */
+  /** @returns {Promise<void>} */
   async loadMigrationsVersions() {
     this.migrationsVersions = {}
 
