@@ -25,6 +25,10 @@
  * @property {boolean} [options.encrypt]
  * @property {boolean} [options.trustServerCertificate]
  * @property {string} [password]
+ * @property {object} [pool]
+ * @property {number} [pool.max]
+ * @property {number} [pool.min]
+ * @property {number} [pool.idleTimeoutMillis]
  * @property {string} [server]
  * @property {string} [user]
  */
