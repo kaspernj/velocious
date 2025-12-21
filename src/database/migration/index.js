@@ -2,12 +2,12 @@
 
 /**
  * @typedef {object} AddColumnArgsType
- * @property {any} default
- * @property {object} foreignKey
- * @property {boolean | {unique: boolean}} index
- * @property {boolean} nullable
- * @property {boolean} primaryKey
- * @property {boolean} unique
+ * @property {any} [default]
+ * @property {object} [foreignKey]
+ * @property {boolean | {unique: boolean}} [index]
+ * @property {boolean} [null]
+ * @property {boolean} [primaryKey]
+ * @property {boolean} [unique]
  */
 
 import * as inflection from "inflection"
