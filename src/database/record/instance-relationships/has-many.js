@@ -55,6 +55,15 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   async load() {
+    const foreignModels = await this.query().toArray()
+
+    this.setLoaded(foreignModels)
+    this.setDirty(false)
+    this.setPreloaded(true)
+  }
+
+  /** @returns {import("../../query/model-class-query.js").default<TMC>} */
+  query() {
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = this.getModel().readColumn(primaryKey)
@@ -67,11 +76,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     whereArgs[foreignKey] = primaryModelID
 
-    const foreignModels = await TargetModelClass.where(whereArgs).toArray()
+    const query = TargetModelClass.where(whereArgs)
 
-    this.setLoaded(foreignModels)
-    this.setDirty(false)
-    this.setPreloaded(true)
+    return query
   }
 
   /**

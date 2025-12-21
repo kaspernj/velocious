@@ -102,9 +102,7 @@ export default class VelociousController {
     await this.logger.debug("After runBeforeCallbacks")
   }
 
-  /**
-   * @returns {object}
-   */
+  /** @returns {Record<string, any>} */
   params() { return this._params }
 
   /**
@@ -135,6 +133,7 @@ export default class VelociousController {
     this._response.setBody(body)
   }
 
+  /** @returns {Promise<void>} */
   renderView() {
     return new Promise((resolve, reject) => {
       const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
@@ -154,6 +153,7 @@ export default class VelociousController {
     })
   }
 
+  /** @returns {void} */
   renderText() {
     throw new Error("renderText stub")
   }
