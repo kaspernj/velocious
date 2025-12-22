@@ -54,6 +54,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     return newInstance
   }
 
+  /** @returns {Promise<void>} */
   async load() {
     const foreignModels = await this.query().toArray()
 
@@ -81,9 +82,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     return query
   }
 
-  /**
-   * @returns {Array<InstanceType<TMC>>} The loaded model or models (depending on relationship type)
-   */
+  /** @returns {Array<InstanceType<TMC>>} The loaded model or models (depending on relationship type) */
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
       throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
