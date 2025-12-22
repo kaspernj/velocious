@@ -1,3 +1,5 @@
+import * as inflection from "inflection"
+
 import Application from "../../../../application.js"
 import BaseCommand from "../../../../cli/base-command.js"
 
@@ -23,7 +25,10 @@ export default class VelociousCliCommandsServer extends BaseCommand{
    */
   printRoutes(route, level = 0) {
     const prefix = "  ".repeat(level)
-    this.log(`${prefix}${route.getHumanPath()}`)
+
+    for (const routeData of route.getHumanPaths()) {
+      this.log(`${prefix}${routeData.method} ${routeData.path}${routeData.action ? ` -> ${inflection.camelize(routeData.action.replaceAll("-", "_"), true)}` : ""}`)
+    }
 
     for (const subRoute of route.getSubRoutes()) {
       this.printRoutes(subRoute, level + 1)

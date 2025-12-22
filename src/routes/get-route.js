@@ -17,8 +17,10 @@ class VelociousRouteGetRoute extends BaseRoute {
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
   }
 
-  getHumanPath() {
-    return this.name
+  getHumanPaths() {
+    return [
+      {method: "GET", action: this.name, path: this.name}
+    ]
   }
 
   /**

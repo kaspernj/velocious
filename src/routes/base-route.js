@@ -33,12 +33,12 @@ export default class VelociousBaseRoute {
     this.ResourceRouteType = RouteClass
   }
 
+  /** @type {Array<VelociousBaseRoute>} */
+  routes = []
+
   constructor() {
     // Nothing
   }
-
-  /** @type {Array<VelociousBaseRoute>} */
-  routes = []
 
   /**
    * @abstract
@@ -48,9 +48,9 @@ export default class VelociousBaseRoute {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {Array<{action: string, method: string, path: string}>}
    */
-  getHumanPath() { throw new Error(`'getHumanPath' not implemented for ${this.constructor.name}`) }
+  getHumanPaths() { throw new Error(`'getHumanPaths' not implemented for ${this.constructor.name}`) }
 
   /** @returns {Array<VelociousBaseRoute>} */
   getSubRoutes() { return this.routes }

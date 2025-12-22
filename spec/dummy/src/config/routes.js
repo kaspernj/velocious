@@ -7,7 +7,11 @@ routes.draw((route) => {
     route.post("version")
   })
 
-  route.resources("projects")
+  route.resources("projects", (route) => {
+    route.resources("tasks", (route) => {
+      route.get("custom")
+    })
+  })
 
   route.resources("tasks", (route) => {
     route.get("users")

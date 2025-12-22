@@ -50,8 +50,36 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     }
 
 
+    // Assign the foreign key to the new model
+    const parentModel = this.getModel()
+
+    if (parentModel.isPersisted()) {
+      const foreignKeyName = this.getForeignKey()
+      const foreignKeyAttributeName = this.getTargetModelClass().getColumnNameToAttributeNameMap()[foreignKeyName]
+      const primaryKeyName = this.getPrimaryKey()
+      const foreignKeyValue = parentModel.readColumn(primaryKeyName)
+      const assignData = {}
+
+      assignData[foreignKeyAttributeName] = foreignKeyValue
+
+      newInstance.assign(assignData)
+    }
+
+
     // Return the new contructed model
     return newInstance
+  }
+
+  /**
+   * @param {Record<string, any>} data
+   * @returns {Promise<InstanceType<TMC>>}
+   */
+  async create(data) {
+    const model = this.build(data)
+
+    await model.save()
+
+    return model
   }
 
   /** @returns {Promise<void>} */
@@ -64,7 +92,19 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /** @returns {import("../../query/model-class-query.js").default<TMC>} */
+  preload(preloads) {
+    return this.query().clone().preload(preloads)
+  }
+
+  /** @returns {Promise<InstanceType<TMC>>} */
+  async find(modelID) {
+    return await this.query().find(modelID)
+  }
+
+  /** @returns {import("../../query/model-class-query.js").default<TMC>} */
   query() {
+    if (!this.getModel().isPersisted()) throw new Error("Cannot build a query for an unpersisted parent model")
+
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = this.getModel().readColumn(primaryKey)

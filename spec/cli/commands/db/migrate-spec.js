@@ -17,10 +17,16 @@ describe("Cli - Commands - db:migrate", () => {
       testing: true
     })
 
-    let defaultDatabaseType, defaultSchemaMigrations = [], tablesResult = []
+    let defaultDatabaseType
 
-    /** @type {import("../../../../src/database/drivers/base-foreign-key.js").default} */
-    let projectForeignKey = undefined
+    /** @type {string[]} */
+    const defaultSchemaMigrations = []
+
+    /** @type {string[]} */
+    const tablesResult = []
+
+    /** @type {import("../../../../src/database/drivers/base-foreign-key.js").default | undefined} */
+    let projectForeignKey
 
     await cli.getConfiguration().ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
@@ -39,6 +45,9 @@ describe("Cli - Commands - db:migrate", () => {
 
       // It creates foreign keys
       const tasksTable = await dbs.default.getTableByName("tasks")
+
+      if (!tasksTable) throw new Error("tasks table not found")
+
       const foreignKeys = await tasksTable.getForeignKeys()
 
       for (const foreignKey of foreignKeys) {
@@ -49,6 +58,9 @@ describe("Cli - Commands - db:migrate", () => {
 
       // It creates the correct index
       const authenticationTokensTable = await dbs.default.getTableByName("authentication_tokens")
+
+      if (!authenticationTokensTable) throw new Error("authentication_tokens table not found")
+
       const indexes = await authenticationTokensTable.getIndexes()
       const indexesNames = indexes
         .map((index) => index.getName())
@@ -73,7 +85,12 @@ describe("Cli - Commands - db:migrate", () => {
       }
 
       const tokenColumn = await authenticationTokensTable.getColumnByName("user_token")
+
+      if (!tokenColumn) throw new Error("Token column not found")
+
       const tokenIndex = await tokenColumn.getIndexByName(tokenIndexName)
+
+      if (!tokenIndex) throw new Error("Token index not found")
 
       expect(tokenIndex.getName()).toEqual(tokenIndexName)
       expect(tokenIndex.isPrimaryKey()).toBeFalse()
@@ -98,6 +115,8 @@ describe("Cli - Commands - db:migrate", () => {
         }
       }
     })
+
+    if (!projectForeignKey) throw new Error("Project foreign key not found")
 
     expect(projectForeignKey.getTableName()).toEqual("tasks")
     expect(projectForeignKey.getColumnName()).toEqual("project_id")
