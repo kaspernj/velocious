@@ -43,7 +43,7 @@ export default class VelociousHttpServer {
     await this._netServerListen()
   }
 
-  /** @returns {Promise<void} */
+  /** @returns {Promise<void>} */
   _netServerListen() {
     return new Promise((resolve, reject) => {
       if (!this.netServer) throw new Error("No netServer")
