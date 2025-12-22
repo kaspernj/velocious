@@ -155,6 +155,7 @@ export default class VelociousHttpServer {
     }
   }
 
+  /** @returns {Promise<void>} */
   async spawnWorker() {
     const workerCount = this.workerCount
 
@@ -169,6 +170,7 @@ export default class VelociousHttpServer {
     this.workerHandlers.push(workerHandler)
   }
 
+  /** @returns {WorkerHandler} */
   workerHandlerToUse() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 

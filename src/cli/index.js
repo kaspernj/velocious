@@ -6,6 +6,7 @@ export default class VelociousCli {
    * @param {import("../configuration.js").default} [args.configuration]
    * @param {string} [args.directory]
    * @param {import("../environment-handlers/base.js").default} [args.environmentHandler]
+   * @param {Record<string, any>} [args.parsedProcessArgs]
    * @param {string[]} [args.processArgs]
    * @param {boolean} [args.testing]
    */

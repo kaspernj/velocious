@@ -25,6 +25,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.requestBuffer.events.on("request-done", this.requestDone)
   }
 
+  /** @returns {void} */
   destroy() {
     this.requestBuffer.events.off("completed", this.requestDone)
     this.requestBuffer.events.off("form-data-part", this.onFormDataPart)
@@ -50,25 +51,26 @@ export default class VelociousHttpServerClientRequestParser {
 
   /**
    * @param {Buffer} data
+   * @returns {void}
    */
   feed = (data) => this.requestBuffer.feed(data)
 
   /**
    * @param {string} name
+   * @returns {string}
    */
   getHeader(name) { return this.requestBuffer.getHeader(name)?.value }
+
+  /** @returns {Record<string, string>} */
   getHeaders() { return this.requestBuffer.getHeadersHash() }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   getHttpMethod() { return digg(this, "requestBuffer", "httpMethod") }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   getHttpVersion() { return digg(this, "requestBuffer", "httpVersion") }
 
+  /** @returns {{host: string, port: string, protocol: string} | null} */
   _getHostMatch() {
     const rawHost = this.requestBuffer.getHeader("origin")?.value
 
@@ -85,14 +87,17 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
+  /** @returns {string | null} */
   getHost() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
 
     if (rawHostSplit && rawHostSplit[0]) return rawHostSplit[0]
   }
 
+  /** @returns {string} */
   getPath() { return digg(this, "requestBuffer", "path") }
 
+  /** @returns {number} */
   getPort() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
     const httpMethod = this.getHttpMethod()
@@ -106,9 +111,13 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
+  /** @returns {string | null} */
   getProtocol() { return this._getHostMatch()?.protocol }
+
+  /** @returns {RequestBuffer} */
   getRequestBuffer() { return this.requestBuffer }
 
+  /** @returns {void} */
   requestDone = () => {
     incorporate(this.params, this.requestBuffer.params)
 
