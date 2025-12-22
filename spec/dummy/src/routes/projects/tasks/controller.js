@@ -11,12 +11,14 @@ export default class ProjectsController extends Controller {
     const project = await Project.preload({translations: true}).find(projectID)
     const task = await project.tasks().find(taskID)
 
-    this.renderJson({
-      project: {
-        name: project.name()
-      },
-      task: {
-        name: task.name()
+    this.render({
+      json: {
+        project: {
+          name: project.name()
+        },
+        task: {
+          name: task.name()
+        }
       }
     })
   }
