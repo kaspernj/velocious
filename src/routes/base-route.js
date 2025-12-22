@@ -47,6 +47,15 @@ export default class VelociousBaseRoute {
   get(name) { throw new Error("'get' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
+   * @abstract
+   * @returns {string}
+   */
+  getHumanPath() { throw new Error(`'getHumanPath' not implemented for ${this.constructor.name}`) }
+
+  /** @returns {Array<VelociousBaseRoute>} */
+  getSubRoutes() { return this.routes }
+
+  /**
    * @param {object} args
    * @param {Record<string, any>} args.params
    * @param {string} args.path

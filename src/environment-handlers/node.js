@@ -6,6 +6,7 @@ import CliCommandsInit from "./node/cli/commands/init.js"
 import CliCommandsGenerateBaseModels from "./node/cli/commands/generate/base-models.js"
 import CliCommandsGenerateMigration from "./node/cli/commands/generate/migration.js"
 import CliCommandsGenerateModel from "./node/cli/commands/generate/model.js"
+import CliCommandsRoutes from "./node/cli/commands/routes.js"
 import CliCommandsServer from "./node/cli/commands/server.js"
 import CliCommandsTest from "./node/cli/commands/test.js"
 import {dirname} from "path"
@@ -94,6 +95,14 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsGenerateModel(command) {
     return await this.forwardCommand(command, CliCommandsGenerateModel)
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} command
+   * @returns {Promise<any>}
+   */
+  async cliCommandsRoutes(command) {
+    return await this.forwardCommand(command, CliCommandsRoutes)
   }
 
   /**

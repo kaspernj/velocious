@@ -56,6 +56,15 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * @abstract
+   * @param {import("../cli/base-command.js").default} _command
+   * @returns {Promise<void>}
+   */
+  async cliCommandsRoutes(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsRoutes not implemented")
+  }
+
+  /**
    * @param {import("../cli/base-command.js").default} _command
    * @returns {Promise<void>}
    */
@@ -90,7 +99,8 @@ export default class VelociousEnvironmentHandlerBase {
    */
   async forwardCommand(command, CommandClass) {
     const newCommand = new CommandClass({
-      args: command.args
+      args: command.args,
+      cli: command.cli
     })
 
     return await newCommand.execute()

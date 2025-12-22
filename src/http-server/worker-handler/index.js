@@ -97,6 +97,7 @@ export default class VelociousHttpServerWorker {
 
     const {command} = data
 
+
     if (command == "started") {
       if (this.onStartCallback) {
         this.onStartCallback(null)
@@ -108,7 +109,9 @@ export default class VelociousHttpServerWorker {
 
       const {clientCount, output} = data
 
-      this.clients[clientCount]?.send(output)
+      if (output !== null) {
+        this.clients[clientCount]?.send(output)
+      }
     } else if (command == "clientClose") {
       const {clientCount} = data
 
