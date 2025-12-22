@@ -1,3 +1,6 @@
+// @ts-check
+
+import {describe, expect, it} from "../../src/testing/test.js"
 import fetch from "node-fetch"
 import Dummy from "../dummy/index.js"
 import Header from "../../src/http-client/header.js"
@@ -21,12 +24,12 @@ describe("HttpServer - get", {databaseCleaning: {transaction: false, truncate: t
   it("returns a 404 error when a collection action isnt found", async () => {
     await Dummy.run(async () => {
       for (let i = 0; i <= 5; i++) {
-        const response = await fetch("http://localhost:3006/tasks/doesnt-exist")
+        const response = await fetch("http://localhost:3006/api/doesnt-exist")
         const text = await response.text()
 
         expect(response.status).toEqual(404)
         expect(response.statusText).toEqual("Not Found")
-        expect(text).toEqual("Path not found: /tasks/doesnt-exist\n")
+        expect(text).toEqual("Path not found: /api/doesnt-exist\n")
       }
     })
   })

@@ -87,7 +87,7 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
-  /** @returns {string | null} */
+  /** @returns {string | void} */
   getHost() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
 
@@ -97,7 +97,7 @@ export default class VelociousHttpServerClientRequestParser {
   /** @returns {string} */
   getPath() { return digg(this, "requestBuffer", "path") }
 
-  /** @returns {number} */
+  /** @returns {number | void} */
   getPort() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
     const httpMethod = this.getHttpMethod()

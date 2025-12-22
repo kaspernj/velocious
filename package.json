@@ -10,8 +10,8 @@
     "build/**"
   ],
   "scripts": {
-    "build": "rm -rf build && npm run compile && npm run copy:ejs",
-    "compile": "tsc && chmod +x build/bin/velocious.js",
+    "build": "rm -rf build && npm run compile",
+    "compile": "tsc && npm run copy:ejs && chmod +x build/bin/velocious.js",
     "copy:ejs": "cpy \"src/**/*.ejs\" build --parents",
     "lint": "eslint",
     "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",

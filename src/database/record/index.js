@@ -275,7 +275,7 @@ class VelociousDatabaseRecord {
   static getRelationshipByName(relationshipName) {
     const relationship = this.getRelationshipsMap()[relationshipName]
 
-    if (!relationship) throw new Error(`No relationship by that name: ${relationshipName}`)
+    if (!relationship) throw new Error(`No relationship in ${this.name} called "${relationshipName}" in list: ${Object.keys(this.getRelationshipsMap()).join(", ")}`)
 
     return relationship
   }

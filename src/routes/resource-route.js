@@ -3,7 +3,9 @@
 import BaseRoute from "./base-route.js"
 import BasicRoute from "./basic-route.js"
 import escapeStringRegexp from "escape-string-regexp"
+import * as inflection from "inflection"
 import restArgsError from "../utils/rest-args-error.js"
+import singularizeModelName from "../utils/singularize-model-name.js"
 
 class VelociousRouteResourceRoute extends BasicRoute {
   /**
@@ -17,8 +19,13 @@ class VelociousRouteResourceRoute extends BasicRoute {
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
   }
 
-  getHumanPath() {
-    return this.name
+  getHumanPaths() {
+    return [
+      {method: "GET", action: "index", path: this.name},
+      {method: "POST", action: "create", path: this.name},
+      {method: "GET", action: "show", path: `${this.name}/\${id}`},
+      {method: "DELETE", action: "destroy", path: `${this.name}/\${id}`}
+    ]
   }
 
   /**
@@ -34,28 +41,55 @@ class VelociousRouteResourceRoute extends BasicRoute {
     if (match) {
       const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
 
-      let action = "index"
-      let subRoutesMatchesRestPath = false
+      let action
+      const controllerName = params.controller ? `${params.controller}/${this.name}` : this.name
+      const normalizedRestPath = restPath.replace(/^\//, "")
+      let nextRestPath = normalizedRestPath
 
-      for (const route of this.routes) {
-        if (route.matchWithPath({params, path: restPath, request})) {
-          subRoutesMatchesRestPath = true
-        }
-      }
+      params.controller = controllerName
 
-      if (!subRoutesMatchesRestPath) {
-        if (request.httpMethod() == "POST") {
+      if (normalizedRestPath.length === 0) {
+        if (request.httpMethod() == "DELETE") {
+          action = "delete"
+        } else if (request.httpMethod() == "POST") {
           action = "create"
-        } else if (restPath.match(/\/(.+)/)) {
-          // TODO: This should change the action to "show" and set the "resource_name_id" in params.
-          action = "show"
+        } else {
+          action = "index"
+        }
+        nextRestPath = ""
+      } else {
+        const idMatch = normalizedRestPath.match(/^([^/]+)(?:\/(.*))?$/)
+
+        if (idMatch) {
+          const singularName = singularizeModelName(this.name)
+          const singularAttributeName = inflection.camelize(inflection.underscore(singularName), true)
+          const idVarName = `${singularAttributeName}Id`
+          const recordId = idMatch[1]
+          const remainingPath = idMatch[2]
+
+          params[idVarName] = recordId
+          params.id = recordId
+
+          if (remainingPath && remainingPath.length > 0) {
+            nextRestPath = remainingPath
+          } else if (request.httpMethod() == "DELETE") {
+            action = "delete"
+            nextRestPath = ""
+          } else if (request.httpMethod() == "POST") {
+            action = "create"
+            nextRestPath = ""
+          } else {
+            action = "show"
+            nextRestPath = ""
+          }
         }
       }
 
-      params.action = action
-      params.controller = this.name
+      if (action) {
+        params.action = action
+      }
 
-      return {restPath}
+      return {restPath: nextRestPath}
     }
   }
 }
