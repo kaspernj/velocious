@@ -42,7 +42,7 @@
     "incorporator": "^1.0.2",
     "inflection": "^3.0.0",
     "is-plain-object": "^5.0.0",
-    "pure-uuid": "^1.8.1",
+    "pure-uuid": "^2.0.0",
     "set-state-compare": "^1.0.61",
     "sql-escape-string": "^1.1.0",
     "sql.js": "^1.12.0",
