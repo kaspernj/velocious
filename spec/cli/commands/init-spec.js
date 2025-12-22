@@ -1,3 +1,5 @@
+// @ts-check
+
 import Cli from "../../../src/cli/index.js"
 import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../dummy/dummy-directory.js"

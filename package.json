@@ -6,16 +6,20 @@
   "version": "1.0.125",
   "main": "build/index.js",
   "types": "build/index.d.ts",
-  "files": ["build/**"],
+  "files": [
+    "build/**"
+  ],
   "scripts": {
-    "build": "rm -rf build && npm run compile",
+    "build": "rm -rf build && npm run compile && npm run copy:ejs",
     "compile": "tsc && chmod +x build/bin/velocious.js",
+    "copy:ejs": "cpy \"src/**/*.ejs\" build --parents",
     "lint": "eslint",
     "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",
     "prepublishOnly": "npm run build && chmod +x build/bin/velocious.js",
     "typecheck": "tsc --noEmit",
     "velocious": "asd",
-    "watch": "tsc -w"
+    "watch": "tsc -w",
+    "watch:ejs": "chokidar \"src/**/*.ejs\" -c \"npm run copy:ejs\""
   },
   "type": "module",
   "repository": {
@@ -50,6 +54,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "chokidar-cli": "^3.0.0",
+    "cpy-cli": "^6.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-jsdoc": "^61.4.1",
     "globals": "^16.5.0",

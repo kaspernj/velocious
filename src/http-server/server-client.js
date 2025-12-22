@@ -23,10 +23,12 @@ export default class ServerClient {
     socket.on("end", this.onSocketEnd)
   }
 
+  /** @returns {void} */
   listen() {
     this.socket.on("data", this.onSocketData)
   }
 
+  /** @returns {Promise<void>} */
   end() {
     return new Promise((resolve) => {
       this.socket.once("close", () => resolve(null))
@@ -50,9 +52,7 @@ export default class ServerClient {
     })
   }
 
-  /**
-   * @returns {void}
-   */
+  /** @returns {void} */
   onSocketEnd = () => {
     this.logger.debug(`Socket ${this.clientCount} end`)
     this.events.emit("close", this)

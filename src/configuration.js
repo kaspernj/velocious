@@ -18,18 +18,14 @@ class CurrentConfigurationNotSetError extends Error {}
 export {CurrentConfigurationNotSetError}
 
 export default class VelociousConfiguration {
-  /**
-   * @returns {VelociousConfiguration}
-   */
+  /** @returns {VelociousConfiguration} */
   static current() {
     if (!shared.currentConfiguration) throw new CurrentConfigurationNotSetError("A current configuration hasn't been set")
 
     return shared.currentConfiguration
   }
 
-  /**
-   * @param {import("./configuration-types.js").ConfigurationArgsType} args
-   */
+  /** @param {import("./configuration-types.js").ConfigurationArgsType} args */
   constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -56,16 +52,12 @@ export default class VelociousConfiguration {
     this.getEnvironmentHandler().setConfiguration(this)
   }
 
-  /**
-   * @returns {import("./configuration-types.js").CorsType | undefined}
-   */
+  /** @returns {import("./configuration-types.js").CorsType | undefined} */
   getCors() {
     return this.cors
   }
 
-  /**
-   * @returns {Record<string, any>}
-   */
+  /** @returns {Record<string, any>} */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
 
@@ -76,9 +68,7 @@ export default class VelociousConfiguration {
     return digg(this, "database", this.getEnvironment())
   }
 
-  /**
-   * @returns {Array<string>}
-   */
+  /** @returns {Array<string>} */
   getDatabaseIdentifiers() {
     return Object.keys(this.getDatabaseConfiguration())
   }
@@ -185,9 +175,7 @@ export default class VelociousConfiguration {
     }
   }
 
-  /**
-   * @returns {Array<string>}
-   */
+  /** @returns {Array<string>} */
   getLocales() { return digg(this, "locales") }
 
   /**
@@ -209,14 +197,10 @@ export default class VelociousConfiguration {
     return this.modelClasses
   }
 
-  /**
-   * @returns {string} The path to a config file that should be used for testing.
-   */
+  /** @returns {string} The path to a config file that should be used for testing. */
   getTesting() { return this._testing }
 
-  /**
-   * @returns {void}
-   */
+  /** @returns {void} */
   initializeDatabasePool(identifier = "default") {
     if (!this.database) throw new Error("No 'database' was given")
     if (this.databasePools[identifier]) throw new Error("DatabasePool has already been initialized")
@@ -227,11 +211,10 @@ export default class VelociousConfiguration {
     this.databasePools[identifier].setCurrent()
   }
 
+  /** @returns {boolean} */
   isDatabasePoolInitialized(identifier = "default") { return Boolean(this.databasePools[identifier]) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   isInitialized() { return this._isInitialized }
 
   /**
@@ -286,12 +269,13 @@ export default class VelociousConfiguration {
     this.modelClasses[modelClass.name] = modelClass
   }
 
-  /**
-   * @returns {void}
-   */
+  /** @returns {void} */
   setCurrent() {
     shared.currentConfiguration = this
   }
+
+  /** @returns {import("./routes/index.js").default | undefined} */
+  getRoutes() { return this.routes }
 
   /**
    * @param {import("./routes/index.js").default} newRoutes
@@ -316,9 +300,7 @@ export default class VelociousConfiguration {
     return msgID
   }
 
-  /**
-   * @returns {Function}
-   */
+  /** @returns {Function} */
   getTranslator() {
     return this._translator || this._defaultTranslator
   }
@@ -357,9 +339,7 @@ export default class VelociousConfiguration {
     await runRequest()
   }
 
-  /**
-   * @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key
-   */
+  /** @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key */
   getCurrentConnections() {
     /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
