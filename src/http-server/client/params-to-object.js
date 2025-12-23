@@ -1,5 +1,10 @@
 // @ts-check
 
+/**
+ * @typedef {Record<string, any>} ParamsObject
+ * @typedef {ParamsObject | any[]} ParamsBranch
+ */
+
 export default class ParamsToObject {
   /**
    * @param {Record<string, string>} object
@@ -8,8 +13,9 @@ export default class ParamsToObject {
     this.object = object
   }
 
-  /** @returns {Record<string, any>} */
+  /** @returns {ParamsObject} */
   toObject() {
+    /** @type {ParamsObject} */
     const result = {}
 
     for(const key in this.object) {
@@ -24,7 +30,7 @@ export default class ParamsToObject {
   /**
    * @param {string} key
    * @param {string} value
-   * @param {Record<string, any> | any[]} result
+   * @param {ParamsObject} result
    * @returns {void}
    */
   treatInitial(key, value, result) {
@@ -33,19 +39,7 @@ export default class ParamsToObject {
     if (firstMatch) {
       const inputName = firstMatch[1]
       const rest = firstMatch[2]
-
-      /** @type {Array<any> | Record<string, any>} */
-      let newResult
-
-      if (inputName in result) {
-        newResult = result[inputName]
-      } else if (rest == "[]") {
-        newResult = []
-        result[inputName] = newResult
-      } else {
-        newResult = {}
-        result[inputName] = newResult
-      }
+      const newResult = this._getOrCreateBranch(result, inputName, rest)
 
       this.treatSecond(value, rest, newResult)
     } else {
@@ -56,7 +50,7 @@ export default class ParamsToObject {
   /**
    * @param {string} value
    * @param {string} rest
-   * @param {Record<string, any> | any[]} result
+   * @param {ParamsBranch} result
    * @returns {void}
    */
   treatSecond(value, rest, result) {
@@ -67,25 +61,70 @@ export default class ParamsToObject {
     const key = secondMatch[1]
     const newRest = secondMatch[2]
 
-    /** @type {Array<any> | Record<string, any>} */
-    let newResult
-
     if (rest == "[]") {
-      result.push(value)
-    } else if (newRest == "") {
-      result[key] = value
-    } else {
-      if (typeof result == "object" && key in result) {
-        newResult = result[key]
-      } else if (newRest == "[]") {
-        newResult = []
-        result[key] = newResult
+      this._ensureArray(result).push(value)
+      return
+    }
+
+    if (newRest == "") {
+      if (Array.isArray(result)) {
+        result[this._coerceArrayIndex(key)] = value
       } else {
-        newResult = {}
-        result[key] = newResult
+        result[key] = value
+      }
+      return
+    }
+
+    const newResult = this._getOrCreateBranch(result, key, newRest)
+
+    this.treatSecond(value, newRest, newResult)
+  }
+
+  /**
+   * @param {ParamsBranch} branch
+   * @param {string} key
+   * @param {string} rest
+   * @returns {ParamsBranch}
+   */
+  _getOrCreateBranch(branch, key, rest) {
+    if (Array.isArray(branch)) {
+      if (key in branch && typeof branch[key] == "object") {
+        return /** @type {ParamsBranch} */ (branch[key])
       }
 
-      this.treatSecond(value, newRest, newResult)
+      const newBranch = rest == "[]" ? [] : {}
+      branch[key] = newBranch
+
+      return newBranch
     }
+
+    if (key in branch && typeof branch[key] == "object") {
+      return /** @type {ParamsBranch} */ (branch[key])
+    }
+
+    const newBranch = rest == "[]" ? [] : {}
+    branch[key] = newBranch
+
+    return newBranch
+  }
+
+  /**
+   * @param {ParamsBranch} result
+   * @returns {any[]}
+   */
+  _ensureArray(result) {
+    if (!Array.isArray(result)) throw new Error("Expected array when pushing to params result")
+
+    return result
+  }
+
+  /**
+   * @param {string} key
+   * @returns {number | string}
+   */
+  _coerceArrayIndex(key) {
+    const index = Number(key)
+
+    return Number.isNaN(index) ? key : index
   }
 }

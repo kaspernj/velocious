@@ -242,17 +242,17 @@ export default class VelociousDatabaseMigration {
    * @property {any} [default]
    * @property {string} [type]
    */
-  /**
-   * @typedef {object} CreateTableArgsType
-   * @property {CreateTableIdArgsType | false} [id]
-   */
-  /**
-   * @typedef {(TableData) => void} CreateTableCallbackType
-   */
-  /**
-   * @overload
-   * @param {string} tableName
-   * @param {CreateTableCallbackType} callback
+/**
+ * @typedef {object} CreateTableArgsType
+ * @property {CreateTableIdArgsType | false} [id]
+ */
+/**
+ * @typedef {(table: TableData) => void} CreateTableCallbackType
+ */
+/**
+ * @overload
+ * @param {string} tableName
+ * @param {CreateTableCallbackType} callback
    * @returns {Promise<void>}
    */
   /**

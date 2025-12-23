@@ -121,11 +121,11 @@ export default class VelociousRoutesResolver {
   async _logActionStart({action, controllerClass}) {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
-    const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
+   const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
     const loggedParams = {...this.params}
 
-    delete loggedParams.action
-    delete loggedParams.controller
+   delete loggedParams.action
+   delete loggedParams.controller
 
     await this.logger.log(() => [`Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`])
     await this.logger.log(() => [`Processing by ${controllerClass.name}#${action}`])
@@ -137,6 +137,7 @@ export default class VelociousRoutesResolver {
    * @returns {string}
    */
   _formatTimestamp(date) {
+    /** @param {number} num */
     const pad = (num) => String(num).padStart(2, "0")
     const year = date.getFullYear()
     const month = pad(date.getMonth() + 1)

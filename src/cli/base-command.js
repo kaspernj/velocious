@@ -1,13 +1,23 @@
 import restArgsError from "../utils/rest-args-error.js"
 
+/**
+ * @typedef {object} VelociousCliCommandArgs
+ * @property {import("../configuration.js").default} [configuration]
+ * @property {Record<string, any>} [parsedProcessArgs]
+ * @property {string[]} [processArgs]
+ * @property {boolean} [testing]
+ */
+
 export default class VelociousCliBaseCommand {
   /**
    * @param {object} args
-   * @param {object} args.args
+   * @param {VelociousCliCommandArgs} args.args
    * @param {import("./index.js").default} args.cli
    */
   constructor({args = {}, cli, ...restArgs}) {
     restArgsError(restArgs)
+
+    if (!args.configuration) throw new Error("configuration argument is required")
 
     this.args = args
     this.cli = cli
@@ -32,10 +42,7 @@ export default class VelociousCliBaseCommand {
    */
   getConfiguration() { return this._configuration }
 
-  /**
-   * @template T extends import("../environment-handlers/base.js").default
-   * @returns {T}
-   */
+  /** @returns {import("../environment-handlers/base.js").default} */
   getEnvironmentHandler() { return this._environmentHandler }
 
   /**

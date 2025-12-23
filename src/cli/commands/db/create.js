@@ -4,6 +4,12 @@ import {incorporate} from "incorporator"
 import TableData from "../../../database/table-data/index.js"
 
 export default class DbCreate extends BaseCommand{
+  /** @type {Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}> | undefined} */
+  result
+
+  /**
+   * @returns {Promise<void | Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>>}
+   */
   async execute() {
     for (const databaseIdentifier of this.getConfiguration().getDatabaseIdentifiers()) {
       const databaseType = this.getConfiguration().getDatabaseType(databaseIdentifier)
@@ -41,6 +47,10 @@ export default class DbCreate extends BaseCommand{
     }
   }
 
+  /**
+   * @param {string} databaseIdentifier
+   * @returns {Promise<void>}
+   */
   async createDatabase(databaseIdentifier) {
     const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
     const sqls = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
@@ -54,6 +64,9 @@ export default class DbCreate extends BaseCommand{
     }
   }
 
+  /**
+   * @returns {Promise<void>}
+   */
   async createSchemaMigrationsTable() {
     const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
 

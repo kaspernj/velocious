@@ -1,8 +1,14 @@
+/**
+ * @param {Array<(next: () => Promise<void>) => void | Promise<void>>} callbacksToNestInside
+ * @param {() => void | Promise<void>} callback
+ * @returns {Promise<void>}
+ */
 export default async function nestCallbacks(callbacksToNestInside, callback) {
-  let runCallback = callback
+  const baseCallback = async () => { await callback() }
+  let runCallback = baseCallback
 
   for (const callbackToNestInside of callbacksToNestInside) {
-    let actualRunCallback = runCallback
+    const actualRunCallback = runCallback
 
     const nextRunRequest = async () => {
       await callbackToNestInside(actualRunCallback)
