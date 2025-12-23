@@ -1517,17 +1517,19 @@ class VelociousDatabaseRecord {
     const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
     const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
     const driverSupportsDefaultUUID = typeof this._connection().supportsDefaultPrimaryKeyUUID == "function" && this._connection().supportsDefaultPrimaryKeyUUID()
-    const shouldAssignUUIDPrimaryKey = primaryKeyType == "uuid" && !driverSupportsDefaultUUID && (data[primaryKey] === undefined || data[primaryKey] === null)
+    const shouldAssignUUIDPrimaryKey = primaryKeyType == "uuid" && !driverSupportsDefaultUUID
     const currentDate = new Date()
-
-    if (shouldAssignUUIDPrimaryKey) {
-      data[primaryKey] = new UUID(4).format()
-    }
 
     if (createdAtColumn) data.created_at = currentDate
     if (updatedAtColumn) data.updated_at = currentDate
 
     const columnNames = this.getModelClass().getColumnNames()
+    const hasUserProvidedPrimaryKey = data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
+
+    if (shouldAssignUUIDPrimaryKey && !hasUserProvidedPrimaryKey) {
+      data[primaryKey] = new UUID(4).format()
+    }
+
     const sql = this._connection().insertSql({
       returnLastInsertedColumnNames: columnNames,
       tableName: this._tableName(),
