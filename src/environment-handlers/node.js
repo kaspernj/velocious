@@ -233,4 +233,70 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     return basePath
   }
+
+  /**
+   * @param {object} args
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @returns {Promise<void>}
+   */
+  async afterMigrations({dbs}) {
+    const dbDir = path.join(this.getConfiguration().getDirectory(), "db")
+    const structureSqlByIdentifier = await this._sqliteStructureSqlByIdentifier({dbs})
+
+    await fs.mkdir(dbDir, {recursive: true})
+
+    for (const identifier of Object.keys(structureSqlByIdentifier)) {
+      const structureSql = structureSqlByIdentifier[identifier]
+
+      if (!structureSql) continue
+
+      const filePath = path.join(dbDir, `structure-${identifier}.sql`)
+
+      await fs.writeFile(filePath, structureSql)
+    }
+  }
+
+  /**
+   * @param {object} args
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @returns {Promise<Record<string, string>>}
+   */
+  async _sqliteStructureSqlByIdentifier({dbs}) {
+    const sqliteIdentifiers = Object.keys(dbs)
+      .filter((identifier) => this.getConfiguration().getDatabaseType(identifier) == "sqlite")
+
+    if (sqliteIdentifiers.length == 0) return /** @type {Record<string, string>} */ ({})
+
+    const sqlByIdentifier = /** @type {Record<string, string>} */ ({})
+
+    for (const identifier of sqliteIdentifiers) {
+      const db = dbs[identifier]
+      const rows = await db.query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
+      const statements = rows
+        .map((row) => row.sql)
+        .filter((statement) => Boolean(statement))
+        .map((statement) => this._normalizeSqlStatement(statement))
+        .filter((statement) => Boolean(statement))
+
+      if (statements.length == 0) continue
+
+      sqlByIdentifier[identifier] = `${statements.join("\n\n")}\n`
+    }
+
+    return sqlByIdentifier
+  }
+
+  /**
+   * @param {string} statement
+   * @returns {string}
+   */
+  _normalizeSqlStatement(statement) {
+    const trimmed = statement.trim()
+
+    if (!trimmed) return ""
+
+    if (trimmed.endsWith(";")) return trimmed
+
+    return `${trimmed};`
+  }
 }
