@@ -48,7 +48,7 @@
  * @property {boolean} [record.transactions]
  * @property {boolean} [reset]
  * @property {SqlConfig} [sqlConfig]
- * @property {string} [type]
+ * @property {"mssql" | "mysql" | "pgsql" | "sqlite"} [type]
  * @property {string} [useDatabase]
  * @property {string} [username]
  */
