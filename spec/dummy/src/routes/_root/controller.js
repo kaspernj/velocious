@@ -15,7 +15,7 @@ export default class RootController extends Controller {
 
   async params() {
     this.viewParams.response = {
-      params: this.params(),
+      params: super.params(),
       getParams: this.getParams(),
       queryParameters: this.queryParameters()
     }

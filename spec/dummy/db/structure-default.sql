@@ -1,5 +1,3 @@
-CREATE TABLE [accounts] ([id] bigint NOT NULL, [name] varchar(255), [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
-
 CREATE TABLE [authentication_tokens] ([id] bigint NOT NULL, [user_token] varchar(255) DEFAULT (newid()), [user_id] bigint, [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
 
 CREATE TABLE [project_details] ([id] bigint NOT NULL, [project_id] bigint NOT NULL, [note] text, [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
