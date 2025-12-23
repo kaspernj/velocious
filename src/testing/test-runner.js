@@ -15,18 +15,18 @@ import {tests} from "./test.js"
  * @property {boolean} [databaseCleaning.transaction]
  * @property {boolean} [databaseCleaning.truncate]
  * @property {boolean} [focus]
- * @property {() => Promise<void>} [function]
+ * @property {() => (void|Promise<void>)} [function]
  * @property {string} [type]
  */
 
 /**
  * @typedef {object} TestData
  * @property {TestArgs} args
- * @property {function(TestArgs) : Promise<void>} function
+ * @property {function(TestArgs) : (void|Promise<void>)} function
  */
 
 /**
- * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : Promise<void>} AfterBeforeEachCallbackType
+ * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : (void|Promise<void>)} AfterBeforeEachCallbackType
  */
 
 /**

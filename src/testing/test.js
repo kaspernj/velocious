@@ -361,8 +361,8 @@ class Expect extends BaseExpect {
 
 /**
  * @param {string} description
- * @param {object|(() => Promise<void>)} arg1
- * @param {undefined|(() => Promise<void>)} [arg2]
+ * @param {object|(() => (void|Promise<void>))} arg1
+ * @param {undefined|(() => (void|Promise<void>))} [arg2]
  * @returns {Promise<void>}
  */
 async function describe(description, arg1, arg2) {
@@ -407,15 +407,15 @@ function expect(arg) {
 
 /**
  * @param {string} description
- * @param {object|(() => Promise<void>)} arg1
- * @param {undefined|(() => Promise<void>)} [arg2]
+ * @param {object|(() => (void|Promise<void>))} arg1
+ * @param {undefined|(() => (void|Promise<void>))} [arg2]
  * @returns {void}
  */
 function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
   let testArgs
 
-  /** @type {() => Promise<void>} */
+  /** @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
@@ -435,14 +435,14 @@ function it(description, arg1, arg2) {
 
 /**
  * @param {string} description
- * @param {object|(() => Promise<void>)} arg1
- * @param {undefined|(() => Promise<void>)} [arg2]
+ * @param {object|(() => (void|Promise<void>))} arg1
+ * @param {undefined|(() => (void|Promise<void>))} [arg2]
  * @returns {void}
  */
 function fit(description, arg1, arg2) {
   let testArgs
 
-  /** @type {() => Promise<void>} */
+  /** @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
