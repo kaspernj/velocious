@@ -9,6 +9,18 @@
  * @property {boolean} [primaryKey]
  * @property {boolean} [unique]
  */
+/**
+ * @typedef {object} CreateTableIdArgsType
+ * @property {any} [default]
+ * @property {string} [type]
+ */
+/**
+ * @typedef {object} CreateTableArgsType
+ * @property {CreateTableIdArgsType | false} [id]
+ */
+/**
+ * @typedef {(table: TableData) => void} CreateTableCallbackType
+ */
 
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
@@ -238,21 +250,9 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @typedef {object} CreateTableIdArgsType
-   * @property {any} [default]
-   * @property {string} [type]
-   */
-/**
- * @typedef {object} CreateTableArgsType
- * @property {CreateTableIdArgsType | false} [id]
- */
-/**
- * @typedef {(table: TableData) => void} CreateTableCallbackType
- */
-/**
- * @overload
- * @param {string} tableName
- * @param {CreateTableCallbackType} callback
+   * @overload
+   * @param {string} tableName
+   * @param {CreateTableCallbackType} callback
    * @returns {Promise<void>}
    */
   /**
