@@ -414,6 +414,11 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @returns {boolean}
+   */
+  supportsDefaultPrimaryKeyUUID() { return false }
+
+  /**
    * @abstract
    * @returns {boolean}
    */

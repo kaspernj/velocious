@@ -251,6 +251,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   shouldSetAutoIncrementWhenPrimaryKey() { return false }
+  supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
    * @param {any} value

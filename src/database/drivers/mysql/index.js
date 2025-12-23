@@ -178,6 +178,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {boolean}
    */
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
+  supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
    * @param {any} value

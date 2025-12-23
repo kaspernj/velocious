@@ -170,6 +170,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   queryToSql(query) { return new QueryParser({query}).toSql() }
 
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
+  supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
    * @param {*} value

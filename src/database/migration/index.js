@@ -294,6 +294,17 @@ export default class VelociousDatabaseMigration {
     if (!idType) {
       idType = databasePool.primaryKeyType()
     }
+    const driverSupportsDefaultUUID = this.getDriver().supportsDefaultPrimaryKeyUUID?.()
+    const isUUIDPrimaryKey = idType?.toLowerCase() == "uuid"
+    let idAutoIncrement = true
+
+    if (isUUIDPrimaryKey) {
+      idAutoIncrement = false
+
+      if (idDefault === undefined && driverSupportsDefaultUUID) {
+        idDefault = () => "UUID()"
+      }
+    }
 
     const tableData = new TableData(tableName)
 
@@ -302,7 +313,7 @@ export default class VelociousDatabaseMigration {
     if (!(idType in tableData)) throw new Error(`Unsupported primary key type: ${idType}`)
 
     if (id !== false) {
-      tableData.addColumn("id", {autoIncrement: true, default: idDefault, null: false, primaryKey: true, type: idType})
+      tableData.addColumn("id", {autoIncrement: idAutoIncrement, default: idDefault, null: false, primaryKey: true, type: idType})
     }
 
     if (callback) {

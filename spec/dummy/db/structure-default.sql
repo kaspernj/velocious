@@ -11,3 +11,5 @@ CREATE TABLE [schema_migrations] ([version] varchar(255) NOT NULL, PRIMARY KEY (
 CREATE TABLE [tasks] ([id] bigint NOT NULL, [project_id] bigint NOT NULL, [name] varchar(255), [description] text, [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
 
 CREATE TABLE [users] ([id] bigint NOT NULL, [email] varchar(255) NOT NULL, [encrypted_password] varchar(255) NOT NULL, [reference] varchar(255), [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+
+CREATE TABLE [uuid_items] ([id] varchar(36) DEFAULT (newid()) NOT NULL, [title] varchar(255), [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
