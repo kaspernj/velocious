@@ -13,6 +13,7 @@ import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
+import StructureSql from "./structure-sql.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
@@ -300,4 +301,11 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {string}
    */
   updateSql({conditions, data, tableName}) { return new Update({conditions, data, driver: this, tableName}).toSql() }
+
+  /**
+   * @returns {Promise<string | null>}
+   */
+  async structureSql() {
+    return await new StructureSql({driver: this}).toSql()
+  }
 }

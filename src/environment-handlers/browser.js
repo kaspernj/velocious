@@ -219,38 +219,20 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
     for (const identifier of sqliteIdentifiers) {
       const db = dbs[identifier]
-      const rows = await db.query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
-      const statements = rows
-        .map((row) => row.sql)
-        .filter((statement) => Boolean(statement))
-        .map((statement) => this._normalizeSqlStatement(statement))
-        .filter((statement) => Boolean(statement))
+      const structureSql = typeof db.structureSql === "function" ? await db.structureSql() : null
+      const trimmedSql = structureSql?.trimEnd()
 
-      if (statements.length == 0) continue
+      if (!trimmedSql) continue
 
       if (sqliteIdentifiers.length > 1) {
         sections.push(`-- ${identifier}`)
       }
 
-      sections.push(statements.join("\n\n"))
+      sections.push(trimmedSql)
     }
 
     if (sections.length == 0) return null
 
     return `${sections.join("\n\n")}\n`
-  }
-
-  /**
-   * @param {string} statement
-   * @returns {string}
-   */
-  _normalizeSqlStatement(statement) {
-    const trimmed = statement.trim()
-
-    if (!trimmed) return ""
-
-    if (trimmed.endsWith(";")) return trimmed
-
-    return `${trimmed};`
   }
 }

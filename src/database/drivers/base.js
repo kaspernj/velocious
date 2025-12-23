@@ -235,6 +235,13 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @returns {Promise<string | null>}
+   */
+  async structureSql() {
+    return null
+  }
+
+  /**
    * @param {string} name
    * @param {object} [args]
    * @param {boolean} args.throwError
