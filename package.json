@@ -10,11 +10,12 @@
     "build/**"
   ],
   "scripts": {
+    "all-checks": "npm run typecheck && npm run lint && npm run test",
     "build": "rm -rf build && npm run compile",
     "compile": "tsc && npm run copy:ejs && chmod +x build/bin/velocious.js",
     "copy:ejs": "cpy \"src/**/*.ejs\" build --parents",
     "lint": "eslint",
-    "test": "VELOCIOUS_TEST_DIR=../ cd spec/dummy && npx velocious test",
+    "test": "cd spec/dummy && VELOCIOUS_TEST_DIR=$(pwd)/.. node ../../bin/velocious.js test",
     "prepublishOnly": "npm run build && chmod +x build/bin/velocious.js",
     "typecheck": "tsc --noEmit",
     "velocious": "asd",
