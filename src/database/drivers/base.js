@@ -485,12 +485,27 @@ export default class VelociousDatabaseDriversBase {
         this.logger.debug("Transaction error", error)
       }
 
+      let transactionRolledBack = false
+
       if (savePointStarted) {
         this.logger.debug("Rollback savepoint", savePointName)
-        await this.rollbackSavePoint(savePointName)
+        try {
+          await this.rollbackSavePoint(savePointName)
+        } catch (savePointError) {
+          const message = savePointError instanceof Error ? savePointError.message : `${savePointError}`
+
+          // MySQL sometimes drops savepoints unexpectedly; fall back to rolling back the full transaction
+          if (message.includes("SAVEPOINT") || message.includes("ER_SP_DOES_NOT_EXIST")) {
+            this.logger.debug("Savepoint rollback failed; rolling back entire transaction instead")
+            await this.rollbackTransaction()
+            transactionRolledBack = true
+          } else {
+            throw savePointError
+          }
+        }
       }
 
-      if (transactionStarted) {
+      if (transactionStarted && !transactionRolledBack) {
         this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
       }
@@ -664,7 +679,19 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>}
    */
   async _releaseSavePointAction(savePointName) {
-    await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+    try {
+      await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${error}`
+
+      // Savepoint may already be gone if the database rolled back automatically
+      if (message.toLowerCase().includes("savepoint") && message.toLowerCase().includes("does not exist")) {
+        this.logger.debug(`Release savepoint ignored because it no longer exists: ${savePointName}`)
+        return
+      }
+
+      throw error
+    }
   }
 
   /**

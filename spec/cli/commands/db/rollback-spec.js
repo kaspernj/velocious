@@ -80,7 +80,8 @@ describe("Cli - Commands - db:rollback", () => {
           "projects",
           "schema_migrations",
           "tasks",
-          "users"
+          "users",
+          "uuid_items"
         ]
       )
 
@@ -93,7 +94,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250912183606",
         "20250915085450",
         "20250916111330",
-        "20250921121002"
+        "20250921121002",
+        "20251223194400"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
@@ -106,7 +108,8 @@ describe("Cli - Commands - db:rollback", () => {
           "schema_migrations",
           "schema_migrations",
           "tasks",
-          "users"
+          "users",
+          "uuid_items"
         ]
       )
 
@@ -119,7 +122,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250912183606",
         "20250915085450",
         "20250916111330",
-        "20250921121002"
+        "20250921121002",
+        "20251223194400"
       ])
     }
 
@@ -132,6 +136,7 @@ describe("Cli - Commands - db:rollback", () => {
         [
           "accounts",
           "authentication_tokens",
+          "interactions",
           "project_details",
           "project_translations",
           "projects",
@@ -152,13 +157,15 @@ describe("Cli - Commands - db:rollback", () => {
         "20250915085450",
         "20250916111330",
         "20250921121002",
-        "20251223194400"
+        "20251223194400",
+        "20251223210800"
       ])
     } else {
       expect(newTablesResult.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
+          "interactions",
           "project_details",
           "project_translations",
           "projects",
@@ -180,7 +187,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250915085450",
         "20250916111330",
         "20250921121002",
-        "20251223194400"
+        "20251223194400",
+        "20251223210800"
       ])
     }
   })

@@ -7,11 +7,15 @@ export default class VelociousDatabaseRecordBelongsToRelationship extends BaseRe
   /** @returns {string} */
   getForeignKey() {
     if (!this.foreignKey) {
-      const targetModelClass = this.getTargetModelClass()
+      if (this.getPolymorphic()) {
+        this.foreignKey = `${inflection.underscore(this.getRelationshipName())}_id`
+      } else {
+        const targetModelClass = this.getTargetModelClass()
 
-      if (!targetModelClass) throw new Error("Can't calculate foreign key without a target model class")
+        if (!targetModelClass) throw new Error("Can't calculate foreign key without a target model class")
 
-      this.foreignKey = `${inflection.underscore(targetModelClass.name)}_id`
+        this.foreignKey = `${inflection.underscore(targetModelClass.name)}_id`
+      }
     }
 
     return this.foreignKey
