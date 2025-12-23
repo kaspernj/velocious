@@ -303,7 +303,10 @@ export default class VelociousDatabaseMigration {
     if (isUUIDPrimaryKey) {
       idAutoIncrement = false
 
-      if (idDefault === undefined && driverSupportsDefaultUUID) {
+      if (!driverSupportsDefaultUUID) {
+        // Let application code assign UUIDs (see DatabaseRecord.insert) when the driver can't do it.
+        idDefault = undefined
+      } else if (idDefault === undefined) {
         idDefault = () => "UUID()"
       }
     }
