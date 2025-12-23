@@ -66,9 +66,13 @@ export default class ServerClient {
   async send(data) {
     return new Promise((resolve) => {
       this.logger.debug("Send", data)
-      this.socket.write(data, () => {
+      if (this.socket.destroyed || this.socket.writableEnded || this.socket.writable === false) {
+        this.logger.debug("Skipping send because socket is closed")
         resolve()
-      })
+        return
+      }
+
+      this.socket.write(data, () => resolve())
     })
   }
 

@@ -13,7 +13,7 @@ export default class VelociousHttpServerClientRequestRunner {
   /**
    * @param {object} args
    * @param {import("../../configuration.js").default} args.configuration
-   * @param {import("./request.js").default} args.request
+   * @param {any} args.request
    */
   constructor({configuration, request}) {
     if (!configuration) throw new Error("No configuration given")

@@ -71,7 +71,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {import("./index.js").default} client
    * @returns {void}
    */
-  sendGoodbye(client) { // eslint-disable-line class-methods-use-this
+  sendGoodbye(client) {
     const frame = Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, 0x00])
 
     client.events.emit("output", frame)
@@ -112,7 +112,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     })
     const requestRunner = new RequestRunner({
       configuration: this.configuration,
-      request
+      /** @type {any} */ request
     })
 
     requestRunner.events.on("done", () => {
@@ -162,6 +162,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       if (this.buffer.length < offset + maskLength + payloadLength) return
 
+      /** @type {Buffer} */
       let payload = this.buffer.slice(offset + maskLength, offset + maskLength + payloadLength)
 
       if (isMasked) {
@@ -253,6 +254,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Buffer}
    */
   _unmaskPayload(payload, mask) {
+    /** @type {Buffer} */
     const result = Buffer.alloc(payload.length)
 
     for (let i = 0; i < payload.length; i++) {

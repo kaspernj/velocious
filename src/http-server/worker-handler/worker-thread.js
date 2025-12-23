@@ -63,13 +63,15 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
   }
 
- /**
-  * @param {object} data
-  * @param {string} data.command
-  * @param {string} [data.chunk]
-  * @param {string} [data.remoteAddress]
-  * @param {number} data.clientCount
-  */
+  /**
+   * @param {object} data
+   * @param {string} data.command
+   * @param {string} [data.chunk]
+   * @param {string} [data.remoteAddress]
+   * @param {number} [data.clientCount]
+   * @param {string} [data.channel]
+   * @param {any} [data.payload]
+   */
   onCommand = async (data) => {
     await this.logger.debug(() => [`Worker ${this.workerCount} received command`, data])
 

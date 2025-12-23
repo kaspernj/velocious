@@ -92,8 +92,10 @@ export default class VelociousHttpServerWorker {
   /**
    * @param {object} data
    * @param {string} data.command
-   * @param {number} data.clientCount
-   * @param {string} data.output
+   * @param {number} [data.clientCount]
+   * @param {string} [data.output]
+   * @param {string} [data.channel]
+   * @param {any} [data.payload]
    * @returns {void}
    */
   onWorkerMessage = (data) => {
@@ -120,6 +122,7 @@ export default class VelociousHttpServerWorker {
       const {clientCount} = data
 
       this.clients[clientCount]?.end()
+      delete this.clients[clientCount]
     } else if (command == "websocketPublish") {
       const {channel, payload} = data
 

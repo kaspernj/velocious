@@ -175,6 +175,103 @@ const tasks = await Task
   .toArray()
 ```
 
+# Websockets
+
+Velocious includes a lightweight websocket entry point for API-style calls and server-side events.
+
+## Connect and call a controller
+
+```js
+const socket = new WebSocket("ws://localhost:3006/websocket")
+
+socket.addEventListener("open", () => {
+  socket.send(JSON.stringify({
+    id: "req-1",
+    method: "POST",
+    path: "/api/version",
+    body: {extra: true},
+    type: "request"
+  }))
+})
+
+socket.addEventListener("message", (event) => {
+  const msg = JSON.parse(event.data)
+
+  if (msg.type === "response" && msg.id === "req-1") {
+    console.log("Status", msg.statusCode, "Body", msg.body)
+  }
+})
+```
+
+## Use the Websocket client API (HTTP-like)
+
+```js
+import WebsocketClient from "velocious/build/src/http-client/websocket-client.js"
+
+const client = new WebsocketClient({url: "ws://localhost:3006/websocket"})
+await client.connect()
+
+// Call controller actions like normal HTTP helpers
+const response = await client.post("/api/version", {locale: "en"})
+console.log(response.statusCode, response.json())
+
+// Listen for broadcast events
+const unsubscribe = client.on("projects", (payload) => {
+  console.log("Project event", payload)
+})
+
+// Trigger a broadcast from another action
+await client.post("/api/broadcast-event", {channel: "projects", payload: {id: 42}})
+
+unsubscribe()
+await client.close()
+```
+
+## Subscribe to events
+
+```js
+const socket = new WebSocket("ws://localhost:3006/websocket")
+
+socket.addEventListener("open", () => {
+  socket.send(JSON.stringify({type: "subscribe", channel: "projects"}))
+})
+
+socket.addEventListener("message", (event) => {
+  const msg = JSON.parse(event.data)
+
+  if (msg.type === "event" && msg.channel === "projects") {
+    console.log("Got project event payload", msg.payload)
+  }
+})
+```
+
+## Broadcast an event from backend code
+
+Any backend code (controllers, services, jobs) can publish to subscribed websocket clients using the shared event bus on the configuration:
+
+```js
+// Inside a controller action
+const {channel, payload} = this.getParams() // or compose your own payload
+this.getConfiguration().getWebsocketEvents().publish(channel, payload)
+this.renderJsonArg({status: "published"})
+```
+
+## Combine: subscribe and invoke another action
+
+You can subscribe first and then call another controller action over the same websocket connection to trigger broadcasts:
+
+```js
+socket.send(JSON.stringify({type: "subscribe", channel: "news"}))
+
+socket.send(JSON.stringify({
+  type: "request",
+  id: "req-broadcast",
+  method: "POST",
+  path: "/api/broadcast-event",
+  body: {channel: "news", payload: {headline: "breaking"}}
+}))
+```
+
 # Testing
 
 If you are using Velocious for an app, Velocious has a built-in testing framework. You can run your tests like this:

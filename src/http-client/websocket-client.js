@@ -1,0 +1,266 @@
+// @ts-check
+
+/**
+ * A small websocket client that mirrors simple HTTP-style calls and channel subscriptions.
+ */
+export default class VelociousWebsocketClient {
+  /**
+   * @param {object} [args]
+   * @param {boolean} [args.debug]
+   * @param {string} [args.url] Full websocket URL (default: ws://127.0.0.1:3006/websocket)
+   */
+  constructor({debug = false, url} = {}) {
+    if (!globalThis.WebSocket) throw new Error("WebSocket global is not available")
+
+    this.debug = debug
+    this.pendingRequests = new Map()
+    this.subscribedChannels = new Set()
+    this.url = url || "ws://127.0.0.1:3006/websocket"
+    this.listeners = new Map()
+    this.nextID = 1
+  }
+
+  /**
+   * Ensure a websocket connection is open.
+   * @returns {Promise<void>}
+   */
+  async connect() {
+    if (this.socket && this.socket.readyState === this.socket.OPEN) return
+    if (this.connectPromise) return this.connectPromise
+
+    this.connectPromise = new Promise((resolve, reject) => {
+      this.socket = new WebSocket(this.url)
+
+      const cleanup = () => {
+        this.socket?.removeEventListener("open", onOpen)
+        this.socket?.removeEventListener("error", onError)
+      }
+
+      const onOpen = () => {
+        cleanup()
+        resolve()
+      }
+      const onError = (event) => {
+        cleanup()
+        const error = event?.error || new Error("Websocket connection error")
+        reject(error)
+      }
+
+      this.socket.addEventListener("open", onOpen)
+      this.socket.addEventListener("error", onError)
+      this.socket.addEventListener("message", this.onMessage)
+      this.socket.addEventListener("close", this.onClose)
+    })
+
+    return this.connectPromise
+  }
+
+  /**
+   * Close the websocket and clear pending state.
+   * @returns {Promise<void>}
+   */
+  async close() {
+    if (!this.socket) return
+
+    await new Promise((resolve) => {
+      this.socket?.addEventListener("close", () => resolve())
+      this.socket?.close()
+    })
+
+    this.socket = undefined
+    this.connectPromise = undefined
+  }
+
+  /**
+   * Perform a POST request over the websocket.
+   * @param {string} path
+   * @param {any} [body]
+   * @param {{headers?: Record<string, string>}} [options]
+   * @returns {Promise<VelociousWebsocketResponse>}
+   */
+  async post(path, body, options = {}) {
+    return await this.request("POST", path, {...options, body})
+  }
+
+  /**
+   * Perform a GET request over the websocket.
+   * @param {string} path
+   * @param {{headers?: Record<string, string>}} [options]
+   * @returns {Promise<VelociousWebsocketResponse>}
+   */
+  async get(path, options = {}) {
+    return await this.request("GET", path, options)
+  }
+
+  /**
+   * Subscribe to a channel for server-sent events.
+   * @param {string} channel
+   * @param {(payload: any) => void} callback
+   * @returns {() => void} unsubscribe function
+   */
+  on(channel, callback) {
+    if (!this.listeners.has(channel)) {
+      this.listeners.set(channel, new Set())
+      this.subscribedChannels.add(channel)
+
+      void this.connect().then(() => {
+        this._sendMessage({channel, type: "subscribe"})
+      }).catch((error) => this._debug("Subscribe failed", error))
+    }
+
+    const channelListeners = this.listeners.get(channel)
+
+    if (!channelListeners) throw new Error("Listeners map not initialized")
+
+    channelListeners.add(callback)
+
+    return () => {
+      channelListeners.delete(callback)
+
+      if (channelListeners.size === 0) {
+        this.listeners.delete(channel)
+      }
+    }
+  }
+
+  /**
+   * @private
+   * @param {string} method
+   * @param {string} path
+   * @param {object} [options]
+   * @param {any} [options.body]
+   * @param {Record<string, string>} [options.headers]
+   * @returns {Promise<VelociousWebsocketResponse>}
+   */
+  async request(method, path, {body, headers} = {}) {
+    await this.connect()
+
+    const id = `ws-${this.nextID++}`
+    const payload = {
+      body,
+      headers,
+      id,
+      method,
+      path,
+      type: "request"
+    }
+
+    return await new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, {resolve, reject})
+      this._sendMessage(payload)
+    })
+  }
+
+  /**
+   * @private
+   * @param {MessageEvent<any>} event
+   */
+  onMessage = (event) => {
+    const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+
+    if (!raw) return
+
+    let message
+
+    try {
+      message = JSON.parse(raw)
+    } catch (error) {
+      this._debug("Failed to parse websocket message", error)
+      return
+    }
+
+    const {type} = message
+
+    if (type === "response") {
+      const {id} = message
+      const pending = id ? this.pendingRequests.get(id) : undefined
+
+      if (pending) {
+        this.pendingRequests.delete(id)
+        pending.resolve(new VelociousWebsocketResponse(message))
+      } else {
+        this._debug(`No pending request for response id ${id}`)
+      }
+    } else if (type === "event") {
+      const {channel, payload} = message
+      const callbacks = this.listeners.get(channel)
+
+      callbacks?.forEach((callback) => {
+        try {
+          callback(payload)
+        } catch (error) {
+          this._debug("Listener error", error)
+        }
+      })
+    } else if (type === "error" && message.id) {
+      const pending = this.pendingRequests.get(message.id)
+
+      if (pending) {
+        this.pendingRequests.delete(message.id)
+        pending.reject(new Error(message.error || "Unknown websocket error"))
+      }
+    }
+  }
+
+  /**
+   * Reject all pending requests when the socket closes unexpectedly.
+   * @private
+   */
+  onClose = () => {
+    for (const [id, {reject}] of this.pendingRequests.entries()) {
+      reject(new Error(`Websocket closed before response for ${id}`))
+    }
+
+    this.pendingRequests.clear()
+    this.connectPromise = undefined
+  }
+
+  /**
+   * @private
+   * @param {Record<string, any>} payload
+   */
+  _sendMessage(payload) {
+    if (!this.socket || this.socket.readyState !== this.socket.OPEN) {
+      throw new Error("Websocket is not open")
+    }
+
+    const json = JSON.stringify(payload)
+
+    this._debug("Sending", json)
+    this.socket.send(json)
+  }
+
+  /**
+   * @private
+   * @param  {...any} args
+   * @returns {void}
+   */
+  _debug(...args) {
+    if (!this.debug) return
+
+    console.debug("[VelociousWebsocketClient]", ...args)
+  }
+}
+
+class VelociousWebsocketResponse {
+  /**
+   * @param {object} message
+   */
+  constructor(message) {
+    this.body = message.body
+    this.headers = message.headers || {}
+    this.id = message.id
+    this.statusCode = message.statusCode || 200
+    this.statusMessage = message.statusMessage || "OK"
+    this.type = message.type
+  }
+
+  /** @returns {any} */
+  json() {
+    if (typeof this.body !== "string") {
+      throw new Error("Response body is not a string")
+    }
+
+    return JSON.parse(this.body)
+  }
+}
