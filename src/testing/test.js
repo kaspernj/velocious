@@ -179,6 +179,13 @@ class Expect extends BaseExpect {
   /**
    * @returns {void}
    */
+  toBeNull() {
+    this.toBe(null)
+  }
+
+  /**
+   * @returns {void}
+   */
   toBeUndefined() {
     this.toBe(undefined)
   }
