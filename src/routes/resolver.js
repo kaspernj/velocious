@@ -5,6 +5,7 @@ import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 import {Logger} from "../logger.js"
+import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
 
 export default class VelociousRoutesResolver {
   /** @type {Logger | undefined} */
@@ -122,7 +123,7 @@ export default class VelociousRoutesResolver {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
-    const loggedParams = {...this.params}
+    const loggedParams = this._sanitizeParamsForLogging(this.params)
 
     delete loggedParams.action
     delete loggedParams.controller
@@ -152,5 +153,36 @@ export default class VelociousRoutesResolver {
     const offsetRemainingMinutes = pad(offsetTotalMinutes % 60)
 
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${offsetSign}${offsetHours}${offsetRemainingMinutes}`
+  }
+
+  /**
+   * @param {any} value
+   * @returns {any}
+   */
+  _sanitizeParamsForLogging(value) {
+    if (value instanceof UploadedFile) {
+      return {
+        className: value.constructor.name,
+        filename: value.filename(),
+        size: value.size()
+      }
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this._sanitizeParamsForLogging(item))
+    }
+
+    if (value && typeof value === "object") {
+      /** @type {Record<string, any>} */
+      const result = {}
+
+      for (const key of Object.keys(value)) {
+        result[key] = this._sanitizeParamsForLogging(value[key])
+      }
+
+      return result
+    }
+
+    return value
   }
 }

@@ -38,7 +38,7 @@ export default class VelociousHttpServerClientRequestParser {
    * @returns {void}
    */
   onFormDataPart = (formDataPart) => {
-    /** @type {Record<string, string>} */
+    /** @type {Record<string, any>} */
     const unorderedParams = {}
 
     unorderedParams[formDataPart.getName()] = formDataPart.getValue()
