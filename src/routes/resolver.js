@@ -122,7 +122,10 @@ export default class VelociousRoutesResolver {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
-    const {action: _ignoredAction, controller: _ignoredController, ...loggedParams} = this.params
+    const loggedParams = {...this.params}
+
+    delete loggedParams.action
+    delete loggedParams.controller
 
     await this.logger.log(`Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
     await this.logger.log(`Processing by ${controllerClass.name}#${action}`)
