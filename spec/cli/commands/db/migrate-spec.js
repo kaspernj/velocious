@@ -4,9 +4,25 @@ import Cli from "../../../../src/cli/index.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
+import fs from "fs/promises"
+import path from "path"
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:migrate", () => {
+  /**
+   * @param {string} statement
+   * @returns {string}
+   */
+  function normalizeSqlStatement(statement) {
+    const trimmed = statement.trim()
+
+    if (!trimmed) return ""
+
+    if (trimmed.endsWith(";")) return trimmed
+
+    return `${trimmed};`
+  }
+
   it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
@@ -175,5 +191,36 @@ describe("Cli - Commands - db:migrate", () => {
         "20250921121002"
       ])
     }
+  })
+
+  it("writes structure sql for sqlite", {databaseCleaning: {transaction: false}}, async () => {
+    const directory = dummyDirectory()
+    const cli = new Cli({
+      configuration: dummyConfiguration,
+      directory,
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["db:migrate"],
+      testing: true
+    })
+
+    await cli.getConfiguration().ensureConnections(async (dbs) => {
+      await cli.execute()
+
+      if (dbs.default.getType() != "sqlite") {
+        throw new Error(`Expected sqlite default database, got: ${dbs.default.getType()}`)
+      }
+
+      const structurePath = path.join(directory, "db", "structure-default.sql")
+      const actual = await fs.readFile(structurePath, "utf8")
+      const rows = await dbs.default.query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
+      const expected = rows
+        .map((row) => row.sql)
+        .filter((statement) => Boolean(statement))
+        .map((statement) => normalizeSqlStatement(statement))
+        .filter((statement) => Boolean(statement))
+        .join("\n\n") + "\n"
+
+      expect(actual).toEqual(expected)
+    })
   })
 })
