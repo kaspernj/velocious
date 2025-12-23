@@ -30,6 +30,26 @@ export default class VeoliciousHttpServerClient {
     this.requestRunners = []
   }
 
+  /**
+   * @param {string} message
+   * @returns {void}
+   */
+  _sendBadUpgradeResponse(message) {
+    const httpVersion = this.currentRequest?.httpVersion() || "1.1"
+    const body = `${message}\n`
+    const headers = [
+      `HTTP/${httpVersion} 400 Bad Request`,
+      "Connection: Close",
+      "Content-Type: text/plain; charset=UTF-8",
+      `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+      "",
+      body
+    ].join("\r\n")
+
+    this.events.emit("output", headers)
+    this.events.emit("close")
+  }
+
   executeCurrentRequest = () => {
     this.logger.debug("executeCurrentRequest")
 
@@ -95,7 +115,10 @@ export default class VeoliciousHttpServerClient {
 
     const secWebsocketKey = this.currentRequest.header("sec-websocket-key")
 
-    if (!secWebsocketKey) throw new Error("Missing Sec-WebSocket-Key header")
+    if (!secWebsocketKey) {
+      this._sendBadUpgradeResponse("Missing Sec-WebSocket-Key header")
+      return
+    }
 
     const websocketAcceptKey = crypto.createHash("sha1")
       .update(`${secWebsocketKey}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`, "binary")
