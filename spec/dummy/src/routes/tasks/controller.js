@@ -22,4 +22,26 @@ export default class TasksController extends Controller {
 
     this.render({json: {status: "success"}})
   }
+
+  collectionGet() {
+    this.render({json: {scope: "collection", method: "get"}})
+  }
+
+  collectionPost() {
+    this.render({json: {scope: "collection", method: "post"}})
+  }
+
+  async memberGet() {
+    const taskId = this.params().id
+    const task = await Task.find(taskId)
+
+    this.render({json: {scope: "member", method: "get", task: {id: task.id(), name: task.name()}}})
+  }
+
+  async memberPost() {
+    const taskId = this.params().id
+    const task = await Task.find(taskId)
+
+    this.render({json: {scope: "member", method: "post", task: {id: task.id(), name: task.name()}}})
+  }
 }
