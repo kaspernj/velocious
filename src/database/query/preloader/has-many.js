@@ -48,6 +48,12 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     whereArgs[foreignKey] = modelsPrimaryKeyValues
 
+    if (this.relationship.getPolymorphic()) {
+      const typeColumn = this.relationship.getPolymorphicTypeColumn()
+
+      whereArgs[typeColumn] = this.relationship.getModelClass().name
+    }
+
     const targetModelClass = this.relationship.getTargetModelClass()
 
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")

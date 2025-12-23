@@ -1,6 +1,7 @@
 // @ts-check
 
 import restArgsError from "../../../utils/rest-args-error.js"
+import * as inflection from "inflection"
 
 /**
  * @typedef {object} RelationshipBaseArgsType
@@ -23,7 +24,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
     restArgsError(restArgs)
 
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
-    if (!className && !klass) throw new Error(`Neither 'className' or 'klass' was given for ${modelClass.name}#${relationshipName}`)
+    if (!className && !klass && !polymorphic) throw new Error(`Neither 'className' or 'klass' was given for ${modelClass.name}#${relationshipName}`)
 
     if (className == "EventSery") {
       throw new Error(`Invalid model name: ${className}`)
@@ -74,6 +75,27 @@ export default class VelociousDatabaseRecordBaseRelationship {
     return this._polymorphic || false
   }
 
+  /** @returns {string} */
+  getPolymorphicTypeColumn() {
+    if (!this.getPolymorphic()) {
+      throw new Error(`${this.modelClass.name}#${this.relationshipName} isn't polymorphic`)
+    }
+
+    if (!this._polymorphicTypeColumn) {
+      const foreignKey = this.getForeignKey()
+
+      if (foreignKey && foreignKey.endsWith("_id")) {
+        this._polymorphicTypeColumn = foreignKey.replace(/_id$/, "_type")
+      } else {
+        const underscoredName = inflection.underscore(this.getRelationshipName())
+
+        this._polymorphicTypeColumn = `${underscoredName}_type`
+      }
+    }
+
+    return this._polymorphicTypeColumn
+  }
+
   /** @returns {string} The name of the foreign key, e.g. "id" etc. */
   getPrimaryKey() { return this._primaryKey }
 
@@ -82,7 +104,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
 
   /** @returns {typeof import("../index.js").default | undefined} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class. */
   getTargetModelClass() {
-    if (this.getPolymorphic()) {
+    if (this.getPolymorphic() && this.type == "belongsTo") {
       return undefined
     } else if (this.className) {
       return this.getConfiguration().getModelClass(this.className)
