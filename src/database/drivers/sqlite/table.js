@@ -51,8 +51,11 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     for (const row of rows) {
       const columnsIndex = new ColumnsIndex(this, row)
       const indexMasterData = await this.getDriver().query(`SELECT * FROM sqlite_master WHERE type = 'index' AND name = ${this.getOptions().quote(columnsIndex.getName())}`)
+      const sql = indexMasterData[0].sql
 
-      columnsIndex.data.columnNames = this._parseColumnsFromSQL(indexMasterData[0].sql)
+      if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
+
+      columnsIndex.data.columnNames = this._parseColumnsFromSQL(sql)
 
       indexes.push(columnsIndex)
     }
@@ -62,6 +65,8 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
 
   /** @param {string} sql */
   _parseColumnsFromSQL(sql) {
+    if (!sql) throw new Error(`Invalid SQL given (${typeof sql}): ${sql}`)
+
     const columnsSQLMatch = sql.match(/\((.+?)\)/)
 
     if (!columnsSQLMatch) {
