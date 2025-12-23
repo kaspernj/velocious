@@ -4,7 +4,7 @@ import {describe, expect, it} from "../../../src/testing/test.js"
 import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
 
-describe("HttpServer - tasks - member and collection", {databaseCleaning: {transaction: false, truncate: true}, focus: true}, async () => {
+describe("HttpServer - tasks - member and collection", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
   it("handles collection get routes", async () => {
     await Dummy.run(async () => {
       const response = await fetch("http://localhost:3006/tasks/collection-get")
