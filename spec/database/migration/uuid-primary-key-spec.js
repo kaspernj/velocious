@@ -8,7 +8,7 @@ import {describe, it} from "../../../src/testing/test.js"
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 describe("database - migration - uuid primary key", () => {
-  it("uses driver default UUIDs when supported", {focus: true}, async () => {
+  it("uses driver default UUIDs when supported", async () => {
     await Dummy.run(async () => {
       await dummyConfiguration.ensureConnections(async (dbs) => {
         const table = await dbs.default.getTableByNameOrFail("uuid_items")
