@@ -19,6 +19,18 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * @param {string} columnName
+   * @returns {Promise<import("./base-column.js").default>}
+   */
+  async getColumnByNameOrFail(columnName) {
+    const column = await this.getColumnByName(columnName)
+
+    if (!column) throw new Error(`Couldn't find a column by that name "${columnName}"`)
+
+    return column
+  }
+
+  /**
    * @abstract
    * @returns {Promise<Array<import("./base-column.js").default>>}
    */

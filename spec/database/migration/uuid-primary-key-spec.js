@@ -11,14 +11,8 @@ describe("database - migration - uuid primary key", () => {
   it("uses driver default UUIDs when supported", async () => {
     await Dummy.run(async () => {
       await dummyConfiguration.ensureConnections(async (dbs) => {
-        const table = await dbs.default.getTableByName("uuid_items", {throwError: true})
-
-        if (!table) throw new Error("No uuid_items table")
-
-        const idColumn = await table.getColumnByName("id")
-
-        if (!idColumn) throw new Error("No id column")
-
+        const table = await dbs.default.getTableByNameOrFail("uuid_items")
+        const idColumn = await table.getColumnByNameOrFail("id")
         const record = new UuidItem({title: "driver default uuid"})
 
         await record.save()

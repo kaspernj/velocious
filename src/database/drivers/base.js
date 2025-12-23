@@ -269,6 +269,18 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @param {string} name
+   * @returns {Promise<import("./base-table.js").default>}
+   */
+  async getTableByNameOrFail(name) {
+    const table = await this.getTableByName(name, {throwError: true})
+
+    if (!table) throw new Error(`Couldn't find a table by that name "${name}"`)
+
+    return table
+  }
+
+  /**
    * @abstract
    * @returns {string}
    */
