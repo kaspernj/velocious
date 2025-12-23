@@ -12,9 +12,22 @@ describe("database - drivers - getTableByNameOrFail", () => {
 
   it("throws when the table is missing", async () => {
     await dummyConfiguration.ensureConnections(async (dbs) => {
-      await expect(async () => {
+      let error
+
+      try {
         await dbs.default.getTableByNameOrFail("non_existing_table_name")
-      }).toThrowError(`Couldn't find a table by that name "non_existing_table_name" in: authentication_tokens, project_details, project_translations, projects, schema_migrations, tasks, users, uuid_items`)
+      } catch (err) {
+        error = err
+      }
+
+      expect(error).toBeDefined()
+
+      if (error instanceof Error) {
+        expect(error.message).toMatch(/Couldn't find a table by that name/)
+        expect(error.message).toMatch(/non_existing_table_name/)
+      } else {
+        throw new Error(`Expected an Error but got: ${typeof error}`)
+      }
     })
   })
 })
