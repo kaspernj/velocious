@@ -5,6 +5,7 @@ import Client from "../client/index.js"
 import {digg} from "diggerize"
 import errorLogger from "../../error-logger.js"
 import {Logger} from "../../logger.js"
+import WebsocketEvents from "../websocket-events.js"
 
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
@@ -52,6 +53,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     this.configuration.setEnvironment(environment)
     this.configuration.setCurrent()
+    this.websocketEvents = new WebsocketEvents({parentPort: this.parentPort, workerCount: this.workerCount})
+    this.configuration.setWebsocketEvents(this.websocketEvents)
 
     this.application = new Application({configuration: this.configuration, type: "worker-handler"})
 
@@ -60,13 +63,15 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
   }
 
- /**
-  * @param {object} data
-  * @param {string} data.command
-  * @param {string} [data.chunk]
-  * @param {string} [data.remoteAddress]
-  * @param {number} data.clientCount
-  */
+  /**
+   * @param {object} data
+   * @param {string} data.command
+   * @param {string} [data.chunk]
+   * @param {string} [data.remoteAddress]
+   * @param {number} [data.clientCount]
+   * @param {string} [data.channel]
+   * @param {any} [data.payload]
+   */
   onCommand = async (data) => {
     await this.logger.debug(() => [`Worker ${this.workerCount} received command`, data])
 
@@ -101,8 +106,26 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       await this.logger.debug(`Sending to client ${clientCount}`)
 
       client.onWrite(chunk)
+    } else if (command == "websocketEvent") {
+      const {channel, payload} = data
+
+      this.broadcastWebsocketEvent({channel, payload})
     } else {
       throw new Error(`Unknown command: ${command}`)
+    }
+  }
+
+  /**
+   * @param {object} args
+   * @param {string} args.channel
+   * @param {any} args.payload
+   * @returns {void}
+   */
+  broadcastWebsocketEvent({channel, payload}) {
+    for (const clientKey of Object.keys(this.clients)) {
+      const client = this.clients[clientKey]
+
+      client.websocketSession?.sendEvent(channel, payload)
     }
   }
 }

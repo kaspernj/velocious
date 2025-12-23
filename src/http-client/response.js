@@ -64,21 +64,7 @@ export default class Response {
   tryToParse() {
     while (true) {
       if (this.state == "body") {
-        const contentLengthValue = this.getHeader("Content-Length")?.getValue()
-
-        if (contentLengthValue === undefined) {
-          throw new Error("No content length given")
-        }
-
-        let contentLengthNumber
-
-        if (typeof contentLengthValue == "number") {
-          contentLengthNumber = contentLengthValue
-        } else if (contentLengthValue == "string") {
-          contentLengthNumber = parseInt(contentLengthValue)
-        } else {
-          throw new Error(`Content-Length is not a number: ${contentLengthValue}`)
-        }
+        const contentLengthNumber = this._contentLengthNumber()
 
         if (this.response.byteLength >= contentLengthNumber) {
           this.completeResponse()
@@ -106,10 +92,12 @@ export default class Response {
             this.state = "headers"
           } else if (this.state == "headers") {
             if (line == "") {
-              if (this.method == "GET" || this.method == "HEAD") {
+              const contentLengthNumber = this._contentLengthNumber()
+
+              if (!contentLengthNumber) {
                 this.completeResponse()
                 break
-              } else if (this.method == "POST") {
+              } else {
                 this.state = "body"
               }
             } else {
@@ -132,5 +120,21 @@ export default class Response {
   completeResponse() {
     this.state = "done"
     this.onComplete()
+  }
+
+  /**
+   * @returns {number}
+   */
+  _contentLengthNumber() {
+    const header = this.headers.find((currentHeader) => currentHeader.getName().toLowerCase() == "content-length")
+
+    if (!header) return 0
+
+    const contentLengthValue = header.getValue()
+
+    if (typeof contentLengthValue === "number") return contentLengthValue
+    if (typeof contentLengthValue === "string") return parseInt(contentLengthValue)
+
+    throw new Error(`Content-Length is not a number: ${contentLengthValue}`)
   }
 }

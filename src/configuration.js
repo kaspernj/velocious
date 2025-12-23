@@ -42,6 +42,7 @@ export default class VelociousConfiguration {
     this.locales = locales
     this._initializers = initializers
     this._testing = testing
+    this._websocketEvents = undefined
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
     this.databasePools = {}
@@ -300,6 +301,19 @@ export default class VelociousConfiguration {
   /** @returns {Function} */
   getTranslator() {
     return this._translator || this._defaultTranslator
+  }
+
+  /** @returns {import("./http-server/websocket-events.js").default | undefined} */
+  getWebsocketEvents() {
+    return this._websocketEvents
+  }
+
+  /**
+   * @param {import("./http-server/websocket-events.js").default} websocketEvents
+   * @returns {void}
+   */
+  setWebsocketEvents(websocketEvents) {
+    this._websocketEvents = websocketEvents
   }
 
   /**

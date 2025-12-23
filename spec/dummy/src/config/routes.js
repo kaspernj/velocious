@@ -4,6 +4,7 @@ const routes = new Routes()
 
 routes.draw((route) => {
   route.namespace("api", (route) => {
+    route.post("broadcast-event")
     route.post("version")
   })
 
