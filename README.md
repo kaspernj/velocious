@@ -116,6 +116,12 @@ export default class CreateEvents extends Migration {
       t.timestamps()
     })
 
+    // UUID primary key
+    await this.createTable("uuid_items", {id: {type: "uuid"}}, (t) => {
+      t.string("title", {null: false})
+      t.timestamps()
+    })
+
     await this.createTable("task_translations", (t) => {
       t.references("task", {foreignKey: true, null: false})
       t.string("locale", {null: false})
