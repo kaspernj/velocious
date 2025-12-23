@@ -4,7 +4,9 @@ import ejs from "ejs"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
 import {Logger} from "./logger.js"
+import ParamsToObject from "./http-server/client/params-to-object.js"
 import restArgsError from "./utils/rest-args-error.js"
+import querystring from "querystring"
 
 export default class VelociousController {
   /**
@@ -103,7 +105,27 @@ export default class VelociousController {
   }
 
   /** @returns {Record<string, any>} */
-  params() { return this._params }
+  params() {
+    // Merge query parameters so controllers can read them via params()
+    const mergedParams = {...this.queryParameters(), ...this._params}
+
+    if (!mergedParams.controller) mergedParams.controller = this._controller
+
+    return mergedParams
+  }
+
+  /** @returns {Record<string, any>} */
+  queryParameters() {
+    const query = this._request.path().split("?")[1]
+
+    if (!query) return {}
+
+    /** @type {Record<string, any>} */
+    const unparsedParams = querystring.parse(query)
+    const paramsToObject = new ParamsToObject(unparsedParams)
+
+    return paramsToObject.toObject()
+  }
 
   /**
    * @param {object} [args]

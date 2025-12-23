@@ -5,11 +5,21 @@ export default class RootController extends Controller {
     await this.render()
   }
 
-  ping() {
-    this.render({
+  async ping() {
+    await this.render({
       json: {
         message: "Pong"
       }
     })
+  }
+
+  async params() {
+    this.viewParams.response = {
+      params: super.params(),
+      getParams: this.getParams(),
+      queryParameters: this.queryParameters()
+    }
+
+    await this.render()
   }
 }

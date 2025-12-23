@@ -1,6 +1,5 @@
 // @ts-check
 
-import {digg} from "diggerize"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
@@ -30,8 +29,9 @@ export default class VelociousRoutesResolver {
 
   async resolve() {
     let controllerPath
-    let currentRoute = digg(this, "configuration", "routes", "rootRoute")
-    let currentPath = this.request.path()
+    let currentRoute = this.configuration.routes.rootRoute
+    const rawPath = this.request.path()
+    const currentPath = rawPath.split("?")[0]
     let viewPath
 
     const matchResult = this.matchPathWithRoutes(currentRoute, currentPath)
@@ -41,6 +41,10 @@ export default class VelociousRoutesResolver {
     if (!matchResult) {
       const __filename = fileURLToPath(import.meta.url)
       const __dirname = dirname(__filename)
+      const requestedPath = currentPath.replace(/^\//, "") || "_root"
+      const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
+
+      await (this.logger || new Logger("RoutesResolver")).warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
 
       controller = "errors"
       controllerPath = "./built-in/errors/controller.js"
@@ -52,7 +56,7 @@ export default class VelociousRoutesResolver {
       controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
       viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
     } else {
-      throw new Error(`Matched the route but didn't know what to do with it: ${currentPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
+      throw new Error(`Matched the route but didn't know what to do with it: ${rawPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
     }
 
     const controllerClassImport = await import(controllerPath)
@@ -87,7 +91,7 @@ export default class VelociousRoutesResolver {
    * @returns {{restPath: string} | undefined}
    */
   matchPathWithRoutes(route, path) {
-    const pathWithoutSlash = path.replace(/^\//, "")
+    const pathWithoutSlash = path.replace(/^\//, "").split("?")[0]
 
     for (const subRoute of route.routes) {
       const matchResult = subRoute.matchWithPath({
@@ -118,10 +122,14 @@ export default class VelociousRoutesResolver {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
+    const loggedParams = {...this.params}
 
-    await this.logger.log(`Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
-    await this.logger.log(`Processing by ${controllerClass.name}#${action}`)
-    await this.logger.log(() => [`  Parameters:`, this.params])
+    delete loggedParams.action
+    delete loggedParams.controller
+
+    await this.logger.log(() => [`Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`])
+    await this.logger.log(() => [`Processing by ${controllerClass.name}#${action}`])
+    await this.logger.log(() => [`  Parameters:`, loggedParams])
   }
 
   /**
