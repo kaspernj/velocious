@@ -1,6 +1,17 @@
 // @ts-check
 
-import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import {describe, expect, it} from "../../src/testing/test.js"
+import MysqlStructureSql from "../../src/database/drivers/mysql/structure-sql.js"
+
+/**
+ * @param {string} sql
+ * @returns {string | null}
+ */
+function extractQuotedName(sql) {
+  const match = sql.match(/["'`]([^"'`]+)["'`]/)
+
+  return match ? match[1] : null
+}
 
 /**
  * @param {object} args
@@ -22,8 +33,7 @@ function buildMysqlDb({version, tables, creates}) {
       }
 
       if (sql.startsWith("SHOW CREATE TABLE")) {
-        const match = sql.match(/`(.+?)`/)
-        const tableName = match?.[1]
+        const tableName = extractQuotedName(sql)
 
         if (!tableName || !creates[tableName]) return []
 
@@ -31,8 +41,7 @@ function buildMysqlDb({version, tables, creates}) {
       }
 
       if (sql.startsWith("SHOW CREATE VIEW")) {
-        const match = sql.match(/`(.+?)`/)
-        const tableName = match?.[1]
+        const tableName = extractQuotedName(sql)
 
         if (!tableName || !creates[tableName]) return []
 
@@ -44,14 +53,8 @@ function buildMysqlDb({version, tables, creates}) {
   }))
 }
 
-describe("Environment handler - Node - structure sql - mysql", () => {
+describe("Drivers - structure sql - mysql", () => {
   it("builds structure sql for mysql tables and views", async () => {
-    const handler = new EnvironmentHandlerNode()
-
-    handler.setConfiguration(/** @type {import("../../src/configuration.js").default} */ (/** @type {unknown} */ ({
-      getDatabaseType() { return "mysql" }
-    })))
-
     const db = buildMysqlDb({
       version: "8.0.33",
       tables: [
@@ -64,20 +67,12 @@ describe("Environment handler - Node - structure sql - mysql", () => {
       }
     })
 
-    const result = await handler._mysqlStructureSqlByIdentifier({dbs: {default: db}})
+    const result = await new MysqlStructureSql({driver: db}).toSql()
 
-    expect(result).toEqual({
-      default: "CREATE TABLE `users` (`id` int);\n\nCREATE VIEW `active_users` AS SELECT 1;\n"
-    })
+    expect(result).toEqual("CREATE TABLE `users` (`id` int);\n\nCREATE VIEW `active_users` AS SELECT 1;\n")
   })
 
   it("treats MariaDB system views as views", async () => {
-    const handler = new EnvironmentHandlerNode()
-
-    handler.setConfiguration(/** @type {import("../../src/configuration.js").default} */ (/** @type {unknown} */ ({
-      getDatabaseType() { return "mysql" }
-    })))
-
     const db = buildMysqlDb({
       version: "10.4.0-MariaDB",
       tables: [
@@ -88,10 +83,8 @@ describe("Environment handler - Node - structure sql - mysql", () => {
       }
     })
 
-    const result = await handler._mysqlStructureSqlByIdentifier({dbs: {default: db}})
+    const result = await new MysqlStructureSql({driver: db}).toSql()
 
-    expect(result).toEqual({
-      default: "CREATE VIEW `system_users` AS SELECT 1;\n"
-    })
+    expect(result).toEqual("CREATE VIEW `system_users` AS SELECT 1;\n")
   })
 })

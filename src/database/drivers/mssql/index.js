@@ -14,6 +14,7 @@ import Options from "./options.js"
 import mssql from "mssql"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
+import StructureSql from "./structure-sql.js"
 import Update from "./sql/update.js"
 import UUID from "pure-uuid"
 
@@ -353,5 +354,12 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const update = new Update({conditions, data, driver: this, tableName})
 
     return update.toSql()
+  }
+
+  /**
+   * @returns {Promise<string | null>}
+   */
+  async structureSql() {
+    return await new StructureSql({driver: this}).toSql()
   }
 }

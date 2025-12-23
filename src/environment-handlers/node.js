@@ -262,131 +262,20 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<Record<string, string>>}
    */
   async _structureSqlByIdentifier({dbs}) {
-    const sqliteSqlByIdentifier = await this._sqliteStructureSqlByIdentifier({dbs})
-    const mysqlSqlByIdentifier = await this._mysqlStructureSqlByIdentifier({dbs})
-
-    return {
-      ...sqliteSqlByIdentifier,
-      ...mysqlSqlByIdentifier
-    }
-  }
-
-  /**
-   * @param {object} args
-   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<Record<string, string>>}
-   */
-  async _sqliteStructureSqlByIdentifier({dbs}) {
-    const sqliteIdentifiers = Object.keys(dbs)
-      .filter((identifier) => this.getConfiguration().getDatabaseType(identifier) == "sqlite")
-
-    if (sqliteIdentifiers.length == 0) return /** @type {Record<string, string>} */ ({})
-
     const sqlByIdentifier = /** @type {Record<string, string>} */ ({})
 
-    for (const identifier of sqliteIdentifiers) {
+    for (const identifier of Object.keys(dbs)) {
       const db = dbs[identifier]
-      const rows = await db.query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
-      const statements = rows
-        .map((row) => row.sql)
-        .filter((statement) => Boolean(statement))
-        .map((statement) => this._normalizeSqlStatement(statement))
-        .filter((statement) => Boolean(statement))
 
-      if (statements.length == 0) continue
+      if (typeof db.structureSql !== "function") continue
 
-      sqlByIdentifier[identifier] = `${statements.join("\n\n")}\n`
-    }
+      const structureSql = await db.structureSql()
 
-    return sqlByIdentifier
-  }
-
-  /**
-   * @param {object} args
-   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<Record<string, string>>}
-   */
-  async _mysqlStructureSqlByIdentifier({dbs}) {
-    const mysqlIdentifiers = Object.keys(dbs)
-      .filter((identifier) => this.getConfiguration().getDatabaseType(identifier) == "mysql")
-
-    if (mysqlIdentifiers.length == 0) return /** @type {Record<string, string>} */ ({})
-
-    const sqlByIdentifier = /** @type {Record<string, string>} */ ({})
-
-    for (const identifier of mysqlIdentifiers) {
-      const db = dbs[identifier]
-      const isMariaDb = await this._isMariaDb(db)
-      const rows = await db.query("SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_type, table_name")
-      const statements = []
-
-      for (const row of rows) {
-        const tableName = row.table_name || row.TABLE_NAME
-        const tableType = row.table_type || row.TABLE_TYPE
-
-        if (!tableName || !tableType) continue
-
-        if (tableType == "BASE TABLE") {
-          const createRows = await db.query(`SHOW CREATE TABLE ${db.quoteTable(tableName)}`)
-          const createStatement = this._mysqlCreateStatement(createRows?.[0])
-
-          if (createStatement) statements.push(this._normalizeSqlStatement(createStatement))
-        } else if (tableType == "VIEW" || (isMariaDb && tableType == "SYSTEM VIEW")) {
-          const createRows = await db.query(`SHOW CREATE VIEW ${db.quoteTable(tableName)}`)
-          const createStatement = this._mysqlCreateStatement(createRows?.[0])
-
-          if (createStatement) statements.push(this._normalizeSqlStatement(createStatement))
-        }
-      }
-
-      if (statements.length == 0) continue
-
-      sqlByIdentifier[identifier] = `${statements.join("\n\n")}\n`
-    }
-
-    return sqlByIdentifier
-  }
-
-  /**
-   * @param {import("../database/drivers/base.js").default} db
-   * @returns {Promise<boolean>}
-   */
-  async _isMariaDb(db) {
-    const rows = await db.query("SELECT VERSION() AS version")
-    const version = rows?.[0]?.version || rows?.[0]?.VERSION
-
-    if (!version) return false
-
-    return String(version).toLowerCase().includes("mariadb")
-  }
-
-  /**
-   * @param {Record<string, any> | undefined} row
-   * @returns {string | null}
-   */
-  _mysqlCreateStatement(row) {
-    if (!row) return null
-
-    for (const key of Object.keys(row)) {
-      if (key.toLowerCase().startsWith("create ")) {
-        return row[key]
+      if (structureSql) {
+        sqlByIdentifier[identifier] = structureSql
       }
     }
 
-    return null
-  }
-
-  /**
-   * @param {string} statement
-   * @returns {string}
-   */
-  _normalizeSqlStatement(statement) {
-    const trimmed = statement.trim()
-
-    if (!trimmed) return ""
-
-    if (trimmed.endsWith(";")) return trimmed
-
-    return `${trimmed};`
+    return sqlByIdentifier
   }
 }
