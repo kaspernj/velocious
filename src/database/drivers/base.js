@@ -269,6 +269,14 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @param {string} name
+   * @returns {Promise<import("./base-table.js").default>}
+   */
+  async getTableByNameOrFail(name) {
+    return await this.getTableByName(name, {throwError: true})
+  }
+
+  /**
    * @abstract
    * @returns {string}
    */
@@ -412,6 +420,11 @@ export default class VelociousDatabaseDriversBase {
   shouldSetAutoIncrementWhenPrimaryKey() {
     throw new Error(`'shouldSetAutoIncrementWhenPrimaryKey' not implemented`)
   }
+
+  /**
+   * @returns {boolean}
+   */
+  supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
    * @abstract
