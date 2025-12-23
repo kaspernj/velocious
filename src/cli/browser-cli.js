@@ -17,7 +17,10 @@ export default class VelociousBrowserCli {
    * @returns {void}
    */
   enable() {
-    globalThis.velociousCLI = this
+    /** @type {typeof globalThis & {velociousCLI?: VelociousBrowserCli}} */
+    const globalScope = globalThis
+
+    globalScope.velociousCLI = this
   }
 
   /**

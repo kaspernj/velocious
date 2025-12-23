@@ -137,6 +137,7 @@ export default class VelociousRoutesResolver {
    * @returns {string}
    */
   _formatTimestamp(date) {
+    /** @param {number} num */
     const pad = (num) => String(num).padStart(2, "0")
     const year = date.getFullYear()
     const month = pad(date.getMonth() + 1)

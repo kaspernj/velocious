@@ -4,6 +4,7 @@ import Cli from "../src/cli/index.js"
 import configurationResolver from "../src/configuration-resolver.js"
 
 const processArgs = process.argv.slice(2)
+/** @type {Record<string, string | undefined>} */
 const parsedProcessArgs = {}
 
 for (let i = 0; i < processArgs.length; i++) {
