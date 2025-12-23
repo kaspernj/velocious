@@ -150,13 +150,14 @@ export default class TableData {
   references(name, args) {
     const columnName = `${name}_id`
     const reference = new TableReference(name, args)
-    const {polymorphic, ...restArgs} = args
+    const {index, polymorphic, ...restArgs} = args
     const columnArgs = Object.assign({isNewColumn: true, type: "bigint"}, restArgs)
     const column = new TableColumn(columnName, columnArgs)
-    const index = new TableIndex([column])
+    const indexArgs = typeof index == "object" ? {unique: index.unique === true} : undefined
+    const tableIndex = new TableIndex([column], indexArgs)
 
     this.getColumns().push(column)
-    this.getIndexes().push(index)
+    this.getIndexes().push(tableIndex)
     this.getReferences().push(reference)
 
     if (polymorphic) {
