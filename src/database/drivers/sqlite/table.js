@@ -49,9 +49,16 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     const indexes = []
 
     for (const row of rows) {
+      const indexName = row.name
+
+      if (typeof indexName == "string" && indexName.startsWith("sqlite_autoindex_")) {
+        // Skip SQLite internal auto indexes (e.g. primary key / unique constraints)
+        continue
+      }
+
       const columnsIndex = new ColumnsIndex(this, row)
       const indexMasterData = await this.getDriver().query(`SELECT * FROM sqlite_master WHERE type = 'index' AND name = ${this.getOptions().quote(columnsIndex.getName())}`)
-      const sql = indexMasterData[0].sql
+      const sql = indexMasterData[0]?.sql
 
       if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
 
