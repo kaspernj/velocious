@@ -45,7 +45,7 @@ function buildMysqlDb({version, tables, creates}) {
 }
 
 describe("Environment handler - Node - structure sql - mysql", () => {
-  it("builds structure sql for mysql tables and views", {focus: true}, async () => {
+  it("builds structure sql for mysql tables and views", async () => {
     const handler = new EnvironmentHandlerNode()
 
     handler.setConfiguration(/** @type {import("../../src/configuration.js").default} */ (/** @type {unknown} */ ({
