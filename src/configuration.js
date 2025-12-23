@@ -109,11 +109,8 @@ export default class VelociousConfiguration {
     return poolTypeClass
   }
 
-  /**
-   * @returns {string} The database type.
-   */
   getDatabaseType(identifier = "default") {
-    const databaseType = digg(this.getDatabaseIdentifier(identifier), "type")
+    const databaseType = this.getDatabaseIdentifier(identifier).type
 
     if (!databaseType) throw new Error("No database type given in database configuration")
 
