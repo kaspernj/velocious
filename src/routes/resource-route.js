@@ -17,6 +17,48 @@ class VelociousRouteResourceRoute extends BasicRoute {
     restArgsError(restArgs)
     this.name = name
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
+    /** @type {Set<string>} */
+    this.collectionRouteNames = new Set()
+  }
+
+  /**
+   * @param {string} name
+   * @param {{on?: "member" | "collection"}} [options]
+   */
+  get(name, options = {}) {
+    const {on, ...restArgs} = options || {}
+
+    restArgsError(restArgs)
+
+    if (on && on !== "member" && on !== "collection") {
+      throw new Error(`Unknown 'on' value: ${on}`)
+    }
+
+    if (on === "collection") {
+      this.collectionRouteNames.add(name)
+    }
+
+    super.get(name)
+  }
+
+  /**
+   * @param {string} name
+   * @param {{on?: "member" | "collection"}} [options]
+   */
+  post(name, options = {}) {
+    const {on, ...restArgs} = options || {}
+
+    restArgsError(restArgs)
+
+    if (on && on !== "member" && on !== "collection") {
+      throw new Error(`Unknown 'on' value: ${on}`)
+    }
+
+    if (on === "collection") {
+      this.collectionRouteNames.add(name)
+    }
+
+    super.post(name)
   }
 
   getHumanPaths() {
@@ -58,29 +100,35 @@ class VelociousRouteResourceRoute extends BasicRoute {
         }
         nextRestPath = ""
       } else {
-        const idMatch = normalizedRestPath.match(/^([^/]+)(?:\/(.*))?$/)
+        const [collectionCandidate] = normalizedRestPath.split("/")
 
-        if (idMatch) {
-          const singularName = singularizeModelName(this.name)
-          const singularAttributeName = inflection.camelize(inflection.underscore(singularName), true)
-          const idVarName = `${singularAttributeName}Id`
-          const recordId = idMatch[1]
-          const remainingPath = idMatch[2]
+        if (this.collectionRouteNames.has(collectionCandidate)) {
+          nextRestPath = normalizedRestPath
+        } else {
+          const idMatch = normalizedRestPath.match(/^([^/]+)(?:\/(.*))?$/)
 
-          params[idVarName] = recordId
-          params.id = recordId
+          if (idMatch) {
+            const singularName = singularizeModelName(this.name)
+            const singularAttributeName = inflection.camelize(inflection.underscore(singularName), true)
+            const idVarName = `${singularAttributeName}Id`
+            const recordId = idMatch[1]
+            const remainingPath = idMatch[2]
 
-          if (remainingPath && remainingPath.length > 0) {
-            nextRestPath = remainingPath
-          } else if (request.httpMethod() == "DELETE") {
-            action = "delete"
-            nextRestPath = ""
-          } else if (request.httpMethod() == "POST") {
-            action = "create"
-            nextRestPath = ""
-          } else {
-            action = "show"
-            nextRestPath = ""
+            params[idVarName] = recordId
+            params.id = recordId
+
+            if (remainingPath && remainingPath.length > 0) {
+              nextRestPath = remainingPath
+            } else if (request.httpMethod() == "DELETE") {
+              action = "delete"
+              nextRestPath = ""
+            } else if (request.httpMethod() == "POST") {
+              action = "create"
+              nextRestPath = ""
+            } else {
+              action = "show"
+              nextRestPath = ""
+            }
           }
         }
       }
