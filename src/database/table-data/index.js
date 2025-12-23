@@ -95,56 +95,56 @@ export default class TableData {
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   bigint(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "bigint"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   blob(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "blob"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   boolean(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "boolean"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   datetime(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "datetime"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   integer(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "integer"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   json(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "json"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   tinyint(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "tinyint"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   references(name, args) {
@@ -169,14 +169,14 @@ export default class TableData {
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   string(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "string"}, args)) }
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   text(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "text"}, args)) }
