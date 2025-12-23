@@ -1,8 +1,8 @@
-import {describe, expect, it} from "../../../src/testing/test.js"
 import fetch from "node-fetch"
+
+import {describe, expect, it} from "../../../src/testing/test.js"
 import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
-import Task from "../../dummy/src/models/task.js"
 
 describe("HttpServer - tasks - member and collection", {databaseCleaning: {transaction: false, truncate: true}, focus: true}, async () => {
   it("handles collection get routes", async () => {
