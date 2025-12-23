@@ -3,6 +3,7 @@
 import {Logger} from "../../logger.js"
 import {Worker} from "worker_threads"
 import ensureError from "../../utils/ensure-error.js"
+import websocketEventsHost from "../websocket-events-host.js"
 
 export default class VelociousHttpServerWorker {
   /**
@@ -18,6 +19,7 @@ export default class VelociousHttpServerWorker {
 
     this.logger = new Logger(this)
     this.workerCount = workerCount
+    this.unregisterFromEventsHost = websocketEventsHost.register(this)
   }
 
   start() {
@@ -83,6 +85,8 @@ export default class VelociousHttpServerWorker {
     } else {
       this.logger.debug(() => [`Client worker stopped with exit code ${code}`])
     }
+
+    this.unregisterFromEventsHost?.()
   }
 
   /**
@@ -116,8 +120,24 @@ export default class VelociousHttpServerWorker {
       const {clientCount} = data
 
       this.clients[clientCount]?.end()
+    } else if (command == "websocketPublish") {
+      const {channel, payload} = data
+
+      websocketEventsHost.publish({channel, payload})
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
+  }
+
+  /**
+   * @param {object} args
+   * @param {string} args.channel
+   * @param {any} args.payload
+   * @returns {void}
+   */
+  dispatchWebsocketEvent({channel, payload}) {
+    if (!this.worker) return
+
+    this.worker.postMessage({channel, command: "websocketEvent", payload})
   }
 }
