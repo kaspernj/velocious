@@ -127,8 +127,8 @@ export default class VelociousRoutesResolver {
     delete loggedParams.action
     delete loggedParams.controller
 
-    await this.logger.log(`Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
-    await this.logger.log(`Processing by ${controllerClass.name}#${action}`)
+    await this.logger.log(() => [`Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`])
+    await this.logger.log(() => [`Processing by ${controllerClass.name}#${action}`])
     await this.logger.log(() => [`  Parameters:`, loggedParams])
   }
 
