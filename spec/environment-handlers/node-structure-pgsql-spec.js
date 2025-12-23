@@ -9,9 +9,10 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
  * @returns {string | null}
  */
 function extractQuotedName(sql) {
-  const match = sql.match(/["'`]([^"'`]+)["'`]/)
+  const matches = [...sql.matchAll(/["'`]([^"'`]+)["'`]/g)]
+  const lastMatch = matches[matches.length - 1]
 
-  return match ? match[1] : null
+  return lastMatch ? lastMatch[1] : null
 }
 
 /**

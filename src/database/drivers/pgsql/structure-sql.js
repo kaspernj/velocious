@@ -19,7 +19,23 @@ export default class VelociousDatabaseDriversPgsqlStructureSql {
     const rows = await driver.query("SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_type, table_name")
     const statements = []
 
-    for (const row of rows) {
+    const sortedRows = [...rows].sort((rowA, rowB) => {
+      const tableTypeA = (rowA.table_type || rowA.TABLE_TYPE || "").toString()
+      const tableTypeB = (rowB.table_type || rowB.TABLE_TYPE || "").toString()
+
+      if (tableTypeA < tableTypeB) return -1
+      if (tableTypeA > tableTypeB) return 1
+
+      const tableNameA = (rowA.table_name || rowA.TABLE_NAME || "").toString()
+      const tableNameB = (rowB.table_name || rowB.TABLE_NAME || "").toString()
+
+      if (tableNameA < tableNameB) return -1
+      if (tableNameA > tableNameB) return 1
+
+      return 0
+    })
+
+    for (const row of sortedRows) {
       const tableName = row.table_name || row.TABLE_NAME
       const tableType = row.table_type || row.TABLE_TYPE
 
