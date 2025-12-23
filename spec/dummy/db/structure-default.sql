@@ -1,15 +1,78 @@
-CREATE TABLE [authentication_tokens] ([id] bigint NOT NULL, [user_token] varchar(255) DEFAULT (newid()), [user_id] bigint, [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+CREATE TABLE `authentication_tokens` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `user_token` varchar(255) DEFAULT uuid(),
+  `user_id` bigint(20) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `index_on_token` (`user_token`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `authentication_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE [project_details] ([id] bigint NOT NULL, [project_id] bigint NOT NULL, [note] text, [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+CREATE TABLE `projects` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `creating_user_reference` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE [project_translations] ([id] bigint NOT NULL, [project_id] bigint NOT NULL, [locale] varchar(255) NOT NULL, [name] varchar(255), [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+CREATE TABLE `project_details` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `project_id` bigint(20) NOT NULL,
+  `note` text DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  CONSTRAINT `project_details_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE [projects] ([id] bigint NOT NULL, [creating_user_reference] varchar(255), [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+CREATE TABLE `project_translations` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `project_id` bigint(20) NOT NULL,
+  `locale` varchar(255) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  CONSTRAINT `project_translations_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE [schema_migrations] ([version] varchar(255) NOT NULL, PRIMARY KEY ([version]));
+CREATE TABLE `schema_migrations` (
+  `version` varchar(255) NOT NULL,
+  PRIMARY KEY (`version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE [tasks] ([id] bigint NOT NULL, [project_id] bigint NOT NULL, [name] varchar(255), [description] text, [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+CREATE TABLE `tasks` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `project_id` bigint(20) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE [users] ([id] bigint NOT NULL, [email] varchar(255) NOT NULL, [encrypted_password] varchar(255) NOT NULL, [reference] varchar(255), [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+CREATE TABLE `users` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `email` varchar(255) NOT NULL,
+  `encrypted_password` varchar(255) NOT NULL,
+  `reference` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `index_on_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE [uuid_items] ([id] varchar(36) DEFAULT (newid()) NOT NULL, [title] varchar(255), [created_at] datetime, [updated_at] datetime, PRIMARY KEY ([id]));
+CREATE TABLE `uuid_items` (
+  `id` uuid NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
