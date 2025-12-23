@@ -1,5 +1,6 @@
 // @ts-check
 
+import {describe, expect, it} from "../../src/testing/test.js"
 import {digg} from "diggerize"
 import fetch from "node-fetch"
 import querystring from "querystring"

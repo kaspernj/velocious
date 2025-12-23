@@ -1,3 +1,5 @@
+// @ts-check
+
 import fetch from "node-fetch"
 
 import {describe, expect, it} from "../../../src/testing/test.js"

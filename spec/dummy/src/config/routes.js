@@ -21,6 +21,7 @@ routes.draw((route) => {
     route.post("member-post", {on: "member"})
   })
 
+  route.get("missing-view")
   route.get("ping")
 })
 

@@ -1,5 +1,8 @@
+// @ts-check
+
 import AppRoutes from "../../src/routes/app-routes.js"
 import Client from "../../src/http-server/client/index.js"
+import {describe, expect, it} from "../../src/testing/test.js"
 import {digg} from "diggerize"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 

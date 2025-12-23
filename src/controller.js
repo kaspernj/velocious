@@ -137,12 +137,24 @@ export default class VelociousController {
   renderView() {
     return new Promise((resolve, reject) => {
       const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
-      const {viewParams} = this
-      const actualViewParams = incorporate({controller: this}, viewParams)
+      const actualViewParams = incorporate({controller: this}, this.viewParams)
 
       ejs.renderFile(viewPath, actualViewParams, {}, (err, str) => {
         if (err) {
-          reject(err)
+          if (err.code === "ENOENT") {
+            this.logger.warn(`Missing view file: ${viewPath}`)
+
+            if (this._response.getStatusCode() === 200) {
+              this._response.setStatus("internal-server-error")
+            }
+
+            this._response.setHeader("Content-Type", "text/plain; charset=UTF-8")
+            this._response.setBody(`Missing view file: ${viewPath}`)
+
+            resolve(null)
+          } else {
+            reject(err)
+          }
         } else {
           this._response.setHeader("Content-Type", "text/html; charset=UTF-8")
           this._response.setBody(str)
