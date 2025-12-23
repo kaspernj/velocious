@@ -679,7 +679,19 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>}
    */
   async _releaseSavePointAction(savePointName) {
-    await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+    try {
+      await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${error}`
+
+      // Savepoint may already be gone if the database rolled back automatically
+      if (message.toLowerCase().includes("savepoint") && message.toLowerCase().includes("does not exist")) {
+        this.logger.debug(`Release savepoint ignored because it no longer exists: ${savePointName}`)
+        return
+      }
+
+      throw error
+    }
   }
 
   /**
