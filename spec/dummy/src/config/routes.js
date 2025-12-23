@@ -23,6 +23,7 @@ routes.draw((route) => {
 
   route.get("missing-view")
   route.get("ping")
+  route.get("params")
 })
 
 export default {routes}

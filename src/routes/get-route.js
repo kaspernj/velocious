@@ -36,6 +36,9 @@ class VelociousRouteGetRoute extends BaseRoute {
     if (match) {
       const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
 
+      // Prevent partial prefix matches (e.g., "params" matching "params-with-query")
+      if (restPath && !restPath.startsWith("/")) return
+
       params.action = this.name
 
       return {restPath}
