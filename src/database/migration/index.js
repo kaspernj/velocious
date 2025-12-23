@@ -295,8 +295,10 @@ export default class VelociousDatabaseMigration {
       idType = databasePool.primaryKeyType()
     }
     const driverSupportsDefaultUUID = this.getDriver().supportsDefaultPrimaryKeyUUID?.()
-    const isUUIDPrimaryKey = idType?.toLowerCase() == "uuid"
-    let idAutoIncrement = true
+    const lowerIdType = idType?.toLowerCase()
+    const isUUIDPrimaryKey = lowerIdType == "uuid"
+    const numericAutoIncrementTypes = ["int", "integer", "bigint", "smallint", "tinyint"]
+    let idAutoIncrement = numericAutoIncrementTypes.includes(lowerIdType || "")
 
     if (isUUIDPrimaryKey) {
       idAutoIncrement = false
