@@ -54,6 +54,14 @@
  */
 
 /**
+ * @typedef {object} LoggingConfiguration
+ * @property {boolean} [console] - Enable/disable console logging. Defaults to true outside of "test".
+ * @property {boolean} [file] - Enable/disable writing logs to a file. Defaults to true.
+ * @property {string} [directory] - Directory where log files are stored. Defaults to "<project>/log".
+ * @property {string} [filePath] - Explicit path for the log file. Defaults to "<directory>/<environment>.log".
+ */
+
+/**
  * @typedef {Record<string, string[]>} LocaleFallbacksType
  */
 
@@ -65,6 +73,7 @@
  * @property {string} [directory]
  * @property {string} [environment]
  * @property {import("./environment-handlers/base.js").default} environmentHandler
+ * @property {LoggingConfiguration} [logging]
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels
  * @property {InitializersType} [initializers]
  * @property {string | function() : string} locale

@@ -8,3 +8,5 @@ spec/dummy/src/config/configuration.mssql.js
 spec/dummy/src/config/configuration.pgsql.js
 spec/dummy/src/config/configuration.sqlite.js
 spec/support/mysql.json
+log
+spec/dummy/log

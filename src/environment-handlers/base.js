@@ -174,4 +174,24 @@ export default class VelociousEnvironmentHandlerBase {
    * @returns {void}
    */
   setProcessArgs(newProcessArgs) { this.processArgs = newProcessArgs }
+
+  /**
+   * @param {object} _args
+   * @param {import("../configuration.js").default} _args.configuration
+   * @returns {string | undefined}
+   */
+  getDefaultLogDirectory(_args) { // eslint-disable-line no-unused-vars
+    return undefined
+  }
+
+  /**
+   * @param {object} _args
+   * @param {import("../configuration.js").default} _args.configuration
+   * @param {string | undefined} _args.directory
+   * @param {string} _args.environment
+   * @returns {string | undefined}
+   */
+  getLogFilePath(_args) { // eslint-disable-line no-unused-vars
+    return undefined
+  }
 }

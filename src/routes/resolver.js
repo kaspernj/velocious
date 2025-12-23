@@ -45,7 +45,7 @@ export default class VelociousRoutesResolver {
       const requestedPath = currentPath.replace(/^\//, "") || "_root"
       const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
 
-      await (this.logger || new Logger("RoutesResolver")).warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
+      await (this.logger || new Logger("RoutesResolver", {configuration: this.configuration})).warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
 
       controller = "errors"
       controllerPath = "./built-in/errors/controller.js"
@@ -76,7 +76,7 @@ export default class VelociousRoutesResolver {
       throw new Error(`Missing action on controller: ${controller}#${action}`)
     }
 
-    this.logger ||= new Logger(controllerClass.name)
+    this.logger ||= new Logger(controllerClass.name, {configuration: this.configuration})
 
     await this._logActionStart({action, controllerClass})
 

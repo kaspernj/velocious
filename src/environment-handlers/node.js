@@ -207,6 +207,28 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     }
   }
 
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @returns {string}
+   */
+  getDefaultLogDirectory({configuration}) {
+    return path.join(configuration.getDirectory(), "log")
+  }
+
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @param {string | undefined} args.directory
+   * @param {string} args.environment
+   * @returns {string | undefined}
+   */
+  getLogFilePath({configuration, directory, environment}) {
+    if (!directory) return undefined
+
+    return path.join(directory, `${environment}.log`)
+  }
+
   async importTestingConfigPath() {
     const testingConfigPath = this.getConfiguration().getTesting()
 
