@@ -148,11 +148,7 @@ export default class VelociousConfiguration {
     const environment = this.getEnvironment()
     const environmentHandler = this.getEnvironmentHandler()
     const directory = this._logging?.directory || environmentHandler.getDefaultLogDirectory({configuration: this})
-    const filePath = this._logging?.filePath || environmentHandler.getLogFilePath({
-      configuration: this,
-      directory,
-      environment
-    })
+    const filePath = this._logging?.filePath || environmentHandler.getLogFilePath({configuration: this, directory, environment})
     const consoleLogging = this._logging?.console
     const fileLogging = this._logging?.file ?? Boolean(filePath)
 

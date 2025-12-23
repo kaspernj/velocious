@@ -1,7 +1,5 @@
 // @ts-check
 
-import fs from "fs/promises"
-import path from "path"
 import Configuration from "./configuration.js"
 import restArgsError from "./utils/rest-args-error.js"
 
@@ -104,49 +102,6 @@ function resolveLoggingConfiguration(configuration) {
   return DEFAULT_LOGGING_CONFIGURATION
 }
 
-/**
- * @param {object} args
- * @param {string} args.filePath
- * @param {string} args.message
- * @returns {Promise<void>}
- */
-async function fileLog({filePath, message}) {
-  await fs.mkdir(path.dirname(filePath), {recursive: true})
-  await fs.appendFile(filePath, `${message}\n`, "utf8")
-}
-
-/**
- * @param {object} args
- * @param {"error" | "log" | "warn"} args.level
- * @param {string} args.message
- * @param {ReturnType<typeof resolveLoggingConfiguration>} args.loggingConfiguration
- * @returns {Promise<void>}
- */
-async function writeLog({level, loggingConfiguration, message}) {
-  const writes = []
-  const {console: consoleEnabled, file: fileEnabled, filePath} = loggingConfiguration
-
-  if (consoleEnabled !== false) {
-    if (level === "error") {
-      writes.push(consoleError(message))
-    } else if (level === "warn") {
-      writes.push(consoleWarn(message))
-    } else {
-      writes.push(consoleLog(message))
-    }
-  }
-
-  if (fileEnabled !== false && filePath) {
-    writes.push(fileLog({filePath, message}))
-  }
-
-  if (writes.length === 1) {
-    await writes[0]
-  } else if (writes.length > 1) {
-    await Promise.all(writes)
-  }
-}
-
 class Logger {
   /**
    * @param {any} object
@@ -246,9 +201,36 @@ class Logger {
   async _write({level, messages}) {
     const resolvedMessages = functionOrMessages(...messages)
     const message = messagesToMessage(this._subject, ...resolvedMessages)
-    const loggingConfiguration = resolveLoggingConfiguration(this._safeConfiguration())
+    const configuration = this._safeConfiguration()
+    const loggingConfiguration = resolveLoggingConfiguration(configuration)
+    const writes = []
 
-    await writeLog({level, loggingConfiguration, message})
+    if (loggingConfiguration.console !== false) {
+      if (level === "error") {
+        writes.push(consoleError(message))
+      } else if (level === "warn") {
+        writes.push(consoleWarn(message))
+      } else {
+        writes.push(consoleLog(message))
+      }
+    }
+
+    if (loggingConfiguration.file !== false && loggingConfiguration.filePath && configuration) {
+      const environmentHandler = configuration.getEnvironmentHandler?.()
+
+      if (environmentHandler?.writeLogToFile) {
+        writes.push(environmentHandler.writeLogToFile({
+          filePath: loggingConfiguration.filePath,
+          message
+        }))
+      }
+    }
+
+    if (writes.length === 1) {
+      await writes[0]
+    } else if (writes.length > 1) {
+      await Promise.all(writes)
+    }
   }
 }
 
@@ -271,10 +253,29 @@ export default async function logger(object, ...messages) {
   }
 
   if (configuration?.debug) {
-    await writeLog({
-      level: "log",
-      loggingConfiguration: resolveLoggingConfiguration(configuration),
-      message: messagesToMessage(className, ...functionOrMessages(...messages))
-    })
+    const loggingConfiguration = resolveLoggingConfiguration(configuration)
+    const message = messagesToMessage(className, ...functionOrMessages(...messages))
+    const writes = []
+
+    if (loggingConfiguration.console !== false) {
+      writes.push(consoleLog(message))
+    }
+
+    if (loggingConfiguration.file !== false && loggingConfiguration.filePath) {
+      const environmentHandler = configuration.getEnvironmentHandler?.()
+
+      if (environmentHandler?.writeLogToFile) {
+        writes.push(environmentHandler.writeLogToFile({
+          filePath: loggingConfiguration.filePath,
+          message
+        }))
+      }
+    }
+
+    if (writes.length === 1) {
+      await writes[0]
+    } else if (writes.length > 1) {
+      await Promise.all(writes)
+    }
   }
 }

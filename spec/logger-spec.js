@@ -13,6 +13,7 @@ describe("Logger", async () => {
     /** @type {string[]} */
     const writes = []
     const originalWrite = process.stdout.write
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-logger-"))
 
     try {
       // @ts-ignore Monkey-patch to capture logger output
@@ -22,12 +23,26 @@ describe("Logger", async () => {
         return true
       }
 
-      const logger = new Logger("PartnersEventsController")
+      const environmentHandler = new EnvironmentHandlerNode()
+      const configuration = new Configuration({
+        database: {test: {}},
+        directory: tempDirectory,
+        environment: "test",
+        environmentHandler,
+        initializeModels: async () => {},
+        locale: "en",
+        localeFallbacks: {en: ["en"]},
+        locales: ["en"],
+        logging: {console: true, file: false}
+      })
+
+      const logger = new Logger("PartnersEventsController", {configuration})
 
       await logger.log("Processing by PartnersEventsController#show")
     } finally {
       // @ts-ignore Restore original stdout
       process.stdout.write = originalWrite
+      await fs.rm(tempDirectory, {recursive: true, force: true})
     }
 
     expect(writes[0]).toBe("PartnersEventsController Processing by PartnersEventsController#show\n")
@@ -53,7 +68,9 @@ describe("Logger", async () => {
         directory: tempDirectory,
         environment: "test",
         environmentHandler,
+        initializeModels: async () => {},
         locale: "en",
+        localeFallbacks: {en: ["en"]},
         locales: ["en"]
       })
       const logger = new Logger("PartnersEventsController", {configuration})

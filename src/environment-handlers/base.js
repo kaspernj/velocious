@@ -194,4 +194,14 @@ export default class VelociousEnvironmentHandlerBase {
   getLogFilePath(_args) { // eslint-disable-line no-unused-vars
     return undefined
   }
+
+  /**
+   * @param {object} _args
+   * @param {string} _args.filePath
+   * @param {string} _args.message
+   * @returns {Promise<void>}
+   */
+  async writeLogToFile(_args) { // eslint-disable-line no-unused-vars
+    return
+  }
 }
