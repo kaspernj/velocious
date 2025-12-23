@@ -182,7 +182,7 @@ export default class TableData {
   text(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "text"}, args)) }
 
   /**
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   timestamps(args) {
