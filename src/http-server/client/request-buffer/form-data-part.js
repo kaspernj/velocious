@@ -54,7 +54,7 @@ export default class FormDataPart {
   }
 
   buildUploadedFile(buffer) {
-    const filename = this.filename || "upload"
+    const filename = this._sanitizeFilename(this.filename) || "upload"
     const fieldName = this.getName()
     const commonArgs = {
       contentType: this.contentType,
@@ -84,6 +84,21 @@ export default class FormDataPart {
     fs.writeFileSync(tempFilePath, buffer)
 
     return tempFilePath
+  }
+
+  /**
+   * Prevent path traversal/absolute paths from filenames coming from headers.
+   * @param {string | undefined} filename
+   * @returns {string}
+   */
+  _sanitizeFilename(filename) {
+    if (!filename) return ""
+
+    const base = path.basename(filename)
+
+    if (base === "." || base === ".." || base === "") return "upload"
+
+    return base
   }
 
   getName() {
