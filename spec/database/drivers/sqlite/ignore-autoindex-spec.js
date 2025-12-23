@@ -16,10 +16,7 @@ describe("SQLite driver - ignore auto indexes", () => {
         await sqlite.query("DROP TABLE IF EXISTS autoindex_test")
         await sqlite.query("CREATE TABLE autoindex_test(id INTEGER PRIMARY KEY, name TEXT UNIQUE)")
 
-        const table = await sqlite.getTableByName("autoindex_test")
-
-        if (!table) throw new Error("autoindex_test table not found")
-
+        const table = await sqlite.getTableByNameOrFail("autoindex_test")
         const indexes = await table.getIndexes()
         const names = indexes.map((index) => index.getName())
 
