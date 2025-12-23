@@ -207,6 +207,41 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     }
   }
 
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @returns {string}
+   */
+  getDefaultLogDirectory({configuration}) {
+    return path.join(configuration.getDirectory(), "log")
+  }
+
+  /**
+   * @param {object} args
+   * @param {import("../configuration.js").default} args.configuration
+   * @param {string | undefined} args.directory
+   * @param {string} args.environment
+   * @returns {string | undefined}
+   */
+  getLogFilePath({configuration, directory, environment}) {
+    const actualDirectory = directory || configuration?.getDirectory?.()
+
+    if (!actualDirectory) return undefined
+
+    return path.join(actualDirectory, `${environment}.log`)
+  }
+
+  /**
+   * @param {object} args
+   * @param {string} args.filePath
+   * @param {string} args.message
+   * @returns {Promise<void>}
+   */
+  async writeLogToFile({filePath, message}) {
+    await fs.mkdir(path.dirname(filePath), {recursive: true})
+    await fs.appendFile(filePath, `${message}\n`, "utf8")
+  }
+
   async importTestingConfigPath() {
     const testingConfigPath = this.getConfiguration().getTesting()
 

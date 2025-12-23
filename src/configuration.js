@@ -26,7 +26,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, testing, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -43,6 +43,7 @@ export default class VelociousConfiguration {
     this._initializers = initializers
     this._testing = testing
     this._websocketEvents = undefined
+    this._logging = logging
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
     this.databasePools = {}
@@ -139,6 +140,25 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
+
+  /**
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath">>}
+   */
+  getLoggingConfiguration() {
+    const environment = this.getEnvironment()
+    const environmentHandler = this.getEnvironmentHandler()
+    const directory = this._logging?.directory || environmentHandler.getDefaultLogDirectory({configuration: this})
+    const filePath = this._logging?.filePath || environmentHandler.getLogFilePath({configuration: this, directory, environment})
+    const consoleLogging = this._logging?.console
+    const fileLogging = this._logging?.file ?? Boolean(filePath)
+
+    return {
+      console: consoleLogging ?? environment !== "test",
+      directory,
+      file: fileLogging ?? false,
+      filePath
+    }
+  }
 
   /**
    * @returns {import("./environment-handlers/base.js").default}

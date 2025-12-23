@@ -203,6 +203,33 @@ socket.addEventListener("message", (event) => {
 })
 ```
 
+# Logging
+
+Velocious includes a lightweight logger that can write to both console and file and is environment-aware.
+
+- **Defaults**: In the `test` environment, console logging is disabled, but file logging still happens to `log/test.log` (created automatically). In other environments, console logging is enabled and file logging is enabled if a file path is available.
+- **Configuration**: Supply a `logging` object when creating your configuration:
+
+```js
+const configuration = new Configuration({
+  // ...
+  logging: {
+    console: false,            // disable console output
+    file: true,                // enable file output
+    directory: "/custom/logs", // optional, defaults to "<project>/log" in Node
+    filePath: "/tmp/app.log"   // optional explicit path
+  }
+})
+```
+
+- **Environment handlers**: File-path resolution and file writes are delegated to the environment handler so browser builds stay bundle-friendly.
+  - Node handler writes to `<directory>/<environment>.log` by default.
+  - Custom handlers can override `getDefaultLogDirectory`, `getLogFilePath`, and `writeLogToFile` if needed.
+
+- **Debug logging**: When `configuration.debug` is true or a `Logger` is constructed with `{debug: true}`, messages are emitted regardless of environment.
+
+- **Per-instance control**: You can create a `new Logger("Subject", {configuration, debug: false})` to honor the configuration defaults, or toggle `logger.setDebug(true)` for verbose output in specific cases.
+
 ## Use the Websocket client API (HTTP-like)
 
 ```js
