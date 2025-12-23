@@ -22,7 +22,10 @@ describe("Migration - SQLite UUID default", () => {
         if (!idColumn) throw new Error("id column not found")
 
         // SQLite driver should not set a database-side UUID() default; insert must supply the value
-        expect(idColumn.getDefault()).toBeUndefined()
+        const defaultValue = idColumn.getDefault()
+
+        // Should not set database-side UUID() default; SQLite reports null when no default is present
+        expect(defaultValue).toBeNull()
       })
     })
   })
