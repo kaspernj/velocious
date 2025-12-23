@@ -7,7 +7,7 @@ import {describe, it} from "../../../src/testing/test.js"
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-describe("database - migration - uuid primary key", {focus: true}, () => {
+describe("database - migration - uuid primary key", () => {
   it("uses driver default UUIDs when supported", async () => {
     await Dummy.run(async () => {
       await dummyConfiguration.ensureConnections(async (dbs) => {
@@ -23,8 +23,11 @@ describe("database - migration - uuid primary key", {focus: true}, () => {
 
         await record.save()
 
+        const columnDefault = idColumn.getDefault()
+        const defaultString = typeof columnDefault == "string" ? columnDefault.toLowerCase() : ""
+
         expect(idColumn.getAutoIncrement()).toBeFalse()
-        expect(idColumn.getDefault().toLowerCase()).toMatch(/newid|gen_random_uuid|uuid/i)
+        expect(defaultString).toMatch(/newid|gen_random_uuid|uuid/i)
         expect(record.id()).toMatch(uuidRegex)
       })
     })
