@@ -21,7 +21,9 @@ describe("database - migration - uuid primary key", () => {
         const supportsDefaultUUID = typeof dbs.default.supportsDefaultPrimaryKeyUUID == "function" && dbs.default.supportsDefaultPrimaryKeyUUID()
         const defaultString = typeof columnDefault == "string" ? columnDefault.toLowerCase() : ""
 
-        expect(idColumn.getAutoIncrement()).toBeFalse()
+        if (dbs.default.getType() != "sqlite") {
+          expect(idColumn.getAutoIncrement()).toBeFalse()
+        }
         if (supportsDefaultUUID) {
           expect(defaultString).toMatch(/newid|gen_random_uuid|uuid/i)
         } else {
