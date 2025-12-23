@@ -192,7 +192,7 @@ export default class TableData {
 
   /**
    * @param {string} name
-   * @param {import("./table-column.js").TableColumnArgsType} args
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
    * @returns {void}
    */
   uuid(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "uuid"}, args)) }
