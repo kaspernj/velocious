@@ -170,6 +170,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   queryToSql(query) { return new QueryParser({query}).toSql() }
 
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
+  supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
    * @param {*} value
@@ -275,7 +276,12 @@ export default class VelociousDatabaseDriversMssql extends Base{
       return new Table(this, result[0])
     }
 
-    if (args?.throwError !== false) throw new Error(`Couldn't find a table by that name: ${name}`)
+    if (args?.throwError !== false) {
+      const tables = await this.getTables()
+      const tableNames = tables.map((table) => table.getName())
+
+      throw new Error(`Couldn't find a table by that name "${name}" in: ${tableNames.join(", ")}`)
+    }
   }
 
   async lastInsertID() {

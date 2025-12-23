@@ -162,6 +162,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
+  supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
    * @param {any} value

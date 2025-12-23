@@ -149,7 +149,8 @@ describe("Cli - Commands - db:migrate", () => {
           "projects",
           "schema_migrations",
           "tasks",
-          "users"
+          "users",
+          "uuid_items"
         ]
       )
 
@@ -162,7 +163,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20250912183606",
         "20250915085450",
         "20250916111330",
-        "20250921121002"
+        "20250921121002",
+        "20251223194400"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
@@ -175,7 +177,8 @@ describe("Cli - Commands - db:migrate", () => {
           "schema_migrations",
           "schema_migrations",
           "tasks",
-          "users"
+          "users",
+          "uuid_items"
         ]
       )
 
@@ -188,7 +191,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20250912183606",
         "20250915085450",
         "20250916111330",
-        "20250921121002"
+        "20250921121002",
+        "20251223194400"
       ])
     }
   })

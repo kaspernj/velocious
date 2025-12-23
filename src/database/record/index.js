@@ -19,6 +19,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
+import UUID from "pure-uuid"
 
 class ValidationError extends Error {
   /**
@@ -1512,22 +1513,35 @@ class VelociousDatabaseRecord {
     const createdAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "created_at")
     const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
     const data = Object.assign({}, this._belongsToChanges(), this.attributes())
+    const primaryKey = this.getModelClass().primaryKey()
+    const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
+    const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
+    const driverSupportsDefaultUUID = typeof this._connection().supportsDefaultPrimaryKeyUUID == "function" && this._connection().supportsDefaultPrimaryKeyUUID()
+    const shouldAssignUUIDPrimaryKey = primaryKeyType == "uuid" && !driverSupportsDefaultUUID
     const currentDate = new Date()
 
     if (createdAtColumn) data.created_at = currentDate
     if (updatedAtColumn) data.updated_at = currentDate
 
     const columnNames = this.getModelClass().getColumnNames()
+    const hasUserProvidedPrimaryKey = data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
+
+    if (shouldAssignUUIDPrimaryKey && !hasUserProvidedPrimaryKey) {
+      data[primaryKey] = new UUID(4).format()
+    }
+
     const sql = this._connection().insertSql({
       returnLastInsertedColumnNames: columnNames,
       tableName: this._tableName(),
       data
     })
     const insertResult = await this._connection().query(sql)
-    const primaryKey = this.getModelClass().primaryKey()
 
     if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
       this._attributes = insertResult[0]
+      this._changes = {}
+    } else if (primaryKeyType == "uuid" && data[primaryKey] !== undefined) {
+      this._attributes = Object.assign({}, data)
       this._changes = {}
     } else {
       const id = await this._connection().lastInsertID()
