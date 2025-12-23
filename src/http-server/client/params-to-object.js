@@ -2,7 +2,7 @@
 
 export default class ParamsToObject {
   /**
-   * @param {Record<string, string>} object
+   * @param {Record<string, any>} object
    */
   constructor(object) {
     this.object = object
@@ -23,7 +23,7 @@ export default class ParamsToObject {
 
   /**
    * @param {string} key
-   * @param {string} value
+   * @param {any} value
    * @param {Record<string, any> | any[]} result
    * @returns {void}
    */
@@ -54,7 +54,7 @@ export default class ParamsToObject {
   }
 
   /**
-   * @param {string} value
+   * @param {any} value
    * @param {string} rest
    * @param {Record<string, any> | any[]} result
    * @returns {void}

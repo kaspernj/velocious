@@ -24,6 +24,7 @@ routes.draw((route) => {
   route.get("missing-view")
   route.get("ping")
   route.get("params")
+  route.post("upload")
 })
 
 export default {routes}
