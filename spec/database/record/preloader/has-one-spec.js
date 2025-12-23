@@ -4,7 +4,7 @@ import Project from "../../../dummy/src/models/project.js"
 import Task from "../../../dummy/src/models/task.js"
 import User from "../../../dummy/src/models/user.js"
 
-describe("Record - preloader - has one", {focus: true}, () => {
+describe("Record - preloader - has one", () => {
   it("loads with custom primary key and foreign key", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({creating_user_reference: "User-65"})

@@ -485,12 +485,27 @@ export default class VelociousDatabaseDriversBase {
         this.logger.debug("Transaction error", error)
       }
 
+      let transactionRolledBack = false
+
       if (savePointStarted) {
         this.logger.debug("Rollback savepoint", savePointName)
-        await this.rollbackSavePoint(savePointName)
+        try {
+          await this.rollbackSavePoint(savePointName)
+        } catch (savePointError) {
+          const message = savePointError instanceof Error ? savePointError.message : `${savePointError}`
+
+          // MySQL sometimes drops savepoints unexpectedly; fall back to rolling back the full transaction
+          if (message.includes("SAVEPOINT") || message.includes("ER_SP_DOES_NOT_EXIST")) {
+            this.logger.debug("Savepoint rollback failed; rolling back entire transaction instead")
+            await this.rollbackTransaction()
+            transactionRolledBack = true
+          } else {
+            throw savePointError
+          }
+        }
       }
 
-      if (transactionStarted) {
+      if (transactionStarted && !transactionRolledBack) {
         this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
       }
