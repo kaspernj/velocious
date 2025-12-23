@@ -19,6 +19,7 @@ export default class ServerClient {
     this.logger = new Logger(this)
     this.socket = socket
     this.clientCount = clientCount
+    this.remoteAddress = socket.remoteAddress
 
     socket.on("end", this.onSocketEnd)
   }

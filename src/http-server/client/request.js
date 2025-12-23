@@ -57,6 +57,7 @@ export default class VelociousHttpServerClientRequest {
   params() { return digg(this, "requestParser", "params") }
   port() { return this.requestParser.getPort() }
   protocol() { return this.requestParser.getProtocol() }
+  remoteAddress() { return this.client?.remoteAddress }
 
   getRequestBuffer() { return this.getRequestParser().getRequestBuffer() }
   getRequestParser() { return this.requestParser }

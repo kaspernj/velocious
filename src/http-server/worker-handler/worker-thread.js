@@ -60,12 +60,13 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
   }
 
-  /**
-   * @param {object} data
-   * @param {string} data.command
-   * @param {string} [data.chunk]
-   * @param {number} data.clientCount
-   */
+ /**
+  * @param {object} data
+  * @param {string} data.command
+  * @param {string} [data.chunk]
+  * @param {string} [data.remoteAddress]
+  * @param {number} data.clientCount
+  */
   onCommand = async (data) => {
     await this.logger.debug(() => [`Worker ${this.workerCount} received command`, data])
 
@@ -74,10 +75,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     if (command == "newClient") {
       if (!this.configuration) throw new Error("Configuration not initialized")
 
-      const {clientCount} = data
+      const {clientCount, remoteAddress} = data
       const client = new Client({
         clientCount,
-        configuration: this.configuration
+        configuration: this.configuration,
+        remoteAddress
       })
 
       client.events.on("output", (output) => {

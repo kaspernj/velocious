@@ -14,13 +14,15 @@ export default class VeoliciousHttpServerClient {
    * @param {object} args
    * @param {number} args.clientCount
    * @param {import("../../configuration.js").default} args.configuration
+   * @param {string} [args.remoteAddress]
    */
-  constructor({clientCount, configuration}) {
+  constructor({clientCount, configuration, remoteAddress}) {
     if (!configuration) throw new Error("No configuration given")
 
     this.logger = new Logger(this)
     this.clientCount = clientCount
     this.configuration = configuration
+    this.remoteAddress = remoteAddress
 
     /** @type {RequestRunner[]} */
     this.requestRunners = []
