@@ -132,6 +132,15 @@ export default class VelociousEnvironmentHandlerBase {
   importTestingConfigPath() { throw new Error(`'importTestingConfigPath' not implemented`) }
 
   /**
+   * @param {object} args
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @returns {Promise<void>}
+   */
+  async afterMigrations(_args) { // eslint-disable-line no-unused-vars
+    return
+  }
+
+  /**
    * @abstract
    * @param {object} args
    * @param {string[]} args.commandParts

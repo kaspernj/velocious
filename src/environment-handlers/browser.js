@@ -190,4 +190,67 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
     return migrationImportDefault
   }
+
+  /**
+   * @param {object} args
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @returns {Promise<void>}
+   */
+  async afterMigrations({dbs}) {
+    const structureSql = await this._sqliteStructureSql({dbs})
+
+    if (!structureSql) return
+
+    console.log(structureSql)
+  }
+
+  /**
+   * @param {object} args
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @returns {Promise<string | null>}
+   */
+  async _sqliteStructureSql({dbs}) {
+    const sqliteIdentifiers = Object.keys(dbs)
+      .filter((identifier) => this.getConfiguration().getDatabaseType(identifier) == "sqlite")
+
+    if (sqliteIdentifiers.length == 0) return null
+
+    const sections = []
+
+    for (const identifier of sqliteIdentifiers) {
+      const db = dbs[identifier]
+      const rows = await db.query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
+      const statements = rows
+        .map((row) => row.sql)
+        .filter((statement) => Boolean(statement))
+        .map((statement) => this._normalizeSqlStatement(statement))
+        .filter((statement) => Boolean(statement))
+
+      if (statements.length == 0) continue
+
+      if (sqliteIdentifiers.length > 1) {
+        sections.push(`-- ${identifier}`)
+      }
+
+      sections.push(statements.join("\n\n"))
+    }
+
+    if (sections.length == 0) return null
+
+    return `${sections.join("\n\n")}\n`
+  }
+
+  /**
+   * @param {string} statement
+   * @returns {string}
+   */
+  _normalizeSqlStatement(statement) {
+    const trimmed = statement.trim()
+
+    if (!trimmed) return ""
+
+    if (trimmed.endsWith(";")) return trimmed
+
+    return `${trimmed};`
+  }
 }

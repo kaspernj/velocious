@@ -106,6 +106,8 @@ export default class VelociousDatabaseMigrator {
           }
         })
       }
+
+      await this._afterMigrations()
     })
   }
 
@@ -153,7 +155,21 @@ export default class VelociousDatabaseMigrator {
           requireMigration: async () => requireContext(migration.file).default
         })
       }
+
+      await this._afterMigrations()
     })
+  }
+
+  /**
+   * @returns {Promise<void>}
+   */
+  async _afterMigrations() {
+    const environmentHandler = this.configuration.getEnvironmentHandler()
+    const dbs = await this.configuration.getCurrentConnections()
+
+    if (!environmentHandler || !dbs || Object.keys(dbs).length == 0) return
+
+    await environmentHandler.afterMigrations({dbs})
   }
 
   /** @returns {Promise<void>} */
