@@ -136,7 +136,7 @@ export default class VelociousEnvironmentHandlerBase {
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
    * @returns {Promise<void>}
    */
-  async afterMigrations(_args) { // eslint-disable-line no-unused-vars
+  async afterMigrations(args) { // eslint-disable-line no-unused-vars
     return
   }
 
