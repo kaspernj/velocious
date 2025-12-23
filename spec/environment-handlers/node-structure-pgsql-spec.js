@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import PgsqlStructureSql from "../../src/database/drivers/pgsql/structure-sql.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 /**
  * @param {string} sql
@@ -63,29 +64,33 @@ function buildPgDb({tables, columns, primaryKeys, views}) {
   }))
 }
 
-describe("Drivers - structure sql - pgsql", () => {
-  it("builds structure sql for pgsql tables and views", async () => {
-    const db = buildPgDb({
-      tables: [
-        {table_name: "users", table_type: "BASE TABLE"},
-        {table_name: "active_users", table_type: "VIEW"}
-      ],
-      columns: {
-        users: [
-          {column_name: "id", data_type: "integer", is_nullable: "NO"},
-          {column_name: "email", data_type: "character varying", character_maximum_length: 255, is_nullable: "NO"}
-        ]
-      },
-      primaryKeys: {
-        users: ["id"]
-      },
-      views: {
-        active_users: "SELECT 1"
-      }
+if (dummyConfiguration.getDatabaseType("default") != "pgsql") {
+  console.warn(`Skipping pgsql structure sql specs: default database is ${dummyConfiguration.getDatabaseType("default")}`)
+} else {
+  describe("Drivers - structure sql - pgsql", () => {
+    it("builds structure sql for pgsql tables and views", async () => {
+      const db = buildPgDb({
+        tables: [
+          {table_name: "users", table_type: "BASE TABLE"},
+          {table_name: "active_users", table_type: "VIEW"}
+        ],
+        columns: {
+          users: [
+            {column_name: "id", data_type: "integer", is_nullable: "NO"},
+            {column_name: "email", data_type: "character varying", character_maximum_length: 255, is_nullable: "NO"}
+          ]
+        },
+        primaryKeys: {
+          users: ["id"]
+        },
+        views: {
+          active_users: "SELECT 1"
+        }
+      })
+
+      const result = await new PgsqlStructureSql({driver: db}).toSql()
+
+      expect(result).toEqual("CREATE TABLE \"users\" (\"id\" integer NOT NULL, \"email\" varchar(255) NOT NULL, PRIMARY KEY (\"id\"));\n\nCREATE VIEW \"active_users\" AS SELECT 1;\n")
     })
-
-    const result = await new PgsqlStructureSql({driver: db}).toSql()
-
-    expect(result).toEqual("CREATE TABLE \"users\" (\"id\" integer NOT NULL, \"email\" varchar(255) NOT NULL, PRIMARY KEY (\"id\"));\n\nCREATE VIEW \"active_users\" AS SELECT 1;\n")
   })
-})
+}

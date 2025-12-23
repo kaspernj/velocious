@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import MssqlStructureSql from "../../src/database/drivers/mssql/structure-sql.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 /**
  * @param {string} sql
@@ -63,29 +64,33 @@ function buildMssqlDb({tables, columns, primaryKeys, views}) {
   }))
 }
 
-describe("Drivers - structure sql - mssql", () => {
-  it("builds structure sql for mssql tables and views", async () => {
-    const db = buildMssqlDb({
-      tables: [
-        {table_name: "users", table_type: "BASE TABLE"},
-        {table_name: "active_users", table_type: "VIEW"}
-      ],
-      columns: {
-        users: [
-          {column_name: "id", data_type: "int", is_nullable: "NO"},
-          {column_name: "name", data_type: "nvarchar", character_maximum_length: 50, is_nullable: "YES"}
-        ]
-      },
-      primaryKeys: {
-        users: ["id"]
-      },
-      views: {
-        active_users: "SELECT 1"
-      }
+if (dummyConfiguration.getDatabaseType("default") != "mssql") {
+  console.warn(`Skipping mssql structure sql specs: default database is ${dummyConfiguration.getDatabaseType("default")}`)
+} else {
+  describe("Drivers - structure sql - mssql", () => {
+    it("builds structure sql for mssql tables and views", async () => {
+      const db = buildMssqlDb({
+        tables: [
+          {table_name: "users", table_type: "BASE TABLE"},
+          {table_name: "active_users", table_type: "VIEW"}
+        ],
+        columns: {
+          users: [
+            {column_name: "id", data_type: "int", is_nullable: "NO"},
+            {column_name: "name", data_type: "nvarchar", character_maximum_length: 50, is_nullable: "YES"}
+          ]
+        },
+        primaryKeys: {
+          users: ["id"]
+        },
+        views: {
+          active_users: "SELECT 1"
+        }
+      })
+
+      const result = await new MssqlStructureSql({driver: db}).toSql()
+
+      expect(result).toEqual("CREATE TABLE [users] ([id] int NOT NULL, [name] nvarchar(50), PRIMARY KEY ([id]));\n\nCREATE VIEW [active_users] AS SELECT 1;\n")
     })
-
-    const result = await new MssqlStructureSql({driver: db}).toSql()
-
-    expect(result).toEqual("CREATE TABLE [users] ([id] int NOT NULL, [name] nvarchar(50), PRIMARY KEY ([id]));\n\nCREATE VIEW [active_users] AS SELECT 1;\n")
   })
-})
+}
