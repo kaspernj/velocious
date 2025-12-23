@@ -63,7 +63,7 @@ export default class VelociousHttpServerWorker {
     client.listen()
 
     this.clients[clientCount] = client
-    this.worker.postMessage({command: "newClient", clientCount})
+    this.worker.postMessage({command: "newClient", clientCount, remoteAddress: client.remoteAddress})
   }
 
   /**

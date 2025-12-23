@@ -5,8 +5,12 @@ import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
+import {Logger} from "../logger.js"
 
 export default class VelociousRoutesResolver {
+  /** @type {Logger | undefined} */
+  logger
+
   /**
    * @param {object} args
    * @param {import("../configuration.js").default} args.configuration
@@ -67,6 +71,10 @@ export default class VelociousRoutesResolver {
       throw new Error(`Missing action on controller: ${controller}#${action}`)
     }
 
+    this.logger ||= new Logger(controllerClass.name)
+
+    await this._logActionStart({action, controllerClass})
+
     await this.configuration.ensureConnections(async () => {
       await controllerInstance._runBeforeCallbacks()
       await controllerInstance[action]()
@@ -98,5 +106,42 @@ export default class VelociousRoutesResolver {
 
       return matchResult
     }
+  }
+
+  /**
+   * @param {object} args
+   * @param {string} args.action
+   * @param {typeof import("../controller.js").default} args.controllerClass
+   * @returns {Promise<void>}
+   */
+  async _logActionStart({action, controllerClass}) {
+    const request = this.request
+    const timestamp = this._formatTimestamp(new Date())
+    const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
+
+    await this.logger.log(`Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
+    await this.logger.log(`Processing by ${controllerClass.name}#${action}`)
+    await this.logger.log(() => [`  Parameters:`, this.params])
+  }
+
+  /**
+   * @param {Date} date
+   * @returns {string}
+   */
+  _formatTimestamp(date) {
+    const pad = (num) => String(num).padStart(2, "0")
+    const year = date.getFullYear()
+    const month = pad(date.getMonth() + 1)
+    const day = pad(date.getDate())
+    const hours = pad(date.getHours())
+    const minutes = pad(date.getMinutes())
+    const seconds = pad(date.getSeconds())
+    const offsetMinutes = date.getTimezoneOffset()
+    const offsetSign = offsetMinutes > 0 ? "-" : "+"
+    const offsetTotalMinutes = Math.abs(offsetMinutes)
+    const offsetHours = pad(Math.floor(offsetTotalMinutes / 60))
+    const offsetRemainingMinutes = pad(offsetTotalMinutes % 60)
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${offsetSign}${offsetHours}${offsetRemainingMinutes}`
   }
 }

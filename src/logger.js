@@ -71,7 +71,7 @@ function messagesToMessage(...messages) {
   for (const messagePartIndex in messages) {
     const messagePart = messages[messagePartIndex]
 
-    if (typeof messagePartIndex == "number" && messagePartIndex > 0) {
+    if (Number(messagePartIndex) > 0) {
       message += " "
     }
 

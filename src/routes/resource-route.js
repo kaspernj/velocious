@@ -105,7 +105,7 @@ class VelociousRouteResourceRoute extends BasicRoute {
         if (this.collectionRouteNames.has(collectionCandidate)) {
           nextRestPath = normalizedRestPath
         } else {
-          const idMatch = normalizedRestPath.match(/^([^/]+)(?:\/(.*))?$/)
+          const idMatch = normalizedRestPath.match(/^([^/?]+)(?:\?[^/]*)?(?:\/(.*))?$/)
 
           if (idMatch) {
             const singularName = singularizeModelName(this.name)
