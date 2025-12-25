@@ -3,10 +3,16 @@
 import Configuration from "./configuration.js"
 import restArgsError from "./utils/rest-args-error.js"
 
+/** @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
+
 const DEFAULT_LOGGING_CONFIGURATION = {
   console: true,
-  file: false
+  file: false,
+  /** @type {LogLevel[]} */
+  levels: ["info", "warn", "error"]
 }
+
+const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
  * @param {string} message
@@ -59,7 +65,8 @@ function consoleWarn(message) {
  */
 function functionOrMessages(...messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
-    messages = messages[0]()
+    const result = messages[0]()
+    messages = Array.isArray(result) ? result : [result]
   }
 
   return messages
@@ -92,7 +99,11 @@ function messagesToMessage(...messages) {
 
 /**
  * @param {import("./configuration.js").default | undefined} configuration
- * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>}
+ * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>}
+ */
+/**
+ * @param {import("./configuration.js").default | undefined} configuration
+ * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>}
  */
 function resolveLoggingConfiguration(configuration) {
   if (configuration && typeof configuration.getLoggingConfiguration === "function") {
@@ -102,18 +113,37 @@ function resolveLoggingConfiguration(configuration) {
   return DEFAULT_LOGGING_CONFIGURATION
 }
 
+/**
+ * @param {object} args
+ * @param {LogLevel} args.level
+ * @param {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} args.loggingConfiguration
+ * @param {boolean} [args.debugFlag]
+ * @returns {boolean}
+ */
+function isLevelAllowed({level, loggingConfiguration, debugFlag}) {
+  const allowedLevels = loggingConfiguration.levels || DEFAULT_LOGGING_CONFIGURATION.levels
+
+  if (allowedLevels.includes(level)) return true
+
+  if (debugFlag && LEVEL_ORDER.indexOf(level) >= LEVEL_ORDER.indexOf("debug")) return true
+
+  return false
+}
+
 class Logger {
   /**
    * @param {any} object
    * @param {object} args
    * @param {import("./configuration.js").default} [args.configuration]
    * @param {boolean} [args.debug]
+   * @param {import("./configuration-types.js").LoggingConfiguration} [args.loggingConfiguration]
    */
-  constructor(object, {configuration, debug = false, ...restArgs} = {}) {
+  constructor(object, {configuration, debug = false, loggingConfiguration, ...restArgs} = {}) {
     restArgsError(restArgs)
 
     this._debug = debug
     this._configuration = configuration
+    this._loggingConfiguration = loggingConfiguration
 
     if (typeof object == "string") {
       this._subject = object
@@ -154,11 +184,23 @@ class Logger {
    * @returns {Promise<void>}
    */
   async debug(...messages) {
-    const configuration = this._safeConfiguration()
+    await this._write({level: "debug", messages})
+  }
 
-    if (this._debug || configuration?.debug) {
-      await this.log(...messages)
-    }
+  /**
+   * @param {any[]} messages
+   * @returns {Promise<void>}
+   */
+  async info(...messages) {
+    await this._write({level: "info", messages})
+  }
+
+  /**
+   * @param {any[]} messages
+   * @returns {Promise<void>}
+   */
+  async debugLowLevel(...messages) {
+    await this._write({level: "debug-low-level", messages})
   }
 
   /**
@@ -166,7 +208,7 @@ class Logger {
    * @returns {Promise<void>}
    */
   async log(...messages) {
-    await this._write({level: "log", messages})
+    await this._write({level: "info", messages})
   }
 
   /**
@@ -194,7 +236,7 @@ class Logger {
 
   /**
    * @param {object} args
-   * @param {"error" | "log" | "warn"} args.level
+   * @param {LogLevel} args.level
    * @param {Parameters<typeof functionOrMessages>} args.messages
    * @returns {Promise<void>}
    */
@@ -202,7 +244,12 @@ class Logger {
     const resolvedMessages = functionOrMessages(...messages)
     const message = messagesToMessage(this._subject, ...resolvedMessages)
     const configuration = this._safeConfiguration()
-    const loggingConfiguration = resolveLoggingConfiguration(configuration)
+    const loggingConfiguration = /** @type {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} */ (
+      this._loggingConfiguration || resolveLoggingConfiguration(configuration)
+    )
+    const shouldLog = isLevelAllowed({level, loggingConfiguration, debugFlag: this._debug})
+
+    if (!shouldLog) return
     const writes = []
 
     if (loggingConfiguration.console !== false) {
@@ -252,30 +299,33 @@ export default async function logger(object, ...messages) {
     }
   }
 
-  if (configuration?.debug) {
-    const loggingConfiguration = resolveLoggingConfiguration(configuration)
-    const message = messagesToMessage(className, ...functionOrMessages(...messages))
-    const writes = []
+  const loggingConfiguration = resolveLoggingConfiguration(configuration)
+  /** @type {LogLevel} */
+  const level = "debug"
 
-    if (loggingConfiguration.console !== false) {
-      writes.push(consoleLog(message))
+  if (!isLevelAllowed({level, loggingConfiguration, debugFlag: configuration?.debug || false})) return
+
+  const message = messagesToMessage(className, ...functionOrMessages(...messages))
+  const writes = []
+
+  if (loggingConfiguration.console !== false) {
+    writes.push(consoleLog(message))
+  }
+
+  if (loggingConfiguration.file !== false && loggingConfiguration.filePath && configuration) {
+    const environmentHandler = configuration.getEnvironmentHandler?.()
+
+    if (environmentHandler?.writeLogToFile) {
+      writes.push(environmentHandler.writeLogToFile({
+        filePath: loggingConfiguration.filePath,
+        message
+      }))
     }
+  }
 
-    if (loggingConfiguration.file !== false && loggingConfiguration.filePath) {
-      const environmentHandler = configuration.getEnvironmentHandler?.()
-
-      if (environmentHandler?.writeLogToFile) {
-        writes.push(environmentHandler.writeLogToFile({
-          filePath: loggingConfiguration.filePath,
-          message
-        }))
-      }
-    }
-
-    if (writes.length === 1) {
-      await writes[0]
-    } else if (writes.length > 1) {
-      await Promise.all(writes)
-    }
+  if (writes.length === 1) {
+    await writes[0]
+  } else if (writes.length > 1) {
+    await Promise.all(writes)
   }
 }

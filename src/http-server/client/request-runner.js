@@ -56,7 +56,7 @@ export default class VelociousHttpServerClientRequestRunner {
     } catch (e) {
       const error = ensureError(e)
 
-      await this.logger.error(() => [`Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`])
+      await this.logger.error(() => `Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`)
 
       response.setStatus(500)
       response.setErrorBody(error)

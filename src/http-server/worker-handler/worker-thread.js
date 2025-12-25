@@ -21,7 +21,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     /** @type {Record<number, Client>} */
     this.clients = {}
 
-    this.logger = new Logger(this, {debug: false})
+    this.logger = new Logger(this)
     this.parentPort = parentPort
     this.workerData = workerData
     this.workerCount = workerCount
@@ -32,7 +32,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       if (!this.application) throw new Error("Application not initialized")
 
       this.application.initialize().then(() => {
-        this.logger.debug(`Worker ${workerCount} started`)
+        this.logger.info(() => `Worker ${workerCount} started`)
         parentPort.postMessage({command: "started"})
       })
     })
@@ -73,7 +73,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {any} [data.payload]
    */
   onCommand = async (data) => {
-    await this.logger.debug(() => [`Worker ${this.workerCount} received command`, data])
+    await this.logger.debugLowLevel(() => [`Worker ${this.workerCount} received command`, data])
 
     const command = data.command
 
@@ -92,18 +92,18 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       })
 
       client.events.on("close", (output) => {
-        this.logger.log("Close received from client in worker - forwarding to worker parent")
+        this.logger.info("Close received from client in worker - forwarding to worker parent")
         this.parentPort.postMessage({command: "clientClose", clientCount, output})
       })
 
       this.clients[clientCount] = client
     } else if (command == "clientWrite") {
-      await this.logger.debug("Looking up client")
+      await this.logger.debugLowLevel("Looking up client")
 
       const {chunk, clientCount} = data
       const client = digg(this.clients, clientCount)
 
-      await this.logger.debug(`Sending to client ${clientCount}`)
+      await this.logger.debugLowLevel(`Sending to client ${clientCount}`)
 
       client.onWrite(chunk)
     } else if (command == "websocketEvent") {
