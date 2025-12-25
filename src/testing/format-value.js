@@ -55,7 +55,7 @@ function minifiedStringify(value) {
 
   try {
     return JSON.stringify(serialize(value, 0))
-  } catch (error) {
+  } catch {
     return String(value)
   }
 }
