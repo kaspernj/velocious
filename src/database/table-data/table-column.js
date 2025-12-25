@@ -198,6 +198,8 @@ export default class TableColumn {
     if (databaseType == "pgsql") {
       if (type == "DATETIME") {
         type = "TIMESTAMP"
+      } else if (type == "TINYINT") {
+        type = "SMALLINT"
       } else if (type == "BLOB") {
         type = "BYTEA"
         maxlength = undefined
@@ -208,6 +210,9 @@ export default class TableColumn {
       type = "VARCHAR"
       maxlength ||= 255
     }
+    if (databaseType == "pgsql" && type == "TINYINT") {
+      type = "SMALLINT"
+    }
 
     if (databaseType == "mssql") {
       if (type == "BOOLEAN") {
@@ -215,6 +220,9 @@ export default class TableColumn {
       } else if (type == "UUID") {
         type = "VARCHAR"
         maxlength ||= 36
+      } else if (type == "JSON") {
+        type = "NVARCHAR(MAX)"
+        maxlength = undefined
       } else if (type == "BLOB") {
         type = "VARBINARY(MAX)"
         maxlength = undefined
