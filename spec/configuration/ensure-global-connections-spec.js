@@ -8,12 +8,10 @@ import {describe, expect, it} from "../../src/testing/test.js"
 describe("Configuration.ensureGlobalConnections", () => {
   it("ensures global or fallback connections for all pools", async () => {
     await Dummy.run(async () => {
-      const configuration = /** @type {any} */ (dummyConfiguration)
+      await dummyConfiguration.ensureGlobalConnections()
 
-      await configuration.ensureGlobalConnections()
-
-      const defaultPool = configuration.getDatabasePool("default")
-      const mssqlPool = /** @type {AsyncTrackedMultiConnection} */ (configuration.getDatabasePool("mssql"))
+      const defaultPool = dummyConfiguration.getDatabasePool("default")
+      const mssqlPool = /** @type {AsyncTrackedMultiConnection} */ (dummyConfiguration.getDatabasePool("mssql"))
 
       const defaultConnection = defaultPool.getCurrentConnection()
       const fallbackConnection = mssqlPool.getGlobalConnection()

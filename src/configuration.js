@@ -390,9 +390,21 @@ export default class VelociousConfiguration {
 
     for (const identifier of this.getDatabaseIdentifiers()) {
       try {
-        dbs[identifier] = this.getDatabasePool(identifier).getCurrentConnection()
+        const pool = this.getDatabasePool(identifier)
+        const currentConnection = pool.getCurrentContextConnection ? pool.getCurrentContextConnection() : pool.getCurrentConnection()
+
+        if (currentConnection) {
+          dbs[identifier] = currentConnection
+        }
       } catch (error) {
-        if (error instanceof Error && (error.message == "ID hasn't been set for this async context" || error.message == "A connection hasn't been made yet")) {
+        if (
+          error instanceof Error &&
+          (
+            error.message == "ID hasn't been set for this async context" ||
+            error.message == "A connection hasn't been made yet" ||
+            error.message.startsWith("No async context set for database connection")
+          )
+        ) {
           // Ignore
         } else {
           throw error

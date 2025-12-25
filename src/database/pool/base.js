@@ -60,6 +60,15 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Returns the connection pinned to the current context, if any.
+   * Default implementation defers to `getCurrentConnection`.
+   * @returns {import("../drivers/base.js").default | undefined}
+   */
+  getCurrentContextConnection() {
+    return this.getCurrentConnection()
+  }
+
+  /**
    * @returns {{driver: typeof import("../drivers/base.js").default, type: string}}
    */
   getConfiguration() {

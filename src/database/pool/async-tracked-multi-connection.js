@@ -29,9 +29,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     super({configuration, identifier})
   }
 
-  /**
-   * @param {import("../drivers/base.js").default} connection
-   */
+  /** @param {import("../drivers/base.js").default} connection */
   checkin(connection) {
     const id = connection.getIdSeq()
 
@@ -48,9 +46,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.connections.push(connection)
   }
 
-  /**
-   * @returns {Promise<import("../drivers/base.js").default>}
-   */
+  /** @returns {Promise<import("../drivers/base.js").default>} */
   async checkout() {
     let connection = this.connections.shift()
 
@@ -68,9 +64,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     return connection
   }
 
-  /**
-   * @param {function(import("../drivers/base.js").default) : void} callback
-   */
+  /** @param {function(import("../drivers/base.js").default) : void} callback */
   async withConnection(callback) {
     const connection = await this.checkout()
     const id = connection.getIdSeq()
@@ -84,9 +78,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     })
   }
 
-  /**
-   * @returns {import("../drivers/base.js").default}
-   */
+  /** @returns {import("../drivers/base.js").default} */
   getCurrentConnection() {
     const id = this.asyncLocalStorage.getStore()
 
@@ -146,6 +138,19 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.setGlobalConnection(connection)
 
     return connection
+  }
+
+  /**
+   * Returns the connection tied to the current async context, if any.
+   * Does not fall back to the global connection.
+   * @returns {import("../drivers/base.js").default | undefined}
+   */
+  getCurrentContextConnection() {
+    const id = this.asyncLocalStorage.getStore()
+
+    if (id === undefined) return undefined
+
+    return this.getCurrentConnection()
   }
 
   /**
