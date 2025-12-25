@@ -1132,6 +1132,16 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
+   * @param {...string|string[]} columns
+   * @returns {Promise<any[]>}
+   */
+  static async pluck(...columns) {
+    return await this._newQuery().pluck(...columns)
+  }
+
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {number|string} recordId
    * @returns {Promise<InstanceType<MC>>}
    */

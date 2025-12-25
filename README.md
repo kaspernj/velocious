@@ -173,6 +173,10 @@ const tasks = await Task
   .order("name")
   .limit(5)
   .toArray()
+
+// Efficiently pluck columns without instantiating models
+const names = await Task.pluck("name")                     // ["Task A", "Task B"]
+const idsAndNames = await Task.all().order("name").pluck("id", "name") // [[1, "Task A"], [2, "Task B"]]
 ```
 
 # Global connections fallback
