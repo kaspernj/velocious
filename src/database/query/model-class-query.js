@@ -283,7 +283,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const modelClass = this.getModelClass()
     const tableName = modelClass.tableName()
     const attributeMap = modelClass.getAttributeNameToColumnNameMap()
-    const columnNames = flatColumns.map((column) => attributeMap[column] || inflection.underscore(column))
+    const columnNames = flatColumns.map((column) => attributeMap[column] || column)
 
     const query = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
