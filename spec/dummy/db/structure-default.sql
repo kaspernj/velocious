@@ -2,6 +2,8 @@ CREATE UNIQUE INDEX `index_on_authentication_tokens_token` ON `authentication_to
 
 CREATE INDEX `index_on_authentication_tokens_user_id` ON `authentication_tokens` (`user_id`);
 
+CREATE INDEX `index_on_comments_task_id` ON `comments` (`task_id`);
+
 CREATE INDEX `index_on_interactions_subject_id` ON `interactions` (`subject_id`);
 
 CREATE INDEX `index_on_project_details_project_id` ON `project_details` (`project_id`);
@@ -17,6 +19,8 @@ CREATE UNIQUE INDEX `index_on_users_email` ON `users` (`email`);
 CREATE INDEX `index_on_uuid_interactions_subject_id` ON `uuid_interactions` (`subject_id`);
 
 CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT REFERENCES `users`(`id`), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
 CREATE TABLE `interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id` BIGINT NOT NULL, `subject_type` VARCHAR(255), `kind` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
