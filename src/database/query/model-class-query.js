@@ -269,4 +269,40 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     return models
   }
+
+  /**
+   * Plucks one or more columns directly from the database without instantiating models.
+   * @param {...string|string[]} columns
+   * @returns {Promise<any[]>}
+   */
+  async pluck(...columns) {
+    const flatColumns = columns.flat()
+
+    if (flatColumns.length === 0) throw new Error("No columns given to pluck")
+
+    const modelClass = this.getModelClass()
+    const tableName = modelClass.tableName()
+    const attributeMap = modelClass.getAttributeNameToColumnNameMap()
+    const columnNames = flatColumns.map((column) => attributeMap[column] || inflection.underscore(column))
+
+    const query = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
+
+    query._preload = {}
+    query._selects = []
+
+    columnNames.forEach((columnName) => {
+      const selectSql = `${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(columnName)}`
+
+      query.select(selectSql)
+    })
+
+    const rows = await query._executeQuery()
+
+    if (columnNames.length === 1) {
+      const [columnName] = columnNames
+      return rows.map((row) => row[columnName])
+    }
+
+    return rows.map((row) => columnNames.map((columnName) => row[columnName]))
+  }
 }
