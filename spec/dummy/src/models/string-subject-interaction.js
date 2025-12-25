@@ -1,6 +1,6 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import StringSubjectInteractionBase from "../model-bases/string-subject-interaction.js"
 
-class StringSubjectInteraction extends DatabaseRecord {}
+class StringSubjectInteraction extends StringSubjectInteractionBase {}
 
 StringSubjectInteraction.belongsTo("subject", {polymorphic: true})
 

@@ -1,19 +1,19 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class ProjectTranslationBase extends DatabaseRecord {
+export default class StringSubjectBase extends DatabaseRecord {
   /**
-   * @returns {typeof ProjectTranslationBase}
+   * @returns {typeof import("../models/string-subject.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
-  getModelClass() { return /** @type {typeof ProjectTranslationBase} */ (this.constructor) }
+  getModelClass() { return /** @type {typeof import("../models/string-subject.js").default} */ (this.constructor) }
 
   /**
-   * @returns {number}
+   * @returns {string}
    */
   id() { return this.readAttribute("id") }
 
   /**
-   * @param {number} newValue
+   * @param {string} newValue
    * @returns {void}
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
@@ -22,38 +22,6 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    * @returns {boolean}
    */
   hasId() { return this._hasAttribute(this.id()) }
-
-  /**
-   * @returns {number}
-   */
-  projectId() { return this.readAttribute("projectId") }
-
-  /**
-   * @param {number} newValue
-   * @returns {void}
-   */
-  setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
-
-  /**
-   * @returns {boolean}
-   */
-  hasProjectId() { return this._hasAttribute(this.projectId()) }
-
-  /**
-   * @returns {string}
-   */
-  locale() { return this.readAttribute("locale") }
-
-  /**
-   * @param {string} newValue
-   * @returns {void}
-   */
-  setLocale(newValue) { return this._setColumnAttribute("locale", newValue) }
-
-  /**
-   * @returns {boolean}
-   */
-  hasLocale() { return this._hasAttribute(this.locale()) }
 
   /**
    * @returns {string | null}
@@ -104,27 +72,25 @@ export default class ProjectTranslationBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @returns {import("../models/project.js").default}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/string-subject.js").default, typeof import("../../../../src/database/record/index.js").default>}
    */
-  Project() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("Project").loaded()) }
+  stringSubjectInteractions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/string-subject.js").default, typeof import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("stringSubjectInteractions")) }
 
   /**
-   * @abstract
-   * @param {Record<string, any>} [attributes]
-   * @returns {import("../models/project.js").default}
+   * @returns {Array<import("../../../../src/database/record/index.js").default>}
    */
-  buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  stringSubjectInteractionsLoaded() { return /** @type {Array<import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("stringSubjectInteractions").loaded()) }
 
   /**
    * @abstract
    * @returns {Promise<void>}
    */
-  loadProject() { throw new Error("Not implemented") }
+  loadStringSubjectInteractions() { throw new Error("Not implemented") }
 
   /**
    * @abstract
-   * @param {import("../models/project.js").default} newModel
+   * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
    * @returns {void}
    */
-  setProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setStringSubjectInteractions(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }

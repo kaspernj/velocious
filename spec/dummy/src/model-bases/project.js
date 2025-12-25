@@ -178,6 +178,77 @@ export default class ProjectBase extends DatabaseRecord {
   setProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../../../../src/database/record/index.js").default>}
+   */
+  interactions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("interactions")) }
+
+  /**
+   * @returns {Array<import("../../../../src/database/record/index.js").default>}
+   */
+  interactionsLoaded() { return /** @type {Array<import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("interactions").loaded()) }
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  loadInteractions() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
+   * @returns {void}
+   */
+  setInteractions(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @returns {import("velocious/build/src/database/record/index.js").default}
+   */
+  primaryInteraction() { return /** @type {import("velocious/build/src/database/record/index.js").default} */ (this.getRelationshipByName("primaryInteraction").loaded()) }
+
+  /**
+   * @abstract
+   * @param {Record<string, any>} [attributes]
+   * @returns {import("velocious/build/src/database/record/index.js").default}
+   */
+  buildPrimaryInteraction(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  loadPrimaryInteraction() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @param {import("velocious/build/src/database/record/index.js").default} newModel
+   * @returns {void}
+   */
+  setPrimaryInteraction(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/comment.js").default>}
+   */
+  comments() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/comment.js").default>} */ (this.getRelationshipByName("comments")) }
+
+  /**
+   * @returns {Array<import("../models/comment.js").default>}
+   */
+  commentsLoaded() { return /** @type {Array<import("../models/comment.js").default>} */ (this.getRelationshipByName("comments").loaded()) }
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  loadComments() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @param {Array<import("../models/comment.js").default>} newModels
+   * @returns {void}
+   */
+  setComments(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../model-bases/project-translation.js").default>}
    */
   translations() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../model-bases/project-translation.js").default>} */ (this.getRelationshipByName("translations")) }
