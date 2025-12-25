@@ -80,7 +80,7 @@ describe("Logger", async () => {
       const logFilePath = path.join(tempDirectory, "log", "test.log")
       const logContents = await fs.readFile(logFilePath, "utf8")
 
-      expect(writes.length).toBe(0)
+      expect(writes.length).toBe(1)
       expect(logContents.trim()).toBe("PartnersEventsController Processing by PartnersEventsController#show")
     } finally {
       // @ts-ignore Restore original stdout

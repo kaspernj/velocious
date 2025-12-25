@@ -75,11 +75,13 @@ describe("Cli - Commands - db:rollback", () => {
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
           "projects",
           "schema_migrations",
+          "comments",
           "string_subject_interactions",
           "string_subjects",
           "tasks",
@@ -100,19 +102,23 @@ describe("Cli - Commands - db:rollback", () => {
         "20250916111330",
         "20250921121002",
         "20251223194400",
-        "20251223210800"
+        "20251223210800",
+        "20251223214200",
+        "20251225230806"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
           "projects",
           "schema_migrations",
           "schema_migrations",
+          "comments",
           "string_subject_interactions",
           "string_subjects",
           "tasks",
@@ -133,7 +139,9 @@ describe("Cli - Commands - db:rollback", () => {
         "20250916111330",
         "20250921121002",
         "20251223194400",
-        "20251223210800"
+        "20251223210800",
+        "20251223214200",
+        "20251225230806"
       ])
     }
 
@@ -151,6 +159,7 @@ describe("Cli - Commands - db:rollback", () => {
           "project_translations",
           "projects",
           "schema_migrations",
+          "comments",
           "string_subject_interactions",
           "string_subjects",
           "tasks",
@@ -172,7 +181,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806"
       ])
     } else {
       expect(newTablesResult.sort()).toEqual(
@@ -185,6 +195,7 @@ describe("Cli - Commands - db:rollback", () => {
           "projects",
           "schema_migrations",
           "schema_migrations",
+          "comments",
           "string_subject_interactions",
           "string_subjects",
           "tasks",
@@ -206,7 +217,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806"
       ])
     }
   })
