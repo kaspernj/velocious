@@ -291,7 +291,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     query._selects = []
 
     columnNames.forEach((columnName) => {
-      const selectSql = `${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(columnName)} AS ${columnName}`
+      const selectSql = `${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(columnName)}`
 
       query.select(selectSql)
     })
