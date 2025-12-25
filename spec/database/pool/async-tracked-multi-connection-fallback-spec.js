@@ -1,73 +1,84 @@
 // @ts-check
 
 import AsyncTrackedMultiConnection from "../../../src/database/pool/async-tracked-multi-connection.js"
+import Dummy from "../../dummy/index.js"
 import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-function getPoolOrSkip() {
+function getPool() {
   const pool = dummyConfiguration.getDatabasePool("default")
 
-  if (!(pool instanceof AsyncTrackedMultiConnection)) {
-    // Skip if the dummy configuration doesn't use the async-tracked pool.
-    return null
-  }
+  if (!(pool instanceof AsyncTrackedMultiConnection)) return null
 
   return pool
 }
 
 describe("database - pool - async tracked multi connection", () => {
   it("returns a global fallback connection when no async context has been set", async () => {
-    const pool = getPoolOrSkip()
-    if (!pool) return
+    await Dummy.run(async () => {
+      const pool = getPool()
 
-    const fallbackConnection = await pool.ensureGlobalConnection()
-    const currentConnection = pool.getCurrentConnection()
+      if (!pool) return
 
-    expect(pool.connections.includes(fallbackConnection)).toBeFalse()
-    expect(currentConnection).toBe(fallbackConnection)
+      const fallbackConnection = await pool.ensureGlobalConnection()
+      const currentConnection = await pool.asyncLocalStorage.run(undefined, async () => pool.getCurrentConnection())
+
+      expect(currentConnection).toBe(fallbackConnection)
+    })
   })
 
   it("prefers the async-context connection and falls back to the global connection outside the context", async () => {
-    const pool = getPoolOrSkip()
-    if (!pool) return
+    await Dummy.run(async () => {
+      const pool = getPool()
 
-    const fallbackConnection = await pool.ensureGlobalConnection()
-    const contextConnection = await pool.spawnConnection()
+      if (!pool) return
 
-    pool.connections.unshift(contextConnection)
+      const fallbackConnection = await pool.ensureGlobalConnection()
+      const contextConnection = await pool.spawnConnection()
 
-    await pool.withConnection(async () => {
-      const currentConnection = pool.getCurrentConnection()
+      pool.connections.unshift(contextConnection)
 
-      expect(currentConnection).toBe(contextConnection)
+      await pool.withConnection(async () => {
+        const currentConnection = pool.getCurrentConnection()
+
+        expect(currentConnection).toBe(contextConnection)
+      })
+
+      const outsideConnection = await pool.asyncLocalStorage.run(undefined, async () => pool.getCurrentConnection())
+
+      expect(outsideConnection).toBe(fallbackConnection)
     })
-
-    const outsideConnection = pool.getCurrentConnection()
-
-    expect(outsideConnection).toBe(fallbackConnection)
   })
 
   it("ensures a global connection is created when missing", async () => {
-    const pool = getPoolOrSkip()
-    if (!pool) return
+    await Dummy.run(async () => {
+      const pool = getPool()
 
-    const connection = await pool.ensureGlobalConnection()
+      if (!pool) return
 
-    expect(connection).toBe(pool.getGlobalConnection())
-    expect(pool.connections.includes(connection)).toBeFalse()
+      const connection = await pool.ensureGlobalConnection()
+      const outsideConnection = await pool.asyncLocalStorage.run(undefined, async () => pool.getCurrentConnection())
+
+      expect(connection).toBe(pool.getGlobalConnection())
+      expect(outsideConnection).toBe(connection)
+    })
   })
 
   it("does not replace an existing global connection when ensuring", async () => {
-    const pool = getPoolOrSkip()
-    if (!pool) return
+    await Dummy.run(async () => {
+      const pool = getPool()
 
-    const existing = await pool.spawnConnection()
+      if (!pool) return
 
-    pool.setGlobalConnection(existing)
+      const existing = await pool.spawnConnection()
 
-    const connection = await pool.ensureGlobalConnection()
+      pool.setGlobalConnection(existing)
 
-    expect(connection).toBe(existing)
-    expect(pool.connections.includes(existing)).toBeFalse()
+      const connection = await pool.ensureGlobalConnection()
+      const outsideConnection = await pool.asyncLocalStorage.run(undefined, async () => pool.getCurrentConnection())
+
+      expect(connection).toBe(existing)
+      expect(outsideConnection).toBe(existing)
+    })
   })
 })
