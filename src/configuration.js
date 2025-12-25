@@ -246,9 +246,26 @@ export default class VelociousConfiguration {
 
       if (this._initializeModels) {
         await this._initializeModels({configuration: this, type: args.type})
+   }
+  }
+
+  /**
+   * Ensures each configured database pool has a global connection available.
+   * Useful when `getCurrentConnection` might be called without an async context.
+   * @returns {Promise<void>}
+   */
+  async ensureGlobalConnections() {
+    for (const identifier of this.getDatabaseIdentifiers()) {
+      const pool = this.getDatabasePool(identifier)
+
+      if (typeof pool.ensureGlobalConnection == "function") {
+        await pool.ensureGlobalConnection()
+      } else {
+        await pool.checkout()
       }
     }
   }
+}
 
   /**
    * @param {object} args

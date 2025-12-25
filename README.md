@@ -191,6 +191,8 @@ await pool.ensureGlobalConnection()
 const db = pool.getCurrentConnection()
 ```
 
+To prime *all* configured pools at once, call `configuration.ensureGlobalConnections()`. It will invoke `ensureGlobalConnection()` on pools that support it and perform a `checkout` on simpler pools so `getCurrentConnection()` is safe everywhere.
+
 When an async context exists, that connection is still preferred over the global one.
 
 # Websockets
