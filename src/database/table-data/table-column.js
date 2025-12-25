@@ -204,11 +204,16 @@ export default class TableColumn {
       maxlength ||= 255
     }
 
-    if (databaseType == "mssql" && type == "BOOLEAN") {
-      type = "BIT"
-    } else if (databaseType == "mssql" && type == "UUID") {
-      type = "VARCHAR"
-      maxlength ||= 36
+    if (databaseType == "mssql") {
+      if (type == "BOOLEAN") {
+        type = "BIT"
+      } else if (type == "UUID") {
+        type = "VARCHAR"
+        maxlength ||= 36
+      } else if (type == "BLOB") {
+        type = "VARBINARY(MAX)"
+        maxlength = undefined
+      }
     }
 
     if (databaseType == "sqlite" && this.getAutoIncrement() && this.getPrimaryKey()) {
