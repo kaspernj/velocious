@@ -184,7 +184,7 @@ import AsyncTrackedMultiConnection from "velocious/build/src/database/pool/async
 
 const pool = configuration.getDatabasePool("default")
 
-// Create (or reuse) a dedicated fallback connection and keep it queued in the pool.
+// Create (or reuse) a dedicated fallback connection.
 await pool.ensureGlobalConnection()
 
 // Later, outside an async context, this will return the ensured fallback connection:
