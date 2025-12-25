@@ -47,7 +47,7 @@ describe("Cli - Commands - db:migrate", () => {
     await cli.getConfiguration().ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
 
-      const tableNames = ["accounts", "authentication_tokens", "interactions", "string_subject_interactions", "string_subjects", "tasks", "project_details", "project_translations", "projects", "schema_migrations", "users", "uuid_interactions", "uuid_items"]
+      const tableNames = ["accounts", "authentication_tokens", "comments", "interactions", "string_subject_interactions", "string_subjects", "tasks", "project_details", "project_translations", "projects", "schema_migrations", "users", "uuid_interactions", "uuid_items"]
 
       for (const tableName of tableNames) {
         await dbs.default.dropTable(tableName, {cascade: true, ifExists: true})
@@ -144,6 +144,7 @@ describe("Cli - Commands - db:migrate", () => {
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -170,13 +171,15 @@ describe("Cli - Commands - db:migrate", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -204,7 +207,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806"
       ])
     }
   })

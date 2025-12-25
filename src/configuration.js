@@ -156,7 +156,7 @@ export default class VelociousConfiguration {
     const configuredLevels = this._logging?.levels
     const includeLowLevelDebug = this._logging?.debugLowLevel === true
 
-    const consoleDefault = defaultConsole !== undefined ? defaultConsole : environment !== "test"
+    const consoleDefault = defaultConsole !== undefined ? defaultConsole : true
     const consoleLogging = consoleOverride !== undefined ? consoleOverride : consoleDefault
 
     /** @type {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} */

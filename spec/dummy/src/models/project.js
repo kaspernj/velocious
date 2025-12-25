@@ -8,6 +8,7 @@ Project.hasMany("tasks")
 Project.hasOne("projectDetail")
 Project.hasMany("interactions", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Project.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
+Project.hasMany("comments", {className: "Comment", through: "tasks", foreignKey: "task_id"})
 Project.translates("name")
 
 export default Project

@@ -32,7 +32,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       if (!this.application) throw new Error("Application not initialized")
 
       this.application.initialize().then(() => {
-        this.logger.info(() => `Worker ${workerCount} started`)
+        this.logger.debugLowLevel(() => `Worker ${workerCount} started`)
         parentPort.postMessage({command: "started"})
       })
     })

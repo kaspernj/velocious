@@ -1,6 +1,7 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import StringSubjectBase from "../model-bases/string-subject.js"
 
-class StringSubject extends DatabaseRecord {}
+class StringSubject extends StringSubjectBase {
+}
 
 StringSubject.hasMany("stringSubjectInteractions", {className: "StringSubjectInteraction", foreignKey: "subject_id", polymorphic: true})
 

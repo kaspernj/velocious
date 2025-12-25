@@ -1,6 +1,7 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import UuidItemBase from "../model-bases/uuid-item.js"
 
-class UuidItem extends DatabaseRecord {}
+class UuidItem extends UuidItemBase {
+}
 
 UuidItem.hasMany("uuidInteractions", {className: "UuidInteraction", foreignKey: "subject_id", polymorphic: true})
 

@@ -49,18 +49,18 @@ builds:
       - wait-for-it mssql:1433
       - wait-for-it mariadb:3306
       - sleep 5
-      - cd spec/dummy && npx velocious db:create
-      - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - npm run test
   build_2:
     name: MS-SQL
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
       - sleep 5
-      - cd spec/dummy && npx velocious db:create
-      - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - npm run test
   build_3:
     name: PG-SQL
     script:
@@ -68,18 +68,18 @@ builds:
       - wait-for-it mssql:1433
       - wait-for-it postgres:5432
       - sleep 5
-      - cd spec/dummy && npx velocious db:create
-      - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - npm run test
   build_4:
     name: SQLite
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - wait-for-it mssql:1433
       - sleep 5
-      - cd spec/dummy && npx velocious db:create
-      - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - npm run test
   build_5:
     name: ESLint
     script:

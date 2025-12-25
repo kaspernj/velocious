@@ -80,8 +80,11 @@ describe("Cli - Commands - db:rollback", () => {
           "project_translations",
           "projects",
           "schema_migrations",
+          "string_subject_interactions",
+          "string_subjects",
           "tasks",
           "users",
+          "uuid_interactions",
           "uuid_items"
         ]
       )
@@ -97,7 +100,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250916111330",
         "20250921121002",
         "20251223194400",
-        "20251223210800"
+        "20251223210800",
+        "20251223214200"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
@@ -110,8 +114,11 @@ describe("Cli - Commands - db:rollback", () => {
           "projects",
           "schema_migrations",
           "schema_migrations",
+          "string_subject_interactions",
+          "string_subjects",
           "tasks",
           "users",
+          "uuid_interactions",
           "uuid_items"
         ]
       )
@@ -127,7 +134,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250916111330",
         "20250921121002",
         "20251223194400",
-        "20251223210800"
+        "20251223210800",
+        "20251223214200"
       ])
     }
 
@@ -140,6 +148,7 @@ describe("Cli - Commands - db:rollback", () => {
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -166,13 +175,15 @@ describe("Cli - Commands - db:rollback", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806"
       ])
     } else {
       expect(newTablesResult.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -200,7 +211,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806"
       ])
     }
   })

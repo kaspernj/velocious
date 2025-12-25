@@ -1,6 +1,7 @@
-import DatabaseRecord from "../../../../src/database/record/index.js"
+import UuidInteractionBase from "../model-bases/uuid-interaction.js"
 
-class UuidInteraction extends DatabaseRecord {}
+class UuidInteraction extends UuidInteractionBase {
+}
 
 UuidInteraction.belongsTo("subject", {polymorphic: true})
 

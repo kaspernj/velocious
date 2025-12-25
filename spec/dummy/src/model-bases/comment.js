@@ -1,11 +1,11 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class InteractionBase extends DatabaseRecord {
+export default class CommentBase extends DatabaseRecord {
   /**
-   * @returns {typeof import("../models/interaction.js").default}
+   * @returns {typeof import("../models/comment.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
-  getModelClass() { return /** @type {typeof import("../models/interaction.js").default} */ (this.constructor) }
+  getModelClass() { return /** @type {typeof import("../models/comment.js").default} */ (this.constructor) }
 
   /**
    * @returns {number}
@@ -26,50 +26,34 @@ export default class InteractionBase extends DatabaseRecord {
   /**
    * @returns {number}
    */
-  subjectId() { return this.readAttribute("subjectId") }
+  taskId() { return this.readAttribute("taskId") }
 
   /**
    * @param {number} newValue
    * @returns {void}
    */
-  setSubjectId(newValue) { return this._setColumnAttribute("subjectId", newValue) }
+  setTaskId(newValue) { return this._setColumnAttribute("taskId", newValue) }
 
   /**
    * @returns {boolean}
    */
-  hasSubjectId() { return this._hasAttribute(this.subjectId()) }
+  hasTaskId() { return this._hasAttribute(this.taskId()) }
 
   /**
    * @returns {string | null}
    */
-  subjectType() { return this.readAttribute("subjectType") }
+  body() { return this.readAttribute("body") }
 
   /**
    * @param {string | null} newValue
    * @returns {void}
    */
-  setSubjectType(newValue) { return this._setColumnAttribute("subjectType", newValue) }
+  setBody(newValue) { return this._setColumnAttribute("body", newValue) }
 
   /**
    * @returns {boolean}
    */
-  hasSubjectType() { return this._hasAttribute(this.subjectType()) }
-
-  /**
-   * @returns {string | null}
-   */
-  kind() { return this.readAttribute("kind") }
-
-  /**
-   * @param {string | null} newValue
-   * @returns {void}
-   */
-  setKind(newValue) { return this._setColumnAttribute("kind", newValue) }
-
-  /**
-   * @returns {boolean}
-   */
-  hasKind() { return this._hasAttribute(this.kind()) }
+  hasBody() { return this._hasAttribute(this.body()) }
 
   /**
    * @returns {Date | null}
@@ -104,27 +88,27 @@ export default class InteractionBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @returns {import("velocious/build/src/database/record/index.js").default}
+   * @returns {import("../models/task.js").default}
    */
-  subject() { return /** @type {import("velocious/build/src/database/record/index.js").default} */ (this.getRelationshipByName("subject").loaded()) }
+  task() { return /** @type {import("../models/task.js").default} */ (this.getRelationshipByName("task").loaded()) }
 
   /**
    * @abstract
    * @param {Record<string, any>} [attributes]
-   * @returns {import("velocious/build/src/database/record/index.js").default}
+   * @returns {import("../models/task.js").default}
    */
-  buildSubject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildTask(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
    * @returns {Promise<void>}
    */
-  loadSubject() { throw new Error("Not implemented") }
+  loadTask() { throw new Error("Not implemented") }
 
   /**
    * @abstract
-   * @param {import("velocious/build/src/database/record/index.js").default} newModel
+   * @param {import("../models/task.js").default} newModel
    * @returns {void}
    */
-  setSubject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setTask(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }

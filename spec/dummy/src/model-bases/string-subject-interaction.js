@@ -1,11 +1,11 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
-export default class InteractionBase extends DatabaseRecord {
+export default class StringSubjectInteractionBase extends DatabaseRecord {
   /**
-   * @returns {typeof import("../models/interaction.js").default}
+   * @returns {typeof import("../models/string-subject-interaction.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
-  getModelClass() { return /** @type {typeof import("../models/interaction.js").default} */ (this.constructor) }
+  getModelClass() { return /** @type {typeof import("../models/string-subject-interaction.js").default} */ (this.constructor) }
 
   /**
    * @returns {number}
@@ -24,12 +24,12 @@ export default class InteractionBase extends DatabaseRecord {
   hasId() { return this._hasAttribute(this.id()) }
 
   /**
-   * @returns {number}
+   * @returns {string}
    */
   subjectId() { return this.readAttribute("subjectId") }
 
   /**
-   * @param {number} newValue
+   * @param {string} newValue
    * @returns {void}
    */
   setSubjectId(newValue) { return this._setColumnAttribute("subjectId", newValue) }

@@ -105,12 +105,36 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   query() {
     if (!this.getModel().isPersisted()) throw new Error("Cannot build a query for an unpersisted parent model")
 
-    const foreignKey = this.getForeignKey()
-    const primaryKey = this.getPrimaryKey()
-    const primaryModelID = this.getModel().readColumn(primaryKey)
     const TargetModelClass = this.getTargetModelClass()
 
     if (!TargetModelClass) throw new Error("Cannot load without a target model class")
+
+    const throughRelationshipName = this.getRelationship().through
+
+    if (throughRelationshipName) {
+      const parentModelClass = this.getModel().getModelClass()
+      const throughRelationship = parentModelClass.getRelationshipByName(throughRelationshipName)
+      const throughModelClass = throughRelationship.getTargetModelClass()
+
+      if (!throughModelClass) throw new Error(`Through relationship ${throughRelationshipName} has no target model class`)
+
+      const throughForeignKey = throughRelationship.getForeignKey()
+      const throughPrimaryKey = throughRelationship.getPrimaryKey()
+      const targetForeignKey = this.getForeignKey()
+      const targetTable = TargetModelClass.tableName()
+      const throughTable = throughModelClass.tableName()
+      const driver = TargetModelClass.connection()
+      const parentPrimaryKey = this.getPrimaryKey()
+      const parentId = this.getModel().readColumn(parentPrimaryKey)
+      const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
+      const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
+
+      return TargetModelClass.joins(joinSql).where(whereSql)
+    }
+
+    const foreignKey = this.getForeignKey()
+    const primaryKey = this.getPrimaryKey()
+    const primaryModelID = this.getModel().readColumn(primaryKey)
 
     /** @type {Record<string, any>} */
     const whereArgs = {}
