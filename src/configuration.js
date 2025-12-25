@@ -246,7 +246,8 @@ export default class VelociousConfiguration {
 
       if (this._initializeModels) {
         await this._initializeModels({configuration: this, type: args.type})
-   }
+      }
+    }
   }
 
   /**
@@ -258,14 +259,9 @@ export default class VelociousConfiguration {
     for (const identifier of this.getDatabaseIdentifiers()) {
       const pool = this.getDatabasePool(identifier)
 
-      if (typeof pool.ensureGlobalConnection == "function") {
-        await pool.ensureGlobalConnection()
-      } else {
-        await pool.checkout()
-      }
+      await pool.ensureGlobalConnection()
     }
   }
-}
 
   /**
    * @param {object} args

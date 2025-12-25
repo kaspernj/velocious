@@ -126,6 +126,15 @@ class VelociousDatabasePoolBase {
   withConnection(_callback) { // eslint-disable-line no-unused-vars
     throw new Error("'withConnection' not implemented")
   }
+
+  /**
+   * Ensures a reusable connection exists for contexts where AsyncLocalStorage isn't set.
+   * Default implementation just checks out a connection.
+   * @returns {Promise<import("../drivers/base.js").default>}
+   */
+  async ensureGlobalConnection() {
+    return await this.checkout()
+  }
 }
 
 baseMethodsForward(VelociousDatabasePoolBase)
