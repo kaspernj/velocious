@@ -41,11 +41,11 @@ async function createPool() {
     environmentHandler: new NodeEnvironmentHandler(),
     initializeModels: async () => {},
     locale: () => dummyConfiguration.getLocale(),
-    localeFallbacks: dummyConfiguration.getLocaleFallbacks(),
+    localeFallbacks: dummyConfiguration.getLocaleFallbacks() || {en: ["en"]},
     locales: dummyConfiguration.getLocales()
   })
 
-  const pool = configuration.getDatabasePool("default")
+  const pool = /** @type {AsyncTrackedMultiConnection} */ (configuration.getDatabasePool("default"))
   const dbFilePath = path.join(configuration.getDirectory(), "db", `VelociousDatabaseDriversSqlite---${dbName}.sqlite`)
 
   return {pool, dbFilePath}
@@ -54,7 +54,7 @@ async function createPool() {
 /**
  * @param {PoolContext} poolContext
  */
-async function cleanupPool({pool, dbFilePath}) {
+async function cleanupPool(/** @type {PoolContext} */ {pool, dbFilePath}) {
   const connections = new Set()
 
   const globalConn = pool.getGlobalConnection()
