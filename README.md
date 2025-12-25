@@ -175,6 +175,24 @@ const tasks = await Task
   .toArray()
 ```
 
+# Global connections fallback
+
+`AsyncTrackedMultiConnection` uses `AsyncLocalStorage` to pin a connection to the current async context. If you need to call `getCurrentConnection()` outside of `ensureConnections`/`withConnection`, ask the pool to create a global fallback connection for you:
+
+```js
+import AsyncTrackedMultiConnection from "velocious/build/src/database/pool/async-tracked-multi-connection.js"
+
+const pool = configuration.getDatabasePool("default")
+
+// Create (or reuse) a dedicated fallback connection.
+await pool.ensureGlobalConnection()
+
+// Later, outside an async context, this will return the ensured fallback connection:
+const db = pool.getCurrentConnection()
+```
+
+When an async context exists, that connection is still preferred over the global one.
+
 # Websockets
 
 Velocious includes a lightweight websocket entry point for API-style calls and server-side events.
