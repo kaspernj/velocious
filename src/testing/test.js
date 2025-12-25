@@ -266,6 +266,23 @@ class Expect extends BaseExpect {
           const objectPrint = formatValue(this._object)
           const resultPrint = formatValue(result)
 
+          if (Array.isArray(this._object) && Array.isArray(result)) {
+            const actualStrings = this._object.map((item) => minifiedStringify(item))
+            const expectedStrings = result.map((item) => minifiedStringify(item))
+
+            const missingItems = expectedStrings.filter((item) => !actualStrings.includes(item))
+            const unexpectedItems = actualStrings.filter((item) => !expectedStrings.includes(item))
+
+            const diffParts = []
+
+            if (missingItems.length > 0) diffParts.push(`missing ${missingItems.join(", ")}`)
+            if (unexpectedItems.length > 0) diffParts.push(`unexpected ${unexpectedItems.join(", ")}`)
+
+            const diffMessage = diffParts.length > 0 ? ` (diff: ${diffParts.join("; ")})` : ""
+
+            throw new Error(`${objectPrint} wasn't equal to ${resultPrint}${diffMessage}`)
+          }
+
           throw new Error(`${objectPrint} wasn't equal to ${resultPrint}`)
         }
       } else {
