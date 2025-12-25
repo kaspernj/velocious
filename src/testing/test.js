@@ -1,5 +1,6 @@
 // @ts-check
 
+import {formatValue, minifiedStringify} from "./format-value.js"
 import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
 import restArgsError from "../utils/rest-args-error.js"
 
@@ -135,11 +136,17 @@ class Expect extends BaseExpect {
   toBe(result) {
     if (this._not) {
       if (this._object === result) {
-        throw new Error(`${this._object} was unexpected not to be ${result}`)
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} was unexpected not to be ${resultPrint}`)
       }
     } else {
       if (this._object !== result) {
-        throw new Error(`${this._object} wasn't expected be ${result}`)
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} wasn't expected be ${resultPrint}`)
       }
     }
   }
@@ -150,11 +157,15 @@ class Expect extends BaseExpect {
   toBeDefined() {
     if (this._not) {
       if (this._object !== undefined) {
-        throw new Error(`${this._object} wasn´t expected to be defined`)
+        const objectPrint = formatValue(this._object)
+
+        throw new Error(`${objectPrint} wasn´t expected to be defined`)
       }
     } else {
       if (this._object === undefined) {
-        throw new Error(`${this._object} wasn't expected be undefined`)
+        const objectPrint = formatValue(this._object)
+
+        throw new Error(`${objectPrint} wasn't expected be undefined`)
       }
     }
   }
@@ -165,7 +176,9 @@ class Expect extends BaseExpect {
    */
   toBeInstanceOf(klass) {
     if (!(this._object instanceof klass)) {
-      throw new Error(`Expected ${this._object?.constructor?.name || "null"} to be a ${klass.name} but it wasn't`)
+      const objectPrint = formatValue(this._object)
+
+      throw new Error(`Expected ${objectPrint} to be a ${klass.name} but it wasn't`)
     }
   }
 
@@ -219,7 +232,10 @@ class Expect extends BaseExpect {
     if (this._not) throw new Error("not stub")
 
     if (!this._object.includes(valueToContain)) {
-      throw new Error(`${this._object} doesn't contain ${valueToContain}`)
+      const objectPrint = formatValue(this._object)
+      const valuePrint = formatValue(valueToContain)
+
+      throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
     }
   }
 
@@ -231,21 +247,33 @@ class Expect extends BaseExpect {
     if (this._not) {
       if (typeof this._object == "object" && typeof result == "object") {
         if (!anythingDifferent(this._object, result)) {
-          throw new Error(`${this._object} was unexpected equal to ${result}`)
+          const objectPrint = formatValue(this._object)
+          const resultPrint = formatValue(result)
+
+          throw new Error(`${objectPrint} was unexpected equal to ${resultPrint}`)
         }
       } else {
         if (this._object == result) {
-          throw new Error(`${this._object} was unexpected equal to ${result}`)
+          const objectPrint = formatValue(this._object)
+          const resultPrint = formatValue(result)
+
+          throw new Error(`${objectPrint} was unexpected equal to ${resultPrint}`)
         }
       }
     } else {
       if (typeof this._object == "object" && typeof result == "object") {
         if (anythingDifferent(this._object, result)) {
-          throw new Error(`${JSON.stringify(this._object)} wasn't equal to ${JSON.stringify(result)}`)
+          const objectPrint = formatValue(this._object)
+          const resultPrint = formatValue(result)
+
+          throw new Error(`${objectPrint} wasn't equal to ${resultPrint}`)
         }
       } else {
         if (this._object != result) {
-          throw new Error(`${this._object} wasn't equal to ${result}`)
+          const objectPrint = formatValue(this._object)
+          const resultPrint = formatValue(result)
+
+          throw new Error(`${objectPrint} wasn't equal to ${resultPrint}`)
         }
       }
     }
@@ -260,11 +288,15 @@ class Expect extends BaseExpect {
 
     if (this._not) {
       if (match) {
-        throw new Error(`${this._object} shouldn't match ${regex}`)
+        const objectPrint = formatValue(this._object)
+
+        throw new Error(`${objectPrint} shouldn't match ${regex}`)
       }
     } else {
       if (!match) {
-        throw new Error(`${this._object} didn't match ${regex}`)
+        const objectPrint = formatValue(this._object)
+
+        throw new Error(`${objectPrint} didn't match ${regex}`)
       }
     }
   }
@@ -354,7 +386,7 @@ class Expect extends BaseExpect {
     }
 
     if (Object.keys(differences).length > 0) {
-      throw new Error(`Object had differet values: ${JSON.stringify(differences)}`)
+      throw new Error(`Object had differet values: ${minifiedStringify(differences)}`)
     }
   }
 }
