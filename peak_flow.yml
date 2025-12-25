@@ -51,7 +51,7 @@ builds:
       - sleep 5
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - npm run test
   build_2:
     name: MS-SQL
     script:
@@ -60,7 +60,7 @@ builds:
       - sleep 5
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - npm run test
   build_3:
     name: PG-SQL
     script:
@@ -70,7 +70,7 @@ builds:
       - sleep 5
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - npm run test
   build_4:
     name: SQLite
     script:
@@ -79,7 +79,7 @@ builds:
       - sleep 5
       - cd spec/dummy && npx velocious db:create
       - cd spec/dummy && npx velocious db:migrate
-      - cd spec/dummy && npx velocious test
+      - npm run test
   build_5:
     name: ESLint
     script:
