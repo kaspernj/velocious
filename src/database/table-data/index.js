@@ -93,6 +93,11 @@ export default class TableData {
    */
   getReferences() { return this._references }
 
+  /**
+   * @param {string} name
+   * @param {import("./table-column.js").TableColumnArgsType} [args]
+   * @returns {void}
+   */
   bigint(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "bigint"}, args)) }
 
   /**

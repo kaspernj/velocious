@@ -6,7 +6,7 @@ import {describe, expect, it} from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
 describe("database - migration - column types", () => {
-  it("creates all supported column types including bigint", {focus: true}, async () => {
+  it("creates all supported column types including bigint", async () => {
     await Dummy.run(async () => {
       await dummyConfiguration.ensureConnections(async (dbs) => {
         const migration = new Migration({
