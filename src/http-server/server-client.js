@@ -42,7 +42,7 @@ export default class ServerClient {
    * @returns {void}
    */
   onSocketData = (chunk) => {
-    this.logger.debug(() => [`Socket ${this.clientCount}: ${chunk}`])
+    this.logger.debugLowLevel(() => `Socket ${this.clientCount}: ${chunk}`)
 
     if (!this.worker) throw new Error("No worker")
 
@@ -55,7 +55,7 @@ export default class ServerClient {
 
   /** @returns {void} */
   onSocketEnd = () => {
-    this.logger.debug(`Socket ${this.clientCount} end`)
+    this.logger.debugLowLevel(() => `Socket ${this.clientCount} end`)
     this.events.emit("close", this)
   }
 
@@ -65,9 +65,9 @@ export default class ServerClient {
    */
   async send(data) {
     return new Promise((resolve) => {
-      this.logger.debug("Send", data)
+      this.logger.debugLowLevel(() => `Send ${data}`)
       if (this.socket.destroyed || this.socket.writableEnded || this.socket.writable === false) {
-        this.logger.debug("Skipping send because socket is closed")
+        this.logger.debugLowLevel(() => "Skipping send because socket is closed")
         resolve()
         return
       }

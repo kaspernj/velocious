@@ -83,7 +83,7 @@ export default class VelociousHttpServerWorker {
     if (code !== 0) {
       throw new Error(`Client worker stopped with exit code ${code}`)
     } else {
-      this.logger.debug(() => [`Client worker stopped with exit code ${code}`])
+      this.logger.info(() => `Client worker stopped with exit code ${code}`)
     }
 
     this.unregisterFromEventsHost?.()

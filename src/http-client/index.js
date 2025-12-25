@@ -59,7 +59,7 @@ export default class HttpClient {
         })
 
         if (!existingNewHeader) {
-          this.logger.debug(() => [`Pushing header from connection: ${header.toString()}`])
+      this.logger.debugLowLevel(() => `Pushing header from connection: ${header.toString()}`)
           newHeaders.push(header)
         }
       }
@@ -68,7 +68,7 @@ export default class HttpClient {
 
       this.currentRequest = new Request({headers: newHeaders, method: "GET", path, version: "1.0"})
       this.currentRequest.stream((chunk) => {
-        this.logger.debug(() => [`Writing: ${chunk}`])
+        this.logger.debugLowLevel(() => `Writing: ${chunk}`)
 
         if (!this.connection) {
           throw new Error("No connection to write to")

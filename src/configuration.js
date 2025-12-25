@@ -142,22 +142,45 @@ export default class VelociousConfiguration {
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
 
   /**
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath">>}
+   * @param {object} [args]
+   * @param {boolean} [args.defaultConsole]
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>}
    */
-  getLoggingConfiguration() {
+  getLoggingConfiguration({defaultConsole} = {}) {
     const environment = this.getEnvironment()
     const environmentHandler = this.getEnvironmentHandler()
     const directory = this._logging?.directory || environmentHandler.getDefaultLogDirectory({configuration: this})
     const filePath = this._logging?.filePath || environmentHandler.getLogFilePath({configuration: this, directory, environment})
-    const consoleLogging = this._logging?.console
+    const consoleOverride = this._logging?.console
     const fileLogging = this._logging?.file ?? Boolean(filePath)
+    const configuredLevels = this._logging?.levels
+    const includeLowLevelDebug = this._logging?.debugLowLevel === true
+
+    const consoleDefault = defaultConsole !== undefined ? defaultConsole : environment !== "test"
+    const consoleLogging = consoleOverride !== undefined ? consoleOverride : consoleDefault
+
+    /** @type {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} */
+    const defaultLevels = ["info", "warn", "error"]
+
+    if (includeLowLevelDebug) defaultLevels.unshift("debug-low-level")
+
+    const levels = configuredLevels || defaultLevels
 
     return {
-      console: consoleLogging ?? environment !== "test",
+      console: consoleLogging,
       directory,
       file: fileLogging ?? false,
-      filePath
+      filePath,
+      levels
     }
+  }
+
+  /**
+   * Logging configuration tailored for HTTP request logging. Defaults console logging to true and applies the user `logging.console` flag only for request logging.
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>}
+   */
+  getHttpLoggingConfiguration() {
+    return this.getLoggingConfiguration({defaultConsole: true})
   }
 
   /**

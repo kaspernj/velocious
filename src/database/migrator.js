@@ -21,7 +21,7 @@ export default class VelociousDatabaseMigrator {
     if (!configuration) throw new Error("configuration argument is required")
 
     this.configuration = configuration
-    this.logger = new Logger(this, {debug: false})
+    this.logger = new Logger(this)
   }
 
 
@@ -188,7 +188,7 @@ export default class VelociousDatabaseMigrator {
       }
 
       if (!await this.migrationsTableExist(db)) {
-        this.logger.log(`Migration table does not exist for ${dbIdentifier} - skipping loading migrations versions for it`)
+        this.logger.info(`Migration table does not exist for ${dbIdentifier} - skipping loading migrations versions for it`)
         continue
       }
 
@@ -270,7 +270,7 @@ export default class VelociousDatabaseMigrator {
 
           try {
             for (const table of await db.getTables()) {
-              this.logger.log(`Dropping table ${table.getName()}`)
+              this.logger.info(`Dropping table ${table.getName()}`)
 
               try {
                 await db.dropTable(table.getName(), {cascade: true})

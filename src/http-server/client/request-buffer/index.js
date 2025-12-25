@@ -119,7 +119,7 @@ export default class RequestBuffer {
   getHeader(name) {
     const result = this.headersByName[name.toLowerCase().trim()]
 
-    this.logger.debug(() => [`getHeader ${name}`, {result: result?.toString()}])
+    this.logger.debugLowLevel(() => [`getHeader ${name}`, {result: result?.toString()}])
 
     return result
   }
@@ -232,7 +232,7 @@ export default class RequestBuffer {
     const header = this.readHeaderFromLine(line)
 
     if (header) {
-      this.logger.debug(() => [`Parsed header: ${header.toString()}`])
+      this.logger.debugLowLevel(() => `Parsed header: ${header.toString()}`)
       this.addHeader(header)
       this.events.emit("header", header)
     } else if (line == "\r\n") {
@@ -287,7 +287,7 @@ export default class RequestBuffer {
     this.httpVersion = match[3]
     this.path = match[2]
     this.setState("headers")
-    this.logger.debug(() => ["Parsed status line", {httpMethod: this.httpMethod, httpVersion: this.httpVersion, path: this.path}])
+    this.logger.debugLowLevel(() => ["Parsed status line", {httpMethod: this.httpMethod, httpVersion: this.httpVersion, path: this.path}])
   }
 
   postRequestDone() {
@@ -306,7 +306,7 @@ export default class RequestBuffer {
    * @returns {void}
    */
   setState(newState) {
-    this.logger.debug(() => [`Changing state from ${this.state} to ${newState}`])
+    this.logger.debugLowLevel(() => `Changing state from ${this.state} to ${newState}`)
     this.state = newState
   }
 

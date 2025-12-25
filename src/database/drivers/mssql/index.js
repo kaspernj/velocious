@@ -148,7 +148,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
         break
       } catch (error) {
         if (error instanceof Error && error.message == "No connection is specified for that request." && tries <= 3) {
-          this.logger.log("Reconnecting to database")
+          this.logger.warn("Reconnecting to database")
           await this.connect()
           // Retry
         } else if (error instanceof Error) {

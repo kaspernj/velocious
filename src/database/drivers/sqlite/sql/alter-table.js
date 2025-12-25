@@ -89,7 +89,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
       if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
 
-      this.logger.debug(() => [`Setting foreign key on column ${tableDataColumn.getName()}`])
+      this.logger.debugLowLevel(() => `Setting foreign key on column ${tableDataColumn.getName()}`)
       tableDataColumn.setForeignKey(actualTableDataForeignKey)
     }
 
@@ -104,7 +104,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
       if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${foreignKey.getName()}`)
 
-      this.logger.debug(() => [`Setting foreign key on column ${tableDataColumn.getName()}`])
+      this.logger.debugLowLevel(() => `Setting foreign key on column ${tableDataColumn.getName()}`)
       tableDataColumn.setForeignKey(foreignKey)
     }
 
