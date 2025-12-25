@@ -1,9 +1,7 @@
 // @ts-check
 
 import debounce from "debounce"
-
-// @ts-expect-error
-import query from "./query"
+import queryWeb from "./query.web.js"
 
 export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   /**
@@ -27,7 +25,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
    * @returns {Promise<Record<string, any>[]>}
    */
   async query(sql) {
-    const result = await query(this.connection, sql)
+    const result = await queryWeb(this.connection, sql)
     const downcasedSQL = sql.toLowerCase().trim()
 
     // Auto-save database in local storage in case we can find manipulating instructions in the SQL

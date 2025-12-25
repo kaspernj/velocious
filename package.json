@@ -12,7 +12,7 @@
   "scripts": {
     "all-checks": "npm run typecheck && npm run lint && npm run test",
     "build": "rm -rf build && npm run compile",
-    "compile": "tsc && npm run copy:ejs && chmod +x build/bin/velocious.js",
+    "compile": "tsc -b && npm run copy:ejs && chmod +x build/bin/velocious.js",
     "copy:ejs": "cpy \"src/**/*.ejs\" build --parents",
     "lint": "eslint",
     "test": "cd spec/dummy && VELOCIOUS_TEST_DIR=$(pwd)/.. node ../../bin/velocious.js test",

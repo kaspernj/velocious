@@ -17,7 +17,10 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
     this.table = table
   }
 
-  getAutoIncrement() { return this.getPrimaryKey() }
+  getAutoIncrement() {
+    // SQLite only auto-increments when the primary key is the special INTEGER type.
+    return this.getPrimaryKey() && this.getType() == "integer"
+  }
 
   async getIndexes() {
     const indexes = await this.getTable().getIndexes()

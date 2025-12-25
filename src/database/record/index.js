@@ -1517,7 +1517,8 @@ class VelociousDatabaseRecord {
     const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
     const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
     const driverSupportsDefaultUUID = typeof this._connection().supportsDefaultPrimaryKeyUUID == "function" && this._connection().supportsDefaultPrimaryKeyUUID()
-    const shouldAssignUUIDPrimaryKey = primaryKeyType == "uuid" && !driverSupportsDefaultUUID
+    const isUUIDPrimaryKey = primaryKeyType?.includes("uuid")
+    const shouldAssignUUIDPrimaryKey = isUUIDPrimaryKey && !driverSupportsDefaultUUID
     const currentDate = new Date()
 
     if (createdAtColumn) data.created_at = currentDate
