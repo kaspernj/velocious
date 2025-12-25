@@ -144,6 +144,7 @@ describe("Cli - Commands - db:migrate", () => {
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -170,13 +171,15 @@ describe("Cli - Commands - db:migrate", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251226000000"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -204,7 +207,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251226000000"
       ])
     }
   })

@@ -80,8 +80,11 @@ describe("Cli - Commands - db:rollback", () => {
           "project_translations",
           "projects",
           "schema_migrations",
+          "string_subject_interactions",
+          "string_subjects",
           "tasks",
           "users",
+          "uuid_interactions",
           "uuid_items"
         ]
       )
@@ -110,8 +113,11 @@ describe("Cli - Commands - db:rollback", () => {
           "projects",
           "schema_migrations",
           "schema_migrations",
+          "string_subject_interactions",
+          "string_subjects",
           "tasks",
           "users",
+          "uuid_interactions",
           "uuid_items"
         ]
       )
