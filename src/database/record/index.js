@@ -1096,7 +1096,7 @@ class VelociousDatabaseRecord {
   static _newQuery() {
     const handler = new Handler()
     const query = new ModelClassQuery({
-      driver: this.connection(),
+      driver: () => this.connection(),
       handler,
       modelClass: this
     })

@@ -4,6 +4,12 @@ import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
+  /**
+   * Global fallback connections keyed by configuration instance and pool identifier.
+   * @type {WeakMap<import("../../configuration.js").default, Record<string, import("../drivers/base.js").default>>}
+   */
+  static globalConnections = new WeakMap()
+
   asyncLocalStorage = new AsyncLocalStorage()
 
   /** @type {import("../drivers/base.js").default[]} */
@@ -85,6 +91,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const id = this.asyncLocalStorage.getStore()
 
     if (id === undefined) {
+      const fallbackConnection = this.getGlobalConnection()
+
+      if (fallbackConnection) {
+        return fallbackConnection
+      }
+
       throw new Error("ID hasn't been set for this async context")
     }
 
@@ -99,5 +111,84 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     }
 
     return currentConnection
+  }
+
+  /**
+   * Registers a fallback connection for this pool identifier that will be used when no async context is available.
+   * @param {import("../drivers/base.js").default} connection
+   * @returns {void}
+   */
+  setGlobalConnection(connection) {
+    const klass = /** @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
+    let mapForConfiguration = klass.globalConnections.get(this.configuration)
+
+    if (!mapForConfiguration) {
+      mapForConfiguration = {}
+      klass.globalConnections.set(this.configuration, mapForConfiguration)
+    }
+
+    mapForConfiguration[this.identifier] = connection
+  }
+
+  /**
+   * Ensures a global fallback connection exists for this pool identifier and returns it.
+   * If one is already set, it is returned and also made available in the pool queue.
+   * Otherwise a new connection is spawned, registered, and queued.
+   * @returns {Promise<import("../drivers/base.js").default>}
+   */
+  async ensureGlobalConnection() {
+    const existing = this.getGlobalConnection()
+
+    if (existing) return existing
+
+    const connection = await this.spawnConnection()
+
+    this.setGlobalConnection(connection)
+
+    return connection
+  }
+
+  /**
+   * @returns {import("../drivers/base.js").default | undefined}
+   */
+  getGlobalConnection() {
+    const klass = /** @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
+    const mapForConfiguration = klass.globalConnections.get(this.configuration)
+
+    return mapForConfiguration?.[this.identifier]
+  }
+
+  /**
+   * Replaces all globally registered fallback connections.
+   * @param {Record<string, import("../drivers/base.js").default>} [connections]
+   * @param {import("../../configuration.js").default} [configuration]
+   * @returns {void}
+   */
+  static setGlobalConnections(connections, configuration) {
+    if (!connections && !configuration) {
+      this.globalConnections = new WeakMap()
+      return
+    }
+
+    if (!configuration) {
+      this.globalConnections = new WeakMap()
+      return
+    }
+
+    this.globalConnections.set(configuration, connections || {})
+  }
+
+  /**
+   * Clears globally registered fallback connections for all configurations or a single configuration.
+   * @param {import("../../configuration.js").default} [configuration]
+   * @returns {void}
+   */
+  static clearGlobalConnections(configuration) {
+    if (!configuration) {
+      this.globalConnections = new WeakMap()
+      return
+    }
+
+    this.globalConnections.delete(configuration)
   }
 }

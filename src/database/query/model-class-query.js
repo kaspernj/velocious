@@ -36,7 +36,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /** @returns {this} */
   clone() {
     const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (new VelociousDatabaseQueryModelClassQuery({
-      driver: this.driver,
+      driver: this._driverFn,
       froms: [...this._froms],
       handler: this.handler.clone(),
       groups: [...this._groups],

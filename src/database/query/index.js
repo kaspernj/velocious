@@ -19,7 +19,7 @@ import WherePlain from "./where-plain.js"
 
 /**
  * @typedef {object} QueryArgsType
- * @property {import("../drivers/base.js").default} driver
+ * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver
  * @property {Array<import("./from-base.js").default>} [froms]
  * @property {string[]} [groups]
  * @property {Array<import("./join-base.js").default>} [joins]
@@ -56,7 +56,8 @@ export default class VelociousDatabaseQuery {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
 
-    this.driver = driver
+    /** @type {() => import("../drivers/base.js").default} */
+    this._driverFn = typeof driver === "function" ? driver : () => driver
     this.handler = handler
     this.logger = new Logger(this)
     this._froms = froms
@@ -78,7 +79,7 @@ export default class VelociousDatabaseQuery {
   clone() {
     const QueryClass = /** @type {new (args: QueryArgsType) => this} */ (this.constructor)
     const newQuery = new QueryClass({
-      driver: this.driver,
+      driver: this._driverFn,
       froms: [...this._froms],
       handler: this.handler.clone(),
       groups: [...this._groups],
@@ -286,5 +287,13 @@ export default class VelociousDatabaseQuery {
     }
 
     return this
+  }
+
+  /**
+   * Resolves the current driver lazily.
+   * @returns {import("../drivers/base.js").default}
+   */
+  get driver() {
+    return this._driverFn()
   }
 }

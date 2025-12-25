@@ -21,7 +21,7 @@ export default async function query(connection, sql) {
     if (error instanceof Error) {
       error.message += `\n\n${sqlInErrorMessage}`
     } else {
-      throw new Error(`An error occurred: ${error}\n\n${sqlInErrorMessage}`)
+      throw new Error(`An error occurred: ${error} [${typeof error}]\n\n${sqlInErrorMessage}`)
     }
 
     throw error
