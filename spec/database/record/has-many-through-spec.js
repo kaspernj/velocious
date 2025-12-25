@@ -7,7 +7,7 @@ import Comment from "../../dummy/src/models/comment.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("database - record - hasMany through", {focus: true}, () => {
+describe("database - record - hasMany through", () => {
   it("loads comments through tasks", async () => {
     await Dummy.run(async () => {
       await dummyConfiguration.ensureConnections(async () => {
