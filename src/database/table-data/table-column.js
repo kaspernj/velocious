@@ -195,20 +195,38 @@ export default class TableColumn {
     let maxlength = this.getMaxLength()
     let type = this.getType()?.toUpperCase()
 
-    if (type == "DATETIME" && databaseType == "pgsql") {
-      type = "TIMESTAMP"
+    if (databaseType == "pgsql") {
+      if (type == "DATETIME") {
+        type = "TIMESTAMP"
+      } else if (type == "TINYINT") {
+        type = "SMALLINT"
+      } else if (type == "BLOB") {
+        type = "BYTEA"
+        maxlength = undefined
+      }
     }
 
     if (type == "STRING") {
       type = "VARCHAR"
       maxlength ||= 255
     }
+    if (databaseType == "pgsql" && type == "TINYINT") {
+      type = "SMALLINT"
+    }
 
-    if (databaseType == "mssql" && type == "BOOLEAN") {
-      type = "BIT"
-    } else if (databaseType == "mssql" && type == "UUID") {
-      type = "VARCHAR"
-      maxlength ||= 36
+    if (databaseType == "mssql") {
+      if (type == "BOOLEAN") {
+        type = "BIT"
+      } else if (type == "UUID") {
+        type = "VARCHAR"
+        maxlength ||= 36
+      } else if (type == "JSON") {
+        type = "NVARCHAR(MAX)"
+        maxlength = undefined
+      } else if (type == "BLOB") {
+        type = "VARBINARY(MAX)"
+        maxlength = undefined
+      }
     }
 
     if (databaseType == "sqlite" && this.getAutoIncrement() && this.getPrimaryKey()) {

@@ -122,6 +122,22 @@ export default class CreateEvents extends Migration {
       t.timestamps()
     })
 
+    // Column helper examples
+    await this.createTable("examples", (t) => {
+      t.bigint("count")
+      t.blob("payload")
+      t.boolean("published")
+      t.datetime("published_at")
+      t.integer("position")
+      t.json("metadata")
+      t.string("name")
+      t.text("body")
+      t.tinyint("priority")
+      t.uuid("uuid_column")
+      t.references("user")
+      t.timestamps()
+    })
+
     await this.createTable("task_translations", (t) => {
       t.references("task", {foreignKey: true, null: false})
       t.string("locale", {null: false})
@@ -134,6 +150,7 @@ export default class CreateEvents extends Migration {
 
   async down() {
     await this.dropTable("task_translations")
+    await this.dropTable("examples")
     await this.dropTable("tasks")
   }
 }
