@@ -195,8 +195,13 @@ export default class TableColumn {
     let maxlength = this.getMaxLength()
     let type = this.getType()?.toUpperCase()
 
-    if (type == "DATETIME" && databaseType == "pgsql") {
-      type = "TIMESTAMP"
+    if (databaseType == "pgsql") {
+      if (type == "DATETIME") {
+        type = "TIMESTAMP"
+      } else if (type == "BLOB") {
+        type = "BYTEA"
+        maxlength = undefined
+      }
     }
 
     if (type == "STRING") {

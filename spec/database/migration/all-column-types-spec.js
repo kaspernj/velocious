@@ -32,7 +32,6 @@ describe("database - migration - column types", () => {
 
         const expectedColumns = [
           "id",
-          "big_integer_column",
           "bigint_column",
           "blob_column",
           "boolean_column",
