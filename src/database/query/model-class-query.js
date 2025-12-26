@@ -72,6 +72,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     // Clone query and execute count
     const countQuery = this.clone()
 
+    countQuery._distinct = false
     countQuery._selects = []
     countQuery.select(sql)
 
