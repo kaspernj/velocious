@@ -1392,6 +1392,24 @@ class VelociousDatabaseRecord {
    * @returns {Record<string, any>}
    */
   attributes() {
+    const data = this.rawAttributes()
+    const columnNameToAttributeName = this.getModelClass().getColumnNameToAttributeNameMap()
+    const attributes = {}
+
+    for (const columnName in data) {
+      const attributeName = columnNameToAttributeName[columnName] || columnName
+
+      attributes[attributeName] = data[columnName]
+    }
+
+    return attributes
+  }
+
+  /**
+   * Returns column-name keyed data (original attributes from database plus changes)
+   * @returns {Record<string, any>}
+   */
+  rawAttributes() {
     return Object.assign({}, this._attributes, this._changes)
   }
 
