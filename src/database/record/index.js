@@ -1125,6 +1125,16 @@ class VelociousDatabaseRecord {
     return await this._newQuery().count()
   }
 
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {string} group
+   * @returns {ModelClassQuery<MC>}
+   */
+  static group(group) {
+    return this._newQuery().group(group)
+  }
+
   static async destroyAll() {
     return await this._newQuery().destroyAll()
   }
