@@ -26,7 +26,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testDirectories, testing, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -41,6 +41,7 @@ export default class VelociousConfiguration {
     this.localeFallbacks = localeFallbacks
     this.locales = locales
     this._initializers = initializers
+    this._testDirectories = testDirectories
     this._testing = testing
     this._websocketEvents = undefined
     this._logging = logging
@@ -240,6 +241,9 @@ export default class VelociousConfiguration {
 
   /** @returns {string} The path to a config file that should be used for testing. */
   getTesting() { return this._testing }
+
+  /** @returns {string[] | undefined} - Directories to scan for tests. */
+  getTestDirectories() { return this._testDirectories }
 
   /**
    * @param {string} [identifier] - Database identifier to initialize.
