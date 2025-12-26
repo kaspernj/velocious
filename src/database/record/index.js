@@ -1615,7 +1615,7 @@ class VelociousDatabaseRecord {
 
     const createdAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "created_at")
     const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
-    const data = Object.assign({}, this._belongsToChanges(), this.attributes())
+    const data = Object.assign({}, this._belongsToChanges(), this.rawAttributes())
     const primaryKey = this.getModelClass().primaryKey()
     const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
     const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
@@ -1739,7 +1739,7 @@ class VelociousDatabaseRecord {
 
     if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)
 
-    this._attributes = reloadedModel.attributes()
+    this._attributes = reloadedModel.rawAttributes()
     this._changes = {}
   }
 
