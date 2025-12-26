@@ -502,6 +502,15 @@ class VelociousDatabaseRecord {
     return false
   }
 
+  /**
+   * @returns {void} - No return value.
+   */
+  static _assertHasBeenInitialized() {
+    if (this._initialized) return
+
+    throw new Error(`${this.name} used before initialization. Call ${this.name}.initializeRecord(...) or configuration.initialize().`)
+  }
+
   static async _defineTranslationMethods() {
     if (this._translations) {
       const locales = this._getConfiguration().getLocales()
@@ -615,6 +624,7 @@ class VelociousDatabaseRecord {
   setAttribute(name, newValue) {
     const setterName = `set${inflection.camelize(name)}`
 
+    this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
     if (!(setterName in this)) throw new Error(`No such setter method: ${this.constructor.name}#${setterName}`)
 
@@ -626,6 +636,7 @@ class VelociousDatabaseRecord {
    * @param {unknown} newValue - New value.
    */
   _setColumnAttribute(name, newValue) {
+    this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass()._attributeNameToColumnName) throw new Error("No attribute-to-column mapping. Has record been initialized?")
 
     const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[name]
@@ -666,6 +677,7 @@ class VelociousDatabaseRecord {
    * @returns {import("../drivers/base-column.js").default[]} - The columns.
    */
   static getColumns() {
+    this._assertHasBeenInitialized()
     if (!this._columns) throw new Error(`${this.name} hasn't been initialized yet`)
 
     return this._columns
@@ -1167,6 +1179,7 @@ class VelociousDatabaseRecord {
    * @returns {ModelClassQuery<MC>} - The new query.
    */
   static _newQuery() {
+    this._assertHasBeenInitialized()
     const handler = new Handler()
     const query = new ModelClassQuery({
       driver: () => this.connection(),
@@ -1377,6 +1390,7 @@ class VelociousDatabaseRecord {
    * @param {Record<string, unknown>} changes - Changes.
    */
   constructor(changes = {}) {
+    this.getModelClass()._assertHasBeenInitialized()
     this._attributes = {}
     this._changes = {}
     this._isNewRecord = true
@@ -1573,6 +1587,7 @@ class VelociousDatabaseRecord {
    * @returns {unknown} - The attribute.
    */
   readAttribute(attributeName) {
+    this.getModelClass()._assertHasBeenInitialized()
     const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[attributeName]
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
@@ -1586,6 +1601,7 @@ class VelociousDatabaseRecord {
    * @returns {unknown} - The column.
    */
   readColumn(attributeName) {
+    this.getModelClass()._assertHasBeenInitialized()
     const column = this.getModelClass().getColumnsHash()[attributeName]
     let result
 
