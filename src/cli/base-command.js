@@ -2,10 +2,10 @@ import restArgsError from "../utils/rest-args-error.js"
 
 /**
  * @typedef {object} VelociousCliCommandArgs
- * @property {import("../configuration.js").default} [configuration]
- * @property {Record<string, any>} [parsedProcessArgs]
- * @property {string[]} [processArgs]
- * @property {boolean} [testing]
+ * @property {import("../configuration.js").default} [configuration] - Description.
+ * @property {Record<string, any>} [parsedProcessArgs] - Description.
+ * @property {string[]} [processArgs] - Description.
+ * @property {boolean} [testing] - Description.
  */
 
 export default class VelociousCliBaseCommand {

@@ -2,30 +2,30 @@
 
 /**
  * @typedef {object} CreateIndexSqlArgs
- * @property {Array<string | import("./../table-data/table-column.js").default>} columns
- * @property {boolean} [ifNotExists]
- * @property {string} [name]
- * @property {boolean} [unique]
- * @property {string} tableName
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Description.
+ * @property {boolean} [ifNotExists] - Description.
+ * @property {string} [name] - Description.
+ * @property {boolean} [unique] - Description.
+ * @property {string} tableName - Description.
  */
 /**
  * @typedef {object} DropTableSqlArgsType
- * @property {boolean} [cascade]
- * @property {boolean} [ifExists]
+ * @property {boolean} [cascade] - Description.
+ * @property {boolean} [ifExists] - Description.
  */
 /**
  * @typedef {object} DeleteSqlArgsType
- * @property {string} tableName
- * @property {{[key: string]: any}} conditions
+ * @property {string} tableName - Description.
+ * @property {{[key: string]: any}} conditions - Description.
  */
 /**
  * @typedef {object} InsertSqlArgsType
- * @property {string[]} [columns]
- * @property {{[key: string]: any}} [data]
- * @property {boolean} [multiple]
- * @property {string[]} [returnLastInsertedColumnNames]
- * @property {Array<Array<any>>} [rows]
- * @property {string} tableName
+ * @property {string[]} [columns] - Description.
+ * @property {{[key: string]: any}} [data] - Description.
+ * @property {boolean} [multiple] - Description.
+ * @property {string[]} [returnLastInsertedColumnNames] - Description.
+ * @property {Array<Array<any>>} [rows] - Description.
+ * @property {string} tableName - Description.
  */
 /**
  * @typedef {Record<string, any>} QueryRowType
@@ -33,9 +33,9 @@
  */
 /**
  * @typedef {object}UpdateSqlArgsType
- * @property {object} conditions
- * @property {object} data
- * @property {string} tableName
+ * @property {object} conditions - Description.
+ * @property {object} data - Description.
+ * @property {string} tableName - Description.
  */
 
 import {Logger} from "../../logger.js"

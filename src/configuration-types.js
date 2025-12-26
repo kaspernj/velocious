@@ -20,38 +20,38 @@
 
 /**
  * @typedef {object} SqlConfig
- * @property {string} [database]
- * @property {object} [options]
- * @property {boolean} [options.encrypt]
- * @property {boolean} [options.trustServerCertificate]
- * @property {string} [password]
- * @property {object} [pool]
- * @property {number} [pool.max]
- * @property {number} [pool.min]
- * @property {number} [pool.idleTimeoutMillis]
- * @property {string} [server]
- * @property {string} [user]
+ * @property {string} [database] - Description.
+ * @property {object} [options] - Description.
+ * @property {boolean} [options.encrypt] - Description.
+ * @property {boolean} [options.trustServerCertificate] - Description.
+ * @property {string} [password] - Description.
+ * @property {object} [pool] - Description.
+ * @property {number} [pool.max] - Description.
+ * @property {number} [pool.min] - Description.
+ * @property {number} [pool.idleTimeoutMillis] - Description.
+ * @property {string} [server] - Description.
+ * @property {string} [user] - Description.
  */
 
 /**
  * @typedef {object} DatabaseConfigurationType
- * @property {string} [database]
- * @property {typeof import("./database/drivers/base.js").default} [driver]
- * @property {typeof import("./database/pool/base.js").default} [poolType]
- * @property {function() : void} [getConnection]
- * @property {string} [host]
- * @property {boolean} [migrations]
- * @property {string} [password]
- * @property {number} [port]
- * @property {string} [name]
- * @property {boolean} [readOnly]
- * @property {object} [record]
- * @property {boolean} [record.transactions]
- * @property {boolean} [reset]
- * @property {SqlConfig} [sqlConfig]
- * @property {"mssql" | "mysql" | "pgsql" | "sqlite"} [type]
- * @property {string} [useDatabase]
- * @property {string} [username]
+ * @property {string} [database] - Description.
+ * @property {typeof import("./database/drivers/base.js").default} [driver] - Description.
+ * @property {typeof import("./database/pool/base.js").default} [poolType] - Description.
+ * @property {function() : void} [getConnection] - Description.
+ * @property {string} [host] - Description.
+ * @property {boolean} [migrations] - Description.
+ * @property {string} [password] - Description.
+ * @property {number} [port] - Description.
+ * @property {string} [name] - Description.
+ * @property {boolean} [readOnly] - Description.
+ * @property {object} [record] - Description.
+ * @property {boolean} [record.transactions] - Description.
+ * @property {boolean} [reset] - Description.
+ * @property {SqlConfig} [sqlConfig] - Description.
+ * @property {"mssql" | "mysql" | "pgsql" | "sqlite"} [type] - Description.
+ * @property {string} [useDatabase] - Description.
+ * @property {string} [username] - Description.
  */
 
 /**
@@ -70,19 +70,19 @@
 
 /**
  * @typedef {object} ConfigurationArgsType
- * @property {CorsType} [cors]
- * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database
- * @property {boolean} [debug]
- * @property {string} [directory]
- * @property {string} [environment]
- * @property {import("./environment-handlers/base.js").default} environmentHandler
- * @property {LoggingConfiguration} [logging]
- * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels
- * @property {InitializersType} [initializers]
- * @property {string | function() : string} locale
- * @property {string[]} locales
- * @property {LocaleFallbacksType} localeFallbacks
- * @property {string} [testing]
+ * @property {CorsType} [cors] - Description.
+ * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Description.
+ * @property {boolean} [debug] - Description.
+ * @property {string} [directory] - Description.
+ * @property {string} [environment] - Description.
+ * @property {import("./environment-handlers/base.js").default} environmentHandler - Description.
+ * @property {LoggingConfiguration} [logging] - Description.
+ * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Description.
+ * @property {InitializersType} [initializers] - Description.
+ * @property {string | function() : string} locale - Description.
+ * @property {string[]} locales - Description.
+ * @property {LocaleFallbacksType} localeFallbacks - Description.
+ * @property {string} [testing] - Description.
  */
 
 export const nothing = {}

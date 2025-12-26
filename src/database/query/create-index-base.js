@@ -4,12 +4,12 @@ import QueryBase from "./base.js"
 
 /**
  * @typedef {object} CreateIndexBaseArgsType
- * @property {Array<string | import("./../table-data/table-column.js").default>} columns
- * @property {import("../drivers/base.js").default} driver
- * @property {boolean} [ifNotExists]
- * @property {string} [name]
- * @property {boolean} [unique]
- * @property {string} tableName
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Description.
+ * @property {import("../drivers/base.js").default} driver - Description.
+ * @property {boolean} [ifNotExists] - Description.
+ * @property {string} [name] - Description.
+ * @property {boolean} [unique] - Description.
+ * @property {string} tableName - Description.
  */
 
 export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {

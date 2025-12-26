@@ -2,21 +2,21 @@
 
 /**
  * @typedef {object} AddColumnArgsType
- * @property {any} [default]
- * @property {object} [foreignKey]
- * @property {boolean | {unique: boolean}} [index]
- * @property {boolean} [null]
- * @property {boolean} [primaryKey]
- * @property {boolean} [unique]
+ * @property {any} [default] - Description.
+ * @property {object} [foreignKey] - Description.
+ * @property {boolean | {unique: boolean}} [index] - Description.
+ * @property {boolean} [null] - Description.
+ * @property {boolean} [primaryKey] - Description.
+ * @property {boolean} [unique] - Description.
  */
 /**
  * @typedef {object} CreateTableIdArgsType
- * @property {any} [default]
- * @property {string} [type]
+ * @property {any} [default] - Description.
+ * @property {string} [type] - Description.
  */
 /**
  * @typedef {object} CreateTableArgsType
- * @property {CreateTableIdArgsType | false} [id]
+ * @property {CreateTableIdArgsType | false} [id] - Description.
  */
 /**
  * @typedef {(table: TableData) => void} CreateTableCallbackType
@@ -130,9 +130,9 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @typedef {object} AddIndexArgsType
-   * @property {boolean} [ifNotExists]
-   * @property {string} [name]
-   * @property {boolean} [unique]
+   * @property {boolean} [ifNotExists] - Description.
+   * @property {string} [name] - Description.
+   * @property {boolean} [unique] - Description.
    */
   /**
    * @param {string} tableName

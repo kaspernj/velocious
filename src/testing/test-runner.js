@@ -9,20 +9,20 @@ import {tests} from "./test.js"
 
 /**
  * @typedef {object} TestArgs
- * @property {Application} [application]
- * @property {RequestClient} [client]
- * @property {object} [databaseCleaning]
- * @property {boolean} [databaseCleaning.transaction]
- * @property {boolean} [databaseCleaning.truncate]
- * @property {boolean} [focus]
- * @property {() => (void|Promise<void>)} [function]
- * @property {string} [type]
+ * @property {Application} [application] - Description.
+ * @property {RequestClient} [client] - Description.
+ * @property {object} [databaseCleaning] - Description.
+ * @property {boolean} [databaseCleaning.transaction] - Description.
+ * @property {boolean} [databaseCleaning.truncate] - Description.
+ * @property {boolean} [focus] - Description.
+ * @property {() => (void|Promise<void>)} [function] - Description.
+ * @property {string} [type] - Description.
  */
 
 /**
  * @typedef {object} TestData
- * @property {TestArgs} args
- * @property {function(TestArgs) : (void|Promise<void>)} function
+ * @property {TestArgs} args - Description.
+ * @property {function(TestArgs) : (void|Promise<void>)} function - Description.
  */
 
 /**
@@ -31,15 +31,15 @@ import {tests} from "./test.js"
 
 /**
  * @typedef {object} AfterBeforeEachCallbackObjectType
- * @property {AfterBeforeEachCallbackType} callback
+ * @property {AfterBeforeEachCallbackType} callback - Description.
  */
 
 /**
  * @typedef {object} TestsArgument
- * @property {Record<string, TestData>} args
- * @property {boolean} [anyTestsFocussed]
- * @property {AfterBeforeEachCallbackObjectType[]} afterEaches
- * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches
+ * @property {Record<string, TestData>} args - Description.
+ * @property {boolean} [anyTestsFocussed] - Description.
+ * @property {AfterBeforeEachCallbackObjectType[]} afterEaches - Description.
+ * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Description.
  * @property {Record<string, TestData>} tests - A unique identifier for the node.
  * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
  */

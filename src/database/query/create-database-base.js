@@ -2,9 +2,9 @@
 
 /**
  * @typedef {object} CreateDatabaseArgsType
- * @property {import("../drivers/base.js").default} driver
- * @property {string} databaseName
- * @property {boolean} [ifNotExists]
+ * @property {import("../drivers/base.js").default} driver - Description.
+ * @property {string} databaseName - Description.
+ * @property {boolean} [ifNotExists] - Description.
  */
 
 import QueryBase from "./base.js"

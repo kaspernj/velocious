@@ -4,8 +4,8 @@
  * @template {typeof import("../index.js").default} MC
  * @template {typeof import("../index.js").default} TMC
  * @typedef {object} InstanceRelationshipsBaseArgs
- * @property {InstanceType<MC>} model
-   @property {import("../relationships/base.js").default} relationship
+ * @property {InstanceType<MC>} model - Description.
+ * @property {import("../relationships/base.js").default} relationship - Description.
  */
 
 /**

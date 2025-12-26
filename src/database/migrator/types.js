@@ -2,10 +2,10 @@
 
 /**
  * @typedef {object} MigrationObjectType
- * @property {number} date
- * @property {string} file
- * @property {string} [fullPath]
- * @property {string} migrationClassName
+ * @property {number} date - Description.
+ * @property {string} file - Description.
+ * @property {string} [fullPath] - Description.
+ * @property {string} migrationClassName - Description.
  */
 
 /**

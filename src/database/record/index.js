@@ -155,9 +155,9 @@ class VelociousDatabaseRecord {
 
   /**
    * @typedef {object} RelationshipDataArgumentType
-   * @property {string} [className]
-   * @property {typeof VelociousDatabaseRecord} [klass]
-   * @property {string} [type]
+   * @property {string} [className] - Description.
+   * @property {typeof VelociousDatabaseRecord} [klass] - Description.
+   * @property {string} [type] - Description.
    */
   /**
    * @param {string} relationshipName

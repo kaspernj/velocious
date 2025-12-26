@@ -5,17 +5,17 @@ import * as inflection from "inflection"
 
 /**
  * @typedef {object} RelationshipBaseArgsType
- * @property {string} [className]
- * @property {string} [dependent]
- * @property {string | undefined} [foreignKey]
- * @property {string} [inverseOf]
- * @property {typeof import("../index.js").default} [klass]
- * @property {typeof import("../index.js").default} modelClass
- * @property {string} [primaryKey]
- * @property {boolean} [polymorphic]
- * @property {string} relationshipName
- * @property {string} [through]
- * @property {string} type
+ * @property {string} [className] - Description.
+ * @property {string} [dependent] - Description.
+ * @property {string | undefined} [foreignKey] - Description.
+ * @property {string} [inverseOf] - Description.
+ * @property {typeof import("../index.js").default} [klass] - Description.
+ * @property {typeof import("../index.js").default} modelClass - Description.
+ * @property {string} [primaryKey] - Description.
+ * @property {boolean} [polymorphic] - Description.
+ * @property {string} relationshipName - Description.
+ * @property {string} [through] - Description.
+ * @property {string} type - Description.
  */
 
 export default class VelociousDatabaseRecordBaseRelationship {

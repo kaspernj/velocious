@@ -2,11 +2,11 @@
 
 /**
  * @typedef {object} OptionsObjectArgsType
- * @property {string} columnQuote
- * @property {string} indexQuote
- * @property {import("../drivers/base.js").default} driver
- * @property {string} tableQuote
- * @property {string} stringQuote
+ * @property {string} columnQuote - Description.
+ * @property {string} indexQuote - Description.
+ * @property {import("../drivers/base.js").default} driver - Description.
+ * @property {string} tableQuote - Description.
+ * @property {string} stringQuote - Description.
  */
 
 export default class VelociousDatabaseQueryParserOptions {

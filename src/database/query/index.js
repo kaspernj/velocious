@@ -19,20 +19,20 @@ import WherePlain from "./where-plain.js"
 
 /**
  * @typedef {object} QueryArgsType
- * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver
- * @property {Array<import("./from-base.js").default>} [froms]
- * @property {string[]} [groups]
- * @property {Array<import("./join-base.js").default>} [joins]
- * @property {import("../handler.js").default} handler
- * @property {number | null} [limit]
- * @property {number | null} [offset]
- * @property {Array<import("./order-base.js").default>} [orders]
- * @property {number | null} [page]
- * @property {number} [perPage]
- * @property {NestedPreloadRecord} [preload]
- * @property {Array<import("./select-base.js").default>} [selects]
- * @property {boolean} [distinct]
- * @property {Array<import("./where-base.js").default>} [wheres]
+ * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver - Description.
+ * @property {Array<import("./from-base.js").default>} [froms] - Description.
+ * @property {string[]} [groups] - Description.
+ * @property {Array<import("./join-base.js").default>} [joins] - Description.
+ * @property {import("../handler.js").default} handler - Description.
+ * @property {number | null} [limit] - Description.
+ * @property {number | null} [offset] - Description.
+ * @property {Array<import("./order-base.js").default>} [orders] - Description.
+ * @property {number | null} [page] - Description.
+ * @property {number} [perPage] - Description.
+ * @property {NestedPreloadRecord} [preload] - Description.
+ * @property {Array<import("./select-base.js").default>} [selects] - Description.
+ * @property {boolean} [distinct] - Description.
+ * @property {Array<import("./where-base.js").default>} [wheres] - Description.
  */
 
 export default class VelociousDatabaseQuery {

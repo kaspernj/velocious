@@ -10,17 +10,17 @@ import TableForeignKey from "./table-foreign-key.js"
 
 /**
  * @typedef {object} TableColumnArgsType
- * @property {boolean} [autoIncrement]
- * @property {any} [default]
- * @property {boolean} [dropColumn]
- * @property {boolean|object} [foreignKey]
- * @property {boolean|IndexArgType} [index]
- * @property {boolean} [isNewColumn]
- * @property {number} [maxLength]
- * @property {boolean} [null]
- * @property {boolean} [polymorphic]
- * @property {boolean} [primaryKey]
- * @property {string} [type]
+ * @property {boolean} [autoIncrement] - Description.
+ * @property {any} [default] - Description.
+ * @property {boolean} [dropColumn] - Description.
+ * @property {boolean|object} [foreignKey] - Description.
+ * @property {boolean|IndexArgType} [index] - Description.
+ * @property {boolean} [isNewColumn] - Description.
+ * @property {number} [maxLength] - Description.
+ * @property {boolean} [null] - Description.
+ * @property {boolean} [polymorphic] - Description.
+ * @property {boolean} [primaryKey] - Description.
+ * @property {string} [type] - Description.
  */
 
 export default class TableColumn {
