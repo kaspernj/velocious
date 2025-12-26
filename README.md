@@ -62,6 +62,10 @@ await project.loadTasks()
 const tasks = project.tasks().loaded()
 ```
 
+### Finding records
+
+`find()` and `findByOrFail()` throw an error when no record is found. `findBy()` returns `null`.
+
 ### Create records
 
 ```js
