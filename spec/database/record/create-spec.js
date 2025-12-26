@@ -101,6 +101,16 @@ describe("Record - create", () => {
     })
   })
 
+  it("accepts ISO datetime strings for datetime attributes", async () => {
+    await Dummy.run(async () => {
+      const createdAt = "2025-12-26T16:18:50.641Z"
+      const task = new Task({name: "ISO task", createdAt})
+
+      expect(task.createdAt()).toBeInstanceOf(Date)
+      expect(task.createdAt().toISOString()).toEqual(createdAt)
+    })
+  })
+
   it("uses transactions and rolls back in case of an error", async () => {
     await Dummy.run(async () => {
       const beforeProjectsCount = await Project.count()

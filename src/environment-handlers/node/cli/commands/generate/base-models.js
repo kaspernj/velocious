@@ -90,9 +90,11 @@ export default class DbGenerateModel extends BaseCommand {
 
         fileContent += `  ${camelizedColumnName}() { return this.readAttribute("${camelizedColumnName}") }\n\n`
 
-        if (jsdocType) {
+        const setterJsdocType = this.jsDocSetterTypeFromColumn(column)
+
+        if (setterJsdocType) {
           fileContent += "  /**\n"
-          fileContent += `   * @param {${jsdocType}${column.getNull() ? " | null" : ""}} newValue\n`
+          fileContent += `   * @param {${setterJsdocType}${column.getNull() ? " | null" : ""}} newValue\n`
           fileContent += "   * @returns {void}\n"
           fileContent += "   */\n"
         }
@@ -289,5 +291,19 @@ export default class DbGenerateModel extends BaseCommand {
     } else {
       console.error(`Unknown column type: ${type}`)
     }
+  }
+
+  /**
+   * @param {import("../../../../../database/drivers/base-column.js").default} column
+   * @returns {string | undefined}
+   */
+  jsDocSetterTypeFromColumn(column) {
+    const type = column.getType()
+
+    if (["date", "datetime"].includes(type)) {
+      return "Date | string"
+    }
+
+    return this.jsDocTypeFromColumn(column)
   }
 }

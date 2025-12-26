@@ -632,9 +632,34 @@ class VelociousDatabaseRecord {
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${name}`)
 
-    if (this._attributes[columnName] != newValue) {
-      this._changes[columnName] = newValue
+    let normalizedValue = newValue
+    const columnType = this.getModelClass().getColumnTypeByName(columnName)
+
+    if (columnType && (columnType == "date" || columnType == "datetime")) {
+      normalizedValue = this._normalizeDateValue(newValue)
     }
+
+    if (this._attributes[columnName] != normalizedValue) {
+      this._changes[columnName] = normalizedValue
+    }
+  }
+
+  /**
+   * @param {any} value
+   * @returns {any}
+   */
+  _normalizeDateValue(value) {
+    if (typeof value != "string") return value
+
+    const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+
+    if (!isoDateTimeRegex.test(value)) return value
+
+    const timestamp = Date.parse(value)
+
+    if (Number.isNaN(timestamp)) return value
+
+    return new Date(timestamp)
   }
 
   /**
@@ -644,6 +669,22 @@ class VelociousDatabaseRecord {
     if (!this._columns) throw new Error(`${this.name} hasn't been initialized yet`)
 
     return this._columns
+  }
+
+  /**
+   * @param {string} name
+   * @returns {string | undefined}
+   */
+  static getColumnTypeByName(name) {
+    if (!this._columnTypeByName) {
+      this._columnTypeByName = {}
+
+      for (const column of this.getColumns()) {
+        this._columnTypeByName[column.getName()] = column.getType()
+      }
+    }
+
+    return this._columnTypeByName[name]
   }
 
   /**
