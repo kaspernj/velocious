@@ -635,7 +635,7 @@ class VelociousDatabaseRecord {
     let normalizedValue = newValue
     const columnType = this.getModelClass().getColumnTypeByName(columnName)
 
-    if (columnType && (columnType == "date" || columnType == "datetime")) {
+    if (columnType && this.getModelClass()._isDateLikeType(columnType)) {
       normalizedValue = this._normalizeDateValue(newValue)
     }
 
@@ -685,6 +685,20 @@ class VelociousDatabaseRecord {
     }
 
     return this._columnTypeByName[name]
+  }
+
+  /**
+   * @param {string} type
+   * @returns {boolean}
+   */
+  static _isDateLikeType(type) {
+    const normalizedType = type.toLowerCase()
+
+    return normalizedType == "date" ||
+      normalizedType == "datetime" ||
+      normalizedType == "timestamp" ||
+      normalizedType == "timestamptz" ||
+      normalizedType.startsWith("timestamp ")
   }
 
   /**
