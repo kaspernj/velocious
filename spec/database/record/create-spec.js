@@ -143,7 +143,11 @@ describe("Record - create", () => {
       const cols = task.rawAttributes()
 
       expect(cols.name).toEqual("Column task")
-      expect(typeof cols.created_at).toEqual("string")
+      if (Task.getDatabaseType() == "sqlite") {
+        expect(typeof cols.created_at).toEqual("string")
+      } else {
+        expect(cols.created_at).toBeInstanceOf(Date)
+      }
       expect("createdAt" in cols).toBeFalse()
     })
   })
