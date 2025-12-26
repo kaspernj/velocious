@@ -123,6 +123,7 @@ export default class VelociousDatabaseDriversBaseTable {
    * @returns {Promise<Array<Record<string, any>>>} - Result.
    */
   async truncate(args) {
+    this.getDriver()._assertNotReadOnly()
     const databaseType = this.getDriver().getType()
     let sql
 

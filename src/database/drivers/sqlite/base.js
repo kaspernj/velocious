@@ -136,6 +136,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {Promise<void>} - Result.
    */
   async insertMultiple(tableName, columns, rows) {
+    this._assertNotReadOnly()
     await this.registerVersion()
 
     if (this.supportsMultipleInsertValues()) {
@@ -173,6 +174,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {Promise<void>} - Result.
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
+    this._assertNotReadOnly()
     const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
 
     await this.query(sql)
@@ -185,6 +187,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {Promise<void>} - Result.
    */
   async insertMultipleWithTransaction(tableName, columns, rows) {
+    this._assertNotReadOnly()
     /** @type {string[]} */
     const sqls = []
 

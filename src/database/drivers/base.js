@@ -75,6 +75,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async addForeignKey(tableName, columnName, referencedTableName, referencedColumnName, args) {
+    this._assertNotReadOnly()
     const tableForeignKeyArgs = Object.assign(
       {
         columnName,
@@ -136,6 +137,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async createTable(tableData) {
+    this._assertNotReadOnly()
     const sqls = await this.createTableSql(tableData)
 
     for (const sql of sqls) {
@@ -157,6 +159,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async delete(args) {
+    this._assertNotReadOnly()
     const sql = this.deleteSql(args)
 
     await this.query(sql)
@@ -177,6 +180,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async dropTable(tableName, args) {
+    this._assertNotReadOnly()
     const sqls = await this.dropTableSQLs(tableName, args)
 
     for (const sql of sqls) {
@@ -289,6 +293,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async insert(args) {
+    this._assertNotReadOnly()
     const sql = this.insertSql(args)
 
     await this.query(sql)
@@ -450,6 +455,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<any>} - Result.
    */
   async transaction(callback) {
+    this._assertNotReadOnly()
     const savePointName = this.generateSavePointName()
     let transactionStarted = false
     let savePointStarted = false
@@ -614,6 +620,15 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @returns {void} - Result.
+   */
+  _assertNotReadOnly() {
+    if (this.isReadOnly()) {
+      throw new Error("Database is read-only")
+    }
+  }
+
+  /**
    * @param {string} sql
    * @returns {boolean} - Result.
    */
@@ -712,6 +727,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
+    this._assertNotReadOnly()
     const tableColumn = new TableColumn(oldColumnName)
 
     tableColumn.setNewName(newColumnName)
@@ -779,6 +795,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async truncateAllTables() {
+    this._assertNotReadOnly()
     await this.withDisabledForeignKeys(async () => {
       let tries = 0
 
@@ -815,6 +832,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Result.
    */
   async update(args) {
+    this._assertNotReadOnly()
     const sql = this.updateSql(args)
 
     await this.query(sql)
