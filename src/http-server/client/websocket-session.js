@@ -29,7 +29,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   addSubscription(channel) {
     this.subscriptions.add(channel)
@@ -41,7 +41,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether it has subscription.
    */
   hasSubscription(channel) {
     return this.subscriptions.has(channel)
@@ -49,7 +49,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {Buffer} data
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   onData(data) {
     this.buffer = Buffer.concat([this.buffer, data])
@@ -59,7 +59,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * @param {string} channel
    * @param {any} payload
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   sendEvent(channel, payload) {
     if (!this.hasSubscription(channel)) return
@@ -69,7 +69,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {import("./index.js").default} client
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   sendGoodbye(client) {
     const frame = Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, 0x00])
@@ -79,7 +79,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {object} message
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
     if (message.type === "subscribe") {
@@ -134,7 +134,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _processBuffer() {
     while (this.buffer.length >= 2) {
@@ -210,7 +210,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * @param {number} opcode
    * @param {Buffer} payload
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _sendControlFrame(opcode, payload) {
     const header = Buffer.alloc(2)
@@ -223,7 +223,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {object} body
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _sendJson(body) {
     const json = JSON.stringify(body)
@@ -251,7 +251,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * @param {Buffer} payload
    * @param {Buffer} mask
-   * @returns {Buffer} - Result.
+   * @returns {Buffer} - The unmask payload.
    */
   _unmaskPayload(payload, mask) {
     /** @type {Buffer} */

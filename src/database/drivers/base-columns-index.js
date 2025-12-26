@@ -14,33 +14,33 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
 
   /**
    * @abstract
-   * @returns {string[]} - Result.
+   * @returns {string[]} - The column names.
    */
   getColumnNames() { throw new Error("'getColumnNames' not implemented") }
 
   /**
-   * @returns {import("./base.js").default} - Result.
+   * @returns {import("./base.js").default} - The driver.
    */
   getDriver() {
     return this.getTable().getDriver()
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The name.
    */
   getName()  {
     return digg(this, "data", "index_name")
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.getDriver().options()
   }
 
   /**
-   * @returns {import("./base-table.js").default} - Result.
+   * @returns {import("./base-table.js").default} - The table.
    */
   getTable() {
     if (!this.table) throw new Error("No table set on column")
@@ -50,21 +50,21 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
 
   /**
    * @abstract
-   * @returns {import("../table-data/table-index.js").default} - Result.
+   * @returns {import("../table-data/table-index.js").default} - The table data index.
    */
   getTableDataIndex() {
     throw new Error("'getTableDataIndex' not implemented")
   }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether primary key.
    */
   isPrimaryKey() {
     return digg(this, "data", "is_primary_key")
   }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether unique.
    */
   isUnique() {
     return digg(this, "data", "is_unique")

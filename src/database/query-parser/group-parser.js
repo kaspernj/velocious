@@ -16,7 +16,7 @@ export default class VelociousDatabaseQueryParserFromParser {
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   toSql() {
     const {pretty, query} = this

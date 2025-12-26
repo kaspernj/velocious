@@ -24,38 +24,38 @@ export default class TableForeignKey {
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The column name.
    */
   getColumnName() { return this._columnName }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether is new foreign key.
    */
   getIsNewForeignKey() { return this._isNewForeignKey || false }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The table name.
    */
   getTableName() { return this._tableName }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The referenced column name.
    */
   getReferencedColumnName() { return this._referencedColumnName }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The referenced table name.
    */
   getReferencedTableName() { return this._referencedTableName }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The name.
    */
   getName() { return this._name }
 
   /**
    * @param {string} newName
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setName(newName) { this._name = newName }
 }

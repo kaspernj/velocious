@@ -49,66 +49,66 @@ export default class TableColumn {
   getName() { return this.name }
 
   /**
-   * @returns {string | undefined} - Result.
+   * @returns {string | undefined} - The new name.
    */
   getNewName() { return this._newName }
 
   /**
    * @param {string} newName
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setNewName(newName) { this._newName = newName }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The actual name.
    */
   getActualName() { return this.getNewName() || this.getName() }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether auto increment.
    */
   getAutoIncrement() { return this.args?.autoIncrement || false }
 
   /**
    * @param {boolean} newAutoIncrement
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
 
   /**
-   * @returns {any} - Result.
+   * @returns {any} - The default.
    */
   getDefault() { return this.args?.default }
 
   /**
    * @param {any} newDefault
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setDefault(newDefault) { this.args.default = newDefault }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether drop column.
    */
   getDropColumn() { return this.args?.dropColumn || false }
 
   /**
-   * @returns {boolean | object | undefined} - Result.
+   * @returns {boolean | object | undefined} - Whether foreign key.
    */
   getForeignKey() { return this.args?.foreignKey }
 
   /**
    * @param {boolean | object | undefined} newForeignKey
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
 
   /**
-   * @returns {boolean|IndexArgType} - Result.
+   * @returns {boolean|IndexArgType} - Whether index.
    */
   getIndex() { return this.args?.index || false }
 
   /**
-   * @returns {IndexArgType} - Result.
+   * @returns {IndexArgType} - The index args.
    */
   getIndexArgs() {
     if (typeof this.args?.index == "object") {
@@ -128,56 +128,56 @@ export default class TableColumn {
 
   /**
    * @param {boolean|IndexArgType} newIndex
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setIndex(newIndex) { this.args.index = newIndex }
 
   /**
-   * @returns {number | undefined} - Result.
+   * @returns {number | undefined} - The max length.
    */
   getMaxLength() { return this.args?.maxLength }
 
   /**
    * @param {number | undefined} newMaxLength
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
 
   /**
-   * @returns {boolean | undefined} - Result.
+   * @returns {boolean | undefined} - Whether null.
    */
   getNull() { return this.args?.null }
 
   /**
    * @param {boolean} nullable
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setNull(nullable) { this.args.null = nullable }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether primary key.
    */
   getPrimaryKey() { return this.args?.primaryKey || false }
 
   /**
    * @param {boolean} newPrimaryKey
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setPrimaryKey(newPrimaryKey) { this.args.primaryKey = newPrimaryKey }
 
   /**
-   * @returns {string | undefined} - Result.
+   * @returns {string | undefined} - The type.
    */
   getType() { return this.args?.type }
 
   /**
    * @param {string | undefined} newType
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setType(newType) { this.args.type = newType }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether new column.
    */
   isNewColumn() { return this.args?.isNewColumn || false }
 
@@ -185,7 +185,7 @@ export default class TableColumn {
    * @param {object} args
    * @param {boolean} args.forAlterTable
    * @param {import("../drivers/base.js").default} args.driver
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   getSQL({forAlterTable, driver, ...restArgs}) {
     restArgsError(restArgs)

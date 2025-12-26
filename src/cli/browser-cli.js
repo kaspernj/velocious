@@ -14,7 +14,7 @@ export default class VelociousBrowserCli {
 
   /**
    * @description Enable the CLI in the global scope. This is useful for debugging and testing.
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   enable() {
     /** @type {typeof globalThis & {velociousCLI?: VelociousBrowserCli}} */
@@ -26,7 +26,7 @@ export default class VelociousBrowserCli {
   /**
    * @description Run a command. This is useful for debugging and testing. This is a wrapper around the Cli class.
    * @param {string} command
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async run(command) {
     const processArgs = command.split(/\s+/)

@@ -46,7 +46,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.connections.push(connection)
   }
 
-  /** @returns {Promise<import("../drivers/base.js").default>} - Result.  */
+  /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
   async checkout() {
     let connection = this.connections.shift()
 
@@ -78,7 +78,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     })
   }
 
-  /** @returns {import("../drivers/base.js").default} - Result.  */
+  /** @returns {import("../drivers/base.js").default} - The current connection.  */
   getCurrentConnection() {
     const id = this.asyncLocalStorage.getStore()
 
@@ -108,7 +108,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Registers a fallback connection for this pool identifier that will be used when no async context is available.
    * @param {import("../drivers/base.js").default} connection
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setGlobalConnection(connection) {
     const klass = /** @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
@@ -126,7 +126,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * Ensures a global fallback connection exists for this pool identifier and returns it.
    * If one is already set, it is returned and also made available in the pool queue.
    * Otherwise a new connection is spawned, registered, and queued.
-   * @returns {Promise<import("../drivers/base.js").default>} - Result.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the global connection.
    */
   async ensureGlobalConnection() {
     const existing = this.getGlobalConnection()
@@ -143,7 +143,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Returns the connection tied to the current async context, if any.
    * Does not fall back to the global connection.
-   * @returns {import("../drivers/base.js").default | undefined} - Result.
+   * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
    */
   getCurrentContextConnection() {
     const id = this.asyncLocalStorage.getStore()
@@ -154,7 +154,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
-   * @returns {import("../drivers/base.js").default | undefined} - Result.
+   * @returns {import("../drivers/base.js").default | undefined} - The global connection.
    */
   getGlobalConnection() {
     const klass = /** @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
@@ -167,7 +167,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * Replaces all globally registered fallback connections.
    * @param {Record<string, import("../drivers/base.js").default>} [connections]
    * @param {import("../../configuration.js").default} [configuration]
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static setGlobalConnections(connections, configuration) {
     if (!connections && !configuration) {
@@ -186,7 +186,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Clears globally registered fallback connections for all configurations or a single configuration.
    * @param {import("../../configuration.js").default} [configuration]
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static clearGlobalConnections(configuration) {
     if (!configuration) {

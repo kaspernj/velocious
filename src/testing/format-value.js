@@ -4,7 +4,7 @@ const MAX_STRINGIFY_DEPTH = 5
 
 /**
  * @param {any} value
- * @returns {boolean} - Result.
+ * @returns {boolean} - Whether plain object.
  */
 function isPlainObject(value) {
   if (!value || typeof value != "object") return false
@@ -17,7 +17,7 @@ function isPlainObject(value) {
 /**
  * Minified stringify with circular and depth protection.
  * @param {any} value
- * @returns {string} - Result.
+ * @returns {string} - The minified stringify.
  */
 function minifiedStringify(value) {
   const seen = new WeakSet()
@@ -25,7 +25,7 @@ function minifiedStringify(value) {
   /**
    * @param {any} current
    * @param {number} depth
-   * @returns {any} - Result.
+   * @returns {any} - The serialize.
    */
   function serialize(current, depth) {
     if (depth > MAX_STRINGIFY_DEPTH) return "[MaxDepth]"
@@ -62,7 +62,7 @@ function minifiedStringify(value) {
 
 /**
  * @param {any} value
- * @returns {string} - Result.
+ * @returns {string} - The value.
  */
 function formatValue(value) {
   if (value === undefined) return "undefined"

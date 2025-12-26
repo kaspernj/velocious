@@ -28,7 +28,7 @@ class VelociousRouteNamespaceRoute extends BasicRoute {
    * @param {Record<string, any>} args.params
    * @param {string} args.path
    * @param {import("../http-server/client/request.js").default} args.request
-   * @returns {{restPath: string} | undefined} - Result.
+   * @returns {{restPath: string} | undefined} - REST path metadata for this route.
    */
   matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars
     const match = path.match(this.regExp)

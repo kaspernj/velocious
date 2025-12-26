@@ -2,7 +2,7 @@
 
 /**
  * @param {any} error
- * @returns {Error} - Result.
+ * @returns {Error} - The error.
  */
 export default function ensureError(error) {
   if (error instanceof Error) {

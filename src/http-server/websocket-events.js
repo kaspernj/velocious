@@ -14,7 +14,7 @@ export default class VelociousHttpServerWebsocketEvents {
   /**
    * @param {string} channel
    * @param {any} payload
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   publish(channel, payload) {
     if (!channel) throw new Error("channel is required")

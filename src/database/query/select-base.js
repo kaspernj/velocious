@@ -2,7 +2,7 @@
 
 export default class VelociousDatabaseQuerySelectBase {
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     if (!this.query) throw new Error("'query' hasn't been set")
@@ -19,7 +19,7 @@ export default class VelociousDatabaseQuerySelectBase {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   toSql() {
     throw new Error("'toSql' wasn't implemented")

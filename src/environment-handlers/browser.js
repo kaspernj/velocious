@@ -39,7 +39,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {Promise<MigrationsRequireContextType>} - Result.
+   * @returns {Promise<MigrationsRequireContextType>} - Resolves with the migrations require context.
    */
   async migrationsRequireContext() {
     const {migrationsRequireContextCallback} = this
@@ -52,7 +52,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Result.
+   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with the commands.
    */
   async findCommands() {
     this._findCommandsResult = this._actualFindCommands()
@@ -61,7 +61,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {CommandsRequireContextType} - Result.
+   * @returns {CommandsRequireContextType} - The commands require context.
    */
   _findCommandsRequireContext() {
     // @ts-expect-error
@@ -94,7 +94,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args
    * @param {Array<string>} args.commandParts
-   * @returns {Promise<typeof import("../cli/base-command.js").default>} - Result.
+   * @returns {Promise<typeof import("../cli/base-command.js").default>} - Resolves with the require command.
    */
   async requireCommand({commandParts}) {
     let filePath = "."
@@ -134,7 +134,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Result.
+   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Resolves with the migrations.
    */
   async findMigrations() {
     const migrationsRequireContext = await this.migrationsRequireContext()
@@ -175,7 +175,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
   /**
    * @param {string} filePath
-   * @returns {Promise<typeof import("../database/migration/index.js").default>} - Result.
+   * @returns {Promise<typeof import("../database/migration/index.js").default>} - Resolves with the require migration.
    */
   requireMigration = async (filePath) => {
     if (!filePath) throw new Error("filePath is required")
@@ -196,7 +196,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async afterMigrations({dbs}) {
     const structureSql = await this._sqliteStructureSql({dbs})
@@ -209,7 +209,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async _sqliteStructureSql({dbs}) {
     const sqliteIdentifiers = Object.keys(dbs)

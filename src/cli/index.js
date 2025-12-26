@@ -44,7 +44,7 @@ export default class VelociousCli {
   /** @returns {import("../configuration.js").default} configuration */
   getConfiguration() { return this.configuration }
 
-  /** @returns {boolean} - Result.  */
+  /** @returns {boolean} - Whether testing.  */
   getTesting() {
     return this.args.testing
   }

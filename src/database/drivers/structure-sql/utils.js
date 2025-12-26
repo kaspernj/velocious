@@ -2,7 +2,7 @@
 
 /**
  * @param {string} statement
- * @returns {string} - Result.
+ * @returns {string} - SQL string.
  */
 export function normalizeSqlStatement(statement) {
   const trimmed = statement.trim()
@@ -20,7 +20,7 @@ export function normalizeSqlStatement(statement) {
  * @param {string} args.objectName
  * @param {string} args.statement
  * @param {string} args.type
- * @returns {string} - Result.
+ * @returns {string} - The create statement.
  */
 export function normalizeCreateStatement({db, objectName, statement, type}) {
   const trimmed = statement.trim()

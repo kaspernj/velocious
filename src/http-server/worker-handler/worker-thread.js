@@ -39,7 +39,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize() {
     const {directory, environment} = this.workerData
@@ -119,7 +119,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {object} args
    * @param {string} args.channel
    * @param {any} args.payload
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   broadcastWebsocketEvent({channel, payload}) {
     for (const clientKey of Object.keys(this.clients)) {

@@ -11,7 +11,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
-   * @returns {Promise<import("../drivers/base.js").default>} - Result.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
   async checkout() {
     if (!this.connection) {
@@ -30,7 +30,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     await callback(connection)
   }
 
-  /** @returns {import("../drivers/base.js").default} - Result.  */
+  /** @returns {import("../drivers/base.js").default} - The current connection.  */
   getCurrentConnection() {
     if (!this.connection) {
       throw new Error("A connection hasn't been made yet")
@@ -39,7 +39,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     return this.connection
   }
 
-  /** @returns {import("../drivers/base.js").default | undefined} - Result.  */
+  /** @returns {import("../drivers/base.js").default | undefined} - The current context connection.  */
   getCurrentContextConnection() {
     return this.connection
   }

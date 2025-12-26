@@ -15,14 +15,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The column name.
    */
   getColumnName() {
     throw new Error(`'getColumnName' not implemented`)
   }
 
   /**
-   * @returns {import("./base.js").default} - Result.
+   * @returns {import("./base.js").default} - The driver.
    */
   getDriver() {
     return this.getTable().getDriver()
@@ -30,14 +30,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The name.
    */
   getName() {
     throw new Error(`'getName' not implemented`)
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.getDriver().options()
@@ -45,7 +45,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The referenced column name.
    */
   getReferencedColumnName() {
     throw new Error(`'getReferencedColumnName' not implemented`)
@@ -53,14 +53,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The referenced table name.
    */
   getReferencedTableName() {
     throw new Error(`'getReferencedTableName' not implemented`)
   }
 
   /**
-   * @returns {import("./base-table.js").default} - Result.
+   * @returns {import("./base-table.js").default} - The table.
    */
   getTable() {
     if (!this.table) throw new Error("No table set on column")
@@ -70,14 +70,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The table name.
    */
   getTableName() {
     throw new Error("'getTableName' not implemented")
   }
 
   /**
-   * @returns {TableForeignKey} - Result.
+   * @returns {TableForeignKey} - The table data foreign key.
    */
   getTableDataForeignKey() {
     return new TableForeignKey({

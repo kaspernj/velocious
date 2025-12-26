@@ -20,7 +20,7 @@ export default class VelociousDatabaseDriversSqliteOptions extends QueryParserOp
 
   /**
    * @param {string} string
-   * @returns {number | string} - Result.
+   * @returns {number | string} - The quote.
    */
   quote(string) {
     if (!this.driver) throw new Error("Driver not set")

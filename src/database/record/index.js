@@ -23,7 +23,7 @@ import UUID from "pure-uuid"
 
 class ValidationError extends Error {
   /**
-   * @returns {VelociousDatabaseRecord} - Result.
+   * @returns {VelociousDatabaseRecord} - The model.
    */
   getModel() {
     if (!this._model) throw new Error("Model hasn't been set")
@@ -33,13 +33,13 @@ class ValidationError extends Error {
 
   /**
    * @param {VelociousDatabaseRecord} model
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setModel(model) {
     this._model = model
   }
 
-  /** @returns {Record<string, ValidationErrorObjectType[]>} - Result.  */
+  /** @returns {Record<string, ValidationErrorObjectType[]>} - The validation errors.  */
   getValidationErrors() {
     if (!this._validationErrors) throw new Error("Validation errors hasn't been set")
 
@@ -133,7 +133,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} validatorName
-   * @returns {typeof import("./validators/base.js").default} - Result.
+   * @returns {typeof import("./validators/base.js").default} - The validator type.
    */
   static getValidatorType(validatorName) {
     if (!(validatorName in this.validatorTypes())) throw new Error(`Validator type ${validatorName} not found`)
@@ -143,7 +143,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} relationshipName
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether relationship exists.
    */
   static _relationshipExists(relationshipName) {
     if (relationshipName in this.getRelationshipsMap()) {
@@ -271,7 +271,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} relationshipName
-   * @returns {import("./relationships/base.js").default} - Result.
+   * @returns {import("./relationships/base.js").default} - The relationship by name.
    */
   static getRelationshipByName(relationshipName) {
     const relationship = this.getRelationshipsMap()[relationshipName]
@@ -282,7 +282,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Array<import("./relationships/base.js").default>} - Result.
+   * @returns {Array<import("./relationships/base.js").default>} - The relationships.
    */
   static getRelationships() {
     return Object.values(this.getRelationshipsMap())
@@ -298,7 +298,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Array<string>} - Result.
+   * @returns {Array<string>} - The relationship names.
    */
   static getRelationshipNames() {
     return this.getRelationships().map((relationship) => relationship.getRelationshipName())
@@ -306,7 +306,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} relationshipName
-   * @returns {import("./instance-relationships/base.js").default} - Result.
+   * @returns {import("./instance-relationships/base.js").default} - The relationship by name.
    */
   getRelationshipByName(relationshipName) {
     if (!(relationshipName in this._instanceRelationships)) {
@@ -340,7 +340,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {import("../drivers/base.js").default} - Result.
+   * @returns {import("../drivers/base.js").default} - The connection.
    */
   static connection() {
     const databasePool = this._getConfiguration().getDatabasePool(this.getDatabaseIdentifier())
@@ -355,7 +355,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {Record<string, any>} [attributes]
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the create.
    */
   static async create(attributes) {
     const record = /** @type {InstanceType<MC>} */ (new this(attributes))
@@ -366,7 +366,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {import("../../configuration.js").default} - Result.
+   * @returns {import("../../configuration.js").default} - The configuration.
    */
   static _getConfiguration() {
     if (!this._configuration) {
@@ -381,7 +381,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {import("../../configuration.js").default} - Result.
+   * @returns {import("../../configuration.js").default} - The configuration.
    */
   _getConfiguration() {
     return this.getModelClass()._getConfiguration()
@@ -391,7 +391,7 @@ class VelociousDatabaseRecord {
    * Adds a has-many-relationship to the model class.
    * @param {string} relationshipName The name of the relationship (e.g. "posts")
    * @param {object} options The options for the relationship (e.g. {className: "Post"})
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static hasMany(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasMany"}, options))
@@ -401,7 +401,7 @@ class VelociousDatabaseRecord {
    * Adds a has-one-relationship to the model class.
    * @param {string} relationshipName The name of the relationship (e.g. "post")
    * @param {object} options The options for the relationship (e.g. {className: "Post"})
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static hasOne(relationshipName, options = {}) {
     return this._defineRelationship(relationshipName, Object.assign({type: "hasOne"}, options))
@@ -409,7 +409,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} attributeName
-   * @returns {string} - Result.
+   * @returns {string} - The human attribute name.
    */
   static humanAttributeName(attributeName) {
     const modelNameKey = inflection.underscore(this.constructor.name)
@@ -418,7 +418,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The database type.
    */
   static getDatabaseType() {
     if (!this._databaseType) throw new Error("Database type hasn't been set")
@@ -429,7 +429,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {object} args
    * @param {import("../../configuration.js").default} args.configuration
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   static async initializeRecord({configuration, ...restArgs}) {
     restArgsError(restArgs)
@@ -479,7 +479,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {any} value
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether attribute.
    */
   _hasAttribute(value) {
     if (typeof value == "string") {
@@ -494,7 +494,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether initialized.
    */
   static isInitialized() {
     if (this._initialized) return true
@@ -569,7 +569,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The database identifier.
    */
   static getDatabaseIdentifier() {
     return this._databaseIdentifier || "default"
@@ -577,7 +577,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} databaseIdentifier
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static setDatabaseIdentifier(databaseIdentifier) {
     this._databaseIdentifier = databaseIdentifier
@@ -585,7 +585,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name
-   * @returns {*} - Result.
+   * @returns {*} - The attribute.
    */
   getAttribute(name) {
     const columnName = inflection.underscore(name)
@@ -599,7 +599,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @abstract
-   * @returns {typeof VelociousDatabaseRecord} - Result.
+   * @returns {typeof VelociousDatabaseRecord} - The model class.
    */
   getModelClass() {
     const modelClass = /** @type {typeof VelociousDatabaseRecord} */ (this.constructor)
@@ -610,7 +610,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} name
    * @param {*} newValue
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setAttribute(name, newValue) {
     const setterName = `set${inflection.camelize(name)}`
@@ -646,7 +646,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {any} value
-   * @returns {any} - Result.
+   * @returns {any} - The date value.
    */
   _normalizeDateValue(value) {
     if (typeof value != "string") return value
@@ -663,7 +663,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {import("../drivers/base-column.js").default[]} - Result.
+   * @returns {import("../drivers/base-column.js").default[]} - The columns.
    */
   static getColumns() {
     if (!this._columns) throw new Error(`${this.name} hasn't been initialized yet`)
@@ -671,7 +671,7 @@ class VelociousDatabaseRecord {
     return this._columns
   }
 
-  /** @returns {Record<string, import("../drivers/base-column.js").default>} - Result.  */
+  /** @returns {Record<string, import("../drivers/base-column.js").default>} - The columns hash.  */
   static getColumnsHash() {
     if (!this._columnsAsHash) {
       /** @type {Record<string, import("../drivers/base-column.js").default>} */
@@ -687,7 +687,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name
-   * @returns {string | undefined} - Result.
+   * @returns {string | undefined} - The column type by name.
    */
   static getColumnTypeByName(name) {
     if (!this._columnTypeByName) {
@@ -703,7 +703,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} type
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether date like type.
    */
   static _isDateLikeType(type) {
     const normalizedType = type.toLowerCase()
@@ -716,7 +716,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Array<string>} - Result.
+   * @returns {Array<string>} - The column names.
    */
   static getColumnNames() {
     if (!this._columnNames) {
@@ -727,7 +727,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {import("../drivers/base-table.js").default} - Result.
+   * @returns {import("../drivers/base-table.js").default} - The table.
    */
   static _getTable() {
     if (!this._table) throw new Error(`${this.name} hasn't been initialized yet`)
@@ -738,14 +738,14 @@ class VelociousDatabaseRecord {
   /**
    * @param {Array<string>} columns
    * @param {Array<Array<string>>} rows
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   static async insertMultiple(columns, rows) {
     return await this.connection().insertMultiple(this.tableName(), columns, rows)
   }
 
   /**
-   * @returns {Promise<number>} - Result.
+   * @returns {Promise<number>} - Resolves with the next primary key.
    */
   static async nextPrimaryKey() {
     const primaryKey = this.primaryKey()
@@ -768,14 +768,14 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} primaryKey
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static setPrimaryKey(primaryKey) {
     this._primaryKey = primaryKey
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The primary key.
    */
   static primaryKey() {
     if (this._primaryKey) return this._primaryKey
@@ -784,7 +784,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async save() {
     const isNewRecord = this.isNewRecord()
@@ -944,7 +944,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The table name.
    */
   static tableName() {
     if (!this._tableName) this._tableName = inflection.underscore(inflection.pluralize(this.name))
@@ -954,7 +954,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} tableName
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static setTableName(tableName) {
     this._tableName = tableName
@@ -962,7 +962,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {function() : Promise<void>} callback
-   * @returns {Promise<*>} - Result.
+   * @returns {Promise<*>} - Resolves with the transaction.
    */
   static async transaction(callback) {
     const useTransactions = this.connection().getArgs().record?.transactions
@@ -976,7 +976,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {...string} names
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static translates(...names) {
     const translations = this.getTranslationsMap()
@@ -993,7 +993,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {typeof VelociousDatabaseRecord} - Result.
+   * @returns {typeof VelociousDatabaseRecord} - The translation class.
    */
   static getTranslationClass() {
     if (this._translationClass) return this._translationClass
@@ -1013,7 +1013,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The translations table name.
    */
   static getTranslationsTableName() {
     const tableNameParts = this.tableName().split("_")
@@ -1024,7 +1024,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Promise<boolean>} - Result.
+   * @returns {Promise<boolean>} - Resolves with Whether it has translations table.
    */
   static async hasTranslationsTable() {
     try {
@@ -1078,7 +1078,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @abstract
-   * @returns {TranslationBase[]} - Result.
+   * @returns {TranslationBase[]} - The translations loaded.
    */
   translationsLoaded() {
     throw new Error("'translationsLoaded' not implemented")
@@ -1087,7 +1087,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} name
    * @param {string} locale
-   * @returns {*} - Result.
+   * @returns {*} - The translated attribute.
    */
   _getTranslatedAttribute(name, locale) {
     const translation = this.translationsLoaded().find((translation) => translation.locale() == locale)
@@ -1110,7 +1110,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} name
    * @param {string} locale
-   * @returns {*} - Result.
+   * @returns {*} - The translated attribute with fallback.
    */
   _getTranslatedAttributeWithFallback(name, locale) {
     let localesInOrder
@@ -1135,7 +1135,7 @@ class VelociousDatabaseRecord {
    * @param {string} name
    * @param {string} locale
    * @param {*} newValue
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _setTranslatedAttribute(name, locale, newValue) {
     /** @type {VelociousDatabaseRecord | TranslationBase | undefined} */
@@ -1160,7 +1160,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The new query.
    */
   static _newQuery() {
     const handler = new Handler()
@@ -1173,7 +1173,7 @@ class VelociousDatabaseRecord {
     return query.from(new FromTable(this.tableName()))
   }
 
-  /** @returns {string} - Result.  */
+  /** @returns {string} - The orderable column.  */
   static orderableColumn() {
     // FIXME: Allow to change to 'created_at' if using UUID?
 
@@ -1183,13 +1183,13 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The all.
    */
   static all() {
     return this._newQuery()
   }
 
-  /** @returns {Promise<number>} - Result.  */
+  /** @returns {Promise<number>} - Resolves with the count.  */
   static async count() {
     return await this._newQuery().count()
   }
@@ -1198,7 +1198,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {string} group
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The group.
    */
   static group(group) {
     return this._newQuery().group(group)
@@ -1212,7 +1212,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {...string|string[]} columns
-   * @returns {Promise<any[]>} - Result.
+   * @returns {Promise<any[]>} - Resolves with the pluck.
    */
   static async pluck(...columns) {
     return await this._newQuery().pluck(...columns)
@@ -1222,7 +1222,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {number|string} recordId
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   static async find(recordId) {
     return await this._newQuery().find(recordId)
@@ -1232,7 +1232,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {{[key: string]: any}} conditions
-   * @returns {Promise<InstanceType<MC> | null>} - Result.
+   * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   static async findBy(conditions) {
     return await this._newQuery().findBy(conditions)
@@ -1242,7 +1242,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {{[key: string]: any}} conditions
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
   static async findByOrFail(conditions) {
     return await this._newQuery().findByOrFail(conditions)
@@ -1253,7 +1253,7 @@ class VelociousDatabaseRecord {
    * @this {MC}
    * @param {{[key: string]: any}} conditions
    * @param {function() : void} [callback]
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the or create by.
    */
   static async findOrCreateBy(conditions, callback) {
     return await this._newQuery().findOrCreateBy(conditions, callback)
@@ -1264,7 +1264,7 @@ class VelociousDatabaseRecord {
    * @this {MC}
    * @param {Record<string, any>} conditions
    * @param {function(InstanceType<MC>) : void} [callback]
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
    */
   static async findOrInitializeBy(conditions, callback) {
     return await this._newQuery().findOrInitializeBy(conditions, callback)
@@ -1273,7 +1273,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the first.
    */
   static async first() {
     return await this._newQuery().first()
@@ -1283,7 +1283,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {string|{[key: string]: any}} join
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The joins.
    */
   static joins(join) {
     return this._newQuery().joins(join)
@@ -1292,7 +1292,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the last.
    */
   static async last() {
     return await this._newQuery().last()
@@ -1302,7 +1302,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {number} value
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The limit.
    */
   static limit(value) {
     return this._newQuery().limit(value)
@@ -1312,7 +1312,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {string | number} order
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The order.
    */
   static order(order) {
     return this._newQuery().order(order)
@@ -1322,7 +1322,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {boolean} [value]
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The distinct.
    */
   static distinct(value = true) {
     return this._newQuery().distinct(value)
@@ -1332,7 +1332,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {import("../query/index.js").NestedPreloadRecord} preload
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The preload.
    */
   static preload(preload) {
     const query = /** @type {ModelClassQuery<MC>} */ (this._newQuery().preload(preload))
@@ -1344,7 +1344,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {import("../query/index.js").SelectArgumentType} select
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The select.
    */
   static select(select) {
     return this._newQuery().select(select)
@@ -1353,7 +1353,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @returns {Promise<InstanceType<MC>[]>} - Result.
+   * @returns {Promise<InstanceType<MC>[]>} - Resolves with the array.
    */
   static async toArray() {
     return await this._newQuery().toArray()
@@ -1363,7 +1363,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {import("../query/index.js").WhereArgumentType} where
-   * @returns {ModelClassQuery<MC>} - Result.
+   * @returns {ModelClassQuery<MC>} - The where.
    */
   static where(where) {
     return this._newQuery().where(where)
@@ -1384,7 +1384,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {object} attributes
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   loadExistingRecord(attributes) {
     this._attributes = attributes
@@ -1394,7 +1394,7 @@ class VelociousDatabaseRecord {
   /**
    * Assigns the given attributes to the record.
    * @param {Record<string, any>} attributesToAssign
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   assign(attributesToAssign) {
     for (const attributeToAssign in attributesToAssign) {
@@ -1404,7 +1404,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns a the current attributes of the record (original attributes from database plus changes)
-   * @returns {Record<string, any>} - Result.
+   * @returns {Record<string, any>} - The attributes.
    */
   attributes() {
     const data = this.rawAttributes()
@@ -1422,14 +1422,14 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns column-name keyed data (original attributes from database plus changes)
-   * @returns {Record<string, any>} - Result.
+   * @returns {Record<string, any>} - The raw attributes.
    */
   rawAttributes() {
     return Object.assign({}, this._attributes, this._changes)
   }
 
   /**
-   * @returns {import("../drivers/base.js").default} - Result.
+   * @returns {import("../drivers/base.js").default} - The connection.
    */
   _connection() {
     if (this.__connection) return this.__connection
@@ -1439,7 +1439,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Destroys the record in the database and all of its dependent records.
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async destroy() {
     for (const relationship of this.getModelClass().getRelationships()) {
@@ -1500,12 +1500,12 @@ class VelociousDatabaseRecord {
     await this._connection().query(sql)
   }
 
-  /** @returns {boolean} - Result.  */
+  /** @returns {boolean} - Whether changes.  */
   _hasChanges() { return Object.keys(this._changes).length > 0 }
 
   /**
    * Returns true if the model has been changed since it was loaded from the database.
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether changed.
    */
   isChanged() {
     if (this.isNewRecord() || this._hasChanges()){
@@ -1538,7 +1538,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns the changes that have been made to this record since it was loaded from the database.
-   * @returns {Record<string, any[]>} - Result.
+   * @returns {Record<string, any[]>} - The changes.
    */
   changes() {
     /** @type {Record<string, any[]>} */
@@ -1554,7 +1554,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The table name.
    */
   _tableName() {
     if (this.__tableName) return this.__tableName
@@ -1565,7 +1565,7 @@ class VelociousDatabaseRecord {
   /**
    * Reads an attribute value from the record.
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
-   * @returns {any} - Result.
+   * @returns {any} - The attribute.
    */
   readAttribute(attributeName) {
     const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[attributeName]
@@ -1578,7 +1578,7 @@ class VelociousDatabaseRecord {
   /**
    * Reads a column value from the record.
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
-   * @returns {any} - Result.
+   * @returns {any} - The column.
    */
   readColumn(attributeName) {
     const column = this.getModelClass().getColumnsHash()[attributeName]
@@ -1626,7 +1626,7 @@ class VelociousDatabaseRecord {
     return belongsToChanges
   }
 
-  /** @returns {Promise<void>} - Result.  */
+  /** @returns {Promise<void>} - Resolves when complete.  */
   async _createNewRecord() {
     if (!this.getModelClass().connection()["insertSql"]) {
       throw new Error(`No insertSql on ${this.getModelClass().connection().constructor.name}`)
@@ -1686,7 +1686,7 @@ class VelociousDatabaseRecord {
     }
   }
 
-  /** @returns {Promise<void>} - Result.  */
+  /** @returns {Promise<void>} - Resolves when complete.  */
   async _updateRecordWithChanges() {
     /** @type {Record<string, any>} */
     const conditions = {}
@@ -1710,7 +1710,7 @@ class VelociousDatabaseRecord {
     }
   }
 
-  /** @returns {number|string} - Result.  */
+  /** @returns {number|string} - The id.  */
   id() {
     if (!this.getModelClass()._columnNameToAttributeName) {
       throw new Error(`Column names mapping hasn't been set on ${this.constructor.name}. Has the model been initialized?`)
@@ -1726,15 +1726,15 @@ class VelociousDatabaseRecord {
     return this.readAttribute(attributeName)
   }
 
-  /** @returns {boolean} - Result.  */
+  /** @returns {boolean} - Whether persisted.  */
   isPersisted() { return !this._isNewRecord }
 
-  /** @returns {boolean} - Result.  */
+  /** @returns {boolean} - Whether new record.  */
   isNewRecord() { return this._isNewRecord }
 
   /**
    * @param {boolean} newIsNewRecord
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setIsNewRecord(newIsNewRecord) {
     this._isNewRecord = newIsNewRecord
@@ -1743,7 +1743,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @param {string | number} id
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _reloadWithId(id) {
     const primaryKey = this.getModelClass().primaryKey()
@@ -1763,7 +1763,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async reload() {
     await this._reloadWithId(this.readAttribute("id"))
@@ -1795,7 +1795,7 @@ class VelociousDatabaseRecord {
     }
   }
 
-  /** @returns {string[]} - Result.  */
+  /** @returns {string[]} - The full error messages.  */
   fullErrorMessages() {
     /** @type {string[]} */
     const validationErrorMessages = []
@@ -1827,7 +1827,7 @@ class VelociousDatabaseRecord {
 class TranslationBase extends VelociousDatabaseRecord {
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The locale.
    */
   locale() {
     throw new Error("'locale' not implemented")

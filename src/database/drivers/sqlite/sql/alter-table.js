@@ -23,7 +23,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
   }
 
   /**
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {
     const {tableData} = this

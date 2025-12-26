@@ -24,7 +24,7 @@ export default class VelociousDatabaseInitializerFromRequireContext {
   /**
    * @param {object} args
    * @param {import("../configuration.js").default} args.configuration
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize({configuration, ...restArgs}) {
     restArgsError(restArgs)

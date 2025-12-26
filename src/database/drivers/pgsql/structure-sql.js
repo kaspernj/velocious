@@ -12,7 +12,7 @@ export default class VelociousDatabaseDriversPgsqlStructureSql {
   }
 
   /**
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {
     const {driver} = this
@@ -75,7 +75,7 @@ export default class VelociousDatabaseDriversPgsqlStructureSql {
 
   /**
    * @param {Record<string, any>} column
-   * @returns {string | null} - Result.
+   * @returns {string | null} - The column definition.
    */
   _columnDefinition(column) {
     const {driver} = this

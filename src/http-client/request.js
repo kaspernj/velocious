@@ -31,7 +31,7 @@ export default class Request {
 
   /**
    * @param {string} name
-   * @returns {Header} - Result.
+   * @returns {Header} - The header.
    */
   getHeader(name) {
     const compareName = name.toLowerCase().trim()
@@ -50,14 +50,14 @@ export default class Request {
   /**
    * @param {string} name
    * @param {string | number} value
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   addHeader(name, value) {
     this.headers.push(new Header(name, value))
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   prepare() {
     if (this.body) {
@@ -67,7 +67,7 @@ export default class Request {
 
   /**
    * @param {function(string) : void} callback
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   stream(callback) {
     this.prepare()

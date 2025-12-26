@@ -2,7 +2,7 @@
 
 /**
  * @param {typeof import("./base.js").default} PoolBase
- * @returns {void} - Result.
+ * @returns {void} - No return value.
  */
 export default function baseMethodsForward(PoolBase) {
   const forwardMethods = [

@@ -9,7 +9,7 @@ export default class VelociousDatabaseQueryOrderBase {
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.query.driver.options()
@@ -18,7 +18,7 @@ export default class VelociousDatabaseQueryOrderBase {
   /**
    * @abstract
    * @param {boolean} _reverseOrder
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setReverseOrder(_reverseOrder) { // eslint-disable-line no-unused-vars
     throw new Error("setReverseOrder not implemented")

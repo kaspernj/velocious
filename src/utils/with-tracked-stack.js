@@ -7,7 +7,7 @@ function addTrackedStackToError(error) {
 
 /**
  * @param  {...any} args
- * @returns {Promise<any>} - Result.
+ * @returns {Promise<any>} - Resolves with value.
  */
 async function withTrackedStack(...args) {
   const withTrackedStack = globalThis.withTrackedStack?.withTrackedStack

@@ -8,7 +8,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * @param {object} args
    * @param {import("../index.js").default} args.model
    * @param {string} args.attributeName
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async validate({model, attributeName}) {
     const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)

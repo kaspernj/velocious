@@ -40,7 +40,7 @@ export default class RequestBuffer {
 
   /**
    * @param {Buffer} data
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   feed(data) {
     for (const char of data) {
@@ -114,7 +114,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} name
-   * @returns {Header} - Result.
+   * @returns {Header} - The header.
    */
   getHeader(name) {
     const result = this.headersByName[name.toLowerCase().trim()]
@@ -125,7 +125,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @returns {Record<string, string>} - Result.
+   * @returns {Record<string, string>} - The headers hash.
    */
   getHeadersHash() {
     /** @type {Record<string, string>} */
@@ -141,7 +141,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   formDataPartDone() {
     const formDataPart = this.formDataPart
@@ -159,7 +159,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   newFormDataPart() {
     this.formDataPart = new FormDataPart()
@@ -168,7 +168,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   parse(line) {
     if (this.state == "status") {
@@ -201,7 +201,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {Header | undefined} - Result.
+   * @returns {Header | undefined} - The header from line.
    */
   readHeaderFromLine(line) {
     const match = line.match(/^(.+): (.+)\r\n/)
@@ -226,7 +226,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   parseHeader(line) {
     const header = this.readHeaderFromLine(line)
@@ -274,7 +274,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   parseStatusLine(line) {
     const match = line.match(/^(GET|OPTIONS|POST) (.+?) HTTP\/(.+)\r\n/)
@@ -303,7 +303,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} newState
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setState(newState) {
     this.logger.debugLowLevel(() => `Changing state from ${this.state} to ${newState}`)

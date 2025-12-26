@@ -20,7 +20,7 @@ let currentPath = [tests]
 
 /**
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback
- * @returns {void} - Result.
+ * @returns {void} - No return value.
  */
 function beforeEach(callback) {
   const currentTest = currentPath[currentPath.length - 1]
@@ -30,7 +30,7 @@ function beforeEach(callback) {
 
 /**
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback
- * @returns {void} - Result.
+ * @returns {void} - No return value.
  */
 function afterEach(callback) {
   const currentTest = currentPath[currentPath.length - 1]
@@ -41,13 +41,13 @@ function afterEach(callback) {
 class BaseExpect {
   /**
    * @abstract
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async runBefore() { /* do nothing */ }
 
   /**
    * @abstract
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async runAfter() { /* do nothing */ }
 }
@@ -68,7 +68,7 @@ class ExpectToChange extends BaseExpect {
 
   /**
    * @param {number} count
-   * @returns {Expect} - Result.
+   * @returns {Expect} - The by.
    */
   by(count) {
     this.count = count
@@ -85,7 +85,7 @@ class ExpectToChange extends BaseExpect {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async execute() {
     if (this.newCount === undefined || this.oldCount === undefined) {
@@ -114,14 +114,14 @@ class Expect extends BaseExpect {
 
   /**
    * @param {function(): Promise<number>} changeCallback
-   * @returns {ExpectToChange} - Result.
+   * @returns {ExpectToChange} - The and change.
    */
   andChange(changeCallback) {
     return this.toChange(changeCallback)
   }
 
   /**
-   * @returns {this} - Result.
+   * @returns {this} - A value.
    */
   get not() {
     this._not = true
@@ -131,7 +131,7 @@ class Expect extends BaseExpect {
 
   /**
    * @param {any} result
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toBe(result) {
     if (this._not) {
@@ -152,7 +152,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toBeDefined() {
     if (this._not) {
@@ -172,7 +172,7 @@ class Expect extends BaseExpect {
 
   /**
    * @param {Function} klass
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toBeInstanceOf(klass) {
     if (!(this._object instanceof klass)) {
@@ -183,28 +183,28 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toBeFalse() {
     this.toBe(false)
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toBeNull() {
     this.toBe(null)
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toBeUndefined() {
     this.toBe(undefined)
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toBeTrue() {
     this.toBe(true)
@@ -212,7 +212,7 @@ class Expect extends BaseExpect {
 
   /**
    * @param {function(): Promise<number>} changeCallback
-   * @returns {ExpectToChange} - Result.
+   * @returns {ExpectToChange} - The change.
    */
   toChange(changeCallback) {
     if (this._not) throw new Error("not stub")
@@ -226,7 +226,7 @@ class Expect extends BaseExpect {
 
   /**
    * @param {any} valueToContain
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toContain(valueToContain) {
     if (this._not) throw new Error("not stub")
@@ -241,7 +241,7 @@ class Expect extends BaseExpect {
 
   /**
    * @param {any} result
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toEqual(result) {
     if (this._not) {
@@ -298,7 +298,7 @@ class Expect extends BaseExpect {
 
   /**
    * @param {RegExp} regex
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toMatch(regex) {
     const match = this._object.match(regex)
@@ -321,7 +321,7 @@ class Expect extends BaseExpect {
   /**
    * @template T extends Error
    * @param {string|T} expectedError
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async toThrowError(expectedError) {
     if (this._not) throw new Error("not stub")
@@ -360,7 +360,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {Promise<any>} - Result.
+   * @returns {Promise<any>} - Resolves with the execute.
    */
   async execute() {
     for (const expectation of this.expectations) {
@@ -382,7 +382,7 @@ class Expect extends BaseExpect {
 
   /**
    * @param {Record<string, any>} result
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
@@ -412,7 +412,7 @@ class Expect extends BaseExpect {
  * @param {string} description
  * @param {object|(() => (void|Promise<void>))} arg1
  * @param {undefined|(() => (void|Promise<void>))} [arg2]
- * @returns {Promise<void>} - Result.
+ * @returns {Promise<void>} - Resolves when complete.
  */
 async function describe(description, arg1, arg2) {
   let testArgs, testFunction
@@ -448,7 +448,7 @@ async function describe(description, arg1, arg2) {
 
 /**
  * @param {any} arg
- * @returns {Expect} - Result.
+ * @returns {Expect} - The expect.
  */
 function expect(arg) {
   return new Expect(arg)
@@ -458,7 +458,7 @@ function expect(arg) {
  * @param {string} description
  * @param {object|(() => (void|Promise<void>))} arg1
  * @param {undefined|(() => (void|Promise<void>))} [arg2]
- * @returns {void} - Result.
+ * @returns {void} - No return value.
  */
 function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
@@ -486,7 +486,7 @@ function it(description, arg1, arg2) {
  * @param {string} description
  * @param {object|(() => (void|Promise<void>))} arg1
  * @param {undefined|(() => (void|Promise<void>))} [arg2]
- * @returns {void} - Result.
+ * @returns {void} - No return value.
  */
 function fit(description, arg1, arg2) {
   let testArgs

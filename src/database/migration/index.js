@@ -32,13 +32,13 @@ export {NotImplementedError}
 export default class VelociousDatabaseMigration {
   /**
    * @param {string[]} databaseIdentifiers
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   static onDatabases(databaseIdentifiers) {
     this._databaseIdentifiers = databaseIdentifiers
   }
 
-  /** @returns {string[] | undefined} - Result.  */
+  /** @returns {string[] | undefined} - The database identifiers.  */
   static getDatabaseIdentifiers() {
     return this._databaseIdentifiers
   }
@@ -64,7 +64,7 @@ export default class VelociousDatabaseMigration {
     return this._databaseIdentifier
   }
 
-  /** @returns {import("../drivers/base.js").default} - Result.  */
+  /** @returns {import("../drivers/base.js").default} - The driver.  */
   getDriver() { return this._db }
   connection() { return this.getDriver() }
 
@@ -82,7 +82,7 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} sql
-   * @returns {Promise<import("../drivers/base.js").QueryResultType>} - Result.
+   * @returns {Promise<import("../drivers/base.js").QueryResultType>} - Resolves with the execute.
    */
   async execute(sql) {
     return await this.connection().query(sql)
@@ -93,7 +93,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} columnName
    * @param {string} columnType
    * @param {AddColumnArgsType} [args]
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addColumn(tableName, columnName, columnType, args) {
     if (!columnType) throw new Error("No column type given")
@@ -113,7 +113,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} columnName
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async removeColumn(tableName, columnName) {
     const tableColumnArgs = Object.assign({dropColumn: true})
@@ -138,7 +138,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {Array<string | import("../table-data/table-column.js").default>} columns
    * @param {AddIndexArgsType} [args]
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addIndex(tableName, columns, args) {
     const createIndexArgs = Object.assign(
@@ -158,7 +158,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} referenceName
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addForeignKey(tableName, referenceName) {
     const referenceNameUnderscore = inflection.underscore(referenceName)
@@ -185,7 +185,7 @@ export default class VelociousDatabaseMigration {
    * @param {boolean} args.foreignKey
    * @param {string} args.type
    * @param {boolean} args.unique
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addReference(tableName, referenceName, args) {
     const {foreignKey, type, unique, ...restArgs} = args
@@ -204,7 +204,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} referenceName
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async removeReference(tableName, referenceName) {
     const columnName = `${inflection.underscore(referenceName)}_id`
@@ -216,7 +216,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {string} columnName
    * @param {boolean} nullable
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async changeColumnNull(tableName, columnName, nullable) {
     const table = await this.getDriver().getTableByName(tableName)
@@ -233,7 +233,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} columnName
-   * @returns {Promise<boolean>} - Result.
+   * @returns {Promise<boolean>} - Resolves with Whether column exists.
    */
   async columnExists(tableName, columnName) {
     const table = await this.getDriver().getTableByName(tableName)
@@ -253,20 +253,20 @@ export default class VelociousDatabaseMigration {
    * @overload
    * @param {string} tableName
    * @param {CreateTableCallbackType} callback
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   /**
    * @overload
    * @param {string} tableName
    * @param {CreateTableArgsType} args
    * @param {CreateTableCallbackType} callback
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   /**
    * @param {string} tableName
    * @param {CreateTableArgsType | CreateTableCallbackType} arg1
    * @param {CreateTableCallbackType | undefined} [arg2]
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async createTable(tableName, arg1, arg2) {
     let args
@@ -337,7 +337,7 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async dropTable(tableName) {
     await this.getDriver().dropTable(tableName)
@@ -347,7 +347,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {string} oldColumnName
    * @param {string} newColumnName
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     await this.getDriver().renameColumn(tableName, oldColumnName, newColumnName)
@@ -355,7 +355,7 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
-   * @returns {Promise<boolean>} - Result.
+   * @returns {Promise<boolean>} - Resolves with Whether table exists.
    */
   async tableExists(tableName) {
     const exists = await this.getDriver().tableExists(tableName)

@@ -33,7 +33,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     this.modelClass = modelClass
   }
 
-  /** @returns {this} - Result.  */
+  /** @returns {this} - The clone.  */
   clone() {
     const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (new VelociousDatabaseQueryModelClassQuery({
       driver: this._driverFn,
@@ -57,7 +57,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return newQuery
   }
 
-  /** @returns {Promise<number>} - Result.  */
+  /** @returns {Promise<number>} - Resolves with the count.  */
   async count() {
     // Generate count SQL
     const primaryKey = `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())}`
@@ -97,14 +97,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return countResult
   }
 
-  /** @returns {MC} - Result.  */
+  /** @returns {MC} - The model class.  */
   getModelClass() {
     if (!this.modelClass) throw new Error("modelClass not set")
 
     return this.modelClass
   }
 
-  /** @returns {Promise<void>} - Result.  */
+  /** @returns {Promise<void>} - Resolves when complete.  */
   async destroyAll() {
     const records = await this.toArray()
 
@@ -115,7 +115,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {number|string} recordId
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   async find(recordId) {
     /** @type {{[key: string]: number | string}} */
@@ -138,7 +138,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {{[key: string]: any}} conditions
-   * @returns {Promise<InstanceType<MC> | null>} - Result.
+   * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   async findBy(conditions) {
     /** @type {{[key: string]: number | string}} */
@@ -160,7 +160,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * @param {{[key: string]: any}} conditions
    * @param {function(InstanceType<MC>) : void} [callback]
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the or create by.
    */
   async findOrCreateBy(conditions, callback) {
     const record = await this.findOrInitializeBy(conditions, callback)
@@ -174,7 +174,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {{[key: string]: any}} conditions
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
   async findByOrFail(conditions) {
     /** @type {{[key: string]: number | string}} */
@@ -202,7 +202,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * @param {object} conditions
    * @param {function(InstanceType<MC>) : void} [callback]
-   * @returns {Promise<InstanceType<MC>>} - Result.
+   * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
    */
   async findOrInitializeBy(conditions, callback) {
     const record = await this.findBy(conditions)
@@ -219,7 +219,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return newRecord
   }
 
-  /** @returns {Promise<InstanceType<MC> | undefined>} - Result.  */
+  /** @returns {Promise<InstanceType<MC> | undefined>} - Resolves with the first.  */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
     const results = await newQuery.toArray()
@@ -227,7 +227,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return results[0]
   }
 
-  /** @returns {Promise<InstanceType<MC> | undefined>} - Result.  */
+  /** @returns {Promise<InstanceType<MC> | undefined>} - Resolves with the last.  */
   async last() {
     const primaryKey = this.getModelClass().primaryKey()
     const tableName = this.getModelClass().tableName()
@@ -238,7 +238,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * @param {import("./index.js").NestedPreloadRecord} data
-   * @returns {this} - Result.
+   * @returns {this} - The preload.
    */
   preload(data) {
     incorporate(this._preload, data)
@@ -247,7 +247,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Converts query results to array of model instances
-   * @returns {Promise<Array<InstanceType<MC>>>} - Result.
+   * @returns {Promise<Array<InstanceType<MC>>>} - Resolves with the array.
    */
   async toArray() {
     const models = []
@@ -277,7 +277,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * Plucks one or more columns directly from the database without instantiating models.
    * @param {...string|string[]} columns
-   * @returns {Promise<any[]>} - Result.
+   * @returns {Promise<any[]>} - Resolves with the pluck.
    */
   async pluck(...columns) {
     const flatColumns = columns.flat()

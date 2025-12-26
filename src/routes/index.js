@@ -11,7 +11,7 @@ export default class VelociousRoutes {
 
   /**
    * @param {function(import("./root-route.js").default) : void} callback
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   draw(callback) {
     callback(this.rootRoute)

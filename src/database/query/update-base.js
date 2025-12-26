@@ -16,7 +16,7 @@ export default class VelociousDatabaseQueryUpdateBase {
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.driver.options()

@@ -29,7 +29,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.driver.options()
@@ -137,7 +137,7 @@ export default class VelociousDatabaseQueryInsertBase {
 
   /**
    * @param {any[]} data
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   _valuesSql(data) {
     let count = 0

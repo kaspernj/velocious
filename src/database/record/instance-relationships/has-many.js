@@ -17,7 +17,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * @param {Record<string, any>} data
-   * @returns {InstanceType<TMC>} - Result.
+   * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
     // Spawn new model of the targeted class
@@ -72,7 +72,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * @param {Record<string, any>} data
-   * @returns {Promise<InstanceType<TMC>>} - Result.
+   * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
   async create(data) {
     const model = this.build(data)
@@ -82,7 +82,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     return model
   }
 
-  /** @returns {Promise<void>} - Result.  */
+  /** @returns {Promise<void>} - Resolves when complete.  */
   async load() {
     const foreignModels = await this.query().toArray()
 
@@ -91,17 +91,17 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     this.setPreloaded(true)
   }
 
-  /** @returns {import("../../query/model-class-query.js").default<TMC>} - Result.  */
+  /** @returns {import("../../query/model-class-query.js").default<TMC>} - The preload.  */
   preload(preloads) {
     return this.query().clone().preload(preloads)
   }
 
-  /** @returns {Promise<InstanceType<TMC>>} - Result.  */
+  /** @returns {Promise<InstanceType<TMC>>} - Resolves with the find.  */
   async find(modelID) {
     return await this.query().find(modelID)
   }
 
-  /** @returns {import("../../query/model-class-query.js").default<TMC>} - Result.  */
+  /** @returns {import("../../query/model-class-query.js").default<TMC>} - The query.  */
   query() {
     if (!this.getModel().isPersisted()) throw new Error("Cannot build a query for an unpersisted parent model")
 
@@ -161,7 +161,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * @param {InstanceType<MC>[] | InstanceType<MC>} models
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   addToLoaded(models) {
     if (!models) {
@@ -189,7 +189,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * @param {InstanceType<TMC>[]} models
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setLoaded(models) {
     if (!Array.isArray(models)) throw new Error(`Argument given to setLoaded wasn't an array: ${typeof models}`)

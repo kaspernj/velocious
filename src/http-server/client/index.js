@@ -32,7 +32,7 @@ export default class VeoliciousHttpServerClient {
 
   /**
    * @param {string} message
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _sendBadUpgradeResponse(message) {
     const httpVersion = this.currentRequest?.httpVersion() || "1.1"
@@ -76,7 +76,7 @@ export default class VeoliciousHttpServerClient {
 
   /**
    * @param {Buffer} data
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   onWrite(data) {
     if (this.websocketSession) {
@@ -100,7 +100,7 @@ export default class VeoliciousHttpServerClient {
 
   /**
    * @param {import("./request.js").default} request
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether websocket upgrade.
    */
   _isWebsocketUpgrade(request) {
     const upgradeHeader = request.header("upgrade")?.toLowerCase()
@@ -109,7 +109,7 @@ export default class VeoliciousHttpServerClient {
     return Boolean(upgradeHeader == "websocket" && connectionHeader?.includes("upgrade"))
   }
 
-  /** @returns {void} - Result.  */
+  /** @returns {void} - No return value.  */
   _upgradeToWebsocket() {
     if (!this.currentRequest) throw new Error("No current request")
 
@@ -176,7 +176,7 @@ export default class VeoliciousHttpServerClient {
 
   /**
    * @param {RequestRunner} requestRunner
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   sendResponse(requestRunner) {
     if (!this.currentRequest) throw new Error("No current request")

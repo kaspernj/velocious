@@ -16,7 +16,7 @@ export default class VelociousBasicRoute extends BaseRoute {
    * @param {Record<string, any>} args.params
    * @param {string} args.path
    * @param {import("../http-server/client/request.js").default} args.request
-   * @returns {{restPath: string} | undefined} - Result.
+   * @returns {{restPath: string} | undefined} - REST path metadata for this route.
    */
   matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars
     throw new Error(`No 'matchWithPath' implemented on ${this.constructor.name}`)
@@ -25,7 +25,7 @@ export default class VelociousBasicRoute extends BaseRoute {
   /**
    * @param {string} name
    * @param {function(import("./namespace-route.js").default) : void} callback
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   namespace(name, callback) {
     const NamespaceRoute = VelociousBasicRoute.NameSpaceRouteType
@@ -43,7 +43,7 @@ export default class VelociousBasicRoute extends BaseRoute {
 
   /**
    * @param {string} name
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   post(name) {
     const PostRoute = VelociousBasicRoute.PostRouteType
@@ -58,7 +58,7 @@ export default class VelociousBasicRoute extends BaseRoute {
   /**
    * @param {string} name
    * @param {function(import("./resource-route.js").default) : void} [callback]
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   resources(name, callback) {
     const ResourceRoute = VelociousBasicRoute.ResourceRouteType

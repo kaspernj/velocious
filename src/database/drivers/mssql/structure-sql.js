@@ -12,7 +12,7 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
   }
 
   /**
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {
     const {driver} = this
@@ -66,7 +66,7 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
 
   /**
    * @param {Record<string, any>} column
-   * @returns {string | null} - Result.
+   * @returns {string | null} - The column definition.
    */
   _columnDefinition(column) {
     const {driver} = this

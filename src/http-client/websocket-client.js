@@ -22,7 +22,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * Ensure a websocket connection is open.
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async connect() {
     if (this.socket && this.socket.readyState === this.socket.OPEN) return
@@ -57,7 +57,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * Close the websocket and clear pending state.
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async close() {
     if (!this.socket) return
@@ -76,7 +76,7 @@ export default class VelociousWebsocketClient {
    * @param {string} path
    * @param {any} [body]
    * @param {{headers?: Record<string, string>}} [options]
-   * @returns {Promise<VelociousWebsocketResponse>} - Result.
+   * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the post.
    */
   async post(path, body, options = {}) {
     return await this.request("POST", path, {...options, body})
@@ -86,7 +86,7 @@ export default class VelociousWebsocketClient {
    * Perform a GET request over the websocket.
    * @param {string} path
    * @param {{headers?: Record<string, string>}} [options]
-   * @returns {Promise<VelociousWebsocketResponse>} - Result.
+   * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the get.
    */
   async get(path, options = {}) {
     return await this.request("GET", path, options)
@@ -130,7 +130,7 @@ export default class VelociousWebsocketClient {
    * @param {object} [options]
    * @param {any} [options.body]
    * @param {Record<string, string>} [options.headers]
-   * @returns {Promise<VelociousWebsocketResponse>} - Result.
+   * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the request.
    */
   async request(method, path, {body, headers} = {}) {
     await this.connect()
@@ -233,7 +233,7 @@ export default class VelociousWebsocketClient {
   /**
    * @private
    * @param  {...any} args
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _debug(...args) {
     if (!this.debug) return
@@ -255,7 +255,7 @@ class VelociousWebsocketResponse {
     this.type = message.type
   }
 
-  /** @returns {any} - Result.  */
+  /** @returns {any} - The json.  */
   json() {
     if (typeof this.body !== "string") {
       throw new Error("Response body is not a string")

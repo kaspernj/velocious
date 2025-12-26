@@ -61,7 +61,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {import("../../table-data/index.js").default} tableData
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async alterTableSQLs(tableData) {
     const alterArgs = {tableData, driver: this}
@@ -74,7 +74,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
    * @param {string} databaseName
    * @param {object} [args]
    * @param {boolean} [args.ifNotExists]
-   * @returns {string[]} - Result.
+   * @returns {string[]} - SQL statements.
    */
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
@@ -85,7 +85,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {import("../base.js").CreateIndexSqlArgs} indexData
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
@@ -96,7 +96,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {import("../../table-data/index.js").default} tableData
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
@@ -122,7 +122,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   /**
    * @param {string} tableName
    * @param {import("../base.js").DropTableSqlArgsType} [args]
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
@@ -136,7 +136,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {string} sql
-   * @returns {Promise<import("../base.js").QueryResultType>} - Result.
+   * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
     let response
@@ -158,7 +158,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {import("../../query/index.js").default} query
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
@@ -166,7 +166,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {any} value
-   * @returns {any} - Result.
+   * @returns {any} - The escape.
    */
   escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
@@ -179,7 +179,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {string} value
-   * @returns {string} - Result.
+   * @returns {string} - The quote.
    */
   quote(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
@@ -190,7 +190,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {import("../base.js").DeleteSqlArgsType} args
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
@@ -201,7 +201,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   /**
    * @abstract
    * @param {import("../base.js").InsertSqlArgsType} args
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   insertSql(args) {
     const insertArgs = Object.assign({driver: this}, args)
@@ -242,7 +242,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   /**
    * @abstract
    * @param {import("../base.js").UpdateSqlArgsType} args
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   updateSql({conditions, data, tableName}) {
     const update = new Update({conditions, data, driver: this, tableName})
@@ -251,7 +251,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
     return await new StructureSql({driver: this}).toSql()

@@ -2,7 +2,7 @@
 
 /**
  * @param {object} restArgs
- * @returns {void} - Result.
+ * @returns {void} - No return value.
  */
 export default function restArgsError(restArgs) {
   const restArgsKeys = Object.keys(restArgs)

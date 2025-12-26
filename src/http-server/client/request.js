@@ -22,13 +22,13 @@ export default class VelociousHttpServerClientRequest {
 
   /**
    * @param {Buffer} data
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   feed(data) { return this.requestParser.feed(data) }
 
   /**
    * @param {string} headerName
-   * @returns {string | null} - Result.
+   * @returns {string | null} - The header.
    */
   header(headerName) { return this.getRequestBuffer().getHeader(headerName)?.getValue() }
   headers() { return this.getRequestBuffer().getHeadersHash() }

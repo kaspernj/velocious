@@ -20,7 +20,7 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
   }
 
   /**
-   * @returns {string[]} - Result.
+   * @returns {string[]} - SQL statements.
    */
   toSql() {
     const {databaseName} = this

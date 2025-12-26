@@ -25,17 +25,17 @@ export default class TableIndex {
   }
 
   /**
-   * @returns {Array<string | import("./table-column.js").default>} - Result.
+   * @returns {Array<string | import("./table-column.js").default>} - The columns.
    */
   getColumns() { return this.columns }
 
   /**
-   * @returns {string | undefined} - Result.
+   * @returns {string | undefined} - The name.
    */
   getName() { return this.args?.name }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether unique.
    */
   getUnique() { return Boolean(this.args?.unique) }
 }

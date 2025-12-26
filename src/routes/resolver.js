@@ -89,7 +89,7 @@ export default class VelociousRoutesResolver {
   /**
    * @param {import("./base-route.js").default} route
    * @param {string} path
-   * @returns {{restPath: string} | undefined} - Result.
+   * @returns {{restPath: string} | undefined} - REST path metadata for this route.
    */
   matchPathWithRoutes(route, path) {
     const pathWithoutSlash = path.replace(/^\//, "").split("?")[0]
@@ -117,7 +117,7 @@ export default class VelociousRoutesResolver {
    * @param {object} args
    * @param {string} args.action
    * @param {typeof import("../controller.js").default} args.controllerClass
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _logActionStart({action, controllerClass}) {
     const request = this.request
@@ -135,12 +135,12 @@ export default class VelociousRoutesResolver {
 
   /**
    * @param {Date} date
-   * @returns {string} - Result.
+   * @returns {string} - The timestamp.
    */
   _formatTimestamp(date) {
     /**
      * @param {number} num
-     * @returns {string} - Result.
+     * @returns {string} - The pad.
      */
     const pad = (num) => String(num).padStart(2, "0")
     const year = date.getFullYear()
@@ -160,7 +160,7 @@ export default class VelociousRoutesResolver {
 
   /**
    * @param {any} value
-   * @returns {any} - Result.
+   * @returns {any} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {
     if (value instanceof UploadedFile) {

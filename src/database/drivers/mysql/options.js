@@ -21,7 +21,7 @@ export default class VelociousDatabaseDriversMysqlOptions extends QueryParserOpt
 
   /**
    * @param {any} string
-   * @returns {number | string} - Result.
+   * @returns {number | string} - The quote.
    */
   quote(string) {
     if (!this.driver) throw new Error("Driver not set")

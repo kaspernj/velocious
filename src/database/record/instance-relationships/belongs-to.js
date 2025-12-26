@@ -17,7 +17,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
   /**
    * @param {Record<string, any>} data
-   * @returns {InstanceType<TMC>} - Result.
+   * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
     const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())

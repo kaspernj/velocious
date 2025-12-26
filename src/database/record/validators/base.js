@@ -16,7 +16,7 @@ export default class VelociousDatabaseRecordValidatorsBase {
    * @param {object} args
    * @param {import("../index.js").default} args.model
    * @param {string} args.attributeName
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async validate({model, attributeName}) { // eslint-disable-line no-unused-vars
     throw new Error("validate not implemented")

@@ -64,18 +64,18 @@ export default class VelociousDatabaseRecordBaseRelationship {
     throw new Error("getInverseOf not implemented")
   }
 
-  /** @returns {typeof import("../index.js").default} - Result.  */
+  /** @returns {typeof import("../index.js").default} - The model class.  */
   getModelClass() { return this.modelClass }
 
   /** @returns {string} The name of the relationship, e.g. "posts", "user", "comments" etc. */
   getRelationshipName() { return this.relationshipName }
 
-  /** @returns {boolean} - Result.  */
+  /** @returns {boolean} - Whether polymorphic.  */
   getPolymorphic() {
     return this._polymorphic || false
   }
 
-  /** @returns {string} - Result.  */
+  /** @returns {string} - The polymorphic type column.  */
   getPolymorphicTypeColumn() {
     if (!this.getPolymorphic()) {
       throw new Error(`${this.modelClass.name}#${this.relationshipName} isn't polymorphic`)

@@ -36,7 +36,7 @@ export default class HttpClient {
    * @param {string} path
    * @param {object} [options]
    * @param {Array<import("./header.js").default>} [options.headers]
-   * @returns {Promise<{request: import("./request.js").default, response: import("./response.js").default}>} - Result.
+   * @returns {Promise<{request: import("./request.js").default, response: import("./response.js").default}>} - Resolves with the request/response pair.
    */
   get(path, {headers} = {}) {
     if (!this.connection) throw new Error("Not connected yet")

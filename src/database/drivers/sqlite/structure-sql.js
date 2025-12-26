@@ -12,7 +12,7 @@ export default class VelociousDatabaseDriversSqliteStructureSql {
   }
 
   /**
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {
     const {driver} = this

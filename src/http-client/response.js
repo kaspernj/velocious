@@ -30,7 +30,7 @@ export default class Response {
 
   /**
    * @param {string} name
-   * @returns {Header} - Result.
+   * @returns {Header} - The header.
    */
   getHeader(name) {
     const compareName = name.toLowerCase().trim()
@@ -123,7 +123,7 @@ export default class Response {
   }
 
   /**
-   * @returns {number} - Result.
+   * @returns {number} - The content length number.
    */
   _contentLengthNumber() {
     const header = this.headers.find((currentHeader) => currentHeader.getName().toLowerCase() == "content-length")

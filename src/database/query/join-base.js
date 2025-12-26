@@ -4,14 +4,14 @@ export default class VelociousDatabaseQueryJoinBase {
   pretty = false
 
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.getQuery().driver.options()
   }
 
   /**
-   * @returns {import("./index.js").default} - Result.
+   * @returns {import("./index.js").default} - The query.
    */
   getQuery() {
     if (!this.query) throw new Error("'query' hasn't been set")
