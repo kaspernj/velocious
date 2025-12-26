@@ -46,9 +46,9 @@ import {tests} from "./test.js"
 
 export default class TestRunner {
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @param {Array<string>} args.testFiles
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {Array<string>} args.testFiles - Test files.
    */
   constructor({configuration, testFiles, ...restArgs}) {
     restArgsError(restArgs)
@@ -187,7 +187,7 @@ export default class TestRunner {
   }
 
   /**
-   * @param {TestsArgument} tests
+   * @param {TestsArgument} tests - Tests.
    * @returns {{anyTestsFocussed: boolean}} - Whether any tests in the tree are focused.
    */
   analyzeTests(tests) {
@@ -220,12 +220,12 @@ export default class TestRunner {
   }
 
   /**
-   * @param {object} args
-   * @param {Array<AfterBeforeEachCallbackObjectType>} args.afterEaches
-   * @param {Array<AfterBeforeEachCallbackObjectType>} args.beforeEaches
-   * @param {TestsArgument} args.tests
-   * @param {string[]} args.descriptions
-   * @param {number} args.indentLevel
+   * @param {object} args - Options object.
+   * @param {Array<AfterBeforeEachCallbackObjectType>} args.afterEaches - After eaches.
+   * @param {Array<AfterBeforeEachCallbackObjectType>} args.beforeEaches - Before eaches.
+   * @param {TestsArgument} args.tests - Tests.
+   * @param {string[]} args.descriptions - Descriptions.
+   * @param {number} args.indentLevel - Indent level.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {

@@ -8,16 +8,16 @@ export default class VelociousHttpServerClientResponse {
   headers = {}
 
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    */
   constructor({configuration}) {
     this.configuration = configuration
   }
 
   /**
-   * @param {string} key
-   * @param {string} value
+   * @param {string} key - Key.
+   * @param {string} value - Value to use.
    * @returns {void} - No return value.
    */
   addHeader(key, value) {
@@ -29,8 +29,8 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @param {string} key
-   * @param {string} value
+   * @param {string} key - Key.
+   * @param {string} value - Value to use.
    * @returns {void} - No return value.
    */
   setHeader(key, value) {
@@ -63,7 +63,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @param {string} value
+   * @param {string} value - Value to use.
    * @returns {void} - No return value.
    */
   setBody(value) {
@@ -71,7 +71,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @param {Error} error
+   * @param {Error} error - Error instance.
    * @returns {void} - No return value.
    */
   setErrorBody(error) {
@@ -80,7 +80,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @param {number | string} status
+   * @param {number | string} status - Status.
    * @returns {void} - No return value.
    */
   setStatus(status) {

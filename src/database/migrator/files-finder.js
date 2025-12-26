@@ -7,8 +7,8 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseMigratorFilesFinder {
   /**
-   * @param {object} args
-   * @param {string} args.path
+   * @param {object} args - Options object.
+   * @param {string} args.path - Path.
    */
   constructor({path, ...restArgs}) {
     restArgsError(restArgs)

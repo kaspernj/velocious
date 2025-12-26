@@ -8,8 +8,8 @@ import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   /**
-   * @param {import("../base.js").default} driver
-   * @param {Record<string, any>} data
+   * @param {import("../base.js").default} driver - Database driver instance.
+   * @param {Record<string, any>} data - Data payload.
    */
   constructor(driver, data) {
     super()
@@ -114,7 +114,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   }
 
   /**
-   * @param {{cascade: boolean}} [args]
+   * @param {{cascade: boolean}} [args] - Truncate options.
    * @returns {Promise<Array<Record<string, any>>>} - Resolves with the truncate.
    */
   async truncate(args) { // eslint-disable-line no-unused-vars

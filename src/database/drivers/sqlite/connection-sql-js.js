@@ -5,8 +5,8 @@ import queryWeb from "./query.web.js"
 
 export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   /**
-   * @param {import("../base.js").default} driver
-   * @param {import("sql.js").Database} connection
+   * @param {import("../base.js").default} driver - Database driver instance.
+   * @param {import("sql.js").Database} connection - Connection.
    */
   constructor(driver, connection) {
     this.connection = connection
@@ -21,7 +21,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   async disconnect() { await this.saveDatabase() }
 
   /**
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {Promise<Record<string, any>[]>} - Resolves with the query.
    */
   async query(sql) {

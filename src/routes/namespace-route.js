@@ -7,8 +7,8 @@ import escapeStringRegexp from "escape-string-regexp"
 
 class VelociousRouteNamespaceRoute extends BasicRoute {
   /**
-   * @param {object} args
-   * @param {string} args.name
+   * @param {object} args - Options object.
+   * @param {string} args.name - Name.
    */
   constructor({name, ...restArgs}) {
     super()
@@ -24,10 +24,10 @@ class VelociousRouteNamespaceRoute extends BasicRoute {
   }
 
   /**
-   * @param {object} args
-   * @param {Record<string, any>} args.params
-   * @param {string} args.path
-   * @param {import("../http-server/client/request.js").default} args.request
+   * @param {object} args - Options object.
+   * @param {Record<string, any>} args.params - Parameters object.
+   * @param {string} args.path - Path.
+   * @param {import("../http-server/client/request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.
    */
   matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars

@@ -16,9 +16,9 @@ export default class VelociousHttpServerClientWebsocketSession {
   subscriptions = new Set()
 
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {import("./index.js").default} args.client
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("./index.js").default} args.client - Client instance.
    */
   constructor({client, configuration}) {
     this.buffer = Buffer.alloc(0)
@@ -28,7 +28,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {string} channel
+   * @param {string} channel - Channel name.
    * @returns {void} - No return value.
    */
   addSubscription(channel) {
@@ -40,7 +40,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {string} channel
+   * @param {string} channel - Channel name.
    * @returns {boolean} - Whether it has subscription.
    */
   hasSubscription(channel) {
@@ -48,7 +48,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {Buffer} data
+   * @param {Buffer} data - Data payload.
    * @returns {void} - No return value.
    */
   onData(data) {
@@ -57,8 +57,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {string} channel
-   * @param {any} payload
+   * @param {string} channel - Channel name.
+   * @param {any} payload - Payload data.
    * @returns {void} - No return value.
    */
   sendEvent(channel, payload) {
@@ -68,7 +68,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {import("./index.js").default} client
+   * @param {import("./index.js").default} client - Client instance.
    * @returns {void} - No return value.
    */
   sendGoodbye(client) {
@@ -78,7 +78,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {object} message
+   * @param {object} message - Message text.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
@@ -208,8 +208,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {number} opcode
-   * @param {Buffer} payload
+   * @param {number} opcode - Opcode.
+   * @param {Buffer} payload - Payload data.
    * @returns {void} - No return value.
    */
   _sendControlFrame(opcode, payload) {
@@ -222,7 +222,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {object} body
+   * @param {object} body - Request body.
    * @returns {void} - No return value.
    */
   _sendJson(body) {
@@ -249,8 +249,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {Buffer} payload
-   * @param {Buffer} mask
+   * @param {Buffer} payload - Payload data.
+   * @param {Buffer} mask - Mask.
    * @returns {Buffer} - The unmask payload.
    */
   _unmaskPayload(payload, mask) {

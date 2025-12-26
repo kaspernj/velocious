@@ -4,7 +4,7 @@ import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   /**
-   * @param {import("../drivers/base.js").default} _connection
+   * @param {import("../drivers/base.js").default} _connection - Connection.
    */
   checkin(_connection) { // eslint-disable-line no-unused-vars
     // Do nothing
@@ -22,7 +22,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
-   * @param {function(import("../drivers/base.js").default) : void} callback
+   * @param {function(import("../drivers/base.js").default) : void} callback - Callback function.
    */
   async withConnection(callback) {
     const connection = await this.checkout()

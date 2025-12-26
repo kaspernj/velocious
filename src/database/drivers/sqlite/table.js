@@ -7,9 +7,9 @@ import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   /**
-   * @param {object} args
-   * @param {import("../base.js").default} args.driver
-   * @param {Record<string, any>} args.row
+   * @param {object} args - Options object.
+   * @param {import("../base.js").default} args.driver - Database driver instance.
+   * @param {Record<string, any>} args.row - Row data.
    */
   constructor({driver, row}) {
     super()
@@ -71,7 +71,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   }
 
   /**
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {string[]} - SQL statements.
    */
   _parseColumnsFromSQL(sql) {

@@ -5,9 +5,9 @@ import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversSqliteForeignKey extends BaseForeignKey {
   /**
-   * @param {Record<string, any>} data
-   * @param {object} args
-   * @param {string} args.tableName
+   * @param {Record<string, any>} data - Data payload.
+   * @param {object} args - Options object.
+   * @param {string} args.tableName - Table name.
    */
   constructor(data, {tableName}) {
     super(data)

@@ -4,9 +4,9 @@ import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasOne {
   /**
-   * @param {object} args
-   * @param {Array<import("../../record/index.js").default>} args.models
-   * @param {import("../../record/relationships/has-one.js").default} args.relationship
+   * @param {object} args - Options object.
+   * @param {Array<import("../../record/index.js").default>} args.models - Model instances.
+   * @param {import("../../record/relationships/has-one.js").default} args.relationship - Relationship.
    */
   constructor({models, relationship, ...restArgs}) {
     restArgsError(restArgs)

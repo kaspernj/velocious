@@ -24,7 +24,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @param {string} indexName
+   * @param {string} indexName - Index name.
    * @returns {Promise<import("./base-columns-index.js").default | undefined>} - Resolves with the index by name.
    */
   async getIndexByName(indexName) {

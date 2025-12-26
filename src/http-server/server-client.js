@@ -7,10 +7,10 @@ export default class ServerClient {
   events = new EventEmitter()
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @param {import("net").Socket} args.socket
-   * @param {number} args.clientCount
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("net").Socket} args.socket - Socket instance.
+   * @param {number} args.clientCount - Client count.
    */
   constructor({configuration, socket, clientCount}) {
     if (!configuration) throw new Error("No configuration given")
@@ -38,7 +38,7 @@ export default class ServerClient {
   }
 
   /**
-   * @param {Buffer} chunk
+   * @param {Buffer} chunk - Chunk.
    * @returns {void} - No return value.
    */
   onSocketData = (chunk) => {
@@ -60,7 +60,7 @@ export default class ServerClient {
   }
 
   /**
-   * @param {string} data
+   * @param {string} data - Data payload.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async send(data) {
@@ -77,7 +77,7 @@ export default class ServerClient {
   }
 
   /**
-   * @param {import("worker_threads").Worker} newWorker
+   * @param {import("worker_threads").Worker} newWorker - New worker.
    * @returns {void} - No return value.
    */
   setWorker(newWorker) {

@@ -8,8 +8,8 @@ import RequestBuffer from "./request-buffer/index.js"
 
 export default class VelociousHttpServerClientRequestParser {
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    */
   constructor({configuration}) {
     if (!configuration) throw new Error("No configuration given")
@@ -34,7 +34,7 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
-   * @param {import("./request-buffer/form-data-part.js").default} formDataPart
+   * @param {import("./request-buffer/form-data-part.js").default} formDataPart - Form data part.
    * @returns {void} - No return value.
    */
   onFormDataPart = (formDataPart) => {
@@ -50,13 +50,13 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
-   * @param {Buffer} data
+   * @param {Buffer} data - Data payload.
    * @returns {void} - No return value.
    */
   feed = (data) => this.requestBuffer.feed(data)
 
   /**
-   * @param {string} name
+   * @param {string} name - Name.
    * @returns {string} - The header.
    */
   getHeader(name) { return this.requestBuffer.getHeader(name)?.value }

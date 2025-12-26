@@ -5,9 +5,9 @@ import * as inflection from "inflection"
 
 export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   /**
-   * @param {object} args
-   * @param {import("../index.js").default} args.model
-   * @param {string} args.attributeName
+   * @param {object} args - Options object.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.attributeName - Attribute name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async validate({model, attributeName}) {

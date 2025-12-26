@@ -6,9 +6,9 @@ import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   /**
-   * @param {object} args
-   * @param {import("../drivers/base.js").default} args.driver
-   * @param {TableData} args.tableData
+   * @param {object} args - Options object.
+   * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
+   * @param {TableData} args.tableData - Table data.
    */
   constructor({driver, tableData, ...restArgs}) {
     restArgsError(restArgs)

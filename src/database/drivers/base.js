@@ -54,8 +54,8 @@ export default class VelociousDatabaseDriversBase {
   idSeq = undefined
 
   /**
-   * @param {import("../../configuration-types.js").DatabaseConfigurationType} config
-   * @param {import("../../configuration.js").default} configuration
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
+   * @param {import("../../configuration.js").default} configuration - Configuration instance.
    */
   constructor(config, configuration) {
     this._args = config
@@ -67,11 +67,11 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} columnName
-   * @param {string} referencedTableName
-   * @param {string} referencedColumnName
-   * @param {object} args
+   * @param {string} tableName - Table name.
+   * @param {string} columnName - Column name.
+   * @param {string} referencedTableName - Referenced table name.
+   * @param {string} referencedColumnName - Referenced column name.
+   * @param {object} args - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async addForeignKey(tableName, columnName, referencedTableName, referencedColumnName, args) {
@@ -99,7 +99,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {import("../table-data/index.js").default} _tableData
+   * @param {import("../table-data/index.js").default} _tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   alterTableSQLs(_tableData) { // eslint-disable-line no-unused-vars
@@ -116,16 +116,16 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} databaseName
-   * @param {object} [args]
-   * @param {boolean} [args.ifNotExists]
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifNotExists] - Whether if not exists.
    * @returns {string[]} - SQL statements.
    */
   createDatabaseSql(databaseName, args) { throw new Error("'createDatabaseSql' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
-   * @param {CreateIndexSqlArgs} indexData
+   * @param {CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createIndexSQLs(indexData) { // eslint-disable-line no-unused-vars
@@ -133,7 +133,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {import("../table-data/index.js").default} tableData
+   * @param {import("../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async createTable(tableData) {
@@ -147,7 +147,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {import("../table-data/index.js").default} tableData
+   * @param {import("../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createTableSql(tableData) { // eslint-disable-line no-unused-vars
@@ -155,7 +155,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {DeleteSqlArgsType} args
+   * @param {DeleteSqlArgsType} args - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async delete(args) {
@@ -167,7 +167,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {DeleteSqlArgsType} args
+   * @param {DeleteSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   deleteSql(args) { // eslint-disable-line no-unused-vars
@@ -175,8 +175,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} tableName
-   * @param {DropTableSqlArgsType} [args]
+   * @param {string} tableName - Table name.
+   * @param {DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async dropTable(tableName, args) {
@@ -190,8 +190,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} tableName
-   * @param {DropTableSqlArgsType} [args]
+   * @param {string} tableName - Table name.
+   * @param {DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args) { // eslint-disable-line no-unused-vars
@@ -200,7 +200,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {any} value
+   * @param {any} value - Value to use.
    * @returns {any} - The escape.
    */
   escape(value) { // eslint-disable-line no-unused-vars
@@ -246,9 +246,9 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} name
-   * @param {object} [args]
-   * @param {boolean} args.throwError
+   * @param {string} name - Name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} args.throwError - Whether throw error.
    * @returns {Promise<import("./base-table.js").default | undefined>} - Resolves with the table by name.
    */
   async getTableByName(name, args) {
@@ -273,7 +273,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} name
+   * @param {string} name - Name.
    * @returns {Promise<import("./base-table.js").default>} - Resolves with the table by name or fail.
    */
   async getTableByNameOrFail(name) {
@@ -289,7 +289,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {InsertSqlArgsType} args
+   * @param {InsertSqlArgsType} args - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insert(args) {
@@ -301,9 +301,9 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} tableName
-   * @param {Array<string>} columns
-   * @param {Array<Array<string>>} rows
+   * @param {string} tableName - Table name.
+   * @param {Array<string>} columns - Column names.
+   * @param {Array<Array<string>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) { // eslint-disable-line no-unused-vars
@@ -312,7 +312,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {InsertSqlArgsType} args
+   * @param {InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   insertSql(args) { // eslint-disable-line no-unused-vars
@@ -328,7 +328,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {any} value
+   * @param {any} value - Value to use.
    * @returns {any} - The convert value.
    */
   _convertValue(value) {
@@ -348,7 +348,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {any} value
+   * @param {any} value - Value to use.
    * @returns {number | string} - The quote.
    */
   quote(value) {
@@ -361,7 +361,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} columnName
+   * @param {string} columnName - Column name.
    * @returns {string} - The quote column.
    */
   quoteColumn(columnName) {
@@ -369,7 +369,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} columnName
+   * @param {string} columnName - Column name.
    * @returns {string} - The quote index.
    */
   quoteIndex(columnName) {
@@ -377,7 +377,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} tableName
+   * @param {string} tableName - Table name.
    * @returns {string} - The quote table.
    */
   quoteTable(tableName) {
@@ -397,7 +397,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} tableName
+   * @param {string} tableName - Table name.
    * @returns {Promise<QueryResultType>} - Resolves with the select.
    */
   async select(tableName) {
@@ -411,7 +411,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {number | undefined} newIdSeq
+   * @param {number | undefined} newIdSeq - New id seq.
    * @returns {void} - No return value.
    */
   setIdSeq(newIdSeq) {
@@ -438,7 +438,7 @@ export default class VelociousDatabaseDriversBase {
   supportsInsertIntoReturning() { return false }
 
   /**
-   * @param {string} tableName
+   * @param {string} tableName - Table name.
    * @returns {Promise<boolean>} - Resolves with Whether table exists.
    */
   async tableExists(tableName) {
@@ -451,7 +451,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {() => Promise<void>} callback
+   * @param {() => Promise<void>} callback - Callback function.
    * @returns {Promise<any>} - Resolves with the transaction.
    */
   async transaction(callback) {
@@ -557,7 +557,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
   async query(sql) {
@@ -586,7 +586,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {Promise<QueryResultType>} - Resolves with the query actual.
    */
   _queryActual(sql) { // eslint-disable-line no-unused-vars
@@ -595,13 +595,13 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {Query} _query
+   * @param {Query} _query - Query instance.
    * @returns {string} - SQL string.
    */
   queryToSql(_query) { throw new Error("queryToSql not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @param {Error} _error
+   * @param {Error} _error - Error instance.
    * @returns {boolean} - Whether retryable database error.
    */
   retryableDatabaseError(_error) { // eslint-disable-line no-unused-vars
@@ -609,7 +609,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {void} - No return value.
    */
   _assertWritableQuery(sql) {
@@ -629,7 +629,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {boolean} - SQL representation.
    */
   _sqlLooksLikeWrite(sql) {
@@ -703,7 +703,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async startSavePoint(savePointName) {
@@ -713,7 +713,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _startSavePointAction(savePointName) {
@@ -721,9 +721,9 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} oldColumnName
-   * @param {string} newColumnName
+   * @param {string} tableName - Table name.
+   * @param {string} oldColumnName - Previous column name.
+   * @param {string} newColumnName - New column name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
@@ -744,7 +744,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async releaseSavePoint(savePointName) {
@@ -754,7 +754,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _releaseSavePointAction(savePointName) {
@@ -774,7 +774,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async rollbackSavePoint(savePointName) {
@@ -784,7 +784,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _rollbackSavePointAction(savePointName) {
@@ -828,7 +828,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {UpdateSqlArgsType} args
+   * @param {UpdateSqlArgsType} args - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async update(args) {
@@ -840,7 +840,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {UpdateSqlArgsType} args
+   * @param {UpdateSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   updateSql(args) { // eslint-disable-line no-unused-vars
@@ -864,7 +864,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {function() : void} callback
+   * @param {function() : void} callback - Callback function.
    * @returns {Promise<any>} - Resolves with the with disabled foreign keys.
    */
   async withDisabledForeignKeys(callback) {

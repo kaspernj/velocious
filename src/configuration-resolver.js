@@ -5,7 +5,7 @@ import envSense from "env-sense/build/use-env-sense.js"
 import fileExists from "./utils/file-exists.js"
 
 /**
- * @param {import("./configuration-types.js").ConfigurationArgsType} [args]
+ * @param {import("./configuration-types.js").ConfigurationArgsType} [args] - Options object.
  * @returns {Promise<Configuration>} - Resolves with value.
  */
 export default async function configurationResolver(args) {

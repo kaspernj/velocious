@@ -2,8 +2,8 @@
 
 export default class Header {
   /**
-   * @param {string} name
-   * @param {string} value
+   * @param {string} name - Name.
+   * @param {string} value - Value to use.
    */
   constructor(name, value) {
     this.formattedName = name.toLowerCase().trim()

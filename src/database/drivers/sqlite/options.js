@@ -4,7 +4,7 @@ import QueryParserOptions from "../../query-parser/options.js"
 
 export default class VelociousDatabaseDriversSqliteOptions extends QueryParserOptions {
   /**
-   * @param {import("../base.js").default} driver
+   * @param {import("../base.js").default} driver - Database driver instance.
    */
   constructor(driver) {
     const optionsArgs = {
@@ -19,7 +19,7 @@ export default class VelociousDatabaseDriversSqliteOptions extends QueryParserOp
   }
 
   /**
-   * @param {string} string
+   * @param {string} string - String.
    * @returns {number | string} - The quote.
    */
   quote(string) {

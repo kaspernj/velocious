@@ -1,8 +1,8 @@
 // @ts-check
 
 /**
- * @param {import("sql.js").Database} connection
- * @param {string} sql
+ * @param {import("sql.js").Database} connection - Connection.
+ * @param {string} sql - SQL string.
  * @returns {Promise<Record<string, any>[]>} - Resolves with string value.
  */
 export default async function query(connection, sql) {

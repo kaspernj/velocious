@@ -22,9 +22,7 @@ export default defineConfig([
     rules: {
       "jsdoc/reject-any-type": "off",
       "jsdoc/reject-function-type": "off",
-      "jsdoc/require-jsdoc": "off",
-      "jsdoc/require-param": "off",
-      "jsdoc/require-param-description": "off"
+      "jsdoc/require-jsdoc": "off"
     }
   }),
   {

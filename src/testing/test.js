@@ -19,7 +19,7 @@ const tests = {
 let currentPath = [tests]
 
 /**
- * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback
+ * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
 function beforeEach(callback) {
@@ -29,7 +29,7 @@ function beforeEach(callback) {
 }
 
 /**
- * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback
+ * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
 function afterEach(callback) {
@@ -54,9 +54,9 @@ class BaseExpect {
 
 class ExpectToChange extends BaseExpect {
   /**
-   * @param {object} args
-   * @param {function(): Promise<number>} args.changeCallback
-   * @param {Expect} args.expect
+   * @param {object} args - Options object.
+   * @param {function(): Promise<number>} args.changeCallback - Change callback.
+   * @param {Expect} args.expect - Expect.
    */
   constructor({changeCallback, expect, ...restArgs}) {
     super()
@@ -67,7 +67,7 @@ class ExpectToChange extends BaseExpect {
   }
 
   /**
-   * @param {number} count
+   * @param {number} count - Count value.
    * @returns {Expect} - The by.
    */
   by(count) {
@@ -102,7 +102,7 @@ class ExpectToChange extends BaseExpect {
 
 class Expect extends BaseExpect {
   /**
-   * @param {any} object
+   * @param {any} object - Object.
    */
   constructor(object) {
     super()
@@ -113,7 +113,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {function(): Promise<number>} changeCallback
+   * @param {function(): Promise<number>} changeCallback - Change callback.
    * @returns {ExpectToChange} - The and change.
    */
   andChange(changeCallback) {
@@ -130,7 +130,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result
+   * @param {any} result - Result.
    * @returns {void} - No return value.
    */
   toBe(result) {
@@ -171,7 +171,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Function} klass
+   * @param {Function} klass - Klass.
    * @returns {void} - No return value.
    */
   toBeInstanceOf(klass) {
@@ -211,7 +211,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {function(): Promise<number>} changeCallback
+   * @param {function(): Promise<number>} changeCallback - Change callback.
    * @returns {ExpectToChange} - The change.
    */
   toChange(changeCallback) {
@@ -225,7 +225,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} valueToContain
+   * @param {any} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
@@ -240,7 +240,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result
+   * @param {any} result - Result.
    * @returns {void} - No return value.
    */
   toEqual(result) {
@@ -297,7 +297,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {RegExp} regex
+   * @param {RegExp} regex - Regex.
    * @returns {void} - No return value.
    */
   toMatch(regex) {
@@ -320,7 +320,7 @@ class Expect extends BaseExpect {
 
   /**
    * @template T extends Error
-   * @param {string|T} expectedError
+   * @param {string|T} expectedError - Expected error.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async toThrowError(expectedError) {
@@ -381,7 +381,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, any>} result
+   * @param {Record<string, any>} result - Result.
    * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
@@ -409,9 +409,9 @@ class Expect extends BaseExpect {
 }
 
 /**
- * @param {string} description
- * @param {object|(() => (void|Promise<void>))} arg1
- * @param {undefined|(() => (void|Promise<void>))} [arg2]
+ * @param {string} description - Description.
+ * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
+ * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
  * @returns {Promise<void>} - Resolves when complete.
  */
 async function describe(description, arg1, arg2) {
@@ -447,7 +447,7 @@ async function describe(description, arg1, arg2) {
 }
 
 /**
- * @param {any} arg
+ * @param {any} arg - Arg.
  * @returns {Expect} - The expect.
  */
 function expect(arg) {
@@ -455,9 +455,9 @@ function expect(arg) {
 }
 
 /**
- * @param {string} description
- * @param {object|(() => (void|Promise<void>))} arg1
- * @param {undefined|(() => (void|Promise<void>))} [arg2]
+ * @param {string} description - Description.
+ * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
+ * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
  * @returns {void} - No return value.
  */
 function it(description, arg1, arg2) {
@@ -483,9 +483,9 @@ function it(description, arg1, arg2) {
 }
 
 /**
- * @param {string} description
- * @param {object|(() => (void|Promise<void>))} arg1
- * @param {undefined|(() => (void|Promise<void>))} [arg2]
+ * @param {string} description - Description.
+ * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
+ * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
  * @returns {void} - No return value.
  */
 function fit(description, arg1, arg2) {

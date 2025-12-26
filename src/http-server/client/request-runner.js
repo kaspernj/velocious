@@ -11,9 +11,9 @@ export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {any} args.request
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {any} args.request - Request object.
    */
   constructor({configuration, request}) {
     if (!configuration) throw new Error("No configuration given")

@@ -4,8 +4,8 @@ import {normalizeSqlStatement} from "../structure-sql/utils.js"
 
 export default class VelociousDatabaseDriversPgsqlStructureSql {
   /**
-   * @param {object} args
-   * @param {import("../base.js").default} args.driver
+   * @param {object} args - Options object.
+   * @param {import("../base.js").default} args.driver - Database driver instance.
    */
   constructor({driver}) {
     this.driver = driver
@@ -74,7 +74,7 @@ export default class VelociousDatabaseDriversPgsqlStructureSql {
   }
 
   /**
-   * @param {Record<string, any>} column
+   * @param {Record<string, any>} column - Column.
    * @returns {string | null} - The column definition.
    */
   _columnDefinition(column) {

@@ -26,7 +26,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
     this.pool.on("error", this.onPoolError)
   }
 
-  /** @param {Error} error */
+  /** @param {Error} error - Error from the connection attempt. */
   onPoolError = (error) => {
     console.error("Velocious / MySQL driver / Pool error", error)
   }
@@ -59,7 +59,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {import("../../table-data/index.js").default} tableData
+   * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async alterTableSQLs(tableData) {
@@ -70,9 +70,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {string} databaseName
-   * @param {object} [args]
-   * @param {boolean} [args.ifNotExists]
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifNotExists] - Whether if not exists.
    * @returns {string[]} - SQL statements.
    */
   createDatabaseSql(databaseName, args) {
@@ -83,7 +83,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {import("../base.js").CreateIndexSqlArgs} indexData
+   * @param {import("../base.js").CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createIndexSQLs(indexData) {
@@ -94,7 +94,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {import("../../table-data/index.js").default} tableData
+   * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createTableSql(tableData) {
@@ -128,8 +128,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {string} tableName
-   * @param {import("../base.js").DropTableSqlArgsType} [args]
+   * @param {string} tableName - Table name.
+   * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args = {}) {
@@ -150,7 +150,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   primaryKeyType() { return "bigint" }
 
   /**
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
@@ -169,7 +169,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {import("../../query/index.js").default} query
+   * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
@@ -181,7 +181,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
-   * @param {any} value
+   * @param {any} value - Value to use.
    * @returns {any} - The escape.
    */
   escape(value) {
@@ -193,7 +193,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {string} value
+   * @param {string} value - Value to use.
    * @returns {string} - The quote.
    */
   quote(value) {
@@ -203,7 +203,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {import("../base.js").DeleteSqlArgsType} args
+   * @param {import("../base.js").DeleteSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   deleteSql({tableName, conditions}) {
@@ -214,7 +214,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   /**
    * @abstract
-   * @param {import("../base.js").InsertSqlArgsType} args
+   * @param {import("../base.js").InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   insertSql(args) {
@@ -273,7 +273,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @param {import("../base.js").UpdateSqlArgsType} args
+   * @param {import("../base.js").UpdateSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   updateSql({conditions, data, tableName}) {

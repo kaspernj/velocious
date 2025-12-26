@@ -42,7 +42,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../../table-data/index.js").default} tableData
+   * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async alterTableSQLs(tableData) {
@@ -53,9 +53,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} databaseName
-   * @param {object} [args]
-   * @param {boolean} [args.ifNotExists]
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifNotExists] - Whether if not exists.
    * @returns {string[]} - SQL statements.
    */
   createDatabaseSql(databaseName, args) {
@@ -66,7 +66,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../base.js").CreateIndexSqlArgs} indexData
+   * @param {import("../base.js").CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createIndexSQLs(indexData) {
@@ -77,7 +77,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../../table-data/index.js").default} tableData
+   * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createTableSql(tableData) {
@@ -105,8 +105,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} tableName
-   * @param {import("../base.js").DropTableSqlArgsType} [args]
+   * @param {string} tableName - Table name.
+   * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args = {}) {
@@ -127,7 +127,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   primaryKeyType() { return "bigint" }
 
   /**
-   * @param {string} sql
+   * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
@@ -164,7 +164,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../../query/index.js").default} query
+   * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
@@ -173,7 +173,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
-   * @param {*} value
+   * @param {*} value - Value to use.
    * @returns {string} - The escape.
    */
   escape(value) {
@@ -190,7 +190,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {*} value
+   * @param {*} value - Value to use.
    * @returns {string} - The quote.
    */
   quote(value) {
@@ -205,21 +205,21 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {*} string
+   * @param {*} string - String.
    * @returns {string} - The quote column.
    */
   quoteColumn(string) { return this.options().quoteColumnName(string) }
 
   /**
-   * @param {string} string
+   * @param {string} string - String.
    * @returns {string} - The quote table.
    */
   quoteTable(string) { return this.options().quoteTableName(string) }
 
   /**
-   * @param {string} tableName
-   * @param {string} oldColumnName
-   * @param {string} newColumnName
+   * @param {string} tableName - Table name.
+   * @param {string} oldColumnName - Previous column name.
+   * @param {string} newColumnName - New column name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
@@ -227,7 +227,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../base.js").DeleteSqlArgsType} args
+   * @param {import("../base.js").DeleteSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   deleteSql({tableName, conditions}) {
@@ -238,7 +238,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   /**
    * @abstract
-   * @param {import("../base.js").InsertSqlArgsType} args
+   * @param {import("../base.js").InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   insertSql(args) {
@@ -265,9 +265,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} name
-   * @param {object} [args]
-   * @param {boolean} args.throwError
+   * @param {string} name - Name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} args.throwError - Whether throw error.
    * @returns {Promise<import("../base-table.js").default | undefined>} - Resolves with the table by name.
    */
   async getTableByName(name, args) {
@@ -326,7 +326,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _startSavePointAction(savePointName) {
@@ -334,7 +334,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _releaseSavePointAction(savePointName) { // eslint-disable-line no-unused-vars
@@ -342,7 +342,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} savePointName
+   * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _rollbackSavePointAction(savePointName) {
@@ -354,7 +354,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../base.js").UpdateSqlArgsType} args
+   * @param {import("../base.js").UpdateSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   updateSql({conditions, data, tableName}) {

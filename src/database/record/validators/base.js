@@ -2,9 +2,9 @@
 
 export default class VelociousDatabaseRecordValidatorsBase {
   /**
-   * @param {object} args
-   * @param {string} args.attributeName
-   * @param {Record<string, any>} args.args
+   * @param {object} args - Options object.
+   * @param {string} args.attributeName - Attribute name.
+   * @param {Record<string, any>} args.args - Options object.
    */
   constructor({attributeName, args}) {
     this.attributeName = attributeName
@@ -13,9 +13,9 @@ export default class VelociousDatabaseRecordValidatorsBase {
 
   /**
    * @abstract
-   * @param {object} args
-   * @param {import("../index.js").default} args.model
-   * @param {string} args.attributeName
+   * @param {object} args - Options object.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.attributeName - Attribute name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async validate({model, attributeName}) { // eslint-disable-line no-unused-vars

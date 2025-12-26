@@ -5,11 +5,11 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
   /**
-   * @param {object} args
-   * @param {boolean} [args.cascade]
-   * @param {import("./../drivers/base.js").default} args.driver
-   * @param {boolean} [args.ifExists]
-   * @param {string} args.tableName
+   * @param {object} args - Options object.
+   * @param {boolean} [args.cascade] - Whether cascade.
+   * @param {import("./../drivers/base.js").default} args.driver - Database driver instance.
+   * @param {boolean} [args.ifExists] - Whether if exists.
+   * @param {string} args.tableName - Table name.
    */
   constructor({cascade, driver, ifExists, tableName, ...restArgs}) {
     super({driver})

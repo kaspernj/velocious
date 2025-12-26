@@ -27,8 +27,8 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   _migrationsRequireContextResult = undefined
 
   /**
-   * @param {object} args
-   * @param {() => Promise<MigrationsRequireContextType>} [args.migrationsRequireContextCallback]
+   * @param {object} args - Options object.
+   * @param {() => Promise<MigrationsRequireContextType>} [args.migrationsRequireContextCallback] - Migrations require context callback.
    */
   constructor({migrationsRequireContextCallback, ...restArgs} = {}) {
     super()
@@ -92,8 +92,8 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @param {object} args
-   * @param {Array<string>} args.commandParts
+   * @param {object} args - Options object.
+   * @param {Array<string>} args.commandParts - Command parts.
    * @returns {Promise<typeof import("../cli/base-command.js").default>} - Resolves with the require command.
    */
   async requireCommand({commandParts}) {
@@ -174,7 +174,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @param {string} filePath
+   * @param {string} filePath - File path.
    * @returns {Promise<typeof import("../database/migration/index.js").default>} - Resolves with the require migration.
    */
   requireMigration = async (filePath) => {
@@ -194,8 +194,8 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @param {object} args
-   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async afterMigrations({dbs}) {
@@ -207,8 +207,8 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @param {object} args
-   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async _sqliteStructureSql({dbs}) {

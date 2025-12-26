@@ -19,7 +19,7 @@ import * as inflection from "inflection"
  */
 
 export default class VelociousDatabaseRecordBaseRelationship {
-  /** @param {RelationshipBaseArgsType} args */
+  /** @param {RelationshipBaseArgsType} args - Relationship definition arguments. */
   constructor({className, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, through, type, ...restArgs}) {
     restArgsError(restArgs)
 

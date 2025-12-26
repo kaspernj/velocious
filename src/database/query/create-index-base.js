@@ -14,7 +14,7 @@ import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   /**
-   * @param {CreateIndexBaseArgsType} args
+   * @param {CreateIndexBaseArgsType} args - Options object.
    */
   constructor({columns, driver, ifNotExists, name, unique, tableName}) {
     super({driver})

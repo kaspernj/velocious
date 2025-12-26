@@ -11,10 +11,10 @@ export default class TestFilesFinder {
   static IGNORED_NAMES = [".git", "node_modules"]
 
   /**
-   * @param {object} args
-   * @param {string} args.directory
-   * @param {string[]} [args.directories]
-   * @param {string[]} args.processArgs
+   * @param {object} args - Options object.
+   * @param {string} args.directory - Directory path.
+   * @param {string[]} [args.directories] - Directories.
+   * @param {string[]} args.processArgs - Process args.
    */
   constructor({directory, directories, processArgs, ...restArgs}) {
     restArgsError(restArgs)
@@ -103,7 +103,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {function() : Promise<void>} callback
+   * @param {function() : Promise<void>} callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
   withFindingCount(callback) {
@@ -123,7 +123,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {string} dir
+   * @param {string} dir - Dir.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async findTestFilesInDir(dir) {
@@ -151,8 +151,8 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {string} file
-   * @param {string} localPath
+   * @param {string} file - File.
+   * @param {string} localPath - Local path.
    * @returns {boolean} - Whether file matching requirements.
    */
   isFileMatchingRequirements(file, localPath) {
@@ -183,7 +183,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {string} file
+   * @param {string} file - File.
    * @returns {boolean} - Whether looks like test file.
    */
   looksLikeTestFile(file) {

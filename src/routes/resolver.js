@@ -12,10 +12,10 @@ export default class VelociousRoutesResolver {
   logger
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @param {import("../http-server/client/request.js").default} args.request
-   * @param {import("../http-server/client/response.js").default} args.response
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("../http-server/client/request.js").default} args.request - Request object.
+   * @param {import("../http-server/client/response.js").default} args.response - Response object.
    */
   constructor({configuration, request, response}) {
     if (!configuration) throw new Error("No configuration given")
@@ -87,8 +87,8 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {import("./base-route.js").default} route
-   * @param {string} path
+   * @param {import("./base-route.js").default} route - Route.
+   * @param {string} path - Path.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.
    */
   matchPathWithRoutes(route, path) {
@@ -114,9 +114,9 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.action
-   * @param {typeof import("../controller.js").default} args.controllerClass
+   * @param {object} args - Options object.
+   * @param {string} args.action - Action.
+   * @param {typeof import("../controller.js").default} args.controllerClass - Controller class.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _logActionStart({action, controllerClass}) {
@@ -134,12 +134,12 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {Date} date
+   * @param {Date} date - Date value.
    * @returns {string} - The timestamp.
    */
   _formatTimestamp(date) {
     /**
-     * @param {number} num
+     * @param {number} num - Num.
      * @returns {string} - The pad.
      */
     const pad = (num) => String(num).padStart(2, "0")
@@ -159,7 +159,7 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {any} value
+   * @param {any} value - Value to use.
    * @returns {any} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {

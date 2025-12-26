@@ -10,8 +10,8 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class TableIndex {
   /**
-   * @param {Array<string | import("./table-column.js").default>} columns
-   * @param {TableIndexArgsType} [args]
+   * @param {Array<string | import("./table-column.js").default>} columns - Column names.
+   * @param {TableIndexArgsType} [args] - Options object.
    */
   constructor(columns, args) {
     if (args) {

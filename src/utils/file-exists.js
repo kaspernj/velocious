@@ -3,7 +3,7 @@
 import fs from "fs/promises"
 
 /**
- * @param {string} path
+ * @param {string} path - Path.
  * @returns {Promise<boolean>} - Resolves with Whether the operation succeeded.
  */
 export default async function fileExists(path) {

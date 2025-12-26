@@ -4,7 +4,7 @@ import JoinBase from "./join-base.js"
 
 export default class VelociousDatabaseQueryJoinPlain extends JoinBase {
   /**
-   * @param {string} plain
+   * @param {string} plain - Plain.
    */
   constructor(plain) {
     super()

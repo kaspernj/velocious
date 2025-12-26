@@ -13,10 +13,10 @@ export default class VeoliciousHttpServerClient {
   state = "initial"
 
   /**
-   * @param {object} args
-   * @param {number} args.clientCount
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {string} [args.remoteAddress]
+   * @param {object} args - Options object.
+   * @param {number} args.clientCount - Client count.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} [args.remoteAddress] - Remote address.
    */
   constructor({clientCount, configuration, remoteAddress}) {
     if (!configuration) throw new Error("No configuration given")
@@ -31,7 +31,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
-   * @param {string} message
+   * @param {string} message - Message text.
    * @returns {void} - No return value.
    */
   _sendBadUpgradeResponse(message) {
@@ -75,7 +75,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
-   * @param {Buffer} data
+   * @param {Buffer} data - Data payload.
    * @returns {void} - No return value.
    */
   onWrite(data) {
@@ -99,7 +99,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
-   * @param {import("./request.js").default} request
+   * @param {import("./request.js").default} request - Request object.
    * @returns {boolean} - Whether websocket upgrade.
    */
   _isWebsocketUpgrade(request) {
@@ -175,7 +175,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
-   * @param {RequestRunner} requestRunner
+   * @param {RequestRunner} requestRunner - Request runner.
    * @returns {void} - No return value.
    */
   sendResponse(requestRunner) {

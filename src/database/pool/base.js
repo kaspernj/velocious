@@ -21,9 +21,9 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @param {object} args
-   * @param {Configuration} args.configuration
-   * @param {string} args.identifier
+   * @param {object} args - Options object.
+   * @param {Configuration} args.configuration - Configuration instance.
+   * @param {string} args.identifier - Identifier.
    */
   constructor({configuration, identifier}) {
     this.configuration = configuration || Configuration.current()
@@ -37,7 +37,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @param {import("../drivers/base.js").default} _connection
+   * @param {import("../drivers/base.js").default} _connection - Connection.
    */
   checkin(_connection) { // eslint-disable-line no-unused-vars
     throw new Error("'checkin' not implemented")
@@ -91,7 +91,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @param {typeof import("../drivers/base.js").default} driverClass
+   * @param {typeof import("../drivers/base.js").default} driverClass - Driver class.
    */
   setDriverClass(driverClass) {
     this.driverClass = driverClass
@@ -111,8 +111,8 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @param {object} config
-   * @param {typeof import("../drivers/base.js").default} config.driver
+   * @param {object} config - Configuration object.
+   * @param {typeof import("../drivers/base.js").default} config.driver - Database driver instance.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection with configuration.
    */
   async spawnConnectionWithConfiguration(config) {
@@ -129,7 +129,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @param {function(import("../drivers/base.js").default) : void} _callback
+   * @param {function(import("../drivers/base.js").default) : void} _callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
   withConnection(_callback) { // eslint-disable-line no-unused-vars

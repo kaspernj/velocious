@@ -11,7 +11,7 @@ export default class VelociousDatabaseQuerySelectBase {
   }
 
   /**
-   * @param {import("./index.js").default} query
+   * @param {import("./index.js").default} query - Query instance.
    */
   setQuery(query) {
     this.query = query

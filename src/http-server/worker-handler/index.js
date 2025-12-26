@@ -7,9 +7,9 @@ import websocketEventsHost from "../websocket-events-host.js"
 
 export default class VelociousHttpServerWorker {
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {number} args.workerCount
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {number} args.workerCount - Worker count.
    */
   constructor({configuration, workerCount}) {
     this.configuration = configuration
@@ -48,7 +48,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {import("../server-client.js").default} client
+   * @param {import("../server-client.js").default} client - Client instance.
    * @returns {void} - No return value.
    */
   addSocketConnection(client) {
@@ -69,14 +69,14 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {any} error
+   * @param {any} error - Error instance.
    */
   onWorkerError = (error) => {
     throw ensureError(error) // Throws original error with backtrace and everything into the console
   }
 
   /**
-   * @param {number} code
+   * @param {number} code - Code.
    * @returns {void} - No return value.
    */
   onWorkerExit = (code) => {
@@ -90,12 +90,12 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {object} data
-   * @param {string} data.command
-   * @param {number} [data.clientCount]
-   * @param {string} [data.output]
-   * @param {string} [data.channel]
-   * @param {any} [data.payload]
+   * @param {object} data - Data payload.
+   * @param {string} data.command - Command.
+   * @param {number} [data.clientCount] - Client count.
+   * @param {string} [data.output] - Output.
+   * @param {string} [data.channel] - Channel name.
+   * @param {any} [data.payload] - Payload data.
    * @returns {void} - No return value.
    */
   onWorkerMessage = (data) => {
@@ -133,9 +133,9 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.channel
-   * @param {any} args.payload
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {any} args.payload - Payload data.
    * @returns {void} - No return value.
    */
   dispatchWebsocketEvent({channel, payload}) {

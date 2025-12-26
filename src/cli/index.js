@@ -2,13 +2,13 @@
 
 export default class VelociousCli {
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} [args.configuration]
-   * @param {string} [args.directory]
-   * @param {import("../environment-handlers/base.js").default} [args.environmentHandler]
-   * @param {Record<string, any>} [args.parsedProcessArgs]
-   * @param {string[]} [args.processArgs]
-   * @param {boolean} [args.testing]
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} [args.configuration] - Configuration instance.
+   * @param {string} [args.directory] - Directory path.
+   * @param {import("../environment-handlers/base.js").default} [args.environmentHandler] - Environment handler.
+   * @param {Record<string, any>} [args.parsedProcessArgs] - Parsed process args.
+   * @param {string[]} [args.processArgs] - Process args.
+   * @param {boolean} [args.testing] - Whether testing.
    */
   constructor(args = {}) {
     if (!args.configuration) throw new Error("configuration argument is required")

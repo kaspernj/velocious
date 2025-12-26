@@ -4,7 +4,7 @@ import FromBase from "./from-base.js"
 
 export default class VelociousDatabaseQueryFromPlain extends FromBase {
   /**
-   * @param {string} plain
+   * @param {string} plain - Plain.
    */
   constructor(plain) {
     super()

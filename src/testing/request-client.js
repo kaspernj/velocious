@@ -2,7 +2,7 @@
 
 class Response {
   /**
-   * @param {globalThis.Response} fetchResponse
+   * @param {globalThis.Response} fetchResponse - Fetch response.
    */
   constructor(fetchResponse) {
     this.fetchResponse = fetchResponse
@@ -38,7 +38,7 @@ export default class RequestClient {
   port = 31006
 
   /**
-   * @param {string} path
+   * @param {string} path - Path.
    * @returns {Promise<Response>} - Resolves with the get.
    */
   async get(path) {
@@ -51,8 +51,8 @@ export default class RequestClient {
   }
 
   /**
-   * @param {string} path
-   * @param {object} data
+   * @param {string} path - Path.
+   * @param {object} data - Data payload.
    * @returns {Promise<Response>} - Resolves with the post.
    */
   async post(path, data) {

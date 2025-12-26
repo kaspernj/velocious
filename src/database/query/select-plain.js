@@ -4,7 +4,7 @@ import SelectBase from "./select-base.js"
 
 export default class VelociousDatabaseQuerySelectPlain extends SelectBase {
   /**
-   * @param {string} plain
+   * @param {string} plain - Plain.
    */
   constructor(plain) {
     super()

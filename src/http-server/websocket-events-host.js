@@ -7,7 +7,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
-   * @param {import("./worker-handler/index.js").default} handler
+   * @param {import("./worker-handler/index.js").default} handler - Handler instance.
    * @returns {() => void} - The register.
    */
   register(handler) {
@@ -17,9 +17,9 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.channel
-   * @param {any} args.payload
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {any} args.payload - Payload data.
    * @returns {void} - No return value.
    */
   publish({channel, payload}) {

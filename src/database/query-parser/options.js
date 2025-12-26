@@ -11,7 +11,7 @@
 
 export default class VelociousDatabaseQueryParserOptions {
   /**
-   * @param {OptionsObjectArgsType} options
+   * @param {OptionsObjectArgsType} options - Options object.
    */
   constructor(options) {
     this.columnQuote = options.columnQuote
@@ -24,7 +24,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {any} value
+   * @param {any} value - Value to use.
    * @returns {number | string} - The quote.
    */
   quote(value) {
@@ -34,7 +34,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {string} databaseName
+   * @param {string} databaseName - Database name.
    * @returns {string} - The quote database name.
    */
   quoteDatabaseName(databaseName) {
@@ -44,7 +44,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {string} columnName
+   * @param {string} columnName - Column name.
    * @returns {string} - The quote column name.
    */
   quoteColumnName(columnName) {
@@ -55,7 +55,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {string} indexName
+   * @param {string} indexName - Index name.
    * @returns {string} - The quote index name.
    */
   quoteIndexName(indexName) {
@@ -66,7 +66,7 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @abstract
-   * @param {any} string
+   * @param {any} string - String.
    * @returns {string} - The quote string.
    */
   quoteString(string) { // eslint-disable-line no-unused-vars
@@ -74,7 +74,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {string} tableName
+   * @param {string} tableName - Table name.
    * @returns {string} - The quote table name.
    */
   quoteTableName(tableName) {

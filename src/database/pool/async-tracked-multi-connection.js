@@ -21,15 +21,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   idSeq = 0
 
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {string} args.identifier
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} args.identifier - Identifier.
    */
   constructor({configuration, identifier}) {
     super({configuration, identifier})
   }
 
-  /** @param {import("../drivers/base.js").default} connection */
+  /** @param {import("../drivers/base.js").default} connection - Database connection instance. */
   checkin(connection) {
     const id = connection.getIdSeq()
 
@@ -64,7 +64,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     return connection
   }
 
-  /** @param {function(import("../drivers/base.js").default) : void} callback */
+  /** @param {function(import("../drivers/base.js").default) : void} callback - Callback to invoke with the connection. */
   async withConnection(callback) {
     const connection = await this.checkout()
     const id = connection.getIdSeq()
@@ -107,7 +107,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Registers a fallback connection for this pool identifier that will be used when no async context is available.
-   * @param {import("../drivers/base.js").default} connection
+   * @param {import("../drivers/base.js").default} connection - Connection.
    * @returns {void} - No return value.
    */
   setGlobalConnection(connection) {
@@ -165,8 +165,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Replaces all globally registered fallback connections.
-   * @param {Record<string, import("../drivers/base.js").default>} [connections]
-   * @param {import("../../configuration.js").default} [configuration]
+   * @param {Record<string, import("../drivers/base.js").default>} [connections] - Connections.
+   * @param {import("../../configuration.js").default} [configuration] - Configuration instance.
    * @returns {void} - No return value.
    */
   static setGlobalConnections(connections, configuration) {
@@ -185,7 +185,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Clears globally registered fallback connections for all configurations or a single configuration.
-   * @param {import("../../configuration.js").default} [configuration]
+   * @param {import("../../configuration.js").default} [configuration] - Configuration instance.
    * @returns {void} - No return value.
    */
   static clearGlobalConnections(configuration) {

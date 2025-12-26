@@ -8,11 +8,11 @@ import TableColumn from "../table-data/table-column.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   /**
-   * @param {object} args
-   * @param {import("../drivers/base.js").default} args.driver
-   * @param {boolean} [args.ifNotExists]
-   * @param {boolean} [args.indexInCreateTable]
-   * @param {TableData} args.tableData
+   * @param {object} args - Options object.
+   * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
+   * @param {boolean} [args.ifNotExists] - Whether if not exists.
+   * @param {boolean} [args.indexInCreateTable] - Whether index in create table.
+   * @param {TableData} args.tableData - Table data.
    */
   constructor({driver, ifNotExists, indexInCreateTable = true, tableData}) {
     if (!(tableData instanceof TableData)) throw new Error("Invalid table data was given")

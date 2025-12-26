@@ -2,9 +2,9 @@
 
 export default class VelociousHttpServerWebsocketEvents {
   /**
-   * @param {object} args
-   * @param {import("worker_threads").parentPort} args.parentPort
-   * @param {number} args.workerCount
+   * @param {object} args - Options object.
+   * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
+   * @param {number} args.workerCount - Worker count.
    */
   constructor({parentPort, workerCount}) {
     this.parentPort = parentPort
@@ -12,8 +12,8 @@ export default class VelociousHttpServerWebsocketEvents {
   }
 
   /**
-   * @param {string} channel
-   * @param {any} payload
+   * @param {string} channel - Channel name.
+   * @param {any} payload - Payload data.
    * @returns {void} - No return value.
    */
   publish(channel, payload) {

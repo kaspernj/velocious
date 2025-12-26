@@ -1,8 +1,8 @@
 // @ts-check
 
 /**
- * @param {import("sqlite3").Database} connection
- * @param {string} sql
+ * @param {import("sqlite3").Database} connection - Connection.
+ * @param {string} sql - SQL string.
  * @returns {Promise<Record<string, any>[]>} - Resolves with string value.
  */
 export default async function query(connection, sql) {

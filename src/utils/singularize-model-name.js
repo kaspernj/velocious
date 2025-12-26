@@ -1,7 +1,7 @@
 import * as inflection from "inflection"
 
 /**
- * @param {string} modelName
+ * @param {string} modelName - Model name.
  * @returns {string} - The singularize model name.
  */
 export default function singularizeModelName(modelName) {

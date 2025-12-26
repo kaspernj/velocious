@@ -20,11 +20,11 @@ export default class VelociousHttpServer {
   workerHandlers = []
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @param {string} [args.host]
-   * @param {number} [args.port]
-   * @param {number} [args.maxWorkers]
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} [args.host] - Host.
+   * @param {number} [args.port] - Port.
+   * @param {number} [args.maxWorkers] - Max workers.
    */
   constructor({configuration, host, maxWorkers, port}) {
     this.configuration = configuration
@@ -115,7 +115,7 @@ export default class VelociousHttpServer {
   }
 
   /**
-   * @param {import("net").Socket} socket
+   * @param {import("net").Socket} socket - Socket instance.
    * @returns {void} - No return value.
    */
   onConnection = (socket) => {
@@ -139,7 +139,7 @@ export default class VelociousHttpServer {
   }
 
   /**
-   * @param {ServerClient} client
+   * @param {ServerClient} client - Client instance.
    * @returns {void} - No return value.
    */
   onClientClose = (client) => {

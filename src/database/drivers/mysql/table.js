@@ -7,8 +7,8 @@ import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversMysqlTable extends BaseTable {
   /**
-   * @param {import("../base.js").default} driver
-   * @param {Record<string, any>} data
+   * @param {import("../base.js").default} driver - Database driver instance.
+   * @param {Record<string, any>} data - Data payload.
    */
   constructor(driver, data) {
     super()

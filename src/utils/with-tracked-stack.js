@@ -1,12 +1,12 @@
 // @ts-check
 
-/** @param {Error} error */
+/** @param {Error} error - Error to annotate with a tracked stack. */
 function addTrackedStackToError(error) {
   globalThis.withTrackedStack?.addTrackedStackToError(error)
 }
 
 /**
- * @param  {...any} args
+ * @param  {...any} args - Options object.
  * @returns {Promise<any>} - Resolves with value.
  */
 async function withTrackedStack(...args) {

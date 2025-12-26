@@ -48,7 +48,7 @@ export default class DbCreate extends BaseCommand{
   }
 
   /**
-   * @param {string} databaseIdentifier
+   * @param {string} databaseIdentifier - Database identifier.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async createDatabase(databaseIdentifier) {

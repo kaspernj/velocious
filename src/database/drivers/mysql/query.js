@@ -1,6 +1,6 @@
 /**
- * @param {import("mysql").Pool} pool
- * @param {string} sql
+ * @param {import("mysql").Pool} pool - Pool.
+ * @param {string} sql - SQL string.
  * @returns {Promise<Record<string, any>[]>} - Resolves with string value.
  */
 export default async function query(pool, sql) {

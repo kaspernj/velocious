@@ -2,7 +2,7 @@
 
 export default class BacktraceCleaner {
   /**
-   * @param {Error} error
+   * @param {Error} error - Error instance.
    * @returns {string | undefined} - The cleaned stack.
    */
   static getCleanedStack(error) {
@@ -10,7 +10,7 @@ export default class BacktraceCleaner {
   }
 
   /**
-   * @param {Error} error
+   * @param {Error} error - Error instance.
    */
   constructor(error) {
     this.error = error

@@ -8,7 +8,7 @@ export default class VelociousDatabaseDriversBaseTable {
   driver = undefined
 
   /**
-   * @param {string} columnName
+   * @param {string} columnName - Column name.
    * @returns {Promise<import("./base-column.js").default | undefined>} - Resolves with the column by name.
    */
   async getColumnByName(columnName) {
@@ -19,7 +19,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
-   * @param {string} columnName
+   * @param {string} columnName - Column name.
    * @returns {Promise<import("./base-column.js").default>} - Resolves with the column by name or fail.
    */
   async getColumnByNameOrFail(columnName) {
@@ -119,7 +119,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
-   * @param {{cascade: boolean}} [args]
+   * @param {{cascade: boolean}} [args] - Truncate options.
    * @returns {Promise<Array<Record<string, any>>>} - Resolves with the truncate.
    */
   async truncate(args) {

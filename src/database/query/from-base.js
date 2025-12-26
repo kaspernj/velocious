@@ -5,7 +5,7 @@ export default class VelociousDatabaseQueryFromBase {
   query = null
 
   /**
-   * @param {import("./index.js").default} query
+   * @param {import("./index.js").default} query - Query instance.
    * @returns {void} - No return value.
    */
   setQuery(query) {

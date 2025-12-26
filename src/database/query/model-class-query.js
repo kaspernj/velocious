@@ -20,7 +20,7 @@ import RecordNotFoundError from "../record/record-not-found-error.js"
  * @template {typeof import("../record/index.js").default} MC
  */
 export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery {
-  /** @param {ModelClassQueryArgsType<MC>} args */
+  /** @param {ModelClassQueryArgsType<MC>} args - Query constructor arguments. */
   constructor(args) {
     const {modelClass} = args
 
@@ -114,7 +114,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {number|string} recordId
+   * @param {number|string} recordId - Record id.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   async find(recordId) {
@@ -137,7 +137,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {{[key: string]: any}} conditions
+   * @param {{[key: string]: any}} conditions - Conditions hash keyed by attribute name.
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   async findBy(conditions) {
@@ -158,8 +158,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {{[key: string]: any}} conditions
-   * @param {function(InstanceType<MC>) : void} [callback]
+   * @param {{[key: string]: any}} conditions - Conditions hash keyed by attribute name.
+   * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or create by.
    */
   async findOrCreateBy(conditions, callback) {
@@ -173,7 +173,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {{[key: string]: any}} conditions
+   * @param {{[key: string]: any}} conditions - Conditions hash keyed by attribute name.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
   async findByOrFail(conditions) {
@@ -200,8 +200,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {object} conditions
-   * @param {function(InstanceType<MC>) : void} [callback]
+   * @param {object} conditions - Conditions.
+   * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
    */
   async findOrInitializeBy(conditions, callback) {
@@ -237,7 +237,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {import("./index.js").NestedPreloadRecord} data
+   * @param {import("./index.js").NestedPreloadRecord} data - Data payload.
    * @returns {this} - The preload.
    */
   preload(data) {
@@ -276,7 +276,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Plucks one or more columns directly from the database without instantiating models.
-   * @param {...string|string[]} columns
+   * @param {...string|string[]} columns - Column names.
    * @returns {Promise<any[]>} - Resolves with the pluck.
    */
   async pluck(...columns) {

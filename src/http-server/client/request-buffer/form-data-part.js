@@ -16,7 +16,7 @@ export default class FormDataPart {
   body = []
 
   /**
-   * @param {import("./header.js").default} header
+   * @param {import("./header.js").default} header - Header value.
    */
   addHeader(header) {
     const name = header.formattedName
@@ -73,8 +73,8 @@ export default class FormDataPart {
   }
 
   /**
-   * @param {Buffer} buffer
-   * @param {string} filename
+   * @param {Buffer} buffer - Buffer.
+   * @param {string} filename - Filename.
    * @returns {string} - The temp file.
    */
   createTempFile(buffer, filename) {
@@ -88,7 +88,7 @@ export default class FormDataPart {
 
   /**
    * Prevent path traversal/absolute paths from filenames coming from headers.
-   * @param {string | undefined} filename
+   * @param {string | undefined} filename - Filename.
    * @returns {string} - The sanitize filename.
    */
   _sanitizeFilename(filename) {
@@ -116,7 +116,7 @@ export default class FormDataPart {
   isFile() { return Boolean(this.filename) }
 
   /**
-   * @param {string} text
+   * @param {string} text - Text.
    */
   removeFromBody(text) {
     this.body = this.body.slice(0, this.body.length - text.length)

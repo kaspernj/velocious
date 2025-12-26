@@ -9,7 +9,7 @@ if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
 }
 
-/** @param {Error} error */
+/** @param {Error} error - Error to annotate with a tracked stack. */
 function addTrackedStackToError(error) {
   // Not supported
   if (!asyncLocalStorage) return
@@ -29,8 +29,8 @@ function addTrackedStackToError(error) {
 
 /**
  *
- * @param {() => Promise<void> | string} arg1
- * @param {() => Promise<void> | Error} [arg2]
+ * @param {() => Promise<void> | string} arg1 - Arg1.
+ * @param {() => Promise<void> | Error} [arg2] - Arg2.
  * @returns {Promise<void>} - Resolves when complete.
  */
 async function withTrackedStack(arg1, arg2) {

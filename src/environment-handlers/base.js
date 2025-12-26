@@ -16,7 +16,7 @@
 
 export default class VelociousEnvironmentHandlerBase {
   /**
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsGenerateBaseModels(_command) { // eslint-disable-line no-unused-vars
@@ -24,7 +24,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
+   * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsInit(command) { // eslint-disable-line no-unused-vars
@@ -32,7 +32,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsMigrationGenerate(_command) { // eslint-disable-line no-unused-vars
@@ -40,7 +40,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsMigrationDestroy(_command) { // eslint-disable-line no-unused-vars
@@ -48,7 +48,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsGenerateModel(_command) { // eslint-disable-line no-unused-vars
@@ -57,7 +57,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @abstract
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsRoutes(_command) { // eslint-disable-line no-unused-vars
@@ -65,7 +65,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsServer(_command) { // eslint-disable-line no-unused-vars
@@ -73,7 +73,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} _command
+   * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async cliCommandsTest(_command) { // eslint-disable-line no-unused-vars
@@ -93,8 +93,8 @@ export default class VelociousEnvironmentHandlerBase {
   async findMigrations() { throw new Error("findMigrations not implemneted") }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @param {typeof import("../cli/base-command.js").default} CommandClass
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @param {typeof import("../cli/base-command.js").default} CommandClass - Command class.
    * @returns {Promise<any>} - Resolves with the forward command.
    */
   async forwardCommand(command, CommandClass) {
@@ -120,7 +120,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @abstract
-   * @param {string[]} _testFiles
+   * @param {string[]} _testFiles - Test files.
    * @returns {Promise<void>} - Resolves when complete.
    */
   importTestFiles(_testFiles) { throw new Error("'importTestFiles' not implemented") } // eslint-disable-line no-unused-vars
@@ -132,8 +132,8 @@ export default class VelociousEnvironmentHandlerBase {
   importTestingConfigPath() { throw new Error(`'importTestingConfigPath' not implemented`) }
 
   /**
-   * @param {object} args
-   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async afterMigrations(args) { // eslint-disable-line no-unused-vars
@@ -142,20 +142,20 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @abstract
-   * @param {object} args
-   * @param {string[]} args.commandParts
+   * @param {object} args - Options object.
+   * @param {string[]} args.commandParts - Command parts.
    * @returns {Promise<typeof import ("../cli/base-command.js").default>} - Resolves with the require command.
    */
   async requireCommand({commandParts}) { throw new Error("'requireCommand' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @param {object} newArgs
+   * @param {object} newArgs - New args.
    * @returns {void} - No return value.
    */
   setArgs(newArgs) { this.args = newArgs }
 
   /**
-   * @param {import("../configuration.js").default} newConfiguration
+   * @param {import("../configuration.js").default} newConfiguration - New configuration.
    * @returns {void} - No return value.
    */
   setConfiguration(newConfiguration) { this.configuration = newConfiguration }
@@ -170,14 +170,14 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {string[]} newProcessArgs
+   * @param {string[]} newProcessArgs - New process args.
    * @returns {void} - No return value.
    */
   setProcessArgs(newProcessArgs) { this.processArgs = newProcessArgs }
 
   /**
-   * @param {object} _args
-   * @param {import("../configuration.js").default} _args.configuration
+   * @param {object} _args - Options object.
+   * @param {import("../configuration.js").default} _args.configuration - Configuration instance.
    * @returns {string | undefined} - The default log directory.
    */
   getDefaultLogDirectory(_args) { // eslint-disable-line no-unused-vars
@@ -185,10 +185,10 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {object} _args
-   * @param {import("../configuration.js").default} _args.configuration
-   * @param {string | undefined} _args.directory
-   * @param {string} _args.environment
+   * @param {object} _args - Options object.
+   * @param {import("../configuration.js").default} _args.configuration - Configuration instance.
+   * @param {string | undefined} _args.directory - Directory path.
+   * @param {string} _args.environment - Environment.
    * @returns {string | undefined} - The log file path.
    */
   getLogFilePath(_args) { // eslint-disable-line no-unused-vars
@@ -196,9 +196,9 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {object} _args
-   * @param {string} _args.filePath
-   * @param {string} _args.message
+   * @param {object} _args - Options object.
+   * @param {string} _args.filePath - File path.
+   * @param {string} _args.message - Message text.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async writeLogToFile(_args) { // eslint-disable-line no-unused-vars

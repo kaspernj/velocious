@@ -18,7 +18,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   _autoSave = undefined
 
   /**
-   * @param {InstanceRelationshipsBaseArgs<MC, TMC>} args
+   * @param {InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor({model, relationship}) {
     this._dirty = false
@@ -28,7 +28,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @param {InstanceType<TMC>[] | InstanceType<TMC>} models
+   * @param {InstanceType<TMC>[] | InstanceType<TMC>} models - Model instances.
    * @returns {void} - No return value.
    */
   addToLoaded(models) { // eslint-disable-line no-unused-vars
@@ -37,7 +37,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @param {Record<string, any>} attributes
+   * @param {Record<string, any>} attributes - Attributes.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(attributes) { // eslint-disable-line no-unused-vars
@@ -82,7 +82,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     return this._loaded
   }
 
-  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model */
+  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model - Related model(s) to mark as loaded. */
   setLoaded(model) { this._loaded = model }
 
   /** @returns {InstanceType<TMC> | InstanceType<TMC>[] | undefined} - The loaded or undefined.  */
@@ -91,7 +91,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @returns {boolean} The loaded model or models (depending on relationship type) */
   getPreloaded() { return this._preloaded || false }
 
-  /** @param {boolean} isPreloaded */
+  /** @param {boolean} isPreloaded - Whether the relationship is preloaded. */
   setPreloaded(isPreloaded) { this._preloaded = isPreloaded }
 
   /** @returns {string} The foreign key for this relationship */

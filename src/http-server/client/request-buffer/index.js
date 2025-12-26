@@ -26,8 +26,8 @@ export default class RequestBuffer {
   state = "status"
 
   /**
-   * @param {object} args
-   * @param {import("../../../configuration.js").default} args.configuration
+   * @param {object} args - Options object.
+   * @param {import("../../../configuration.js").default} args.configuration - Configuration instance.
    */
   constructor({configuration}) {
     this.configuration = configuration
@@ -39,7 +39,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {Buffer} data
+   * @param {Buffer} data - Data payload.
    * @returns {void} - No return value.
    */
   feed(data) {
@@ -113,7 +113,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {string} name
+   * @param {string} name - Name.
    * @returns {Header} - The header.
    */
   getHeader(name) {
@@ -167,7 +167,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {string} line
+   * @param {string} line - Line.
    * @returns {void} - No return value.
    */
   parse(line) {
@@ -200,7 +200,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {string} line
+   * @param {string} line - Line.
    * @returns {Header | undefined} - The header from line.
    */
   readHeaderFromLine(line) {
@@ -214,7 +214,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {Header} header
+   * @param {Header} header - Header value.
    */
   addHeader(header) {
     const formattedName = header.getFormattedName()
@@ -225,7 +225,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {string} line
+   * @param {string} line - Line.
    * @returns {void} - No return value.
    */
   parseHeader(line) {
@@ -273,7 +273,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {string} line
+   * @param {string} line - Line.
    * @returns {void} - No return value.
    */
   parseStatusLine(line) {
@@ -302,7 +302,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @param {string} newState
+   * @param {string} newState - New state.
    * @returns {void} - No return value.
    */
   setState(newState) {

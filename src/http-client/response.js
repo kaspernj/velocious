@@ -4,9 +4,9 @@ import Header from "./header.js"
 
 export default class Response {
   /**
-   * @param {object} args
-   * @param {string} args.method
-   * @param {function() : void} args.onComplete
+   * @param {object} args - Options object.
+   * @param {string} args.method - HTTP method.
+   * @param {function() : void} args.onComplete - On complete.
    */
   constructor({method = "GET", onComplete}) {
     if (!method) throw new Error(`Invalid method given: ${method}`)
@@ -22,14 +22,14 @@ export default class Response {
     this.response = Buffer.alloc(0);
   }
 
-  /** @param {Buffer} data */
+  /** @param {Buffer} data - Response data chunk. */
   feed(data) {
     this.response = Buffer.concat([this.response, data])
     this.tryToParse()
   }
 
   /**
-   * @param {string} name
+   * @param {string} name - Name.
    * @returns {Header} - The header.
    */
   getHeader(name) {

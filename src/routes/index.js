@@ -10,7 +10,7 @@ export default class VelociousRoutes {
   rootRoute = new RootRoute()
 
   /**
-   * @param {function(import("./root-route.js").default) : void} callback
+   * @param {function(import("./root-route.js").default) : void} callback - Callback function.
    * @returns {void} - No return value.
    */
   draw(callback) {

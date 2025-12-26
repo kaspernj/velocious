@@ -12,8 +12,8 @@ export default class VelociousDatabaseMigrator {
   migrationsVersions = {}
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    */
   constructor({configuration, ...restArgs}) {
     restArgsError(restArgs)
@@ -69,8 +69,8 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {string} dbIdentifier
-   * @param {number} version
+   * @param {string} dbIdentifier - Db identifier.
+   * @param {number} version - Version.
    * @returns {boolean} - Whether it has run migration version.
    */
   hasRunMigrationVersion(dbIdentifier, version) {
@@ -85,8 +85,8 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {import("./migrator/types.js").MigrationObjectType[]} files
-   * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback
+   * @param {import("./migrator/types.js").MigrationObjectType[]} files - Files.
+   * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback - Import callback.
    */
   async migrateFiles(files, importCallback) {
     await this.configuration.ensureConnections(async () => {
@@ -112,7 +112,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext
+   * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async migrateFilesFromRequireContext(requireContext) {
@@ -205,7 +205,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {import("./drivers/base.js").default} db
+   * @param {import("./drivers/base.js").default} db - Database connection.
    * @returns {Promise<boolean>} - Resolves with Whether migrations table exist.
    */
   async migrationsTableExist(db) {
@@ -217,7 +217,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext
+   * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async executeRequireContext(requireContext) {
@@ -294,7 +294,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {import("./migrator/types.js").MigrationObjectType[]} files
+   * @param {import("./migrator/types.js").MigrationObjectType[]} files - Files.
    * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback Function to import a file
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -344,10 +344,10 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
-   * @param {object} args
-   * @param {import("./migrator/types.js").MigrationObjectType} args.migration
-   * @param {import("./migrator/types.js").RequireMigrationType} args.requireMigration
-   * @param {string} [args.direction]
+   * @param {object} args - Options object.
+   * @param {import("./migrator/types.js").MigrationObjectType} args.migration - Migration.
+   * @param {import("./migrator/types.js").RequireMigrationType} args.requireMigration - Require migration.
+   * @param {string} [args.direction] - Direction.
    */
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")

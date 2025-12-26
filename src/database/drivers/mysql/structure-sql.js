@@ -4,8 +4,8 @@ import {normalizeSqlStatement} from "../structure-sql/utils.js"
 
 export default class VelociousDatabaseDriversMysqlStructureSql {
   /**
-   * @param {object} args
-   * @param {import("../base.js").default} args.driver
+   * @param {object} args - Options object.
+   * @param {import("../base.js").default} args.driver - Database driver instance.
    */
   constructor({driver}) {
     this.driver = driver
@@ -58,7 +58,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @param {Record<string, any> | undefined} row
+   * @param {Record<string, any> | undefined} row - Row data.
    * @returns {string | null} - SQL string.
    */
   _mysqlCreateStatement(row) {

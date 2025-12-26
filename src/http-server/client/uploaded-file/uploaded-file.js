@@ -2,11 +2,11 @@
 
 export default class UploadedFile {
   /**
-   * @param {object} args
-   * @param {string} args.fieldName
-   * @param {string} args.filename
-   * @param {string | undefined} args.contentType
-   * @param {number} args.size
+   * @param {object} args - Options object.
+   * @param {string} args.fieldName - Field name.
+   * @param {string} args.filename - Filename.
+   * @param {string | undefined} args.contentType - Content type.
+   * @param {number} args.size - Size.
    */
   constructor({contentType, fieldName, filename, size}) {
     if (!fieldName) throw new Error("fieldName is required")
@@ -25,7 +25,7 @@ export default class UploadedFile {
   size() { return this.sizeValue }
 
   /**
-   * @param {string} _destinationPath
+   * @param {string} _destinationPath - Destination path.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async saveTo(_destinationPath) { // eslint-disable-line no-unused-vars

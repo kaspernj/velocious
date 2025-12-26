@@ -9,7 +9,7 @@ import BaseInstanceRelationship from "./base.js"
  */
 export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
   /**
-   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args
+   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor(args) {
     super(args)
@@ -19,7 +19,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   _loaded = undefined
 
   /**
-   * @param {Record<string, any>} data
+   * @param {Record<string, any>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -67,7 +67,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   getLoadedOrUndefined() { return this._loaded }
 
-  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>>} model */
+  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>>} model - Related model(s). */
   setLoaded(model) {
     if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
 

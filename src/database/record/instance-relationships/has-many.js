@@ -9,14 +9,14 @@ import BaseInstanceRelationship from "./base.js"
  */
 export default class VelociousDatabaseRecordHasManyInstanceRelationship extends BaseInstanceRelationship {
   /**
-   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args
+   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor(args) {
     super(args)
   }
 
   /**
-   * @param {Record<string, any>} data
+   * @param {Record<string, any>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -71,7 +71,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, any>} data
+   * @param {Record<string, any>} data - Data payload.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
   async create(data) {
@@ -91,12 +91,18 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     this.setPreloaded(true)
   }
 
-  /** @returns {import("../../query/model-class-query.js").default<TMC>} - The preload.  */
+  /**
+   * @param {Record<string, any>} preloads - Preload map for related records.
+   * @returns {import("../../query/model-class-query.js").default<TMC>} - The preload.
+   */
   preload(preloads) {
     return this.query().clone().preload(preloads)
   }
 
-  /** @returns {Promise<InstanceType<TMC>>} - Resolves with the find.  */
+  /**
+   * @param {string | number} modelID - Related model identifier.
+   * @returns {Promise<InstanceType<TMC>>} - Resolves with the find.
+   */
   async find(modelID) {
     return await this.query().find(modelID)
   }
@@ -160,7 +166,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {InstanceType<MC>[] | InstanceType<MC>} models
+   * @param {InstanceType<MC>[] | InstanceType<MC>} models - Model instances.
    * @returns {void} - No return value.
    */
   addToLoaded(models) {
@@ -188,7 +194,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {InstanceType<TMC>[]} models
+   * @param {InstanceType<TMC>[]} models - Model instances.
    * @returns {void} - No return value.
    */
   setLoaded(models) {

@@ -10,7 +10,7 @@ import querystring from "querystring"
 
 export default class VelociousController {
   /**
-   * @param {string} methodName
+   * @param {string} methodName - Method name.
    * @returns {void} - No return value.
    */
   static beforeAction(methodName) {
@@ -23,14 +23,14 @@ export default class VelociousController {
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.action
-   * @param {import("./configuration.js").default} args.configuration
-   * @param {string} args.controller
-   * @param {object} args.params
-   * @param {import("./http-server/client/request.js").default} args.request
-   * @param {import("./http-server/client/response.js").default} args.response
-   * @param {string} args.viewPath
+   * @param {object} args - Options object.
+   * @param {string} args.action - Action.
+   * @param {import("./configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} args.controller - Controller.
+   * @param {object} args.params - Parameters object.
+   * @param {import("./http-server/client/request.js").default} args.request - Request object.
+   * @param {import("./http-server/client/response.js").default} args.response - Response object.
+   * @param {string} args.viewPath - View path.
    */
   constructor({action, configuration, controller, params, request, response, viewPath}) {
     if (!action) throw new Error("No action given")
@@ -128,9 +128,9 @@ export default class VelociousController {
   }
 
   /**
-   * @param {object} [args]
-   * @param {object} [args.json]
-   * @param {number | string} [args.status]
+   * @param {object} [args] - Options object.
+   * @param {object} [args.json] - Json.
+   * @param {number | string} [args.status] - Status.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async render({json, status, ...restArgs} = {}) {
@@ -147,7 +147,7 @@ export default class VelociousController {
     return await this.renderView()
   }
 
-  /** @param {object} json */
+  /** @param {object} json - JSON payload. */
   renderJsonArg(json) {
     const body = JSON.stringify(json)
 

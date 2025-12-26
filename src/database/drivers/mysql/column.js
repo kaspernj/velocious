@@ -6,8 +6,8 @@ import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
   /**
-   * @param {import("../base-table.js").default} table
-   * @param {Record<string, any>} data
+   * @param {import("../base-table.js").default} table - Table.
+   * @param {Record<string, any>} data - Data payload.
    */
   constructor(table, data) {
     super()

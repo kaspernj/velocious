@@ -37,7 +37,7 @@ import WherePlain from "./where-plain.js"
 
 export default class VelociousDatabaseQuery {
   /**
-   * @param {QueryArgsType} args
+   * @param {QueryArgsType} args - Options object.
    */
   constructor({
     driver,
@@ -118,7 +118,7 @@ export default class VelociousDatabaseQuery {
   getSelects() { return this._selects }
 
   /**
-   * @param {string|import("./from-base.js").default} from
+   * @param {string|import("./from-base.js").default} from - From.
    * @returns {this} - The from.
    */
   from(from) {
@@ -129,7 +129,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string} group
+   * @param {string} group - Group.
    * @returns {this} - The group.
    */
   group(group) {
@@ -138,7 +138,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|{[key: string]: any}} join
+   * @param {string|{[key: string]: any}} join - Join clause or join descriptor.
    * @returns {this} - The joins.
    */
   joins(join) {
@@ -154,7 +154,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} value
+   * @param {number} value - Value to use.
    * @returns {this} - The limit.
    */
   limit(value) {
@@ -163,7 +163,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} value
+   * @param {number} value - Value to use.
    * @returns {this} - The offset.
    */
   offset(value) {
@@ -172,7 +172,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | number} order
+   * @param {string | number} order - Order.
    * @returns {this} - The order.
    */
   order(order) {
@@ -188,7 +188,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} pageNumber
+   * @param {number} pageNumber - Page number.
    * @returns {this} - The page.
    */
   page(pageNumber) {
@@ -203,7 +203,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} perPage
+   * @param {number} perPage - Page size.
    * @returns {this} - The per page.
    */
   perPage(perPage) {
@@ -212,7 +212,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | number} order
+   * @param {string | number} order - Order.
    * @returns {this} - The reorder.
    */
   reorder(order) {
@@ -231,7 +231,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {boolean} [value]
+   * @param {boolean} [value] - Value to use.
    * @returns {this} - The distinct.
    */
   distinct(value = true) {
@@ -240,7 +240,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {SelectArgumentType} select
+   * @param {SelectArgumentType} select - Select.
    * @returns {this} - The select.
    */
   select(select) {
@@ -287,7 +287,7 @@ export default class VelociousDatabaseQuery {
   toSql() { return this.driver.queryToSql(this) }
 
   /**
-   * @param {WhereArgumentType} where
+   * @param {WhereArgumentType} where - Where.
    * @returns {this} This query instance
    */
   where(where) {

@@ -10,9 +10,9 @@ import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousCliBaseCommand {
   /**
-   * @param {object} args
-   * @param {VelociousCliCommandArgs} args.args
-   * @param {import("./index.js").default} args.cli
+   * @param {object} args - Options object.
+   * @param {VelociousCliCommandArgs} args.args - Options object.
+   * @param {import("./index.js").default} args.cli - Cli.
    */
   constructor({args = {}, cli, ...restArgs}) {
     restArgsError(restArgs)

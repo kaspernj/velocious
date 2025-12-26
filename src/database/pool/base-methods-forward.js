@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * @param {typeof import("./base.js").default} PoolBase
+ * @param {typeof import("./base.js").default} PoolBase - Pool base.
  * @returns {void} - No return value.
  */
 export default function baseMethodsForward(PoolBase) {

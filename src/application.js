@@ -14,10 +14,10 @@ import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousApplication {
   /**
-   * @param {object} args
-   * @param {import("./configuration.js").default} args.configuration
-   * @param {HttpServerConfiguration} [args.httpServer]
-   * @param {string} args.type
+   * @param {object} args - Options object.
+   * @param {import("./configuration.js").default} args.configuration - Configuration instance.
+   * @param {HttpServerConfiguration} [args.httpServer] - Http server.
+   * @param {string} args.type - Type identifier.
    */
   constructor({configuration, httpServer, type, ...restArgs}) {
     restArgsError(restArgs)
@@ -59,7 +59,7 @@ export default class VelociousApplication {
   }
 
   /**
-   * @param {function() : void} callback
+   * @param {function() : void} callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async run(callback) {

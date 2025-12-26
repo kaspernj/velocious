@@ -4,8 +4,8 @@ import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversBaseColumnsIndex {
   /**
-   * @param {import("./base-table.js").default} table
-   * @param {object} data
+   * @param {import("./base-table.js").default} table - Table.
+   * @param {object} data - Data payload.
    */
   constructor(table, data) {
     this.data = data

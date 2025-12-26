@@ -2,7 +2,7 @@
 
 export default class ParamsToObject {
   /**
-   * @param {Record<string, any>} object
+   * @param {Record<string, any>} object - Object.
    */
   constructor(object) {
     this.object = object
@@ -22,9 +22,9 @@ export default class ParamsToObject {
   }
 
   /**
-   * @param {string} key
-   * @param {any} value
-   * @param {Record<string, any> | any[]} result
+   * @param {string} key - Key.
+   * @param {any} value - Value to use.
+   * @param {Record<string, any> | any[]} result - Result.
    * @returns {void} - No return value.
    */
   treatInitial(key, value, result) {
@@ -54,9 +54,9 @@ export default class ParamsToObject {
   }
 
   /**
-   * @param {any} value
-   * @param {string} rest
-   * @param {Record<string, any> | any[]} result
+   * @param {any} value - Value to use.
+   * @param {string} rest - Rest.
+   * @param {Record<string, any> | any[]} result - Result.
    * @returns {void} - No return value.
    */
   treatSecond(value, rest, result) {

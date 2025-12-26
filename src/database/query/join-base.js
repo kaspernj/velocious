@@ -20,14 +20,14 @@ export default class VelociousDatabaseQueryJoinBase {
   }
 
   /**
-   * @param {boolean} value
+   * @param {boolean} value - Value to use.
    */
   setPretty(value) {
     this.pretty = value
   }
 
   /**
-   * @param {import("./index.js").default} query
+   * @param {import("./index.js").default} query - Query instance.
    */
   setQuery(query) {
     this.query = query

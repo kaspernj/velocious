@@ -4,9 +4,9 @@ import restArgsError from "./utils/rest-args-error.js"
 
 export default class VelociousInitializer {
   /**
-   * @param {object} args
-   * @param {import("./configuration.js").default} args.configuration
-   * @param {string} args.type
+   * @param {object} args - Options object.
+   * @param {import("./configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} args.type - Type identifier.
    */
   constructor({configuration, type, ...restArgs}) {
     restArgsError(restArgs)

@@ -2,7 +2,7 @@
 
 export default class VelociousDatabaseQueryOrderBase {
   /**
-   * @param {import("./index.js").default} query
+   * @param {import("./index.js").default} query - Query instance.
    */
   constructor(query) {
     this.query = query
@@ -17,7 +17,7 @@ export default class VelociousDatabaseQueryOrderBase {
 
   /**
    * @abstract
-   * @param {boolean} _reverseOrder
+   * @param {boolean} _reverseOrder - Whether reverse order.
    * @returns {void} - No return value.
    */
   setReverseOrder(_reverseOrder) { // eslint-disable-line no-unused-vars
