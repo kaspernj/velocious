@@ -44,6 +44,7 @@
  * @property {string} [password]
  * @property {number} [port]
  * @property {string} [name]
+ * @property {boolean} [readOnly]
  * @property {object} [record]
  * @property {boolean} [record.transactions]
  * @property {boolean} [reset]
