@@ -37,7 +37,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @param {Record<string, any>} attributes - Attributes.
+   * @param {Record<string, unknown>} attributes - Attributes.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(attributes) { // eslint-disable-line no-unused-vars

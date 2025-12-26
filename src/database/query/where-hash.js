@@ -3,7 +3,7 @@
 import WhereBase from "./where-base.js"
 
 /**
- * @typedef {{[key: string]: any}} WhereHash
+ * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | WhereHash}} WhereHash
  */
 
 export default class VelociousDatabaseQueryWhereHash extends WhereBase {

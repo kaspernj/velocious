@@ -14,7 +14,7 @@ export default class VelociousRoutesResolver {
   /**
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
-   * @param {import("../http-server/client/request.js").default} args.request - Request object.
+   * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @param {import("../http-server/client/response.js").default} args.response - Response object.
    */
   constructor({configuration, request, response}) {
@@ -36,8 +36,11 @@ export default class VelociousRoutesResolver {
     let viewPath
 
     const matchResult = this.matchPathWithRoutes(currentRoute, currentPath)
-    let action = this.params.action ? inflection.camelize(this.params.action.replaceAll("-", "_"), true) : undefined
-    let controller = this.params.controller
+    const actionParam = this.params.action
+    const controllerParam = this.params.controller
+    const actionValue = typeof actionParam == "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
+    let action = typeof actionValue == "string" ? inflection.camelize(actionValue.replaceAll("-", "_"), true) : undefined
+    let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
 
     if (!matchResult) {
       const __filename = fileURLToPath(import.meta.url)
@@ -123,7 +126,7 @@ export default class VelociousRoutesResolver {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
-    const loggedParams = this._sanitizeParamsForLogging(this.params)
+    const loggedParams = /** @type {Record<string, unknown>} */ (this._sanitizeParamsForLogging(this.params))
 
     delete loggedParams.action
     delete loggedParams.controller
@@ -159,8 +162,8 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The sanitize params for logging.
+   * @param {unknown} value - Value to use.
+   * @returns {unknown} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {
     if (value instanceof UploadedFile) {
@@ -176,7 +179,7 @@ export default class VelociousRoutesResolver {
     }
 
     if (value && typeof value === "object") {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, unknown>} */
       const result = {}
 
       for (const key of Object.keys(value)) {

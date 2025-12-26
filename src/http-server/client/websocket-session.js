@@ -58,7 +58,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {any} payload - Payload data.
+   * @param {unknown} payload - Payload data.
    * @returns {void} - No return value.
    */
   sendEvent(channel, payload) {
@@ -112,7 +112,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     })
     const requestRunner = new RequestRunner({
       configuration: this.configuration,
-      /** @type {any} */ request
+      request
     })
 
     requestRunner.events.on("done", () => {

@@ -11,7 +11,7 @@ import TableForeignKey from "./table-foreign-key.js"
 /**
  * @typedef {object} TableColumnArgsType
  * @property {boolean} [autoIncrement] - Whether the column auto-increments.
- * @property {any} [default] - Default value for the column.
+ * @property {unknown} [default] - Default value for the column.
  * @property {boolean} [dropColumn] - Whether the column should be dropped.
  * @property {boolean|object} [foreignKey] - Foreign key options or flag.
  * @property {boolean|IndexArgType} [index] - Whether the column should be indexed.
@@ -76,12 +76,12 @@ export default class TableColumn {
   setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
 
   /**
-   * @returns {any} - The default.
+   * @returns {unknown | (() => unknown)} - The default value or factory.
    */
   getDefault() { return this.args?.default }
 
   /**
-   * @param {any} newDefault - New default.
+   * @param {unknown} newDefault - New default.
    * @returns {void} - No return value.
    */
   setDefault(newDefault) { this.args.default = newDefault }
@@ -257,22 +257,24 @@ export default class TableColumn {
       }
     }
 
-    if (typeof this.getDefault() == "function") {
-      const defaultValue = this.getDefault()()
+    const defaultValue = this.getDefault()
+
+    if (typeof defaultValue == "function") {
+      const evaluatedDefault = defaultValue()
 
       sql += ` DEFAULT (`
 
-      if (databaseType == "pgsql" && defaultValue == "UUID()") {
+      if (databaseType == "pgsql" && evaluatedDefault == "UUID()") {
         sql += "gen_random_uuid()"
-      } else if (databaseType == "mssql" && defaultValue == "UUID()") {
+      } else if (databaseType == "mssql" && evaluatedDefault == "UUID()") {
         sql += "NEWID()"
       } else {
-        sql += defaultValue
+        sql += evaluatedDefault
       }
 
       sql += ")"
-    } else if (this.getDefault()) {
-      sql += ` DEFAULT ${options.quote(this.getDefault())}`
+    } else if (defaultValue) {
+      sql += ` DEFAULT ${options.quote(defaultValue)}`
     }
 
     if (this.getPrimaryKey()) sql += " PRIMARY KEY"

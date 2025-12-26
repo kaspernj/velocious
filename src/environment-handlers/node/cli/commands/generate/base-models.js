@@ -60,14 +60,14 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += `   * @returns {typeof import("${sourceModelFilePath}").default}\n`
         fileContent += "   */\n"
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
-        fileContent += `  getModelClass() { return /** @type {typeof import("${sourceModelFilePath}").default} */ (this.constructor) }\n\n`
+        fileContent += `  getModelClass() { return /unknownunknown @type {typeof import("${sourceModelFilePath}").default} */ (this.constructor) }\n\n`
       } else {
         // No model file yet → fall back to typeof TicketBase
         fileContent += "  /**\n"
         fileContent += `   * @returns {typeof ${modelNameCamelized}Base}\n`
         fileContent += "   */\n"
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
-        fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
+        fileContent += `  getModelClass() { return /unknownunknown @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
       }
 
       const columns = await modelClass._getTable().getColumns()
@@ -198,12 +198,12 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${modelFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return /unknownunknown @type {import("${modelFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += "   * @param {Record<string, any>} [attributes]\n"
+          fileContent += "   * @param {Record<string, unknown>} [attributes]\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
@@ -236,13 +236,13 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return /unknownunknown @type {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += `   * @returns {Array<import("${recordImport}").default>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}Loaded() { return /** @type {Array<import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}Loaded() { return /unknownunknown @type {Array<import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"

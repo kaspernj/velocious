@@ -28,9 +28,9 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
       for (const model of this.models) {
         modelMeta.push({
-          foreignKeyValue: model.readColumn(foreignKey),
+          foreignKeyValue: /** @type {string | number | undefined} */ (model.readColumn(foreignKey)),
           model,
-          targetType: model.readColumn(typeColumn)
+          targetType: /** @type {string | undefined} */ (model.readColumn(typeColumn))
         })
       }
 
@@ -57,7 +57,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
       for (const targetType in foreignKeyValuesByType) {
         const targetModelClass = configuration.getModelClass(targetType)
 
-        /** @type {Record<string, any>} */
+        /** @type {Record<string, string | number | Array<string | number>>} */
         const whereArgs = {}
 
         whereArgs[primaryKey] = foreignKeyValuesByType[targetType]
@@ -69,7 +69,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
         targetModelsByTypeAndId[targetType] = {}
 
         for (const targetModel of foundTargetModels) {
-          const primaryKeyValue = targetModel.readColumn(primaryKey)
+          const primaryKeyValue = /** @type {string | number} */ (targetModel.readColumn(primaryKey))
 
           targetModelsByTypeAndId[targetType][primaryKeyValue] = targetModel
         }
@@ -77,7 +77,9 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
       for (const meta of modelMeta) {
         const modelRelationship = meta.model.getRelationshipByName(this.relationship.getRelationshipName())
-        const targetModel = meta.targetType ? targetModelsByTypeAndId[meta.targetType]?.[meta.foreignKeyValue] : undefined
+        const targetModel = (meta.targetType && meta.foreignKeyValue !== undefined && meta.foreignKeyValue !== null)
+          ? targetModelsByTypeAndId[meta.targetType]?.[meta.foreignKeyValue]
+          : undefined
 
         modelRelationship.setPreloaded(true)
         modelRelationship.setLoaded(targetModel)
@@ -90,12 +92,12 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     const foreignKeyValues = []
 
     for (const model of this.models) {
-      const foreignKeyValue = model.readColumn(foreignKey)
+      const foreignKeyValue = /** @type {string | number} */ (model.readColumn(foreignKey))
 
       if (!foreignKeyValues.includes(foreignKeyValue)) foreignKeyValues.push(foreignKeyValue)
     }
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | number | Array<string | number>>} */
     const whereArgs = {}
 
     whereArgs[primaryKey] = foreignKeyValues
@@ -111,14 +113,14 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     const targetModelsById = {}
 
     for (const targetModel of targetModels) {
-      const primaryKeyValue = targetModel.readColumn(this.relationship.getPrimaryKey())
+      const primaryKeyValue = /** @type {string | number} */ (targetModel.readColumn(this.relationship.getPrimaryKey()))
 
       targetModelsById[primaryKeyValue] = targetModel
     }
 
     // Set the target preloaded models on the given models
     for (const model of this.models) {
-      const foreignKeyValue = model.readColumn(foreignKey)
+      const foreignKeyValue = /** @type {string | number} */ (model.readColumn(foreignKey))
       const targetModel = targetModelsById[foreignKeyValue]
       const modelRelationship = model.getRelationshipByName(this.relationship.getRelationshipName())
 

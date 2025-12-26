@@ -104,7 +104,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     const row = result[0]
 
     if (row) {
-      return new Table({driver: this, row})
+      return new Table({driver: this, row: /** @type {Record<string, string | number | null>} */ (row)})
     }
 
     if (args?.throwError !== false) {
@@ -121,7 +121,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     const tables = []
 
     for (const row of result) {
-      const table = new Table({driver: this, row})
+      const table = new Table({driver: this, row: /** @type {Record<string, string | number | null>} */ (row)})
 
       tables.push(table)
     }
@@ -132,7 +132,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<string>>} rows - Rows to insert.
+   * @param {Array<Array<unknown>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) {
@@ -170,7 +170,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<string>>} rows - Rows to insert.
+   * @param {Array<Array<unknown>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
@@ -183,7 +183,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<string>>} rows - Rows to insert.
+   * @param {Array<Array<unknown>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithTransaction(tableName, columns, rows) {
@@ -192,8 +192,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     const sqls = []
 
     for (const row of rows) {
-      /** @type {Record<string, any>} */
-      const data = []
+      /** @type {Record<string, unknown>} */
+      const data = {}
 
       for (const columnIndex in columns) {
         const columnName = columns[columnIndex]
@@ -244,21 +244,21 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
     const versionResult = await this.query("SELECT sqlite_version() AS version")
 
-    this.version = versionResult[0].version
+    this.version = String(versionResult[0].version)
 
     const versionParts = this.version.split(".")
 
-    this.versionMajor = versionParts[0]
-    this.versionMinor = versionParts[1]
-    this.versionPatch = versionParts[2]
+    this.versionMajor = Number(versionParts[0])
+    this.versionMinor = Number(versionParts[1])
+    this.versionPatch = Number(versionParts[2])
   }
 
   shouldSetAutoIncrementWhenPrimaryKey() { return false }
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The escape.
+   * @param {unknown} value - Value to use.
+   * @returns {unknown} - The escape.
    */
   escape(value) {
     value = this._convertValue(value)
@@ -286,16 +286,16 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
-   * @param {string} value - Value to use.
-   * @returns {string} - The quote.
+   * @param {unknown} value - Value to use.
+   * @returns {string | number} - The quoted value.
    */
   quote(value) {
     value = this._convertValue(value)
 
     const type = typeof value
 
-    if (type == "number") return value
-    if (type != "string") value = `${value}`
+    if (type == "number") return /** @type {number} */ (value)
+    if (type != "string") value = String(value)
 
     return escapeString(value, null)
   }

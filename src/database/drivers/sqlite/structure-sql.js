@@ -18,7 +18,7 @@ export default class VelociousDatabaseDriversSqliteStructureSql {
     const {driver} = this
     const rows = await driver.query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
     const statements = rows
-      .map((row) => row.sql)
+      .map((row) => String(row.sql))
       .filter((statement) => Boolean(statement))
       .map((statement) => normalizeSqlStatement(statement))
       .filter((statement) => Boolean(statement))

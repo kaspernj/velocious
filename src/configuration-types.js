@@ -5,7 +5,7 @@
  */
 
 /**
- * @typedef {function({request: import("./http-server/client/request.js").default, response: import("./http-server/client/response.js").default}): Promise<void>} CorsType
+ * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default}): Promise<void>} CorsType
  */
 
 /**
@@ -38,7 +38,7 @@
  * @property {string} [database] - Database name for this connection.
  * @property {typeof import("./database/drivers/base.js").default} [driver] - Driver class to use for this database.
  * @property {typeof import("./database/pool/base.js").default} [poolType] - Pool class to use for this database.
- * @property {function() : void} [getConnection] - Custom connection factory override.
+ * @property {function() : unknown} [getConnection] - Custom connection factory override.
  * @property {string} [host] - Database host.
  * @property {boolean} [migrations] - Whether migrations are enabled for this database.
  * @property {string} [password] - Password for the database user.

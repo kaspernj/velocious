@@ -59,7 +59,7 @@ export default class VelociousConfiguration {
     return this.cors
   }
 
-  /** @returns {Record<string, any>} - The database configuration.  */
+  /** @returns {Record<string, import("./configuration-types.js").DatabaseConfigurationType>} - The database configuration.  */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
 
@@ -344,7 +344,7 @@ export default class VelociousConfiguration {
   setRoutes(newRoutes) { this.routes = newRoutes }
 
   /**
-   * @param {Function} callback - Callback function.
+   * @param {function(string, {defaultValue: string} | undefined) : string} callback - Translator callback.
    * @returns {void} - No return value.
    */
   setTranslator(callback) { this._translator = callback }
@@ -360,7 +360,7 @@ export default class VelociousConfiguration {
     return msgID
   }
 
-  /** @returns {Function} - The translator.  */
+  /** @returns {function(string, {defaultValue: string} | undefined) : string} - The translator.  */
   getTranslator() {
     return this._translator || this._defaultTranslator
   }

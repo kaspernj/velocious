@@ -137,7 +137,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {{[key: string]: any}} conditions - Conditions hash keyed by attribute name.
+   * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   async findBy(conditions) {
@@ -158,7 +158,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {{[key: string]: any}} conditions - Conditions hash keyed by attribute name.
+   * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
    * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or create by.
    */
@@ -173,7 +173,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {{[key: string]: any}} conditions - Conditions hash keyed by attribute name.
+   * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
   async findByOrFail(conditions) {
@@ -277,7 +277,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * Plucks one or more columns directly from the database without instantiating models.
    * @param {...string|string[]} columns - Column names.
-   * @returns {Promise<any[]>} - Resolves with the pluck.
+   * @returns {Promise<unknown[]>} - Resolves with the pluck.
    */
   async pluck(...columns) {
     const flatColumns = columns.flat()

@@ -334,7 +334,7 @@ export default class RequestBuffer {
 
   parseQueryStringPostParams() {
     if (this.postBody) {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, string | string[]>} */
       const unparsedParams = querystring.parse(this.postBody)
       const paramsToObject = new ParamsToObject(unparsedParams)
       const newParams = paramsToObject.toObject()

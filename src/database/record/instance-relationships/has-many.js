@@ -16,7 +16,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, any>} data - Data payload.
+   * @param {Record<string, unknown>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -71,7 +71,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, any>} data - Data payload.
+   * @param {Record<string, unknown>} data - Data payload.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
   async create(data) {
@@ -92,7 +92,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, any>} preloads - Preload map for related records.
+   * @param {import("../../query/index.js").NestedPreloadRecord} preloads - Preload map for related records.
    * @returns {import("../../query/model-class-query.js").default<TMC>} - The preload.
    */
   preload(preloads) {
@@ -131,7 +131,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const throughTable = throughModelClass.tableName()
       const driver = TargetModelClass.connection()
       const parentPrimaryKey = this.getPrimaryKey()
-      const parentId = this.getModel().readColumn(parentPrimaryKey)
+    const parentId = /** @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
       const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
       const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
 
@@ -140,9 +140,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
-    const primaryModelID = this.getModel().readColumn(primaryKey)
+    const primaryModelID = /** @type {string | number} */ (this.getModel().readColumn(primaryKey))
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = primaryModelID

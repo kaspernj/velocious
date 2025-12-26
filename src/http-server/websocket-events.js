@@ -13,7 +13,7 @@ export default class VelociousHttpServerWebsocketEvents {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {any} payload - Payload data.
+   * @param {unknown} payload - Payload data.
    * @returns {void} - No return value.
    */
   publish(channel, payload) {

@@ -102,7 +102,7 @@ class ExpectToChange extends BaseExpect {
 
 class Expect extends BaseExpect {
   /**
-   * @param {any} object - Object.
+   * @param {unknown} object - Object.
    */
   constructor(object) {
     super()
@@ -130,7 +130,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result - Result.
+   * @param {unknown} result - Result.
    * @returns {void} - No return value.
    */
   toBe(result) {
@@ -171,7 +171,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Function} klass - Klass.
+   * @param {new (...args: unknown[]) => unknown} klass - Class constructor to check against.
    * @returns {void} - No return value.
    */
   toBeInstanceOf(klass) {
@@ -225,11 +225,25 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} valueToContain - Value to contain.
+   * @param {unknown} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
     if (this._not) throw new Error("not stub")
+
+    if (typeof this._object == "string") {
+      if (!this._object.includes(String(valueToContain))) {
+        const objectPrint = formatValue(this._object)
+        const valuePrint = formatValue(valueToContain)
+
+        throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
+      }
+      return
+    }
+
+    if (!Array.isArray(this._object)) {
+      throw new Error(`Expected array or string but got ${typeof this._object}`)
+    }
 
     if (!this._object.includes(valueToContain)) {
       const objectPrint = formatValue(this._object)
@@ -240,7 +254,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result - Result.
+   * @param {unknown} result - Result.
    * @returns {void} - No return value.
    */
   toEqual(result) {
@@ -301,6 +315,10 @@ class Expect extends BaseExpect {
    * @returns {void} - No return value.
    */
   toMatch(regex) {
+    if (typeof this._object !== "string") {
+      throw new Error(`Expected string but got ${typeof this._object}`)
+    }
+
     const match = this._object.match(regex)
 
     if (this._not) {
@@ -329,6 +347,10 @@ class Expect extends BaseExpect {
     let failedError
 
     try {
+      if (typeof this._object !== "function") {
+        throw new Error(`Expected function but got ${typeof this._object}`)
+      }
+
       await this._object()
     } catch (error) {
       failedError = error
@@ -360,11 +382,15 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {Promise<any>} - Resolves with the execute.
+   * @returns {Promise<unknown>} - Resolves with the execute.
    */
   async execute() {
     for (const expectation of this.expectations) {
       await expectation.runBefore()
+    }
+
+    if (typeof this._object !== "function") {
+      throw new Error(`Expected function but got ${typeof this._object}`)
     }
 
     const result = await this._object()
@@ -381,21 +407,22 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, any>} result - Result.
+   * @param {Record<string, unknown>} result - Result.
    * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
 
-    /** @type {Record<string, any[]>} */
+    /** @type {Record<string, unknown[]>} */
     const differences = {}
+    const objectAsRecord = /** @type {Record<string, unknown>} */ (this._object)
 
     for (const key in result) {
       const value = result[key]
 
-      if (!(key in this._object)) throw new Error(`${this._object.constructor.name} doesn't respond to ${key}`)
+      if (!(key in objectAsRecord)) throw new Error(`${this._object.constructor.name} doesn't respond to ${key}`)
 
-      const objectValue = this._object[key]()
+      const objectValue = /** @type {() => unknown} */ (objectAsRecord[key])()
 
       if (value != objectValue) {
         differences[key] = [value, objectValue]
@@ -447,7 +474,7 @@ async function describe(description, arg1, arg2) {
 }
 
 /**
- * @param {any} arg - Arg.
+ * @param {unknown} arg - Arg.
  * @returns {Expect} - The expect.
  */
 function expect(arg) {

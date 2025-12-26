@@ -15,10 +15,10 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
     const connection = modelClass.connection()
     const tableName = modelClass._getTable().getName()
-    const attributeValue = model.readAttribute(attributeName)
+    const attributeValue = /** @type {string | number} */ (model.readAttribute(attributeName))
     const attributeNameUnderscore = inflection.underscore(attributeName)
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[attributeNameUnderscore] = attributeValue

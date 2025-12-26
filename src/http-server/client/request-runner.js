@@ -13,7 +13,7 @@ export default class VelociousHttpServerClientRequestRunner {
   /**
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
-   * @param {any} args.request - Request object.
+   * @param {import("./request.js").default | import("./websocket-request.js").default} args.request - Request object.
    */
   constructor({configuration, request}) {
     if (!configuration) throw new Error("No configuration given")

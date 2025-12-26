@@ -9,7 +9,7 @@ import ForeignKey from "./foreign-key.js"
 export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   /**
    * @param {import("../base.js").default} driver - Database driver instance.
-   * @param {Record<string, any>} data - Data payload.
+   * @param {Record<string, string>} data - Data payload.
    */
   constructor(driver, data) {
     super()
@@ -109,13 +109,14 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
     return indexes
   }
 
+  /** @returns {string} - The table name. */
   getName() {
-    return digg(this.data, "TABLE_NAME")
+    return /** @type {string} */ (digg(this.data, "TABLE_NAME"))
   }
 
   /**
    * @param {{cascade: boolean}} [args] - Truncate options.
-   * @returns {Promise<Array<Record<string, any>>>} - Resolves with the truncate.
+   * @returns {Promise<Array<Record<string, unknown>>>} - Resolves with the truncate.
    */
   async truncate(args) { // eslint-disable-line no-unused-vars
     this.getDriver()._assertNotReadOnly()

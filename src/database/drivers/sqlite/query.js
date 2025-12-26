@@ -3,11 +3,11 @@
 /**
  * @param {import("sqlite3").Database} connection - Connection.
  * @param {string} sql - SQL string.
- * @returns {Promise<Record<string, any>[]>} - Resolves with string value.
+ * @returns {Promise<Record<string, unknown>[]>} - Resolves with string value.
  */
 export default async function query(connection, sql) {
   try {
-    /** @type {Record<string, any>[]} */
+    /** @type {Record<string, unknown>[]} */
     let result
 
     // @ts-expect-error

@@ -173,7 +173,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
-   * @param {*} value - Value to use.
+   * @param {unknown} value - Value to use.
    * @returns {string} - The escape.
    */
   escape(value) {
@@ -190,25 +190,25 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {*} value - Value to use.
-   * @returns {string} - The quote.
+   * @param {unknown} value - Value to use.
+   * @returns {string | number} - The quoted value.
    */
   quote(value) {
     value = this._convertValue(value)
 
     const type = typeof value
 
-    if (type == "number") return value
-    if (type != "string") value = `${value}`
+    if (type == "number") return /** @type {number} */ (value)
+    if (type != "string") value = String(value)
 
     return escapeString(value, null)
   }
 
   /**
-   * @param {*} string - String.
+   * @param {string} columnName - Column name.
    * @returns {string} - The quote column.
    */
-  quoteColumn(string) { return this.options().quoteColumnName(string) }
+  quoteColumn(columnName) { return this.options().quoteColumnName(columnName) }
 
   /**
    * @param {string} string - String.
@@ -256,7 +256,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const tables = []
 
     for (const row of result) {
-      const table = new Table(this, row)
+      const table = new Table(this, /** @type {Record<string, string>} */ (row))
 
       tables.push(table)
     }
@@ -274,7 +274,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(name)}`)
 
     if (result[0]) {
-      return new Table(this, result[0])
+      return new Table(this, /** @type {Record<string, string>} */ (result[0]))
     }
 
     if (args?.throwError !== false) {

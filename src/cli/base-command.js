@@ -3,7 +3,7 @@ import restArgsError from "../utils/rest-args-error.js"
 /**
  * @typedef {object} VelociousCliCommandArgs
  * @property {import("../configuration.js").default} [configuration] - Configuration instance for the CLI.
- * @property {Record<string, any>} [parsedProcessArgs] - Parsed CLI arguments.
+ * @property {Record<string, string | number | boolean | undefined>} [parsedProcessArgs] - Parsed CLI arguments.
  * @property {string[]} [processArgs] - Raw CLI arguments array.
  * @property {boolean} [testing] - Whether the CLI is running in test mode.
  */
@@ -31,7 +31,7 @@ export default class VelociousCliBaseCommand {
 
   /**
    * @abstract
-   * @returns {Promise<any>} - Resolves with the execute.
+   * @returns {Promise<unknown>} - Resolves with the execute.
    */
   execute() {
     throw new Error("execute not implemented")

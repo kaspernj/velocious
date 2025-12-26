@@ -9,7 +9,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   /**
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
-   * @param {Record<string, any>} args.row - Row data.
+   * @param {Record<string, string | number | null>} args.row - Row data.
    */
   constructor({driver, row}) {
     super()
@@ -62,7 +62,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
 
       if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
 
-      columnsIndex.data.columnNames = this._parseColumnsFromSQL(sql)
+      columnsIndex.data.columnNames = this._parseColumnsFromSQL(String(sql))
 
       indexes.push(columnsIndex)
     }
@@ -102,11 +102,12 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     return columnNames
   }
 
+  /** @returns {string} - The table name. */
   getName() {
     if (!this.row.name) {
       throw new Error("No name given for SQLite table")
     }
 
-    return this.row.name
+    return String(this.row.name)
   }
 }

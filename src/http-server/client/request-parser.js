@@ -17,6 +17,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.configuration = configuration
     this.data = []
     this.events = new EventEmitter()
+    /** @type {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} */
     this.params = {}
 
     this.requestBuffer = new RequestBuffer({configuration})
@@ -38,7 +39,7 @@ export default class VelociousHttpServerClientRequestParser {
    * @returns {void} - No return value.
    */
   onFormDataPart = (formDataPart) => {
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | string[] | import("./uploaded-file/uploaded-file.js").default>} */
     const unorderedParams = {}
 
     unorderedParams[formDataPart.getName()] = formDataPart.getValue()

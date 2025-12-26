@@ -60,8 +60,8 @@ function consoleWarn(message) {
 }
 
 /**
- * @param {...any|function() : Array<any>} messages - Messages.
- * @returns {Array<any>} - Either the function result or the messages
+ * @param {...unknown|function() : Array<unknown>} messages - Messages.
+ * @returns {Array<unknown>} - Either the function result or the messages
  */
 function functionOrMessages(...messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
@@ -74,7 +74,7 @@ function functionOrMessages(...messages) {
 
 /**
  * Converts multiple message parts into a single string.
- * @param {...any} messages - Parts to combine into a message
+ * @param {...unknown} messages - Parts to combine into a message
  * @returns {string} - The messages to message.
  */
 function messagesToMessage(...messages) {
@@ -132,7 +132,7 @@ function isLevelAllowed({level, loggingConfiguration, debugFlag}) {
 
 class Logger {
   /**
-   * @param {any} object - Object.
+   * @param {string | object} object - Object.
    * @param {object} args - Options object.
    * @param {import("./configuration.js").default} [args.configuration] - Configuration instance.
    * @param {boolean} [args.debug] - Whether debug.
@@ -162,7 +162,8 @@ class Logger {
    */
   getConfiguration() {
     if (!this._configuration) {
-      this._configuration = this._object?.configuration || Configuration.current()
+      const objectWithConfig = /** @type {{configuration?: import("./configuration.js").default}} */ (this._object)
+      this._configuration = objectWithConfig?.configuration || Configuration.current()
     }
 
     return this._configuration
@@ -180,7 +181,7 @@ class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {unknown[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debug(...messages) {
@@ -188,7 +189,7 @@ class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {unknown[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async info(...messages) {
@@ -196,7 +197,7 @@ class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {unknown[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debugLowLevel(...messages) {
@@ -204,7 +205,7 @@ class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {unknown[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async log(...messages) {
@@ -212,7 +213,7 @@ class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {unknown[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async error(...messages) {
@@ -284,12 +285,17 @@ class Logger {
 export {Logger}
 
 /**
- * @param {any} object - Object.
+ * @param {unknown} object - Object.
+ * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
+ */
+/**
+ * @param {object} object - Log subject.
  * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
  */
 export default async function logger(object, ...messages) {
-  const className = object.constructor.name
-  let configuration = object.configuration
+  const objectWithConfig = /** @type {{constructor: {name: string}, configuration?: import("./configuration.js").default}} */ (object)
+  const className = objectWithConfig.constructor.name
+  let configuration = objectWithConfig.configuration
 
   if (!configuration) {
     try {

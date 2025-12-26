@@ -24,7 +24,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {any} value - Value to use.
+   * @param {unknown} value - Value to use.
    * @returns {number | string} - The quote.
    */
   quote(value) {
@@ -66,7 +66,7 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @abstract
-   * @param {any} string - String.
+   * @param {unknown} string - String.
    * @returns {string} - The quote string.
    */
   quoteString(string) { // eslint-disable-line no-unused-vars

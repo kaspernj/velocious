@@ -1,12 +1,12 @@
 // @ts-check
 
 /**
- * @param {(...args: any[]) => Promise<void>} callback - Callback function.
- * @returns {(...args: any[]) => Promise<void>} - The error logger.
+ * @param {(...args: unknown[]) => Promise<void>} callback - Callback function.
+ * @returns {(...args: unknown[]) => Promise<void>} - The error logger.
  */
 export default function errorLogger(callback) {
   /**
-   * @param  {...any} args - Options object.
+   * @param  {...unknown[]} args - Arguments forwarded to the callback.
    * @returns {Promise<void>} - Resolves when complete.
    */
   return async function(...args) {

@@ -2,7 +2,7 @@
 
 /**
  * @typedef {object} AddColumnArgsType
- * @property {any} [default] - Default value for the column.
+ * @property {unknown} [default] - Default value for the column.
  * @property {object} [foreignKey] - Foreign key definition for the column.
  * @property {boolean | {unique: boolean}} [index] - Whether to add an index (optionally unique).
  * @property {boolean} [null] - Whether the column allows null values.
@@ -11,7 +11,7 @@
  */
 /**
  * @typedef {object} CreateTableIdArgsType
- * @property {any} [default] - Default value for the ID column.
+ * @property {unknown} [default] - Default value for the ID column.
  * @property {string} [type] - Column type for the ID column.
  */
 /**

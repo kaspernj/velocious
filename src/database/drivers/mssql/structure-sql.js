@@ -20,8 +20,10 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
     const statements = []
 
     for (const row of rows) {
-      const tableName = row.table_name || row.TABLE_NAME
-      const tableType = row.table_type || row.TABLE_TYPE
+      const tableNameValue = row.table_name || row.TABLE_NAME
+      const tableTypeValue = row.table_type || row.TABLE_TYPE
+      const tableName = tableNameValue ? String(tableNameValue) : ""
+      const tableType = tableTypeValue ? String(tableTypeValue) : ""
 
       if (!tableName || !tableType) continue
 
@@ -36,7 +38,7 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
           .filter((column) => Boolean(column))
 
         if (primaryKeyColumns.length > 0) {
-          columnSql.push(`PRIMARY KEY (${primaryKeyColumns.map((name) => driver.quoteColumn(name)).join(", ")})`)
+          columnSql.push(`PRIMARY KEY (${primaryKeyColumns.map((name) => driver.quoteColumn(String(name))).join(", ")})`)
         }
 
         if (columnSql.length == 0) continue
@@ -44,7 +46,8 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
         statements.push(normalizeSqlStatement(`CREATE TABLE ${driver.quoteTable(tableName)} (${columnSql.join(", ")})`))
       } else if (tableType == "VIEW") {
         const viewRows = await driver.query(`SELECT m.definition AS definition FROM sys.sql_modules m JOIN sys.objects o ON m.object_id = o.object_id WHERE o.type = 'V' AND o.name = ${driver.quote(tableName)}`)
-        const viewDef = viewRows?.[0]?.definition || viewRows?.[0]?.DEFINITION
+        const viewDefValue = viewRows?.[0]?.definition || viewRows?.[0]?.DEFINITION
+        const viewDef = viewDefValue ? String(viewDefValue) : ""
 
         if (!viewDef) continue
 
@@ -65,20 +68,25 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
   }
 
   /**
-   * @param {Record<string, any>} column - Column.
+   * @param {Record<string, unknown>} column - Column.
    * @returns {string | null} - The column definition.
    */
   _columnDefinition(column) {
     const {driver} = this
-    const columnName = column.column_name || column.COLUMN_NAME
-    const dataType = column.data_type || column.DATA_TYPE
+    const columnNameValue = column.column_name || column.COLUMN_NAME
+    const dataTypeValue = column.data_type || column.DATA_TYPE
+    const columnName = columnNameValue ? String(columnNameValue) : ""
+    const dataType = dataTypeValue ? String(dataTypeValue) : ""
 
     if (!columnName || !dataType) return null
 
     let typeSql = dataType
-    const charLength = column.character_maximum_length || column.CHARACTER_MAXIMUM_LENGTH
-    const numericPrecision = column.numeric_precision || column.NUMERIC_PRECISION
-    const numericScale = column.numeric_scale || column.NUMERIC_SCALE
+    const charLengthValue = column.character_maximum_length || column.CHARACTER_MAXIMUM_LENGTH
+    const numericPrecisionValue = column.numeric_precision || column.NUMERIC_PRECISION
+    const numericScaleValue = column.numeric_scale || column.NUMERIC_SCALE
+    const charLength = charLengthValue === undefined || charLengthValue === null ? null : Number(charLengthValue)
+    const numericPrecision = numericPrecisionValue === undefined || numericPrecisionValue === null ? null : Number(numericPrecisionValue)
+    const numericScale = numericScaleValue === undefined || numericScaleValue === null ? null : Number(numericScaleValue)
 
     if ((dataType == "varchar" || dataType == "nvarchar" || dataType == "char" || dataType == "nchar")) {
       if (charLength == -1) {

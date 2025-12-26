@@ -54,6 +54,7 @@ export default class VelociousHttpServerClientRequest {
 
   origin() { return this.header("origin") }
   path() { return this.requestParser.getPath() }
+  /** @returns {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} - The request params. */
   params() { return digg(this, "requestParser", "params") }
   port() { return this.requestParser.getPort() }
   protocol() { return this.requestParser.getProtocol() }

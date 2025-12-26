@@ -10,7 +10,7 @@ export default class VelociousDatabaseQueryPreloader {
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {import("../record/index.js").default[]} args.models - Model instances.
-   * @param {Record<string, any>} args.preload - Preload.
+   * @param {import("../query/index.js").NestedPreloadRecord} args.preload - Preload.
    */
   constructor({modelClass, models, preload, ...restArgs}) {
     restArgsError(restArgs)

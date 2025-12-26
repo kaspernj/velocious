@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {any} - The default.
+   * @returns {unknown} - The default.
    */
   getDefault() {
     throw new Error("getDefault not implemented")

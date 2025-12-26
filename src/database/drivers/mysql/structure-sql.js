@@ -21,8 +21,10 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
     const statements = []
 
     for (const row of rows) {
-      const tableName = row.table_name || row.TABLE_NAME
-      const tableType = row.table_type || row.TABLE_TYPE
+      const tableNameValue = row.table_name || row.TABLE_NAME
+      const tableTypeValue = row.table_type || row.TABLE_TYPE
+      const tableName = tableNameValue ? String(tableNameValue) : ""
+      const tableType = tableTypeValue ? String(tableTypeValue) : ""
 
       if (!tableName || !tableType) continue
 
@@ -58,7 +60,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @param {Record<string, any> | undefined} row - Row data.
+   * @param {Record<string, unknown> | undefined} row - Row data.
    * @returns {string | null} - SQL string.
    */
   _mysqlCreateStatement(row) {
@@ -66,7 +68,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
 
     for (const key of Object.keys(row)) {
       if (key.toLowerCase().startsWith("create ")) {
-        return row[key]
+        return String(row[key])
       }
     }
 

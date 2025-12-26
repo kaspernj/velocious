@@ -138,7 +138,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|{[key: string]: any}} join - Join clause or join descriptor.
+   * @param {string | import("./join-object.js").JoinObject} join - Join clause or join descriptor.
    * @returns {this} - The joins.
    */
   joins(join) {
