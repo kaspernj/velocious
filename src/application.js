@@ -7,9 +7,9 @@ import restArgsError from "./utils/rest-args-error.js"
 
 /**
  * @typedef {object} HttpServerConfiguration
- * @property {number} [maxWorkers] - Description.
- * @property {string} [host] - Description.
- * @property {number} [port] - Description.
+ * @property {number} [maxWorkers] - Max worker threads for the HTTP server.
+ * @property {string} [host] - Hostname to bind the HTTP server to.
+ * @property {number} [port] - Port to bind the HTTP server to.
  */
 
 export default class VelociousApplication {

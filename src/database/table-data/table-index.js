@@ -4,8 +4,8 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 /**
  * @typedef {object} TableIndexArgsType
- * @property {string} [name] - Description.
- * @property {boolean} [unique] - Description.
+ * @property {string} [name] - Explicit index name.
+ * @property {boolean} [unique] - Whether the index should be unique.
  */
 
 export default class TableIndex {

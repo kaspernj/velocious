@@ -5,17 +5,17 @@ import * as inflection from "inflection"
 
 /**
  * @typedef {object} RelationshipBaseArgsType
- * @property {string} [className] - Description.
- * @property {string} [dependent] - Description.
- * @property {string | undefined} [foreignKey] - Description.
- * @property {string} [inverseOf] - Description.
- * @property {typeof import("../index.js").default} [klass] - Description.
- * @property {typeof import("../index.js").default} modelClass - Description.
- * @property {string} [primaryKey] - Description.
- * @property {boolean} [polymorphic] - Description.
- * @property {string} relationshipName - Description.
- * @property {string} [through] - Description.
- * @property {string} type - Description.
+ * @property {string} [className] - Name of the related model class.
+ * @property {string} [dependent] - Dependent action when parent is destroyed.
+ * @property {string | undefined} [foreignKey] - Explicit foreign key column name.
+ * @property {string} [inverseOf] - Inverse relationship name on the related model.
+ * @property {typeof import("../index.js").default} [klass] - Related model class.
+ * @property {typeof import("../index.js").default} modelClass - Owning model class.
+ * @property {string} [primaryKey] - Primary key column on the owning model.
+ * @property {boolean} [polymorphic] - Whether the relationship is polymorphic.
+ * @property {string} relationshipName - Name of the relationship on the model.
+ * @property {string} [through] - Name of the through association.
+ * @property {string} type - Relationship type (e.g. "hasMany").
  */
 
 export default class VelociousDatabaseRecordBaseRelationship {

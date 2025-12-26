@@ -2,30 +2,30 @@
 
 /**
  * @typedef {object} CreateIndexSqlArgs
- * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Description.
- * @property {boolean} [ifNotExists] - Description.
- * @property {string} [name] - Description.
- * @property {boolean} [unique] - Description.
- * @property {string} tableName - Description.
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Columns to include in the index.
+ * @property {boolean} [ifNotExists] - Skip creation if the index already exists.
+ * @property {string} [name] - Explicit index name to use.
+ * @property {boolean} [unique] - Whether the index should enforce uniqueness.
+ * @property {string} tableName - Name of the table to add the index to.
  */
 /**
  * @typedef {object} DropTableSqlArgsType
- * @property {boolean} [cascade] - Description.
- * @property {boolean} [ifExists] - Description.
+ * @property {boolean} [cascade] - Whether dependent objects should be dropped too.
+ * @property {boolean} [ifExists] - Skip dropping if the table does not exist.
  */
 /**
  * @typedef {object} DeleteSqlArgsType
- * @property {string} tableName - Description.
- * @property {{[key: string]: any}} conditions - Description.
+ * @property {string} tableName - Table name to delete from.
+ * @property {{[key: string]: any}} conditions - Conditions used to build the delete WHERE clause.
  */
 /**
  * @typedef {object} InsertSqlArgsType
- * @property {string[]} [columns] - Description.
- * @property {{[key: string]: any}} [data] - Description.
- * @property {boolean} [multiple] - Description.
- * @property {string[]} [returnLastInsertedColumnNames] - Description.
- * @property {Array<Array<any>>} [rows] - Description.
- * @property {string} tableName - Description.
+ * @property {string[]} [columns] - Column names for `rows` inserts.
+ * @property {{[key: string]: any}} [data] - Column/value pairs for a single-row insert.
+ * @property {boolean} [multiple] - Whether this insert should be treated as multi-row.
+ * @property {string[]} [returnLastInsertedColumnNames] - Column names to return after insert.
+ * @property {Array<Array<any>>} [rows] - Row values for a multi-row insert.
+ * @property {string} tableName - Table name to insert into.
  */
 /**
  * @typedef {Record<string, any>} QueryRowType
@@ -33,9 +33,9 @@
  */
 /**
  * @typedef {object}UpdateSqlArgsType
- * @property {object} conditions - Description.
- * @property {object} data - Description.
- * @property {string} tableName - Description.
+ * @property {object} conditions - Conditions used to build the update WHERE clause.
+ * @property {object} data - Column/value pairs to update.
+ * @property {string} tableName - Table name to update.
  */
 
 import {Logger} from "../../logger.js"

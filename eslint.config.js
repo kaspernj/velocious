@@ -24,8 +24,7 @@ export default defineConfig([
       "jsdoc/reject-function-type": "off",
       "jsdoc/require-jsdoc": "off",
       "jsdoc/require-param": "off",
-      "jsdoc/require-param-description": "off",
-      "jsdoc/require-property-description": "error"
+      "jsdoc/require-param-description": "off"
     }
   }),
   {

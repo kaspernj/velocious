@@ -2,16 +2,16 @@
 
 /**
  * @typedef {object} CommandFileObjectType
- * @property {string} name - Description.
- * @property {string} file - Description.
+ * @property {string} name - Command name.
+ * @property {string} file - Command file path.
  */
 
 /**
  * @typedef {object} MigrationObjectType
- * @property {number} date - Description.
- * @property {string} [fullPath] - Description.
- * @property {string} migrationClassName - Description.
- * @property {string} file - Description.
+ * @property {number} date - Migration timestamp parsed from filename.
+ * @property {string} [fullPath] - Absolute path to the migration file.
+ * @property {string} migrationClassName - Exported migration class name.
+ * @property {string} file - Migration filename.
  */
 
 export default class VelociousEnvironmentHandlerBase {

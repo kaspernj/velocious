@@ -2,21 +2,21 @@
 
 /**
  * @typedef {object} AddColumnArgsType
- * @property {any} [default] - Description.
- * @property {object} [foreignKey] - Description.
- * @property {boolean | {unique: boolean}} [index] - Description.
- * @property {boolean} [null] - Description.
- * @property {boolean} [primaryKey] - Description.
- * @property {boolean} [unique] - Description.
+ * @property {any} [default] - Default value for the column.
+ * @property {object} [foreignKey] - Foreign key definition for the column.
+ * @property {boolean | {unique: boolean}} [index] - Whether to add an index (optionally unique).
+ * @property {boolean} [null] - Whether the column allows null values.
+ * @property {boolean} [primaryKey] - Whether the column is a primary key.
+ * @property {boolean} [unique] - Whether the column enforces uniqueness.
  */
 /**
  * @typedef {object} CreateTableIdArgsType
- * @property {any} [default] - Description.
- * @property {string} [type] - Description.
+ * @property {any} [default] - Default value for the ID column.
+ * @property {string} [type] - Column type for the ID column.
  */
 /**
  * @typedef {object} CreateTableArgsType
- * @property {CreateTableIdArgsType | false} [id] - Description.
+ * @property {CreateTableIdArgsType | false} [id] - ID column options or false to skip ID.
  */
 /**
  * @typedef {(table: TableData) => void} CreateTableCallbackType
@@ -130,9 +130,9 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @typedef {object} AddIndexArgsType
-   * @property {boolean} [ifNotExists] - Description.
-   * @property {string} [name] - Description.
-   * @property {boolean} [unique] - Description.
+   * @property {boolean} [ifNotExists] - Skip creation if the index already exists.
+   * @property {string} [name] - Explicit index name to use.
+   * @property {boolean} [unique] - Whether the index should be unique.
    */
   /**
    * @param {string} tableName

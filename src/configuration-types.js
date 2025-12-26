@@ -20,38 +20,38 @@
 
 /**
  * @typedef {object} SqlConfig
- * @property {string} [database] - Description.
- * @property {object} [options] - Description.
- * @property {boolean} [options.encrypt] - Description.
- * @property {boolean} [options.trustServerCertificate] - Description.
- * @property {string} [password] - Description.
- * @property {object} [pool] - Description.
- * @property {number} [pool.max] - Description.
- * @property {number} [pool.min] - Description.
- * @property {number} [pool.idleTimeoutMillis] - Description.
- * @property {string} [server] - Description.
- * @property {string} [user] - Description.
+ * @property {string} [database] - Database name for the SQL driver.
+ * @property {object} [options] - Driver-specific connection options.
+ * @property {boolean} [options.encrypt] - Whether to encrypt the connection (MSSQL).
+ * @property {boolean} [options.trustServerCertificate] - Whether to trust the server certificate (MSSQL).
+ * @property {string} [password] - Password for the SQL user.
+ * @property {object} [pool] - Connection pool configuration.
+ * @property {number} [pool.max] - Maximum number of connections.
+ * @property {number} [pool.min] - Minimum number of connections.
+ * @property {number} [pool.idleTimeoutMillis] - Idle timeout before releasing a connection.
+ * @property {string} [server] - SQL server hostname.
+ * @property {string} [user] - SQL username.
  */
 
 /**
  * @typedef {object} DatabaseConfigurationType
- * @property {string} [database] - Description.
- * @property {typeof import("./database/drivers/base.js").default} [driver] - Description.
- * @property {typeof import("./database/pool/base.js").default} [poolType] - Description.
- * @property {function() : void} [getConnection] - Description.
- * @property {string} [host] - Description.
- * @property {boolean} [migrations] - Description.
- * @property {string} [password] - Description.
- * @property {number} [port] - Description.
- * @property {string} [name] - Description.
- * @property {boolean} [readOnly] - Description.
- * @property {object} [record] - Description.
- * @property {boolean} [record.transactions] - Description.
- * @property {boolean} [reset] - Description.
- * @property {SqlConfig} [sqlConfig] - Description.
- * @property {"mssql" | "mysql" | "pgsql" | "sqlite"} [type] - Description.
- * @property {string} [useDatabase] - Description.
- * @property {string} [username] - Description.
+ * @property {string} [database] - Database name for this connection.
+ * @property {typeof import("./database/drivers/base.js").default} [driver] - Driver class to use for this database.
+ * @property {typeof import("./database/pool/base.js").default} [poolType] - Pool class to use for this database.
+ * @property {function() : void} [getConnection] - Custom connection factory override.
+ * @property {string} [host] - Database host.
+ * @property {boolean} [migrations] - Whether migrations are enabled for this database.
+ * @property {string} [password] - Password for the database user.
+ * @property {number} [port] - Database port.
+ * @property {string} [name] - Friendly name for the configuration.
+ * @property {boolean} [readOnly] - Whether writes should be blocked for this database.
+ * @property {object} [record] - Record-level configuration.
+ * @property {boolean} [record.transactions] - Whether record operations should use transactions.
+ * @property {boolean} [reset] - Whether to reset the database on startup.
+ * @property {SqlConfig} [sqlConfig] - Driver-specific SQL config.
+ * @property {"mssql" | "mysql" | "pgsql" | "sqlite"} [type] - Database type identifier.
+ * @property {string} [useDatabase] - Database to switch to after connecting.
+ * @property {string} [username] - Username for database authentication.
  */
 
 /**
@@ -70,19 +70,19 @@
 
 /**
  * @typedef {object} ConfigurationArgsType
- * @property {CorsType} [cors] - Description.
- * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Description.
- * @property {boolean} [debug] - Description.
- * @property {string} [directory] - Description.
- * @property {string} [environment] - Description.
- * @property {import("./environment-handlers/base.js").default} environmentHandler - Description.
- * @property {LoggingConfiguration} [logging] - Description.
- * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Description.
- * @property {InitializersType} [initializers] - Description.
- * @property {string | function() : string} locale - Description.
- * @property {string[]} locales - Description.
- * @property {LocaleFallbacksType} localeFallbacks - Description.
- * @property {string} [testing] - Description.
+ * @property {CorsType} [cors] - CORS configuration for the HTTP server.
+ * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
+ * @property {boolean} [debug] - Enable debug logging.
+ * @property {string} [directory] - Base directory for the project.
+ * @property {string} [environment] - Current environment name.
+ * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
+ * @property {LoggingConfiguration} [logging] - Logging configuration.
+ * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.
+ * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.
+ * @property {string | function() : string} locale - Default locale or locale resolver.
+ * @property {string[]} locales - Supported locales.
+ * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
+ * @property {string} [testing] - Path to the testing configuration file.
  */
 
 export const nothing = {}

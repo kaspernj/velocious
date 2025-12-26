@@ -6,7 +6,7 @@ import TableReference from "./table-reference.js"
 
 /**
  * @typedef {object} TableDataArgsType
- * @property {boolean} ifNotExists - Description.
+ * @property {boolean} ifNotExists - Whether to create the table only if it does not exist.
  */
 
 export default class TableData {

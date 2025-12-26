@@ -19,20 +19,20 @@ import WherePlain from "./where-plain.js"
 
 /**
  * @typedef {object} QueryArgsType
- * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver - Description.
- * @property {Array<import("./from-base.js").default>} [froms] - Description.
- * @property {string[]} [groups] - Description.
- * @property {Array<import("./join-base.js").default>} [joins] - Description.
- * @property {import("../handler.js").default} handler - Description.
- * @property {number | null} [limit] - Description.
- * @property {number | null} [offset] - Description.
- * @property {Array<import("./order-base.js").default>} [orders] - Description.
- * @property {number | null} [page] - Description.
- * @property {number} [perPage] - Description.
- * @property {NestedPreloadRecord} [preload] - Description.
- * @property {Array<import("./select-base.js").default>} [selects] - Description.
- * @property {boolean} [distinct] - Description.
- * @property {Array<import("./where-base.js").default>} [wheres] - Description.
+ * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver - Driver instance or factory for query execution.
+ * @property {Array<import("./from-base.js").default>} [froms] - FROM clauses for the query.
+ * @property {string[]} [groups] - GROUP BY columns.
+ * @property {Array<import("./join-base.js").default>} [joins] - JOIN clauses for the query.
+ * @property {import("../handler.js").default} handler - Handler used for executing and transforming results.
+ * @property {number | null} [limit] - LIMIT clause value.
+ * @property {number | null} [offset] - OFFSET clause value.
+ * @property {Array<import("./order-base.js").default>} [orders] - ORDER BY clauses.
+ * @property {number | null} [page] - Page number for pagination.
+ * @property {number} [perPage] - Records per page for pagination.
+ * @property {NestedPreloadRecord} [preload] - Preload graph for related records.
+ * @property {Array<import("./select-base.js").default>} [selects] - SELECT clauses for the query.
+ * @property {boolean} [distinct] - Whether the query should use DISTINCT.
+ * @property {Array<import("./where-base.js").default>} [wheres] - WHERE conditions for the query.
  */
 
 export default class VelociousDatabaseQuery {

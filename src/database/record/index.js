@@ -155,9 +155,9 @@ class VelociousDatabaseRecord {
 
   /**
    * @typedef {object} RelationshipDataArgumentType
-   * @property {string} [className] - Description.
-   * @property {typeof VelociousDatabaseRecord} [klass] - Description.
-   * @property {string} [type] - Description.
+   * @property {string} [className] - Model class name for the related record.
+   * @property {typeof VelociousDatabaseRecord} [klass] - Model class for the related record.
+   * @property {string} [type] - Relationship type (e.g. "hasMany", "belongsTo").
    */
   /**
    * @param {string} relationshipName

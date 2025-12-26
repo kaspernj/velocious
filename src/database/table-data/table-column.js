@@ -10,17 +10,17 @@ import TableForeignKey from "./table-foreign-key.js"
 
 /**
  * @typedef {object} TableColumnArgsType
- * @property {boolean} [autoIncrement] - Description.
- * @property {any} [default] - Description.
- * @property {boolean} [dropColumn] - Description.
- * @property {boolean|object} [foreignKey] - Description.
- * @property {boolean|IndexArgType} [index] - Description.
- * @property {boolean} [isNewColumn] - Description.
- * @property {number} [maxLength] - Description.
- * @property {boolean} [null] - Description.
- * @property {boolean} [polymorphic] - Description.
- * @property {boolean} [primaryKey] - Description.
- * @property {string} [type] - Description.
+ * @property {boolean} [autoIncrement] - Whether the column auto-increments.
+ * @property {any} [default] - Default value for the column.
+ * @property {boolean} [dropColumn] - Whether the column should be dropped.
+ * @property {boolean|object} [foreignKey] - Foreign key options or flag.
+ * @property {boolean|IndexArgType} [index] - Whether the column should be indexed.
+ * @property {boolean} [isNewColumn] - Whether this column is being added in a migration.
+ * @property {number} [maxLength] - Maximum length for the column value.
+ * @property {boolean} [null] - Whether the column allows null values.
+ * @property {boolean} [polymorphic] - Whether the column is polymorphic.
+ * @property {boolean} [primaryKey] - Whether the column is a primary key.
+ * @property {string} [type] - Column data type.
  */
 
 export default class TableColumn {

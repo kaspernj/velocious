@@ -4,12 +4,12 @@ import QueryBase from "./base.js"
 
 /**
  * @typedef {object} CreateIndexBaseArgsType
- * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Description.
- * @property {import("../drivers/base.js").default} driver - Description.
- * @property {boolean} [ifNotExists] - Description.
- * @property {string} [name] - Description.
- * @property {boolean} [unique] - Description.
- * @property {string} tableName - Description.
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Columns to include in the index.
+ * @property {import("../drivers/base.js").default} driver - Database driver used to generate SQL.
+ * @property {boolean} [ifNotExists] - Skip creation if the index already exists.
+ * @property {string} [name] - Explicit index name to use.
+ * @property {boolean} [unique] - Whether the index should enforce uniqueness.
+ * @property {string} tableName - Name of the table to add the index to.
  */
 
 export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {

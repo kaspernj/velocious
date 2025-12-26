@@ -9,20 +9,20 @@ import {tests} from "./test.js"
 
 /**
  * @typedef {object} TestArgs
- * @property {Application} [application] - Description.
- * @property {RequestClient} [client] - Description.
- * @property {object} [databaseCleaning] - Description.
- * @property {boolean} [databaseCleaning.transaction] - Description.
- * @property {boolean} [databaseCleaning.truncate] - Description.
- * @property {boolean} [focus] - Description.
- * @property {() => (void|Promise<void>)} [function] - Description.
- * @property {string} [type] - Description.
+ * @property {Application} [application] - Application instance for integration tests.
+ * @property {RequestClient} [client] - HTTP client for request tests.
+ * @property {object} [databaseCleaning] - Database cleanup options for tests.
+ * @property {boolean} [databaseCleaning.transaction] - Use transactions to rollback between tests.
+ * @property {boolean} [databaseCleaning.truncate] - Truncate tables between tests.
+ * @property {boolean} [focus] - Whether this test is focused.
+ * @property {() => (void|Promise<void>)} [function] - Test callback function.
+ * @property {string} [type] - Test type identifier.
  */
 
 /**
  * @typedef {object} TestData
- * @property {TestArgs} args - Description.
- * @property {function(TestArgs) : (void|Promise<void>)} function - Description.
+ * @property {TestArgs} args - Arguments passed to the test.
+ * @property {function(TestArgs) : (void|Promise<void>)} function - Test callback to execute.
  */
 
 /**
@@ -31,15 +31,15 @@ import {tests} from "./test.js"
 
 /**
  * @typedef {object} AfterBeforeEachCallbackObjectType
- * @property {AfterBeforeEachCallbackType} callback - Description.
+ * @property {AfterBeforeEachCallbackType} callback - Hook callback to execute.
  */
 
 /**
  * @typedef {object} TestsArgument
- * @property {Record<string, TestData>} args - Description.
- * @property {boolean} [anyTestsFocussed] - Description.
- * @property {AfterBeforeEachCallbackObjectType[]} afterEaches - Description.
- * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Description.
+ * @property {Record<string, TestData>} args - Arguments keyed by test description.
+ * @property {boolean} [anyTestsFocussed] - Whether any tests in the tree are focused.
+ * @property {AfterBeforeEachCallbackObjectType[]} afterEaches - After-each hooks for this scope.
+ * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Before-each hooks for this scope.
  * @property {Record<string, TestData>} tests - A unique identifier for the node.
  * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
  */
