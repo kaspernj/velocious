@@ -25,7 +25,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.requestBuffer.events.on("request-done", this.requestDone)
   }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   destroy() {
     this.requestBuffer.events.off("completed", this.requestDone)
     this.requestBuffer.events.off("form-data-part", this.onFormDataPart)
@@ -35,7 +35,7 @@ export default class VelociousHttpServerClientRequestParser {
 
   /**
    * @param {import("./request-buffer/form-data-part.js").default} formDataPart
-   * @returns {void}
+   * @returns {void} - Result.
    */
   onFormDataPart = (formDataPart) => {
     /** @type {Record<string, any>} */
@@ -51,26 +51,26 @@ export default class VelociousHttpServerClientRequestParser {
 
   /**
    * @param {Buffer} data
-   * @returns {void}
+   * @returns {void} - Result.
    */
   feed = (data) => this.requestBuffer.feed(data)
 
   /**
    * @param {string} name
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getHeader(name) { return this.requestBuffer.getHeader(name)?.value }
 
-  /** @returns {Record<string, string>} */
+  /** @returns {Record<string, string>} - Result.  */
   getHeaders() { return this.requestBuffer.getHeadersHash() }
 
-  /** @returns {string} */
+  /** @returns {string} - Result.  */
   getHttpMethod() { return digg(this, "requestBuffer", "httpMethod") }
 
-  /** @returns {string} */
+  /** @returns {string} - Result.  */
   getHttpVersion() { return digg(this, "requestBuffer", "httpVersion") }
 
-  /** @returns {{host: string, port: string, protocol: string} | null} */
+  /** @returns {{host: string, port: string, protocol: string} | null} - Result. */
   _getHostMatch() {
     const rawHost = this.requestBuffer.getHeader("origin")?.value
 
@@ -87,17 +87,17 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
-  /** @returns {string | void} */
+  /** @returns {string | void} - Result.  */
   getHost() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
 
     if (rawHostSplit && rawHostSplit[0]) return rawHostSplit[0]
   }
 
-  /** @returns {string} */
+  /** @returns {string} - Result.  */
   getPath() { return digg(this, "requestBuffer", "path") }
 
-  /** @returns {number | void} */
+  /** @returns {number | void} - Result.  */
   getPort() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
     const httpMethod = this.getHttpMethod()
@@ -111,13 +111,13 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
-  /** @returns {string | null} */
+  /** @returns {string | null} - Result.  */
   getProtocol() { return this._getHostMatch()?.protocol }
 
-  /** @returns {RequestBuffer} */
+  /** @returns {RequestBuffer} - Result.  */
   getRequestBuffer() { return this.requestBuffer }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   requestDone = () => {
     incorporate(this.params, this.requestBuffer.params)
 

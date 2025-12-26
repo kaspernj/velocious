@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     this.row = row
   }
 
-  /** @returns {Promise<Array<import("../base-column.js").default>>} */
+  /** @returns {Promise<Array<import("../base-column.js").default>>} - Result.  */
   async getColumns() {
     const result = await this.driver.query(`PRAGMA table_info('${this.getName()}')`)
     const columns = []
@@ -70,7 +70,10 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     return indexes
   }
 
-  /** @param {string} sql */
+  /**
+   * @param {string} sql
+   * @returns {string[]} - Result.
+   */
   _parseColumnsFromSQL(sql) {
     if (!sql) throw new Error(`Invalid SQL given (${typeof sql}): ${sql}`)
 

@@ -33,7 +33,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
    * @param {typeof import("../record/index.js").default} modelClass
    * @param {string} sql
    * @param {number} joinsCount
-   * @returns {string}
+   * @returns {string} - Result.
    */
   joinObject(join, modelClass, sql, joinsCount) {
     const pretty = this.pretty

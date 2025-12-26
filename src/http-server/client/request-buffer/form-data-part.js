@@ -75,7 +75,7 @@ export default class FormDataPart {
   /**
    * @param {Buffer} buffer
    * @param {string} filename
-   * @returns {string}
+   * @returns {string} - Result.
    */
   createTempFile(buffer, filename) {
     const tempDirectory = fs.mkdtempSync(path.join(tmpdir(), "velocious-upload-"))
@@ -89,7 +89,7 @@ export default class FormDataPart {
   /**
    * Prevent path traversal/absolute paths from filenames coming from headers.
    * @param {string | undefined} filename
-   * @returns {string}
+   * @returns {string} - Result.
    */
   _sanitizeFilename(filename) {
     if (!filename) return ""

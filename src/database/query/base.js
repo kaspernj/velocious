@@ -26,7 +26,7 @@ export default class VelociousDatabaseQueryBase {
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default}
+   * @returns {import("../query-parser/options.js").default} - Result.
    */
   getOptions() {
     return this._options
@@ -38,7 +38,7 @@ export default class VelociousDatabaseQueryBase {
 
   /**
    * @abstract
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async toSQLs() {
     throw new Error("'toSQLs' wasn't implemented")

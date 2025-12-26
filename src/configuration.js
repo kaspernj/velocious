@@ -18,7 +18,7 @@ class CurrentConfigurationNotSetError extends Error {}
 export {CurrentConfigurationNotSetError}
 
 export default class VelociousConfiguration {
-  /** @returns {VelociousConfiguration} */
+  /** @returns {VelociousConfiguration} - Result.  */
   static current() {
     if (!shared.currentConfiguration) throw new CurrentConfigurationNotSetError("A current configuration hasn't been set")
 
@@ -54,12 +54,12 @@ export default class VelociousConfiguration {
     this.getEnvironmentHandler().setConfiguration(this)
   }
 
-  /** @returns {import("./configuration-types.js").CorsType | undefined} */
+  /** @returns {import("./configuration-types.js").CorsType | undefined} - Result.  */
   getCors() {
     return this.cors
   }
 
-  /** @returns {Record<string, any>} */
+  /** @returns {Record<string, any>} - Result.  */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
 
@@ -70,14 +70,14 @@ export default class VelociousConfiguration {
     return digg(this, "database", this.getEnvironment())
   }
 
-  /** @returns {Array<string>} */
+  /** @returns {Array<string>} - Result.  */
   getDatabaseIdentifiers() {
     return Object.keys(this.getDatabaseConfiguration())
   }
 
   /**
    * @param {string} identifier
-   * @returns {import("./database/pool/base.js").default}
+   * @returns {import("./database/pool/base.js").default} - Result.
    */
   getDatabasePool(identifier = "default") {
     if (!this.isDatabasePoolInitialized(identifier)) {
@@ -99,7 +99,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} identifier
-   * @returns {typeof import("./database/pool/base.js").default}
+   * @returns {typeof import("./database/pool/base.js").default} - Result.
    */
   getDatabasePoolType(identifier = "default") {
     const poolTypeClass = digg(this.getDatabaseIdentifier(identifier), "poolType")
@@ -120,7 +120,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getDirectory() {
     if (!this._directory) {
@@ -131,20 +131,20 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getEnvironment() { return digg(this, "_environment") }
 
   /**
    * @param {string} newEnvironment
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
 
   /**
    * @param {object} [args]
    * @param {boolean} [args.defaultConsole]
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>}
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>} - Result.
    */
   getLoggingConfiguration({defaultConsole} = {}) {
     const environment = this.getEnvironment()
@@ -177,14 +177,14 @@ export default class VelociousConfiguration {
 
   /**
    * Logging configuration tailored for HTTP request logging. Defaults console logging to true and applies the user `logging.console` flag only for request logging.
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>}
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>} - Result.
    */
   getHttpLoggingConfiguration() {
     return this.getLoggingConfiguration({defaultConsole: true})
   }
 
   /**
-   * @returns {import("./environment-handlers/base.js").default}
+   * @returns {import("./environment-handlers/base.js").default} - Result.
    */
   getEnvironmentHandler() {
     if (!this._environmentHandler) throw new Error("No environment handler set")
@@ -193,18 +193,18 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {import("./configuration-types.js").LocaleFallbacksType | undefined}
+   * @returns {import("./configuration-types.js").LocaleFallbacksType | undefined} - Result.
    */
   getLocaleFallbacks() { return this.localeFallbacks }
 
   /**
    * @param {import("./configuration-types.js").LocaleFallbacksType} newLocaleFallbacks
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getLocale() {
     if (typeof this.locale == "function") {
@@ -216,12 +216,12 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Array<string>} */
+  /** @returns {Array<string>} - Result.  */
   getLocales() { return digg(this, "locales") }
 
   /**
    * @param {string} name
-   * @returns {typeof import("./database/record/index.js").default}
+   * @returns {typeof import("./database/record/index.js").default} - Result.
    */
   getModelClass(name) {
     const modelClass = this.modelClasses[name]
@@ -241,7 +241,7 @@ export default class VelociousConfiguration {
   /** @returns {string} The path to a config file that should be used for testing. */
   getTesting() { return this._testing }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   initializeDatabasePool(identifier = "default") {
     if (!this.database) throw new Error("No 'database' was given")
     if (this.databasePools[identifier]) throw new Error("DatabasePool has already been initialized")
@@ -252,16 +252,16 @@ export default class VelociousConfiguration {
     this.databasePools[identifier].setCurrent()
   }
 
-  /** @returns {boolean} */
+  /** @returns {boolean} - Result.  */
   isDatabasePoolInitialized(identifier = "default") { return Boolean(this.databasePools[identifier]) }
 
-  /** @returns {boolean} */
+  /** @returns {boolean} - Result.  */
   isInitialized() { return this._isInitialized }
 
   /**
    * @param {object} args
    * @param {string} args.type
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async initializeModels(args = {type: "server"}) {
     if (!this._modelsInitialized) {
@@ -276,7 +276,7 @@ export default class VelociousConfiguration {
   /**
    * Ensures each configured database pool has a global connection available.
    * Useful when `getCurrentConnection` might be called without an async context.
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async ensureGlobalConnections() {
     for (const identifier of this.getDatabaseIdentifiers()) {
@@ -289,7 +289,7 @@ export default class VelociousConfiguration {
   /**
    * @param {object} args
    * @param {string} args.type
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async initialize({type} = {type: "undefined"}) {
     if (!this.isInitialized()) {
@@ -317,36 +317,36 @@ export default class VelociousConfiguration {
 
   /**
    * @param {typeof import("./database/record/index.js").default} modelClass
-   * @returns {void}
+   * @returns {void} - Result.
    */
   registerModelClass(modelClass) {
     this.modelClasses[modelClass.name] = modelClass
   }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   setCurrent() {
     shared.currentConfiguration = this
   }
 
-  /** @returns {import("./routes/index.js").default | undefined} */
+  /** @returns {import("./routes/index.js").default | undefined} - Result.  */
   getRoutes() { return this.routes }
 
   /**
    * @param {import("./routes/index.js").default} newRoutes
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setRoutes(newRoutes) { this.routes = newRoutes }
 
   /**
    * @param {Function} callback
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setTranslator(callback) { this._translator = callback }
 
   /**
    * @param {string} msgID
    * @param {undefined | {defaultValue: string}} args
-   * @returns {string}
+   * @returns {string} - Result.
    */
   _defaultTranslator(msgID, args) {
     if (args?.defaultValue) return args.defaultValue
@@ -354,19 +354,19 @@ export default class VelociousConfiguration {
     return msgID
   }
 
-  /** @returns {Function} */
+  /** @returns {Function} - Result.  */
   getTranslator() {
     return this._translator || this._defaultTranslator
   }
 
-  /** @returns {import("./http-server/websocket-events.js").default | undefined} */
+  /** @returns {import("./http-server/websocket-events.js").default | undefined} - Result.  */
   getWebsocketEvents() {
     return this._websocketEvents
   }
 
   /**
    * @param {import("./http-server/websocket-events.js").default} websocketEvents
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setWebsocketEvents(websocketEvents) {
     this._websocketEvents = websocketEvents
@@ -374,7 +374,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {WithConnectionsCallbackType} callback
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async withConnections(callback) {
     /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
@@ -440,7 +440,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {WithConnectionsCallbackType} callback
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async ensureConnections(callback) {
     let dbs = this.getCurrentConnections()

@@ -22,7 +22,7 @@ export default class VelociousCliCommandsServer extends BaseCommand{
   /**
    * @param {import("../../../../routes/base-route.js").default} route
    * @param {number} [level]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   printRoutes(route, level = 0) {
     const prefix = "  ".repeat(level)
@@ -38,7 +38,7 @@ export default class VelociousCliCommandsServer extends BaseCommand{
 
   /**
    * @param {string} content
-   * @returns {void}
+   * @returns {void} - Result.
    */
   log(content) {
     if (this.cli.getTesting()) {

@@ -24,12 +24,12 @@ export default class ServerClient {
     socket.on("end", this.onSocketEnd)
   }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   listen() {
     this.socket.on("data", this.onSocketData)
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   end() {
     return new Promise((resolve) => {
       this.socket.once("close", () => resolve(null))
@@ -39,7 +39,7 @@ export default class ServerClient {
 
   /**
    * @param {Buffer} chunk
-   * @returns {void}
+   * @returns {void} - Result.
    */
   onSocketData = (chunk) => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount}: ${chunk}`)
@@ -53,7 +53,7 @@ export default class ServerClient {
     })
   }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   onSocketEnd = () => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount} end`)
     this.events.emit("close", this)
@@ -61,7 +61,7 @@ export default class ServerClient {
 
   /**
    * @param {string} data
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async send(data) {
     return new Promise((resolve) => {
@@ -78,7 +78,7 @@ export default class ServerClient {
 
   /**
    * @param {import("worker_threads").Worker} newWorker
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setWorker(newWorker) {
     this.worker = newWorker

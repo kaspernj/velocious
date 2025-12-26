@@ -3,7 +3,7 @@
 /**
  * @param {import("sql.js").Database} connection
  * @param {string} sql
- * @returns {Promise<Record<string, any>[]>}
+ * @returns {Promise<Record<string, any>[]>} - Result.
  */
 export default async function query(connection, sql) {
   const rows = []

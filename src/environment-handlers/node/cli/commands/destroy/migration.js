@@ -7,7 +7,7 @@ import fs from "fs/promises"
 
 export default class DbDestroyMigration extends BaseCommand {
   /**
-   * @returns {Promise<void | DestroyMigrationResult>}
+   * @returns {Promise<void | DestroyMigrationResult>} - Result.
    */
   async execute() {
     const migrationName = this.processArgs[1]

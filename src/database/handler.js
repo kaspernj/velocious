@@ -2,7 +2,7 @@
 
 export default class VelociousDatabaseHandler {
   /**
-   * @returns {VelociousDatabaseHandler}
+   * @returns {VelociousDatabaseHandler} - Result.
    */
   clone() {
     const newHandler = new VelociousDatabaseHandler()

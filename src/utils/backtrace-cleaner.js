@@ -3,7 +3,7 @@
 export default class BacktraceCleaner {
   /**
    * @param {Error} error
-   * @returns {string | undefined}
+   * @returns {string | undefined} - Result.
    */
   static getCleanedStack(error) {
     return new BacktraceCleaner(error).getCleanedStack()
@@ -17,7 +17,7 @@ export default class BacktraceCleaner {
   }
 
   /**
-   * @returns {string | undefined}
+   * @returns {string | undefined} - Result.
    */
   getCleanedStack() {
     const backtrace = this.error?.stack?.split("\n")

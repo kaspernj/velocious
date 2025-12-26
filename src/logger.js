@@ -16,7 +16,7 @@ const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
  * @param {string} message
- * @returns {Promise<void>}
+ * @returns {Promise<void>} - Result.
  */
 function consoleLog(message) {
   return new Promise((resolve) => {
@@ -31,7 +31,7 @@ function consoleLog(message) {
 
 /**
  * @param {string} message
- * @returns {Promise<void>}
+ * @returns {Promise<void>} - Result.
  */
 function consoleError(message) {
   return new Promise((resolve) => {
@@ -46,7 +46,7 @@ function consoleError(message) {
 
 /**
  * @param {string} message
- * @returns {Promise<void>}
+ * @returns {Promise<void>} - Result.
  */
 function consoleWarn(message) {
   return new Promise((resolve) => {
@@ -75,7 +75,7 @@ function functionOrMessages(...messages) {
 /**
  * Converts multiple message parts into a single string.
  * @param {...any} messages - Parts to combine into a message
- * @returns {string}
+ * @returns {string} - Result.
  */
 function messagesToMessage(...messages) {
   let message = ""
@@ -99,11 +99,11 @@ function messagesToMessage(...messages) {
 
 /**
  * @param {import("./configuration.js").default | undefined} configuration
- * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>}
+ * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} - Result.
  */
 /**
  * @param {import("./configuration.js").default | undefined} configuration
- * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>}
+ * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} - Result.
  */
 function resolveLoggingConfiguration(configuration) {
   if (configuration && typeof configuration.getLoggingConfiguration === "function") {
@@ -118,7 +118,7 @@ function resolveLoggingConfiguration(configuration) {
  * @param {LogLevel} args.level
  * @param {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} args.loggingConfiguration
  * @param {boolean} [args.debugFlag]
- * @returns {boolean}
+ * @returns {boolean} - Result.
  */
 function isLevelAllowed({level, loggingConfiguration, debugFlag}) {
   const allowedLevels = loggingConfiguration.levels || DEFAULT_LOGGING_CONFIGURATION.levels
@@ -158,7 +158,7 @@ class Logger {
   }
 
   /**
-   * @returns {import("./configuration.js").default}
+   * @returns {import("./configuration.js").default} - Result.
    */
   getConfiguration() {
     if (!this._configuration) {
@@ -169,7 +169,7 @@ class Logger {
   }
 
   /**
-   * @returns {import("./configuration.js").default | undefined}
+   * @returns {import("./configuration.js").default | undefined} - Result.
    */
   _safeConfiguration() {
     try {
@@ -181,7 +181,7 @@ class Logger {
 
   /**
    * @param {any[]} messages
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async debug(...messages) {
     await this._write({level: "debug", messages})
@@ -189,7 +189,7 @@ class Logger {
 
   /**
    * @param {any[]} messages
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async info(...messages) {
     await this._write({level: "info", messages})
@@ -197,7 +197,7 @@ class Logger {
 
   /**
    * @param {any[]} messages
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async debugLowLevel(...messages) {
     await this._write({level: "debug-low-level", messages})
@@ -205,7 +205,7 @@ class Logger {
 
   /**
    * @param {any[]} messages
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async log(...messages) {
     await this._write({level: "info", messages})
@@ -213,7 +213,7 @@ class Logger {
 
   /**
    * @param {any[]} messages
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async error(...messages) {
     await this._write({level: "error", messages})
@@ -221,7 +221,7 @@ class Logger {
 
   /**
    * @param {boolean} newValue
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setDebug(newValue) {
     this._debug = newValue
@@ -238,7 +238,7 @@ class Logger {
    * @param {object} args
    * @param {LogLevel} args.level
    * @param {Parameters<typeof functionOrMessages>} args.messages
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async _write({level, messages}) {
     const resolvedMessages = functionOrMessages(...messages)

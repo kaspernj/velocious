@@ -20,7 +20,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   /**
    * @param {Record<string, any>} data
-   * @returns {InstanceType<TMC>}
+   * @returns {InstanceType<TMC>} - Result.
    */
   build(data) {
     const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())

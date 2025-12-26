@@ -6,14 +6,14 @@ export default class VelociousDatabaseQueryFromBase {
 
   /**
    * @param {import("./index.js").default} query
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setQuery(query) {
     this.query = query
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default}
+   * @returns {import("../query-parser/options.js").default} - Result.
    */
   getOptions() {
     if (!this.query) throw new Error("'query' hasn't been set")
@@ -23,7 +23,7 @@ export default class VelociousDatabaseQueryFromBase {
 
   /**
    * @abstract
-   * @returns {string[]}
+   * @returns {string[]} - Result.
    */
   toSql() {
     throw new Error("'toSql' wasn't implemented")

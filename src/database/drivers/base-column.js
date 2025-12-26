@@ -9,7 +9,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   getAutoIncrement() {
     throw new Error("getAutoIncrement not implemented")
@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {any}
+   * @returns {any} - Result.
    */
   getDefault() {
     throw new Error("getDefault not implemented")
@@ -25,7 +25,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @param {string} indexName
-   * @returns {Promise<import("./base-columns-index.js").default | undefined>}
+   * @returns {Promise<import("./base-columns-index.js").default | undefined>} - Result.
    */
   async getIndexByName(indexName) {
     const indexes = await this.getIndexes()
@@ -36,7 +36,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @param {boolean} nullable Whether the column should be nullable or not.
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async changeNullable(nullable) {
     const tableData = new TableData(this.getTable().getName())
@@ -54,7 +54,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
-   * @returns {import("./base.js").default}
+   * @returns {import("./base.js").default} - Result.
    */
   getDriver() {
     return this.getTable().getDriver()
@@ -62,7 +62,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {Promise<Array<import("./base-columns-index.js").default>>}
+   * @returns {Promise<Array<import("./base-columns-index.js").default>>} - Result.
    */
   getIndexes() {
     throw new Error("getIndexes not implemented")
@@ -70,7 +70,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {number | undefined}
+   * @returns {number | undefined} - Result.
    */
   getMaxLength() {
     throw new Error("getMaxLength not implemented")
@@ -78,7 +78,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getName() {
     throw new Error("getName not implemented")
@@ -86,14 +86,14 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   getNull() {
     throw new Error("getNull not implemented")
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default}
+   * @returns {import("../query-parser/options.js").default} - Result.
    */
   getOptions() {
     return this.getDriver().options()
@@ -101,14 +101,14 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   getPrimaryKey() {
     throw new Error("getPrimaryKey not implemented")
   }
 
   /**
-   * @returns {import("./base-table.js").default}
+   * @returns {import("./base-table.js").default} - Result.
    */
   getTable() {
     if (!this.table) throw new Error("No table set on column")
@@ -133,7 +133,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getType() {
     throw new Error("getType not implemented")

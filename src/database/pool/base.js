@@ -12,7 +12,7 @@ const shared = {
 
 class VelociousDatabasePoolBase {
   /**
-   * @returns {VelociousDatabasePoolBase}
+   * @returns {VelociousDatabasePoolBase} - Result.
    */
   static current() {
     if (!shared.currentPool) throw new Error("A database pool hasn't been set")
@@ -45,7 +45,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @returns {Promise<import("../drivers/base.js").default>}
+   * @returns {Promise<import("../drivers/base.js").default>} - Result.
    */
   checkout() {
     throw new Error("'checkout' not implemented")
@@ -53,7 +53,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @returns {import("../drivers/base.js").default}
+   * @returns {import("../drivers/base.js").default} - Result.
    */
   getCurrentConnection() {
     throw new Error("'getCurrentConnection' not implemented")
@@ -62,14 +62,14 @@ class VelociousDatabasePoolBase {
   /**
    * Returns the connection pinned to the current context, if any.
    * Default implementation defers to `getCurrentConnection`.
-   * @returns {import("../drivers/base.js").default | undefined}
+   * @returns {import("../drivers/base.js").default | undefined} - Result.
    */
   getCurrentContextConnection() {
     return this.getCurrentConnection()
   }
 
   /**
-   * @returns {{driver: typeof import("../drivers/base.js").default, type: string}}
+   * @returns {{driver: typeof import("../drivers/base.js").default, type: string}} - Result.
    */
   getConfiguration() {
     return digg(this.configuration.getDatabaseConfiguration(), this.identifier)
@@ -77,14 +77,14 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   primaryKeyType() {
     throw new Error("'primaryKeyType' not implemented")
   }
 
   /**
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setCurrent() {
     shared.currentPool = this
@@ -98,7 +98,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @returns {Promise<import("../drivers/base.js").default>}
+   * @returns {Promise<import("../drivers/base.js").default>} - Result.
    */
   async spawnConnection() {
     const databaseConfig = this.getConfiguration()
@@ -113,7 +113,7 @@ class VelociousDatabasePoolBase {
   /**
    * @param {object} config
    * @param {typeof import("../drivers/base.js").default} config.driver
-   * @returns {Promise<import("../drivers/base.js").default>}
+   * @returns {Promise<import("../drivers/base.js").default>} - Result.
    */
   async spawnConnectionWithConfiguration(config) {
     const DriverClass = config.driver || this.driverClass
@@ -130,7 +130,7 @@ class VelociousDatabasePoolBase {
   /**
    * @abstract
    * @param {function(import("../drivers/base.js").default) : void} _callback
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   withConnection(_callback) { // eslint-disable-line no-unused-vars
     throw new Error("'withConnection' not implemented")
@@ -139,7 +139,7 @@ class VelociousDatabasePoolBase {
   /**
    * Ensures a reusable connection exists for contexts where AsyncLocalStorage isn't set.
    * Default implementation just checks out a connection.
-   * @returns {Promise<import("../drivers/base.js").default>}
+   * @returns {Promise<import("../drivers/base.js").default>} - Result.
    */
   async ensureGlobalConnection() {
     return await this.checkout()

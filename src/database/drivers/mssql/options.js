@@ -21,7 +21,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
 
   /**
    * @param {any} string
-   * @returns {number | string}
+   * @returns {number | string} - Result.
    */
   quote(string) {
     if (!this.driver) throw new Error("Driver not set")
@@ -31,7 +31,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
 
   /**
    * @param {string} string
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteColumnName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in column name: ${string}`)
@@ -41,7 +41,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
 
   /**
    * @param {string} databaseName
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteDatabaseName(databaseName) {
     if (typeof databaseName != "string") throw new Error(`Invalid database name given: ${databaseName}`)
@@ -52,7 +52,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
 
   /**
    * @param {string} string
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteIndexName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in index name: ${string}`)
@@ -62,7 +62,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
 
   /**
    * @param {string} string
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteTableName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in table name: ${string}`)

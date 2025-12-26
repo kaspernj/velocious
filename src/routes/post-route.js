@@ -27,7 +27,7 @@ class VelociousRoutePostRoute extends BaseRoute {
    * @param {Record<string, any>} args.params
    * @param {string} args.path
    * @param {import("../http-server/client/request.js").default} args.request
-   * @returns {{restPath: string} | undefined}
+   * @returns {{restPath: string} | undefined} - Result.
    */
   matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars
     const match = path.match(this.regExp)

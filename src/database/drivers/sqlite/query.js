@@ -3,7 +3,7 @@
 /**
  * @param {import("sqlite3").Database} connection
  * @param {string} sql
- * @returns {Promise<Record<string, any>[]>}
+ * @returns {Promise<Record<string, any>[]>} - Result.
  */
 export default async function query(connection, sql) {
   try {

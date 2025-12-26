@@ -9,7 +9,7 @@ export default class VelociousDatabaseDriversBaseTable {
 
   /**
    * @param {string} columnName
-   * @returns {Promise<import("./base-column.js").default | undefined>}
+   * @returns {Promise<import("./base-column.js").default | undefined>} - Result.
    */
   async getColumnByName(columnName) {
     const columnes = await this.getColumns()
@@ -20,7 +20,7 @@ export default class VelociousDatabaseDriversBaseTable {
 
   /**
    * @param {string} columnName
-   * @returns {Promise<import("./base-column.js").default>}
+   * @returns {Promise<import("./base-column.js").default>} - Result.
    */
   async getColumnByNameOrFail(columnName) {
     const column = await this.getColumnByName(columnName)
@@ -32,14 +32,14 @@ export default class VelociousDatabaseDriversBaseTable {
 
   /**
    * @abstract
-   * @returns {Promise<Array<import("./base-column.js").default>>}
+   * @returns {Promise<Array<import("./base-column.js").default>>} - Result.
    */
   getColumns() {
     throw new Error("getColumns not implemented")
   }
 
   /**
-   * @returns {import("./base.js").default}
+   * @returns {import("./base.js").default} - Result.
    */
   getDriver() {
     if (!this.driver) throw new Error("No driver set on table")
@@ -49,7 +49,7 @@ export default class VelociousDatabaseDriversBaseTable {
 
   /**
    * @abstract
-   * @returns {Promise<import("./base-foreign-key.js").default[]>}
+   * @returns {Promise<import("./base-foreign-key.js").default[]>} - Result.
    */
   getForeignKeys() {
     throw new Error("'getForeignKeys' not implemented")
@@ -57,7 +57,7 @@ export default class VelociousDatabaseDriversBaseTable {
 
   /**
    * @abstract
-   * @returns {Promise<import("./base-columns-index.js").default[]>}
+   * @returns {Promise<import("./base-columns-index.js").default[]>} - Result.
    */
   getIndexes() {
     throw new Error("'getForeignKeys' not implemented")
@@ -65,21 +65,21 @@ export default class VelociousDatabaseDriversBaseTable {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getName() {
     throw new Error("getName not implemented")
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default}
+   * @returns {import("../query-parser/options.js").default} - Result.
    */
   getOptions() {
     return this.getDriver().options()
   }
 
   /**
-   * @returns {Promise<TableData>}
+   * @returns {Promise<TableData>} - Result.
    */
   async getTableData() {
     const tableData = new TableData(this.getName())
@@ -110,7 +110,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
-   * @returns {Promise<number>}
+   * @returns {Promise<number>} - Result.
    */
   async rowsCount() {
     const result = await this.getDriver().query(`SELECT COUNT(*) AS count FROM ${this.getOptions().quoteTableName(this.getName())}`)
@@ -120,7 +120,7 @@ export default class VelociousDatabaseDriversBaseTable {
 
   /**
    * @param {{cascade: boolean}} [args]
-   * @returns {Promise<Array<Record<string, any>>>}
+   * @returns {Promise<Array<Record<string, any>>>} - Result.
    */
   async truncate(args) {
     const databaseType = this.getDriver().getType()

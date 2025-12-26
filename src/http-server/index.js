@@ -34,7 +34,7 @@ export default class VelociousHttpServer {
     this.maxWorkers = maxWorkers || 16
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   async start() {
     await this._ensureAtLeastOneWorker()
     this.netServer = new Net.Server()
@@ -43,7 +43,7 @@ export default class VelociousHttpServer {
     await this._netServerListen()
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   _netServerListen() {
     return new Promise((resolve, reject) => {
       if (!this.netServer) throw new Error("No netServer")
@@ -59,14 +59,14 @@ export default class VelociousHttpServer {
     })
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   async _ensureAtLeastOneWorker() {
     if (this.workerHandlers.length == 0) {
       await this.spawnWorker()
     }
   }
 
-  /** @returns {boolean} */
+  /** @returns {boolean} - Result.  */
   isActive() {
     if (this.netServer) {
       return this.netServer.listening
@@ -75,7 +75,7 @@ export default class VelociousHttpServer {
     return false
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   async stopClients() {
     const promises = []
 
@@ -88,7 +88,7 @@ export default class VelociousHttpServer {
     await Promise.all(promises)
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   stopServer() {
     return new Promise((resolve, reject) => {
       if (!this.netServer) throw new Error("No netServer to stop")
@@ -103,20 +103,20 @@ export default class VelociousHttpServer {
     })
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   async stop() {
     await this.stopClients()
     await this.stopServer()
   }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   onClose = () => {
     this.events.emit("close")
   }
 
   /**
    * @param {import("net").Socket} socket
-   * @returns {void}
+   * @returns {void} - Result.
    */
   onConnection = (socket) => {
     const clientCount = this.clientCount
@@ -140,7 +140,7 @@ export default class VelociousHttpServer {
 
   /**
    * @param {ServerClient} client
-   * @returns {void}
+   * @returns {void} - Result.
    */
   onClientClose = (client) => {
     const clientCount = digg(client, "clientCount")
@@ -155,7 +155,7 @@ export default class VelociousHttpServer {
     }
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   async spawnWorker() {
     const workerCount = this.workerCount
 
@@ -170,7 +170,7 @@ export default class VelociousHttpServer {
     this.workerHandlers.push(workerHandler)
   }
 
-  /** @returns {WorkerHandler} */
+  /** @returns {WorkerHandler} - Result.  */
   workerHandlerToUse() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 

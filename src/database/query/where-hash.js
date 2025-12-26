@@ -17,6 +17,9 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
     this.query = query
   }
 
+  /**
+   * @returns {string} - Result.
+   */
   toSql() {
     let sql = "("
 
@@ -30,6 +33,7 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
    * @param {WhereHash} hash
    * @param {string} [tableName]
    * @param {number} index
+   * @returns {string} - Result.
    */
   _whereSQLFromHash(hash, tableName, index = 0) {
     const options = this.getOptions()

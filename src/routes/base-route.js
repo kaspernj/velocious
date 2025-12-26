@@ -48,11 +48,11 @@ export default class VelociousBaseRoute {
 
   /**
    * @abstract
-   * @returns {Array<{action: string, method: string, path: string}>}
+   * @returns {Array<{action: string, method: string, path: string}>} - Result.
    */
   getHumanPaths() { throw new Error(`'getHumanPaths' not implemented for ${this.constructor.name}`) }
 
-  /** @returns {Array<VelociousBaseRoute>} */
+  /** @returns {Array<VelociousBaseRoute>} - Result.  */
   getSubRoutes() { return this.routes }
 
   /**
@@ -60,7 +60,7 @@ export default class VelociousBaseRoute {
    * @param {Record<string, any>} args.params
    * @param {string} args.path
    * @param {import("../http-server/client/request.js").default} args.request
-   * @returns {{restPath: string} | undefined}
+   * @returns {{restPath: string} | undefined} - Result.
    */
   matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars
     throw new Error(`No 'matchWithPath' implemented on ${this.constructor.name}`)
@@ -70,14 +70,14 @@ export default class VelociousBaseRoute {
    * @abstract
    * @param {string} name
    * @param {function(import("./namespace-route.js").default) : void} callback
-   * @returns {void}
+   * @returns {void} - Result.
    */
   namespace(name, callback) { throw new Error("'namespace' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
    * @param {string} name
-   * @returns {void}
+   * @returns {void} - Result.
    */
   post(name) { throw new Error("'post' not implemented") } // eslint-disable-line no-unused-vars
 
@@ -85,7 +85,7 @@ export default class VelociousBaseRoute {
    * @abstract
    * @param {string} name
    * @param {function(import("./resource-route.js").default) : void} callback
-   * @returns {void}
+   * @returns {void} - Result.
    */
   resources(name, callback) { throw new Error("'resources' not implemented") } // eslint-disable-line no-unused-vars
 }

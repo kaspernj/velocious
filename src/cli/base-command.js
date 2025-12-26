@@ -26,28 +26,28 @@ export default class VelociousCliBaseCommand {
     this.processArgs = args.processArgs
   }
 
-  /** @returns {string} */
+  /** @returns {string} - Result.  */
   directory() { return this.getConfiguration().getDirectory() }
 
   /**
    * @abstract
-   * @returns {Promise<any>}
+   * @returns {Promise<any>} - Result.
    */
   execute() {
     throw new Error("execute not implemented")
   }
 
   /**
-   * @returns {import("../configuration.js").default}
+   * @returns {import("../configuration.js").default} - Result.
    */
   getConfiguration() { return this._configuration }
 
-  /** @returns {import("../environment-handlers/base.js").default} */
+  /** @returns {import("../environment-handlers/base.js").default} - Result.  */
   getEnvironmentHandler() { return this._environmentHandler }
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async initialize() {
     // Do nothing

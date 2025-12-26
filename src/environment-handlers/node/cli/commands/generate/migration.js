@@ -10,7 +10,7 @@ import strftime from "strftime"
 
 export default class DbGenerateMigration extends BaseCommand {
   /**
-   * @returns {Promise<void | DbGenerateMigrationReturnType>}
+   * @returns {Promise<void | DbGenerateMigrationReturnType>} - Result.
    */
   async execute() {
     const migrationName = this.processArgs[1]

@@ -22,7 +22,7 @@ export default class MemoryUploadedFile extends UploadedFile {
 
   /**
    * @param {string} destinationPath
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async saveTo(destinationPath) {
     await fs.writeFile(destinationPath, this.buffer)

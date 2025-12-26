@@ -12,7 +12,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @returns {Promise<string | null>}
+   * @returns {Promise<string | null>} - Result.
    */
   async toSql() {
     const {driver} = this
@@ -45,7 +45,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Result.
    */
   async _isMariaDb() {
     const {driver} = this
@@ -59,7 +59,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
 
   /**
    * @param {Record<string, any> | undefined} row
-   * @returns {string | null}
+   * @returns {string | null} - Result.
    */
   _mysqlCreateStatement(row) {
     if (!row) return null

@@ -4,7 +4,7 @@ import BaseRelationship from "./base.js"
 import * as inflection from "inflection"
 
 export default class VelociousDatabaseRecordBelongsToRelationship extends BaseRelationship {
-  /** @returns {string} */
+  /** @returns {string} - Result.  */
   getForeignKey() {
     if (!this.foreignKey) {
       if (this.getPolymorphic()) {
@@ -21,7 +21,7 @@ export default class VelociousDatabaseRecordBelongsToRelationship extends BaseRe
     return this.foreignKey
   }
 
-  /** @returns {string | undefined} */
+  /** @returns {string | undefined} - Result.  */
   getInverseOf() {
     if (!this._inverseOf && !this._autoGenerateInverseOfAttempted) {
       this._autoGenerateInverseOfAttempted = true

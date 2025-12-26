@@ -60,7 +60,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async findTestFiles() {
     await this.withFindingCount(async () => {
@@ -77,7 +77,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @returns {number}
+   * @returns {number} - Result.
    */
   findingPromisesLength() { return Object.keys(this.findingPromises).length }
 
@@ -88,7 +88,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async waitForFindingPromisesIteration() {
     const unfinishedPromises = []
@@ -104,6 +104,7 @@ export default class TestFilesFinder {
 
   /**
    * @param {function() : Promise<void>} callback
+   * @returns {Promise<void>} - Result.
    */
   withFindingCount(callback) {
     return new Promise((resolve) => {
@@ -123,7 +124,7 @@ export default class TestFilesFinder {
 
   /**
    * @param {string} dir
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async findTestFilesInDir(dir) {
     await this.withFindingCount(async () => {
@@ -152,7 +153,7 @@ export default class TestFilesFinder {
   /**
    * @param {string} file
    * @param {string} localPath
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   isFileMatchingRequirements(file, localPath) {
     if (this.directoryArgs.length > 0) {
@@ -183,7 +184,7 @@ export default class TestFilesFinder {
 
   /**
    * @param {string} file
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   looksLikeTestFile(file) {
     return Boolean(file.match(/-(spec|test)\.(m|)js$/))

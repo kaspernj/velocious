@@ -18,7 +18,7 @@ export default class VelociousHttpServerClientResponse {
   /**
    * @param {string} key
    * @param {string} value
-   * @returns {void}
+   * @returns {void} - Result.
    */
   addHeader(key, value) {
     if (!(key in this.headers)) {
@@ -31,14 +31,14 @@ export default class VelociousHttpServerClientResponse {
   /**
    * @param {string} key
    * @param {string} value
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setHeader(key, value) {
     this.headers[key] = [value]
   }
 
   /**
-   * @returns {string | null}
+   * @returns {string | null} - Result.
    */
   getBody() {
     if (this.body !== undefined) {
@@ -49,14 +49,14 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @returns {number}
+   * @returns {number} - Result.
    */
   getStatusCode() {
     return this.statusCode || 200
   }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getStatusMessage() {
     return this.statusMessage || "OK"
@@ -64,7 +64,7 @@ export default class VelociousHttpServerClientResponse {
 
   /**
    * @param {string} value
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setBody(value) {
     this.body = value
@@ -72,7 +72,7 @@ export default class VelociousHttpServerClientResponse {
 
   /**
    * @param {Error} error
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setErrorBody(error) {
     this.setHeader("Content-Type", "text/plain; charset=UTF-8")
@@ -81,7 +81,7 @@ export default class VelociousHttpServerClientResponse {
 
   /**
    * @param {number | string} status
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setStatus(status) {
     if (status == "success" || status == 200) {

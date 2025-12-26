@@ -16,18 +16,18 @@ export default class VelociousInitializer {
   }
 
   /**
-   * @returns {import("./configuration.js").default}
+   * @returns {import("./configuration.js").default} - Result.
    */
   getConfiguration() { return this._configuration }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getType() { return this._type }
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   run() {
     throw new Error(`'run' hasn't been implemented on ${this.constructor.name})`)

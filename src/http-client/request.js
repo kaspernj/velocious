@@ -31,6 +31,7 @@ export default class Request {
 
   /**
    * @param {string} name
+   * @returns {Header} - Result.
    */
   getHeader(name) {
     const compareName = name.toLowerCase().trim()
@@ -49,11 +50,15 @@ export default class Request {
   /**
    * @param {string} name
    * @param {string | number} value
+   * @returns {void} - Result.
    */
   addHeader(name, value) {
     this.headers.push(new Header(name, value))
   }
 
+  /**
+   * @returns {void} - Result.
+   */
   prepare() {
     if (this.body) {
       this.addHeader("Content-Length", Buffer.from(this.body).byteLength)
@@ -62,6 +67,7 @@ export default class Request {
 
   /**
    * @param {function(string) : void} callback
+   * @returns {void} - Result.
    */
   stream(callback) {
     this.prepare()

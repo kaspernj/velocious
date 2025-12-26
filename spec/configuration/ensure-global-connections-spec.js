@@ -1,7 +1,6 @@
 // @ts-check
 
 import Dummy from "../dummy/index.js"
-import AsyncTrackedMultiConnection from "../../src/database/pool/async-tracked-multi-connection.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
@@ -11,7 +10,7 @@ describe("Configuration.ensureGlobalConnections", () => {
       await dummyConfiguration.ensureGlobalConnections()
 
       const defaultPool = dummyConfiguration.getDatabasePool("default")
-      const mssqlPool = /** @type {AsyncTrackedMultiConnection} */ (dummyConfiguration.getDatabasePool("mssql"))
+      const mssqlPool = /** @type {import("../../src/database/pool/async-tracked-multi-connection.js").default} */ (dummyConfiguration.getDatabasePool("mssql"))
 
       const defaultConnection = defaultPool.getCurrentConnection()
       const fallbackConnection = mssqlPool.getGlobalConnection()

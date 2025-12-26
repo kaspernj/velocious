@@ -32,13 +32,13 @@ export {NotImplementedError}
 export default class VelociousDatabaseMigration {
   /**
    * @param {string[]} databaseIdentifiers
-   * @returns {void}
+   * @returns {void} - Result.
    */
   static onDatabases(databaseIdentifiers) {
     this._databaseIdentifiers = databaseIdentifiers
   }
 
-  /** @returns {string[] | undefined} */
+  /** @returns {string[] | undefined} - Result.  */
   static getDatabaseIdentifiers() {
     return this._databaseIdentifiers
   }
@@ -64,7 +64,7 @@ export default class VelociousDatabaseMigration {
     return this._databaseIdentifier
   }
 
-  /** @returns {import("../drivers/base.js").default} */
+  /** @returns {import("../drivers/base.js").default} - Result.  */
   getDriver() { return this._db }
   connection() { return this.getDriver() }
 
@@ -82,7 +82,7 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} sql
-   * @returns {Promise<import("../drivers/base.js").QueryResultType>}
+   * @returns {Promise<import("../drivers/base.js").QueryResultType>} - Result.
    */
   async execute(sql) {
     return await this.connection().query(sql)
@@ -93,7 +93,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} columnName
    * @param {string} columnType
    * @param {AddColumnArgsType} [args]
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async addColumn(tableName, columnName, columnType, args) {
     if (!columnType) throw new Error("No column type given")
@@ -113,7 +113,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} columnName
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async removeColumn(tableName, columnName) {
     const tableColumnArgs = Object.assign({dropColumn: true})
@@ -138,7 +138,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {Array<string | import("../table-data/table-column.js").default>} columns
    * @param {AddIndexArgsType} [args]
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async addIndex(tableName, columns, args) {
     const createIndexArgs = Object.assign(
@@ -158,7 +158,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} referenceName
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async addForeignKey(tableName, referenceName) {
     const referenceNameUnderscore = inflection.underscore(referenceName)
@@ -185,7 +185,7 @@ export default class VelociousDatabaseMigration {
    * @param {boolean} args.foreignKey
    * @param {string} args.type
    * @param {boolean} args.unique
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async addReference(tableName, referenceName, args) {
     const {foreignKey, type, unique, ...restArgs} = args
@@ -204,7 +204,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} referenceName
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async removeReference(tableName, referenceName) {
     const columnName = `${inflection.underscore(referenceName)}_id`
@@ -216,7 +216,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {string} columnName
    * @param {boolean} nullable
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async changeColumnNull(tableName, columnName, nullable) {
     const table = await this.getDriver().getTableByName(tableName)
@@ -233,7 +233,7 @@ export default class VelociousDatabaseMigration {
   /**
    * @param {string} tableName
    * @param {string} columnName
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Result.
    */
   async columnExists(tableName, columnName) {
     const table = await this.getDriver().getTableByName(tableName)
@@ -253,20 +253,20 @@ export default class VelociousDatabaseMigration {
    * @overload
    * @param {string} tableName
    * @param {CreateTableCallbackType} callback
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   /**
    * @overload
    * @param {string} tableName
    * @param {CreateTableArgsType} args
    * @param {CreateTableCallbackType} callback
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   /**
    * @param {string} tableName
    * @param {CreateTableArgsType | CreateTableCallbackType} arg1
    * @param {CreateTableCallbackType | undefined} [arg2]
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async createTable(tableName, arg1, arg2) {
     let args
@@ -337,7 +337,7 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async dropTable(tableName) {
     await this.getDriver().dropTable(tableName)
@@ -347,7 +347,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName
    * @param {string} oldColumnName
    * @param {string} newColumnName
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     await this.getDriver().renameColumn(tableName, oldColumnName, newColumnName)
@@ -355,7 +355,7 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @param {string} tableName
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Result.
    */
   async tableExists(tableName) {
     const exists = await this.getDriver().tableExists(tableName)
