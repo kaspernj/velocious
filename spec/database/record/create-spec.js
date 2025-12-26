@@ -104,12 +104,23 @@ describe("Record - create", () => {
   it("accepts ISO datetime strings for datetime attributes", async () => {
     await Dummy.run(async () => {
       const createdAt = "2025-12-26T16:18:50.641Z"
+      const createdAtNoMs = "2025-12-26T16:18:50Z"
+      const createdAtOffset = "2025-12-26T16:18:50+01:00"
+
       const task = new Task({name: "ISO task", createdAt})
+      const taskNoMs = new Task({name: "ISO task no ms", createdAt: createdAtNoMs})
+      const taskOffset = new Task({name: "ISO task offset", createdAt: createdAtOffset})
 
       const createdAtValue = task.createdAt()
+      const createdAtNoMsValue = taskNoMs.createdAt()
+      const createdAtOffsetValue = taskOffset.createdAt()
 
       expect(createdAtValue).toBeInstanceOf(Date)
+      expect(createdAtNoMsValue).toBeInstanceOf(Date)
+      expect(createdAtOffsetValue).toBeInstanceOf(Date)
       expect(createdAtValue?.toISOString().slice(0, 19)).toEqual(createdAt.slice(0, 19))
+      expect(createdAtNoMsValue?.toISOString().slice(0, 19)).toEqual(createdAtNoMs.slice(0, 19))
+      expect(createdAtOffsetValue?.toISOString().slice(0, 19)).toEqual("2025-12-26T15:18:50")
     })
   })
 
