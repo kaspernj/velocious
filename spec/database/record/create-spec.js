@@ -143,7 +143,7 @@ describe("Record - create", () => {
       const cols = task.rawAttributes()
 
       expect(cols.name).toEqual("Column task")
-      expect(cols.created_at).toBeInstanceOf(Date)
+      expect(typeof cols.created_at).toEqual("string")
       expect("createdAt" in cols).toBeFalse()
     })
   })

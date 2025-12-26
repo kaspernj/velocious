@@ -671,6 +671,20 @@ class VelociousDatabaseRecord {
     return this._columns
   }
 
+  /** @returns {Record<string, import("../drivers/base-column.js").default>} */
+  static getColumnsHash() {
+    if (!this._columnsAsHash) {
+      /** @type {Record<string, import("../drivers/base-column.js").default>} */
+      this._columnsAsHash = {}
+
+      for (const column of this.getColumns()) {
+        this._columnsAsHash[column.getName()] = column
+      }
+    }
+
+    return this._columnsAsHash
+  }
+
   /**
    * @param {string} name
    * @returns {string | undefined}
@@ -1399,7 +1413,7 @@ class VelociousDatabaseRecord {
     for (const columnName in data) {
       const attributeName = columnNameToAttributeName[columnName] || columnName
 
-      attributes[attributeName] = data[columnName]
+      attributes[attributeName] = this.readAttribute(attributeName)
     }
 
     return attributes
@@ -1562,7 +1576,7 @@ class VelociousDatabaseRecord {
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
    */
   readColumn(attributeName) {
-    const column = this.getModelClass().getColumns().find((column) => column.getName() == attributeName)
+    const column = this.getModelClass().getColumnsHash()[attributeName]
     let result
 
     if (attributeName in this._changes) {
