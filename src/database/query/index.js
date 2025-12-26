@@ -31,6 +31,7 @@ import WherePlain from "./where-plain.js"
  * @property {number} [perPage]
  * @property {NestedPreloadRecord} [preload]
  * @property {Array<import("./select-base.js").default>} [selects]
+ * @property {boolean} [distinct]
  * @property {Array<import("./where-base.js").default>} [wheres]
  */
 
@@ -50,6 +51,7 @@ export default class VelociousDatabaseQuery {
     page = null,
     perPage,
     preload = {},
+    distinct = false,
     selects = [],
     wheres = []
   }) {
@@ -69,6 +71,7 @@ export default class VelociousDatabaseQuery {
     this._page = page
     this._perPage = perPage
     this._preload = preload
+    this._distinct = distinct
     this._selects = selects
 
     /** @type {import("./where-base.js").default[]} */
@@ -90,6 +93,7 @@ export default class VelociousDatabaseQuery {
       page: this._page,
       perPage: this._perPage,
       preload: {...this._preload},
+      distinct: this._distinct,
       selects: [...this._selects],
       wheres: [...this._wheres]
     })
@@ -223,6 +227,15 @@ export default class VelociousDatabaseQuery {
       order.setReverseOrder(true)
     }
 
+    return this
+  }
+
+  /**
+   * @param {boolean} [value]
+   * @returns {this}
+   */
+  distinct(value = true) {
+    this._distinct = value
     return this
   }
 

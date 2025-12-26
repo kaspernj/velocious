@@ -38,4 +38,16 @@ describe("database - connection - drivers - mysql - query parser", () => {
 
     expect(sql).toEqual("SELECT `tasks`.`id`, `tasks`.`name` FROM `tasks` LEFT JOIN projects ON projects.id = tasks.project_id")
   })
+
+  it("generates sql with distinct selects", () => {
+    const handler = new DatabaseHandler()
+    const query = new DatabaseQuery({driver: mysqlDriver, handler})
+      .distinct()
+      .select("tasks.id")
+      .from("tasks")
+
+    const sql = new MysqlQueryParser({query}).toSql()
+
+    expect(sql).toEqual("SELECT DISTINCT tasks.id FROM tasks")
+  })
 })

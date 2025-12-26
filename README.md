@@ -64,7 +64,7 @@ const tasks = project.tasks().loaded()
 
 ### Finding records
 
-`find()` and `findByOrFail()` throw an error when no record is found. `findBy()` returns `null`.
+`find()` and `findByOrFail()` throw an error when no record is found. `findBy()` returns `null`. These apply to records.
 
 ### Create records
 
@@ -182,22 +182,127 @@ await this.configuration.ensureConnections(async () => {
 
 # Querying
 
+Each query feature has its own focused example.
+
+### Basic retrieval
+
 ```js
 import {Task} from "@/src/models/task"
 
+const tasks = await Task.all().toArray()
+```
+
+### Filtering
+
+```js
+const tasks = await Task.where({tasks: {status: "open"}}).toArray()
+```
+
+### Raw where clauses
+
+```js
+const tasks = await Task.where("tasks.completed_at IS NULL").toArray()
+```
+
+### Joins
+
+```js
 const tasks = await Task
-  .preload({project: {account: true}})
   .joins({project: true})
   .where({projects: {public: true}})
-  .joins("JOIN task_details ON task_details.task_id = tasks.id")
-  .where("task_details.id IS NOT NULL")
-  .order("name")
-  .limit(5)
   .toArray()
+```
 
-// Efficiently pluck columns without instantiating models
+### Preloading relationships
+
+```js
+const tasks = await Task.preload({project: {account: true}}).toArray()
+const accountNames = tasks.map((task) => task.project().account().name())
+```
+
+### Selecting columns
+
+```js
+const tasks = await Task.select(["tasks.id", "tasks.name"]).toArray()
+```
+
+### Ordering
+
+```js
+const tasks = await Task.order("name").toArray()
+```
+
+### Reordering and reverse order
+
+```js
+const tasks = await Task.order("name").reorder("created_at").reverseOrder().toArray()
+```
+
+### Limiting and offsetting
+
+```js
+const tasks = await Task.limit(10).offset(20).toArray()
+```
+
+### Grouping
+
+```js
+const tasks = await Task.group("tasks.project_id").toArray()
+```
+
+### Distinct records
+
+```js
+const tasks = await Task.joins({project: true}).distinct().toArray()
+```
+
+### Paging
+
+```js
+const tasks = await Task.page(2).perPage(25).toArray()
+```
+
+### Counting
+
+```js
+const totalTasks = await Task.count()
+const distinctProjects = await Task.joins({project: true}).distinct().count()
+```
+
+### First and last
+
+```js
+const firstTask = await Task.first()
+const lastTask = await Task.last()
+```
+
+### Find by attributes
+
+```js
+const task = await Task.findBy({identifier: "task-5"})
+const taskOrFail = await Task.findByOrFail({identifier: "task-5"})
+```
+
+### Find or initialize/create
+
+```js
+const task = await Task.findOrInitializeBy({identifier: "task-5"})
+const task2 = await Task.findOrCreateBy({identifier: "task-6"}, (newTask) => {
+  newTask.assign({description: "Only runs when new"})
+})
+```
+
+### Destroy all records
+
+```js
+await Task.where({tasks: {status: "archived"}}).destroyAll()
+```
+
+### Plucking columns
+
+```js
 const names = await Task.pluck("name")                     // ["Task A", "Task B"]
-const idsAndNames = await Task.all().order("name").pluck("id", "name") // [[1, "Task A"], [2, "Task B"]]
+const idsAndNames = await Task.order("name").pluck("id", "name") // [[1, "Task A"], [2, "Task B"]]
 ```
 
 # Global connections fallback

@@ -1242,6 +1242,16 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
+   * @param {boolean} [value]
+   * @returns {ModelClassQuery<MC>}
+   */
+  static distinct(value = true) {
+    return this._newQuery().distinct(value)
+  }
+
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
    * @param {import("../query/index.js").NestedPreloadRecord} preload
    */
   static preload(preload) {
