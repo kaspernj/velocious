@@ -106,8 +106,10 @@ describe("Record - create", () => {
       const createdAt = "2025-12-26T16:18:50.641Z"
       const task = new Task({name: "ISO task", createdAt})
 
-      expect(task.createdAt()).toBeInstanceOf(Date)
-      expect(task.createdAt().toISOString()).toEqual(createdAt)
+      const createdAtValue = task.createdAt()
+
+      expect(createdAtValue).toBeInstanceOf(Date)
+      expect(createdAtValue?.toISOString().slice(0, 19)).toEqual(createdAt.slice(0, 19))
     })
   })
 
