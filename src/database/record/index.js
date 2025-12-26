@@ -651,7 +651,7 @@ class VelociousDatabaseRecord {
   _normalizeDateValue(value) {
     if (typeof value != "string") return value
 
-    const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+    const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/
 
     if (!isoDateTimeRegex.test(value)) return value
 
