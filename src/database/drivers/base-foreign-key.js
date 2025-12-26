@@ -15,14 +15,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getColumnName() {
     throw new Error(`'getColumnName' not implemented`)
   }
 
   /**
-   * @returns {import("./base.js").default}
+   * @returns {import("./base.js").default} - Result.
    */
   getDriver() {
     return this.getTable().getDriver()
@@ -30,14 +30,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getName() {
     throw new Error(`'getName' not implemented`)
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default}
+   * @returns {import("../query-parser/options.js").default} - Result.
    */
   getOptions() {
     return this.getDriver().options()
@@ -45,7 +45,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getReferencedColumnName() {
     throw new Error(`'getReferencedColumnName' not implemented`)
@@ -53,14 +53,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getReferencedTableName() {
     throw new Error(`'getReferencedTableName' not implemented`)
   }
 
   /**
-   * @returns {import("./base-table.js").default}
+   * @returns {import("./base-table.js").default} - Result.
    */
   getTable() {
     if (!this.table) throw new Error("No table set on column")
@@ -70,14 +70,14 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * @abstract
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getTableName() {
     throw new Error("'getTableName' not implemented")
   }
 
   /**
-   * @returns {TableForeignKey}
+   * @returns {TableForeignKey} - Result.
    */
   getTableDataForeignKey() {
     return new TableForeignKey({

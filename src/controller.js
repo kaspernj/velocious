@@ -11,7 +11,7 @@ import querystring from "querystring"
 export default class VelociousController {
   /**
    * @param {string} methodName
-   * @returns {void}
+   * @returns {void} - Result.
    */
   static beforeAction(methodName) {
     if (!this._beforeActions) {
@@ -52,21 +52,21 @@ export default class VelociousController {
     this._viewPath = viewPath
   }
 
-  /** @returns {string} */
+  /** @returns {string} - Result.  */
   getAction() { return this._action }
 
-  /** @returns {import("./configuration.js").default} */
+  /** @returns {import("./configuration.js").default} - Result.  */
   getConfiguration() { return this._configuration }
 
-  /** @returns {Record<string, any>} */
+  /** @returns {Record<string, any>} - Result.  */
   getParams() { return this._params }
 
-  /** @returns {import("./http-server/client/request.js").default} */
+  /** @returns {import("./http-server/client/request.js").default} - Result.  */
   getRequest() { return this._request }
 
   /**
    * @private
-   * @returns {typeof VelociousController}
+   * @returns {typeof VelociousController} - Result.
    */
   _getControllerClass() {
     const controllerClass = /** @type {typeof VelociousController} */ (this.constructor)
@@ -104,7 +104,7 @@ export default class VelociousController {
     await this.logger.debug("After runBeforeCallbacks")
   }
 
-  /** @returns {Record<string, any>} */
+  /** @returns {Record<string, any>} - Result.  */
   params() {
     // Merge query parameters so controllers can read them via params()
     const mergedParams = {...this.queryParameters(), ...this._params}
@@ -114,7 +114,7 @@ export default class VelociousController {
     return mergedParams
   }
 
-  /** @returns {Record<string, any>} */
+  /** @returns {Record<string, any>} - Result.  */
   queryParameters() {
     const query = this._request.path().split("?")[1]
 
@@ -131,7 +131,7 @@ export default class VelociousController {
    * @param {object} [args]
    * @param {object} [args.json]
    * @param {number | string} [args.status]
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async render({json, status, ...restArgs} = {}) {
     restArgsError(restArgs)
@@ -155,7 +155,7 @@ export default class VelociousController {
     this._response.setBody(body)
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {Promise<void>} - Result.  */
   renderView() {
     return new Promise((resolve, reject) => {
       const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
@@ -187,14 +187,14 @@ export default class VelociousController {
     })
   }
 
-  /** @returns {void} */
+  /** @returns {void} - Result.  */
   renderText() {
     throw new Error("renderText stub")
   }
 
-  /** @returns {import("./http-server/client/request.js").default} */
+  /** @returns {import("./http-server/client/request.js").default} - Result.  */
   request() { return this._request }
 
-  /** @returns {import("./http-server/client/response.js").default} */
+  /** @returns {import("./http-server/client/response.js").default} - Result.  */
   response() { return this._response }
 }

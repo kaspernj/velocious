@@ -22,7 +22,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
 
   /**
    * @param {string} sql
-   * @returns {Promise<Record<string, any>[]>}
+   * @returns {Promise<Record<string, any>[]>} - Result.
    */
   async query(sql) {
     const result = await queryWeb(this.connection, sql)

@@ -8,7 +8,7 @@ export default class DbCreate extends BaseCommand{
   result
 
   /**
-   * @returns {Promise<void | Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>>}
+   * @returns {Promise<void | Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>>} - Result.
    */
   async execute() {
     for (const databaseIdentifier of this.getConfiguration().getDatabaseIdentifiers()) {
@@ -49,7 +49,7 @@ export default class DbCreate extends BaseCommand{
 
   /**
    * @param {string} databaseIdentifier
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async createDatabase(databaseIdentifier) {
     const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
@@ -65,7 +65,7 @@ export default class DbCreate extends BaseCommand{
   }
 
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async createSchemaMigrationsTable() {
     const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})

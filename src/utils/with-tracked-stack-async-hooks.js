@@ -31,7 +31,7 @@ function addTrackedStackToError(error) {
  *
  * @param {() => Promise<void> | string} arg1
  * @param {() => Promise<void> | Error} [arg2]
- * @returns {Promise<void>}
+ * @returns {Promise<void>} - Result.
  */
 async function withTrackedStack(arg1, arg2) {
   /** @type {() => Promise<void>} */

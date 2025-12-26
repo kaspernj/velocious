@@ -29,7 +29,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**
    * @abstract
    * @param {InstanceType<TMC>[] | InstanceType<TMC>} models
-   * @returns {void}
+   * @returns {void} - Result.
    */
   addToLoaded(models) { // eslint-disable-line no-unused-vars
     throw new Error("addToLoaded not implemented")
@@ -38,7 +38,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**
    * @abstract
    * @param {Record<string, any>} attributes
-   * @returns {InstanceType<TMC>}
+   * @returns {InstanceType<TMC>} - Result.
    */
   build(attributes) { // eslint-disable-line no-unused-vars
     throw new Error("'build' not implemented")
@@ -49,13 +49,13 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @param {boolean} newAutoSaveValue Whether the relationship should be auto-saved before saving the parent model
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setAutoSave(newAutoSaveValue) { this._autoSave = newAutoSaveValue }
 
   /**
    * @param {boolean} newValue Whether the relationship is dirty (has been modified)
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setDirty(newValue) { this._dirty = newValue }
 
@@ -64,7 +64,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   load() {
     throw new Error("'load' not implemented")
@@ -85,7 +85,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model */
   setLoaded(model) { this._loaded = model }
 
-  /** @returns {InstanceType<TMC> | InstanceType<TMC>[] | undefined} */
+  /** @returns {InstanceType<TMC> | InstanceType<TMC>[] | undefined} - Result.  */
   getLoadedOrUndefined() { return this._loaded }
 
   /** @returns {boolean} The loaded model or models (depending on relationship type) */
@@ -97,7 +97,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @returns {string} The foreign key for this relationship */
   getForeignKey() { return this.getRelationship().getForeignKey() }
 
-  /** @returns {InstanceType<MC>} */
+  /** @returns {InstanceType<MC>} - Result.  */
   getModel() { return this.model }
 
   /** @returns {string} The primary key for this relationship's model */

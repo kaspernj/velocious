@@ -22,7 +22,7 @@ export default class TemporaryUploadedFile extends UploadedFile {
 
   /**
    * @param {string} destinationPath
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async saveTo(destinationPath) {
     await fs.copyFile(this.pathValue, destinationPath)

@@ -40,7 +40,7 @@ export default class RequestBuffer {
 
   /**
    * @param {Buffer} data
-   * @returns {void}
+   * @returns {void} - Result.
    */
   feed(data) {
     for (const char of data) {
@@ -114,7 +114,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} name
-   * @returns {Header}
+   * @returns {Header} - Result.
    */
   getHeader(name) {
     const result = this.headersByName[name.toLowerCase().trim()]
@@ -125,7 +125,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @returns {Record<string, string>}
+   * @returns {Record<string, string>} - Result.
    */
   getHeadersHash() {
     /** @type {Record<string, string>} */
@@ -141,7 +141,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @returns {void}
+   * @returns {void} - Result.
    */
   formDataPartDone() {
     const formDataPart = this.formDataPart
@@ -159,7 +159,7 @@ export default class RequestBuffer {
   }
 
   /**
-   * @returns {void}
+   * @returns {void} - Result.
    */
   newFormDataPart() {
     this.formDataPart = new FormDataPart()
@@ -168,7 +168,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {void}
+   * @returns {void} - Result.
    */
   parse(line) {
     if (this.state == "status") {
@@ -201,7 +201,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {Header | undefined}
+   * @returns {Header | undefined} - Result.
    */
   readHeaderFromLine(line) {
     const match = line.match(/^(.+): (.+)\r\n/)
@@ -226,7 +226,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {void}
+   * @returns {void} - Result.
    */
   parseHeader(line) {
     const header = this.readHeaderFromLine(line)
@@ -274,7 +274,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} line
-   * @returns {void}
+   * @returns {void} - Result.
    */
   parseStatusLine(line) {
     const match = line.match(/^(GET|OPTIONS|POST) (.+?) HTTP\/(.+)\r\n/)
@@ -303,7 +303,7 @@ export default class RequestBuffer {
 
   /**
    * @param {string} newState
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setState(newState) {
     this.logger.debugLowLevel(() => `Changing state from ${this.state} to ${newState}`)

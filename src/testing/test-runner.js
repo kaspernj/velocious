@@ -64,17 +64,17 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {import("../configuration.js").default}
+   * @returns {import("../configuration.js").default} - Result.
    */
   getConfiguration() { return this._configuration }
 
   /**
-   * @returns {string[]}
+   * @returns {string[]} - Result.
    */
   getTestFiles() { return this._testFiles }
 
   /**
-   * @returns {Promise<Application>}
+   * @returns {Promise<Application>} - Result.
    */
   async application() {
     if (!this._application) {
@@ -92,7 +92,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {Promise<RequestClient>}
+   * @returns {Promise<RequestClient>} - Result.
    */
   async requestClient() {
     if (!this._requestClient) {
@@ -103,19 +103,19 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async importTestFiles() {
     await this.getConfiguration().getEnvironmentHandler().importTestFiles(this.getTestFiles())
   }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   isFailed() { return this._failedTests !== undefined && this._failedTests > 0 }
 
   /**
-   * @returns {number}
+   * @returns {number} - Result.
    */
   getFailedTests() {
     if (this._failedTests === undefined) throw new Error("Tests hasn't been run yet")
@@ -124,7 +124,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {number}
+   * @returns {number} - Result.
    */
   getSuccessfulTests() {
     if (this._successfulTests === undefined) throw new Error("Tests hasn't been run yet")
@@ -133,7 +133,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {number}
+   * @returns {number} - Result.
    */
   getTestsCount() {
     if (this._testsCount === undefined) throw new Error("Tests hasn't been run yet")
@@ -142,7 +142,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async prepare() {
     this.anyTestsFocussed = false
@@ -161,7 +161,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   areAnyTestsFocussed() {
     if (this.anyTestsFocussed === undefined) {
@@ -172,7 +172,7 @@ export default class TestRunner {
   }
 
   /**
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async run() {
     await this.getConfiguration().ensureConnections(async () => {
@@ -188,7 +188,7 @@ export default class TestRunner {
 
   /**
    * @param {TestsArgument} tests
-   * @returns {{anyTestsFocussed: boolean}}
+   * @returns {{anyTestsFocussed: boolean}} - Result.
    */
   analyzeTests(tests) {
     let anyTestsFocussedFound = false
@@ -226,7 +226,7 @@ export default class TestRunner {
    * @param {TestsArgument} args.tests
    * @param {string[]} args.descriptions
    * @param {number} args.indentLevel
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {
     const leftPadding = " ".repeat(indentLevel * 2)

@@ -19,7 +19,7 @@ import Update from "./sql/update.js"
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {import("../../table-data/index.js").default} tableData
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async alterTableSQLs(tableData) {
     const alterArgs = {driver: this, tableData}
@@ -30,7 +30,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {import("../base.js").CreateIndexSqlArgs} indexData
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
@@ -42,7 +42,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @abstract
    * @param {import("../../table-data/index.js").default} tableData
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
@@ -66,7 +66,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName
    * @param {import("../base.js").DropTableSqlArgsType} [args]
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async dropTableSQLs(tableName, args = {}) {
     const driver = /** @type {import("../base.js").default} */ (this)
@@ -78,18 +78,18 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {import("../base.js").DeleteSqlArgsType} args
-   * @returns {string}
+   * @returns {string} - Result.
    */
   deleteSql(args) { return new Delete(Object.assign({driver: this}, args)).toSql() }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getType() { return "sqlite" }
 
   /**
    * @param {import("../base.js").InsertSqlArgsType} args
-   * @returns {string}
+   * @returns {string} - Result.
    */
   insertSql(args) { return new Insert(Object.assign({driver: this}, args)).toSql() }
 
@@ -97,7 +97,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @param {string} name
    * @param {object} [args]
    * @param {boolean} args.throwError
-   * @returns {Promise<import("../base-table.js").default | undefined>}
+   * @returns {Promise<import("../base-table.js").default | undefined>} - Result.
    */
   async getTableByName(name, args) {
     const result = await this.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${this.quote(name)} LIMIT 1`)
@@ -115,7 +115,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     }
   }
 
-  /** @returns {Promise<Array<import("../base-table.js").default>>} */
+  /** @returns {Promise<Array<import("../base-table.js").default>>} - Result.  */
   async getTables() {
     const result = await this.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
     const tables = []
@@ -133,7 +133,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @param {string} tableName
    * @param {Array<string>} columns
    * @param {Array<Array<string>>} rows
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async insertMultiple(tableName, columns, rows) {
     await this.registerVersion()
@@ -146,7 +146,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   supportsMultipleInsertValues() {
     if (this.versionMajor >= 4) return true
@@ -157,7 +157,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   supportsInsertIntoReturning() {
     if (this.versionMajor >= 4) return true
@@ -170,7 +170,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @param {string} tableName
    * @param {Array<string>} columns
    * @param {Array<Array<string>>} rows
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
     const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
@@ -182,7 +182,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @param {string} tableName
    * @param {Array<string>} columns
    * @param {Array<Array<string>>} rows
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async insertMultipleWithTransaction(tableName, columns, rows) {
     /** @type {string[]} */
@@ -230,7 +230,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {import("../../query/index.js").default} query
-   * @returns {string}
+   * @returns {string} - Result.
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
 
@@ -255,7 +255,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {any} value
-   * @returns {any}
+   * @returns {any} - Result.
    */
   escape(value) {
     value = this._convertValue(value)
@@ -272,7 +272,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {Error} error
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   retryableDatabaseError(error) {
     if (error.message?.startsWith("attempt to write a readonly database")) return true
@@ -284,7 +284,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {string} value
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quote(value) {
     value = this._convertValue(value)
@@ -299,12 +299,12 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {import("../base.js").UpdateSqlArgsType} args
-   * @returns {string}
+   * @returns {string} - Result.
    */
   updateSql({conditions, data, tableName}) { return new Update({conditions, data, driver: this, tableName}).toSql() }
 
   /**
-   * @returns {Promise<string | null>}
+   * @returns {Promise<string | null>} - Result.
    */
   async structureSql() {
     return await new StructureSql({driver: this}).toSql()

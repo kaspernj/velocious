@@ -52,7 +52,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   /**
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async toSQLs() {
     const databaseType = this.getDriver().getType()

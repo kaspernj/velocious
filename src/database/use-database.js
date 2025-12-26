@@ -10,7 +10,7 @@ import restArgsError from "../utils/rest-args-error.js"
 /**
  * @param {object} args
  * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback
- * @returns {{loaded: boolean}}
+ * @returns {{loaded: boolean}} - Result.
  */
 export default function loadMigrations({migrationsRequireContextCallback, ...restArgs}) {
   const instance = React.useMemo(() => ({running: false}), [])

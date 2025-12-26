@@ -1,7 +1,7 @@
 /**
  * @param {Array<(next: () => Promise<void>) => void | Promise<void>>} callbacksToNestInside
  * @param {() => void | Promise<void>} callback
- * @returns {Promise<void>}
+ * @returns {Promise<void>} - Result.
  */
 export default async function nestCallbacks(callbacksToNestInside, callback) {
   const baseCallback = async () => { await callback() }

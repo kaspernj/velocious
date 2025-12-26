@@ -49,7 +49,7 @@ export default class VelociousHttpServerWorker {
 
   /**
    * @param {import("../server-client.js").default} client
-   * @returns {void}
+   * @returns {void} - Result.
    */
   addSocketConnection(client) {
     const clientCount = client.clientCount
@@ -77,7 +77,7 @@ export default class VelociousHttpServerWorker {
 
   /**
    * @param {number} code
-   * @returns {void}
+   * @returns {void} - Result.
    */
   onWorkerExit = (code) => {
     if (code !== 0) {
@@ -96,7 +96,7 @@ export default class VelociousHttpServerWorker {
    * @param {string} [data.output]
    * @param {string} [data.channel]
    * @param {any} [data.payload]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   onWorkerMessage = (data) => {
     this.logger.debug(`Worker message`, data)
@@ -136,7 +136,7 @@ export default class VelociousHttpServerWorker {
    * @param {object} args
    * @param {string} args.channel
    * @param {any} args.payload
-   * @returns {void}
+   * @returns {void} - Result.
    */
   dispatchWebsocketEvent({channel, payload}) {
     if (!this.worker) return

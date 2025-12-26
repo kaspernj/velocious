@@ -19,7 +19,7 @@ export default class VelociousDatabaseMigratorFilesFinder {
   }
 
   /**
-   * @returns {Promise<Array<import("./types.js").MigrationObjectType>>}
+   * @returns {Promise<Array<import("./types.js").MigrationObjectType>>} - Result.
    */
   async findFiles() {
     let files = await fs.readdir(this.path)

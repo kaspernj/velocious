@@ -49,66 +49,66 @@ export default class TableColumn {
   getName() { return this.name }
 
   /**
-   * @returns {string | undefined}
+   * @returns {string | undefined} - Result.
    */
   getNewName() { return this._newName }
 
   /**
    * @param {string} newName
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setNewName(newName) { this._newName = newName }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getActualName() { return this.getNewName() || this.getName() }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   getAutoIncrement() { return this.args?.autoIncrement || false }
 
   /**
    * @param {boolean} newAutoIncrement
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
 
   /**
-   * @returns {any}
+   * @returns {any} - Result.
    */
   getDefault() { return this.args?.default }
 
   /**
    * @param {any} newDefault
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setDefault(newDefault) { this.args.default = newDefault }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   getDropColumn() { return this.args?.dropColumn || false }
 
   /**
-   * @returns {boolean | object | undefined}
+   * @returns {boolean | object | undefined} - Result.
    */
   getForeignKey() { return this.args?.foreignKey }
 
   /**
    * @param {boolean | object | undefined} newForeignKey
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
 
   /**
-   * @returns {boolean|IndexArgType}
+   * @returns {boolean|IndexArgType} - Result.
    */
   getIndex() { return this.args?.index || false }
 
   /**
-   * @returns {IndexArgType}
+   * @returns {IndexArgType} - Result.
    */
   getIndexArgs() {
     if (typeof this.args?.index == "object") {
@@ -128,56 +128,56 @@ export default class TableColumn {
 
   /**
    * @param {boolean|IndexArgType} newIndex
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setIndex(newIndex) { this.args.index = newIndex }
 
   /**
-   * @returns {number | undefined}
+   * @returns {number | undefined} - Result.
    */
   getMaxLength() { return this.args?.maxLength }
 
   /**
    * @param {number | undefined} newMaxLength
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
 
   /**
-   * @returns {boolean | undefined}
+   * @returns {boolean | undefined} - Result.
    */
   getNull() { return this.args?.null }
 
   /**
    * @param {boolean} nullable
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setNull(nullable) { this.args.null = nullable }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   getPrimaryKey() { return this.args?.primaryKey || false }
 
   /**
    * @param {boolean} newPrimaryKey
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setPrimaryKey(newPrimaryKey) { this.args.primaryKey = newPrimaryKey }
 
   /**
-   * @returns {string | undefined}
+   * @returns {string | undefined} - Result.
    */
   getType() { return this.args?.type }
 
   /**
    * @param {string | undefined} newType
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setType(newType) { this.args.type = newType }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   isNewColumn() { return this.args?.isNewColumn || false }
 
@@ -185,7 +185,7 @@ export default class TableColumn {
    * @param {object} args
    * @param {boolean} args.forAlterTable
    * @param {import("../drivers/base.js").default} args.driver
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getSQL({forAlterTable, driver, ...restArgs}) {
     restArgsError(restArgs)

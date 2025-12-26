@@ -115,7 +115,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
 
   /**
    * @param {{cascade: boolean}} [args]
-   * @returns {Promise<Array<Record<string, any>>>}
+   * @returns {Promise<Array<Record<string, any>>>} - Result.
    */
   async truncate(args) { // eslint-disable-line no-unused-vars
     try {

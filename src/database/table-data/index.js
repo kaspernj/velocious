@@ -48,7 +48,7 @@ export default class TableData {
   }
 
   /**
-   * @returns {TableColumn[]}
+   * @returns {TableColumn[]} - Result.
    */
   getColumns() { return this._columns }
 
@@ -58,7 +58,7 @@ export default class TableData {
   addForeignKey(foreignKey) { this._foreignKeys.push(foreignKey) }
 
   /**
-   * @returns {import("./table-foreign-key.js").default[]}
+   * @returns {import("./table-foreign-key.js").default[]} - Result.
    */
   getForeignKeys() { return this._foreignKeys }
 
@@ -68,84 +68,84 @@ export default class TableData {
   addIndex(index) { this._indexes.push(index) }
 
   /**
-   * @returns {TableIndex[]}
+   * @returns {TableIndex[]} - Result.
    */
   getIndexes() { return this._indexes }
 
   /**
-   * @returns {string}
+   * @returns {string} - Result.
    */
   getName() { return this._name }
 
   /**
    * @param {string} newName
-   * @returns {void}
+   * @returns {void} - Result.
    */
   setName(newName) { this._name = newName }
 
   /**
-   * @returns {boolean}
+   * @returns {boolean} - Result.
    */
   getIfNotExists() { return this.args?.ifNotExists || false }
 
   /**
-   * @returns {TableReference[]}
+   * @returns {TableReference[]} - Result.
    */
   getReferences() { return this._references }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   bigint(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "bigint"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   blob(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "blob"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   boolean(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "boolean"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   datetime(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "datetime"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   integer(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "integer"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   json(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "json"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   tinyint(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "tinyint"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   references(name, args) {
     const columnName = `${name}_id`
@@ -172,20 +172,20 @@ export default class TableData {
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   string(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "string"}, args)) }
 
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   text(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "text"}, args)) }
 
   /**
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   timestamps(args) {
     this.datetime("created_at", args)
@@ -195,7 +195,7 @@ export default class TableData {
   /**
    * @param {string} name
    * @param {import("./table-column.js").TableColumnArgsType} [args]
-   * @returns {void}
+   * @returns {void} - Result.
    */
   uuid(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "uuid"}, args)) }
 }

@@ -2,11 +2,12 @@
 
 /**
  * @param {(...args: any[]) => Promise<void>} callback
+ * @returns {(...args: any[]) => Promise<void>} - Result.
  */
 export default function errorLogger(callback) {
   /**
    * @param  {...any} args
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   return async function(...args) {
     try {

@@ -78,7 +78,7 @@ export default class VelociousDatabaseQuery {
     this._wheres = wheres
   }
 
-  /** @returns {this} */
+  /** @returns {this} - Result.  */
   clone() {
     const QueryClass = /** @type {new (args: QueryArgsType) => this} */ (this.constructor)
     const newQuery = new QueryClass({
@@ -101,25 +101,25 @@ export default class VelociousDatabaseQuery {
     return newQuery
   }
 
-  /** @returns {import("./from-base.js").default[]} */
+  /** @returns {import("./from-base.js").default[]} - Result.  */
   getFroms() {
     return this._froms
   }
 
-  /** @returns {string[]} */
+  /** @returns {string[]} - Result.  */
   getGroups() {
     return this._groups
   }
 
-  /** @returns {import("../query-parser/options.js").default} */
+  /** @returns {import("../query-parser/options.js").default} - Result.  */
   getOptions() { return this.driver.options() }
 
-  /** @returns {Array<import("./select-base.js").default>} */
+  /** @returns {Array<import("./select-base.js").default>} - Result.  */
   getSelects() { return this._selects }
 
   /**
    * @param {string|import("./from-base.js").default} from
-   * @returns {this}
+   * @returns {this} - Result.
    */
   from(from) {
     if (typeof from == "string") from = new FromPlain(from)
@@ -130,7 +130,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {string} group
-   * @returns {this}
+   * @returns {this} - Result.
    */
   group(group) {
     this._groups.push(group)
@@ -139,7 +139,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {string|{[key: string]: any}} join
-   * @returns {this}
+   * @returns {this} - Result.
    */
   joins(join) {
     if (typeof join == "string") {
@@ -155,7 +155,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {number} value
-   * @returns {this}
+   * @returns {this} - Result.
    */
   limit(value) {
     this._limit = value
@@ -164,7 +164,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {number} value
-   * @returns {this}
+   * @returns {this} - Result.
    */
   offset(value) {
     this._offset = value
@@ -173,7 +173,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {string | number} order
-   * @returns {this}
+   * @returns {this} - Result.
    */
   order(order) {
     if (typeof order == "string") {
@@ -189,7 +189,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {number} pageNumber
-   * @returns {this}
+   * @returns {this} - Result.
    */
   page(pageNumber) {
     const perPage = this._perPage || 30
@@ -204,7 +204,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {number} perPage
-   * @returns {this}
+   * @returns {this} - Result.
    */
   perPage(perPage) {
     this._perPage = perPage
@@ -213,7 +213,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {string | number} order
-   * @returns {this}
+   * @returns {this} - Result.
    */
   reorder(order) {
     this._orders = []
@@ -221,7 +221,7 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  /** @returns {this} */
+  /** @returns {this} - Result.  */
   reverseOrder() {
     for (const order of this._orders) {
       order.setReverseOrder(true)
@@ -232,7 +232,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {boolean} [value]
-   * @returns {this}
+   * @returns {this} - Result.
    */
   distinct(value = true) {
     this._distinct = value
@@ -241,7 +241,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * @param {SelectArgumentType} select
-   * @returns {this}
+   * @returns {this} - Result.
    */
   select(select) {
     if (Array.isArray(select)) {
@@ -304,7 +304,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Resolves the current driver lazily.
-   * @returns {import("../drivers/base.js").default}
+   * @returns {import("../drivers/base.js").default} - Result.
    */
   get driver() {
     return this._driverFn()

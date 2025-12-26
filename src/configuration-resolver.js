@@ -6,7 +6,7 @@ import fileExists from "./utils/file-exists.js"
 
 /**
  * @param {import("./configuration-types.js").ConfigurationArgsType} [args]
- * @returns {Promise<Configuration>}
+ * @returns {Promise<Configuration>} - Result.
  */
 export default async function configurationResolver(args) {
   let configuration

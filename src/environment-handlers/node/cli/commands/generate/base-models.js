@@ -273,7 +273,7 @@ export default class DbGenerateModel extends BaseCommand {
 
   /**
    * @param {import("../../../../../database/drivers/base-column.js").default} column
-   * @returns {string | undefined}
+   * @returns {string | undefined} - Result.
    */
   jsDocTypeFromColumn(column) {
     const type = column.getType()
@@ -295,7 +295,7 @@ export default class DbGenerateModel extends BaseCommand {
 
   /**
    * @param {import("../../../../../database/drivers/base-column.js").default} column
-   * @returns {string | undefined}
+   * @returns {string | undefined} - Result.
    */
   jsDocSetterTypeFromColumn(column) {
     const type = column.getType()

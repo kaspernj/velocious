@@ -26,7 +26,7 @@ export default class UploadedFile {
 
   /**
    * @param {string} _destinationPath
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async saveTo(_destinationPath) { // eslint-disable-line no-unused-vars
     throw new Error("Not implemented")

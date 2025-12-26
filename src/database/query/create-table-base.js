@@ -24,7 +24,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   }
 
   /**
-   * @returns {Promise<string[]>}
+   * @returns {Promise<string[]>} - Result.
    */
   async toSql() {
     const databaseType = this.getDatabaseType()

@@ -20,7 +20,7 @@ export default class VelociousDatabaseDriversPgsqlOptions extends QueryParserOpt
 
   /**
    * @param {string} string
-   * @returns {number | string}
+   * @returns {number | string} - Result.
    */
   quote(string) {
     if (!this.driver) throw new Error("Driver not set")

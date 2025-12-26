@@ -8,7 +8,7 @@ export default class ParamsToObject {
     this.object = object
   }
 
-  /** @returns {Record<string, any>} */
+  /** @returns {Record<string, any>} - Result.  */
   toObject() {
     const result = {}
 
@@ -25,7 +25,7 @@ export default class ParamsToObject {
    * @param {string} key
    * @param {any} value
    * @param {Record<string, any> | any[]} result
-   * @returns {void}
+   * @returns {void} - Result.
    */
   treatInitial(key, value, result) {
     const firstMatch = key.match(/^(.+?)(\[([\s\S]+$))/)
@@ -57,7 +57,7 @@ export default class ParamsToObject {
    * @param {any} value
    * @param {string} rest
    * @param {Record<string, any> | any[]} result
-   * @returns {void}
+   * @returns {void} - Result.
    */
   treatSecond(value, rest, result) {
     const secondMatch = rest.match(/^\[(.*?)\]([\s\S]*)$/)

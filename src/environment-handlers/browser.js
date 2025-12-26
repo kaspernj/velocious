@@ -39,7 +39,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {Promise<MigrationsRequireContextType>}
+   * @returns {Promise<MigrationsRequireContextType>} - Result.
    */
   async migrationsRequireContext() {
     const {migrationsRequireContextCallback} = this
@@ -52,7 +52,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>}
+   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Result.
    */
   async findCommands() {
     this._findCommandsResult = this._actualFindCommands()
@@ -61,7 +61,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {CommandsRequireContextType}
+   * @returns {CommandsRequireContextType} - Result.
    */
   _findCommandsRequireContext() {
     // @ts-expect-error
@@ -94,7 +94,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args
    * @param {Array<string>} args.commandParts
-   * @returns {Promise<typeof import("../cli/base-command.js").default>}
+   * @returns {Promise<typeof import("../cli/base-command.js").default>} - Result.
    */
   async requireCommand({commandParts}) {
     let filePath = "."
@@ -134,7 +134,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
-   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>}
+   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Result.
    */
   async findMigrations() {
     const migrationsRequireContext = await this.migrationsRequireContext()
@@ -175,7 +175,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
   /**
    * @param {string} filePath
-   * @returns {Promise<typeof import("../database/migration/index.js").default>}
+   * @returns {Promise<typeof import("../database/migration/index.js").default>} - Result.
    */
   requireMigration = async (filePath) => {
     if (!filePath) throw new Error("filePath is required")
@@ -196,7 +196,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Result.
    */
   async afterMigrations({dbs}) {
     const structureSql = await this._sqliteStructureSql({dbs})
@@ -209,7 +209,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<string | null>}
+   * @returns {Promise<string | null>} - Result.
    */
   async _sqliteStructureSql({dbs}) {
     const sqliteIdentifiers = Object.keys(dbs)

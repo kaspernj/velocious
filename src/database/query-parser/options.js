@@ -25,7 +25,7 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @param {any} value
-   * @returns {number | string}
+   * @returns {number | string} - Result.
    */
   quote(value) {
     if (typeof value == "number") return value
@@ -35,7 +35,7 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @param {string} databaseName
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteDatabaseName(databaseName) {
     if (databaseName.includes(this.tableQuote)) throw new Error(`Possible SQL injection in database name: ${databaseName}`)
@@ -45,7 +45,7 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @param {string} columnName
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteColumnName(columnName) {
     if (!columnName) throw new Error("No column name was given")
@@ -56,7 +56,7 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @param {string} indexName
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteIndexName(indexName) {
     if (!indexName || indexName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${indexName}`)
@@ -67,7 +67,7 @@ export default class VelociousDatabaseQueryParserOptions {
   /**
    * @abstract
    * @param {any} string
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteString(string) { // eslint-disable-line no-unused-vars
     throw new Error("quoteString not implemented")
@@ -75,7 +75,7 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @param {string} tableName
-   * @returns {string}
+   * @returns {string} - Result.
    */
   quoteTableName(tableName) {
     if (!tableName || tableName.includes(this.tableQuote)) throw new Error(`Invalid table name: ${tableName}`)

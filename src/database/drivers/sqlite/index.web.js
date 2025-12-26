@@ -36,7 +36,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     await this.getConnection().close()
   }
 
-  /** @returns {ConnectionSqlJs | any} */
+  /** @returns {ConnectionSqlJs | any} - Result.  */
   getConnection() {
     if (this.args?.getConnection) {
       return this.args.getConnection()
@@ -55,7 +55,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
 
   /**
    * @param {string} sql
-   * @returns {Promise<Record<string, any>[]>}
+   * @returns {Promise<Record<string, any>[]>} - Result.
    */
   async _queryActual(sql) {
     return await this.getConnection().query(sql)
