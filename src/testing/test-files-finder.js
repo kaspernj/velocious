@@ -11,10 +11,10 @@ export default class TestFilesFinder {
   static IGNORED_NAMES = [".git", "node_modules"]
 
   /**
-   * @param {object} args
-   * @param {string} args.directory
-   * @param {string[]} [args.directories]
-   * @param {string[]} args.processArgs
+   * @param {object} args - Options object.
+   * @param {string} args.directory - Directory path.
+   * @param {string[]} [args.directories] - Directories.
+   * @param {string[]} args.processArgs - Process args.
    */
   constructor({directory, directories, processArgs, ...restArgs}) {
     restArgsError(restArgs)
@@ -60,7 +60,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with the test files.
    */
   async findTestFiles() {
     await this.withFindingCount(async () => {
@@ -77,7 +77,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @returns {number} - Result.
+   * @returns {number} - The ing promises length.
    */
   findingPromisesLength() { return Object.keys(this.findingPromises).length }
 
@@ -88,7 +88,7 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async waitForFindingPromisesIteration() {
     const unfinishedPromises = []
@@ -103,8 +103,8 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {function() : Promise<void>} callback
-   * @returns {Promise<void>} - Result.
+   * @param {function() : Promise<void>} callback - Callback function.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   withFindingCount(callback) {
     return new Promise((resolve) => {
@@ -123,8 +123,8 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {string} dir
-   * @returns {Promise<void>} - Result.
+   * @param {string} dir - Dir.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async findTestFilesInDir(dir) {
     await this.withFindingCount(async () => {
@@ -151,9 +151,9 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {string} file
-   * @param {string} localPath
-   * @returns {boolean} - Result.
+   * @param {string} file - File.
+   * @param {string} localPath - Local path.
+   * @returns {boolean} - Whether file matching requirements.
    */
   isFileMatchingRequirements(file, localPath) {
     if (this.directoryArgs.length > 0) {
@@ -183,8 +183,8 @@ export default class TestFilesFinder {
   }
 
   /**
-   * @param {string} file
-   * @returns {boolean} - Result.
+   * @param {string} file - File.
+   * @returns {boolean} - Whether looks like test file.
    */
   looksLikeTestFile(file) {
     return Boolean(file.match(/-(spec|test)\.(m|)js$/))

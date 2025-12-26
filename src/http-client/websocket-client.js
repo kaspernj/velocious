@@ -5,8 +5,8 @@
  */
 export default class VelociousWebsocketClient {
   /**
-   * @param {object} [args]
-   * @param {boolean} [args.debug]
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.debug] - Whether debug.
    * @param {string} [args.url] Full websocket URL (default: ws://127.0.0.1:3006/websocket)
    */
   constructor({debug = false, url} = {}) {
@@ -22,7 +22,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * Ensure a websocket connection is open.
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async connect() {
     if (this.socket && this.socket.readyState === this.socket.OPEN) return
@@ -57,7 +57,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * Close the websocket and clear pending state.
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async close() {
     if (!this.socket) return
@@ -73,10 +73,10 @@ export default class VelociousWebsocketClient {
 
   /**
    * Perform a POST request over the websocket.
-   * @param {string} path
-   * @param {any} [body]
-   * @param {{headers?: Record<string, string>}} [options]
-   * @returns {Promise<VelociousWebsocketResponse>} - Result.
+   * @param {string} path - Path.
+   * @param {unknown} [body] - Request body.
+   * @param {{headers?: Record<string, string>}} [options] - Request options such as headers.
+   * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the post.
    */
   async post(path, body, options = {}) {
     return await this.request("POST", path, {...options, body})
@@ -84,9 +84,9 @@ export default class VelociousWebsocketClient {
 
   /**
    * Perform a GET request over the websocket.
-   * @param {string} path
-   * @param {{headers?: Record<string, string>}} [options]
-   * @returns {Promise<VelociousWebsocketResponse>} - Result.
+   * @param {string} path - Path.
+   * @param {{headers?: Record<string, string>}} [options] - Request options such as headers.
+   * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the get.
    */
   async get(path, options = {}) {
     return await this.request("GET", path, options)
@@ -94,8 +94,8 @@ export default class VelociousWebsocketClient {
 
   /**
    * Subscribe to a channel for server-sent events.
-   * @param {string} channel
-   * @param {(payload: any) => void} callback
+   * @param {string} channel - Channel name.
+   * @param {(payload: unknown) => void} callback - Callback function.
    * @returns {() => void} unsubscribe function
    */
   on(channel, callback) {
@@ -125,12 +125,12 @@ export default class VelociousWebsocketClient {
 
   /**
    * @private
-   * @param {string} method
-   * @param {string} path
-   * @param {object} [options]
-   * @param {any} [options.body]
-   * @param {Record<string, string>} [options.headers]
-   * @returns {Promise<VelociousWebsocketResponse>} - Result.
+   * @param {string} method - HTTP method.
+   * @param {string} path - Path.
+   * @param {object} [options] - Options object.
+   * @param {unknown} [options.body] - Request body.
+   * @param {Record<string, string>} [options.headers] - Header list.
+   * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the request.
    */
   async request(method, path, {body, headers} = {}) {
     await this.connect()
@@ -153,7 +153,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * @private
-   * @param {MessageEvent<any>} event
+   * @param {MessageEvent<unknown>} event - Event payload.
    */
   onMessage = (event) => {
     const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
@@ -217,7 +217,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * @private
-   * @param {Record<string, any>} payload
+   * @param {Record<string, unknown>} payload - Payload data.
    */
   _sendMessage(payload) {
     if (!this.socket || this.socket.readyState !== this.socket.OPEN) {
@@ -232,8 +232,8 @@ export default class VelociousWebsocketClient {
 
   /**
    * @private
-   * @param  {...any} args
-   * @returns {void} - Result.
+   * @param  {...unknown} args - Options object.
+   * @returns {void} - No return value.
    */
   _debug(...args) {
     if (!this.debug) return
@@ -244,7 +244,7 @@ export default class VelociousWebsocketClient {
 
 class VelociousWebsocketResponse {
   /**
-   * @param {object} message
+   * @param {object} message - Message text.
    */
   constructor(message) {
     this.body = message.body
@@ -255,7 +255,7 @@ class VelociousWebsocketResponse {
     this.type = message.type
   }
 
-  /** @returns {any} - Result.  */
+  /** @returns {unknown} - The json.  */
   json() {
     if (typeof this.body !== "string") {
       throw new Error("Response body is not a string")

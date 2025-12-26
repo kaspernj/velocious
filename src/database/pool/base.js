@@ -12,7 +12,7 @@ const shared = {
 
 class VelociousDatabasePoolBase {
   /**
-   * @returns {VelociousDatabasePoolBase} - Result.
+   * @returns {VelociousDatabasePoolBase} - The current.
    */
   static current() {
     if (!shared.currentPool) throw new Error("A database pool hasn't been set")
@@ -21,9 +21,9 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @param {object} args
-   * @param {Configuration} args.configuration
-   * @param {string} args.identifier
+   * @param {object} args - Options object.
+   * @param {Configuration} args.configuration - Configuration instance.
+   * @param {string} args.identifier - Identifier.
    */
   constructor({configuration, identifier}) {
     this.configuration = configuration || Configuration.current()
@@ -37,7 +37,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @param {import("../drivers/base.js").default} _connection
+   * @param {import("../drivers/base.js").default} _connection - Connection.
    */
   checkin(_connection) { // eslint-disable-line no-unused-vars
     throw new Error("'checkin' not implemented")
@@ -45,7 +45,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @returns {Promise<import("../drivers/base.js").default>} - Result.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
   checkout() {
     throw new Error("'checkout' not implemented")
@@ -53,7 +53,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @returns {import("../drivers/base.js").default} - Result.
+   * @returns {import("../drivers/base.js").default} - The current connection.
    */
   getCurrentConnection() {
     throw new Error("'getCurrentConnection' not implemented")
@@ -62,14 +62,14 @@ class VelociousDatabasePoolBase {
   /**
    * Returns the connection pinned to the current context, if any.
    * Default implementation defers to `getCurrentConnection`.
-   * @returns {import("../drivers/base.js").default | undefined} - Result.
+   * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
    */
   getCurrentContextConnection() {
     return this.getCurrentConnection()
   }
 
   /**
-   * @returns {{driver: typeof import("../drivers/base.js").default, type: string}} - Result.
+   * @returns {{driver: typeof import("../drivers/base.js").default, type: string}} - Driver class and database type identifier.
    */
   getConfiguration() {
     return digg(this.configuration.getDatabaseConfiguration(), this.identifier)
@@ -77,28 +77,28 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The primary key type.
    */
   primaryKeyType() {
     throw new Error("'primaryKeyType' not implemented")
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   setCurrent() {
     shared.currentPool = this
   }
 
   /**
-   * @param {typeof import("../drivers/base.js").default} driverClass
+   * @param {typeof import("../drivers/base.js").default} driverClass - Driver class.
    */
   setDriverClass(driverClass) {
     this.driverClass = driverClass
   }
 
   /**
-   * @returns {Promise<import("../drivers/base.js").default>} - Result.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection.
    */
   async spawnConnection() {
     const databaseConfig = this.getConfiguration()
@@ -111,9 +111,9 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @param {object} config
-   * @param {typeof import("../drivers/base.js").default} config.driver
-   * @returns {Promise<import("../drivers/base.js").default>} - Result.
+   * @param {object} config - Configuration object.
+   * @param {typeof import("../drivers/base.js").default} config.driver - Database driver instance.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection with configuration.
    */
   async spawnConnectionWithConfiguration(config) {
     const DriverClass = config.driver || this.driverClass
@@ -129,8 +129,8 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
-   * @param {function(import("../drivers/base.js").default) : void} _callback
-   * @returns {Promise<void>} - Result.
+   * @param {function(import("../drivers/base.js").default) : void} _callback - Callback function.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   withConnection(_callback) { // eslint-disable-line no-unused-vars
     throw new Error("'withConnection' not implemented")
@@ -139,7 +139,7 @@ class VelociousDatabasePoolBase {
   /**
    * Ensures a reusable connection exists for contexts where AsyncLocalStorage isn't set.
    * Default implementation just checks out a connection.
-   * @returns {Promise<import("../drivers/base.js").default>} - Result.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the global connection.
    */
   async ensureGlobalConnection() {
     return await this.checkout()

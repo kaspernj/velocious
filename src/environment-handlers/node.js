@@ -20,7 +20,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   _findCommandsResult = undefined
 
   /**
-   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Result.
+   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with the commands.
    */
   async findCommands() {
     this._findCommandsResult ||= await this._actualFindCommands()
@@ -58,73 +58,73 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<void>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsInit(command) {
     return await this.forwardCommand(command, CliCommandsInit)
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<any>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsMigrationGenerate(command) {
     return await this.forwardCommand(command, CliCommandsGenerateMigration)
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<any>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsMigrationDestroy(command) {
     return await this.forwardCommand(command, CliCommandsDestroyMigration)
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<any>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsGenerateBaseModels(command) {
     return await this.forwardCommand(command, CliCommandsGenerateBaseModels)
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<any>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsGenerateModel(command) {
     return await this.forwardCommand(command, CliCommandsGenerateModel)
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<any>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsRoutes(command) {
     return await this.forwardCommand(command, CliCommandsRoutes)
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<any>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsServer(command) {
     return await this.forwardCommand(command, CliCommandsServer)
   }
 
   /**
-   * @param {import("../cli/base-command.js").default} command
-   * @returns {Promise<any>} - Result.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsTest(command) {
     return await this.forwardCommand(command, CliCommandsTest)
   }
 
   /**
-   * @param {object} args
-   * @param {string[]} args.commandParts
-   * @returns {Promise<typeof import ("../cli/base-command.js").default>} - Result.
+   * @param {object} args - Options object.
+   * @param {string[]} args.commandParts - Command parts.
+   * @returns {Promise<typeof import ("../cli/base-command.js").default>} - Resolves with the require command.
    */
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()
@@ -143,7 +143,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Result.
+   * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Resolves with the migrations.
    */
   async findMigrations() {
     const migrationsPath = `${this.getConfiguration().getDirectory()}/src/database/migrations`
@@ -175,7 +175,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @returns {Promise<import("../routes/index.js").default>} - Result.
+   * @returns {Promise<import("../routes/index.js").default>} - Resolves with the import application routes.
    */
   async importApplicationRoutes() {
     const routesImport = await import(`${this.getConfiguration().getDirectory()}/src/config/routes.js`)
@@ -184,7 +184,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @returns {Promise<string>} - Result.
+   * @returns {Promise<string>} - Resolves with the velocious path.
    */
   async getVelociousPath() {
     if (!this._velociousPath) {
@@ -198,8 +198,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {string[]} testFiles
-   * @returns {Promise<void>} - Result.
+   * @param {string[]} testFiles - Test files.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async importTestFiles(testFiles) {
     for (const testFile of testFiles) {
@@ -208,20 +208,20 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @returns {string} - Result.
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @returns {string} - The default log directory.
    */
   getDefaultLogDirectory({configuration}) {
     return path.join(configuration.getDirectory(), "log")
   }
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @param {string | undefined} args.directory
-   * @param {string} args.environment
-   * @returns {string | undefined} - Result.
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {string | undefined} args.directory - Directory path.
+   * @param {string} args.environment - Environment.
+   * @returns {string | undefined} - The log file path.
    */
   getLogFilePath({configuration, directory, environment}) {
     const actualDirectory = directory || configuration?.getDirectory?.()
@@ -232,10 +232,10 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.filePath
-   * @param {string} args.message
-   * @returns {Promise<void>} - Result.
+   * @param {object} args - Options object.
+   * @param {string} args.filePath - File path.
+   * @param {string} args.message - Message text.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async writeLogToFile({filePath, message}) {
     await fs.mkdir(path.dirname(filePath), {recursive: true})
@@ -249,8 +249,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {string} filePath
-   * @returns {Promise<import("../database/migration/index.js").default>} - Result.
+   * @param {string} filePath - File path.
+   * @returns {Promise<import("../database/migration/index.js").default>} - Resolves with the require migration.
    */
   async requireMigration(filePath) {
     const migrationImport = await import(filePath)
@@ -270,9 +270,9 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {object} args
-   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<void>} - Result.
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async afterMigrations({dbs}) {
     const dbDir = path.join(this.getConfiguration().getDirectory(), "db")
@@ -292,9 +292,9 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {object} args
-   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs
-   * @returns {Promise<Record<string, string>>} - Result.
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
+   * @returns {Promise<Record<string, string>>} - Resolves with SQL string.
    */
   async _structureSqlByIdentifier({dbs}) {
     const sqlByIdentifier = /** @type {Record<string, string>} */ ({})

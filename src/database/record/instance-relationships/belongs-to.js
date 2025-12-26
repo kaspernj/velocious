@@ -9,15 +9,15 @@ import BaseInstanceRelationship from "./base.js"
  */
 export default class VelociousDatabaseRecordBelongsToInstanceRelationship extends BaseInstanceRelationship {
   /**
-   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args
+   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor(args) {
     super(args)
   }
 
   /**
-   * @param {Record<string, any>} data
-   * @returns {InstanceType<TMC>} - Result.
+   * @param {Record<string, unknown>} data - Data payload.
+   * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
     const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())

@@ -7,9 +7,9 @@ import websocketEventsHost from "../websocket-events-host.js"
 
 export default class VelociousHttpServerWorker {
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {number} args.workerCount
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {number} args.workerCount - Worker count.
    */
   constructor({configuration, workerCount}) {
     this.configuration = configuration
@@ -48,8 +48,8 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {import("../server-client.js").default} client
-   * @returns {void} - Result.
+   * @param {import("../server-client.js").default} client - Client instance.
+   * @returns {void} - No return value.
    */
   addSocketConnection(client) {
     const clientCount = client.clientCount
@@ -69,15 +69,15 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {any} error
+   * @param {unknown} error - Error instance.
    */
   onWorkerError = (error) => {
     throw ensureError(error) // Throws original error with backtrace and everything into the console
   }
 
   /**
-   * @param {number} code
-   * @returns {void} - Result.
+   * @param {number} code - Code.
+   * @returns {void} - No return value.
    */
   onWorkerExit = (code) => {
     if (code !== 0) {
@@ -90,13 +90,13 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {object} data
-   * @param {string} data.command
-   * @param {number} [data.clientCount]
-   * @param {string} [data.output]
-   * @param {string} [data.channel]
-   * @param {any} [data.payload]
-   * @returns {void} - Result.
+   * @param {object} data - Data payload.
+   * @param {string} data.command - Command.
+   * @param {number} [data.clientCount] - Client count.
+   * @param {string} [data.output] - Output.
+   * @param {string} [data.channel] - Channel name.
+   * @param {unknown} [data.payload] - Payload data.
+   * @returns {void} - No return value.
    */
   onWorkerMessage = (data) => {
     this.logger.debug(`Worker message`, data)
@@ -133,10 +133,10 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.channel
-   * @param {any} args.payload
-   * @returns {void} - Result.
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {unknown} args.payload - Payload data.
+   * @returns {void} - No return value.
    */
   dispatchWebsocketEvent({channel, payload}) {
     if (!this.worker) return

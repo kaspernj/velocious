@@ -7,10 +7,10 @@ export default class ServerClient {
   events = new EventEmitter()
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @param {import("net").Socket} args.socket
-   * @param {number} args.clientCount
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("net").Socket} args.socket - Socket instance.
+   * @param {number} args.clientCount - Client count.
    */
   constructor({configuration, socket, clientCount}) {
     if (!configuration) throw new Error("No configuration given")
@@ -24,12 +24,12 @@ export default class ServerClient {
     socket.on("end", this.onSocketEnd)
   }
 
-  /** @returns {void} - Result.  */
+  /** @returns {void} - No return value.  */
   listen() {
     this.socket.on("data", this.onSocketData)
   }
 
-  /** @returns {Promise<void>} - Result.  */
+  /** @returns {Promise<void>} - Resolves when complete.  */
   end() {
     return new Promise((resolve) => {
       this.socket.once("close", () => resolve(null))
@@ -38,8 +38,8 @@ export default class ServerClient {
   }
 
   /**
-   * @param {Buffer} chunk
-   * @returns {void} - Result.
+   * @param {Buffer} chunk - Chunk.
+   * @returns {void} - No return value.
    */
   onSocketData = (chunk) => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount}: ${chunk}`)
@@ -53,15 +53,15 @@ export default class ServerClient {
     })
   }
 
-  /** @returns {void} - Result.  */
+  /** @returns {void} - No return value.  */
   onSocketEnd = () => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount} end`)
     this.events.emit("close", this)
   }
 
   /**
-   * @param {string} data
-   * @returns {Promise<void>} - Result.
+   * @param {string} data - Data payload.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async send(data) {
     return new Promise((resolve) => {
@@ -77,8 +77,8 @@ export default class ServerClient {
   }
 
   /**
-   * @param {import("worker_threads").Worker} newWorker
-   * @returns {void} - Result.
+   * @param {import("worker_threads").Worker} newWorker - New worker.
+   * @returns {void} - No return value.
    */
   setWorker(newWorker) {
     this.worker = newWorker

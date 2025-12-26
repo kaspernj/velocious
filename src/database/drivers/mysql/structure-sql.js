@@ -4,15 +4,15 @@ import {normalizeSqlStatement} from "../structure-sql/utils.js"
 
 export default class VelociousDatabaseDriversMysqlStructureSql {
   /**
-   * @param {object} args
-   * @param {import("../base.js").default} args.driver
+   * @param {object} args - Options object.
+   * @param {import("../base.js").default} args.driver - Database driver instance.
    */
   constructor({driver}) {
     this.driver = driver
   }
 
   /**
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {
     const {driver} = this
@@ -21,8 +21,10 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
     const statements = []
 
     for (const row of rows) {
-      const tableName = row.table_name || row.TABLE_NAME
-      const tableType = row.table_type || row.TABLE_TYPE
+      const tableNameValue = row.table_name || row.TABLE_NAME
+      const tableTypeValue = row.table_type || row.TABLE_TYPE
+      const tableName = tableNameValue ? String(tableNameValue) : ""
+      const tableType = tableTypeValue ? String(tableTypeValue) : ""
 
       if (!tableName || !tableType) continue
 
@@ -45,7 +47,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @returns {Promise<boolean>} - Result.
+   * @returns {Promise<boolean>} - Resolves with Whether maria db.
    */
   async _isMariaDb() {
     const {driver} = this
@@ -58,15 +60,15 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @param {Record<string, any> | undefined} row
-   * @returns {string | null} - Result.
+   * @param {Record<string, unknown> | undefined} row - Row data.
+   * @returns {string | null} - SQL string.
    */
   _mysqlCreateStatement(row) {
     if (!row) return null
 
     for (const key of Object.keys(row)) {
       if (key.toLowerCase().startsWith("create ")) {
-        return row[key]
+        return String(row[key])
       }
     }
 

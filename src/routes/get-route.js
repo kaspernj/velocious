@@ -7,8 +7,8 @@ import restArgsError from "../utils/rest-args-error.js"
 
 class VelociousRouteGetRoute extends BaseRoute {
   /**
-   * @param {object} args
-   * @param {string} args.name
+   * @param {object} args - Options object.
+   * @param {string} args.name - Name.
    */
   constructor({name, ...restArgs}) {
     super()
@@ -24,11 +24,11 @@ class VelociousRouteGetRoute extends BaseRoute {
   }
 
   /**
-   * @param {object} args
-   * @param {Record<string, any>} args.params
-   * @param {string} args.path
-   * @param {import("../http-server/client/request.js").default} args.request
-   * @returns {{restPath: string} | undefined} - Result.
+   * @param {object} args - Options object.
+   * @param {Record<string, unknown>} args.params - Parameters object.
+   * @param {string} args.path - Path.
+   * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
+   * @returns {{restPath: string} | undefined} - REST path metadata for this route.
    */
   matchWithPath({params, path, request}) { // eslint-disable-line no-unused-vars
     const match = path.match(this.regExp)

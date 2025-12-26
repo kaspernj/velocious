@@ -2,9 +2,9 @@
 
 export default class VelocuiousDatabaseQueryParserOrderParser {
   /**
-   * @param {object} args
-   * @param {boolean} args.pretty
-   * @param {import("../query/index.js").default} args.query
+   * @param {object} args - Options object.
+   * @param {boolean} args.pretty - Whether pretty.
+   * @param {import("../query/index.js").default} args.query - Query instance.
    */
   constructor({pretty, query}) {
     this.pretty = pretty

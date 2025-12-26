@@ -4,13 +4,13 @@ import querystring from "querystring"
 
 export default class VelociousHttpServerClientWebsocketRequest {
   /**
-   * @param {object} args
-   * @param {any} [args.body]
-   * @param {Record<string, string>} [args.headers]
-   * @param {string} args.method
-   * @param {string} args.path
-   * @param {Record<string, any>} [args.params]
-   * @param {string} [args.remoteAddress]
+   * @param {object} args - Options object.
+   * @param {unknown} [args.body] - Request body.
+   * @param {Record<string, string>} [args.headers] - Header list.
+   * @param {string} args.method - HTTP method.
+   * @param {string} args.path - Path.
+   * @param {Record<string, unknown>} [args.params] - Parameters object.
+   * @param {string} [args.remoteAddress] - Remote address.
    */
   constructor({body, headers, method, params, path, remoteAddress}) {
     if (!method) throw new Error("method is required")
@@ -94,9 +94,9 @@ export default class VelociousHttpServerClientWebsocketRequest {
 
     if (!query) return {}
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | string[]>} */
     const unparsedParams = querystring.parse(query)
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | string[]>} */
     const params = {}
 
     for (const key of Object.keys(unparsedParams)) {

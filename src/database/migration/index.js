@@ -2,21 +2,21 @@
 
 /**
  * @typedef {object} AddColumnArgsType
- * @property {any} [default]
- * @property {object} [foreignKey]
- * @property {boolean | {unique: boolean}} [index]
- * @property {boolean} [null]
- * @property {boolean} [primaryKey]
- * @property {boolean} [unique]
+ * @property {unknown} [default] - Default value for the column.
+ * @property {object} [foreignKey] - Foreign key definition for the column.
+ * @property {boolean | {unique: boolean}} [index] - Whether to add an index (optionally unique).
+ * @property {boolean} [null] - Whether the column allows null values.
+ * @property {boolean} [primaryKey] - Whether the column is a primary key.
+ * @property {boolean} [unique] - Whether the column enforces uniqueness.
  */
 /**
  * @typedef {object} CreateTableIdArgsType
- * @property {any} [default]
- * @property {string} [type]
+ * @property {unknown} [default] - Default value for the ID column.
+ * @property {string} [type] - Column type for the ID column.
  */
 /**
  * @typedef {object} CreateTableArgsType
- * @property {CreateTableIdArgsType | false} [id]
+ * @property {CreateTableIdArgsType | false} [id] - ID column options or false to skip ID.
  */
 /**
  * @typedef {(table: TableData) => void} CreateTableCallbackType
@@ -31,23 +31,23 @@ export {NotImplementedError}
 
 export default class VelociousDatabaseMigration {
   /**
-   * @param {string[]} databaseIdentifiers
-   * @returns {void} - Result.
+   * @param {string[]} databaseIdentifiers - Database identifiers.
+   * @returns {void} - No return value.
    */
   static onDatabases(databaseIdentifiers) {
     this._databaseIdentifiers = databaseIdentifiers
   }
 
-  /** @returns {string[] | undefined} - Result.  */
+  /** @returns {string[] | undefined} - The database identifiers.  */
   static getDatabaseIdentifiers() {
     return this._databaseIdentifiers
   }
 
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {string} args.databaseIdentifier
-   * @param {import("../drivers/base.js").default} args.db
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} args.databaseIdentifier - Database identifier.
+   * @param {import("../drivers/base.js").default} args.db - Database connection.
    */
   constructor({configuration, databaseIdentifier = "default", db}) {
     if (!databaseIdentifier) throw new Error("No database identifier given")
@@ -64,7 +64,7 @@ export default class VelociousDatabaseMigration {
     return this._databaseIdentifier
   }
 
-  /** @returns {import("../drivers/base.js").default} - Result.  */
+  /** @returns {import("../drivers/base.js").default} - The driver.  */
   getDriver() { return this._db }
   connection() { return this.getDriver() }
 
@@ -81,19 +81,19 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} sql
-   * @returns {Promise<import("../drivers/base.js").QueryResultType>} - Result.
+   * @param {string} sql - SQL string.
+   * @returns {Promise<import("../drivers/base.js").QueryResultType>} - Resolves with the execute.
    */
   async execute(sql) {
     return await this.connection().query(sql)
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} columnName
-   * @param {string} columnType
-   * @param {AddColumnArgsType} [args]
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} columnName - Column name.
+   * @param {string} columnType - Column type.
+   * @param {AddColumnArgsType} [args] - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addColumn(tableName, columnName, columnType, args) {
     if (!columnType) throw new Error("No column type given")
@@ -111,9 +111,9 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} columnName
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} columnName - Column name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async removeColumn(tableName, columnName) {
     const tableColumnArgs = Object.assign({dropColumn: true})
@@ -130,15 +130,15 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @typedef {object} AddIndexArgsType
-   * @property {boolean} [ifNotExists]
-   * @property {string} [name]
-   * @property {boolean} [unique]
+   * @property {boolean} [ifNotExists] - Skip creation if the index already exists.
+   * @property {string} [name] - Explicit index name to use.
+   * @property {boolean} [unique] - Whether the index should be unique.
    */
   /**
-   * @param {string} tableName
-   * @param {Array<string | import("../table-data/table-column.js").default>} columns
-   * @param {AddIndexArgsType} [args]
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {Array<string | import("../table-data/table-column.js").default>} columns - Column names.
+   * @param {AddIndexArgsType} [args] - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addIndex(tableName, columns, args) {
     const createIndexArgs = Object.assign(
@@ -156,9 +156,9 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} referenceName
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} referenceName - Reference name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addForeignKey(tableName, referenceName) {
     const referenceNameUnderscore = inflection.underscore(referenceName)
@@ -179,13 +179,13 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} referenceName
-   * @param {object} args
-   * @param {boolean} args.foreignKey
-   * @param {string} args.type
-   * @param {boolean} args.unique
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} referenceName - Reference name.
+   * @param {object} args - Options object.
+   * @param {boolean} args.foreignKey - Whether foreign key.
+   * @param {string} args.type - Type identifier.
+   * @param {boolean} args.unique - Whether unique.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addReference(tableName, referenceName, args) {
     const {foreignKey, type, unique, ...restArgs} = args
@@ -202,9 +202,9 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} referenceName
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} referenceName - Reference name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async removeReference(tableName, referenceName) {
     const columnName = `${inflection.underscore(referenceName)}_id`
@@ -213,10 +213,10 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} columnName
-   * @param {boolean} nullable
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} columnName - Column name.
+   * @param {boolean} nullable - Whether nullable.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async changeColumnNull(tableName, columnName, nullable) {
     const table = await this.getDriver().getTableByName(tableName)
@@ -231,9 +231,9 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} columnName
-   * @returns {Promise<boolean>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} columnName - Column name.
+   * @returns {Promise<boolean>} - Resolves with Whether column exists.
    */
   async columnExists(tableName, columnName) {
     const table = await this.getDriver().getTableByName(tableName)
@@ -251,22 +251,22 @@ export default class VelociousDatabaseMigration {
 
   /**
    * @overload
-   * @param {string} tableName
-   * @param {CreateTableCallbackType} callback
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {CreateTableCallbackType} callback - Callback function.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   /**
    * @overload
-   * @param {string} tableName
-   * @param {CreateTableArgsType} args
-   * @param {CreateTableCallbackType} callback
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {CreateTableArgsType} args - Options object.
+   * @param {CreateTableCallbackType} callback - Callback function.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   /**
-   * @param {string} tableName
-   * @param {CreateTableArgsType | CreateTableCallbackType} arg1
-   * @param {CreateTableCallbackType | undefined} [arg2]
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {CreateTableArgsType | CreateTableCallbackType} arg1 - Arg1.
+   * @param {CreateTableCallbackType | undefined} [arg2] - Arg2.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async createTable(tableName, arg1, arg2) {
     let args
@@ -336,26 +336,26 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async dropTable(tableName) {
     await this.getDriver().dropTable(tableName)
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} oldColumnName
-   * @param {string} newColumnName
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} oldColumnName - Previous column name.
+   * @param {string} newColumnName - New column name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     await this.getDriver().renameColumn(tableName, oldColumnName, newColumnName)
   }
 
   /**
-   * @param {string} tableName
-   * @returns {Promise<boolean>} - Result.
+   * @param {string} tableName - Table name.
+   * @returns {Promise<boolean>} - Resolves with Whether table exists.
    */
   async tableExists(tableName) {
     const exists = await this.getDriver().tableExists(tableName)

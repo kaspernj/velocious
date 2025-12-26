@@ -8,9 +8,9 @@ import TableData from "../../../table-data/index.js"
 
 export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable extends AlterTableBase {
   /**
-   * @param {object} args
-   * @param {import("../../base.js").default} args.driver
-   * @param {import("../../../table-data/index.js").default} args.tableData
+   * @param {object} args - Options object.
+   * @param {import("../../base.js").default} args.driver - Database driver instance.
+   * @param {import("../../../table-data/index.js").default} args.tableData - Table data.
    */
   constructor({driver, tableData, ...restArgs}) {
     restArgsError(restArgs)
@@ -23,7 +23,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
   }
 
   /**
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {
     const {tableData} = this

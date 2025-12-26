@@ -5,21 +5,21 @@ import * as inflection from "inflection"
 
 /**
  * @typedef {object} RelationshipBaseArgsType
- * @property {string} [className]
- * @property {string} [dependent]
- * @property {string | undefined} [foreignKey]
- * @property {string} [inverseOf]
- * @property {typeof import("../index.js").default} [klass]
- * @property {typeof import("../index.js").default} modelClass
- * @property {string} [primaryKey]
- * @property {boolean} [polymorphic]
- * @property {string} relationshipName
- * @property {string} [through]
- * @property {string} type
+ * @property {string} [className] - Name of the related model class.
+ * @property {string} [dependent] - Dependent action when parent is destroyed.
+ * @property {string | undefined} [foreignKey] - Explicit foreign key column name.
+ * @property {string} [inverseOf] - Inverse relationship name on the related model.
+ * @property {typeof import("../index.js").default} [klass] - Related model class.
+ * @property {typeof import("../index.js").default} modelClass - Owning model class.
+ * @property {string} [primaryKey] - Primary key column on the owning model.
+ * @property {boolean} [polymorphic] - Whether the relationship is polymorphic.
+ * @property {string} relationshipName - Name of the relationship on the model.
+ * @property {string} [through] - Name of the through association.
+ * @property {string} type - Relationship type (e.g. "hasMany").
  */
 
 export default class VelociousDatabaseRecordBaseRelationship {
-  /** @param {RelationshipBaseArgsType} args */
+  /** @param {RelationshipBaseArgsType} args - Relationship definition arguments. */
   constructor({className, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, through, type, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -64,18 +64,18 @@ export default class VelociousDatabaseRecordBaseRelationship {
     throw new Error("getInverseOf not implemented")
   }
 
-  /** @returns {typeof import("../index.js").default} - Result.  */
+  /** @returns {typeof import("../index.js").default} - The model class.  */
   getModelClass() { return this.modelClass }
 
   /** @returns {string} The name of the relationship, e.g. "posts", "user", "comments" etc. */
   getRelationshipName() { return this.relationshipName }
 
-  /** @returns {boolean} - Result.  */
+  /** @returns {boolean} - Whether polymorphic.  */
   getPolymorphic() {
     return this._polymorphic || false
   }
 
-  /** @returns {string} - Result.  */
+  /** @returns {string} - The polymorphic type column.  */
   getPolymorphicTypeColumn() {
     if (!this.getPolymorphic()) {
       throw new Error(`${this.modelClass.name}#${this.relationshipName} isn't polymorphic`)

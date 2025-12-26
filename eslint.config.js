@@ -18,15 +18,7 @@ export default defineConfig([
   },
   jsdoc({
     config: "flat/recommended",
-    files: ["src/**/*.js"],
-    rules: {
-      "jsdoc/reject-any-type": "off",
-      "jsdoc/reject-function-type": "off",
-      "jsdoc/require-jsdoc": "off",
-      "jsdoc/require-param": "off",
-      "jsdoc/require-param-description": "off",
-      "jsdoc/require-property-description": "off"
-    }
+    files: ["src/**/*.js"]
   }),
   {
     files: ["spec/**/*.js"],

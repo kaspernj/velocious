@@ -2,10 +2,10 @@
 
 /**
  * @typedef {object} MigrationObjectType
- * @property {number} date
- * @property {string} file
- * @property {string} [fullPath]
- * @property {string} migrationClassName
+ * @property {number} date - Migration timestamp parsed from filename.
+ * @property {string} file - Filename for the migration.
+ * @property {string} [fullPath] - Absolute path to the migration file.
+ * @property {string} migrationClassName - Exported migration class name.
  */
 
 /**

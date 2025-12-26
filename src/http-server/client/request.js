@@ -6,9 +6,9 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousHttpServerClientRequest {
   /**
-   * @param {object} args
-   * @param {import("./index.js").default} args.client
-   * @param {import("../../configuration.js").default} args.configuration
+   * @param {object} args - Options object.
+   * @param {import("./index.js").default} args.client - Client instance.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    */
   constructor({client, configuration, ...restArgs}) {
     restArgsError(restArgs)
@@ -21,14 +21,14 @@ export default class VelociousHttpServerClientRequest {
   baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
 
   /**
-   * @param {Buffer} data
-   * @returns {void} - Result.
+   * @param {Buffer} data - Data payload.
+   * @returns {void} - No return value.
    */
   feed(data) { return this.requestParser.feed(data) }
 
   /**
-   * @param {string} headerName
-   * @returns {string | null} - Result.
+   * @param {string} headerName - Header name.
+   * @returns {string | null} - The header.
    */
   header(headerName) { return this.getRequestBuffer().getHeader(headerName)?.getValue() }
   headers() { return this.getRequestBuffer().getHeadersHash() }
@@ -54,6 +54,7 @@ export default class VelociousHttpServerClientRequest {
 
   origin() { return this.header("origin") }
   path() { return this.requestParser.getPath() }
+  /** @returns {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} - The request params. */
   params() { return digg(this, "requestParser", "params") }
   port() { return this.requestParser.getPort() }
   protocol() { return this.requestParser.getProtocol() }

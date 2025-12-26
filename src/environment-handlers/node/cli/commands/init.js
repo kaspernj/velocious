@@ -8,7 +8,7 @@ import fs from "fs/promises"
 
 export default class VelociousCliCommandsInit extends BaseCommand {
   /**
-   * @returns {Promise<void | {fileMappings: FileMappingType[]}>} - Result.
+   * @returns {Promise<void | {fileMappings: FileMappingType[]}>} - Resolves with generated file mappings, if any.
    */
   async execute() {
     const velociousPath = await this.getEnvironmentHandler().getVelociousPath()

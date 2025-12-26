@@ -2,16 +2,16 @@
 
 /**
  * @typedef {object} OptionsObjectArgsType
- * @property {string} columnQuote
- * @property {string} indexQuote
- * @property {import("../drivers/base.js").default} driver
- * @property {string} tableQuote
- * @property {string} stringQuote
+ * @property {string} columnQuote - Quote character for column names.
+ * @property {string} indexQuote - Quote character for index names.
+ * @property {import("../drivers/base.js").default} driver - Database driver instance.
+ * @property {string} tableQuote - Quote character for table names.
+ * @property {string} stringQuote - Quote character for string literals.
  */
 
 export default class VelociousDatabaseQueryParserOptions {
   /**
-   * @param {OptionsObjectArgsType} options
+   * @param {OptionsObjectArgsType} options - Options object.
    */
   constructor(options) {
     this.columnQuote = options.columnQuote
@@ -24,8 +24,8 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {any} value
-   * @returns {number | string} - Result.
+   * @param {unknown} value - Value to use.
+   * @returns {number | string} - The quote.
    */
   quote(value) {
     if (typeof value == "number") return value
@@ -34,8 +34,8 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {string} databaseName
-   * @returns {string} - Result.
+   * @param {string} databaseName - Database name.
+   * @returns {string} - The quote database name.
    */
   quoteDatabaseName(databaseName) {
     if (databaseName.includes(this.tableQuote)) throw new Error(`Possible SQL injection in database name: ${databaseName}`)
@@ -44,8 +44,8 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {string} columnName
-   * @returns {string} - Result.
+   * @param {string} columnName - Column name.
+   * @returns {string} - The quote column name.
    */
   quoteColumnName(columnName) {
     if (!columnName) throw new Error("No column name was given")
@@ -55,8 +55,8 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {string} indexName
-   * @returns {string} - Result.
+   * @param {string} indexName - Index name.
+   * @returns {string} - The quote index name.
    */
   quoteIndexName(indexName) {
     if (!indexName || indexName.includes(this.columnQuote)) throw new Error(`Invalid column name: ${indexName}`)
@@ -66,16 +66,16 @@ export default class VelociousDatabaseQueryParserOptions {
 
   /**
    * @abstract
-   * @param {any} string
-   * @returns {string} - Result.
+   * @param {unknown} string - String.
+   * @returns {string} - The quote string.
    */
   quoteString(string) { // eslint-disable-line no-unused-vars
     throw new Error("quoteString not implemented")
   }
 
   /**
-   * @param {string} tableName
-   * @returns {string} - Result.
+   * @param {string} tableName - Table name.
+   * @returns {string} - The quote table name.
    */
   quoteTableName(tableName) {
     if (!tableName || tableName.includes(this.tableQuote)) throw new Error(`Invalid table name: ${tableName}`)

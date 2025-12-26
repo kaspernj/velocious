@@ -2,17 +2,17 @@ import restArgsError from "../utils/rest-args-error.js"
 
 /**
  * @typedef {object} VelociousCliCommandArgs
- * @property {import("../configuration.js").default} [configuration]
- * @property {Record<string, any>} [parsedProcessArgs]
- * @property {string[]} [processArgs]
- * @property {boolean} [testing]
+ * @property {import("../configuration.js").default} [configuration] - Configuration instance for the CLI.
+ * @property {Record<string, string | number | boolean | undefined>} [parsedProcessArgs] - Parsed CLI arguments.
+ * @property {string[]} [processArgs] - Raw CLI arguments array.
+ * @property {boolean} [testing] - Whether the CLI is running in test mode.
  */
 
 export default class VelociousCliBaseCommand {
   /**
-   * @param {object} args
-   * @param {VelociousCliCommandArgs} args.args
-   * @param {import("./index.js").default} args.cli
+   * @param {object} args - Options object.
+   * @param {VelociousCliCommandArgs} args.args - Options object.
+   * @param {import("./index.js").default} args.cli - Cli.
    */
   constructor({args = {}, cli, ...restArgs}) {
     restArgsError(restArgs)
@@ -26,28 +26,28 @@ export default class VelociousCliBaseCommand {
     this.processArgs = args.processArgs
   }
 
-  /** @returns {string} - Result.  */
+  /** @returns {string} - The directory.  */
   directory() { return this.getConfiguration().getDirectory() }
 
   /**
    * @abstract
-   * @returns {Promise<any>} - Result.
+   * @returns {Promise<unknown>} - Resolves with the execute.
    */
   execute() {
     throw new Error("execute not implemented")
   }
 
   /**
-   * @returns {import("../configuration.js").default} - Result.
+   * @returns {import("../configuration.js").default} - The configuration.
    */
   getConfiguration() { return this._configuration }
 
-  /** @returns {import("../environment-handlers/base.js").default} - Result.  */
+  /** @returns {import("../environment-handlers/base.js").default} - The environment handler.  */
   getEnvironmentHandler() { return this._environmentHandler }
 
   /**
    * @abstract
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize() {
     // Do nothing

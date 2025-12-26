@@ -9,7 +9,7 @@ import * as inflection from "inflection"
 
 export default class DbGenerateModel extends BaseCommand {
   /**
-   * @returns {Promise<void | DbGenerateModelResult>} - Result.
+   * @returns {Promise<void | DbGenerateModelResult>} - Resolves with the execute.
    */
   async execute() {
     const modelName = this.processArgs[1]

@@ -8,17 +8,17 @@ export default class VelociousHttpServerClientResponse {
   headers = {}
 
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    */
   constructor({configuration}) {
     this.configuration = configuration
   }
 
   /**
-   * @param {string} key
-   * @param {string} value
-   * @returns {void} - Result.
+   * @param {string} key - Key.
+   * @param {string} value - Value to use.
+   * @returns {void} - No return value.
    */
   addHeader(key, value) {
     if (!(key in this.headers)) {
@@ -29,16 +29,16 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @param {string} key
-   * @param {string} value
-   * @returns {void} - Result.
+   * @param {string} key - Key.
+   * @param {string} value - Value to use.
+   * @returns {void} - No return value.
    */
   setHeader(key, value) {
     this.headers[key] = [value]
   }
 
   /**
-   * @returns {string | null} - Result.
+   * @returns {string | null} - The body.
    */
   getBody() {
     if (this.body !== undefined) {
@@ -49,30 +49,30 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @returns {number} - Result.
+   * @returns {number} - The status code.
    */
   getStatusCode() {
     return this.statusCode || 200
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The status message.
    */
   getStatusMessage() {
     return this.statusMessage || "OK"
   }
 
   /**
-   * @param {string} value
-   * @returns {void} - Result.
+   * @param {string} value - Value to use.
+   * @returns {void} - No return value.
    */
   setBody(value) {
     this.body = value
   }
 
   /**
-   * @param {Error} error
-   * @returns {void} - Result.
+   * @param {Error} error - Error instance.
+   * @returns {void} - No return value.
    */
   setErrorBody(error) {
     this.setHeader("Content-Type", "text/plain; charset=UTF-8")
@@ -80,8 +80,8 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @param {number | string} status
-   * @returns {void} - Result.
+   * @param {number | string} status - Status.
+   * @returns {void} - No return value.
    */
   setStatus(status) {
     if (status == "success" || status == 200) {

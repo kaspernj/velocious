@@ -4,14 +4,14 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 /**
  * @typedef {object} TableIndexArgsType
- * @property {string} [name]
- * @property {boolean} [unique]
+ * @property {string} [name] - Explicit index name.
+ * @property {boolean} [unique] - Whether the index should be unique.
  */
 
 export default class TableIndex {
   /**
-   * @param {Array<string | import("./table-column.js").default>} columns
-   * @param {TableIndexArgsType} [args]
+   * @param {Array<string | import("./table-column.js").default>} columns - Column names.
+   * @param {TableIndexArgsType} [args] - Options object.
    */
   constructor(columns, args) {
     if (args) {
@@ -25,17 +25,17 @@ export default class TableIndex {
   }
 
   /**
-   * @returns {Array<string | import("./table-column.js").default>} - Result.
+   * @returns {Array<string | import("./table-column.js").default>} - The columns.
    */
   getColumns() { return this.columns }
 
   /**
-   * @returns {string | undefined} - Result.
+   * @returns {string | undefined} - The name.
    */
   getName() { return this.args?.name }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether unique.
    */
   getUnique() { return Boolean(this.args?.unique) }
 }

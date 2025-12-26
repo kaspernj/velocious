@@ -12,8 +12,8 @@ import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousDatabaseInitializerFromRequireContext {
   /**
-   * @param {object} args
-   * @param {ModelClassRequireContextType} args.requireContext
+   * @param {object} args - Options object.
+   * @param {ModelClassRequireContextType} args.requireContext - Require context.
    */
   constructor({requireContext, ...restArgs}) {
     restArgsError(restArgs)
@@ -22,9 +22,9 @@ export default class VelociousDatabaseInitializerFromRequireContext {
   }
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @returns {Promise<void>} - Result.
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize({configuration, ...restArgs}) {
     restArgsError(restArgs)

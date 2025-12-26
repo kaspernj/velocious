@@ -4,12 +4,12 @@ import Header from "./header.js"
 
 export default class Request {
   /**
-   * @param {object} args
-   * @param {string} [args.body]
-   * @param {string} args.method
-   * @param {Header[]} args.headers
-   * @param {string} args.path
-   * @param {string} args.version
+   * @param {object} args - Options object.
+   * @param {string} [args.body] - Request body.
+   * @param {string} args.method - HTTP method.
+   * @param {Header[]} args.headers - Header list.
+   * @param {string} args.path - Path.
+   * @param {string} args.version - Version.
    */
   constructor({body, method = "GET", headers = [], path, version = "1.1"}) {
     this.body = body
@@ -30,8 +30,8 @@ export default class Request {
   }
 
   /**
-   * @param {string} name
-   * @returns {Header} - Result.
+   * @param {string} name - Name.
+   * @returns {Header} - The header.
    */
   getHeader(name) {
     const compareName = name.toLowerCase().trim()
@@ -48,16 +48,16 @@ export default class Request {
   }
 
   /**
-   * @param {string} name
-   * @param {string | number} value
-   * @returns {void} - Result.
+   * @param {string} name - Name.
+   * @param {string | number} value - Value to use.
+   * @returns {void} - No return value.
    */
   addHeader(name, value) {
     this.headers.push(new Header(name, value))
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   prepare() {
     if (this.body) {
@@ -66,8 +66,8 @@ export default class Request {
   }
 
   /**
-   * @param {function(string) : void} callback
-   * @returns {void} - Result.
+   * @param {function(string) : void} callback - Callback function.
+   * @returns {void} - No return value.
    */
   stream(callback) {
     this.prepare()

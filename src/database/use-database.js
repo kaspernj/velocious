@@ -8,9 +8,9 @@ import Migrator from "./migrator.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
- * @param {object} args
- * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback
- * @returns {{loaded: boolean}} - Result.
+ * @param {object} args - Options object.
+ * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback - Migrations require context callback.
+ * @returns {{loaded: boolean}} - Whether the database was loaded by this call.
  */
 export default function loadMigrations({migrationsRequireContextCallback, ...restArgs}) {
   const instance = React.useMemo(() => ({running: false}), [])

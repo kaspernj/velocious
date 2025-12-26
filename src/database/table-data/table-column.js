@@ -10,23 +10,23 @@ import TableForeignKey from "./table-foreign-key.js"
 
 /**
  * @typedef {object} TableColumnArgsType
- * @property {boolean} [autoIncrement]
- * @property {any} [default]
- * @property {boolean} [dropColumn]
- * @property {boolean|object} [foreignKey]
- * @property {boolean|IndexArgType} [index]
- * @property {boolean} [isNewColumn]
- * @property {number} [maxLength]
- * @property {boolean} [null]
- * @property {boolean} [polymorphic]
- * @property {boolean} [primaryKey]
- * @property {string} [type]
+ * @property {boolean} [autoIncrement] - Whether the column auto-increments.
+ * @property {unknown} [default] - Default value for the column.
+ * @property {boolean} [dropColumn] - Whether the column should be dropped.
+ * @property {boolean|object} [foreignKey] - Foreign key options or flag.
+ * @property {boolean|IndexArgType} [index] - Whether the column should be indexed.
+ * @property {boolean} [isNewColumn] - Whether this column is being added in a migration.
+ * @property {number} [maxLength] - Maximum length for the column value.
+ * @property {boolean} [null] - Whether the column allows null values.
+ * @property {boolean} [polymorphic] - Whether the column is polymorphic.
+ * @property {boolean} [primaryKey] - Whether the column is a primary key.
+ * @property {string} [type] - Column data type.
  */
 
 export default class TableColumn {
   /**
-   * @param {string} name
-   * @param {TableColumnArgsType} [args]
+   * @param {string} name - Name.
+   * @param {TableColumnArgsType} [args] - Options object.
    */
   constructor(name, args) {
     if (args) {
@@ -49,66 +49,66 @@ export default class TableColumn {
   getName() { return this.name }
 
   /**
-   * @returns {string | undefined} - Result.
+   * @returns {string | undefined} - The new name.
    */
   getNewName() { return this._newName }
 
   /**
-   * @param {string} newName
-   * @returns {void} - Result.
+   * @param {string} newName - New name.
+   * @returns {void} - No return value.
    */
   setNewName(newName) { this._newName = newName }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The actual name.
    */
   getActualName() { return this.getNewName() || this.getName() }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether auto increment.
    */
   getAutoIncrement() { return this.args?.autoIncrement || false }
 
   /**
-   * @param {boolean} newAutoIncrement
-   * @returns {void} - Result.
+   * @param {boolean} newAutoIncrement - New auto increment.
+   * @returns {void} - No return value.
    */
   setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
 
   /**
-   * @returns {any} - Result.
+   * @returns {unknown | (() => unknown)} - The default value or factory.
    */
   getDefault() { return this.args?.default }
 
   /**
-   * @param {any} newDefault
-   * @returns {void} - Result.
+   * @param {unknown} newDefault - New default.
+   * @returns {void} - No return value.
    */
   setDefault(newDefault) { this.args.default = newDefault }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether drop column.
    */
   getDropColumn() { return this.args?.dropColumn || false }
 
   /**
-   * @returns {boolean | object | undefined} - Result.
+   * @returns {boolean | object | undefined} - Whether foreign key.
    */
   getForeignKey() { return this.args?.foreignKey }
 
   /**
-   * @param {boolean | object | undefined} newForeignKey
-   * @returns {void} - Result.
+   * @param {boolean | object | undefined} newForeignKey - New foreign key.
+   * @returns {void} - No return value.
    */
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
 
   /**
-   * @returns {boolean|IndexArgType} - Result.
+   * @returns {boolean|IndexArgType} - Whether index.
    */
   getIndex() { return this.args?.index || false }
 
   /**
-   * @returns {IndexArgType} - Result.
+   * @returns {IndexArgType} - The index args.
    */
   getIndexArgs() {
     if (typeof this.args?.index == "object") {
@@ -127,65 +127,65 @@ export default class TableColumn {
   }
 
   /**
-   * @param {boolean|IndexArgType} newIndex
-   * @returns {void} - Result.
+   * @param {boolean|IndexArgType} newIndex - New index.
+   * @returns {void} - No return value.
    */
   setIndex(newIndex) { this.args.index = newIndex }
 
   /**
-   * @returns {number | undefined} - Result.
+   * @returns {number | undefined} - The max length.
    */
   getMaxLength() { return this.args?.maxLength }
 
   /**
-   * @param {number | undefined} newMaxLength
-   * @returns {void} - Result.
+   * @param {number | undefined} newMaxLength - New max length.
+   * @returns {void} - No return value.
    */
   setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
 
   /**
-   * @returns {boolean | undefined} - Result.
+   * @returns {boolean | undefined} - Whether null.
    */
   getNull() { return this.args?.null }
 
   /**
-   * @param {boolean} nullable
-   * @returns {void} - Result.
+   * @param {boolean} nullable - Whether nullable.
+   * @returns {void} - No return value.
    */
   setNull(nullable) { this.args.null = nullable }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether primary key.
    */
   getPrimaryKey() { return this.args?.primaryKey || false }
 
   /**
-   * @param {boolean} newPrimaryKey
-   * @returns {void} - Result.
+   * @param {boolean} newPrimaryKey - New primary key.
+   * @returns {void} - No return value.
    */
   setPrimaryKey(newPrimaryKey) { this.args.primaryKey = newPrimaryKey }
 
   /**
-   * @returns {string | undefined} - Result.
+   * @returns {string | undefined} - The type.
    */
   getType() { return this.args?.type }
 
   /**
-   * @param {string | undefined} newType
-   * @returns {void} - Result.
+   * @param {string | undefined} newType - New type.
+   * @returns {void} - No return value.
    */
   setType(newType) { this.args.type = newType }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether new column.
    */
   isNewColumn() { return this.args?.isNewColumn || false }
 
   /**
-   * @param {object} args
-   * @param {boolean} args.forAlterTable
-   * @param {import("../drivers/base.js").default} args.driver
-   * @returns {string} - Result.
+   * @param {object} args - Options object.
+   * @param {boolean} args.forAlterTable - Whether for alter table.
+   * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
+   * @returns {string} - SQL string.
    */
   getSQL({forAlterTable, driver, ...restArgs}) {
     restArgsError(restArgs)
@@ -257,22 +257,24 @@ export default class TableColumn {
       }
     }
 
-    if (typeof this.getDefault() == "function") {
-      const defaultValue = this.getDefault()()
+    const defaultValue = this.getDefault()
+
+    if (typeof defaultValue == "function") {
+      const evaluatedDefault = defaultValue()
 
       sql += ` DEFAULT (`
 
-      if (databaseType == "pgsql" && defaultValue == "UUID()") {
+      if (databaseType == "pgsql" && evaluatedDefault == "UUID()") {
         sql += "gen_random_uuid()"
-      } else if (databaseType == "mssql" && defaultValue == "UUID()") {
+      } else if (databaseType == "mssql" && evaluatedDefault == "UUID()") {
         sql += "NEWID()"
       } else {
-        sql += defaultValue
+        sql += evaluatedDefault
       }
 
       sql += ")"
-    } else if (this.getDefault()) {
-      sql += ` DEFAULT ${options.quote(this.getDefault())}`
+    } else if (defaultValue) {
+      sql += ` DEFAULT ${options.quote(defaultValue)}`
     }
 
     if (this.getPrimaryKey()) sql += " PRIMARY KEY"

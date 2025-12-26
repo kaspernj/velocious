@@ -2,14 +2,14 @@
 
 export default class VelociousDatabaseQueryWhereBase {
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.getQuery().getOptions()
   }
 
   /**
-   * @returns {import("./index.js").default} - Result.
+   * @returns {import("./index.js").default} - The query.
    */
   getQuery() {
     if (!this.query) throw new Error("'query' hasn't been set")
@@ -18,7 +18,7 @@ export default class VelociousDatabaseQueryWhereBase {
   }
 
   /**
-   * @param {import("./index.js").default} query
+   * @param {import("./index.js").default} query - Query instance.
    */
   setQuery(query) {
     this.query = query
@@ -26,7 +26,7 @@ export default class VelociousDatabaseQueryWhereBase {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - SQL string.
    */
   toSql() {
     throw new Error("'toSql' wasn't implemented")

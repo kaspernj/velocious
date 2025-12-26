@@ -19,25 +19,25 @@ import WherePlain from "./where-plain.js"
 
 /**
  * @typedef {object} QueryArgsType
- * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver
- * @property {Array<import("./from-base.js").default>} [froms]
- * @property {string[]} [groups]
- * @property {Array<import("./join-base.js").default>} [joins]
- * @property {import("../handler.js").default} handler
- * @property {number | null} [limit]
- * @property {number | null} [offset]
- * @property {Array<import("./order-base.js").default>} [orders]
- * @property {number | null} [page]
- * @property {number} [perPage]
- * @property {NestedPreloadRecord} [preload]
- * @property {Array<import("./select-base.js").default>} [selects]
- * @property {boolean} [distinct]
- * @property {Array<import("./where-base.js").default>} [wheres]
+ * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver - Driver instance or factory for query execution.
+ * @property {Array<import("./from-base.js").default>} [froms] - FROM clauses for the query.
+ * @property {string[]} [groups] - GROUP BY columns.
+ * @property {Array<import("./join-base.js").default>} [joins] - JOIN clauses for the query.
+ * @property {import("../handler.js").default} handler - Handler used for executing and transforming results.
+ * @property {number | null} [limit] - LIMIT clause value.
+ * @property {number | null} [offset] - OFFSET clause value.
+ * @property {Array<import("./order-base.js").default>} [orders] - ORDER BY clauses.
+ * @property {number | null} [page] - Page number for pagination.
+ * @property {number} [perPage] - Records per page for pagination.
+ * @property {NestedPreloadRecord} [preload] - Preload graph for related records.
+ * @property {Array<import("./select-base.js").default>} [selects] - SELECT clauses for the query.
+ * @property {boolean} [distinct] - Whether the query should use DISTINCT.
+ * @property {Array<import("./where-base.js").default>} [wheres] - WHERE conditions for the query.
  */
 
 export default class VelociousDatabaseQuery {
   /**
-   * @param {QueryArgsType} args
+   * @param {QueryArgsType} args - Options object.
    */
   constructor({
     driver,
@@ -78,7 +78,7 @@ export default class VelociousDatabaseQuery {
     this._wheres = wheres
   }
 
-  /** @returns {this} - Result.  */
+  /** @returns {this} - The clone.  */
   clone() {
     const QueryClass = /** @type {new (args: QueryArgsType) => this} */ (this.constructor)
     const newQuery = new QueryClass({
@@ -101,25 +101,25 @@ export default class VelociousDatabaseQuery {
     return newQuery
   }
 
-  /** @returns {import("./from-base.js").default[]} - Result.  */
+  /** @returns {import("./from-base.js").default[]} - The froms.  */
   getFroms() {
     return this._froms
   }
 
-  /** @returns {string[]} - Result.  */
+  /** @returns {string[]} - The groups.  */
   getGroups() {
     return this._groups
   }
 
-  /** @returns {import("../query-parser/options.js").default} - Result.  */
+  /** @returns {import("../query-parser/options.js").default} - The options options.  */
   getOptions() { return this.driver.options() }
 
-  /** @returns {Array<import("./select-base.js").default>} - Result.  */
+  /** @returns {Array<import("./select-base.js").default>} - The selects.  */
   getSelects() { return this._selects }
 
   /**
-   * @param {string|import("./from-base.js").default} from
-   * @returns {this} - Result.
+   * @param {string|import("./from-base.js").default} from - From.
+   * @returns {this} - The from.
    */
   from(from) {
     if (typeof from == "string") from = new FromPlain(from)
@@ -129,8 +129,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string} group
-   * @returns {this} - Result.
+   * @param {string} group - Group.
+   * @returns {this} - The group.
    */
   group(group) {
     this._groups.push(group)
@@ -138,8 +138,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string|{[key: string]: any}} join
-   * @returns {this} - Result.
+   * @param {string | import("./join-object.js").JoinObject} join - Join clause or join descriptor.
+   * @returns {this} - The joins.
    */
   joins(join) {
     if (typeof join == "string") {
@@ -154,8 +154,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} value
-   * @returns {this} - Result.
+   * @param {number} value - Value to use.
+   * @returns {this} - The limit.
    */
   limit(value) {
     this._limit = value
@@ -163,8 +163,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} value
-   * @returns {this} - Result.
+   * @param {number} value - Value to use.
+   * @returns {this} - The offset.
    */
   offset(value) {
     this._offset = value
@@ -172,8 +172,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | number} order
-   * @returns {this} - Result.
+   * @param {string | number} order - Order.
+   * @returns {this} - The order.
    */
   order(order) {
     if (typeof order == "string") {
@@ -188,8 +188,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} pageNumber
-   * @returns {this} - Result.
+   * @param {number} pageNumber - Page number.
+   * @returns {this} - The page.
    */
   page(pageNumber) {
     const perPage = this._perPage || 30
@@ -203,8 +203,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {number} perPage
-   * @returns {this} - Result.
+   * @param {number} perPage - Page size.
+   * @returns {this} - The per page.
    */
   perPage(perPage) {
     this._perPage = perPage
@@ -212,8 +212,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | number} order
-   * @returns {this} - Result.
+   * @param {string | number} order - Order.
+   * @returns {this} - The reorder.
    */
   reorder(order) {
     this._orders = []
@@ -221,7 +221,7 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  /** @returns {this} - Result.  */
+  /** @returns {this} - The reverse order.  */
   reverseOrder() {
     for (const order of this._orders) {
       order.setReverseOrder(true)
@@ -231,8 +231,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {boolean} [value]
-   * @returns {this} - Result.
+   * @param {boolean} [value] - Value to use.
+   * @returns {this} - The distinct.
    */
   distinct(value = true) {
     this._distinct = value
@@ -240,8 +240,8 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {SelectArgumentType} select
-   * @returns {this} - Result.
+   * @param {SelectArgumentType} select - Select.
+   * @returns {this} - The select.
    */
   select(select) {
     if (Array.isArray(select)) {
@@ -287,7 +287,7 @@ export default class VelociousDatabaseQuery {
   toSql() { return this.driver.queryToSql(this) }
 
   /**
-   * @param {WhereArgumentType} where
+   * @param {WhereArgumentType} where - Where.
    * @returns {this} This query instance
    */
   where(where) {
@@ -304,7 +304,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Resolves the current driver lazily.
-   * @returns {import("../drivers/base.js").default} - Result.
+   * @returns {import("../drivers/base.js").default} - A value.
    */
   get driver() {
     return this._driverFn()

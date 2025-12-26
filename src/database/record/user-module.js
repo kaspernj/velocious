@@ -5,8 +5,8 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class UserModule {
   /**
-   * @param {object} args
-   * @param {string} args.secretKey
+   * @param {object} args - Options object.
+   * @param {string} args.secretKey - Secret key.
    */
   constructor({secretKey, ...restArgs}) {
     restArgsError(restArgs)
@@ -17,7 +17,7 @@ export default class UserModule {
   }
 
   /**
-   * @param {typeof import("./index.js").default} UserClass
+   * @param {typeof import("./index.js").default} UserClass - User class.
    */
   attachTo(UserClass) {
     // @ts-expect-error

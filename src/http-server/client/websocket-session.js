@@ -16,9 +16,9 @@ export default class VelociousHttpServerClientWebsocketSession {
   subscriptions = new Set()
 
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
-   * @param {import("./index.js").default} args.client
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("./index.js").default} args.client - Client instance.
    */
   constructor({client, configuration}) {
     this.buffer = Buffer.alloc(0)
@@ -28,8 +28,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {string} channel
-   * @returns {void} - Result.
+   * @param {string} channel - Channel name.
+   * @returns {void} - No return value.
    */
   addSubscription(channel) {
     this.subscriptions.add(channel)
@@ -40,16 +40,16 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {string} channel
-   * @returns {boolean} - Result.
+   * @param {string} channel - Channel name.
+   * @returns {boolean} - Whether it has subscription.
    */
   hasSubscription(channel) {
     return this.subscriptions.has(channel)
   }
 
   /**
-   * @param {Buffer} data
-   * @returns {void} - Result.
+   * @param {Buffer} data - Data payload.
+   * @returns {void} - No return value.
    */
   onData(data) {
     this.buffer = Buffer.concat([this.buffer, data])
@@ -57,9 +57,9 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {string} channel
-   * @param {any} payload
-   * @returns {void} - Result.
+   * @param {string} channel - Channel name.
+   * @param {unknown} payload - Payload data.
+   * @returns {void} - No return value.
    */
   sendEvent(channel, payload) {
     if (!this.hasSubscription(channel)) return
@@ -68,8 +68,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {import("./index.js").default} client
-   * @returns {void} - Result.
+   * @param {import("./index.js").default} client - Client instance.
+   * @returns {void} - No return value.
    */
   sendGoodbye(client) {
     const frame = Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, 0x00])
@@ -78,8 +78,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {object} message
-   * @returns {Promise<void>} - Result.
+   * @param {object} message - Message text.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
     if (message.type === "subscribe") {
@@ -112,7 +112,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     })
     const requestRunner = new RequestRunner({
       configuration: this.configuration,
-      /** @type {any} */ request
+      request
     })
 
     requestRunner.events.on("done", () => {
@@ -134,7 +134,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _processBuffer() {
     while (this.buffer.length >= 2) {
@@ -208,9 +208,9 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {number} opcode
-   * @param {Buffer} payload
-   * @returns {void} - Result.
+   * @param {number} opcode - Opcode.
+   * @param {Buffer} payload - Payload data.
+   * @returns {void} - No return value.
    */
   _sendControlFrame(opcode, payload) {
     const header = Buffer.alloc(2)
@@ -222,8 +222,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {object} body
-   * @returns {void} - Result.
+   * @param {object} body - Request body.
+   * @returns {void} - No return value.
    */
   _sendJson(body) {
     const json = JSON.stringify(body)
@@ -249,9 +249,9 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {Buffer} payload
-   * @param {Buffer} mask
-   * @returns {Buffer} - Result.
+   * @param {Buffer} payload - Payload data.
+   * @param {Buffer} mask - Mask.
+   * @returns {Buffer} - The unmask payload.
    */
   _unmaskPayload(payload, mask) {
     /** @type {Buffer} */

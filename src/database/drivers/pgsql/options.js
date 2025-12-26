@@ -4,7 +4,7 @@ import QueryParserOptions from "../../query-parser/options.js"
 
 export default class VelociousDatabaseDriversPgsqlOptions extends QueryParserOptions {
   /**
-   * @param {import("../base.js").default} driver
+   * @param {import("../base.js").default} driver - Database driver instance.
    */
   constructor(driver) {
     const options = {
@@ -19,8 +19,8 @@ export default class VelociousDatabaseDriversPgsqlOptions extends QueryParserOpt
   }
 
   /**
-   * @param {string} string
-   * @returns {number | string} - Result.
+   * @param {string} string - String.
+   * @returns {number | string} - The quote.
    */
   quote(string) {
     if (!this.driver) throw new Error("Driver not set")

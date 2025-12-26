@@ -7,8 +7,8 @@ import restArgsError from "../utils/rest-args-error.js"
 const shared = {}
 
 /**
- * @param {object} args
- * @param {import("../configuration.js").default} args.configuration
+ * @param {object} args - Options object.
+ * @param {import("../configuration.js").default} args.configuration - Configuration instance.
  * @returns {Promise<BrowserCli>} browserCli
  */
 export default function velociousUseBrowserCli({configuration, ...restArgs}) {

@@ -4,17 +4,17 @@ import QueryBase from "./base.js"
 
 /**
  * @typedef {object} CreateIndexBaseArgsType
- * @property {Array<string | import("./../table-data/table-column.js").default>} columns
- * @property {import("../drivers/base.js").default} driver
- * @property {boolean} [ifNotExists]
- * @property {string} [name]
- * @property {boolean} [unique]
- * @property {string} tableName
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Columns to include in the index.
+ * @property {import("../drivers/base.js").default} driver - Database driver used to generate SQL.
+ * @property {boolean} [ifNotExists] - Skip creation if the index already exists.
+ * @property {string} [name] - Explicit index name to use.
+ * @property {boolean} [unique] - Whether the index should enforce uniqueness.
+ * @property {string} tableName - Name of the table to add the index to.
  */
 
 export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   /**
-   * @param {CreateIndexBaseArgsType} args
+   * @param {CreateIndexBaseArgsType} args - Options object.
    */
   constructor({columns, driver, ifNotExists, name, unique, tableName}) {
     super({driver})
@@ -52,7 +52,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   /**
-   * @returns {Promise<string[]>} - Result.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {
     const databaseType = this.getDriver().getType()

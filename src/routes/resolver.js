@@ -12,10 +12,10 @@ export default class VelociousRoutesResolver {
   logger
 
   /**
-   * @param {object} args
-   * @param {import("../configuration.js").default} args.configuration
-   * @param {import("../http-server/client/request.js").default} args.request
-   * @param {import("../http-server/client/response.js").default} args.response
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
+   * @param {import("../http-server/client/response.js").default} args.response - Response object.
    */
   constructor({configuration, request, response}) {
     if (!configuration) throw new Error("No configuration given")
@@ -36,8 +36,11 @@ export default class VelociousRoutesResolver {
     let viewPath
 
     const matchResult = this.matchPathWithRoutes(currentRoute, currentPath)
-    let action = this.params.action ? inflection.camelize(this.params.action.replaceAll("-", "_"), true) : undefined
-    let controller = this.params.controller
+    const actionParam = this.params.action
+    const controllerParam = this.params.controller
+    const actionValue = typeof actionParam == "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
+    let action = typeof actionValue == "string" ? inflection.camelize(actionValue.replaceAll("-", "_"), true) : undefined
+    let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
 
     if (!matchResult) {
       const __filename = fileURLToPath(import.meta.url)
@@ -87,9 +90,9 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {import("./base-route.js").default} route
-   * @param {string} path
-   * @returns {{restPath: string} | undefined} - Result.
+   * @param {import("./base-route.js").default} route - Route.
+   * @param {string} path - Path.
+   * @returns {{restPath: string} | undefined} - REST path metadata for this route.
    */
   matchPathWithRoutes(route, path) {
     const pathWithoutSlash = path.replace(/^\//, "").split("?")[0]
@@ -114,16 +117,16 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.action
-   * @param {typeof import("../controller.js").default} args.controllerClass
-   * @returns {Promise<void>} - Result.
+   * @param {object} args - Options object.
+   * @param {string} args.action - Action.
+   * @param {typeof import("../controller.js").default} args.controllerClass - Controller class.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _logActionStart({action, controllerClass}) {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
-    const loggedParams = this._sanitizeParamsForLogging(this.params)
+    const loggedParams = /** @type {Record<string, unknown>} */ (this._sanitizeParamsForLogging(this.params))
 
     delete loggedParams.action
     delete loggedParams.controller
@@ -134,13 +137,13 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {Date} date
-   * @returns {string} - Result.
+   * @param {Date} date - Date value.
+   * @returns {string} - The timestamp.
    */
   _formatTimestamp(date) {
     /**
-     * @param {number} num
-     * @returns {string} - Result.
+     * @param {number} num - Num.
+     * @returns {string} - The pad.
      */
     const pad = (num) => String(num).padStart(2, "0")
     const year = date.getFullYear()
@@ -159,8 +162,8 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {any} value
-   * @returns {any} - Result.
+   * @param {unknown} value - Value to use.
+   * @returns {unknown} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {
     if (value instanceof UploadedFile) {
@@ -176,7 +179,7 @@ export default class VelociousRoutesResolver {
     }
 
     if (value && typeof value === "object") {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, unknown>} */
       const result = {}
 
       for (const key of Object.keys(value)) {

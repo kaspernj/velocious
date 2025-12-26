@@ -42,8 +42,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../../table-data/index.js").default} tableData
-   * @returns {Promise<string[]>} - Result.
+   * @param {import("../../table-data/index.js").default} tableData - Table data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async alterTableSQLs(tableData) {
     const alterArgs = {tableData, driver: this}
@@ -53,10 +53,10 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} databaseName
-   * @param {object} [args]
-   * @param {boolean} [args.ifNotExists]
-   * @returns {string[]} - Result.
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifNotExists] - Whether if not exists.
+   * @returns {string[]} - SQL statements.
    */
   createDatabaseSql(databaseName, args) {
     const createArgs = Object.assign({databaseName, driver: this}, args)
@@ -66,8 +66,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../base.js").CreateIndexSqlArgs} indexData
-   * @returns {Promise<string[]>} - Result.
+   * @param {import("../base.js").CreateIndexSqlArgs} indexData - Index data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createIndexSQLs(indexData) {
     const createArgs = Object.assign({driver: this}, indexData)
@@ -77,8 +77,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../../table-data/index.js").default} tableData
-   * @returns {Promise<string[]>} - Result.
+   * @param {import("../../table-data/index.js").default} tableData - Table data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createTableSql(tableData) {
     const createArgs = {tableData, driver: this, indexInCreateTable: false}
@@ -88,7 +88,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @returns {Promise<string>} - Result.
+   * @returns {Promise<string>} - Resolves with the current database.
    */
   async currentDatabase() {
     const rows = await this.query("SELECT DB_NAME() AS db_name")
@@ -105,9 +105,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} tableName
-   * @param {import("../base.js").DropTableSqlArgsType} [args]
-   * @returns {Promise<string[]>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args = {}) {
     const dropArgs = Object.assign({tableName, driver: this}, args)
@@ -117,18 +117,18 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The type.
    */
   getType() { return "mssql" }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The primary key type.
    */
   primaryKeyType() { return "bigint" }
 
   /**
-   * @param {string} sql
-   * @returns {Promise<import("../base.js").QueryResultType>} - Result.
+   * @param {string} sql - SQL string.
+   * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
     let result
@@ -164,8 +164,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../../query/index.js").default} query
-   * @returns {string} - Result.
+   * @param {import("../../query/index.js").default} query - Query instance.
+   * @returns {string} - SQL string.
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
 
@@ -173,8 +173,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
-   * @param {*} value
-   * @returns {string} - Result.
+   * @param {unknown} value - Value to use.
+   * @returns {string} - The escape.
    */
   escape(value) {
     value = this._convertValue(value)
@@ -190,45 +190,45 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {*} value
-   * @returns {string} - Result.
+   * @param {unknown} value - Value to use.
+   * @returns {string | number} - The quoted value.
    */
   quote(value) {
     value = this._convertValue(value)
 
     const type = typeof value
 
-    if (type == "number") return value
-    if (type != "string") value = `${value}`
+    if (type == "number") return /** @type {number} */ (value)
+    if (type != "string") value = String(value)
 
     return escapeString(value, null)
   }
 
   /**
-   * @param {*} string
-   * @returns {string} - Result.
+   * @param {string} columnName - Column name.
+   * @returns {string} - The quote column.
    */
-  quoteColumn(string) { return this.options().quoteColumnName(string) }
+  quoteColumn(columnName) { return this.options().quoteColumnName(columnName) }
 
   /**
-   * @param {string} string
-   * @returns {string} - Result.
+   * @param {string} string - String.
+   * @returns {string} - The quote table.
    */
   quoteTable(string) { return this.options().quoteTableName(string) }
 
   /**
-   * @param {string} tableName
-   * @param {string} oldColumnName
-   * @param {string} newColumnName
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} oldColumnName - Previous column name.
+   * @param {string} newColumnName - New column name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     await this.query(`EXEC sp_rename ${this.quote(`${tableName}.${oldColumnName}`)}, ${this.quote(newColumnName)}, 'COLUMN'`)
   }
 
   /**
-   * @param {import("../base.js").DeleteSqlArgsType} args
-   * @returns {string} - Result.
+   * @param {import("../base.js").DeleteSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
    */
   deleteSql({tableName, conditions}) {
     const deleteInstruction = new Delete({conditions, driver: this, tableName})
@@ -238,8 +238,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   /**
    * @abstract
-   * @param {import("../base.js").InsertSqlArgsType} args
-   * @returns {string} - Result.
+   * @param {import("../base.js").InsertSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
    */
   insertSql(args) {
     const insertArgs = Object.assign({driver: this}, args)
@@ -249,14 +249,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @returns {Promise<Array<import("../base-table.js").default>>} - Result.
+   * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
    */
   async getTables() {
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo'`)
     const tables = []
 
     for (const row of result) {
-      const table = new Table(this, row)
+      const table = new Table(this, /** @type {Record<string, string>} */ (row))
 
       tables.push(table)
     }
@@ -265,16 +265,16 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} name
-   * @param {object} [args]
-   * @param {boolean} args.throwError
-   * @returns {Promise<import("../base-table.js").default | undefined>} - Result.
+   * @param {string} name - Name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} args.throwError - Whether throw error.
+   * @returns {Promise<import("../base-table.js").default | undefined>} - Resolves with the table by name.
    */
   async getTableByName(name, args) {
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(name)}`)
 
     if (result[0]) {
-      return new Table(this, result[0])
+      return new Table(this, /** @type {Record<string, string>} */ (result[0]))
     }
 
     if (args?.throwError !== false) {
@@ -294,7 +294,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return lastInsertID
   }
 
-  /** @returns {Options} - Result.  */
+  /** @returns {Options} - The options options.  */
   options() {
     if (!this._options) this._options = new Options({driver: this})
 
@@ -326,24 +326,24 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _startSavePointAction(savePointName) {
     await this.query(`SAVE TRANSACTION [${savePointName}]`)
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _releaseSavePointAction(savePointName) { // eslint-disable-line no-unused-vars
     // Do nothing in MS-SQL.
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _rollbackSavePointAction(savePointName) {
     await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
@@ -354,8 +354,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {import("../base.js").UpdateSqlArgsType} args
-   * @returns {string} - Result.
+   * @param {import("../base.js").UpdateSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
    */
   updateSql({conditions, data, tableName}) {
     const update = new Update({conditions, data, driver: this, tableName})
@@ -364,7 +364,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
     return await new StructureSql({driver: this}).toSql()

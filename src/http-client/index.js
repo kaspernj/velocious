@@ -7,10 +7,10 @@ import {Logger} from "../logger.js"
 
 export default class HttpClient {
   /**
-   * @param {object} args
-   * @param {boolean} [args.debug]
-   * @param {Array<import("./header.js").default>} [args.headers]
-   * @param {string} [args.version]
+   * @param {object} args - Options object.
+   * @param {boolean} [args.debug] - Whether debug.
+   * @param {Array<import("./header.js").default>} [args.headers] - Header list.
+   * @param {string} [args.version] - Version.
    */
   constructor({debug = false, headers, version = "1.1"}) {
     this.headers = headers || []
@@ -33,10 +33,10 @@ export default class HttpClient {
   }
 
   /**
-   * @param {string} path
-   * @param {object} [options]
-   * @param {Array<import("./header.js").default>} [options.headers]
-   * @returns {Promise<{request: import("./request.js").default, response: import("./response.js").default}>} - Result.
+   * @param {string} path - Path.
+   * @param {object} [options] - Options object.
+   * @param {Array<import("./header.js").default>} [options.headers] - Header list.
+   * @returns {Promise<{request: import("./request.js").default, response: import("./response.js").default}>} - Resolves with the request/response pair.
    */
   get(path, {headers} = {}) {
     if (!this.connection) throw new Error("Not connected yet")
@@ -86,7 +86,7 @@ export default class HttpClient {
   }
 
   /**
-   * @param {Buffer} data
+   * @param {Buffer} data - Data payload.
    */
   onConnectionData = (data) => {
     if (!this.currentResponse) throw new Error("No current response to feed data to")
@@ -99,7 +99,7 @@ export default class HttpClient {
   }
 
   /**
-   * @param {Error} error
+   * @param {Error} error - Error instance.
    */
   onConnectionError = (error) => {
     if (this.connectionReject) {

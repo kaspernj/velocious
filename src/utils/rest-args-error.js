@@ -1,8 +1,8 @@
 // @ts-check
 
 /**
- * @param {object} restArgs
- * @returns {void} - Result.
+ * @param {object} restArgs - Rest args.
+ * @returns {void} - No return value.
  */
 export default function restArgsError(restArgs) {
   const restArgsKeys = Object.keys(restArgs)

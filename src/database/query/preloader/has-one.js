@@ -4,9 +4,9 @@ import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasOne {
   /**
-   * @param {object} args
-   * @param {Array<import("../../record/index.js").default>} args.models
-   * @param {import("../../record/relationships/has-one.js").default} args.relationship
+   * @param {object} args - Options object.
+   * @param {Array<import("../../record/index.js").default>} args.models - Model instances.
+   * @param {import("../../record/relationships/has-one.js").default} args.relationship - Relationship.
    */
   constructor({models, relationship, ...restArgs}) {
     restArgsError(restArgs)
@@ -29,7 +29,7 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
     const preloadCollections = {}
 
     for (const model of this.models) {
-      const primaryKeyValue = model.readColumn(primaryKey)
+      const primaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = undefined
 
@@ -39,7 +39,7 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
       modelsByPrimaryKeyValue[primaryKeyValue].push(model)
     }
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | number | Array<string | number>>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = modelsPrimaryKeyValues
@@ -58,7 +58,7 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
     const targetModels = await targetModelClass.where(whereArgs).toArray()
 
     for (const targetModel of targetModels) {
-      const foreignKeyValue = targetModel.readColumn(foreignKey)
+      const foreignKeyValue = /** @type {string | number} */ (targetModel.readColumn(foreignKey))
 
       preloadCollections[foreignKeyValue] = targetModel
     }

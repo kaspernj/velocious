@@ -8,8 +8,8 @@ import RequestBuffer from "./request-buffer/index.js"
 
 export default class VelociousHttpServerClientRequestParser {
   /**
-   * @param {object} args
-   * @param {import("../../configuration.js").default} args.configuration
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    */
   constructor({configuration}) {
     if (!configuration) throw new Error("No configuration given")
@@ -17,6 +17,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.configuration = configuration
     this.data = []
     this.events = new EventEmitter()
+    /** @type {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} */
     this.params = {}
 
     this.requestBuffer = new RequestBuffer({configuration})
@@ -25,7 +26,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.requestBuffer.events.on("request-done", this.requestDone)
   }
 
-  /** @returns {void} - Result.  */
+  /** @returns {void} - No return value.  */
   destroy() {
     this.requestBuffer.events.off("completed", this.requestDone)
     this.requestBuffer.events.off("form-data-part", this.onFormDataPart)
@@ -34,11 +35,11 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
-   * @param {import("./request-buffer/form-data-part.js").default} formDataPart
-   * @returns {void} - Result.
+   * @param {import("./request-buffer/form-data-part.js").default} formDataPart - Form data part.
+   * @returns {void} - No return value.
    */
   onFormDataPart = (formDataPart) => {
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, string | string[] | import("./uploaded-file/uploaded-file.js").default>} */
     const unorderedParams = {}
 
     unorderedParams[formDataPart.getName()] = formDataPart.getValue()
@@ -50,27 +51,27 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
-   * @param {Buffer} data
-   * @returns {void} - Result.
+   * @param {Buffer} data - Data payload.
+   * @returns {void} - No return value.
    */
   feed = (data) => this.requestBuffer.feed(data)
 
   /**
-   * @param {string} name
-   * @returns {string} - Result.
+   * @param {string} name - Name.
+   * @returns {string} - The header.
    */
   getHeader(name) { return this.requestBuffer.getHeader(name)?.value }
 
-  /** @returns {Record<string, string>} - Result.  */
+  /** @returns {Record<string, string>} - The headers.  */
   getHeaders() { return this.requestBuffer.getHeadersHash() }
 
-  /** @returns {string} - Result.  */
+  /** @returns {string} - The http method.  */
   getHttpMethod() { return digg(this, "requestBuffer", "httpMethod") }
 
-  /** @returns {string} - Result.  */
+  /** @returns {string} - The http version.  */
   getHttpVersion() { return digg(this, "requestBuffer", "httpVersion") }
 
-  /** @returns {{host: string, port: string, protocol: string} | null} - Result. */
+  /** @returns {{host: string, port: string, protocol: string} | null} - Parsed host info, or null when unavailable. */
   _getHostMatch() {
     const rawHost = this.requestBuffer.getHeader("origin")?.value
 
@@ -87,17 +88,17 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
-  /** @returns {string | void} - Result.  */
+  /** @returns {string | void} - The host.  */
   getHost() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
 
     if (rawHostSplit && rawHostSplit[0]) return rawHostSplit[0]
   }
 
-  /** @returns {string} - Result.  */
+  /** @returns {string} - The path.  */
   getPath() { return digg(this, "requestBuffer", "path") }
 
-  /** @returns {number | void} - Result.  */
+  /** @returns {number | void} - The port.  */
   getPort() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
     const httpMethod = this.getHttpMethod()
@@ -111,13 +112,13 @@ export default class VelociousHttpServerClientRequestParser {
     }
   }
 
-  /** @returns {string | null} - Result.  */
+  /** @returns {string | null} - The protocol.  */
   getProtocol() { return this._getHostMatch()?.protocol }
 
-  /** @returns {RequestBuffer} - Result.  */
+  /** @returns {RequestBuffer} - The request buffer.  */
   getRequestBuffer() { return this.requestBuffer }
 
-  /** @returns {void} - Result.  */
+  /** @returns {void} - No return value.  */
   requestDone = () => {
     incorporate(this.params, this.requestBuffer.params)
 

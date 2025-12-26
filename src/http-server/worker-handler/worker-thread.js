@@ -9,9 +9,9 @@ import WebsocketEvents from "../websocket-events.js"
 
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
-   * @param {object} args
-   * @param {import("worker_threads").parentPort} args.parentPort
-   * @param {{directory: string, environment: string, workerCount: number}} args.workerData
+   * @param {object} args - Options object.
+   * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
+   * @param {{directory: string, environment: string, workerCount: number}} args.workerData - Worker configuration details.
    */
   constructor({parentPort, workerData}) {
     if (!parentPort) throw new Error("parentPort is required")
@@ -39,7 +39,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize() {
     const {directory, environment} = this.workerData
@@ -64,13 +64,13 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
-   * @param {object} data
-   * @param {string} data.command
-   * @param {string} [data.chunk]
-   * @param {string} [data.remoteAddress]
-   * @param {number} [data.clientCount]
-   * @param {string} [data.channel]
-   * @param {any} [data.payload]
+   * @param {object} data - Data payload.
+   * @param {string} data.command - Command.
+   * @param {string} [data.chunk] - Chunk.
+   * @param {string} [data.remoteAddress] - Remote address.
+   * @param {number} [data.clientCount] - Client count.
+   * @param {string} [data.channel] - Channel name.
+   * @param {unknown} [data.payload] - Payload data.
    */
   onCommand = async (data) => {
     await this.logger.debugLowLevel(() => [`Worker ${this.workerCount} received command`, data])
@@ -116,10 +116,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
-   * @param {object} args
-   * @param {string} args.channel
-   * @param {any} args.payload
-   * @returns {void} - Result.
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {unknown} args.payload - Payload data.
+   * @returns {void} - No return value.
    */
   broadcastWebsocketEvent({channel, payload}) {
     for (const clientKey of Object.keys(this.clients)) {

@@ -7,8 +7,8 @@ import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
   /**
-   * @param {import("../base.js").default} driver
-   * @param {Record<string, any>} data
+   * @param {import("../base.js").default} driver - Database driver instance.
+   * @param {Record<string, string>} data - Data payload.
    */
   constructor(driver, data) {
     super()
@@ -117,6 +117,7 @@ export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
     return indexes
   }
 
+  /** @returns {string} - The table name. */
   getName() {
     return this.data.table_name
   }

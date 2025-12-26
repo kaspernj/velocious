@@ -2,11 +2,11 @@
 
 export default class VelociousDatabaseQueryUpdateBase {
   /**
-   * @param {object} args
-   * @param {Record<string, any>} args.conditions
-   * @param {Record<string, any>} args.data
-   * @param {import("../drivers/base.js").default} args.driver
-   * @param {string} args.tableName
+   * @param {object} args - Options object.
+   * @param {Record<string, unknown>} args.conditions - Conditions.
+   * @param {Record<string, unknown>} args.data - Data payload.
+   * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
+   * @param {string} args.tableName - Table name.
    */
   constructor({conditions, data, driver, tableName}) {
     this.conditions = conditions
@@ -16,7 +16,7 @@ export default class VelociousDatabaseQueryUpdateBase {
   }
 
   /**
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
     return this.driver.options()

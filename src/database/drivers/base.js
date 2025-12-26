@@ -2,40 +2,40 @@
 
 /**
  * @typedef {object} CreateIndexSqlArgs
- * @property {Array<string | import("./../table-data/table-column.js").default>} columns
- * @property {boolean} [ifNotExists]
- * @property {string} [name]
- * @property {boolean} [unique]
- * @property {string} tableName
+ * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Columns to include in the index.
+ * @property {boolean} [ifNotExists] - Skip creation if the index already exists.
+ * @property {string} [name] - Explicit index name to use.
+ * @property {boolean} [unique] - Whether the index should enforce uniqueness.
+ * @property {string} tableName - Name of the table to add the index to.
  */
 /**
  * @typedef {object} DropTableSqlArgsType
- * @property {boolean} [cascade]
- * @property {boolean} [ifExists]
+ * @property {boolean} [cascade] - Whether dependent objects should be dropped too.
+ * @property {boolean} [ifExists] - Skip dropping if the table does not exist.
  */
 /**
  * @typedef {object} DeleteSqlArgsType
- * @property {string} tableName
- * @property {{[key: string]: any}} conditions
+ * @property {string} tableName - Table name to delete from.
+ * @property {{[key: string]: unknown}} conditions - Conditions used to build the delete WHERE clause.
  */
 /**
  * @typedef {object} InsertSqlArgsType
- * @property {string[]} [columns]
- * @property {{[key: string]: any}} [data]
- * @property {boolean} [multiple]
- * @property {string[]} [returnLastInsertedColumnNames]
- * @property {Array<Array<any>>} [rows]
- * @property {string} tableName
+ * @property {string[]} [columns] - Column names for `rows` inserts.
+ * @property {{[key: string]: unknown}} [data] - Column/value pairs for a single-row insert.
+ * @property {boolean} [multiple] - Whether this insert should be treated as multi-row.
+ * @property {string[]} [returnLastInsertedColumnNames] - Column names to return after insert.
+ * @property {Array<Array<unknown>>} [rows] - Row values for a multi-row insert.
+ * @property {string} tableName - Table name to insert into.
  */
 /**
- * @typedef {Record<string, any>} QueryRowType
+ * @typedef {Record<string, unknown>} QueryRowType
  * @typedef {Array<QueryRowType>} QueryResultType
  */
 /**
  * @typedef {object}UpdateSqlArgsType
- * @property {object} conditions
- * @property {object} data
- * @property {string} tableName
+ * @property {object} conditions - Conditions used to build the update WHERE clause.
+ * @property {object} data - Column/value pairs to update.
+ * @property {string} tableName - Table name to update.
  */
 
 import {Logger} from "../../logger.js"
@@ -54,8 +54,8 @@ export default class VelociousDatabaseDriversBase {
   idSeq = undefined
 
   /**
-   * @param {import("../../configuration-types.js").DatabaseConfigurationType} config
-   * @param {import("../../configuration.js").default} configuration
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
+   * @param {import("../../configuration.js").default} configuration - Configuration instance.
    */
   constructor(config, configuration) {
     this._args = config
@@ -67,12 +67,12 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} columnName
-   * @param {string} referencedTableName
-   * @param {string} referencedColumnName
-   * @param {object} args
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} columnName - Column name.
+   * @param {string} referencedTableName - Referenced table name.
+   * @param {string} referencedColumnName - Referenced column name.
+   * @param {object} args - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async addForeignKey(tableName, columnName, referencedTableName, referencedColumnName, args) {
     this._assertNotReadOnly()
@@ -99,8 +99,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {import("../table-data/index.js").default} _tableData
-   * @returns {Promise<string[]>} - Result.
+   * @param {import("../table-data/index.js").default} _tableData - Table data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   alterTableSQLs(_tableData) { // eslint-disable-line no-unused-vars
     throw new Error("alterTableSQLs not implemented")
@@ -108,7 +108,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   connect() {
     throw new Error("'connect' not implemented")
@@ -116,25 +116,25 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} databaseName
-   * @param {object} [args]
-   * @param {boolean} [args.ifNotExists]
-   * @returns {string[]} - Result.
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifNotExists] - Whether if not exists.
+   * @returns {string[]} - SQL statements.
    */
   createDatabaseSql(databaseName, args) { throw new Error("'createDatabaseSql' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
-   * @param {CreateIndexSqlArgs} indexData
-   * @returns {Promise<string[]>} - Result.
+   * @param {CreateIndexSqlArgs} indexData - Index data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createIndexSQLs(indexData) { // eslint-disable-line no-unused-vars
     throw new Error("'createIndexSQLs' not implemented")
   }
 
   /**
-   * @param {import("../table-data/index.js").default} tableData
-   * @returns {Promise<void>} - Result.
+   * @param {import("../table-data/index.js").default} tableData - Table data.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async createTable(tableData) {
     this._assertNotReadOnly()
@@ -147,16 +147,16 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {import("../table-data/index.js").default} tableData
-   * @returns {Promise<string[]>} - Result.
+   * @param {import("../table-data/index.js").default} tableData - Table data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async createTableSql(tableData) { // eslint-disable-line no-unused-vars
     throw new Error("'createTableSql' not implemented")
   }
 
   /**
-   * @param {DeleteSqlArgsType} args
-   * @returns {Promise<void>} - Result.
+   * @param {DeleteSqlArgsType} args - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async delete(args) {
     this._assertNotReadOnly()
@@ -167,17 +167,17 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {DeleteSqlArgsType} args
-   * @returns {string} - Result.
+   * @param {DeleteSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
    */
   deleteSql(args) { // eslint-disable-line no-unused-vars
     throw new Error(`'deleteSql' not implemented`)
   }
 
   /**
-   * @param {string} tableName
-   * @param {DropTableSqlArgsType} [args]
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {DropTableSqlArgsType} [args] - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async dropTable(tableName, args) {
     this._assertNotReadOnly()
@@ -190,9 +190,9 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} tableName
-   * @param {DropTableSqlArgsType} [args]
-   * @returns {Promise<string[]>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {DropTableSqlArgsType} [args] - Options object.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args) { // eslint-disable-line no-unused-vars
     throw new Error("dropTableSQLs not implemented")
@@ -200,22 +200,22 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {any} value
-   * @returns {any} - Result.
+   * @param {unknown} value - Value to use.
+   * @returns {unknown} - The escape.
    */
   escape(value) { // eslint-disable-line no-unused-vars
     throw new Error("'escape' not implemented")
   }
 
   /**
-   * @returns {import("../../configuration-types.js").DatabaseConfigurationType} - Result.
+   * @returns {import("../../configuration-types.js").DatabaseConfigurationType} - The args.
    */
   getArgs() {
     return this._args
   }
 
   /**
-   * @returns {import("../../configuration.js").default} - Result.
+   * @returns {import("../../configuration.js").default} - The configuration.
    */
   getConfiguration() {
     if (!this.configuration) throw new Error("No configuration set")
@@ -224,7 +224,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {number | undefined} - Result.
+   * @returns {number | undefined} - The id seq.
    */
   getIdSeq() {
     return this.idSeq
@@ -232,24 +232,24 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {Promise<Array<import("./base-table.js").default>>} - Result.
+   * @returns {Promise<Array<import("./base-table.js").default>>} - Resolves with the tables.
    */
   getTables() {
     throw new Error(`${this.constructor.name}#getTables not implemented`)
   }
 
   /**
-   * @returns {Promise<string | null>} - Result.
+   * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
     return null
   }
 
   /**
-   * @param {string} name
-   * @param {object} [args]
-   * @param {boolean} args.throwError
-   * @returns {Promise<import("./base-table.js").default | undefined>} - Result.
+   * @param {string} name - Name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} args.throwError - Whether throw error.
+   * @returns {Promise<import("./base-table.js").default | undefined>} - Resolves with the table by name.
    */
   async getTableByName(name, args) {
     const tables = await this.getTables()
@@ -273,8 +273,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} name
-   * @returns {Promise<import("./base-table.js").default>} - Result.
+   * @param {string} name - Name.
+   * @returns {Promise<import("./base-table.js").default>} - Resolves with the table by name or fail.
    */
   async getTableByNameOrFail(name) {
     return await this.getTableByName(name, {throwError: true})
@@ -282,15 +282,15 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {string} - Result.
+   * @returns {string} - The type.
    */
   getType() {
     throw new Error("'type' not implemented")
   }
 
   /**
-   * @param {InsertSqlArgsType} args
-   * @returns {Promise<void>} - Result.
+   * @param {InsertSqlArgsType} args - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async insert(args) {
     this._assertNotReadOnly()
@@ -301,10 +301,10 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} tableName
-   * @param {Array<string>} columns
-   * @param {Array<Array<string>>} rows
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {Array<string>} columns - Column names.
+   * @param {Array<Array<string>>} rows - Rows to insert.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) { // eslint-disable-line no-unused-vars
     throw new Error("'insertMultiple' not implemented")
@@ -312,8 +312,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {InsertSqlArgsType} args
-   * @returns {string} - Result.
+   * @param {InsertSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
    */
   insertSql(args) { // eslint-disable-line no-unused-vars
     throw new Error("'insertSql' not implemented")
@@ -321,15 +321,15 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {Promise<number>} - Result.
+   * @returns {Promise<number>} - Resolves with the last insert id.
    */
   lastInsertID() {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
   }
 
   /**
-   * @param {any} value
-   * @returns {any} - Result.
+   * @param {unknown} value - Value to use.
+   * @returns {unknown} - The convert value.
    */
   _convertValue(value) {
     if (value instanceof Date) {
@@ -341,15 +341,15 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {import("../query-parser/options.js").default} - Result.
+   * @returns {import("../query-parser/options.js").default} - The options options.
    */
   options() {
     throw new Error("'options' not implemented.")
   }
 
   /**
-   * @param {any} value
-   * @returns {number | string} - Result.
+   * @param {unknown} value - Value to use.
+   * @returns {number | string} - The quote.
    */
   quote(value) {
     if (typeof value == "number") return value
@@ -361,31 +361,31 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} columnName
-   * @returns {string} - Result.
+   * @param {string} columnName - Column name.
+   * @returns {string} - The quote column.
    */
   quoteColumn(columnName) {
     return this.options().quoteColumnName(columnName)
   }
 
   /**
-   * @param {string} columnName
-   * @returns {string} - Result.
+   * @param {string} columnName - Column name.
+   * @returns {string} - The quote index.
    */
   quoteIndex(columnName) {
     return this.options().quoteIndexName(columnName)
   }
 
   /**
-   * @param {string} tableName
-   * @returns {string} - Result.
+   * @param {string} tableName - Table name.
+   * @returns {string} - The quote table.
    */
   quoteTable(tableName) {
     return this.options().quoteTableName(tableName)
   }
 
   /**
-   * @returns {Query} - Result.
+   * @returns {Query} - The new query.
    */
   newQuery() {
     const handler = new Handler()
@@ -397,8 +397,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} tableName
-   * @returns {Promise<QueryResultType>} - Result.
+   * @param {string} tableName - Table name.
+   * @returns {Promise<QueryResultType>} - Resolves with the select.
    */
   async select(tableName) {
     const query = this.newQuery()
@@ -411,8 +411,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {number | undefined} newIdSeq
-   * @returns {void} - Result.
+   * @param {number | undefined} newIdSeq - New id seq.
+   * @returns {void} - No return value.
    */
   setIdSeq(newIdSeq) {
     this.idSeq = newIdSeq
@@ -420,26 +420,26 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether set auto increment when primary key.
    */
   shouldSetAutoIncrementWhenPrimaryKey() {
     throw new Error(`'shouldSetAutoIncrementWhenPrimaryKey' not implemented`)
   }
 
   /**
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether supports default primary key uuid.
    */
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
    * @abstract
-   * @returns {boolean} - Result.
+   * @returns {boolean} - Whether supports insert into returning.
    */
   supportsInsertIntoReturning() { return false }
 
   /**
-   * @param {string} tableName
-   * @returns {Promise<boolean>} - Result.
+   * @param {string} tableName - Table name.
+   * @returns {Promise<boolean>} - Resolves with Whether table exists.
    */
   async tableExists(tableName) {
     const tables = await this.getTables()
@@ -451,8 +451,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {() => Promise<void>} callback
-   * @returns {Promise<any>} - Result.
+   * @param {() => Promise<void>} callback - Callback function.
+   * @returns {Promise<unknown>} - Resolves with the transaction.
    */
   async transaction(callback) {
     this._assertNotReadOnly()
@@ -523,7 +523,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async startTransaction() {
     await this._transactionsActionsMutex.sync(async () => {
@@ -533,14 +533,14 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _startTransactionAction() {
     await this.query("BEGIN TRANSACTION")
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async commitTransaction() {
     await this._transactionsActionsMutex.sync(async () => {
@@ -550,15 +550,15 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _commitTransactionAction() {
     await this.query("COMMIT")
   }
 
   /**
-   * @param {string} sql
-   * @returns {Promise<QueryResultType>} - Result.
+   * @param {string} sql - SQL string.
+   * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
   async query(sql) {
     this._assertWritableQuery(sql)
@@ -586,8 +586,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {string} sql
-   * @returns {Promise<QueryResultType>} - Result.
+   * @param {string} sql - SQL string.
+   * @returns {Promise<QueryResultType>} - Resolves with the query actual.
    */
   _queryActual(sql) { // eslint-disable-line no-unused-vars
     throw new Error(`queryActual not implemented`)
@@ -595,22 +595,22 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {Query} _query
-   * @returns {string} - Result.
+   * @param {Query} _query - Query instance.
+   * @returns {string} - SQL string.
    */
   queryToSql(_query) { throw new Error("queryToSql not implemented") } // eslint-disable-line no-unused-vars
 
   /**
-   * @param {Error} _error
-   * @returns {boolean} - Result.
+   * @param {Error} _error - Error instance.
+   * @returns {boolean} - Whether retryable database error.
    */
   retryableDatabaseError(_error) { // eslint-disable-line no-unused-vars
     return false
   }
 
   /**
-   * @param {string} sql
-   * @returns {void} - Result.
+   * @param {string} sql - SQL string.
+   * @returns {void} - No return value.
    */
   _assertWritableQuery(sql) {
     if (!this.isReadOnly()) return
@@ -620,7 +620,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {void} - Result.
+   * @returns {void} - No return value.
    */
   _assertNotReadOnly() {
     if (this.isReadOnly()) {
@@ -629,8 +629,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} sql
-   * @returns {boolean} - Result.
+   * @param {string} sql - SQL string.
+   * @returns {boolean} - SQL representation.
    */
   _sqlLooksLikeWrite(sql) {
     const normalized = sql.trim().toLowerCase()
@@ -673,13 +673,13 @@ export default class VelociousDatabaseDriversBase {
     ].includes(keyword)
   }
 
-  /** @returns {boolean} - Result.  */
+  /** @returns {boolean} - Whether read only.  */
   isReadOnly() {
     return Boolean(this.getArgs().readOnly)
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async rollbackTransaction() {
     await this._transactionsActionsMutex.sync(async () => {
@@ -689,22 +689,22 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _rollbackTransactionAction() {
     await this.query("ROLLBACK")
   }
 
   /**
-   * @returns {string} - Result.
+   * @returns {string} - The generate save point name.
    */
   generateSavePointName() {
     return `sp${new UUID(4).format().replaceAll("-", "")}`
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async startSavePoint(savePointName) {
     await this._transactionsActionsMutex.sync(async () => {
@@ -713,18 +713,18 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _startSavePointAction(savePointName) {
     await this.query(`SAVEPOINT ${savePointName}`)
   }
 
   /**
-   * @param {string} tableName
-   * @param {string} oldColumnName
-   * @param {string} newColumnName
-   * @returns {Promise<void>} - Result.
+   * @param {string} tableName - Table name.
+   * @param {string} oldColumnName - Previous column name.
+   * @param {string} newColumnName - New column name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async renameColumn(tableName, oldColumnName, newColumnName) {
     this._assertNotReadOnly()
@@ -744,8 +744,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async releaseSavePoint(savePointName) {
     await this._transactionsActionsMutex.sync(async () => {
@@ -754,8 +754,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _releaseSavePointAction(savePointName) {
     try {
@@ -774,8 +774,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async rollbackSavePoint(savePointName) {
     await this._transactionsActionsMutex.sync(async () => {
@@ -784,15 +784,15 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} savePointName
-   * @returns {Promise<void>} - Result.
+   * @param {string} savePointName - Save point name.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async _rollbackSavePointAction(savePointName) {
     await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
   }
 
   /**
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async truncateAllTables() {
     this._assertNotReadOnly()
@@ -828,8 +828,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {UpdateSqlArgsType} args
-   * @returns {Promise<void>} - Result.
+   * @param {UpdateSqlArgsType} args - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   async update(args) {
     this._assertNotReadOnly()
@@ -840,8 +840,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {UpdateSqlArgsType} args
-   * @returns {string} - Result.
+   * @param {UpdateSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
    */
   updateSql(args) { // eslint-disable-line no-unused-vars
     throw new Error("'disableForeignKeys' not implemented")
@@ -849,7 +849,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   disableForeignKeys() {
     throw new Error("'disableForeignKeys' not implemented")
@@ -857,15 +857,15 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @returns {Promise<void>} - Result.
+   * @returns {Promise<void>} - Resolves when complete.
    */
   enableForeignKeys() {
     throw new Error("'enableForeignKeys' not implemented")
   }
 
   /**
-   * @param {function() : void} callback
-   * @returns {Promise<any>} - Result.
+   * @param {function() : void} callback - Callback function.
+   * @returns {Promise<unknown>} - Resolves with the with disabled foreign keys.
    */
   async withDisabledForeignKeys(callback) {
     await this.disableForeignKeys()

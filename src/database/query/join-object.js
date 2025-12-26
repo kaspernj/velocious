@@ -8,7 +8,7 @@ import JoinBase from "./join-base.js"
 
 export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   /**
-   * @param {JoinObject} object
+   * @param {JoinObject} object - Object.
    */
   constructor(object) {
     super()
@@ -29,11 +29,11 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   }
 
   /**
-   * @param {JoinObject} join
-   * @param {typeof import("../record/index.js").default} modelClass
-   * @param {string} sql
-   * @param {number} joinsCount
-   * @returns {string} - Result.
+   * @param {JoinObject} join - Join.
+   * @param {typeof import("../record/index.js").default} modelClass - Model class.
+   * @param {string} sql - SQL string.
+   * @param {number} joinsCount - Joins count.
+   * @returns {string} - The join object.
    */
   joinObject(join, modelClass, sql, joinsCount) {
     const pretty = this.pretty

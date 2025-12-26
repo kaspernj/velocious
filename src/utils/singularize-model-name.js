@@ -1,8 +1,8 @@
 import * as inflection from "inflection"
 
 /**
- * @param {string} modelName
- * @returns {string} - Result.
+ * @param {string} modelName - Model name.
+ * @returns {string} - The singularize model name.
  */
 export default function singularizeModelName(modelName) {
   const words = inflection.underscore(modelName).split("_")

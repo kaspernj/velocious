@@ -7,8 +7,8 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseMigratorFilesFinder {
   /**
-   * @param {object} args
-   * @param {string} args.path
+   * @param {object} args - Options object.
+   * @param {string} args.path - Path.
    */
   constructor({path, ...restArgs}) {
     restArgsError(restArgs)
@@ -19,7 +19,7 @@ export default class VelociousDatabaseMigratorFilesFinder {
   }
 
   /**
-   * @returns {Promise<Array<import("./types.js").MigrationObjectType>>} - Result.
+   * @returns {Promise<Array<import("./types.js").MigrationObjectType>>} - Resolves with the files.
    */
   async findFiles() {
     let files = await fs.readdir(this.path)

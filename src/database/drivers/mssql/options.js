@@ -4,8 +4,8 @@ import QueryParserOptions from "../../query-parser/options.js"
 
 export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOptions {
   /**
-   * @param {object} args
-   * @param {import("../base.js").default} args.driver
+   * @param {object} args - Options object.
+   * @param {import("../base.js").default} args.driver - Database driver instance.
    */
   constructor({driver}) {
     const options = {
@@ -20,8 +20,8 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
-   * @param {any} string
-   * @returns {number | string} - Result.
+   * @param {unknown} string - String.
+   * @returns {number | string} - The quote.
    */
   quote(string) {
     if (!this.driver) throw new Error("Driver not set")
@@ -30,8 +30,8 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
-   * @param {string} string
-   * @returns {string} - Result.
+   * @param {string} string - String.
+   * @returns {string} - The quote column name.
    */
   quoteColumnName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in column name: ${string}`)
@@ -40,8 +40,8 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
-   * @param {string} databaseName
-   * @returns {string} - Result.
+   * @param {string} databaseName - Database name.
+   * @returns {string} - The quote database name.
    */
   quoteDatabaseName(databaseName) {
     if (typeof databaseName != "string") throw new Error(`Invalid database name given: ${databaseName}`)
@@ -51,8 +51,8 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
-   * @param {string} string
-   * @returns {string} - Result.
+   * @param {string} string - String.
+   * @returns {string} - The quote index name.
    */
   quoteIndexName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in index name: ${string}`)
@@ -61,8 +61,8 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
-   * @param {string} string
-   * @returns {string} - Result.
+   * @param {string} string - String.
+   * @returns {string} - The quote table name.
    */
   quoteTableName(string) {
     if (string.includes("[") || string.includes("]")) throw new Error(`Possible SQL injection in table name: ${string}`)

@@ -7,9 +7,9 @@ import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   /**
-   * @param {object} args
-   * @param {import("../base.js").default} args.driver
-   * @param {Record<string, any>} args.row
+   * @param {object} args - Options object.
+   * @param {import("../base.js").default} args.driver - Database driver instance.
+   * @param {Record<string, string | number | null>} args.row - Row data.
    */
   constructor({driver, row}) {
     super()
@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     this.row = row
   }
 
-  /** @returns {Promise<Array<import("../base-column.js").default>>} - Result.  */
+  /** @returns {Promise<Array<import("../base-column.js").default>>} - Resolves with the columns.  */
   async getColumns() {
     const result = await this.driver.query(`PRAGMA table_info('${this.getName()}')`)
     const columns = []
@@ -62,7 +62,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
 
       if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
 
-      columnsIndex.data.columnNames = this._parseColumnsFromSQL(sql)
+      columnsIndex.data.columnNames = this._parseColumnsFromSQL(String(sql))
 
       indexes.push(columnsIndex)
     }
@@ -71,8 +71,8 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   }
 
   /**
-   * @param {string} sql
-   * @returns {string[]} - Result.
+   * @param {string} sql - SQL string.
+   * @returns {string[]} - SQL statements.
    */
   _parseColumnsFromSQL(sql) {
     if (!sql) throw new Error(`Invalid SQL given (${typeof sql}): ${sql}`)
@@ -102,11 +102,12 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
     return columnNames
   }
 
+  /** @returns {string} - The table name. */
   getName() {
     if (!this.row.name) {
       throw new Error("No name given for SQLite table")
     }
 
-    return this.row.name
+    return String(this.row.name)
   }
 }

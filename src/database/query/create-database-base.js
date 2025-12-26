@@ -2,16 +2,16 @@
 
 /**
  * @typedef {object} CreateDatabaseArgsType
- * @property {import("../drivers/base.js").default} driver
- * @property {string} databaseName
- * @property {boolean} [ifNotExists]
+ * @property {import("../drivers/base.js").default} driver - Database driver used to generate SQL.
+ * @property {string} databaseName - Name of the database to create.
+ * @property {boolean} [ifNotExists] - Skip creation if the database already exists.
  */
 
 import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase {
   /**
-   * @param {CreateDatabaseArgsType} args
+   * @param {CreateDatabaseArgsType} args - Options object.
    */
   constructor({driver, databaseName, ifNotExists}) {
     super({driver})
@@ -20,7 +20,7 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
   }
 
   /**
-   * @returns {string[]} - Result.
+   * @returns {string[]} - SQL statements.
    */
   toSql() {
     const {databaseName} = this
