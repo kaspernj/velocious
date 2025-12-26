@@ -118,6 +118,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
    * @returns {Promise<Array<Record<string, any>>>} - Result.
    */
   async truncate(args) { // eslint-disable-line no-unused-vars
+    this.getDriver()._assertNotReadOnly()
     try {
       return await this.getDriver().query(`TRUNCATE TABLE ${this.getOptions().quoteTableName(this.getName())}`)
     } catch (error) {
