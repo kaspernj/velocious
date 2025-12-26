@@ -124,6 +124,34 @@ describe("Record - create", () => {
     })
   })
 
+  it("returns attribute names from attributes()", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Attribute project"})
+      const task = await Task.create({name: "Attribute task", project})
+      const attrs = task.attributes()
+
+      expect(attrs.name).toEqual("Attribute task")
+      expect(attrs.createdAt).toBeInstanceOf(Date)
+      expect("created_at" in attrs).toBeFalse()
+    })
+  })
+
+  it("returns column names from rawAttributes()", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Column project"})
+      const task = await Task.create({name: "Column task", project})
+      const cols = task.rawAttributes()
+
+      expect(cols.name).toEqual("Column task")
+      if (Task.getDatabaseType() == "sqlite") {
+        expect(typeof cols.created_at).toEqual("string")
+      } else {
+        expect(cols.created_at).toBeInstanceOf(Date)
+      }
+      expect("createdAt" in cols).toBeFalse()
+    })
+  })
+
   it("uses transactions and rolls back in case of an error", async () => {
     await Dummy.run(async () => {
       const beforeProjectsCount = await Project.count()

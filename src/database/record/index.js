@@ -671,6 +671,20 @@ class VelociousDatabaseRecord {
     return this._columns
   }
 
+  /** @returns {Record<string, import("../drivers/base-column.js").default>} */
+  static getColumnsHash() {
+    if (!this._columnsAsHash) {
+      /** @type {Record<string, import("../drivers/base-column.js").default>} */
+      this._columnsAsHash = {}
+
+      for (const column of this.getColumns()) {
+        this._columnsAsHash[column.getName()] = column
+      }
+    }
+
+    return this._columnsAsHash
+  }
+
   /**
    * @param {string} name
    * @returns {string | undefined}
@@ -1392,6 +1406,24 @@ class VelociousDatabaseRecord {
    * @returns {Record<string, any>}
    */
   attributes() {
+    const data = this.rawAttributes()
+    const columnNameToAttributeName = this.getModelClass().getColumnNameToAttributeNameMap()
+    const attributes = {}
+
+    for (const columnName in data) {
+      const attributeName = columnNameToAttributeName[columnName] || columnName
+
+      attributes[attributeName] = this.readAttribute(attributeName)
+    }
+
+    return attributes
+  }
+
+  /**
+   * Returns column-name keyed data (original attributes from database plus changes)
+   * @returns {Record<string, any>}
+   */
+  rawAttributes() {
     return Object.assign({}, this._attributes, this._changes)
   }
 
@@ -1544,7 +1576,7 @@ class VelociousDatabaseRecord {
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
    */
   readColumn(attributeName) {
-    const column = this.getModelClass().getColumns().find((column) => column.getName() == attributeName)
+    const column = this.getModelClass().getColumnsHash()[attributeName]
     let result
 
     if (attributeName in this._changes) {
@@ -1597,7 +1629,7 @@ class VelociousDatabaseRecord {
 
     const createdAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "created_at")
     const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
-    const data = Object.assign({}, this._belongsToChanges(), this.attributes())
+    const data = Object.assign({}, this._belongsToChanges(), this.rawAttributes())
     const primaryKey = this.getModelClass().primaryKey()
     const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
     const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
@@ -1721,7 +1753,7 @@ class VelociousDatabaseRecord {
 
     if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)
 
-    this._attributes = reloadedModel.attributes()
+    this._attributes = reloadedModel.rawAttributes()
     this._changes = {}
   }
 
