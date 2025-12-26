@@ -555,6 +555,8 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<QueryResultType>}
    */
   async query(sql) {
+    this._assertWritableQuery(sql)
+
     let tries = 0
 
     while(tries < 5) {
@@ -598,6 +600,67 @@ export default class VelociousDatabaseDriversBase {
    */
   retryableDatabaseError(_error) { // eslint-disable-line no-unused-vars
     return false
+  }
+
+  /**
+   * @param {string} sql
+   * @returns {void}
+   */
+  _assertWritableQuery(sql) {
+    if (!this.isReadOnly()) return
+    if (!this._sqlLooksLikeWrite(sql)) return
+
+    throw new Error("Database is read-only")
+  }
+
+  /**
+   * @param {string} sql
+   * @returns {boolean}
+   */
+  _sqlLooksLikeWrite(sql) {
+    const normalized = sql.trim().toLowerCase()
+
+    if (!normalized) return false
+
+    if (
+      normalized.startsWith("select") ||
+      normalized.startsWith("show") ||
+      normalized.startsWith("pragma") ||
+      normalized.startsWith("explain") ||
+      normalized.startsWith("describe")
+    ) {
+      return false
+    }
+
+    if (normalized.startsWith("with")) {
+      const withMatch = normalized.match(/^\s*with[\s\S]+?\)\s*(select|insert|update|delete|merge|replace)\b/)
+
+      if (withMatch) {
+        return withMatch[1] !== "select"
+      }
+
+      return false
+    }
+
+    const keywordMatch = normalized.match(/^\s*(\w+)/)
+    const keyword = keywordMatch ? keywordMatch[1] : ""
+
+    return [
+      "insert",
+      "update",
+      "delete",
+      "create",
+      "alter",
+      "drop",
+      "truncate",
+      "merge",
+      "replace"
+    ].includes(keyword)
+  }
+
+  /** @returns {boolean} */
+  isReadOnly() {
+    return Boolean(this.getArgs().readOnly)
   }
 
   /**
