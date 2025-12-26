@@ -95,7 +95,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
    * @param {typeof import("../cli/base-command.js").default} CommandClass - Command class.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async forwardCommand(command, CommandClass) {
     const newCommand = new CommandClass({
