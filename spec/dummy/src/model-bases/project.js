@@ -45,7 +45,7 @@ export default class ProjectBase extends DatabaseRecord {
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
-   * @param {Date | null} newValue
+   * @param {Date | string | null} newValue
    * @returns {void}
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
@@ -61,7 +61,7 @@ export default class ProjectBase extends DatabaseRecord {
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
-   * @param {Date | null} newValue
+   * @param {Date | string | null} newValue
    * @returns {void}
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
