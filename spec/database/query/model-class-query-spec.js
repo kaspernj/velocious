@@ -15,4 +15,20 @@ describe("Database - query - model class query", () => {
       expect(distinctCount).toEqual(1)
     })
   })
+
+  it("counts distinct records across groups without collapsing counts", async () => {
+    await Dummy.run(async () => {
+      const project1 = await Project.create({nameEn: "Alpha", nameDe: "Alfa"})
+      const project2 = await Project.create({nameEn: "Beta", nameDe: "Beta"})
+
+      await Task.create({name: "Task 1", project: project1})
+      await Task.create({name: "Task 2", project: project1})
+      await Task.create({name: "Task 3", project: project2})
+      await Task.create({name: "Task 4", project: project2})
+
+      const count = await Task.group("tasks.project_id").distinct().count()
+
+      expect(count).toEqual(4)
+    })
+  })
 })

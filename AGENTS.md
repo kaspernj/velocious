@@ -47,7 +47,7 @@ describe("something", {focus: true}, () => {
 })
 ```
 
-### Focus a `it`
+### Focus an `it`
 ```js
 describe("something", () => {
   it("sample", {focus: true}, () => {
