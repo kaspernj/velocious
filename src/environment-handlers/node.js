@@ -59,7 +59,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsInit(command) {
     return await this.forwardCommand(command, CliCommandsInit)
@@ -67,7 +67,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsMigrationGenerate(command) {
     return await this.forwardCommand(command, CliCommandsGenerateMigration)
@@ -75,7 +75,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsMigrationDestroy(command) {
     return await this.forwardCommand(command, CliCommandsDestroyMigration)
@@ -83,7 +83,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsGenerateBaseModels(command) {
     return await this.forwardCommand(command, CliCommandsGenerateBaseModels)
@@ -91,7 +91,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsGenerateModel(command) {
     return await this.forwardCommand(command, CliCommandsGenerateModel)
@@ -99,7 +99,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsRoutes(command) {
     return await this.forwardCommand(command, CliCommandsRoutes)
@@ -107,7 +107,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsServer(command) {
     return await this.forwardCommand(command, CliCommandsServer)
@@ -115,7 +115,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsTest(command) {
     return await this.forwardCommand(command, CliCommandsTest)

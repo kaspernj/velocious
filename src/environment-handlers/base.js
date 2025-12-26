@@ -17,7 +17,7 @@
 export default class VelociousEnvironmentHandlerBase {
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsGenerateBaseModels(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsGenerateBaseModels not implemented")
@@ -25,7 +25,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsInit(command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsInit not implemented")
@@ -33,7 +33,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsMigrationGenerate(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsMigrationGenerate not implemented")
@@ -41,7 +41,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsMigrationDestroy(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsMigrationDestroy not implemented")
@@ -49,7 +49,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsGenerateModel(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsGenerateModel not implemented")
@@ -58,7 +58,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * @abstract
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsRoutes(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsRoutes not implemented")
@@ -66,7 +66,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsServer(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsServer not implemented")
@@ -74,7 +74,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<unknown>} - Resolves with the command result.
    */
   async cliCommandsTest(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsTest not implemented")
