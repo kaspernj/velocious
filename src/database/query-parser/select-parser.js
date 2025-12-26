@@ -22,6 +22,10 @@ export default class VelociousDatabaseQueryParserSelectParser {
 
     sql += "SELECT"
 
+    if (query._distinct) {
+      sql += " DISTINCT"
+    }
+
     if (pretty) {
       sql += "\n"
     } else {

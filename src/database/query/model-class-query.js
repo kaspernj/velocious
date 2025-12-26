@@ -48,6 +48,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       page: this._page,
       perPage: this._perPage,
       preload: {...this._preload},
+      distinct: this._distinct,
       selects: [...this._selects],
       wheres: [...this._wheres]
     }))
@@ -59,7 +60,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /** @returns {Promise<number>} */
   async count() {
     // Generate count SQL
-    let sql = `COUNT(${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())})`
+    const primaryKey = `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())}`
+    const distinctPrefix = this._distinct ? "DISTINCT " : ""
+    let sql = `COUNT(${distinctPrefix}${primaryKey})`
 
     if (this.driver.getType() == "pgsql") sql += "::int"
 
@@ -69,6 +72,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     // Clone query and execute count
     const countQuery = this.clone()
 
+    countQuery._distinct = false
     countQuery._selects = []
     countQuery.select(sql)
 
