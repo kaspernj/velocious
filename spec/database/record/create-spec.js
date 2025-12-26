@@ -126,7 +126,8 @@ describe("Record - create", () => {
 
   it("returns attribute names from attributes()", async () => {
     await Dummy.run(async () => {
-      const task = await Task.create({name: "Attribute task"})
+      const project = await Project.create({name: "Attribute project"})
+      const task = await Task.create({name: "Attribute task", project})
       const attrs = task.attributes()
 
       expect(attrs.name).toEqual("Attribute task")
@@ -137,7 +138,8 @@ describe("Record - create", () => {
 
   it("returns column names from rawAttributes()", async () => {
     await Dummy.run(async () => {
-      const task = await Task.create({name: "Column task"})
+      const project = await Project.create({name: "Column project"})
+      const task = await Task.create({name: "Column task", project})
       const cols = task.rawAttributes()
 
       expect(cols.name).toEqual("Column task")
