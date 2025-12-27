@@ -3,6 +3,7 @@
 import BaseCommand from "../../../../cli/base-command.js"
 import TestFilesFinder from "../../../../testing/test-files-finder.js"
 import TestRunner from "../../../../testing/test-runner.js"
+import path from "path"
 
 export default class VelociousCliCommandsTest extends BaseCommand {
   async execute() {
@@ -10,10 +11,16 @@ export default class VelociousCliCommandsTest extends BaseCommand {
 
     let directory
     const directories = []
+    const testDirectories = this.getConfiguration().getTestDirectories()
 
     if (process.env.VELOCIOUS_TEST_DIR) {
       directory = process.env.VELOCIOUS_TEST_DIR
       directories.push(process.env.VELOCIOUS_TEST_DIR)
+    } else if (testDirectories && testDirectories.length > 0) {
+      directory = this.getConfiguration().getDirectory()
+      for (const testDirectory of testDirectories) {
+        directories.push(path.isAbsolute(testDirectory) ? testDirectory : `${directory}/${testDirectory}`)
+      }
     } else {
       directory = this.directory()
       directories.push(`${this.directory()}/__tests__`)

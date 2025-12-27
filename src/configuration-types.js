@@ -82,6 +82,7 @@
  * @property {string | function() : string} locale - Default locale or locale resolver.
  * @property {string[]} locales - Supported locales.
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
+ * @property {string[]} [testDirectories] - Directories to scan for test files (relative to directory or absolute).
  * @property {string} [testing] - Path to the testing configuration file.
  */
 
