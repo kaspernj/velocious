@@ -389,6 +389,10 @@ configuration.getErrorEvents().on("framework-error", ({error, request, response,
   // Send to your error reporting tool of choice
   console.error("Framework error", error, context)
 })
+
+configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
+  console.error(`Velocious error (${errorType})`, error)
+})
 ```
 
 ## Use the Websocket client API (HTTP-like)
