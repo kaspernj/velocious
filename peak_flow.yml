@@ -51,6 +51,7 @@ builds:
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test
   build_2:
     name: MS-SQL
@@ -60,6 +61,7 @@ builds:
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test
   build_3:
     name: PG-SQL
@@ -70,6 +72,7 @@ builds:
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test
   build_4:
     name: SQLite
@@ -79,6 +82,7 @@ builds:
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test
   build_5:
     name: ESLint
