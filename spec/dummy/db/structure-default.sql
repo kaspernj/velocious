@@ -1,25 +1,130 @@
-CREATE TABLE "authentication_tokens" ("id" integer DEFAULT nextval('authentication_tokens_id_seq'::regclass) NOT NULL, "user_token" varchar(255) DEFAULT gen_random_uuid(), "user_id" bigint NOT NULL, "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `authentication_tokens` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `user_token` varchar(255) DEFAULT uuid(),
+  `user_id` bigint(20) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `index_on_token` (`user_token`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `authentication_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "comments" ("id" integer DEFAULT nextval('comments_id_seq'::regclass) NOT NULL, "task_id" bigint NOT NULL, "body" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `comments` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `task_id` bigint(20) NOT NULL,
+  `body` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `task_id` (`task_id`),
+  CONSTRAINT `comments_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "interactions" ("id" integer DEFAULT nextval('interactions_id_seq'::regclass) NOT NULL, "subject_id" bigint NOT NULL, "subject_type" varchar(255), "kind" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `interactions` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `subject_id` bigint(20) NOT NULL,
+  `subject_type` varchar(255) DEFAULT NULL,
+  `kind` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `subject_id` (`subject_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "project_details" ("id" integer DEFAULT nextval('project_details_id_seq'::regclass) NOT NULL, "project_id" bigint NOT NULL, "note" text, "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `projects` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `creating_user_reference` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "project_translations" ("id" integer DEFAULT nextval('project_translations_id_seq'::regclass) NOT NULL, "project_id" bigint NOT NULL, "locale" varchar(255) NOT NULL, "name" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `project_details` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `project_id` bigint(20) NOT NULL,
+  `note` text DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  CONSTRAINT `project_details_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "projects" ("id" integer DEFAULT nextval('projects_id_seq'::regclass) NOT NULL, "creating_user_reference" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `project_translations` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `project_id` bigint(20) NOT NULL,
+  `locale` varchar(255) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  CONSTRAINT `project_translations_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "schema_migrations" ("version" varchar(255) NOT NULL, PRIMARY KEY ("version"));
+CREATE TABLE `schema_migrations` (
+  `version` varchar(255) NOT NULL,
+  PRIMARY KEY (`version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "string_subject_interactions" ("id" integer DEFAULT nextval('string_subject_interactions_id_seq'::regclass) NOT NULL, "subject_id" varchar(255) NOT NULL, "subject_type" varchar(255), "kind" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `string_subjects` (
+  `id` varchar(255) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "string_subjects" ("id" varchar(255) NOT NULL, "name" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `string_subject_interactions` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `subject_id` varchar(255) NOT NULL,
+  `subject_type` varchar(255) DEFAULT NULL,
+  `kind` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `subject_id` (`subject_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "tasks" ("id" integer DEFAULT nextval('tasks_id_seq'::regclass) NOT NULL, "project_id" bigint NOT NULL, "name" varchar(255), "description" text, "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `tasks` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `project_id` bigint(20) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `project_id` (`project_id`),
+  CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "users" ("id" integer DEFAULT nextval('users_id_seq'::regclass) NOT NULL, "email" varchar(255) NOT NULL, "encrypted_password" varchar(255) NOT NULL, "reference" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `users` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `email` varchar(255) NOT NULL,
+  `encrypted_password` varchar(255) NOT NULL,
+  `reference` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `index_on_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "uuid_interactions" ("id" integer DEFAULT nextval('uuid_interactions_id_seq'::regclass) NOT NULL, "subject_id" uuid NOT NULL, "subject_type" varchar(255), "kind" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `uuid_interactions` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `subject_id` uuid NOT NULL,
+  `subject_type` varchar(255) DEFAULT NULL,
+  `kind` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `subject_id` (`subject_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE "uuid_items" ("id" uuid DEFAULT gen_random_uuid() NOT NULL, "title" varchar(255), "created_at" timestamp without time zone, "updated_at" timestamp without time zone, PRIMARY KEY ("id"));
+CREATE TABLE `uuid_items` (
+  `id` uuid NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;

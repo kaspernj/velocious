@@ -1,7 +1,7 @@
 // @ts-check
 
 import {digg} from "diggerize"
-import {EventEmitter} from "events"
+import EventEmitter from "../../utils/event-emitter.js"
 import {incorporate} from "incorporator"
 import ParamsToObject from "./params-to-object.js"
 import RequestBuffer from "./request-buffer/index.js"

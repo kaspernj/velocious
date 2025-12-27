@@ -1,6 +1,6 @@
 // @ts-check
 
-import EventEmitter from "events"
+import EventEmitter from "../utils/event-emitter.js"
 import {Logger} from "../logger.js"
 
 export default class ServerClient {

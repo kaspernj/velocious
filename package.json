@@ -44,6 +44,7 @@
     "env-sense": "^1.0.2",
     "epic-locks": "^1.0.4",
     "escape-string-regexp": "^1.0.5",
+    "eventemitter3": "^5.0.1",
     "incorporator": "^1.0.2",
     "inflection": "^3.0.0",
     "is-plain-object": "^5.0.0",

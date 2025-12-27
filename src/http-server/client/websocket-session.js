@@ -1,6 +1,6 @@
 // @ts-check
 
-import {EventEmitter} from "events"
+import EventEmitter from "../../utils/event-emitter.js"
 import {Logger} from "../../logger.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
@@ -264,4 +264,3 @@ export default class VelociousHttpServerClientWebsocketSession {
     return result
   }
 }
-
