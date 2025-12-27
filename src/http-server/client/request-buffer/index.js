@@ -1,6 +1,6 @@
 // @ts-check
 
-import {EventEmitter} from "eventemitter3"
+import EventEmitter from "../../../utils/event-emitter.js"
 import FormDataPart from "./form-data-part.js"
 import Header from "./header.js"
 import {incorporate} from "incorporator"

@@ -2,7 +2,7 @@
 
 import crypto from "crypto"
 import {digg} from "diggerize"
-import {EventEmitter} from "eventemitter3"
+import EventEmitter from "../../utils/event-emitter.js"
 import {Logger} from "../../logger.js"
 import Request from "./request.js"
 import RequestRunner from "./request-runner.js"

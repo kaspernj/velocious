@@ -5,7 +5,7 @@
  */
 
 import {digg} from "diggerize"
-import {EventEmitter} from "eventemitter3"
+import EventEmitter from "./utils/event-emitter.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
@@ -380,7 +380,7 @@ export default class VelociousConfiguration {
     this._websocketEvents = websocketEvents
   }
 
-  /** @returns {EventEmitter} - Framework error events emitter. */
+  /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
   getErrorEvents() {
     return this._errorEvents
   }
