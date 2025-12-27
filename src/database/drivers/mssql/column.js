@@ -7,7 +7,7 @@ import {digg} from "diggerize"
 export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
   /**
    * @param {import("../base-table.js").default} table - Table.
-   * @param {Record<string, unknown>} data - Data payload.
+   * @param {Record<string, any>} data - Data payload.
    */
   constructor(table, data) {
     super()
@@ -70,3 +70,4 @@ export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
   getPrimaryKey() { return digg(this, "data", "isIdentity") === 1 }
   getType() { return digg(this, "data", "DATA_TYPE") }
 }
+

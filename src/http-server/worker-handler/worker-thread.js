@@ -70,7 +70,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.remoteAddress] - Remote address.
    * @param {number} [data.clientCount] - Client count.
    * @param {string} [data.channel] - Channel name.
-   * @param {unknown} [data.payload] - Payload data.
+   * @param {any} [data.payload] - Payload data.
    */
   onCommand = async (data) => {
     await this.logger.debugLowLevel(() => [`Worker ${this.workerCount} received command`, data])
@@ -118,7 +118,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {unknown} args.payload - Payload data.
+   * @param {any} args.payload - Payload data.
    * @returns {void} - No return value.
    */
   broadcastWebsocketEvent({channel, payload}) {
@@ -129,3 +129,4 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
   }
 }
+

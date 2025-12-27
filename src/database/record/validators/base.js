@@ -4,7 +4,7 @@ export default class VelociousDatabaseRecordValidatorsBase {
   /**
    * @param {object} args - Options object.
    * @param {string} args.attributeName - Attribute name.
-   * @param {Record<string, unknown>} args.args - Options object.
+   * @param {Record<string, any>} args.args - Options object.
    */
   constructor({attributeName, args}) {
     this.attributeName = attributeName
@@ -22,3 +22,4 @@ export default class VelociousDatabaseRecordValidatorsBase {
     throw new Error("validate not implemented")
   }
 }
+

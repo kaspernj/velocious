@@ -69,7 +69,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {unknown} error - Error instance.
+   * @param {any} error - Error instance.
    */
   onWorkerError = (error) => {
     throw ensureError(error) // Throws original error with backtrace and everything into the console
@@ -95,7 +95,7 @@ export default class VelociousHttpServerWorker {
    * @param {number} [data.clientCount] - Client count.
    * @param {string} [data.output] - Output.
    * @param {string} [data.channel] - Channel name.
-   * @param {unknown} [data.payload] - Payload data.
+   * @param {any} [data.payload] - Payload data.
    * @returns {void} - No return value.
    */
   onWorkerMessage = (data) => {
@@ -135,7 +135,7 @@ export default class VelociousHttpServerWorker {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {unknown} args.payload - Payload data.
+   * @param {any} args.payload - Payload data.
    * @returns {void} - No return value.
    */
   dispatchWebsocketEvent({channel, payload}) {
@@ -144,3 +144,4 @@ export default class VelociousHttpServerWorker {
     this.worker.postMessage({channel, command: "websocketEvent", payload})
   }
 }
+

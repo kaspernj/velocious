@@ -60,7 +60,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @param {Record<string, unknown> | undefined} row - Row data.
+   * @param {Record<string, any> | undefined} row - Row data.
    * @returns {string | null} - SQL string.
    */
   _mysqlCreateStatement(row) {
@@ -75,3 +75,4 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
     return null
   }
 }
+

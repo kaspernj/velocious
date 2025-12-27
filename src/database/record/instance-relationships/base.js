@@ -37,7 +37,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @param {Record<string, unknown>} attributes - Attributes.
+   * @param {Record<string, any>} attributes - Attributes.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(attributes) { // eslint-disable-line no-unused-vars
@@ -116,3 +116,4 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @returns {string} The type of relationship (e.g. "has_many", "belongs_to", etc.) */
   getType() { return this.getRelationship().getType() }
 }
+

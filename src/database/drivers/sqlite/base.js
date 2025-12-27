@@ -192,7 +192,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     const sqls = []
 
     for (const row of rows) {
-      /** @type {Record<string, unknown>} */
+      /** @type {Record<string, any>} */
       const data = {}
 
       for (const columnIndex in columns) {
@@ -257,8 +257,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
-   * @param {unknown} value - Value to use.
-   * @returns {unknown} - The escape.
+   * @param {any} value - Value to use.
+   * @returns {any} - The escape.
    */
   escape(value) {
     value = this._convertValue(value)
@@ -286,7 +286,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
-   * @param {unknown} value - Value to use.
+   * @param {any} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {
@@ -313,3 +313,4 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return await new StructureSql({driver: this}).toSql()
   }
 }
+

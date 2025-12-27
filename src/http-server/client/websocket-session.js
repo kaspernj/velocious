@@ -58,7 +58,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {unknown} payload - Payload data.
+   * @param {any} payload - Payload data.
    * @returns {void} - No return value.
    */
   sendEvent(channel, payload) {
@@ -264,3 +264,4 @@ export default class VelociousHttpServerClientWebsocketSession {
     return result
   }
 }
+

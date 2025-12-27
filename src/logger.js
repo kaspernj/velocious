@@ -60,8 +60,8 @@ function consoleWarn(message) {
 }
 
 /**
- * @param {...unknown|function() : Array<unknown>} messages - Messages.
- * @returns {Array<unknown>} - Either the function result or the messages
+ * @param {...any|function() : Array<any>} messages - Messages.
+ * @returns {Array<any>} - Either the function result or the messages
  */
 function functionOrMessages(...messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
@@ -74,7 +74,7 @@ function functionOrMessages(...messages) {
 
 /**
  * Converts multiple message parts into a single string.
- * @param {...unknown} messages - Parts to combine into a message
+ * @param {...any} messages - Parts to combine into a message
  * @returns {string} - The messages to message.
  */
 function messagesToMessage(...messages) {
@@ -181,7 +181,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debug(...messages) {
@@ -189,7 +189,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async info(...messages) {
@@ -197,7 +197,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debugLowLevel(...messages) {
@@ -205,7 +205,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async log(...messages) {
@@ -213,7 +213,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async error(...messages) {
@@ -285,7 +285,7 @@ class Logger {
 export {Logger}
 
 /**
- * @param {unknown} object - Object.
+ * @param {any} object - Object.
  * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
  */
 /**
@@ -335,3 +335,4 @@ export default async function logger(object, ...messages) {
     await Promise.all(writes)
   }
 }
+

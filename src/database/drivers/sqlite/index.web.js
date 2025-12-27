@@ -59,9 +59,10 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
 
   /**
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, unknown>[]>} - Resolves with the query actual.
+   * @returns {Promise<Record<string, any>[]>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
     return await this.getConnection().query(sql)
   }
 }
+

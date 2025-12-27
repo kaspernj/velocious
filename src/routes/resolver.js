@@ -183,8 +183,8 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {unknown} value - Value to use.
-   * @returns {unknown} - The sanitize params for logging.
+   * @param {any} value - Value to use.
+   * @returns {any} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {
     if (value instanceof UploadedFile) {
@@ -200,7 +200,7 @@ export default class VelociousRoutesResolver {
     }
 
     if (value && typeof value === "object") {
-      /** @type {Record<string, unknown>} */
+      /** @type {Record<string, any>} */
       const result = {}
 
       for (const key of Object.keys(value)) {
@@ -213,3 +213,4 @@ export default class VelociousRoutesResolver {
     return value
   }
 }
+

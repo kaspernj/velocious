@@ -5,7 +5,7 @@ import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversSqliteForeignKey extends BaseForeignKey {
   /**
-   * @param {Record<string, unknown>} data - Data payload.
+   * @param {Record<string, any>} data - Data payload.
    * @param {object} args - Options object.
    * @param {string} args.tableName - Table name.
    */
@@ -20,3 +20,4 @@ export default class VelociousDatabaseDriversSqliteForeignKey extends BaseForeig
   getReferencedColumnName() { return digg(this, "data", "to") }
   getReferencedTableName() { return digg(this, "data", "table") }
 }
+

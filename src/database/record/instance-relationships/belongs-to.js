@@ -16,7 +16,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
   }
 
   /**
-   * @param {Record<string, unknown>} data - Data payload.
+   * @param {Record<string, any>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -47,3 +47,4 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     this.setPreloaded(true)
   }
 }
+

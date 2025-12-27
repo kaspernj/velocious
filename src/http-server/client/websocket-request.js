@@ -5,11 +5,11 @@ import querystring from "querystring"
 export default class VelociousHttpServerClientWebsocketRequest {
   /**
    * @param {object} args - Options object.
-   * @param {unknown} [args.body] - Request body.
+   * @param {any} [args.body] - Request body.
    * @param {Record<string, string>} [args.headers] - Header list.
    * @param {string} args.method - HTTP method.
    * @param {string} args.path - Path.
-   * @param {Record<string, unknown>} [args.params] - Parameters object.
+   * @param {Record<string, any>} [args.params] - Parameters object.
    * @param {string} [args.remoteAddress] - Remote address.
    */
   constructor({body, headers, method, params, path, remoteAddress}) {
@@ -106,3 +106,4 @@ export default class VelociousHttpServerClientWebsocketRequest {
     return params
   }
 }
+

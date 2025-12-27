@@ -5,7 +5,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 export default class VelociousDatabaseQueryInsertBase {
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, unknown>} [args.data] - Data payload.
+   * @param {Record<string, any>} [args.data] - Data payload.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {string} args.tableName - Table name.
    * @param {Array<string>} [args.columns] - Column names.
@@ -136,7 +136,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
-   * @param {unknown[]} data - Data payload.
+   * @param {any[]} data - Data payload.
    * @returns {string} - SQL string.
    */
   _valuesSql(data) {
@@ -155,3 +155,4 @@ export default class VelociousDatabaseQueryInsertBase {
     return sql
   }
 }
+

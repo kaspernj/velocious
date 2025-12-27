@@ -19,7 +19,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {unknown} args.payload - Payload data.
+   * @param {any} args.payload - Payload data.
    * @returns {void} - No return value.
    */
   publish({channel, payload}) {
@@ -32,3 +32,4 @@ export class VelociousHttpServerWebsocketEventsHost {
 const websocketEventsHost = new VelociousHttpServerWebsocketEventsHost()
 
 export default websocketEventsHost
+

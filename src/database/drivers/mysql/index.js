@@ -40,13 +40,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @returns {Record<string, unknown>} - The connect args.
+   * @returns {Record<string, any>} - The connect args.
    */
   connectArgs() {
     const args = this.getArgs()
     const forward = ["database", "host", "password"]
 
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const connectArgs = {}
 
     for (const forwardValue of forward) {
@@ -181,8 +181,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
-   * @param {unknown} value - Value to use.
-   * @returns {unknown} - The escape.
+   * @param {any} value - Value to use.
+   * @returns {any} - The escape.
    */
   escape(value) {
     if (!this.pool) throw new Error("Can't escape before connected")
@@ -282,3 +282,4 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return update.toSql()
   }
 }
+
