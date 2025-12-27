@@ -3,8 +3,8 @@
 export default class VelociousDatabaseQueryUpdateBase {
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, unknown>} args.conditions - Conditions.
-   * @param {Record<string, unknown>} args.data - Data payload.
+   * @param {Record<string, any>} args.conditions - Conditions.
+   * @param {Record<string, any>} args.data - Data payload.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {string} args.tableName - Table name.
    */
@@ -26,3 +26,4 @@ export default class VelociousDatabaseQueryUpdateBase {
     throw new Error("'toSql' wasn't implemented")
   }
 }
+

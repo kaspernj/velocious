@@ -1,7 +1,7 @@
 /**
  * @param {import("mysql").Pool} pool - Pool.
  * @param {string} sql - SQL string.
- * @returns {Promise<Record<string, unknown>[]>} - Resolves with string value.
+ * @returns {Promise<Record<string, any>[]>} - Resolves with string value.
  */
 export default async function query(pool, sql) {
   return new Promise((resolve, reject) => {
@@ -12,7 +12,7 @@ export default async function query(pool, sql) {
         const rows = []
 
         for (const resultIndex in results) {
-          /** @type {Record<string, unknown>} */
+          /** @type {Record<string, any>} */
           const result = {}
 
           for (const fieldKey in fields) {
@@ -30,3 +30,4 @@ export default async function query(pool, sql) {
     })
   })
 }
+

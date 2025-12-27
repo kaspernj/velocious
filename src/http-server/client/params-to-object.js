@@ -2,13 +2,13 @@
 
 export default class ParamsToObject {
   /**
-   * @param {Record<string, unknown>} object - Object.
+   * @param {Record<string, any>} object - Object.
    */
   constructor(object) {
     this.object = object
   }
 
-  /** @returns {Record<string, unknown>} - The object.  */
+  /** @returns {Record<string, any>} - The object.  */
   toObject() {
     /** @type {Record<string, unknown>} */
     const result = {}
@@ -24,8 +24,8 @@ export default class ParamsToObject {
 
   /**
    * @param {string} key - Key.
-   * @param {unknown} value - Value to use.
-   * @param {Record<string, unknown> | unknown[]} result - Result.
+   * @param {any} value - Value to use.
+   * @param {Record<string, any> | any[]} result - Result.
    * @returns {void} - No return value.
    */
   treatInitial(key, value, result) {
@@ -35,7 +35,7 @@ export default class ParamsToObject {
       const inputName = firstMatch[1]
       const rest = firstMatch[2]
 
-      /** @type {Array<unknown> | Record<string, unknown>} */
+      /** @type {Array<any> | Record<string, any>} */
       let newResult
 
       if (inputName in result) {
@@ -55,9 +55,9 @@ export default class ParamsToObject {
   }
 
   /**
-   * @param {unknown} value - Value to use.
+   * @param {any} value - Value to use.
    * @param {string} rest - Rest.
-   * @param {Record<string, unknown> | unknown[]} result - Result.
+   * @param {Record<string, any> | any[]} result - Result.
    * @returns {void} - No return value.
    */
   treatSecond(value, rest, result) {
@@ -68,7 +68,7 @@ export default class ParamsToObject {
     const key = secondMatch[1]
     const newRest = secondMatch[2]
 
-    /** @type {Array<unknown> | Record<string, unknown>} */
+    /** @type {Array<any> | Record<string, any>} */
     let newResult
 
     if (rest == "[]") {
@@ -94,3 +94,4 @@ export default class ParamsToObject {
     }
   }
 }
+

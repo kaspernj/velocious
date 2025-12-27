@@ -102,7 +102,7 @@ class ExpectToChange extends BaseExpect {
 
 class Expect extends BaseExpect {
   /**
-   * @param {unknown} object - Object.
+   * @param {any} object - Object.
    */
   constructor(object) {
     super()
@@ -130,7 +130,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {unknown} result - Result.
+   * @param {any} result - Result.
    * @returns {void} - No return value.
    */
   toBe(result) {
@@ -225,7 +225,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {unknown} valueToContain - Value to contain.
+   * @param {any} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
@@ -254,7 +254,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {unknown} result - Result.
+   * @param {any} result - Result.
    * @returns {void} - No return value.
    */
   toEqual(result) {
@@ -382,7 +382,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {Promise<unknown>} - Resolves with the execute.
+   * @returns {Promise<any>} - Resolves with the execute.
    */
   async execute() {
     for (const expectation of this.expectations) {
@@ -407,13 +407,13 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, unknown>} result - Result.
+   * @param {Record<string, any>} result - Result.
    * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
 
-    /** @type {Record<string, unknown[]>} */
+    /** @type {Record<string, any[]>} */
     const differences = {}
     const objectAsRecord = /** @type {Record<string, unknown>} */ (this._object)
 
@@ -474,7 +474,7 @@ async function describe(description, arg1, arg2) {
 }
 
 /**
- * @param {unknown} arg - Arg.
+ * @param {any} arg - Arg.
  * @returns {Expect} - The expect.
  */
 function expect(arg) {
@@ -543,3 +543,4 @@ globalThis.it = it
 globalThis.fit = fit
 
 export {afterEach, beforeEach, describe, expect, fit, it, tests}
+

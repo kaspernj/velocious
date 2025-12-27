@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {unknown} - The default.
+   * @returns {any} - The default.
    */
   getDefault() {
     throw new Error("getDefault not implemented")
@@ -139,3 +139,4 @@ export default class VelociousDatabaseDriversBaseColumn {
     throw new Error("getType not implemented")
   }
 }
+

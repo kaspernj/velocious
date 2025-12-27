@@ -22,7 +22,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
 
   /**
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, unknown>[]>} - Resolves with the query.
+   * @returns {Promise<Record<string, any>[]>} - Resolves with the query.
    */
   async query(sql) {
     const result = await queryWeb(this.connection, sql)
@@ -45,3 +45,4 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
 
   saveDatabaseDebounce = debounce(this.saveDatabase, 500)
 }
+

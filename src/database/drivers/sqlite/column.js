@@ -6,7 +6,7 @@ import BaseColumn from "../base-column.js"
 export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, unknown>} args.column - Column.
+   * @param {Record<string, any>} args.column - Column.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    * @param {import("../base-table.js").default} args.table - Table.
    */
@@ -71,3 +71,4 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
     return columnType.toLowerCase()
   }
 }
+

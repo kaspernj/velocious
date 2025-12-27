@@ -277,7 +277,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * Plucks one or more columns directly from the database without instantiating models.
    * @param {...string|string[]} columns - Column names.
-   * @returns {Promise<unknown[]>} - Resolves with the pluck.
+   * @returns {Promise<any[]>} - Resolves with the pluck.
    */
   async pluck(...columns) {
     const flatColumns = columns.flat()
@@ -310,3 +310,4 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return rows.map((row) => columnNames.map((columnName) => row[columnName]))
   }
 }
+

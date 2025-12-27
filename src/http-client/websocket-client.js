@@ -74,7 +74,7 @@ export default class VelociousWebsocketClient {
   /**
    * Perform a POST request over the websocket.
    * @param {string} path - Path.
-   * @param {unknown} [body] - Request body.
+   * @param {any} [body] - Request body.
    * @param {{headers?: Record<string, string>}} [options] - Request options such as headers.
    * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the post.
    */
@@ -95,7 +95,7 @@ export default class VelociousWebsocketClient {
   /**
    * Subscribe to a channel for server-sent events.
    * @param {string} channel - Channel name.
-   * @param {(payload: unknown) => void} callback - Callback function.
+   * @param {(payload: any) => void} callback - Callback function.
    * @returns {() => void} unsubscribe function
    */
   on(channel, callback) {
@@ -128,7 +128,7 @@ export default class VelociousWebsocketClient {
    * @param {string} method - HTTP method.
    * @param {string} path - Path.
    * @param {object} [options] - Options object.
-   * @param {unknown} [options.body] - Request body.
+   * @param {any} [options.body] - Request body.
    * @param {Record<string, string>} [options.headers] - Header list.
    * @returns {Promise<VelociousWebsocketResponse>} - Resolves with the request.
    */
@@ -153,7 +153,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * @private
-   * @param {MessageEvent<unknown>} event - Event payload.
+   * @param {MessageEvent<any>} event - Event payload.
    */
   onMessage = (event) => {
     const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
@@ -217,7 +217,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * @private
-   * @param {Record<string, unknown>} payload - Payload data.
+   * @param {Record<string, any>} payload - Payload data.
    */
   _sendMessage(payload) {
     if (!this.socket || this.socket.readyState !== this.socket.OPEN) {
@@ -232,7 +232,7 @@ export default class VelociousWebsocketClient {
 
   /**
    * @private
-   * @param  {...unknown} args - Options object.
+   * @param  {...any} args - Options object.
    * @returns {void} - No return value.
    */
   _debug(...args) {
@@ -255,7 +255,7 @@ class VelociousWebsocketResponse {
     this.type = message.type
   }
 
-  /** @returns {unknown} - The json.  */
+  /** @returns {any} - The json.  */
   json() {
     if (typeof this.body !== "string") {
       throw new Error("Response body is not a string")
@@ -264,3 +264,4 @@ class VelociousWebsocketResponse {
     return JSON.parse(this.body)
   }
 }
+
