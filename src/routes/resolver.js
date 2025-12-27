@@ -6,6 +6,7 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import {Logger} from "../logger.js"
 import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
+import ensureError from "../utils/ensure-error.js"
 
 export default class VelociousRoutesResolver {
   /** @type {Logger | undefined} */
@@ -83,10 +84,30 @@ export default class VelociousRoutesResolver {
 
     await this._logActionStart({action, controllerClass})
 
-    await this.configuration.ensureConnections(async () => {
-      await controllerInstance._runBeforeCallbacks()
-      await controllerInstance[action]()
-    })
+    try {
+      await this.configuration.ensureConnections(async () => {
+        await controllerInstance._runBeforeCallbacks()
+        await controllerInstance[action]()
+      })
+    } catch (error) {
+      const ensuredError = ensureError(error)
+      const errorContext = {
+        action,
+        controller,
+        httpMethod: this.request.httpMethod(),
+        path: this.request.path(),
+        stage: "controller-action"
+      }
+
+      const errorWithContext = /** @type {{velociousContext?: object}} */ (ensuredError)
+
+      errorWithContext.velociousContext = {
+        ...(errorWithContext.velociousContext || {}),
+        controllerAction: errorContext
+      }
+
+      throw ensuredError
+    }
   }
 
   /**

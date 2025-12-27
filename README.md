@@ -380,6 +380,17 @@ const configuration = new Configuration({
 
 - **Per-instance control**: You can create a `new Logger("Subject", {configuration, debug: false})` to honor the configuration defaults, or toggle `logger.setDebug(true)` for verbose output in specific cases.
 
+## Listen for framework errors
+
+Velocious emits framework errors (including uncaught controller action errors) on the configuration error event bus:
+
+```js
+configuration.getErrorEvents().on("framework-error", ({error, request, response, context}) => {
+  // Send to your error reporting tool of choice
+  console.error("Framework error", error, context)
+})
+```
+
 ## Use the Websocket client API (HTTP-like)
 
 ```js
