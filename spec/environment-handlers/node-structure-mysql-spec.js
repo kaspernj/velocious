@@ -103,4 +103,20 @@ describe("Drivers - structure sql - mysql", () => {
 
     expect(result).toEqual("CREATE TABLE `users` (`id` int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n")
   })
+
+  it("does not strip AUTO_INCREMENT from view definitions", async () => {
+    const db = buildMysqlDb({
+      version: "8.0.33",
+      tables: [
+        {table_name: "users_with_auto", table_type: "VIEW"}
+      ],
+      creates: {
+        users_with_auto: {type: "view", sql: "CREATE VIEW `users_with_auto` AS SELECT AUTO_INCREMENT FROM information_schema.tables"}
+      }
+    })
+
+    const result = await new MysqlStructureSql({driver: db}).toSql()
+
+    expect(result).toEqual("CREATE VIEW `users_with_auto` AS SELECT AUTO_INCREMENT FROM information_schema.tables;\n")
+  })
 })
