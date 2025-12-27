@@ -68,11 +68,14 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
 
     for (const key of Object.keys(row)) {
       if (key.toLowerCase().startsWith("create ")) {
-        return String(row[key])
+        const statement = String(row[key])
+
+        return statement
+          .replace(/\sAUTO_INCREMENT\s*=\s*\d+/gi, "")
+          .replace(/\s{2,}/g, " ")
       }
     }
 
     return null
   }
 }
-

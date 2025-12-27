@@ -87,4 +87,20 @@ describe("Drivers - structure sql - mysql", () => {
 
     expect(result).toEqual("CREATE VIEW `system_users` AS SELECT 1;\n")
   })
+
+  it("strips AUTO_INCREMENT from create statements", async () => {
+    const db = buildMysqlDb({
+      version: "8.0.33",
+      tables: [
+        {table_name: "users", table_type: "BASE TABLE"}
+      ],
+      creates: {
+        users: {type: "table", sql: "CREATE TABLE `users` (`id` int) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4"}
+      }
+    })
+
+    const result = await new MysqlStructureSql({driver: db}).toSql()
+
+    expect(result).toEqual("CREATE TABLE `users` (`id` int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n")
+  })
 })
