@@ -1,7 +1,7 @@
 // @ts-check
 
 import {digg} from "diggerize"
-import EventEmitter from "events"
+import {EventEmitter} from "eventemitter3"
 import {Logger} from "../logger.js"
 import Net from "net"
 import ServerClient from "./server-client.js"

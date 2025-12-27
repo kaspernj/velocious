@@ -5,7 +5,7 @@
  */
 
 import {digg} from "diggerize"
-import EventEmitter from "events"
+import {EventEmitter} from "eventemitter3"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
