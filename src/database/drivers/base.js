@@ -455,7 +455,6 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<unknown>} - Resolves with the transaction.
    */
   async transaction(callback) {
-    this._assertNotReadOnly()
     const savePointName = this.generateSavePointName()
     let transactionStarted = false
     let savePointStarted = false
