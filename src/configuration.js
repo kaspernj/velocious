@@ -5,6 +5,7 @@
  */
 
 import {digg} from "diggerize"
+import EventEmitter from "events"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
@@ -44,6 +45,7 @@ export default class VelociousConfiguration {
     this._testing = testing
     this._websocketEvents = undefined
     this._logging = logging
+    this._errorEvents = new EventEmitter()
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
     this.databasePools = {}
@@ -376,6 +378,11 @@ export default class VelociousConfiguration {
    */
   setWebsocketEvents(websocketEvents) {
     this._websocketEvents = websocketEvents
+  }
+
+  /** @returns {EventEmitter} - Framework error events emitter. */
+  getErrorEvents() {
+    return this._errorEvents
   }
 
   /**

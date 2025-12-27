@@ -55,8 +55,23 @@ export default class VelociousHttpServerClientRequestRunner {
       }
     } catch (e) {
       const error = ensureError(e)
+      const errorWithContext = /** @type {{velociousContext?: object}} */ (error)
+      const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
 
       await this.logger.error(() => `Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`)
+
+      const errorPayload = {
+        context: errorContext,
+        error,
+        request,
+        response
+      }
+
+      configuration.getErrorEvents().emit("framework-error", errorPayload)
+      configuration.getErrorEvents().emit("all-error", {
+        ...errorPayload,
+        errorType: "framework-error"
+      })
 
       response.setStatus(500)
       response.setErrorBody(error)
