@@ -74,7 +74,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {string | null}
    */
-  name() { return this._getTranslatedAttributeWithFallback("name", this._getConfiguration().getLocale()) }
+  name() { return this._getTranslatedAttributeWithFallback("name", this._getConfiguration().getLocale()) ?? null }
 
   /**
    * @abstract
@@ -85,7 +85,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {string | null}
    */
-  nameDe() { return this._getTranslatedAttributeWithFallback("name", "de") }
+  nameDe() { return this._getTranslatedAttributeWithFallback("name", "de") ?? null }
 
   /**
    * @abstract
@@ -96,7 +96,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {string | null}
    */
-  nameEn() { return this._getTranslatedAttributeWithFallback("name", "en") }
+  nameEn() { return this._getTranslatedAttributeWithFallback("name", "en") ?? null }
 
   /**
    * @abstract

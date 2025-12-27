@@ -129,7 +129,7 @@ export default class DbGenerateModel extends BaseCommand {
             fileContent += "   */\n"
           }
 
-          fileContent += `  ${name}() { return this._getTranslatedAttributeWithFallback("${name}", this._getConfiguration().getLocale()) }\n`
+          fileContent += `  ${name}() { return this._getTranslatedAttributeWithFallback("${name}", this._getConfiguration().getLocale()) ?? null }\n`
           methodsCount++
 
           const hasName = `has${inflection.camelize(name)}`
@@ -152,7 +152,7 @@ export default class DbGenerateModel extends BaseCommand {
               fileContent += "   */\n"
             }
 
-            fileContent += `  ${localeMethodName}() { return this._getTranslatedAttributeWithFallback("${name}", "${locale}") }\n`
+            fileContent += `  ${localeMethodName}() { return this._getTranslatedAttributeWithFallback("${name}", "${locale}") ?? null }\n`
             methodsCount++
 
             const localeHasName = `has${inflection.camelize(localeMethodName)}`
