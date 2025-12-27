@@ -30,7 +30,8 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
 
       if (tableType == "BASE TABLE") {
         const createRows = await driver.query(`SHOW CREATE TABLE ${driver.quoteTable(tableName)}`)
-        const createStatement = this._mysqlCreateStatement(createRows?.[0])
+        const rawCreateStatement = this._mysqlCreateStatement(createRows?.[0])
+        const createStatement = rawCreateStatement ? this._stripAutoIncrement(rawCreateStatement) : null
 
         if (createStatement) statements.push(normalizeSqlStatement(createStatement))
       } else if (tableType == "VIEW" || (isMariaDb && tableType == "SYSTEM VIEW")) {
@@ -74,5 +75,14 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
 
     return null
   }
-}
 
+  /**
+   * @param {string} statement - Statement.
+   * @returns {string} - Statement without auto increment.
+   */
+  _stripAutoIncrement(statement) {
+    return statement
+      .replace(/\sAUTO_INCREMENT\s*=\s*\d+/gi, "")
+      .replace(/\s{2,}/g, " ")
+  }
+}
