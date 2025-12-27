@@ -1584,7 +1584,7 @@ class VelociousDatabaseRecord {
   /**
    * Reads an attribute value from the record.
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
-   * @returns {unknown} - The attribute.
+   * @returns {any} - The attribute.
    */
   readAttribute(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
@@ -1598,7 +1598,7 @@ class VelociousDatabaseRecord {
   /**
    * Reads a column value from the record.
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
-   * @returns {unknown} - The column.
+   * @returns {any} - The column.
    */
   readColumn(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
