@@ -12,7 +12,7 @@ export default class DbGenerateModel extends BaseCommand {
     const modelClasses = this.getConfiguration().getModelClasses()
     let devMode = false
 
-    if (baseModelsDir.endsWith("velocious/spec/dummy/src/model-bases")) {
+    if (baseModelsDir.includes("/spec/dummy/src/model-bases")) {
       devMode = true
     }
 
