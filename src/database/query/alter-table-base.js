@@ -40,7 +40,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
       } else if (column.getNewName()) {
         sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(column.getNewName())}`
       } else if (column.getDropColumn()) {
-        sql += `DROP COLUMN ${options.quoteColumnName}`
+        sql += `DROP COLUMN ${options.quoteColumnName(column.getName())}`
       } else {
         if (databaseType == "mssql" || databaseType == "pgsql") {
           sql += "ALTER COLUMN "
