@@ -3,7 +3,7 @@ import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("Database - query - model class query", {focus: true}, () => {
+describe("Database - query - model class query", {databaseCleaning: {transaction: false, truncate: true}, focus: true}, () => {
   it("counts distinct records", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({nameEn: "Project name", nameDe: "Projektname"})
@@ -107,6 +107,33 @@ describe("Database - query - model class query", {focus: true}, () => {
         .sort()
 
       expect(names).toEqual(["Deep Match Task"])
+    })
+  })
+
+  it("filters on deep nested boolean attributes", async () => {
+    await Dummy.run(async () => {
+      const projectMatch = await Project.create({
+        creatingUserReference: "creator-5",
+        nameEn: "Deep Bool Match Project",
+        nameDe: "Tiefes Boolesches Trefferprojekt"
+      })
+      const projectMiss = await Project.create({
+        creatingUserReference: "creator-6",
+        nameEn: "Deep Bool Miss Project",
+        nameDe: "Tiefes Boolesches Fehlprojekt"
+      })
+
+      await ProjectDetail.create({project: projectMatch, isActive: true, note: "Active"})
+      await ProjectDetail.create({project: projectMiss, isActive: false, note: "Inactive"})
+
+      await Task.create({name: "Deep Bool Match Task", project: projectMatch})
+      await Task.create({name: "Deep Bool Miss Task", project: projectMiss})
+
+      const names = (await Task.where({project: {projectDetail: {isActive: true}}}).toArray())
+        .map((task) => task.name())
+        .sort()
+
+      expect(names).toEqual(["Deep Bool Match Task"])
     })
   })
 

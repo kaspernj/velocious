@@ -75,6 +75,7 @@ describe("Cli - Commands - db:rollback", () => {
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -101,13 +102,16 @@ describe("Cli - Commands - db:rollback", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806",
+        "20251228090000"
       ])
     } else {
       expect(tablesResult.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
+          "comments",
           "interactions",
           "project_details",
           "project_translations",
@@ -135,7 +139,9 @@ describe("Cli - Commands - db:rollback", () => {
         "20250921121002",
         "20251223194400",
         "20251223210800",
-        "20251223214200"
+        "20251223214200",
+        "20251225230806",
+        "20251228090000"
       ])
     }
 
@@ -176,7 +182,9 @@ describe("Cli - Commands - db:rollback", () => {
         "20251223194400",
         "20251223210800",
         "20251223214200",
-        "20251225230806"
+        "20251225230806",
+        "20251228090000",
+        "20251228090010"
       ])
     } else {
       expect(newTablesResult.sort()).toEqual(
@@ -212,7 +220,9 @@ describe("Cli - Commands - db:rollback", () => {
         "20251223194400",
         "20251223210800",
         "20251223214200",
-        "20251225230806"
+        "20251225230806",
+        "20251228090000",
+        "20251228090010"
       ])
     }
   })
