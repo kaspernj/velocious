@@ -126,8 +126,9 @@ describe("Record - create", () => {
 
   it("round-trips datetime values without timezone shifts", async () => {
     await Dummy.run(async () => {
+      const project = await Project.create({name: "Timezone project"})
       const timestamp = new Date("2025-12-26T12:34:56.789Z")
-      const task = await Task.create({name: "Timezone task", createdAt: timestamp})
+      const task = await Task.create({name: "Timezone task", createdAt: timestamp, project})
       const reloaded = await Task.find(task.id())
 
       expect(reloaded.createdAt()?.getTime()).toEqual(timestamp.getTime())
