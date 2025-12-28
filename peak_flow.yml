@@ -46,8 +46,8 @@ builds:
     name: MariaDB
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
-      - wait-for-it mssql:1433
       - wait-for-it mariadb:3306
+      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -57,7 +57,7 @@ builds:
     name: MS-SQL
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
-      - wait-for-it mssql:1433
+      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -67,8 +67,8 @@ builds:
     name: PG-SQL
     script:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
-      - wait-for-it mssql:1433
       - wait-for-it postgres:5432
+      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -78,7 +78,7 @@ builds:
     name: SQLite
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
-      - wait-for-it mssql:1433
+      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
