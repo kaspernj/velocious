@@ -41,7 +41,7 @@ describe("Database - query - model class query", () => {
     })
   })
 
-  it("returns no results when where is given an empty array", {focus: true}, async () => {
+  it("returns no results when where is given an empty array", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({nameEn: "Empty Where", nameDe: "Leere Abfrage"})
       await Task.create({name: "Task 1", project})
