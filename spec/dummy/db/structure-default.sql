@@ -25,7 +25,7 @@ CREATE TABLE `string_subjects` ( `id` varchar(255) NOT NULL, `name` varchar(255)
 CREATE TABLE `string_subject_interactions` ( `id` bigint(20) NOT NULL AUTO_INCREMENT, `subject_id` varchar(255) NOT NULL, `subject_type` varchar(255) DEFAULT NULL, `kind` varchar(255) DEFAULT NULL, `created_at` datetime DEFAULT NULL, `updated_at` datetime DEFAULT NULL, PRIMARY KEY (`id`), KEY `subject_id` (`subject_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
-CREATE TABLE `tasks` ( `id` bigint(20) NOT NULL AUTO_INCREMENT, `project_id` bigint(20) NOT NULL, `name` varchar(255) DEFAULT NULL, `description` text DEFAULT NULL, `created_at` datetime DEFAULT NULL, `updated_at` datetime DEFAULT NULL, PRIMARY KEY (`id`), KEY `project_id` (`project_id`), CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
+CREATE TABLE `tasks` ( `id` bigint(20) NOT NULL AUTO_INCREMENT, `project_id` bigint(20) NOT NULL, `name` varchar(255) DEFAULT NULL, `description` text DEFAULT NULL, `created_at` datetime DEFAULT NULL, `updated_at` datetime DEFAULT NULL, `is_done` tinyint(1) DEFAULT NULL, PRIMARY KEY (`id`), KEY `project_id` (`project_id`), CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 CREATE TABLE `users` ( `id` bigint(20) NOT NULL AUTO_INCREMENT, `email` varchar(255) NOT NULL, `encrypted_password` varchar(255) NOT NULL, `reference` varchar(255) DEFAULT NULL, `created_at` datetime DEFAULT NULL, `updated_at` datetime DEFAULT NULL, PRIMARY KEY (`id`), UNIQUE KEY `index_on_email` (`email`)
