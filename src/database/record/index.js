@@ -650,6 +650,8 @@ class VelociousDatabaseRecord {
       normalizedValue = this._normalizeDateValue(newValue)
     }
 
+    normalizedValue = this._normalizeSqliteBooleanValue({columnType, value: normalizedValue})
+
     if (this._attributes[columnName] != normalizedValue) {
       this._changes[columnName] = normalizedValue
     }
@@ -671,6 +673,22 @@ class VelociousDatabaseRecord {
     if (Number.isNaN(timestamp)) return value
 
     return new Date(timestamp)
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string | undefined} args.columnType - Column type.
+   * @param {any} args.value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeSqliteBooleanValue({columnType, value}) {
+    if (this.getModelClass().getDatabaseType() != "sqlite") return value
+    if (!columnType || typeof columnType != "string") return value
+    if (columnType.toLowerCase() !== "boolean") return value
+    if (value === true) return 1
+    if (value === false) return 0
+
+    return value
   }
 
   /**
