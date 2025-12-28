@@ -51,7 +51,11 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     const newTableData = new TableData(tempTableName)
 
     for (const tableDataColumn of currentTableData.getColumns()) {
-      const newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
+      let newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
+
+      if (newTableDataColumn && newTableDataColumn.isNewColumn()) {
+        newTableDataColumn = undefined
+      }
 
       if (newTableDataColumn) {
         newTableDataColumn.setAutoIncrement(tableDataColumn.getAutoIncrement())
