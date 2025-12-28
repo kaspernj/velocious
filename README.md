@@ -195,7 +195,16 @@ const tasks = await Task.all().toArray()
 ### Filtering
 
 ```js
-const tasks = await Task.where({tasks: {status: "open"}}).toArray()
+const tasks = await Task.where({status: "open"}).toArray()
+
+const tasksForActiveProjects = await Task.where({
+  project: {projectDetail: {isActive: true}}
+}).toArray()
+
+const specificTask = await Task.where({
+  id: 1,
+  project: {nameEn: "Alpha"}
+}).toArray()
 ```
 
 ### Raw where clauses
