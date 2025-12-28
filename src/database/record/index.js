@@ -1630,12 +1630,8 @@ class VelociousDatabaseRecord {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
 
-    if (column && this.getModelClass().getDatabaseType() == "sqlite") {
-      if (result && (column.getType() == "date" || column.getType() == "datetime")) {
-        if (typeof result == "string") {
-          result = new Date(Date.parse(result))
-        }
-      }
+    if (column && (column.getType() == "date" || column.getType() == "datetime")) {
+      result = this._connection().normalizeDateValueForRead(result)
     }
 
     return result
