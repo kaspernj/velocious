@@ -40,4 +40,15 @@ describe("Database - query - model class query", () => {
       expect(record.isChanged()).toEqual(true)
     })
   })
+
+  it("returns no results when where is given an empty array", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({nameEn: "Empty Where", nameDe: "Leere Abfrage"})
+      await Task.create({name: "Task 1", project})
+
+      const results = await Task.where({id: []}).toArray()
+
+      expect(results).toEqual([])
+    })
+  })
 })

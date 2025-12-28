@@ -42,7 +42,10 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
     for (const whereKey in hash) {
       const whereValue = hash[whereKey]
 
-      if (!Array.isArray(whereValue) && whereValue !== null && typeof whereValue == "object") {
+      if (Array.isArray(whereValue) && whereValue.length === 0) {
+        if (index > 0) sql += " AND "
+        sql += "1=0"
+      } else if (!Array.isArray(whereValue) && whereValue !== null && typeof whereValue == "object") {
         sql += this._whereSQLFromHash(whereValue, whereKey, index)
       } else {
         if (index > 0) sql += " AND "
