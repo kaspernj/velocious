@@ -132,11 +132,20 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
         if (!columnName) throw new Error(`Unknown attribute "${whereKey}" for ${modelClass.name}`)
 
+        let columnSql = `${options.quoteColumnName(columnName)}`
+
         if (tableName) {
-          sql += `${options.quoteTableName(tableName)}.`
+          columnSql = `${options.quoteTableName(tableName)}.${columnSql}`
         }
 
-        sql += `${options.quoteColumnName(columnName)}`
+        const columnType = modelClass.getColumnTypeByName(columnName)
+        const driverType = this.getQuery().driver.getType()
+
+        if (driverType == "mssql" && typeof whereValue === "string" && columnType?.toLowerCase() == "text") {
+          columnSql = `CAST(${columnSql} AS NVARCHAR(MAX))`
+        }
+
+        sql += columnSql
 
         const normalizedValue = this._normalizeSqliteBooleanValue({
           columnName,
