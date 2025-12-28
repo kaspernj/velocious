@@ -31,4 +31,13 @@ describe("Database - query - model class query", () => {
       expect(count).toEqual(4)
     })
   })
+
+  it("findOrInitializeBy marks new records as new and changed", async () => {
+    await Dummy.run(async () => {
+      const record = await Task.where({name: "New Task"}).findOrInitializeBy({name: "New Task"})
+
+      expect(record.isNewRecord()).toEqual(true)
+      expect(record.isChanged()).toEqual(true)
+    })
+  })
 })
