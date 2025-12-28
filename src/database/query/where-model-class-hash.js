@@ -13,11 +13,13 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    * @param {import("./index.js").default} args.query - Query instance.
    * @param {WhereHash} args.hash - Hash.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+   * @param {boolean} [args.qualifyBaseTable] - Whether to qualify base table columns.
    */
-  constructor({query, hash, modelClass}) {
+  constructor({query, hash, modelClass, qualifyBaseTable = false}) {
     super()
     this.hash = hash
     this.modelClass = modelClass
+    this.qualifyBaseTable = qualifyBaseTable
     this.query = query
   }
 
@@ -36,7 +38,9 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   toSql() {
     let sql = "("
 
-    sql += this._whereSQLFromHash(this.hash, this.getModelClass())
+    const baseTableName = this.qualifyBaseTable ? this.getModelClass().tableName() : undefined
+
+    sql += this._whereSQLFromHash(this.hash, this.getModelClass(), baseTableName)
     sql += ")"
 
     return sql

@@ -3,7 +3,7 @@ import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("Database - query - model class query", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("Database - query - model class query", {databaseCleaning: {transaction: false, truncate: true}, focus: true}, () => {
   it("counts distinct records", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({nameEn: "Project name", nameDe: "Projektname"})

@@ -330,7 +330,13 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       }
 
       if (Object.keys(resolvedHash).length > 0) {
-        this._wheres.push(new WhereModelClassHash({hash: resolvedHash, modelClass: this.getModelClass(), query: this}))
+        const qualifyBaseTable = Object.keys(joinObject).length > 0
+        this._wheres.push(new WhereModelClassHash({
+          hash: resolvedHash,
+          modelClass: this.getModelClass(),
+          qualifyBaseTable,
+          query: this
+        }))
       }
 
       if (Object.keys(fallbackHash).length > 0) {
