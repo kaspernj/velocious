@@ -166,6 +166,18 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * @param {any} value - Value to use.
+   * @returns {any} - The converted value.
+   */
+  _convertValue(value) {
+    if (typeof value === "boolean") {
+      return value ? "true" : "false"
+    }
+
+    return super._convertValue(value)
+  }
+
+  /**
+   * @param {any} value - Value to use.
    * @returns {any} - The escape.
    */
   escape(value) {
@@ -257,4 +269,3 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return await new StructureSql({driver: this}).toSql()
   }
 }
-
