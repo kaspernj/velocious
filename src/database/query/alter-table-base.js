@@ -36,7 +36,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
       if (column.isNewColumn()) {
         sql += "ADD "
-        sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
+        sql += column.getSQL({driver: this.getDriver(), forAlterTable: false})
       } else if (column.getNewName()) {
         sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(column.getNewName())}`
       } else if (column.getDropColumn()) {
