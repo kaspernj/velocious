@@ -104,6 +104,22 @@ export default class TaskBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
+   * @returns {boolean | null}
+   */
+  isDone() { return this.readAttribute("isDone") }
+
+  /**
+   * @param {boolean | null} newValue
+   * @returns {void}
+   */
+  setIsDone(newValue) { return this._setColumnAttribute("isDone", newValue) }
+
+  /**
+   * @returns {boolean}
+   */
+  hasIsDone() { return this._hasAttribute(this.isDone()) }
+
+  /**
    * @returns {import("../models/project.js").default}
    */
   project() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("project").loaded()) }

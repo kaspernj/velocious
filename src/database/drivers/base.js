@@ -332,6 +332,10 @@ export default class VelociousDatabaseDriversBase {
    * @returns {any} - The convert value.
    */
   _convertValue(value) {
+    if (typeof value === "boolean") {
+      return value ? 1 : 0
+    }
+
     if (value instanceof Date) {
       return strftime("%F %T.%L", value)
     }
@@ -876,4 +880,3 @@ export default class VelociousDatabaseDriversBase {
     }
   }
 }
-

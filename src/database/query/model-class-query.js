@@ -2,10 +2,12 @@
 
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
+import {isPlainObject} from "is-plain-object"
 import {Logger} from "../../logger.js"
 import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
+import WhereModelClassHash from "./where-model-class-hash.js"
 
 /**
  * @template {typeof import("../record/index.js").default} MC
@@ -309,5 +311,144 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     return rows.map((row) => columnNames.map((columnName) => row[columnName]))
   }
+
+  /**
+   * @param {import("./index.js").WhereArgumentType} where - Where.
+   * @returns {this} This query instance
+   */
+  where(where) {
+    if (typeof where == "string") {
+      return super.where(where)
+    }
+
+    if (isPlainObject(where)) {
+      const {resolvedHash, fallbackHash} = splitWhereHash({hash: where, modelClass: this.getModelClass()})
+      const joinObject = buildJoinObjectFromWhereHash({hash: where, modelClass: this.getModelClass()})
+
+      if (Object.keys(joinObject).length > 0) {
+        this.joins(joinObject)
+      }
+
+      if (Object.keys(resolvedHash).length > 0) {
+        const qualifyBaseTable = Object.keys(joinObject).length > 0
+        this._wheres.push(new WhereModelClassHash({
+          hash: resolvedHash,
+          modelClass: this.getModelClass(),
+          qualifyBaseTable,
+          query: this
+        }))
+      }
+
+      if (Object.keys(fallbackHash).length > 0) {
+        super.where(fallbackHash)
+      }
+
+      return this
+    }
+
+    throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
+  }
 }
 
+/**
+ * @param {typeof import("../record/index.js").default} modelClass - Model class.
+ * @param {string} relationshipName - Relationship name.
+ * @returns {import("../record/relationships/base.js").default | undefined} - The relationship.
+ */
+function getRelationshipByName(modelClass, relationshipName) {
+  return modelClass.getRelationshipsMap()[relationshipName]
+}
+
+/**
+ * @param {typeof import("../record/index.js").default} modelClass - Model class.
+ * @param {string} key - Attribute or column name.
+ * @returns {string | undefined} - The resolved column name.
+ */
+function resolveColumnName(modelClass, key) {
+  const attributeMap = modelClass.getAttributeNameToColumnNameMap()
+  const columnName = attributeMap[key]
+
+  if (columnName) return columnName
+
+  return undefined
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {Record<string, any>} args.hash - Where hash.
+ * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+ * @returns {{resolvedHash: Record<string, any>, fallbackHash: Record<string, any>}} - Split hashes.
+ */
+function splitWhereHash({hash, modelClass}) {
+  /** @type {Record<string, any>} */
+  const resolvedHash = {}
+  /** @type {Record<string, any>} */
+  const fallbackHash = {}
+
+  for (const key in hash) {
+    const value = hash[key]
+    const isNested = isPlainObject(value)
+
+    if (isNested) {
+      const relationship = getRelationshipByName(modelClass, key)
+
+      if (relationship) {
+        const targetModelClass = relationship.getTargetModelClass()
+        const nestedResult = splitWhereHash({hash: value, modelClass: targetModelClass})
+        const nestedResolvedKeys = Object.keys(nestedResult.resolvedHash)
+        const nestedFallbackKeys = Object.keys(nestedResult.fallbackHash)
+
+        if (nestedResolvedKeys.length > 0) {
+          resolvedHash[key] = nestedResult.resolvedHash
+        }
+
+        if (nestedFallbackKeys.length > 0) {
+          const tableName = targetModelClass.tableName()
+
+          if (!fallbackHash[tableName]) fallbackHash[tableName] = {}
+          Object.assign(fallbackHash[tableName], nestedResult.fallbackHash)
+        }
+      } else {
+        fallbackHash[key] = value
+      }
+    } else {
+      const columnName = resolveColumnName(modelClass, key)
+
+      if (columnName) {
+        resolvedHash[key] = value
+      } else {
+        fallbackHash[key] = value
+      }
+    }
+  }
+
+  return {resolvedHash, fallbackHash}
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {Record<string, any>} args.hash - Where hash.
+ * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+ * @returns {Record<string, any>} - Join object.
+ */
+function buildJoinObjectFromWhereHash({hash, modelClass}) {
+  /** @type {Record<string, any>} */
+  const joinObject = {}
+
+  for (const key in hash) {
+    const value = hash[key]
+
+    if (!isPlainObject(value)) continue
+
+    const relationship = getRelationshipByName(modelClass, key)
+
+    if (!relationship) continue
+
+    const targetModelClass = relationship.getTargetModelClass()
+    const nestedJoinObject = buildJoinObjectFromWhereHash({hash: value, modelClass: targetModelClass})
+
+    joinObject[key] = Object.keys(nestedJoinObject).length > 0 ? nestedJoinObject : true
+  }
+
+  return joinObject
+}

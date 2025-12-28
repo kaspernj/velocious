@@ -51,7 +51,11 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     const newTableData = new TableData(tempTableName)
 
     for (const tableDataColumn of currentTableData.getColumns()) {
-      const newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
+      let newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
+
+      if (newTableDataColumn && newTableDataColumn.isNewColumn()) {
+        newTableDataColumn = undefined
+      }
 
       if (newTableDataColumn) {
         newTableDataColumn.setAutoIncrement(tableDataColumn.getAutoIncrement())
@@ -66,8 +70,12 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       newTableData.addColumn(newTableDataColumn || tableDataColumn)
     }
 
+    // SQLite rebuilds use existing columns plus new ones; avoid duplicating a column that already exists.
+    const existingColumnNames = new Set(currentTableData.getColumns().map((column) => column.getName()))
+
     for (const tableDataColumn of tableData.getColumns()) {
       if (!tableDataColumn.isNewColumn()) continue
+      if (existingColumnNames.has(tableDataColumn.getName())) continue
 
       newTableData.addColumn(tableDataColumn)
     }
