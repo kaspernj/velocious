@@ -88,6 +88,22 @@ export default class ProjectDetailBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
+   * @returns {boolean | null}
+   */
+  isActive() { return this.readAttribute("isActive") }
+
+  /**
+   * @param {boolean | null} newValue
+   * @returns {void}
+   */
+  setIsActive(newValue) { return this._setColumnAttribute("isActive", newValue) }
+
+  /**
+   * @returns {boolean}
+   */
+  hasIsActive() { return this._hasAttribute(this.isActive()) }
+
+  /**
    * @returns {import("../models/project.js").default}
    */
   project() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("project").loaded()) }
