@@ -52,6 +52,29 @@ describe("database - migration - column types", () => {
           expect(exists).toBe(true)
         }
 
+        const allColumnsTable = await dbs.default.getTableByName("all_column_types")
+        const booleanColumn = await allColumnsTable.getColumnByName("boolean_column")
+        const tinyintColumn = await allColumnsTable.getColumnByName("tinyint_column")
+        const databaseType = dbs.default.getType()
+
+        const expectedTypesByDatabase = {
+          mysql: {boolean_column: "boolean", tinyint_column: "tinyint"},
+          pgsql: {boolean_column: "boolean", tinyint_column: "smallint"},
+          sqlite: {boolean_column: "boolean", tinyint_column: "tinyint"},
+          mssql: {boolean_column: "bit", tinyint_column: "tinyint"}
+        }
+
+        const expectedTypes = expectedTypesByDatabase[databaseType]
+
+        if (!expectedTypes) throw new Error(`Unhandled database type: ${databaseType}`)
+
+        expect(booleanColumn.getType()).toBe(expectedTypes.boolean_column)
+        expect(tinyintColumn.getType()).toBe(expectedTypes.tinyint_column)
+
+        if (["mysql", "pgsql"].includes(databaseType)) {
+          expect(booleanColumn.getNotes()).toBe("velocious:type=boolean")
+        }
+
         await migration.dropTable("all_column_types")
       })
     })

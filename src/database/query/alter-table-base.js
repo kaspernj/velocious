@@ -57,6 +57,20 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
     sqls.push(sql)
 
+    if (databaseType == "pgsql") {
+      for (const column of tableData.getColumns()) {
+        if (!column.isNewColumn() || column.getDropColumn()) continue
+
+        const notes = column.getNotesForDatabase(databaseType)
+
+        if (!notes) continue
+
+        sqls.push(
+          `COMMENT ON COLUMN ${options.quoteTableName(tableData.getName())}.${options.quoteColumnName(column.getActualName())} IS ${options.quote(notes)}`
+        )
+      }
+    }
+
     return sqls
   }
 }

@@ -17,6 +17,7 @@ import TableForeignKey from "./table-foreign-key.js"
  * @property {boolean|IndexArgType} [index] - Whether the column should be indexed.
  * @property {boolean} [isNewColumn] - Whether this column is being added in a migration.
  * @property {number} [maxLength] - Maximum length for the column value.
+ * @property {string} [notes] - Column notes or comment.
  * @property {boolean} [null] - Whether the column allows null values.
  * @property {boolean} [polymorphic] - Whether the column is polymorphic.
  * @property {boolean} [primaryKey] - Whether the column is a primary key.
@@ -30,7 +31,7 @@ export default class TableColumn {
    */
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, null: argsNull, polymorphic, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
+      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, notes, null: argsNull, polymorphic, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
 
       if (Object.keys(args).length == 0) {
         throw new Error("Empty args given")
@@ -144,6 +145,17 @@ export default class TableColumn {
   setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
 
   /**
+   * @returns {string | undefined} - The notes.
+   */
+  getNotes() { return this.args?.notes }
+
+  /**
+   * @param {string | undefined} newNotes - New notes.
+   * @returns {void} - No return value.
+   */
+  setNotes(newNotes) { this.args.notes = newNotes }
+
+  /**
    * @returns {boolean | undefined} - Whether null.
    */
   getNull() { return this.args?.null }
@@ -175,6 +187,23 @@ export default class TableColumn {
    * @returns {void} - No return value.
    */
   setType(newType) { this.args.type = newType }
+
+  /**
+   * @returns {string | undefined} - The type hint notes.
+   */
+  getTypeHintNotes() {
+    if (this.getType()?.toLowerCase() == "boolean") return "velocious:type=boolean"
+  }
+
+  /**
+   * @param {string} databaseType - Database type.
+   * @returns {string | undefined} - Notes for the database.
+   */
+  getNotesForDatabase(databaseType) {
+    if (!["mysql", "pgsql"].includes(databaseType)) return
+
+    return this.getNotes() || this.getTypeHintNotes()
+  }
 
   /**
    * @returns {boolean} - Whether new column.
@@ -280,6 +309,12 @@ export default class TableColumn {
     if (this.getPrimaryKey()) sql += " PRIMARY KEY"
     if (this.getNull() === false) sql += " NOT NULL"
 
+    const notes = this.getNotesForDatabase(databaseType)
+
+    if (notes && databaseType == "mysql") {
+      sql += ` COMMENT ${options.quote(notes)}`
+    }
+
     const foreignKey = this.getForeignKey()
 
     if (foreignKey) {
@@ -301,4 +336,3 @@ export default class TableColumn {
     return sql
   }
 }
-
