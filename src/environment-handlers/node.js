@@ -14,6 +14,14 @@ import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 import path from "path"
+import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
+
+/**
+ * @returns {typeof import("node:async_hooks").AsyncLocalStorage} - AsyncLocalStorage constructor.
+ */
+export function getAsyncLocalStorage() {
+  return NodeAsyncLocalStorage
+}
 
 export default class VelociousEnvironmentHandlerNode extends Base{
   /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
