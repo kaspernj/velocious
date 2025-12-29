@@ -1,6 +1,7 @@
 // @ts-check
 
 import fs from "fs/promises"
+import path from "path"
 
 import fileExists from "../utils/file-exists.js"
 import {Logger} from "../logger.js"
@@ -50,19 +51,15 @@ export default class TestFilesFinder {
     /** @type {string[]} */
     this.fileArgs = []
 
-    for (const testArg of this.testArgs) {
-      if (testArg.endsWith("/")) {
-        this.directoryArgs.push(testArg)
-      } else {
-        this.fileArgs.push(testArg)
-      }
-    }
+    this._argsPrepared = false
   }
 
   /**
    * @returns {Promise<string[]>} - Resolves with the test files.
    */
   async findTestFiles() {
+    await this.prepareArgs()
+
     await this.withFindingCount(async () => {
       for (const directory of this.directories) {
         if (await fileExists(directory)) {
@@ -188,5 +185,55 @@ export default class TestFilesFinder {
    */
   looksLikeTestFile(file) {
     return Boolean(file.match(/-(spec|test)\.(m|)js$/))
+  }
+
+  /**
+   * @returns {Promise<void>} - Resolves when test args are prepared.
+   */
+  async prepareArgs() {
+    if (this._argsPrepared) return
+
+    for (const testArg of this.testArgs) {
+      const forceDirectory = testArg.endsWith("/") || testArg.endsWith(path.sep)
+      const fullPath = path.isAbsolute(testArg) ? testArg : path.resolve(this.directory, testArg)
+      const localPath = this.toLocalPath(fullPath)
+
+      if (forceDirectory) {
+        this.directoryArgs.push(this.ensureTrailingSlash(localPath))
+        continue
+      }
+
+      try {
+        const stats = await fs.stat(fullPath)
+
+        if (stats.isDirectory()) {
+          this.directoryArgs.push(this.ensureTrailingSlash(localPath))
+        } else if (stats.isFile()) {
+          this.fileArgs.push(localPath)
+        }
+      } catch {
+        this.fileArgs.push(localPath)
+      }
+    }
+
+    this._argsPrepared = true
+  }
+
+  /**
+   * @param {string} localPath - Local path.
+   * @returns {string} - Normalized local path with trailing slash.
+   */
+  ensureTrailingSlash(localPath) {
+    if (localPath === "") return localPath
+    return localPath.endsWith("/") ? localPath : `${localPath}/`
+  }
+
+  /**
+   * @param {string} fullPath - Full path.
+   * @returns {string} - Local path relative to the base directory.
+   */
+  toLocalPath(fullPath) {
+    const relativePath = path.relative(this.directory, fullPath)
+    return relativePath.split(path.sep).join("/")
   }
 }

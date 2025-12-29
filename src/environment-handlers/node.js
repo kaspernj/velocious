@@ -128,7 +128,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()
-    const command = commands.find((aCommand) => aCommand.name === commandParts.join(":"))
+    const commandName = commandParts.join(":")
+    const command = commands.find((aCommand) => aCommand.name === commandName)
 
     if (!command) {
       const possibleCommands = commands.map(aCommand => aCommand.name)
