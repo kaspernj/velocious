@@ -122,24 +122,6 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {string} arg - CLI argument to evaluate.
-   * @returns {Promise<boolean>} - Whether the argument resolves to a file or directory.
-   */
-  async isPathArgument(arg) {
-    if (!arg) return false
-
-    const baseDirectory = this.getConfiguration().getDirectory()
-    const fullPath = path.isAbsolute(arg) ? arg : path.resolve(baseDirectory, arg)
-
-    try {
-      const stat = await fs.stat(fullPath)
-      return stat.isFile() || stat.isDirectory()
-    } catch {
-      return false
-    }
-  }
-
-  /**
    * @param {object} args - Options object.
    * @param {string[]} args.commandParts - Command parts.
    * @returns {Promise<typeof import ("../cli/base-command.js").default>} - Resolves with the require command.
@@ -147,23 +129,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()
     const commandName = commandParts.join(":")
-    let command = commands.find((aCommand) => aCommand.name === commandName)
-
-    if (!command) {
-      const processArgs = this.args?.processArgs || []
-
-      if (await this.isPathArgument(processArgs[0])) {
-        const testCommand = commands.find((aCommand) => aCommand.name === "test")
-
-        if (testCommand) {
-          if (this.args) {
-            this.args.processArgs = ["test", ...processArgs]
-          }
-
-          command = testCommand
-        }
-      }
-    }
+    const command = commands.find((aCommand) => aCommand.name === commandName)
 
     if (!command) {
       const possibleCommands = commands.map(aCommand => aCommand.name)
