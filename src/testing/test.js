@@ -152,6 +152,32 @@ class Expect extends BaseExpect {
   }
 
   /**
+   * @param {number} result - Result.
+   * @returns {void} - No return value.
+   */
+  toBeLessThanOrEqual(result) {
+    if (typeof this._object !== "number" || typeof result !== "number") {
+      throw new Error(`Expected numbers but got ${typeof this._object} and ${typeof result}`)
+    }
+
+    if (this._not) {
+      if (this._object <= result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} was unexpected to be less than or equal to ${resultPrint}`)
+      }
+    } else {
+      if (this._object > result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} wasn't expected to be greater than ${resultPrint}`)
+      }
+    }
+  }
+
+  /**
    * @returns {void} - No return value.
    */
   toBeDefined() {
@@ -543,4 +569,3 @@ globalThis.it = it
 globalThis.fit = fit
 
 export {afterEach, beforeEach, describe, expect, fit, it, tests}
-

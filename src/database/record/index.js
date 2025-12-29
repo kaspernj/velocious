@@ -1631,7 +1631,9 @@ class VelociousDatabaseRecord {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
 
-    if (column && (column.getType() == "date" || column.getType() == "datetime")) {
+    const columnType = column?.getType()
+
+    if (columnType && this.getModelClass()._isDateLikeType(columnType)) {
       result = this._normalizeDateValueForRead(result)
     }
 

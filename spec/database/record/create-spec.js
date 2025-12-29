@@ -132,7 +132,20 @@ describe("Record - create", () => {
       const task = await Task.create({name: "Timezone task", createdAt: timestamp, project})
       const reloaded = await Task.find(task.id())
 
-      expect(reloaded.createdAt()?.getTime()).toEqual(timestamp.getTime())
+      const actualTime = reloaded.createdAt()?.getTime()
+      const expectedTime = timestamp.getTime()
+
+      if (actualTime === undefined) {
+        throw new Error("Expected createdAt to be set")
+      }
+
+      if (Task.getDatabaseType() == "mysql") {
+        expect(Math.floor(actualTime / 1000)).toEqual(Math.floor(expectedTime / 1000))
+      } else if (Task.getDatabaseType() == "mssql") {
+        expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
+      } else {
+        expect(actualTime).toEqual(expectedTime)
+      }
     })
   })
 
@@ -149,7 +162,20 @@ describe("Record - create", () => {
 
         const reloaded = await Task.find(task.id())
 
-        expect(reloaded.createdAt()?.getTime()).toEqual(timestamp.getTime())
+        const actualTime = reloaded.createdAt()?.getTime()
+        const expectedTime = timestamp.getTime()
+
+        if (actualTime === undefined) {
+          throw new Error("Expected createdAt to be set")
+        }
+
+        if (Task.getDatabaseType() == "mysql") {
+          expect(Math.floor(actualTime / 1000)).toEqual(Math.floor(expectedTime / 1000))
+        } else if (Task.getDatabaseType() == "mssql") {
+          expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
+        } else {
+          expect(actualTime).toEqual(expectedTime)
+        }
       })
 
       if (taskId === undefined) throw new Error("Expected task to be created")
@@ -160,7 +186,20 @@ describe("Record - create", () => {
         const reloaded = await Task.find(resolvedTaskId)
         const expected = new Date(timestamp.getTime() - (120 * 60 * 1000))
 
-        expect(reloaded.createdAt()?.getTime()).toEqual(expected.getTime())
+        const actualTime = reloaded.createdAt()?.getTime()
+        const expectedTime = expected.getTime()
+
+        if (actualTime === undefined) {
+          throw new Error("Expected createdAt to be set")
+        }
+
+        if (Task.getDatabaseType() == "mysql") {
+          expect(Math.floor(actualTime / 1000)).toEqual(Math.floor(expectedTime / 1000))
+        } else if (Task.getDatabaseType() == "mssql") {
+          expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
+        } else {
+          expect(actualTime).toEqual(expectedTime)
+        }
       })
     })
   })
