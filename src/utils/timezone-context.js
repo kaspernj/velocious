@@ -1,10 +1,10 @@
 // @ts-check
 
-import {AsyncLocalStorage} from "async_hooks"
+import {AsyncLocalStorage} from "./async-local-storage.js"
 
 /** @typedef {{offsetMinutes: number}} TimezoneStore */
 
-/** @type {AsyncLocalStorage<TimezoneStore> | undefined} */
+/** @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
 let asyncLocalStorage
 
 if (AsyncLocalStorage) {
