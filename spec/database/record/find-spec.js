@@ -1,6 +1,7 @@
 import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
+import UuidItem from "../../dummy/src/models/uuid-item.js"
 
 describe("Record - find", () => {
   it("finds an existing record", async () => {
@@ -26,6 +27,18 @@ describe("Record - find", () => {
       } catch (error) {
         expect(error.message).toEqual("Couldn't find Task with 'id'=123")
         expect(error.constructor.name).toEqual("RecordNotFoundError")
+      }
+    })
+  })
+
+  it("treats numeric ids as strings for uuid primary keys", async () => {
+    await Dummy.run(async () => {
+      try {
+        await UuidItem.find(1)
+        throw new Error("Didn't expect to reach this")
+      } catch (error) {
+        expect(error.constructor.name).toEqual("RecordNotFoundError")
+        expect(error.message).toEqual("Couldn't find UuidItem with 'id'=1")
       }
     })
   })
