@@ -373,10 +373,16 @@ export default class VelociousConfiguration {
    */
   getTimezoneOffsetMinutes() {
     if (typeof this._timezoneOffsetMinutes === "function") {
-      return this._timezoneOffsetMinutes()
+      const configuredOffset = this._timezoneOffsetMinutes()
+
+      if (typeof configuredOffset === "number") return configuredOffset
     }
 
-    return this._timezoneOffsetMinutes
+    if (typeof this._timezoneOffsetMinutes === "number") {
+      return this._timezoneOffsetMinutes
+    }
+
+    return new Date().getTimezoneOffset()
   }
 
   /** @returns {import("./http-server/websocket-events.js").default | undefined} - The websocket events.  */

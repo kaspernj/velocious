@@ -15,7 +15,6 @@ import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
 import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
-import {getTimezoneOffsetMinutes} from "../../utils/timezone-context.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import ValidatorsPresence from "./validators/presence.js"
@@ -1647,7 +1646,8 @@ class VelociousDatabaseRecord {
   _normalizeDateValueForRead(value) {
     if (value === null || value === undefined) return value
 
-    const offsetMinutes = getTimezoneOffsetMinutes(this.getModelClass()._getConfiguration())
+    const configuration = this.getModelClass()._getConfiguration()
+    const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
     const offsetMs = offsetMinutes * 60 * 1000
 
     if (value instanceof Date) {
@@ -1762,7 +1762,8 @@ class VelociousDatabaseRecord {
    * @returns {void} - No return value.
    */
   _normalizeDateValuesForWrite(data) {
-    const offsetMinutes = getTimezoneOffsetMinutes(this.getModelClass()._getConfiguration())
+    const configuration = this.getModelClass()._getConfiguration()
+    const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
     const offsetMs = offsetMinutes * 60 * 1000
 
     for (const columnName in data) {

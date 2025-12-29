@@ -38,6 +38,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     this.logger = new Logger(this)
   }
 
+
   /**
    * @returns {Promise<MigrationsRequireContextType>} - Resolves with the migrations require context.
    */

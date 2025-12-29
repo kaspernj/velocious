@@ -14,8 +14,14 @@ import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 import path from "path"
+import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
+
+/** @typedef {{offsetMinutes: number}} TimezoneStore */
 
 export default class VelociousEnvironmentHandlerNode extends Base{
+  /** @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
+  _timezoneAsyncLocalStorage = NodeAsyncLocalStorage ? new NodeAsyncLocalStorage() : undefined
+
   /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
 
@@ -28,6 +34,51 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     if (!this._findCommandsResult) throw new Error("Could not get commands")
 
     return this._findCommandsResult
+  }
+
+  /**
+   * @param {number} offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @param {() => Promise<any>} callback - Callback to run.
+   * @returns {Promise<any>} - Result of the callback.
+   */
+  async runWithTimezoneOffset(offsetMinutes, callback) {
+    if (!this._timezoneAsyncLocalStorage) {
+      return await callback()
+    }
+
+    return await this._timezoneAsyncLocalStorage.run({offsetMinutes}, callback)
+  }
+
+  /**
+   * @param {number} offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @returns {void} - No return value.
+   */
+  setTimezoneOffset(offsetMinutes) {
+    if (!this._timezoneAsyncLocalStorage) return
+
+    const store = this._timezoneAsyncLocalStorage.getStore()
+
+    if (store) {
+      store.offsetMinutes = offsetMinutes
+    } else {
+      this._timezoneAsyncLocalStorage.enterWith({offsetMinutes})
+    }
+  }
+
+  /**
+   * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
+   * @returns {number} - Offset in minutes.
+   */
+  getTimezoneOffsetMinutes(configuration) {
+    if (this._timezoneAsyncLocalStorage) {
+      const store = this._timezoneAsyncLocalStorage.getStore()
+
+      if (store && typeof store.offsetMinutes === "number") {
+        return store.offsetMinutes
+      }
+    }
+
+    return super.getTimezoneOffsetMinutes(configuration)
   }
 
   async _actualFindCommands() {
