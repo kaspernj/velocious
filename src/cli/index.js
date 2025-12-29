@@ -1,8 +1,5 @@
 // @ts-check
 
-import fs from "fs/promises"
-import path from "path"
-
 export default class VelociousCli {
   /**
    * @param {object} args - Options object.
@@ -40,14 +37,13 @@ export default class VelociousCli {
       parsedCommandParts.push(commandPart)
     }
 
-    const commands = await this.environmentHandler.findCommands()
-    const commandNames = new Set(commands.map(aCommand => aCommand.name))
-    const commandKey = parsedCommandParts.join(":")
+    const resolvedCommand = await this.environmentHandler.resolveCommand({
+      commandParts: parsedCommandParts,
+      processArgs: this.args.processArgs
+    })
 
-    if (!commandNames.has(commandKey) && await this.isPathArgument(this.args.processArgs[0])) {
-      this.args.processArgs = ["test", ...this.args.processArgs]
-      parsedCommandParts = ["test"]
-    }
+    this.args.processArgs = resolvedCommand.processArgs
+    parsedCommandParts = resolvedCommand.commandParts
 
     const CommandClass = await this.environmentHandler.requireCommand({commandParts: parsedCommandParts})
     const commandInstance = new CommandClass({args: this.args, cli: this})
@@ -63,21 +59,5 @@ export default class VelociousCli {
   /** @returns {boolean} - Whether testing.  */
   getTesting() {
     return this.args.testing
-  }
-
-  /**
-   * @param {string} arg - CLI argument to evaluate.
-   * @returns {Promise<boolean>} - Whether the argument resolves to a file or directory.
-   */
-  async isPathArgument(arg) {
-    const baseDirectory = this.getConfiguration().getDirectory()
-    const fullPath = path.isAbsolute(arg) ? arg : path.resolve(baseDirectory, arg)
-
-    try {
-      const stat = await fs.stat(fullPath)
-      return stat.isFile() || stat.isDirectory()
-    } catch {
-      return false
-    }
   }
 }

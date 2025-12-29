@@ -126,6 +126,16 @@ export default class VelociousEnvironmentHandlerBase {
   importTestFiles(_testFiles) { throw new Error("'importTestFiles' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
+   * @param {object} args - Options object.
+   * @param {string[]} args.commandParts - Command parts.
+   * @param {string[]} args.processArgs - Process args.
+   * @returns {Promise<{commandParts: string[], processArgs: string[]}>} - Resolves with adjusted command info.
+   */
+  async resolveCommand({commandParts, processArgs}) {
+    return {commandParts, processArgs}
+  }
+
+  /**
    * @abstract
    * @returns {Promise<void>} - Resolves when complete.
    */

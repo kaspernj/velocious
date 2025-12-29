@@ -124,6 +124,42 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * @param {object} args - Options object.
    * @param {string[]} args.commandParts - Command parts.
+   * @param {string[]} args.processArgs - Process args.
+   * @returns {Promise<{commandParts: string[], processArgs: string[]}>} - Resolves with adjusted command info.
+   */
+  async resolveCommand({commandParts, processArgs}) {
+    const commands = await this.findCommands()
+    const commandNames = new Set(commands.map(aCommand => aCommand.name))
+    const commandKey = commandParts.join(":")
+
+    if (!commandNames.has(commandKey) && await this.isPathArgument(processArgs[0])) {
+      return {commandParts: ["test"], processArgs: ["test", ...processArgs]}
+    }
+
+    return {commandParts, processArgs}
+  }
+
+  /**
+   * @param {string} arg - CLI argument to evaluate.
+   * @returns {Promise<boolean>} - Whether the argument resolves to a file or directory.
+   */
+  async isPathArgument(arg) {
+    if (!arg) return false
+
+    const baseDirectory = this.getConfiguration().getDirectory()
+    const fullPath = path.isAbsolute(arg) ? arg : path.resolve(baseDirectory, arg)
+
+    try {
+      const stat = await fs.stat(fullPath)
+      return stat.isFile() || stat.isDirectory()
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string[]} args.commandParts - Command parts.
    * @returns {Promise<typeof import ("../cli/base-command.js").default>} - Resolves with the require command.
    */
   async requireCommand({commandParts}) {

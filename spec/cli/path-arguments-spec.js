@@ -6,7 +6,7 @@ import path from "path"
 import BaseCommand from "../../src/cli/base-command.js"
 import Cli from "../../src/cli/index.js"
 import Configuration from "../../src/configuration.js"
-import EnvironmentHandlerBase from "../../src/environment-handlers/base.js"
+import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 
 describe("Cli - path arguments", () => {
   it("runs the test command when the first argument is a path", async () => {
@@ -22,7 +22,7 @@ describe("Cli - path arguments", () => {
       }
     }
 
-    class StubEnvironmentHandler extends EnvironmentHandlerBase {
+    class StubEnvironmentHandler extends EnvironmentHandlerNode {
       async findCommands() {
         return [{name: "test", file: "stub-test.js"}]
       }
