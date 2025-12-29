@@ -61,4 +61,26 @@ describe("Cli - generate - base-models", () => {
 
     expect(returnType).toEqual("typeof User")
   })
+
+  it("generates boolean attribute types in base models", async () => {
+    const cli = new Cli({
+      configuration: dummyConfiguration,
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:base-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const taskBasePath = `${dummyDirectory()}/src/model-bases/task.js`
+    const projectDetailBasePath = `${dummyDirectory()}/src/model-bases/project-detail.js`
+    const taskContents = await fs.readFile(taskBasePath, "utf8")
+    const projectDetailContents = await fs.readFile(projectDetailBasePath, "utf8")
+
+    expect(/@returns \{boolean \| null\}[\s\S]*?isDone\(\)/.test(taskContents)).toBeTrue()
+    expect(/@param \{boolean \| null\} newValue[\s\S]*?setIsDone\(/.test(taskContents)).toBeTrue()
+    expect(/@returns \{boolean \| null\}[\s\S]*?isActive\(\)/.test(projectDetailContents)).toBeTrue()
+    expect(/@param \{boolean \| null\} newValue[\s\S]*?setIsActive\(/.test(projectDetailContents)).toBeTrue()
+  })
 })
