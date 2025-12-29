@@ -259,8 +259,10 @@ class Expect extends BaseExpect {
 
     if (typeof this._object == "string") {
       if (!this._object.includes(String(valueToContain))) {
-        const objectPrint = formatValue(this._object)
-        const valuePrint = formatValue(valueToContain)
+        const objectPrint = minifiedStringify(this._object)
+        const valuePrint = typeof valueToContain == "string"
+          ? minifiedStringify(valueToContain)
+          : formatValue(valueToContain)
 
         throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
       }
@@ -273,7 +275,9 @@ class Expect extends BaseExpect {
 
     if (!this._object.includes(valueToContain)) {
       const objectPrint = formatValue(this._object)
-      const valuePrint = formatValue(valueToContain)
+      const valuePrint = typeof valueToContain == "string"
+        ? minifiedStringify(valueToContain)
+        : formatValue(valueToContain)
 
       throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
     }
@@ -346,17 +350,14 @@ class Expect extends BaseExpect {
     }
 
     const match = this._object.match(regex)
+    const objectPrint = minifiedStringify(this._object)
 
     if (this._not) {
       if (match) {
-        const objectPrint = formatValue(this._object)
-
         throw new Error(`${objectPrint} shouldn't match ${regex}`)
       }
     } else {
       if (!match) {
-        const objectPrint = formatValue(this._object)
-
         throw new Error(`${objectPrint} didn't match ${regex}`)
       }
     }
