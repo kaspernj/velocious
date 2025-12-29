@@ -337,10 +337,7 @@ export default class VelociousDatabaseDriversBase {
     }
 
     if (value instanceof Date) {
-      const offsetMs = value.getTimezoneOffset() * 60 * 1000
-      const adjusted = new Date(value.getTime() - offsetMs)
-
-      return strftime("%F %T.%L", adjusted)
+      return strftime("%F %T.%L", value)
     }
 
     return value
@@ -395,26 +392,6 @@ export default class VelociousDatabaseDriversBase {
    * @param {any} value - Value from database.
    * @returns {any} - Normalized value.
    */
-  normalizeDateValueForRead(value) {
-    if (value === null || value === undefined) return value
-
-    const offsetMs = new Date().getTimezoneOffset() * 60 * 1000
-
-    if (value instanceof Date) {
-      return new Date(value.getTime() + offsetMs)
-    }
-
-    if (typeof value != "string") return value
-
-    const hasTimezone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value)
-    const normalized = value.includes("T") ? value : value.replace(" ", "T")
-    const parseValue = hasTimezone ? normalized : `${normalized}Z`
-    const parsed = Date.parse(parseValue)
-
-    if (Number.isNaN(parsed)) return value
-
-    return new Date(parsed + offsetMs)
-  }
 
   /**
    * @returns {Query} - The new query.

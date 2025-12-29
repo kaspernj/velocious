@@ -27,7 +27,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, timezoneOffsetMinutes, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -43,6 +43,7 @@ export default class VelociousConfiguration {
     this.locales = locales
     this._initializers = initializers
     this._testing = testing
+    this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._websocketEvents = undefined
     this._logging = logging
     this._errorEvents = new EventEmitter()
@@ -365,6 +366,17 @@ export default class VelociousConfiguration {
   /** @returns {function(string, {defaultValue: string} | undefined) : string} - The translator.  */
   getTranslator() {
     return this._translator || this._defaultTranslator
+  }
+
+  /**
+   * @returns {number | undefined} - The timezone offset in minutes.
+   */
+  getTimezoneOffsetMinutes() {
+    if (typeof this._timezoneOffsetMinutes === "function") {
+      return this._timezoneOffsetMinutes()
+    }
+
+    return this._timezoneOffsetMinutes
   }
 
   /** @returns {import("./http-server/websocket-events.js").default | undefined} - The websocket events.  */

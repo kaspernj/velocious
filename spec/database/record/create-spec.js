@@ -1,6 +1,7 @@
 // @ts-check
 
 import Dummy from "../../dummy/index.js"
+import {runWithTimezoneOffset} from "../../../src/utils/timezone-context.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 import {ValidationError} from "../../../src/database/record/index.js"
@@ -135,6 +136,35 @@ describe("Record - create", () => {
     })
   })
 
+  it("applies per-request timezone offsets on write and read", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Timezone offset project"})
+      const timestamp = new Date("2025-12-26T12:34:56.789Z")
+      /** @type {string | number | undefined} */
+      let taskId
+
+      await runWithTimezoneOffset(120, async () => {
+        const task = await Task.create({name: "Timezone offset task", createdAt: timestamp, project})
+        taskId = task.id()
+
+        const reloaded = await Task.find(task.id())
+
+        expect(reloaded.createdAt()?.getTime()).toEqual(timestamp.getTime())
+      })
+
+      if (taskId === undefined) throw new Error("Expected task to be created")
+
+      const resolvedTaskId = /** @type {string | number} */ (taskId)
+
+      await runWithTimezoneOffset(0, async () => {
+        const reloaded = await Task.find(resolvedTaskId)
+        const expected = new Date(timestamp.getTime() - (120 * 60 * 1000))
+
+        expect(reloaded.createdAt()?.getTime()).toEqual(expected.getTime())
+      })
+    })
+  })
+
   it("returns attribute names from attributes()", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({name: "Attribute project"})
@@ -181,7 +211,7 @@ describe("Record - create", () => {
 
         throw new Error("Didnt expect to succeed")
       } catch (error) {
-        expect(error).toBeInstanceOf(ValidationError)
+        expect(error).toBeInstanceOf(/** @type {new (...args: unknown[]) => unknown} */ (ValidationError))
 
         if (error instanceof Error) {
           expect(error.message).toEqual("Name can't be blank")

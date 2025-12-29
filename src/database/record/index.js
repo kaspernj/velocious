@@ -15,6 +15,7 @@ import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
 import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
+import {getTimezoneOffsetMinutes} from "../../utils/timezone-context.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import ValidatorsPresence from "./validators/presence.js"
@@ -1631,10 +1632,36 @@ class VelociousDatabaseRecord {
     }
 
     if (column && (column.getType() == "date" || column.getType() == "datetime")) {
-      result = this._connection().normalizeDateValueForRead(result)
+      result = this._normalizeDateValueForRead(result)
     }
 
     return result
+  }
+
+  /**
+   * @param {any} value - Value from database.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeDateValueForRead(value) {
+    if (value === null || value === undefined) return value
+
+    const offsetMinutes = getTimezoneOffsetMinutes(this.getModelClass()._getConfiguration())
+    const offsetMs = offsetMinutes * 60 * 1000
+
+    if (value instanceof Date) {
+      return new Date(value.getTime() + offsetMs)
+    }
+
+    if (typeof value != "string") return value
+
+    const hasTimezone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value)
+    const normalized = value.includes("T") ? value : value.replace(" ", "T")
+    const parseValue = hasTimezone ? normalized : `${normalized}Z`
+    const parsed = Date.parse(parseValue)
+
+    if (Number.isNaN(parsed)) return value
+
+    return new Date(parsed + offsetMs)
   }
 
   _belongsToChanges() {
@@ -1679,8 +1706,12 @@ class VelociousDatabaseRecord {
     const shouldAssignUUIDPrimaryKey = isUUIDPrimaryKey && !driverSupportsDefaultUUID
     const currentDate = new Date()
 
-    if (createdAtColumn) data.created_at = currentDate
-    if (updatedAtColumn) data.updated_at = currentDate
+    if (createdAtColumn && (data.created_at === undefined || data.created_at === null || data.created_at === "")) {
+      data.created_at = currentDate
+    }
+    if (updatedAtColumn && (data.updated_at === undefined || data.updated_at === null || data.updated_at === "")) {
+      data.updated_at = currentDate
+    }
 
     const columnNames = this.getModelClass().getColumnNames()
     const hasUserProvidedPrimaryKey = data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
@@ -1688,6 +1719,8 @@ class VelociousDatabaseRecord {
     if (shouldAssignUUIDPrimaryKey && !hasUserProvidedPrimaryKey) {
       data[primaryKey] = new UUID(4).format()
     }
+
+    this._normalizeDateValuesForWrite(data)
 
     const sql = this._connection().insertSql({
       returnLastInsertedColumnNames: columnNames,
@@ -1722,6 +1755,27 @@ class VelociousDatabaseRecord {
     }
   }
 
+  /**
+   * @param {Record<string, any>} data - Column-keyed data.
+   * @returns {void} - No return value.
+   */
+  _normalizeDateValuesForWrite(data) {
+    const offsetMinutes = getTimezoneOffsetMinutes(this.getModelClass()._getConfiguration())
+    const offsetMs = offsetMinutes * 60 * 1000
+
+    for (const columnName in data) {
+      const columnType = this.getModelClass().getColumnTypeByName(columnName)
+
+      if (!columnType || !this.getModelClass()._isDateLikeType(columnType)) continue
+
+      const value = data[columnName]
+
+      if (!(value instanceof Date)) continue
+
+      data[columnName] = new Date(value.getTime() - offsetMs)
+    }
+  }
+
   /** @returns {Promise<void>} - Resolves when complete.  */
   async _updateRecordWithChanges() {
     /** @type {Record<string, any>} */
@@ -1733,9 +1787,12 @@ class VelociousDatabaseRecord {
     const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
     const currentDate = new Date()
 
-    if (updatedAtColumn) changes.updated_at = currentDate
+    if (updatedAtColumn && (changes.updated_at === undefined || changes.updated_at === null || changes.updated_at === "")) {
+      changes.updated_at = currentDate
+    }
 
     if (Object.keys(changes).length > 0) {
+      this._normalizeDateValuesForWrite(changes)
       const sql = this._connection().updateSql({
         tableName: this._tableName(),
         data: changes,
