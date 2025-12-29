@@ -12,6 +12,7 @@ import escapeString from "sql-escape-string"
 import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import mssql from "mssql"
+import net from "node:net"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
@@ -24,15 +25,15 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const sqlConfig = digg(args, "sqlConfig")
 
     try {
+      if (sqlConfig?.server && !sqlConfig.options?.serverName && net.isIP(sqlConfig.server)) {
+        sqlConfig.options = Object.assign({}, sqlConfig.options, {serverName: ""})
+      }
+
       this.connection = new mssql.ConnectionPool(sqlConfig)
       await this.connection.connect()
     } catch (error) {
       // Re-throw to fix unuseable stack trace.
-      if (error instanceof Error) {
-        throw new Error(`Couldn't connect to database: ${error.message}`)
-      } else {
-        throw new Error(`Couldn't connect to database: ${error}`)
-      }
+      throw new Error(`Couldn't connect to database: ${error instanceof Error ? error.message : error}`)
     }
   }
 

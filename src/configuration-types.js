@@ -23,6 +23,7 @@
  * @property {string} [database] - Database name for the SQL driver.
  * @property {object} [options] - Driver-specific connection options.
  * @property {boolean} [options.encrypt] - Whether to encrypt the connection (MSSQL).
+ * @property {string} [options.serverName] - TLS SNI server name override for MSSQL (empty string disables SNI).
  * @property {boolean} [options.trustServerCertificate] - Whether to trust the server certificate (MSSQL).
  * @property {string} [password] - Password for the SQL user.
  * @property {object} [pool] - Connection pool configuration.
@@ -83,6 +84,7 @@
  * @property {string[]} locales - Supported locales.
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
  * @property {string} [testing] - Path to the testing configuration file.
+ * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  */
 
 export const nothing = {}

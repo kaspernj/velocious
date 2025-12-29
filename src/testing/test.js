@@ -152,6 +152,32 @@ class Expect extends BaseExpect {
   }
 
   /**
+   * @param {number} result - Result.
+   * @returns {void} - No return value.
+   */
+  toBeLessThanOrEqual(result) {
+    if (typeof this._object !== "number" || typeof result !== "number") {
+      throw new Error(`Expected numbers but got ${typeof this._object} and ${typeof result}`)
+    }
+
+    if (this._not) {
+      if (this._object <= result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} was unexpected to be less than or equal to ${resultPrint}`)
+      }
+    } else {
+      if (this._object > result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} wasn't expected to be greater than ${resultPrint}`)
+      }
+    }
+  }
+
+  /**
    * @returns {void} - No return value.
    */
   toBeDefined() {
@@ -233,8 +259,10 @@ class Expect extends BaseExpect {
 
     if (typeof this._object == "string") {
       if (!this._object.includes(String(valueToContain))) {
-        const objectPrint = formatValue(this._object)
-        const valuePrint = formatValue(valueToContain)
+        const objectPrint = minifiedStringify(this._object)
+        const valuePrint = typeof valueToContain == "string"
+          ? minifiedStringify(valueToContain)
+          : formatValue(valueToContain)
 
         throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
       }
@@ -247,7 +275,9 @@ class Expect extends BaseExpect {
 
     if (!this._object.includes(valueToContain)) {
       const objectPrint = formatValue(this._object)
-      const valuePrint = formatValue(valueToContain)
+      const valuePrint = typeof valueToContain == "string"
+        ? minifiedStringify(valueToContain)
+        : formatValue(valueToContain)
 
       throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
     }
@@ -320,17 +350,14 @@ class Expect extends BaseExpect {
     }
 
     const match = this._object.match(regex)
+    const objectPrint = minifiedStringify(this._object)
 
     if (this._not) {
       if (match) {
-        const objectPrint = formatValue(this._object)
-
         throw new Error(`${objectPrint} shouldn't match ${regex}`)
       }
     } else {
       if (!match) {
-        const objectPrint = formatValue(this._object)
-
         throw new Error(`${objectPrint} didn't match ${regex}`)
       }
     }
@@ -543,4 +570,3 @@ globalThis.it = it
 globalThis.fit = fit
 
 export {afterEach, beforeEach, describe, expect, fit, it, tests}
-

@@ -389,6 +389,11 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * @param {any} value - Value from database.
+   * @returns {any} - Normalized value.
+   */
+
+  /**
    * @returns {Query} - The new query.
    */
   newQuery() {
