@@ -1,6 +1,6 @@
 // @ts-check
 
-import {AsyncLocalStorage} from "async_hooks"
+import {AsyncLocalStorage} from "../../utils/async-local-storage.js"
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
@@ -10,7 +10,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   static globalConnections = new WeakMap()
 
-  asyncLocalStorage = new AsyncLocalStorage()
+  /** @type {import("node:async_hooks").AsyncLocalStorage<number> | undefined} */
+  asyncLocalStorage = AsyncLocalStorage ? new AsyncLocalStorage() : undefined
 
   /** @type {import("../drivers/base.js").default[]} */
   connections = []
@@ -69,6 +70,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const connection = await this.checkout()
     const id = connection.getIdSeq()
 
+    if (!this.asyncLocalStorage) {
+      try {
+        await callback(connection)
+      } finally {
+        this.checkin(connection)
+      }
+      return
+    }
+
     await this.asyncLocalStorage.run(id, async () => {
       try {
         await callback(connection)
@@ -80,13 +90,17 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /** @returns {import("../drivers/base.js").default} - The current connection.  */
   getCurrentConnection() {
-    const id = this.asyncLocalStorage.getStore()
+    const id = this.asyncLocalStorage ? this.asyncLocalStorage.getStore() : undefined
 
     if (id === undefined) {
       const fallbackConnection = this.getGlobalConnection()
 
       if (fallbackConnection) {
         return fallbackConnection
+      }
+
+      if (!this.asyncLocalStorage) {
+        throw new Error("No async context set for database connection (async_hooks unavailable)")
       }
 
       throw new Error("ID hasn't been set for this async context")
@@ -146,6 +160,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
    */
   getCurrentContextConnection() {
+    if (!this.asyncLocalStorage) return undefined
+
     const id = this.asyncLocalStorage.getStore()
 
     if (id === undefined) return undefined
