@@ -7,6 +7,8 @@ import WhereBase from "./where-base.js"
  * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | Record<string, any>}} WhereHash
  */
 
+const NO_MATCH = Symbol("no-match")
+
 export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase {
   /**
    * @param {object} args - Options object.
@@ -110,22 +112,32 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     if (!columnType || typeof columnType != "string") return value
 
     const normalizedType = columnType.toLowerCase()
-    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext"])
+    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
+    const isUuidType = normalizedType.includes("uuid")
     const shouldCoerceToString = normalizedType.includes("uuid") ||
       normalizedType.includes("text") ||
       stringTypes.has(normalizedType)
 
     const normalize = (entry) => {
+      if (isUuidType && typeof entry === "number") return NO_MATCH
       if (!shouldCoerceToString || typeof entry !== "number") return entry
 
       return String(entry)
     }
 
     if (Array.isArray(value)) {
-      return value.map((entry) => normalize(entry))
+      const normalized = value.map((entry) => normalize(entry)).filter((entry) => entry !== NO_MATCH)
+
+      if (isUuidType && normalized.length === 0) return NO_MATCH
+
+      return normalized
     }
 
-    return normalize(value)
+    const normalized = normalize(value)
+
+    if (normalized === NO_MATCH) return NO_MATCH
+
+    return normalized
   }
 
   /**
@@ -163,20 +175,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
         if (!columnName) throw new Error(`Unknown attribute "${whereKey}" for ${modelClass.name}`)
 
-        let columnSql = `${options.quoteColumnName(columnName)}`
-
-        if (tableName) {
-          columnSql = `${options.quoteTableName(tableName)}.${columnSql}`
-        }
-
         const columnType = modelClass.getColumnTypeByName(columnName)
-        const driverType = this.getQuery().driver.getType()
-
-        if (driverType == "mssql" && typeof whereValue === "string" && columnType?.toLowerCase() == "text") {
-          columnSql = `CAST(${columnSql} AS NVARCHAR(MAX))`
-        }
-
-        sql += columnSql
 
         const normalizedValue = this._normalizeSqliteBooleanValue({
           columnName,
@@ -188,6 +187,26 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
           modelClass,
           value: normalizedValue
         })
+
+        if (typedValue === NO_MATCH) {
+          sql += "1=0"
+          index++
+          continue
+        }
+
+        let columnSql = `${options.quoteColumnName(columnName)}`
+
+        if (tableName) {
+          columnSql = `${options.quoteTableName(tableName)}.${columnSql}`
+        }
+
+        const driverType = this.getQuery().driver.getType()
+
+        if (driverType == "mssql" && typeof whereValue === "string" && columnType?.toLowerCase() == "text") {
+          columnSql = `CAST(${columnSql} AS NVARCHAR(MAX))`
+        }
+
+        sql += columnSql
 
         if (Array.isArray(typedValue)) {
           sql += ` IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
