@@ -22,12 +22,8 @@ export default class VelociousCli {
   }
 
   async execute() {
-    if (!this.args.processArgs || this.args.processArgs.length === 0) {
-      throw new Error("No command given")
-    }
-
     const commandParts = this.args.processArgs[0].split(":")
-    let parsedCommandParts = []
+    const parsedCommandParts = []
 
     for (let commandPart of commandParts) {
       if (commandPart == "d") commandPart = "destroy"
@@ -36,14 +32,6 @@ export default class VelociousCli {
 
       parsedCommandParts.push(commandPart)
     }
-
-    const resolvedCommand = await this.environmentHandler.resolveCommand({
-      commandParts: parsedCommandParts,
-      processArgs: this.args.processArgs
-    })
-
-    this.args.processArgs = resolvedCommand.processArgs
-    parsedCommandParts = resolvedCommand.commandParts
 
     const CommandClass = await this.environmentHandler.requireCommand({commandParts: parsedCommandParts})
     const commandInstance = new CommandClass({args: this.args, cli: this})

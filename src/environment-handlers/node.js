@@ -122,24 +122,6 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * @param {object} args - Options object.
-   * @param {string[]} args.commandParts - Command parts.
-   * @param {string[]} args.processArgs - Process args.
-   * @returns {Promise<{commandParts: string[], processArgs: string[]}>} - Resolves with adjusted command info.
-   */
-  async resolveCommand({commandParts, processArgs}) {
-    const commands = await this.findCommands()
-    const commandNames = new Set(commands.map(aCommand => aCommand.name))
-    const commandKey = commandParts.join(":")
-
-    if (!commandNames.has(commandKey) && await this.isPathArgument(processArgs[0])) {
-      return {commandParts: ["test"], processArgs: ["test", ...processArgs]}
-    }
-
-    return {commandParts, processArgs}
-  }
-
-  /**
    * @param {string} arg - CLI argument to evaluate.
    * @returns {Promise<boolean>} - Whether the argument resolves to a file or directory.
    */
@@ -164,7 +146,24 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()
-    const command = commands.find((aCommand) => aCommand.name === commandParts.join(":"))
+    const commandName = commandParts.join(":")
+    let command = commands.find((aCommand) => aCommand.name === commandName)
+
+    if (!command) {
+      const processArgs = this.args?.processArgs || []
+
+      if (await this.isPathArgument(processArgs[0])) {
+        const testCommand = commands.find((aCommand) => aCommand.name === "test")
+
+        if (testCommand) {
+          if (this.args) {
+            this.args.processArgs = ["test", ...processArgs]
+          }
+
+          command = testCommand
+        }
+      }
+    }
 
     if (!command) {
       const possibleCommands = commands.map(aCommand => aCommand.name)

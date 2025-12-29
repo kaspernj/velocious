@@ -3,7 +3,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import BaseCommand from "../../src/cli/base-command.js"
+import {pathToFileURL} from "url"
 import Cli from "../../src/cli/index.js"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
@@ -12,24 +12,13 @@ describe("Cli - path arguments", () => {
   it("runs the test command when the first argument is a path", async () => {
     const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-path-"))
     const specDir = path.join(tempDirectory, "spec")
-    let receivedProcessArgs
-    let receivedCommandParts
-
-    class DummyCommand extends BaseCommand {
-      async execute() {
-        receivedProcessArgs = this.args.processArgs
-        return receivedProcessArgs
-      }
-    }
+    const tempCommandFile = path.join(tempDirectory, "test-command.js")
+    const rootDirectory = await fs.realpath(`${process.cwd()}/../..`)
+    const baseCommandUrl = pathToFileURL(path.join(rootDirectory, "src/cli/base-command.js")).href
 
     class StubEnvironmentHandler extends EnvironmentHandlerNode {
       async findCommands() {
-        return [{name: "test", file: "stub-test.js"}]
-      }
-
-      async requireCommand({commandParts}) {
-        receivedCommandParts = commandParts
-        return DummyCommand
+        return [{name: "test", file: tempCommandFile}]
       }
 
       async findMigrations() { return [] }
@@ -41,6 +30,14 @@ describe("Cli - path arguments", () => {
 
     try {
       await fs.mkdir(specDir, {recursive: true})
+      await fs.writeFile(tempCommandFile, [
+        `import BaseCommand from "${baseCommandUrl}"`,
+        "export default class DummyCommand extends BaseCommand {",
+        "  async execute() {",
+        "    return this.args.processArgs",
+        "  }",
+        "}"
+      ].join("\n"))
 
       const environmentHandler = new StubEnvironmentHandler()
       const configuration = new Configuration({
@@ -61,8 +58,6 @@ describe("Cli - path arguments", () => {
 
       const result = await cli.execute()
 
-      expect(receivedCommandParts).toEqual(["test"])
-      expect(receivedProcessArgs).toEqual(["test", "spec"])
       expect(result).toEqual(["test", "spec"])
     } finally {
       await fs.rm(tempDirectory, {recursive: true, force: true})
