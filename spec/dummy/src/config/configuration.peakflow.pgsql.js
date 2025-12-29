@@ -37,6 +37,7 @@ export default new Configuration({
           database: "velocious_test",
           server: "mssql",
           options: {
+            serverName: "mssql",
             encrypt: true, // for azure
             trustServerCertificate: true // change to true for local dev / self-signed certs
           }
