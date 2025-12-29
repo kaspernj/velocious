@@ -20,7 +20,8 @@ export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
     const result = await this.driver.query(`
       SELECT
         columns.*,
-        CASE WHEN key_column_usage.column_name IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key
+        CASE WHEN key_column_usage.column_name IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key,
+        col_description((columns.table_schema || '.' || columns.table_name)::regclass, columns.ordinal_position) AS column_comment
 
       FROM
         information_schema.columns AS columns

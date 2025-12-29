@@ -61,4 +61,33 @@ describe("Cli - generate - base-models", () => {
 
     expect(returnType).toEqual("typeof User")
   })
+
+  it("generates boolean attribute types in base models", async () => {
+    const cli = new Cli({
+      configuration: dummyConfiguration,
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:base-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const taskBasePath = `${dummyDirectory()}/src/model-bases/task.js`
+    const projectDetailBasePath = `${dummyDirectory()}/src/model-bases/project-detail.js`
+    const taskContents = await fs.readFile(taskBasePath, "utf8")
+    const projectDetailContents = await fs.readFile(projectDetailBasePath, "utf8")
+    const databaseType = dummyConfiguration.getDatabaseType()
+    const expectedType = databaseType == "mssql" ? "number" : "boolean"
+
+    const returnPattern = new RegExp(`@returns \\{${expectedType} \\| null\\}[\\s\\S]*?isDone\\(\\)`)
+    const setterPattern = new RegExp(`@param \\{${expectedType} \\| null\\} newValue[\\s\\S]*?setIsDone\\(`)
+    const activeReturnPattern = new RegExp(`@returns \\{${expectedType} \\| null\\}[\\s\\S]*?isActive\\(\\)`)
+    const activeSetterPattern = new RegExp(`@param \\{${expectedType} \\| null\\} newValue[\\s\\S]*?setIsActive\\(`)
+
+    expect(returnPattern.test(taskContents)).toBeTrue()
+    expect(setterPattern.test(taskContents)).toBeTrue()
+    expect(activeReturnPattern.test(projectDetailContents)).toBeTrue()
+    expect(activeSetterPattern.test(projectDetailContents)).toBeTrue()
+  })
 })

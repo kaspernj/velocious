@@ -65,6 +65,10 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
     return digg(this, "data", "column_name")
   }
 
+  getNotes() {
+    return digg(this, "data", "column_comment") || undefined
+  }
+
   getNull() {
     const nullValue = digg(this, "data", "is_nullable")
 
@@ -76,7 +80,10 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
   }
 
   getType() {
+    const typeHint = this.getTypeHintFromNotes()
+
+    if (typeHint == "boolean") return "boolean"
+
     return digg(this, "data", "data_type")
   }
 }
-
