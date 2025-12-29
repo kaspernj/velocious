@@ -7,6 +7,8 @@ import WhereBase from "./where-base.js"
  * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | Record<string, any>}} WhereHash
  */
 
+const NO_MATCH = Symbol("no-match")
+
 export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase {
   /**
    * @param {object} args - Options object.
@@ -98,6 +100,47 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
+   * @param {object} args - Options object.
+   * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.columnName - Column name.
+   * @param {any} args.value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeValueForColumnType({modelClass, columnName, value}) {
+    const columnType = modelClass.getColumnTypeByName(columnName)
+
+    if (!columnType || typeof columnType != "string") return value
+
+    const normalizedType = columnType.toLowerCase()
+    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
+    const isUuidType = normalizedType.includes("uuid")
+    const shouldCoerceToString = normalizedType.includes("uuid") ||
+      normalizedType.includes("text") ||
+      stringTypes.has(normalizedType)
+
+    const normalize = (entry) => {
+      if (isUuidType && typeof entry === "number") return NO_MATCH
+      if (!shouldCoerceToString || typeof entry !== "number") return entry
+
+      return String(entry)
+    }
+
+    if (Array.isArray(value)) {
+      const normalized = value.map((entry) => normalize(entry)).filter((entry) => entry !== NO_MATCH)
+
+      if (isUuidType && normalized.length === 0) return NO_MATCH
+
+      return normalized
+    }
+
+    const normalized = normalize(value)
+
+    if (normalized === NO_MATCH) return NO_MATCH
+
+    return normalized
+  }
+
+  /**
    * @param {WhereHash} hash - Hash.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
    * @param {string} [tableName] - Table name.
@@ -132,13 +175,31 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
         if (!columnName) throw new Error(`Unknown attribute "${whereKey}" for ${modelClass.name}`)
 
+        const columnType = modelClass.getColumnTypeByName(columnName)
+
+        const normalizedValue = this._normalizeSqliteBooleanValue({
+          columnName,
+          modelClass,
+          value: whereValue
+        })
+        const typedValue = this._normalizeValueForColumnType({
+          columnName,
+          modelClass,
+          value: normalizedValue
+        })
+
+        if (typedValue === NO_MATCH) {
+          sql += "1=0"
+          index++
+          continue
+        }
+
         let columnSql = `${options.quoteColumnName(columnName)}`
 
         if (tableName) {
           columnSql = `${options.quoteTableName(tableName)}.${columnSql}`
         }
 
-        const columnType = modelClass.getColumnTypeByName(columnName)
         const driverType = this.getQuery().driver.getType()
 
         if (driverType == "mssql" && typeof whereValue === "string" && columnType?.toLowerCase() == "text") {
@@ -147,18 +208,12 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
         sql += columnSql
 
-        const normalizedValue = this._normalizeSqliteBooleanValue({
-          columnName,
-          modelClass,
-          value: whereValue
-        })
-
-        if (Array.isArray(normalizedValue)) {
-          sql += ` IN (${normalizedValue.map((value) => options.quote(value)).join(", ")})`
-        } else if (normalizedValue === null) {
+        if (Array.isArray(typedValue)) {
+          sql += ` IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
+        } else if (typedValue === null) {
           sql += " IS NULL"
         } else {
-          sql += ` = ${options.quote(normalizedValue)}`
+          sql += ` = ${options.quote(typedValue)}`
         }
       }
 
