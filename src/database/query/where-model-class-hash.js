@@ -98,6 +98,37 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
+   * @param {object} args - Options object.
+   * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.columnName - Column name.
+   * @param {any} args.value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeValueForColumnType({modelClass, columnName, value}) {
+    const columnType = modelClass.getColumnTypeByName(columnName)
+
+    if (!columnType || typeof columnType != "string") return value
+
+    const normalizedType = columnType.toLowerCase()
+    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext"])
+    const shouldCoerceToString = normalizedType.includes("uuid") ||
+      normalizedType.includes("text") ||
+      stringTypes.has(normalizedType)
+
+    const normalize = (entry) => {
+      if (!shouldCoerceToString || typeof entry !== "number") return entry
+
+      return String(entry)
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((entry) => normalize(entry))
+    }
+
+    return normalize(value)
+  }
+
+  /**
    * @param {WhereHash} hash - Hash.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
    * @param {string} [tableName] - Table name.
@@ -152,13 +183,18 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
           modelClass,
           value: whereValue
         })
+        const typedValue = this._normalizeValueForColumnType({
+          columnName,
+          modelClass,
+          value: normalizedValue
+        })
 
-        if (Array.isArray(normalizedValue)) {
-          sql += ` IN (${normalizedValue.map((value) => options.quote(value)).join(", ")})`
-        } else if (normalizedValue === null) {
+        if (Array.isArray(typedValue)) {
+          sql += ` IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
+        } else if (typedValue === null) {
           sql += " IS NULL"
         } else {
-          sql += ` = ${options.quote(normalizedValue)}`
+          sql += ` = ${options.quote(typedValue)}`
         }
       }
 
