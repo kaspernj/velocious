@@ -57,3 +57,6 @@ describe("something", () => {
   })
 })
 ```
+
+## Pull requests
+Use the `gh` CLI to open GitHub pull requests when needed.
