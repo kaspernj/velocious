@@ -52,6 +52,16 @@ describe("database - migration - column types", () => {
           expect(exists).toBe(true)
         }
 
+        const allColumnsTable = await dbs.default.getTableByName("all_column_types")
+        const booleanColumn = await allColumnsTable.getColumnByName("boolean_column")
+        const databaseType = dbs.default.getType()
+
+        expect(booleanColumn.getType()).toBe("boolean")
+
+        if (["mysql", "pgsql"].includes(databaseType)) {
+          expect(booleanColumn.getNotes()).toBe("velocious:type=boolean")
+        }
+
         await migration.dropTable("all_column_types")
       })
     })

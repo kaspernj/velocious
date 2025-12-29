@@ -72,6 +72,7 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
   }
 
   getName() { return digg(this, "data", "Field") }
+  getNotes() { return digg(this, "data", "Comment") || undefined }
 
   getNull() {
     const nullValue = digg(this, "data", "Null")
@@ -88,19 +89,23 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
   getPrimaryKey() { return digg(this, "data", "Key") == "PRI" }
 
   getType() {
-    const type = digg(this, "data", "Type")
+    const typeHint = this.getTypeHintFromNotes()
 
-    if (type.match(/^[a-z]+$/)) {
-      return type
+    if (typeHint == "boolean") return "boolean"
+
+    const type = digg(this, "data", "Type")
+    const tinyintMatch = type.match(/^tinyint\((\d+)\)/i)
+
+    if (tinyintMatch && tinyintMatch[1] == "1") return "boolean"
+
+    if (type.match(/^[a-z]+$/i)) {
+      return type.toLowerCase()
     }
 
-    const match = type.match(/^(.+)\((\d+)\)$/)
+    const match = type.match(/^([a-z]+)(?:\((\d+)\))?/i)
 
     if (!match) throw new Error(`Couldn't match column type from: ${type}`)
 
-    const columnType = match[1]
-
-    return columnType
+    return match[1].toLowerCase()
   }
 }
-
