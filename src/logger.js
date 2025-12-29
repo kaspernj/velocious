@@ -12,6 +12,7 @@ const DEFAULT_LOGGING_CONFIGURATION = {
   levels: ["info", "warn", "error"]
 }
 
+/** @type {LogLevel[]} */
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
@@ -106,8 +107,27 @@ function messagesToMessage(...messages) {
  * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} - The logging configuration.
  */
 function resolveLoggingConfiguration(configuration) {
+  const debugEnabled = configuration?.debug === true
   if (configuration && typeof configuration.getLoggingConfiguration === "function") {
-    return configuration.getLoggingConfiguration()
+    const resolved = configuration.getLoggingConfiguration()
+
+    if (debugEnabled) {
+      return {
+        ...resolved,
+        console: true,
+        levels: LEVEL_ORDER
+      }
+    }
+
+    return resolved
+  }
+
+  if (debugEnabled) {
+    return {
+      ...DEFAULT_LOGGING_CONFIGURATION,
+      console: true,
+      levels: LEVEL_ORDER
+    }
   }
 
   return DEFAULT_LOGGING_CONFIGURATION
@@ -335,4 +355,3 @@ export default async function logger(object, ...messages) {
     await Promise.all(writes)
   }
 }
-
