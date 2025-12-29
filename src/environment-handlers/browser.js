@@ -4,13 +4,6 @@ import restArgsError from "../utils/rest-args-error.js"
 import {Logger} from "../logger.js"
 
 /**
- * @returns {null} - AsyncLocalStorage not available in browsers.
- */
-export function getAsyncLocalStorage() {
-  return null
-}
-
-/**
  * @typedef {(id: string) => {default: typeof import("../database/migration/index.js").default}} MigrationsRequireContextIDFunctionType
  * @typedef {MigrationsRequireContextIDFunctionType & {
  *   keys: () => string[],
@@ -44,6 +37,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     this.migrationsRequireContextCallback = migrationsRequireContextCallback
     this.logger = new Logger(this)
   }
+
 
   /**
    * @returns {Promise<MigrationsRequireContextType>} - Resolves with the migrations require context.

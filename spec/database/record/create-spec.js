@@ -1,7 +1,7 @@
 // @ts-check
 
 import Dummy from "../../dummy/index.js"
-import {runWithTimezoneOffset} from "../../../src/utils/timezone-context.js"
+import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 import {ValidationError} from "../../../src/database/record/index.js"
@@ -156,7 +156,7 @@ describe("Record - create", () => {
       /** @type {string | number | undefined} */
       let taskId
 
-      await runWithTimezoneOffset(120, async () => {
+      await dummyConfiguration.getEnvironmentHandler().runWithTimezoneOffset(120, async () => {
         const task = await Task.create({name: "Timezone offset task", createdAt: timestamp, project})
         taskId = task.id()
 
@@ -182,7 +182,7 @@ describe("Record - create", () => {
 
       const resolvedTaskId = /** @type {string | number} */ (taskId)
 
-      await runWithTimezoneOffset(0, async () => {
+      await dummyConfiguration.getEnvironmentHandler().runWithTimezoneOffset(0, async () => {
         const reloaded = await Task.find(resolvedTaskId)
         const expected = new Date(timestamp.getTime() - (120 * 60 * 1000))
 

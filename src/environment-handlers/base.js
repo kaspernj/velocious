@@ -16,6 +16,50 @@
 
 export default class VelociousEnvironmentHandlerBase {
   /**
+   * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @param {() => Promise<any>} callback - Callback to run.
+   * @returns {Promise<any>} - Result of the callback.
+   */
+  async runWithTimezoneOffset(_offsetMinutes, callback) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    const previousOffsetMinutes = this.configuration._timezoneOffsetMinutes
+
+    this.configuration._timezoneOffsetMinutes = _offsetMinutes
+
+    try {
+      return await callback()
+    } finally {
+      this.configuration._timezoneOffsetMinutes = previousOffsetMinutes
+    }
+  }
+
+  /**
+   * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @returns {void} - No return value.
+   */
+  setTimezoneOffset(_offsetMinutes) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    this.configuration._timezoneOffsetMinutes = _offsetMinutes
+  }
+
+  /**
+   * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
+   * @returns {number} - Offset in minutes.
+   */
+  getTimezoneOffsetMinutes(configuration) {
+    const activeConfiguration = configuration || this.configuration
+
+    if (!activeConfiguration) throw new Error("Configuration hasn't been set")
+
+    if (typeof activeConfiguration._timezoneOffsetMinutes === "number") {
+      return activeConfiguration._timezoneOffsetMinutes
+    }
+
+    return activeConfiguration.getTimezoneOffsetMinutes()
+  }
+  /**
    * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.
    */

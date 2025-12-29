@@ -1,6 +1,6 @@
 // @ts-check
 
-import {AsyncLocalStorage} from "./async-local-storage.js"
+import {AsyncLocalStorage} from "node:async_hooks"
 
 /** @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
 let asyncLocalStorage

@@ -1,6 +1,6 @@
 // @ts-check
 
-import {AsyncLocalStorage} from "../../utils/async-local-storage.js"
+import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
@@ -10,8 +10,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   static globalConnections = new WeakMap()
 
-  /** @type {import("node:async_hooks").AsyncLocalStorage<number> | undefined} */
-  asyncLocalStorage = AsyncLocalStorage ? new AsyncLocalStorage() : undefined
+  asyncLocalStorage = new AsyncLocalStorage()
 
   /** @type {import("../drivers/base.js").default[]} */
   connections = []
