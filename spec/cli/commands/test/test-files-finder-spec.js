@@ -82,4 +82,27 @@ describe("Cli - Commands - test - TestFilesFinder", () => {
       await fs.rm(tempDirectory, {recursive: true, force: true})
     }
   })
+
+  it("only searches provided directories when a directory arg is used", async () => {
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-test-files-"))
+
+    try {
+      const specDir = path.join(tempDirectory, "spec")
+      const customDir = path.join(tempDirectory, "custom")
+      const specFile = path.join(specDir, "default-spec.js")
+      const customFile = path.join(customDir, "custom-spec.js")
+
+      await fs.mkdir(specDir, {recursive: true})
+      await fs.mkdir(customDir, {recursive: true})
+      await fs.writeFile(specFile, "")
+      await fs.writeFile(customFile, "")
+
+      const testFilesFinder = new TestFilesFinder({directory: tempDirectory, processArgs: ["test", "custom"]})
+      const testFiles = await testFilesFinder.findTestFiles()
+
+      expect(testFiles).toEqual([customFile])
+    } finally {
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
+  })
 })
