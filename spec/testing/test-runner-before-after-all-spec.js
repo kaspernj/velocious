@@ -68,4 +68,49 @@ describe("TestRunner beforeAll/afterAll", () => {
     expect(childBeforeAll).toBe(1)
     expect(childAfterAll).toBe(1)
   })
+
+  it("skips beforeAll/afterAll when all tests are filtered out", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, includeTags: ["fast"], testFiles: []})
+
+    let beforeAllRuns = 0
+    let afterAllRuns = 0
+
+    const tests = {
+      args: {},
+      afterAlls: [{callback: async () => { afterAllRuns++ }}],
+      afterEaches: [],
+      beforeAlls: [{callback: async () => { beforeAllRuns++ }}],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "slow test": {
+          args: {tags: ["slow"]},
+          function: async () => {}
+        }
+      }
+    }
+
+    await testRunner.runTests({
+      afterEaches: [],
+      beforeEaches: [],
+      tests,
+      descriptions: [],
+      indentLevel: 0
+    })
+
+    expect(beforeAllRuns).toBe(0)
+    expect(afterAllRuns).toBe(0)
+    expect(testRunner.getExecutedTestsCount()).toBe(0)
+  })
 })

@@ -144,6 +144,31 @@ export default class TestRunner {
   }
 
   /**
+   * @param {TestsArgument} tests - Tests.
+   * @returns {boolean} - Whether any tests in this scope will run.
+   */
+  hasRunnableTests(tests) {
+    for (const testDescription in tests.tests) {
+      const testData = tests.tests[testDescription]
+      const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
+
+      if (this._onlyFocussed && !testArgs.focus) continue
+      if (this.shouldSkipTest(testArgs)) continue
+
+      return true
+    }
+
+    for (const subDescription in tests.subs) {
+      const subTest = tests.subs[subDescription]
+
+      if (this._onlyFocussed && !subTest.anyTestsFocussed) continue
+      if (this.hasRunnableTests(subTest)) return true
+    }
+
+    return false
+  }
+
+  /**
    * @param {TestArgs} testArgs - Test args.
    * @returns {boolean} - Whether the test should be skipped.
    */
@@ -327,6 +352,9 @@ export default class TestRunner {
     const leftPadding = " ".repeat(indentLevel * 2)
     const newAfterEaches = [...afterEaches, ...tests.afterEaches]
     const newBeforeEaches = [...beforeEaches, ...tests.beforeEaches]
+    const shouldRunAnyTests = this.hasRunnableTests(tests)
+
+    if (!shouldRunAnyTests) return
 
     for (const beforeAllData of tests.beforeAlls || []) {
       await beforeAllData.callback({configuration: this.getConfiguration()})
