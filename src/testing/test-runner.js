@@ -448,16 +448,16 @@ export default class TestRunner {
               console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
             }
 
-            testEvents.emit("testFailed", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error: failedError,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this
-            })
-          }
+          await this.emitEvent("testFailed", {
+            configuration: this.getConfiguration(),
+            descriptions,
+            error: failedError,
+            testArgs,
+            testData,
+            testDescription,
+            testRunner: this
+          })
+        }
 
           break
         }
@@ -499,6 +499,19 @@ export default class TestRunner {
 
     for (const afterAllData of scopeEntry.tests.afterAlls || []) {
       await afterAllData.callback({configuration: this.getConfiguration()})
+    }
+  }
+
+  /**
+   * @param {string} eventName - Event name.
+   * @param {object} payload - Event payload.
+   * @returns {Promise<void>} - Resolves when all listeners complete.
+   */
+  async emitEvent(eventName, payload) {
+    const listeners = testEvents.listeners(eventName)
+
+    for (const listener of listeners) {
+      await listener(payload)
     }
   }
 }
