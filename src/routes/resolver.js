@@ -148,13 +148,14 @@ export default class VelociousRoutesResolver {
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
     const loggedParams = /** @type {Record<string, unknown>} */ (this._sanitizeParamsForLogging(this.params))
+    const logMethod = this.configuration.getEnvironment() === "test" ? "debug" : "info"
 
     delete loggedParams.action
     delete loggedParams.controller
 
-    await this.logger.info(() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
-    await this.logger.info(() => `Processing by ${controllerClass.name}#${action}`)
-    await this.logger.info(() => [`  Parameters:`, loggedParams])
+    await this.logger[logMethod](() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
+    await this.logger[logMethod](() => `Processing by ${controllerClass.name}#${action}`)
+    await this.logger[logMethod](() => [`  Parameters:`, loggedParams])
   }
 
   /**
@@ -213,4 +214,3 @@ export default class VelociousRoutesResolver {
     return value
   }
 }
-

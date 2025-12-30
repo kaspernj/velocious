@@ -20,11 +20,11 @@ export default class TestFilesFinder {
   constructor({directory, directories, processArgs, ...restArgs}) {
     restArgsError(restArgs)
 
-    this.directory = directory
+    this.directory = path.resolve(directory)
     this.logger = new Logger(this)
 
     if (directories) {
-      this.directories = directories
+      this.directories = directories.map((entry) => path.resolve(entry))
     } else {
       this.directories = [
         `${this.directory}/__tests__`,
@@ -196,15 +196,33 @@ export default class TestFilesFinder {
     for (const testArg of this.testArgs) {
       const forceDirectory = testArg.endsWith("/") || testArg.endsWith(path.sep)
       const fullPath = path.isAbsolute(testArg) ? testArg : path.resolve(this.directory, testArg)
-      const localPath = this.toLocalPath(fullPath)
+      const baseName = path.basename(this.directory)
+      const hasBasePrefix = testArg === baseName || testArg.startsWith(`${baseName}/`) || testArg.startsWith(`${baseName}${path.sep}`)
+      const basePrefixedFullPath = (!path.isAbsolute(testArg) && hasBasePrefix) ? path.resolve(path.dirname(this.directory), testArg) : null
+      const fullPathCandidates = basePrefixedFullPath ? [basePrefixedFullPath] : [fullPath]
 
       if (forceDirectory) {
-        this.directoryArgs.push(this.ensureTrailingSlash(localPath))
+        const preferredLocalPath = this.toLocalPath(basePrefixedFullPath || fullPath)
+        this.directoryArgs.push(this.ensureTrailingSlash(preferredLocalPath))
         continue
       }
 
       try {
-        const stats = await fs.stat(fullPath)
+        let stats
+        let resolvedFullPath
+
+        for (const candidatePath of fullPathCandidates) {
+          try {
+            stats = await fs.stat(candidatePath)
+            resolvedFullPath = candidatePath
+            break
+          } catch {
+            // Keep searching
+          }
+        }
+
+        if (!stats || !resolvedFullPath) throw new Error("Path not found")
+        const localPath = this.toLocalPath(resolvedFullPath)
 
         if (stats.isDirectory()) {
           this.directoryArgs.push(this.ensureTrailingSlash(localPath))
@@ -212,7 +230,8 @@ export default class TestFilesFinder {
           this.fileArgs.push(localPath)
         }
       } catch {
-        this.fileArgs.push(localPath)
+        const fallbackLocalPath = this.toLocalPath(basePrefixedFullPath || fullPath)
+        this.fileArgs.push(fallbackLocalPath)
       }
     }
 
