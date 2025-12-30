@@ -5,7 +5,7 @@ import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
 import restArgsError from "../utils/rest-args-error.js"
-import {testEvents, tests} from "./test.js"
+import {testConfig, testEvents, tests} from "./test.js"
 
 /**
  * @typedef {object} TestArgs
@@ -17,6 +17,7 @@ import {testEvents, tests} from "./test.js"
  * @property {boolean} [focus] - Whether this test is focused.
  * @property {() => (void|Promise<void>)} [function] - Test callback function.
  * @property {number} [retry] - Number of retries when a test fails.
+ * @property {string[] | string} [tags] - Tags for filtering.
  * @property {string} [type] - Test type identifier.
  */
 
@@ -49,14 +50,20 @@ export default class TestRunner {
   /**
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {string[] | string} [args.excludeTags] - Tags to exclude.
+   * @param {string[] | string} [args.includeTags] - Tags to include.
    * @param {Array<string>} args.testFiles - Test files.
    */
-  constructor({configuration, testFiles, ...restArgs}) {
+  constructor({configuration, excludeTags, includeTags, testFiles, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration is required")
 
     this._configuration = configuration
+    this._excludeTags = this.normalizeTags(excludeTags)
+    this._excludeTagSet = new Set(this._excludeTags)
+    this._includeTags = this.normalizeTags(includeTags)
+    this._includeTagSet = new Set(this._includeTags)
     this._testFiles = testFiles
 
     this._failedTests = 0
@@ -73,6 +80,71 @@ export default class TestRunner {
    * @returns {string[]} - The test files.
    */
   getTestFiles() { return this._testFiles }
+
+  /**
+   * @param {string[] | string | undefined} tags - Tags.
+   * @returns {string[]} - Normalized tags.
+   */
+  normalizeTags(tags) {
+    if (!tags) return []
+
+    const values = []
+    const rawTags = Array.isArray(tags) ? tags : [tags]
+
+    for (const rawTag of rawTags) {
+      if (rawTag === undefined || rawTag === null) continue
+
+      const parts = String(rawTag).split(",")
+
+      for (const part of parts) {
+        const trimmed = part.trim()
+
+        if (trimmed) values.push(trimmed)
+      }
+    }
+
+    return Array.from(new Set(values))
+  }
+
+  /**
+   * @returns {Set<string>} - Exclude tag set.
+   */
+  getExcludeTagSet() {
+    const configTags = Array.isArray(testConfig.excludeTags) ? testConfig.excludeTags : []
+
+    return new Set([...this._excludeTags, ...configTags])
+  }
+
+  /**
+   * @param {string[] | string | undefined} testTags - Test tags.
+   * @param {Set<string>} tagSet - Tag set.
+   * @returns {boolean} - Whether any tags match.
+   */
+  hasMatchingTag(testTags, tagSet) {
+    if (!tagSet.size) return false
+
+    const normalized = this.normalizeTags(testTags)
+
+    for (const tag of normalized) {
+      if (tagSet.has(tag)) return true
+    }
+
+    return false
+  }
+
+  /**
+   * @param {TestArgs} testArgs - Test args.
+   * @returns {boolean} - Whether the test should be skipped.
+   */
+  shouldSkipTest(testArgs) {
+    if (this.hasMatchingTag(testArgs.tags, this.getExcludeTagSet())) return true
+
+    if (this._includeTagSet.size > 0 && !testArgs.focus) {
+      if (!this.hasMatchingTag(testArgs.tags, this._includeTagSet)) return true
+    }
+
+    return false
+  }
 
   /**
    * @returns {Promise<Application>} - Resolves with the application.
@@ -140,6 +212,17 @@ export default class TestRunner {
     if (this._testsCount === undefined) throw new Error("Tests hasn't been run yet")
 
     return this._testsCount
+  }
+
+  /**
+   * @returns {number} - The executed tests count.
+   */
+  getExecutedTestsCount() {
+    if (this._successfulTests === undefined || this._failedTests === undefined) {
+      throw new Error("Tests hasn't been run yet")
+    }
+
+    return this._successfulTests + this._failedTests
   }
 
   /**
@@ -239,6 +322,7 @@ export default class TestRunner {
       const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
 
       if (this._onlyFocussed && !testArgs.focus) continue
+      if (this.shouldSkipTest(testArgs)) continue
 
       if (testArgs.type == "model" || testArgs.type == "request") {
         testArgs.application = await this.application()

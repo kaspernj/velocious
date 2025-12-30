@@ -17,6 +17,41 @@ npm install velocious
 npx velocious init
 ```
 
+# Testing
+
+Tag tests to filter runs.
+
+```js
+describe("Tasks", {tags: ["db"]}, () => {
+  it("creates a task", {tags: ["fast"]}, async () => {})
+})
+```
+
+```bash
+# Only run tagged tests (focused tests still run)
+npx velocious test --tag fast
+npx velocious test --include-tag fast,api
+
+# Exclude tagged tests (always wins)
+npx velocious test --exclude-tag slow
+```
+
+Exclude tags via your testing config file.
+
+```js
+import {configureTests} from "velocious/build/src/testing/test.js"
+
+configureTests({excludeTags: ["mssql"]})
+```
+
+Retry flaky tests by setting a retry count on the test args.
+
+```js
+describe("Tasks", () => {
+  it("retries a flaky check", {retry: 2}, async () => {})
+})
+```
+
 # Models
 
 ```bash
