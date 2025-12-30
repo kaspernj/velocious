@@ -578,6 +578,35 @@ function isObjectLike(value) {
 }
 
 /**
+ * @param {unknown} value - Value.
+ * @returns {boolean} - Whether plain object.
+ */
+function isPlainObject(value) {
+  if (!value || typeof value !== "object") return false
+
+  const prototype = Object.getPrototypeOf(value)
+
+  return prototype === Object.prototype || prototype === null
+}
+
+/**
+ * @param {unknown} actual - Actual value.
+ * @param {unknown} expected - Expected value.
+ * @returns {boolean} - Whether values are equal.
+ */
+function valuesEqual(actual, expected) {
+  if (actual instanceof Date && expected instanceof Date) {
+    return actual.getTime() === expected.getTime()
+  }
+
+  if (actual instanceof RegExp && expected instanceof RegExp) {
+    return actual.source === expected.source && actual.flags === expected.flags
+  }
+
+  return Object.is(actual, expected)
+}
+
+/**
  * @param {unknown} actual - Actual value.
  * @param {unknown} expected - Expected value.
  * @param {string} path - Path.
@@ -599,7 +628,7 @@ function collectMatchDifferences(actual, expected, path, differences) {
     return
   }
 
-  if (isObjectLike(expected)) {
+  if (isPlainObject(expected)) {
     if (!isObjectLike(actual)) {
       differences[path || "$"] = [expected, actual]
       return
@@ -608,7 +637,7 @@ function collectMatchDifferences(actual, expected, path, differences) {
     for (const key of Object.keys(expected)) {
       const nextPath = path ? `${path}.${key}` : key
 
-      if (!(key in /** @type {Record<string, unknown>} */ (actual))) {
+      if (!Object.prototype.hasOwnProperty.call(/** @type {Record<string, unknown>} */ (actual), key)) {
         differences[nextPath] = [expected[key], undefined]
         continue
       }
@@ -619,7 +648,7 @@ function collectMatchDifferences(actual, expected, path, differences) {
     return
   }
 
-  if (actual != expected) {
+  if (!valuesEqual(actual, expected)) {
     differences[path || "$"] = [expected, actual]
   }
 }
