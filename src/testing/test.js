@@ -22,6 +22,49 @@ const testEvents = new EventEmitter()
 let currentPath = [tests]
 
 /**
+ * @param {string[] | string | undefined} tags - Tags.
+ * @returns {string[]} - Normalized tags.
+ */
+function normalizeTags(tags) {
+  if (!tags) return []
+
+  const values = []
+  const rawTags = Array.isArray(tags) ? tags : [tags]
+
+  for (const rawTag of rawTags) {
+    if (rawTag === undefined || rawTag === null) continue
+
+    const parts = String(rawTag).split(",")
+
+    for (const part of parts) {
+      const trimmed = part.trim()
+
+      if (trimmed) values.push(trimmed)
+    }
+  }
+
+  return Array.from(new Set(values))
+}
+
+/**
+ * @param {Record<string, any>} baseArgs - Base args.
+ * @param {Record<string, any>} extraArgs - Extra args.
+ * @returns {Record<string, any>} - Merged args.
+ */
+function mergeTestArgs(baseArgs, extraArgs) {
+  const merged = Object.assign({}, baseArgs, extraArgs)
+  const mergedTags = [...normalizeTags(baseArgs?.tags), ...normalizeTags(extraArgs?.tags)]
+
+  if (mergedTags.length > 0) {
+    merged.tags = Array.from(new Set(mergedTags))
+  } else if ("tags" in merged) {
+    delete merged.tags
+  }
+
+  return merged
+}
+
+/**
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
@@ -485,7 +528,7 @@ async function describe(description, arg1, arg2) {
   }
 
   const currentTest = currentPath[currentPath.length - 1]
-  const newTestArgs = Object.assign({}, currentTest.args, testArgs)
+  const newTestArgs = mergeTestArgs(currentTest.args, testArgs)
 
   if (description in currentTest.subs) {
     throw new Error(`Duplicate test description: ${description}`)
@@ -534,7 +577,7 @@ function it(description, arg1, arg2) {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
   }
 
-  const newTestArgs = Object.assign({}, currentTest.args, testArgs)
+  const newTestArgs = mergeTestArgs(currentTest.args, testArgs)
 
   currentTest.tests[description] = {args: newTestArgs, function: testFunction}
 }
