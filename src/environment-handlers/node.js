@@ -297,7 +297,17 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   async importTestingConfigPath() {
     const testingConfigPath = this.getConfiguration().getTesting()
 
-    await import(testingConfigPath)
+    const testingImport = await import(testingConfigPath)
+    const testingDefault = testingImport.default
+
+    if (!testingDefault) throw new Error("Testing config must export a default function")
+    if (typeof testingDefault !== "function") throw new Error("Testing config default export isn't a function")
+
+    const result = await testingDefault()
+
+    if (typeof result === "function") {
+      await result()
+    }
   }
 
   /**

@@ -33,6 +33,8 @@ describe("TestRunner tags", () => {
     const tests = {
       args: {},
       afterEaches: [],
+      afterAlls: [],
+      beforeAlls: [],
       beforeEaches: [],
       subs: {},
       tests: {
@@ -72,6 +74,8 @@ describe("TestRunner tags", () => {
     const tests = {
       args: {},
       afterEaches: [],
+      afterAlls: [],
+      beforeAlls: [],
       beforeEaches: [],
       subs: {},
       tests: {
@@ -111,6 +115,8 @@ describe("TestRunner tags", () => {
     const tests = {
       args: {},
       afterEaches: [],
+      afterAlls: [],
+      beforeAlls: [],
       beforeEaches: [],
       subs: {},
       tests: {
@@ -145,6 +151,8 @@ describe("TestRunner tags", () => {
     const tests = {
       args: {},
       afterEaches: [],
+      afterAlls: [],
+      beforeAlls: [],
       beforeEaches: [],
       subs: {},
       tests: {
