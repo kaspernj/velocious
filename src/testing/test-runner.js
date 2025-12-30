@@ -16,6 +16,7 @@ import {tests} from "./test.js"
  * @property {boolean} [databaseCleaning.truncate] - Truncate tables between tests.
  * @property {boolean} [focus] - Whether this test is focused.
  * @property {() => (void|Promise<void>)} [function] - Test callback function.
+ * @property {number} [retry] - Number of retries when a test fails.
  * @property {string} [type] - Test type identifier.
  */
 
@@ -249,36 +250,60 @@ export default class TestRunner {
 
       console.log(`${leftPadding}it ${testDescription}`)
 
-      try {
-        for (const beforeEachData of newBeforeEaches) {
-          await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-        }
+      const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
+        ? Math.max(0, Math.floor(testArgs.retry))
+        : 0
+      let retriesUsed = 0
 
-        await testData.function(testArgs)
-        this._successfulTests++
-      } catch (error) {
-        this._failedTests++
+      while (true) {
+        let shouldRetry = false
+        /** @type {unknown} */
+        let failedError
 
-        if (error instanceof Error) {
-          console.error(`${leftPadding}  Test failed:`, error.message)
-          addTrackedStackToError(error)
-
-          const backtraceCleaner = new BacktraceCleaner(error)
-          const cleanedStack = backtraceCleaner.getCleanedStack()
-          const stackLines = cleanedStack?.split("\n")
-
-          if (stackLines) {
-            for (const stackLine of stackLines) {
-              console.error(`${leftPadding}  ${stackLine}`)
-            }
+        try {
+          for (const beforeEachData of newBeforeEaches) {
+            await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
           }
-        } else {
-          console.error(`${leftPadding}  Test failed with a ${typeof error}:`, error)
+
+          await testData.function(testArgs)
+          this._successfulTests++
+        } catch (error) {
+          if (retriesUsed < retryCount) {
+            retriesUsed++
+            shouldRetry = true
+          } else {
+            failedError = error
+          }
+        } finally {
+          for (const afterEachData of newAfterEaches) {
+            await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+          }
         }
-      } finally {
-        for (const afterEachData of newAfterEaches) {
-          await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+
+        if (shouldRetry) continue
+
+        if (failedError) {
+          this._failedTests++
+
+          if (failedError instanceof Error) {
+            console.error(`${leftPadding}  Test failed:`, failedError.message)
+            addTrackedStackToError(failedError)
+
+            const backtraceCleaner = new BacktraceCleaner(failedError)
+            const cleanedStack = backtraceCleaner.getCleanedStack()
+            const stackLines = cleanedStack?.split("\n")
+
+            if (stackLines) {
+              for (const stackLine of stackLines) {
+                console.error(`${leftPadding}  ${stackLine}`)
+              }
+            }
+          } else {
+            console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
+          }
         }
+
+        break
       }
     }
 
