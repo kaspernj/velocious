@@ -17,6 +17,25 @@ npm install velocious
 npx velocious init
 ```
 
+# Testing
+
+Tag tests to filter runs.
+
+```js
+describe("Tasks", {tags: ["db"]}, () => {
+  it("creates a task", {tags: ["fast"]}, async () => {})
+})
+```
+
+```bash
+# Only run tagged tests (focused tests still run)
+npx velocious test --tag fast
+npx velocious test --include-tag fast,api
+
+# Exclude tagged tests (always wins)
+npx velocious test --exclude-tag slow
+```
+
 # Models
 
 ```bash
