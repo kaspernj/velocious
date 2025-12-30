@@ -2,7 +2,7 @@
 
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
-import {describe, expect, it} from "../../src/testing/test.js"
+import {configureTests, describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
 /**
@@ -167,5 +167,45 @@ describe("TestRunner tags", () => {
     expect(testRunner.getExecutedTestsCount()).toBe(0)
     expect(testRunner.getSuccessfulTests()).toBe(0)
     expect(testRunner.getFailedTests()).toBe(0)
+  })
+
+  it("excludes tags configured in the testing config", async () => {
+    configureTests({excludeTags: ["mssql"]})
+
+    try {
+      const testRunner = buildTestRunner()
+      const counts = {mssql: 0, untagged: 0}
+
+      const tests = {
+        args: {},
+        afterEaches: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "mssql test": {
+            args: {tags: ["mssql"]},
+            function: async () => { counts.mssql++ }
+          },
+          "untagged test": {
+            args: {},
+            function: async () => { counts.untagged++ }
+          }
+        }
+      }
+
+      await testRunner.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
+      })
+
+      expect(counts.mssql).toBe(0)
+      expect(counts.untagged).toBe(1)
+      expect(testRunner.getSuccessfulTests()).toBe(1)
+    } finally {
+      configureTests({excludeTags: []})
+    }
   })
 })
