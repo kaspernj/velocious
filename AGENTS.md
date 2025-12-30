@@ -61,3 +61,6 @@ describe("something", () => {
 ## Pull requests
 Use the `gh` CLI to open GitHub pull requests when needed.
 Do not push to GitHub unless explicitly asked.
+
+## Branches and commits
+When asked to create branches and commit changes, come up with fitting branch names and commit messages. Split commits into smaller commits for each distinct change.
