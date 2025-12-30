@@ -39,9 +39,12 @@ npx velocious test --exclude-tag slow
 Exclude tags via your testing config file.
 
 ```js
+// src/config/testing.js
 import {configureTests} from "velocious/build/src/testing/test.js"
 
-configureTests({excludeTags: ["mssql"]})
+export default async function configureTesting() {
+  configureTests({excludeTags: ["mssql"]})
+}
 ```
 
 Retry flaky tests by setting a retry count on the test args.
@@ -50,6 +53,21 @@ Retry flaky tests by setting a retry count on the test args.
 describe("Tasks", () => {
   it("retries a flaky check", {retry: 2}, async () => {})
 })
+```
+
+Use beforeAll/afterAll for suite-level setup/teardown.
+
+```js
+// src/config/testing.js
+export default async function configureTesting() {
+  beforeAll(async () => {
+    // setup shared resources
+  })
+
+  afterAll(async () => {
+    // teardown shared resources
+  })
+}
 ```
 
 # Models

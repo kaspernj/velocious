@@ -9,8 +9,12 @@ import restArgsError from "../utils/rest-args-error.js"
 const tests = {
   /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   afterEaches: [],
+  /** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+  afterAlls: [],
   args: {},
 
+  /** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+  beforeAlls: [],
   /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   beforeEaches: [],
   subs: {},
@@ -88,6 +92,16 @@ function beforeEach(callback) {
 }
 
 /**
+ * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
+ * @returns {void} - No return value.
+ */
+function beforeAll(callback) {
+  const currentTest = currentPath[currentPath.length - 1]
+
+  currentTest.beforeAlls.push({callback})
+}
+
+/**
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
@@ -95,6 +109,16 @@ function afterEach(callback) {
   const currentTest = currentPath[currentPath.length - 1]
 
   currentTest.afterEaches.push({callback})
+}
+
+/**
+ * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
+ * @returns {void} - No return value.
+ */
+function afterAll(callback) {
+  const currentTest = currentPath[currentPath.length - 1]
+
+  currentTest.afterAlls.push({callback})
 }
 
 class BaseExpect {
@@ -547,7 +571,7 @@ async function describe(description, arg1, arg2) {
     throw new Error(`Duplicate test description: ${description}`)
   }
 
-  const newTestData = {afterEaches: [], args: newTestArgs, beforeEaches: [], subs: {}, tests: {}}
+  const newTestData = {afterEaches: [], afterAlls: [], args: newTestArgs, beforeAlls: [], beforeEaches: [], subs: {}, tests: {}}
 
   currentTest.subs[description] = newTestData
   currentPath.push(newTestData)
@@ -622,7 +646,9 @@ function fit(description, arg1, arg2) {
 
 // Make the methods global so they can be used in test files
 globalThis.afterEach = afterEach
+globalThis.afterAll = afterAll
 globalThis.beforeEach = beforeEach
+globalThis.beforeAll = beforeAll
 globalThis.describe = describe
 globalThis.expect = expect
 globalThis.it = it
@@ -630,4 +656,4 @@ globalThis.fit = fit
 globalThis.testEvents = testEvents
 globalThis.configureTests = configureTests
 
-export {afterEach, beforeEach, configureTests, describe, expect, fit, it, testConfig, testEvents, tests}
+export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, testConfig, testEvents, tests}

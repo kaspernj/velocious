@@ -37,10 +37,21 @@ import {testConfig, testEvents, tests} from "./test.js"
  */
 
 /**
+ * @typedef {function({configuration: import("../configuration.js").default}) : (void|Promise<void>)} BeforeAfterAllCallbackType
+ */
+
+/**
+ * @typedef {object} BeforeAfterAllCallbackObjectType
+ * @property {BeforeAfterAllCallbackType} callback - Hook callback to execute.
+ */
+
+/**
  * @typedef {object} TestsArgument
  * @property {Record<string, TestData>} args - Arguments keyed by test description.
  * @property {boolean} [anyTestsFocussed] - Whether any tests in the tree are focused.
  * @property {AfterBeforeEachCallbackObjectType[]} afterEaches - After-each hooks for this scope.
+ * @property {BeforeAfterAllCallbackObjectType[]} afterAlls - After-all hooks for this scope.
+ * @property {BeforeAfterAllCallbackObjectType[]} beforeAlls - Before-all hooks for this scope.
  * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Before-each hooks for this scope.
  * @property {Record<string, TestData>} tests - A unique identifier for the node.
  * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
@@ -127,6 +138,31 @@ export default class TestRunner {
 
     for (const tag of normalized) {
       if (tagSet.has(tag)) return true
+    }
+
+    return false
+  }
+
+  /**
+   * @param {TestsArgument} tests - Tests.
+   * @returns {boolean} - Whether any tests in this scope will run.
+   */
+  hasRunnableTests(tests) {
+    for (const testDescription in tests.tests) {
+      const testData = tests.tests[testDescription]
+      const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
+
+      if (this._onlyFocussed && !testArgs.focus) continue
+      if (this.shouldSkipTest(testArgs)) continue
+
+      return true
+    }
+
+    for (const subDescription in tests.subs) {
+      const subTest = tests.subs[subDescription]
+
+      if (this._onlyFocussed && !subTest.anyTestsFocussed) continue
+      if (this.hasRunnableTests(subTest)) return true
     }
 
     return false
@@ -316,6 +352,13 @@ export default class TestRunner {
     const leftPadding = " ".repeat(indentLevel * 2)
     const newAfterEaches = [...afterEaches, ...tests.afterEaches]
     const newBeforeEaches = [...beforeEaches, ...tests.beforeEaches]
+    const shouldRunAnyTests = this.hasRunnableTests(tests)
+
+    if (!shouldRunAnyTests) return
+
+    for (const beforeAllData of tests.beforeAlls || []) {
+      await beforeAllData.callback({configuration: this.getConfiguration()})
+    }
 
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
@@ -415,6 +458,10 @@ export default class TestRunner {
           indentLevel: indentLevel + 1
         })
       }
+    }
+
+    for (const afterAllData of tests.afterAlls || []) {
+      await afterAllData.callback({configuration: this.getConfiguration()})
     }
   }
 }
