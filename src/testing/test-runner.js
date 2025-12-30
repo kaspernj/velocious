@@ -80,6 +80,7 @@ export default class TestRunner {
     this._failedTests = 0
     this._successfulTests = 0
     this._testsCount = 0
+    this._activeAfterAllScopes = []
   }
 
   /**
@@ -307,6 +308,19 @@ export default class TestRunner {
   }
 
   /**
+   * @returns {Promise<void>} - Resolves when cleanup hooks finish.
+   */
+  async runAfterAllsForActiveScopes() {
+    const scopes = [...this._activeAfterAllScopes].reverse()
+
+    for (const scope of scopes) {
+      await this.runAfterAllsForScope(scope)
+    }
+
+    this._activeAfterAllScopes = []
+  }
+
+  /**
    * @param {TestsArgument} tests - Tests.
    * @returns {{anyTestsFocussed: boolean}} - Whether any tests in the tree are focused.
    */
@@ -356,111 +370,134 @@ export default class TestRunner {
 
     if (!shouldRunAnyTests) return
 
-    for (const beforeAllData of tests.beforeAlls || []) {
-      await beforeAllData.callback({configuration: this.getConfiguration()})
-    }
+    /** @type {{tests: TestsArgument, afterAllsRun: boolean}} */
+    const scopeEntry = {tests, afterAllsRun: false}
+    this._activeAfterAllScopes.push(scopeEntry)
 
-    for (const testDescription in tests.tests) {
-      const testData = tests.tests[testDescription]
-      const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
-
-      if (this._onlyFocussed && !testArgs.focus) continue
-      if (this.shouldSkipTest(testArgs)) continue
-
-      if (testArgs.type == "model" || testArgs.type == "request") {
-        testArgs.application = await this.application()
+    try {
+      for (const beforeAllData of tests.beforeAlls || []) {
+        await beforeAllData.callback({configuration: this.getConfiguration()})
       }
 
-      if (testArgs.type == "request") {
-        testArgs.client = await this.requestClient()
-      }
+      for (const testDescription in tests.tests) {
+        const testData = tests.tests[testDescription]
+        const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
 
-      console.log(`${leftPadding}it ${testDescription}`)
+        if (this._onlyFocussed && !testArgs.focus) continue
+        if (this.shouldSkipTest(testArgs)) continue
 
-      const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
-        ? Math.max(0, Math.floor(testArgs.retry))
-        : 0
-      let retriesUsed = 0
-
-      while (true) {
-        let shouldRetry = false
-        /** @type {unknown} */
-        let failedError
-
-        try {
-          for (const beforeEachData of newBeforeEaches) {
-            await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-          }
-
-          await testData.function(testArgs)
-          this._successfulTests++
-        } catch (error) {
-          if (retriesUsed < retryCount) {
-            retriesUsed++
-            shouldRetry = true
-          } else {
-            failedError = error
-          }
-        } finally {
-          for (const afterEachData of newAfterEaches) {
-            await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-          }
+        if (testArgs.type == "model" || testArgs.type == "request") {
+          testArgs.application = await this.application()
         }
 
-        if (shouldRetry) continue
+        if (testArgs.type == "request") {
+          testArgs.client = await this.requestClient()
+        }
 
-        if (failedError) {
-          this._failedTests++
+        console.log(`${leftPadding}it ${testDescription}`)
 
-          if (failedError instanceof Error) {
-            console.error(`${leftPadding}  Test failed:`, failedError.message)
-            addTrackedStackToError(failedError)
+        const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
+          ? Math.max(0, Math.floor(testArgs.retry))
+          : 0
+        let retriesUsed = 0
 
-            const backtraceCleaner = new BacktraceCleaner(failedError)
-            const cleanedStack = backtraceCleaner.getCleanedStack()
-            const stackLines = cleanedStack?.split("\n")
+        while (true) {
+          let shouldRetry = false
+          /** @type {unknown} */
+          let failedError
 
-            if (stackLines) {
-              for (const stackLine of stackLines) {
-                console.error(`${leftPadding}  ${stackLine}`)
-              }
+          try {
+            for (const beforeEachData of newBeforeEaches) {
+              await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
             }
-          } else {
-            console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
+
+            await testData.function(testArgs)
+            this._successfulTests++
+          } catch (error) {
+            if (retriesUsed < retryCount) {
+              retriesUsed++
+              shouldRetry = true
+            } else {
+              failedError = error
+            }
+          } finally {
+            for (const afterEachData of newAfterEaches) {
+              await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+            }
           }
 
-          testEvents.emit("testFailed", {
-            configuration: this.getConfiguration(),
-            descriptions,
-            error: failedError,
-            testArgs,
-            testData,
-            testDescription,
-            testRunner: this
+          if (shouldRetry) continue
+
+          if (failedError) {
+            this._failedTests++
+
+            if (failedError instanceof Error) {
+              console.error(`${leftPadding}  Test failed:`, failedError.message)
+              addTrackedStackToError(failedError)
+
+              const backtraceCleaner = new BacktraceCleaner(failedError)
+              const cleanedStack = backtraceCleaner.getCleanedStack()
+              const stackLines = cleanedStack?.split("\n")
+
+              if (stackLines) {
+                for (const stackLine of stackLines) {
+                  console.error(`${leftPadding}  ${stackLine}`)
+                }
+              }
+            } else {
+              console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
+            }
+
+            testEvents.emit("testFailed", {
+              configuration: this.getConfiguration(),
+              descriptions,
+              error: failedError,
+              testArgs,
+              testData,
+              testDescription,
+              testRunner: this
+            })
+          }
+
+          break
+        }
+      }
+
+      for (const subDescription in tests.subs) {
+        const subTest = tests.subs[subDescription]
+        const newDecriptions = descriptions.concat([subDescription])
+
+        if (!this._onlyFocussed || subTest.anyTestsFocussed) {
+          console.log(`${leftPadding}${subDescription}`)
+          await this.runTests({
+            afterEaches: newAfterEaches,
+            beforeEaches: newBeforeEaches,
+            tests: subTest,
+            descriptions: newDecriptions,
+            indentLevel: indentLevel + 1
           })
         }
+      }
+    } finally {
+      await this.runAfterAllsForScope(scopeEntry)
+      const scopeIndex = this._activeAfterAllScopes.indexOf(scopeEntry)
 
-        break
+      if (scopeIndex >= 0) {
+        this._activeAfterAllScopes.splice(scopeIndex, 1)
       }
     }
+  }
 
-    for (const subDescription in tests.subs) {
-      const subTest = tests.subs[subDescription]
-      const newDecriptions = descriptions.concat([subDescription])
+  /**
+   * @param {{tests: TestsArgument, afterAllsRun: boolean}} scopeEntry - Scope entry.
+   * @returns {Promise<void>} - Resolves when scope cleanup finishes.
+   */
+  async runAfterAllsForScope(scopeEntry) {
+    if (scopeEntry.afterAllsRun) return
 
-      if (!this._onlyFocussed || subTest.anyTestsFocussed) {
-        console.log(`${leftPadding}${subDescription}`)
-        await this.runTests({
-          afterEaches: newAfterEaches,
-          beforeEaches: newBeforeEaches,
-          tests: subTest,
-          descriptions: newDecriptions,
-          indentLevel: indentLevel + 1
-        })
-      }
-    }
+    scopeEntry.afterAllsRun = true
 
-    for (const afterAllData of tests.afterAlls || []) {
+    for (const afterAllData of scopeEntry.tests.afterAlls || []) {
       await afterAllData.callback({configuration: this.getConfiguration()})
     }
   }

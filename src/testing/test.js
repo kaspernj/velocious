@@ -447,6 +447,30 @@ class Expect extends BaseExpect {
   }
 
   /**
+   * @param {Record<string, any> | any[]} expected - Expected partial object.
+   * @returns {void} - No return value.
+   */
+  toMatchObject(expected) {
+    if (expected === null || typeof expected !== "object") {
+      throw new Error(`Expected object but got ${typeof expected}`)
+    }
+
+    const {matches, differences} = matchObject(this._object, expected)
+    const objectPrint = formatValue(this._object)
+    const expectedPrint = formatValue(expected)
+
+    if (this._not) {
+      if (matches) {
+        throw new Error(`Expected ${objectPrint} not to match ${expectedPrint}`)
+      }
+    } else if (!matches) {
+      const diffPrint = Object.keys(differences).length > 0 ? ` (diff: ${minifiedStringify(differences)})` : ""
+
+      throw new Error(`Expected ${objectPrint} to match ${expectedPrint}${diffPrint}`)
+    }
+  }
+
+  /**
    * @template T extends Error
    * @param {string|T} expectedError - Expected error.
    * @returns {Promise<void>} - Resolves when complete.
@@ -542,6 +566,78 @@ class Expect extends BaseExpect {
     if (Object.keys(differences).length > 0) {
       throw new Error(`Object had differet values: ${minifiedStringify(differences)}`)
     }
+  }
+}
+
+/**
+ * @param {unknown} value - Value.
+ * @returns {boolean} - Whether object-like.
+ */
+function isObjectLike(value) {
+  return value !== null && typeof value === "object"
+}
+
+/**
+ * @param {unknown} actual - Actual value.
+ * @param {unknown} expected - Expected value.
+ * @param {string} path - Path.
+ * @param {Record<string, unknown[]>} differences - Differences.
+ * @returns {void} - No return value.
+ */
+function collectMatchDifferences(actual, expected, path, differences) {
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual)) {
+      differences[path || "$"] = [expected, actual]
+      return
+    }
+
+    for (let i = 0; i < expected.length; i++) {
+      const nextPath = `${path}[${i}]`
+      collectMatchDifferences(actual[i], expected[i], nextPath, differences)
+    }
+
+    return
+  }
+
+  if (isObjectLike(expected)) {
+    if (!isObjectLike(actual)) {
+      differences[path || "$"] = [expected, actual]
+      return
+    }
+
+    for (const key of Object.keys(expected)) {
+      const nextPath = path ? `${path}.${key}` : key
+
+      if (!(key in /** @type {Record<string, unknown>} */ (actual))) {
+        differences[nextPath] = [expected[key], undefined]
+        continue
+      }
+
+      collectMatchDifferences(actual[key], expected[key], nextPath, differences)
+    }
+
+    return
+  }
+
+  if (actual != expected) {
+    differences[path || "$"] = [expected, actual]
+  }
+}
+
+/**
+ * @param {unknown} actual - Actual value.
+ * @param {Record<string, any> | any[]} expected - Expected value.
+ * @returns {{matches: boolean, differences: Record<string, unknown[]>}} - Match result.
+ */
+function matchObject(actual, expected) {
+  /** @type {Record<string, unknown[]>} */
+  const differences = {}
+
+  collectMatchDifferences(actual, expected, "", differences)
+
+  return {
+    matches: Object.keys(differences).length === 0,
+    differences
   }
 }
 
