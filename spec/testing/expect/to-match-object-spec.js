@@ -21,6 +21,16 @@ describe("Expect#toMatchObject", () => {
     }).toThrowError('Expected {"a":1,"b":{"c":2}} to match {"b":{"c":3}} (diff: {"b.c":[3,2]})')
   })
 
+  it("compares non-plain values by value", async () => {
+    const actual = {createdAt: new Date("2024-01-01T00:00:00.000Z")}
+
+    expect(actual).toMatchObject({createdAt: new Date("2024-01-01T00:00:00.000Z")})
+
+    await expect(() => {
+      expect(actual).toMatchObject({createdAt: new Date("2024-01-02T00:00:00.000Z")})
+    }).toThrowError('Expected {"createdAt":"Date"} to match {"createdAt":"Date"} (diff: {"createdAt":["Date","Date"]})')
+  })
+
   it("fails when the matcher argument is not an object", async () => {
     await expect(() => {
       expect({a: 1}).toMatchObject(5)
