@@ -49,6 +49,9 @@ export default class TestFilesFinder {
     this.directoryArgs = []
 
     /** @type {string[]} */
+    this.directoryFullPaths = []
+
+    /** @type {string[]} */
     this.fileArgs = []
 
     /** @type {string[]} */
@@ -68,7 +71,10 @@ export default class TestFilesFinder {
     }
 
     await this.withFindingCount(async () => {
-      for (const directory of this.directories) {
+      const hasExplicitArgs = this.directoryFullPaths.length > 0 || this.fileArgs.length > 0
+      const directoriesToScan = hasExplicitArgs ? this.directoryFullPaths : this.directories
+
+      for (const directory of directoriesToScan) {
         if (await fileExists(directory)) {
           await this.findTestFilesInDir(directory)
         }
@@ -217,6 +223,7 @@ export default class TestFilesFinder {
       if (forceDirectory) {
         const preferredLocalPath = this.toLocalPath(basePrefixedFullPath || fullPath)
         this.directoryArgs.push(this.ensureTrailingSlash(preferredLocalPath))
+        this.directoryFullPaths.push(path.resolve(basePrefixedFullPath || fullPath))
         continue
       }
 
@@ -239,6 +246,7 @@ export default class TestFilesFinder {
 
         if (stats.isDirectory()) {
           this.directoryArgs.push(this.ensureTrailingSlash(localPath))
+          this.directoryFullPaths.push(resolvedFullPath)
         } else if (stats.isFile()) {
           this.fileArgs.push(localPath)
           this.explicitFiles.push(resolvedFullPath)
