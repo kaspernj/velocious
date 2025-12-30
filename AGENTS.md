@@ -32,6 +32,9 @@ If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.
 - Repeat until the command succeeds (or clearly explain why it cannot be made to pass).
 
+## PR description formatting
+When editing PRs via CLI, use actual newlines in the body. Avoid literal `\n` sequences in the final description.
+
 ## When to run which check
 - **Tiny change (docs/comments/non-functional formatting):** you may skip checks.
 - **Most code changes:** run **Quick check** at least once while iterating.
