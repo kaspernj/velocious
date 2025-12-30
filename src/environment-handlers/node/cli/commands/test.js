@@ -112,6 +112,24 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
     const testFiles = await testFilesFinder.findTestFiles()
     const testRunner = new TestRunner({configuration: this.getConfiguration(), excludeTags, includeTags, testFiles})
+    let signalHandled = false
+
+    const handleSignal = async (signal) => {
+      if (signalHandled) return
+      signalHandled = true
+      console.error(`\nReceived ${signal}, running afterAll hooks before exit...`)
+
+      try {
+        await testRunner.runAfterAllsForActiveScopes()
+      } catch (error) {
+        console.error("Failed while running afterAll hooks:", error)
+      } finally {
+        process.exit(130)
+      }
+    }
+
+    process.once("SIGINT", () => { void handleSignal("SIGINT") })
+    process.once("SIGTERM", () => { void handleSignal("SIGTERM") })
 
     await testRunner.prepare()
 
