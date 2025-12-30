@@ -3,6 +3,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import {describe, expect, it} from "../../../../src/testing/test.js"
 import TestFilesFinder from "../../../../src/testing/test-files-finder.js"
 
 describe("Cli - Commands - test - TestFilesFinder", () => {
@@ -51,6 +52,29 @@ describe("Cli - Commands - test - TestFilesFinder", () => {
       await fs.writeFile(otherFile, "")
 
       const testFilesFinder = new TestFilesFinder({directory: tempDirectory, processArgs: ["test", testFile]})
+      const testFiles = await testFilesFinder.findTestFiles()
+
+      expect(testFiles).toEqual([testFile])
+    } finally {
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
+  })
+
+  it("accepts file args after -- outside the default directories", async () => {
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-test-files-"))
+
+    try {
+      const appDir = path.join(tempDirectory, "app")
+      const testDir = path.join(appDir, "tests", "events")
+      const testFile = path.join(testDir, "upload-test.js")
+
+      await fs.mkdir(testDir, {recursive: true})
+      await fs.writeFile(testFile, "")
+
+      const testFilesFinder = new TestFilesFinder({
+        directory: tempDirectory,
+        processArgs: ["test", "--", "app/tests/events/upload-test.js"]
+      })
       const testFiles = await testFilesFinder.findTestFiles()
 
       expect(testFiles).toEqual([testFile])

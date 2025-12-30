@@ -51,6 +51,9 @@ export default class TestFilesFinder {
     /** @type {string[]} */
     this.fileArgs = []
 
+    /** @type {string[]} */
+    this.explicitFiles = []
+
     this._argsPrepared = false
   }
 
@@ -59,6 +62,10 @@ export default class TestFilesFinder {
    */
   async findTestFiles() {
     await this.prepareArgs()
+
+    if (this.explicitFiles.length > 0 && this.directoryArgs.length === 0) {
+      return Array.from(new Set(this.explicitFiles))
+    }
 
     await this.withFindingCount(async () => {
       for (const directory of this.directories) {
@@ -70,7 +77,11 @@ export default class TestFilesFinder {
 
     await this.waitForFindingPromises()
 
-    return this.foundFiles
+    if (this.explicitFiles.length > 0) {
+      this.foundFiles.push(...this.explicitFiles)
+    }
+
+    return Array.from(new Set(this.foundFiles))
   }
 
   /**
@@ -194,6 +205,8 @@ export default class TestFilesFinder {
     if (this._argsPrepared) return
 
     for (const testArg of this.testArgs) {
+      if (testArg === "--") continue
+
       const forceDirectory = testArg.endsWith("/") || testArg.endsWith(path.sep)
       const fullPath = path.isAbsolute(testArg) ? testArg : path.resolve(this.directory, testArg)
       const baseName = path.basename(this.directory)
@@ -228,6 +241,7 @@ export default class TestFilesFinder {
           this.directoryArgs.push(this.ensureTrailingSlash(localPath))
         } else if (stats.isFile()) {
           this.fileArgs.push(localPath)
+          this.explicitFiles.push(resolvedFullPath)
         }
       } catch {
         const fallbackLocalPath = this.toLocalPath(basePrefixedFullPath || fullPath)
