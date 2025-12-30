@@ -320,6 +320,23 @@ class Expect extends BaseExpect {
   }
 
   /**
+   * @returns {void} - No return value.
+   */
+  toBeTruthy() {
+    const objectPrint = formatValue(this._object)
+
+    if (this._not) {
+      if (this._object) {
+        throw new Error(`${objectPrint} was unexpected to be truthy`)
+      }
+    } else {
+      if (!this._object) {
+        throw new Error(`${objectPrint} wasn't expected to be truthy`)
+      }
+    }
+  }
+
+  /**
    * @param {function(): Promise<number>} changeCallback - Change callback.
    * @returns {ExpectToChange} - The change.
    */
@@ -371,6 +388,25 @@ class Expect extends BaseExpect {
    * @returns {void} - No return value.
    */
   toEqual(result) {
+    if (isObjectContaining(result)) {
+      const expectedValue = /** @type {any} */ (result).value
+      const {matches, differences} = matchObject(this._object, expectedValue)
+      const objectPrint = formatValue(this._object)
+      const expectedPrint = formatValue(expectedValue)
+
+      if (this._not) {
+        if (matches) {
+          throw new Error(`Expected ${objectPrint} not to match ${expectedPrint}`)
+        }
+      } else if (!matches) {
+        const diffPrint = Object.keys(differences).length > 0 ? ` (diff: ${minifiedStringify(differences)})` : ""
+
+        throw new Error(`Expected ${objectPrint} to match ${expectedPrint}${diffPrint}`)
+      }
+
+      return
+    }
+
     if (this._not) {
       if (typeof this._object == "object" && typeof result == "object") {
         if (!anythingDifferent(this._object, result)) {
@@ -571,10 +607,33 @@ class Expect extends BaseExpect {
 
 /**
  * @param {unknown} value - Value.
+ * @returns {{__velociousMatcher: string, value: unknown}} - Matcher wrapper.
+ */
+function objectContaining(value) {
+  if (value === null || typeof value !== "object") {
+    throw new Error(`Expected object but got ${typeof value}`)
+  }
+
+  return {
+    __velociousMatcher: "objectContaining",
+    value
+  }
+}
+
+/**
+ * @param {unknown} value - Value.
  * @returns {boolean} - Whether object-like.
  */
 function isObjectLike(value) {
   return value !== null && typeof value === "object"
+}
+
+/**
+ * @param {unknown} value - Value.
+ * @returns {boolean} - Whether objectContaining matcher.
+ */
+function isObjectContaining(value) {
+  return !!value && typeof value === "object" && (/** @type {any} */ (value)).__velociousMatcher === "objectContaining"
 }
 
 /**
@@ -614,6 +673,11 @@ function valuesEqual(actual, expected) {
  * @returns {void} - No return value.
  */
 function collectMatchDifferences(actual, expected, path, differences) {
+  if (isObjectContaining(expected)) {
+    collectMatchDifferences(actual, /** @type {any} */ (expected).value, path, differences)
+    return
+  }
+
   if (Array.isArray(expected)) {
     if (!Array.isArray(actual)) {
       differences[path || "$"] = [expected, actual]
@@ -716,6 +780,8 @@ function expect(arg) {
   return new Expect(arg)
 }
 
+expect.objectContaining = objectContaining
+
 /**
  * @param {string} description - Description.
  * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
@@ -781,4 +847,4 @@ globalThis.fit = fit
 globalThis.testEvents = testEvents
 globalThis.configureTests = configureTests
 
-export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, testConfig, testEvents, tests}
+export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, objectContaining, testConfig, testEvents, tests}
