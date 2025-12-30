@@ -2,6 +2,7 @@
 
 import {formatValue, minifiedStringify} from "./format-value.js"
 import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
+import EventEmitter from "../utils/event-emitter.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 /** @type {import("./test-runner.js").TestsArgument} */
@@ -15,6 +16,8 @@ const tests = {
   subs: {},
   tests: {}
 }
+
+const testEvents = new EventEmitter()
 
 let currentPath = [tests]
 
@@ -568,5 +571,6 @@ globalThis.describe = describe
 globalThis.expect = expect
 globalThis.it = it
 globalThis.fit = fit
+globalThis.testEvents = testEvents
 
-export {afterEach, beforeEach, describe, expect, fit, it, tests}
+export {afterEach, beforeEach, describe, expect, fit, it, testEvents, tests}

@@ -5,7 +5,7 @@ import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
 import restArgsError from "../utils/rest-args-error.js"
-import {tests} from "./test.js"
+import {testEvents, tests} from "./test.js"
 
 /**
  * @typedef {object} TestArgs
@@ -301,6 +301,16 @@ export default class TestRunner {
           } else {
             console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
           }
+
+          testEvents.emit("testFailed", {
+            configuration: this.getConfiguration(),
+            descriptions,
+            error: failedError,
+            testArgs,
+            testData,
+            testDescription,
+            testRunner: this
+          })
         }
 
         break
