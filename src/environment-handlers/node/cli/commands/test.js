@@ -121,6 +121,13 @@ export default class VelociousCliCommandsTest extends BaseCommand {
 
     await testRunner.run()
 
+    const executedTests = testRunner.getExecutedTestsCount()
+
+    if ((includeTags.length > 0 || excludeTags.length > 0) && executedTests === 0) {
+      console.error("\nNo tests matched the provided tag filters")
+      process.exit(1)
+    }
+
     if (testRunner.isFailed()) {
       console.error(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`)
       process.exit(1)

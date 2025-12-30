@@ -137,4 +137,35 @@ describe("TestRunner tags", () => {
     expect(counts.fast).toBe(1)
     expect(testRunner.getSuccessfulTests()).toBe(1)
   })
+
+  it("tracks zero executed tests when tag filters skip everything", async () => {
+    const testRunner = buildTestRunner({includeTags: ["fast"]})
+    let runs = 0
+
+    const tests = {
+      args: {},
+      afterEaches: [],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "slow test": {
+          args: {tags: ["slow"]},
+          function: async () => { runs++ }
+        }
+      }
+    }
+
+    await testRunner.runTests({
+      afterEaches: [],
+      beforeEaches: [],
+      tests,
+      descriptions: [],
+      indentLevel: 0
+    })
+
+    expect(runs).toBe(0)
+    expect(testRunner.getExecutedTestsCount()).toBe(0)
+    expect(testRunner.getSuccessfulTests()).toBe(0)
+    expect(testRunner.getFailedTests()).toBe(0)
+  })
 })

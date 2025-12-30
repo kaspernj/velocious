@@ -215,6 +215,17 @@ export default class TestRunner {
   }
 
   /**
+   * @returns {number} - The executed tests count.
+   */
+  getExecutedTestsCount() {
+    if (this._successfulTests === undefined || this._failedTests === undefined) {
+      throw new Error("Tests hasn't been run yet")
+    }
+
+    return this._successfulTests + this._failedTests
+  }
+
+  /**
    * @returns {Promise<void>} - Resolves when complete.
    */
   async prepare() {
