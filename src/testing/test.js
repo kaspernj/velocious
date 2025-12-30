@@ -407,6 +407,25 @@ class Expect extends BaseExpect {
       return
     }
 
+    if (isArrayContaining(result)) {
+      const expectedValue = /** @type {any[]} */ (/** @type {any} */ (result).value)
+      const {matches, differences} = matchArrayContaining(this._object, expectedValue)
+      const objectPrint = formatValue(this._object)
+      const expectedPrint = formatValue(expectedValue)
+
+      if (this._not) {
+        if (matches) {
+          throw new Error(`Expected ${objectPrint} not to match ${expectedPrint}`)
+        }
+      } else if (!matches) {
+        const diffPrint = Object.keys(differences).length > 0 ? ` (diff: ${minifiedStringify(differences)})` : ""
+
+        throw new Error(`Expected ${objectPrint} to match ${expectedPrint}${diffPrint}`)
+      }
+
+      return
+    }
+
     if (this._not) {
       if (typeof this._object == "object" && typeof result == "object") {
         if (!anythingDifferent(this._object, result)) {
@@ -622,10 +641,33 @@ function objectContaining(value) {
 
 /**
  * @param {unknown} value - Value.
+ * @returns {{__velociousMatcher: string, value: unknown}} - Matcher wrapper.
+ */
+function arrayContaining(value) {
+  if (!Array.isArray(value)) {
+    throw new Error(`Expected array but got ${typeof value}`)
+  }
+
+  return {
+    __velociousMatcher: "arrayContaining",
+    value
+  }
+}
+
+/**
+ * @param {unknown} value - Value.
  * @returns {boolean} - Whether object-like.
  */
 function isObjectLike(value) {
   return value !== null && typeof value === "object"
+}
+
+/**
+ * @param {unknown} value - Value.
+ * @returns {boolean} - Whether arrayContaining matcher.
+ */
+function isArrayContaining(value) {
+  return !!value && typeof value === "object" && (/** @type {any} */ (value)).__velociousMatcher === "arrayContaining"
 }
 
 /**
@@ -675,6 +717,16 @@ function valuesEqual(actual, expected) {
 function collectMatchDifferences(actual, expected, path, differences) {
   if (isObjectContaining(expected)) {
     collectMatchDifferences(actual, /** @type {any} */ (expected).value, path, differences)
+    return
+  }
+
+  if (isArrayContaining(expected)) {
+    const {matches} = matchArrayContaining(actual, /** @type {any[]} */ (/** @type {any} */ (expected).value))
+
+    if (!matches) {
+      differences[path || "$"] = [expected, actual]
+    }
+
     return
   }
 
@@ -735,6 +787,66 @@ function matchObject(actual, expected) {
 }
 
 /**
+ * @param {unknown} actual - Actual value.
+ * @param {any[]} expected - Expected values.
+ * @returns {{matches: boolean, differences: Record<string, unknown[]>}} - Match result.
+ */
+function matchArrayContaining(actual, expected) {
+  /** @type {Record<string, unknown[]>} */
+  const differences = {}
+
+  if (!Array.isArray(actual)) {
+    differences["$"] = [expected, actual]
+    return {matches: false, differences}
+  }
+
+  const usedIndexes = new Set()
+
+  for (const expectedItem of expected) {
+    let matchedIndex = -1
+
+    for (let i = 0; i < actual.length; i++) {
+      if (usedIndexes.has(i)) continue
+
+      if (isObjectContaining(expectedItem)) {
+        const {matches} = matchObject(actual[i], /** @type {any} */ (expectedItem).value)
+        if (matches) {
+          matchedIndex = i
+          break
+        }
+        continue
+      }
+
+      if (isArrayContaining(expectedItem)) {
+        const {matches} = matchArrayContaining(actual[i], /** @type {any} */ (expectedItem).value)
+        if (matches) {
+          matchedIndex = i
+          break
+        }
+        continue
+      }
+
+      if (!anythingDifferent(actual[i], expectedItem)) {
+        matchedIndex = i
+        break
+      }
+    }
+
+    if (matchedIndex >= 0) {
+      usedIndexes.add(matchedIndex)
+    } else {
+      differences["$"] = [expected, actual]
+      break
+    }
+  }
+
+  return {
+    matches: Object.keys(differences).length === 0,
+    differences
+  }
+}
+
+/**
  * @param {string} description - Description.
  * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
  * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
@@ -781,6 +893,7 @@ function expect(arg) {
 }
 
 expect.objectContaining = objectContaining
+expect.arrayContaining = arrayContaining
 
 /**
  * @param {string} description - Description.
@@ -847,4 +960,4 @@ globalThis.fit = fit
 globalThis.testEvents = testEvents
 globalThis.configureTests = configureTests
 
-export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, objectContaining, testConfig, testEvents, tests}
+export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests}
