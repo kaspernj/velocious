@@ -5,6 +5,93 @@ import TestFilesFinder from "../../../../testing/test-files-finder.js"
 import TestRunner from "../../../../testing/test-runner.js"
 import path from "path"
 
+const INCLUDE_TAG_FLAGS = new Set(["--tag", "--include-tag", "-t"])
+const EXCLUDE_TAG_FLAGS = new Set(["--exclude-tag", "--skip-tag", "-x"])
+
+/**
+ * @param {string | undefined} value - Tag argument value.
+ * @returns {string[]} - Tags list.
+ */
+function splitTags(value) {
+  if (!value) return []
+
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+}
+
+/**
+ * @param {string[]} processArgs - Process args.
+ * @returns {{includeTags: string[], excludeTags: string[], filteredProcessArgs: string[]}} - Parsed tags and process args.
+ */
+function parseTagFilters(processArgs) {
+  const includeTags = []
+  const excludeTags = []
+  const filteredProcessArgs = processArgs.length > 0 ? [processArgs[0]] : []
+  let inRestArgs = false
+
+  for (let i = 1; i < processArgs.length; i++) {
+    const arg = processArgs[i]
+
+    if (arg === "--") {
+      inRestArgs = true
+      filteredProcessArgs.push(arg)
+      continue
+    }
+
+    if (!inRestArgs) {
+      if (INCLUDE_TAG_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (nextValue && !nextValue.startsWith("-")) {
+          includeTags.push(...splitTags(nextValue))
+          i++
+        }
+        continue
+      }
+
+      if (EXCLUDE_TAG_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (nextValue && !nextValue.startsWith("-")) {
+          excludeTags.push(...splitTags(nextValue))
+          i++
+        }
+        continue
+      }
+
+      if (arg.startsWith("--tag=")) {
+        includeTags.push(...splitTags(arg.slice("--tag=".length)))
+        continue
+      }
+
+      if (arg.startsWith("--include-tag=")) {
+        includeTags.push(...splitTags(arg.slice("--include-tag=".length)))
+        continue
+      }
+
+      if (arg.startsWith("--exclude-tag=")) {
+        excludeTags.push(...splitTags(arg.slice("--exclude-tag=".length)))
+        continue
+      }
+
+      if (arg.startsWith("--skip-tag=")) {
+        excludeTags.push(...splitTags(arg.slice("--skip-tag=".length)))
+        continue
+      }
+    }
+
+    filteredProcessArgs.push(arg)
+  }
+
+  return {
+    includeTags: Array.from(new Set(includeTags)),
+    excludeTags: Array.from(new Set(excludeTags)),
+    filteredProcessArgs
+  }
+}
+
 export default class VelociousCliCommandsTest extends BaseCommand {
   async execute() {
     this.getConfiguration().setEnvironment("test")
@@ -28,9 +115,10 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       directories.push(`${this.directory()}/spec`)
     }
 
-    const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: this.processArgs})
+    const {includeTags, excludeTags, filteredProcessArgs} = parseTagFilters(this.processArgs || [])
+    const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
     const testFiles = await testFilesFinder.findTestFiles()
-    const testRunner = new TestRunner({configuration: this.getConfiguration(), testFiles})
+    const testRunner = new TestRunner({configuration: this.getConfiguration(), excludeTags, includeTags, testFiles})
 
     await testRunner.prepare()
 
@@ -39,6 +127,13 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     }
 
     await testRunner.run()
+
+    const executedTests = testRunner.getExecutedTestsCount()
+
+    if ((includeTags.length > 0 || excludeTags.length > 0) && executedTests === 0) {
+      console.error("\nNo tests matched the provided tag filters")
+      process.exit(1)
+    }
 
     if (testRunner.isFailed()) {
       console.error(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`)

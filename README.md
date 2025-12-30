@@ -17,6 +17,59 @@ npm install velocious
 npx velocious init
 ```
 
+# Testing
+
+Tag tests to filter runs.
+
+```js
+describe("Tasks", {tags: ["db"]}, () => {
+  it("creates a task", {tags: ["fast"]}, async () => {})
+})
+```
+
+```bash
+# Only run tagged tests (focused tests still run)
+npx velocious test --tag fast
+npx velocious test --include-tag fast,api
+
+# Exclude tagged tests (always wins)
+npx velocious test --exclude-tag slow
+```
+
+Exclude tags via your testing config file.
+
+```js
+// src/config/testing.js
+import {configureTests} from "velocious/build/src/testing/test.js"
+
+export default async function configureTesting() {
+  configureTests({excludeTags: ["mssql"]})
+}
+```
+
+Retry flaky tests by setting a retry count on the test args.
+
+```js
+describe("Tasks", () => {
+  it("retries a flaky check", {retry: 2}, async () => {})
+})
+```
+
+Use beforeAll/afterAll for suite-level setup/teardown.
+
+```js
+// src/config/testing.js
+export default async function configureTesting() {
+  beforeAll(async () => {
+    // setup shared resources
+  })
+
+  afterAll(async () => {
+    // teardown shared resources
+  })
+}
+```
+
 # Models
 
 ```bash
@@ -195,7 +248,16 @@ const tasks = await Task.all().toArray()
 ### Filtering
 
 ```js
-const tasks = await Task.where({tasks: {status: "open"}}).toArray()
+const tasks = await Task.where({status: "open"}).toArray()
+
+const tasksForActiveProjects = await Task.where({
+  project: {projectDetail: {isActive: true}}
+}).toArray()
+
+const specificTask = await Task.where({
+  id: 1,
+  project: {nameEn: "Alpha"}
+}).toArray()
 ```
 
 ### Raw where clauses
@@ -379,6 +441,21 @@ const configuration = new Configuration({
 - **Debug logging**: When `configuration.debug` is true or a `Logger` is constructed with `{debug: true}`, messages are emitted regardless of environment.
 
 - **Per-instance control**: You can create a `new Logger("Subject", {configuration, debug: false})` to honor the configuration defaults, or toggle `logger.setDebug(true)` for verbose output in specific cases.
+
+## Listen for framework errors
+
+Velocious emits framework errors (including uncaught controller action errors) on the configuration error event bus:
+
+```js
+configuration.getErrorEvents().on("framework-error", ({error, request, response, context}) => {
+  // Send to your error reporting tool of choice
+  console.error("Framework error", error, context)
+})
+
+configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
+  console.error(`Velocious error (${errorType})`, error)
+})
+```
 
 ## Use the Websocket client API (HTTP-like)
 

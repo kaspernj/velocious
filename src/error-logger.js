@@ -1,8 +1,8 @@
 // @ts-check
 
 /**
- * @param {(...args: unknown[]) => Promise<void>} callback - Callback function.
- * @returns {(...args: unknown[]) => Promise<void>} - The error logger.
+ * @param {(...args: any[]) => Promise<void>} callback - Callback function.
+ * @returns {(...args: any[]) => Promise<void>} - The error logger.
  */
 export default function errorLogger(callback) {
   /**
@@ -31,3 +31,4 @@ export default function errorLogger(callback) {
     }
   }
 }
+

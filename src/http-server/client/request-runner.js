@@ -2,7 +2,7 @@
 
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import ensureError from "../../utils/ensure-error.js"
-import EventEmitter from "events"
+import EventEmitter from "../../utils/event-emitter.js"
 import {Logger} from "../../logger.js"
 import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
@@ -55,8 +55,23 @@ export default class VelociousHttpServerClientRequestRunner {
       }
     } catch (e) {
       const error = ensureError(e)
+      const errorWithContext = /** @type {{velociousContext?: object}} */ (error)
+      const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
 
       await this.logger.error(() => `Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`)
+
+      const errorPayload = {
+        context: errorContext,
+        error,
+        request,
+        response
+      }
+
+      configuration.getErrorEvents().emit("framework-error", errorPayload)
+      configuration.getErrorEvents().emit("all-error", {
+        ...errorPayload,
+        errorType: "framework-error"
+      })
 
       response.setStatus(500)
       response.setErrorBody(error)

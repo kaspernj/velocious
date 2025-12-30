@@ -12,6 +12,7 @@ const DEFAULT_LOGGING_CONFIGURATION = {
   levels: ["info", "warn", "error"]
 }
 
+/** @type {LogLevel[]} */
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
@@ -60,8 +61,8 @@ function consoleWarn(message) {
 }
 
 /**
- * @param {...unknown|function() : Array<unknown>} messages - Messages.
- * @returns {Array<unknown>} - Either the function result or the messages
+ * @param {...any|function() : Array<any>} messages - Messages.
+ * @returns {Array<any>} - Either the function result or the messages
  */
 function functionOrMessages(...messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
@@ -74,7 +75,7 @@ function functionOrMessages(...messages) {
 
 /**
  * Converts multiple message parts into a single string.
- * @param {...unknown} messages - Parts to combine into a message
+ * @param {...any} messages - Parts to combine into a message
  * @returns {string} - The messages to message.
  */
 function messagesToMessage(...messages) {
@@ -106,8 +107,27 @@ function messagesToMessage(...messages) {
  * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} - The logging configuration.
  */
 function resolveLoggingConfiguration(configuration) {
+  const debugEnabled = configuration?.debug === true
   if (configuration && typeof configuration.getLoggingConfiguration === "function") {
-    return configuration.getLoggingConfiguration()
+    const resolved = configuration.getLoggingConfiguration()
+
+    if (debugEnabled) {
+      return {
+        ...resolved,
+        console: true,
+        levels: LEVEL_ORDER
+      }
+    }
+
+    return resolved
+  }
+
+  if (debugEnabled) {
+    return {
+      ...DEFAULT_LOGGING_CONFIGURATION,
+      console: true,
+      levels: LEVEL_ORDER
+    }
   }
 
   return DEFAULT_LOGGING_CONFIGURATION
@@ -181,7 +201,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debug(...messages) {
@@ -189,7 +209,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async info(...messages) {
@@ -197,7 +217,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debugLowLevel(...messages) {
@@ -205,7 +225,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async log(...messages) {
@@ -213,7 +233,7 @@ class Logger {
   }
 
   /**
-   * @param {unknown[]} messages - Messages.
+   * @param {any[]} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async error(...messages) {
@@ -285,7 +305,7 @@ class Logger {
 export {Logger}
 
 /**
- * @param {unknown} object - Object.
+ * @param {any} object - Object.
  * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
  */
 /**

@@ -1,6 +1,6 @@
 // @ts-check
 
-import {EventEmitter} from "events"
+import EventEmitter from "../../utils/event-emitter.js"
 import {Logger} from "../../logger.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
@@ -58,7 +58,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {unknown} payload - Payload data.
+   * @param {any} payload - Payload data.
    * @returns {void} - No return value.
    */
   sendEvent(channel, payload) {

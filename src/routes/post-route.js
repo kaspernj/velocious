@@ -24,7 +24,7 @@ class VelociousRoutePostRoute extends BaseRoute {
 
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, unknown>} args.params - Parameters object.
+   * @param {Record<string, any>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.
@@ -45,3 +45,4 @@ class VelociousRoutePostRoute extends BaseRoute {
 BaseRoute.registerRoutePostType(VelociousRoutePostRoute)
 
 export default VelociousRoutePostRoute
+

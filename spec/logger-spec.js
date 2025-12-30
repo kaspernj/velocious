@@ -88,4 +88,66 @@ describe("Logger", async () => {
       await fs.rm(tempDirectory, {recursive: true, force: true})
     }
   })
+
+  it("writes all levels to console when debug is enabled", async () => {
+    /** @type {string[]} */
+    const stdoutWrites = []
+    /** @type {string[]} */
+    const stderrWrites = []
+    const originalStdoutWrite = process.stdout.write
+    const originalStderrWrite = process.stderr.write
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-logger-"))
+
+    try {
+      // @ts-ignore Monkey-patch to capture logger output
+      process.stdout.write = (chunk, encoding, callback) => {
+        stdoutWrites.push(chunk.toString())
+        if (typeof callback === "function") callback()
+        return true
+      }
+      // @ts-ignore Monkey-patch to capture logger output
+      process.stderr.write = (chunk, encoding, callback) => {
+        stderrWrites.push(chunk.toString())
+        if (typeof callback === "function") callback()
+        return true
+      }
+
+      const environmentHandler = new EnvironmentHandlerNode()
+      const configuration = new Configuration({
+        database: {test: {}},
+        debug: true,
+        directory: tempDirectory,
+        environment: "test",
+        environmentHandler,
+        initializeModels: async () => {},
+        locale: "en",
+        localeFallbacks: {en: ["en"]},
+        locales: ["en"],
+        logging: {console: false, file: false, levels: ["error"]}
+      })
+      const logger = new Logger("PartnersEventsController", {configuration})
+
+      await logger.debugLowLevel("Low level")
+      await logger.debug("Debug")
+      await logger.info("Info")
+      await logger.warn("Warn")
+      await logger.error("Error")
+    } finally {
+      // @ts-ignore Restore original stdout
+      process.stdout.write = originalStdoutWrite
+      // @ts-ignore Restore original stderr
+      process.stderr.write = originalStderrWrite
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
+
+    expect(stdoutWrites).toEqual([
+      "PartnersEventsController Low level\n",
+      "PartnersEventsController Debug\n",
+      "PartnersEventsController Info\n"
+    ])
+    expect(stderrWrites).toEqual([
+      "PartnersEventsController Warn\n",
+      "PartnersEventsController Error\n"
+    ])
+  })
 })

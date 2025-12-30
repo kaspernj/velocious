@@ -1,6 +1,6 @@
 // @ts-check
 
-import {describe, expect, it} from "../../src/testing/test.js"
+import {describe, expect, it} from "../../../src/testing/test.js"
 
 describe("Expect#toEqual", () => {
   it("reports missing and unexpected array items on failure", async () => {

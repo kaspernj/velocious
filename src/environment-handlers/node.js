@@ -14,8 +14,14 @@ import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 import path from "path"
+import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
+
+/** @typedef {{offsetMinutes: number}} TimezoneStore */
 
 export default class VelociousEnvironmentHandlerNode extends Base{
+  /** @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
+  _timezoneAsyncLocalStorage = NodeAsyncLocalStorage ? new NodeAsyncLocalStorage() : undefined
+
   /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
 
@@ -28,6 +34,51 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     if (!this._findCommandsResult) throw new Error("Could not get commands")
 
     return this._findCommandsResult
+  }
+
+  /**
+   * @param {number} offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @param {() => Promise<any>} callback - Callback to run.
+   * @returns {Promise<any>} - Result of the callback.
+   */
+  async runWithTimezoneOffset(offsetMinutes, callback) {
+    if (!this._timezoneAsyncLocalStorage) {
+      return await callback()
+    }
+
+    return await this._timezoneAsyncLocalStorage.run({offsetMinutes}, callback)
+  }
+
+  /**
+   * @param {number} offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @returns {void} - No return value.
+   */
+  setTimezoneOffset(offsetMinutes) {
+    if (!this._timezoneAsyncLocalStorage) return
+
+    const store = this._timezoneAsyncLocalStorage.getStore()
+
+    if (store) {
+      store.offsetMinutes = offsetMinutes
+    } else {
+      this._timezoneAsyncLocalStorage.enterWith({offsetMinutes})
+    }
+  }
+
+  /**
+   * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
+   * @returns {number} - Offset in minutes.
+   */
+  getTimezoneOffsetMinutes(configuration) {
+    if (this._timezoneAsyncLocalStorage) {
+      const store = this._timezoneAsyncLocalStorage.getStore()
+
+      if (store && typeof store.offsetMinutes === "number") {
+        return store.offsetMinutes
+      }
+    }
+
+    return super.getTimezoneOffsetMinutes(configuration)
   }
 
   async _actualFindCommands() {
@@ -128,7 +179,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async requireCommand({commandParts}) {
     const commands = await this.findCommands()
-    const command = commands.find((aCommand) => aCommand.name === commandParts.join(":"))
+    const commandName = commandParts.join(":")
+    const command = commands.find((aCommand) => aCommand.name === commandName)
 
     if (!command) {
       const possibleCommands = commands.map(aCommand => aCommand.name)
@@ -245,7 +297,17 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   async importTestingConfigPath() {
     const testingConfigPath = this.getConfiguration().getTesting()
 
-    await import(testingConfigPath)
+    const testingImport = await import(testingConfigPath)
+    const testingDefault = testingImport.default
+
+    if (!testingDefault) throw new Error("Testing config must export a default function")
+    if (typeof testingDefault !== "function") throw new Error("Testing config default export isn't a function")
+
+    const result = await testingDefault()
+
+    if (typeof result === "function") {
+      await result()
+    }
   }
 
   /**

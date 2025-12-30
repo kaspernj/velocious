@@ -58,7 +58,7 @@ export default class VelociousController {
   /** @returns {import("./configuration.js").default} - The configuration.  */
   getConfiguration() { return this._configuration }
 
-  /** @returns {Record<string, unknown>} - The params.  */
+  /** @returns {Record<string, any>} - The params.  */
   getParams() { return this._params }
 
   /** @returns {import("./http-server/client/request.js").default} - The request.  */
@@ -104,7 +104,7 @@ export default class VelociousController {
     await this.logger.debug("After runBeforeCallbacks")
   }
 
-  /** @returns {Record<string, unknown>} - The params.  */
+  /** @returns {Record<string, any>} - The params.  */
   params() {
     // Merge query parameters so controllers can read them via params()
     const mergedParams = {...this.queryParameters(), ...this._params}
@@ -114,13 +114,13 @@ export default class VelociousController {
     return mergedParams
   }
 
-  /** @returns {Record<string, unknown>} - The query parameters.  */
+  /** @returns {Record<string, any>} - The query parameters.  */
   queryParameters() {
     const query = this._request.path().split("?")[1]
 
     if (!query) return {}
 
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const unparsedParams = querystring.parse(query)
     const paramsToObject = new ParamsToObject(unparsedParams)
 
@@ -198,3 +198,4 @@ export default class VelociousController {
   /** @returns {import("./http-server/client/response.js").default} - The response.  */
   response() { return this._response }
 }
+

@@ -20,7 +20,7 @@ export default class VelociousDatabaseDriversMysqlOptions extends QueryParserOpt
   }
 
   /**
-   * @param {unknown} string - String.
+   * @param {any} string - String.
    * @returns {number | string} - The quote.
    */
   quote(string) {
@@ -29,3 +29,4 @@ export default class VelociousDatabaseDriversMysqlOptions extends QueryParserOpt
     return this.driver.quote(string)
   }
 }
+

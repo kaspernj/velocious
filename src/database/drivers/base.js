@@ -16,19 +16,19 @@
 /**
  * @typedef {object} DeleteSqlArgsType
  * @property {string} tableName - Table name to delete from.
- * @property {{[key: string]: unknown}} conditions - Conditions used to build the delete WHERE clause.
+ * @property {{[key: string]: any}} conditions - Conditions used to build the delete WHERE clause.
  */
 /**
  * @typedef {object} InsertSqlArgsType
  * @property {string[]} [columns] - Column names for `rows` inserts.
- * @property {{[key: string]: unknown}} [data] - Column/value pairs for a single-row insert.
+ * @property {{[key: string]: any}} [data] - Column/value pairs for a single-row insert.
  * @property {boolean} [multiple] - Whether this insert should be treated as multi-row.
  * @property {string[]} [returnLastInsertedColumnNames] - Column names to return after insert.
- * @property {Array<Array<unknown>>} [rows] - Row values for a multi-row insert.
+ * @property {Array<Array<any>>} [rows] - Row values for a multi-row insert.
  * @property {string} tableName - Table name to insert into.
  */
 /**
- * @typedef {Record<string, unknown>} QueryRowType
+ * @typedef {Record<string, any>} QueryRowType
  * @typedef {Array<QueryRowType>} QueryResultType
  */
 /**
@@ -200,8 +200,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {unknown} value - Value to use.
-   * @returns {unknown} - The escape.
+   * @param {any} value - Value to use.
+   * @returns {any} - The escape.
    */
   escape(value) { // eslint-disable-line no-unused-vars
     throw new Error("'escape' not implemented")
@@ -328,10 +328,14 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {unknown} value - Value to use.
-   * @returns {unknown} - The convert value.
+   * @param {any} value - Value to use.
+   * @returns {any} - The convert value.
    */
   _convertValue(value) {
+    if (typeof value === "boolean") {
+      return value ? 1 : 0
+    }
+
     if (value instanceof Date) {
       return strftime("%F %T.%L", value)
     }
@@ -348,7 +352,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {unknown} value - Value to use.
+   * @param {any} value - Value to use.
    * @returns {number | string} - The quote.
    */
   quote(value) {
@@ -383,6 +387,11 @@ export default class VelociousDatabaseDriversBase {
   quoteTable(tableName) {
     return this.options().quoteTableName(tableName)
   }
+
+  /**
+   * @param {any} value - Value from database.
+   * @returns {any} - Normalized value.
+   */
 
   /**
    * @returns {Query} - The new query.
@@ -452,10 +461,9 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {() => Promise<void>} callback - Callback function.
-   * @returns {Promise<unknown>} - Resolves with the transaction.
+   * @returns {Promise<any>} - Resolves with the transaction.
    */
   async transaction(callback) {
-    this._assertNotReadOnly()
     const savePointName = this.generateSavePointName()
     let transactionStarted = false
     let savePointStarted = false
@@ -865,7 +873,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {function() : void} callback - Callback function.
-   * @returns {Promise<unknown>} - Resolves with the with disabled foreign keys.
+   * @returns {Promise<any>} - Resolves with the with disabled foreign keys.
    */
   async withDisabledForeignKeys(callback) {
     await this.disableForeignKeys()

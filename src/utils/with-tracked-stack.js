@@ -8,7 +8,7 @@ function addTrackedStackToError(error) {
 /**
  * @param {string | (() => Promise<unknown>)} stackOrCallback - Stack string or callback.
  * @param {(() => Promise<unknown>)} [callback] - Callback to execute.
- * @returns {Promise<unknown>} - Resolves with value.
+ * @returns {Promise<any>} - Resolves with value.
  */
 async function withTrackedStack(stackOrCallback, callback) {
   const tracked = /** @type {((stack: string | undefined, fn: () => Promise<unknown>) => Promise<unknown>) | undefined} */ (globalThis.withTrackedStack?.withTrackedStack)
@@ -23,3 +23,4 @@ async function withTrackedStack(stackOrCallback, callback) {
 }
 
 export {addTrackedStackToError, withTrackedStack}
+

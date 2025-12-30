@@ -16,7 +16,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, unknown>} data - Data payload.
+   * @param {Record<string, any>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -71,7 +71,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, unknown>} data - Data payload.
+   * @param {Record<string, any>} data - Data payload.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
   async create(data) {
@@ -203,3 +203,4 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     this._loaded = models
   }
 }
+

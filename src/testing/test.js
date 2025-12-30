@@ -2,21 +2,84 @@
 
 import {formatValue, minifiedStringify} from "./format-value.js"
 import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
+import EventEmitter from "../utils/event-emitter.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 /** @type {import("./test-runner.js").TestsArgument} */
 const tests = {
   /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   afterEaches: [],
+  /** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+  afterAlls: [],
   args: {},
 
+  /** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+  beforeAlls: [],
   /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   beforeEaches: [],
   subs: {},
   tests: {}
 }
 
+const testEvents = new EventEmitter()
+
 let currentPath = [tests]
+
+/**
+ * @param {string[] | string | undefined} tags - Tags.
+ * @returns {string[]} - Normalized tags.
+ */
+function normalizeTags(tags) {
+  if (!tags) return []
+
+  const values = []
+  const rawTags = Array.isArray(tags) ? tags : [tags]
+
+  for (const rawTag of rawTags) {
+    if (rawTag === undefined || rawTag === null) continue
+
+    const parts = String(rawTag).split(",")
+
+    for (const part of parts) {
+      const trimmed = part.trim()
+
+      if (trimmed) values.push(trimmed)
+    }
+  }
+
+  return Array.from(new Set(values))
+}
+
+const testConfig = {
+  excludeTags: []
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {string[] | string} [args.excludeTags] - Tags to exclude.
+ * @returns {void}
+ */
+function configureTests({excludeTags} = {}) {
+  testConfig.excludeTags = normalizeTags(excludeTags)
+}
+
+/**
+ * @param {Record<string, any>} baseArgs - Base args.
+ * @param {Record<string, any>} extraArgs - Extra args.
+ * @returns {Record<string, any>} - Merged args.
+ */
+function mergeTestArgs(baseArgs, extraArgs) {
+  const merged = Object.assign({}, baseArgs, extraArgs)
+  const mergedTags = [...normalizeTags(baseArgs?.tags), ...normalizeTags(extraArgs?.tags)]
+
+  if (mergedTags.length > 0) {
+    merged.tags = Array.from(new Set(mergedTags))
+  } else if ("tags" in merged) {
+    delete merged.tags
+  }
+
+  return merged
+}
 
 /**
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
@@ -29,6 +92,16 @@ function beforeEach(callback) {
 }
 
 /**
+ * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
+ * @returns {void} - No return value.
+ */
+function beforeAll(callback) {
+  const currentTest = currentPath[currentPath.length - 1]
+
+  currentTest.beforeAlls.push({callback})
+}
+
+/**
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
@@ -36,6 +109,16 @@ function afterEach(callback) {
   const currentTest = currentPath[currentPath.length - 1]
 
   currentTest.afterEaches.push({callback})
+}
+
+/**
+ * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
+ * @returns {void} - No return value.
+ */
+function afterAll(callback) {
+  const currentTest = currentPath[currentPath.length - 1]
+
+  currentTest.afterAlls.push({callback})
 }
 
 class BaseExpect {
@@ -102,7 +185,7 @@ class ExpectToChange extends BaseExpect {
 
 class Expect extends BaseExpect {
   /**
-   * @param {unknown} object - Object.
+   * @param {any} object - Object.
    */
   constructor(object) {
     super()
@@ -130,7 +213,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {unknown} result - Result.
+   * @param {any} result - Result.
    * @returns {void} - No return value.
    */
   toBe(result) {
@@ -147,6 +230,32 @@ class Expect extends BaseExpect {
         const resultPrint = formatValue(result)
 
         throw new Error(`${objectPrint} wasn't expected be ${resultPrint}`)
+      }
+    }
+  }
+
+  /**
+   * @param {number} result - Result.
+   * @returns {void} - No return value.
+   */
+  toBeLessThanOrEqual(result) {
+    if (typeof this._object !== "number" || typeof result !== "number") {
+      throw new Error(`Expected numbers but got ${typeof this._object} and ${typeof result}`)
+    }
+
+    if (this._not) {
+      if (this._object <= result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} was unexpected to be less than or equal to ${resultPrint}`)
+      }
+    } else {
+      if (this._object > result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} wasn't expected to be greater than ${resultPrint}`)
       }
     }
   }
@@ -225,7 +334,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {unknown} valueToContain - Value to contain.
+   * @param {any} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
@@ -233,8 +342,10 @@ class Expect extends BaseExpect {
 
     if (typeof this._object == "string") {
       if (!this._object.includes(String(valueToContain))) {
-        const objectPrint = formatValue(this._object)
-        const valuePrint = formatValue(valueToContain)
+        const objectPrint = minifiedStringify(this._object)
+        const valuePrint = typeof valueToContain == "string"
+          ? minifiedStringify(valueToContain)
+          : formatValue(valueToContain)
 
         throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
       }
@@ -247,14 +358,16 @@ class Expect extends BaseExpect {
 
     if (!this._object.includes(valueToContain)) {
       const objectPrint = formatValue(this._object)
-      const valuePrint = formatValue(valueToContain)
+      const valuePrint = typeof valueToContain == "string"
+        ? minifiedStringify(valueToContain)
+        : formatValue(valueToContain)
 
       throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
     }
   }
 
   /**
-   * @param {unknown} result - Result.
+   * @param {any} result - Result.
    * @returns {void} - No return value.
    */
   toEqual(result) {
@@ -320,17 +433,14 @@ class Expect extends BaseExpect {
     }
 
     const match = this._object.match(regex)
+    const objectPrint = minifiedStringify(this._object)
 
     if (this._not) {
       if (match) {
-        const objectPrint = formatValue(this._object)
-
         throw new Error(`${objectPrint} shouldn't match ${regex}`)
       }
     } else {
       if (!match) {
-        const objectPrint = formatValue(this._object)
-
         throw new Error(`${objectPrint} didn't match ${regex}`)
       }
     }
@@ -382,7 +492,7 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {Promise<unknown>} - Resolves with the execute.
+   * @returns {Promise<any>} - Resolves with the execute.
    */
   async execute() {
     for (const expectation of this.expectations) {
@@ -407,13 +517,13 @@ class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, unknown>} result - Result.
+   * @param {Record<string, any>} result - Result.
    * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
 
-    /** @type {Record<string, unknown[]>} */
+    /** @type {Record<string, any[]>} */
     const differences = {}
     const objectAsRecord = /** @type {Record<string, unknown>} */ (this._object)
 
@@ -455,13 +565,13 @@ async function describe(description, arg1, arg2) {
   }
 
   const currentTest = currentPath[currentPath.length - 1]
-  const newTestArgs = Object.assign({}, currentTest.args, testArgs)
+  const newTestArgs = mergeTestArgs(currentTest.args, testArgs)
 
   if (description in currentTest.subs) {
     throw new Error(`Duplicate test description: ${description}`)
   }
 
-  const newTestData = {afterEaches: [], args: newTestArgs, beforeEaches: [], subs: {}, tests: {}}
+  const newTestData = {afterEaches: [], afterAlls: [], args: newTestArgs, beforeAlls: [], beforeEaches: [], subs: {}, tests: {}}
 
   currentTest.subs[description] = newTestData
   currentPath.push(newTestData)
@@ -474,7 +584,7 @@ async function describe(description, arg1, arg2) {
 }
 
 /**
- * @param {unknown} arg - Arg.
+ * @param {any} arg - Arg.
  * @returns {Expect} - The expect.
  */
 function expect(arg) {
@@ -504,7 +614,7 @@ function it(description, arg1, arg2) {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
   }
 
-  const newTestArgs = Object.assign({}, currentTest.args, testArgs)
+  const newTestArgs = mergeTestArgs(currentTest.args, testArgs)
 
   currentTest.tests[description] = {args: newTestArgs, function: testFunction}
 }
@@ -536,10 +646,14 @@ function fit(description, arg1, arg2) {
 
 // Make the methods global so they can be used in test files
 globalThis.afterEach = afterEach
+globalThis.afterAll = afterAll
 globalThis.beforeEach = beforeEach
+globalThis.beforeAll = beforeAll
 globalThis.describe = describe
 globalThis.expect = expect
 globalThis.it = it
 globalThis.fit = fit
+globalThis.testEvents = testEvents
+globalThis.configureTests = configureTests
 
-export {afterEach, beforeEach, describe, expect, fit, it, tests}
+export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, testConfig, testEvents, tests}

@@ -36,11 +36,11 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
       if (column.isNewColumn()) {
         sql += "ADD "
-        sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
+        sql += column.getSQL({driver: this.getDriver(), forAlterTable: false})
       } else if (column.getNewName()) {
         sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(column.getNewName())}`
       } else if (column.getDropColumn()) {
-        sql += `DROP COLUMN ${options.quoteColumnName}`
+        sql += `DROP COLUMN ${options.quoteColumnName(column.getName())}`
       } else {
         if (databaseType == "mssql" || databaseType == "pgsql") {
           sql += "ALTER COLUMN "
@@ -56,6 +56,20 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
     }
 
     sqls.push(sql)
+
+    if (databaseType == "pgsql") {
+      for (const column of tableData.getColumns()) {
+        if (!column.isNewColumn() || column.getDropColumn()) continue
+
+        const notes = column.getNotesForDatabase(databaseType)
+
+        if (!notes) continue
+
+        sqls.push(
+          `COMMENT ON COLUMN ${options.quoteTableName(tableData.getName())}.${options.quoteColumnName(column.getActualName())} IS ${options.quote(notes)}`
+        )
+      }
+    }
 
     return sqls
   }

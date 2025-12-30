@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversBaseColumn {
 
   /**
    * @abstract
-   * @returns {unknown} - The default.
+   * @returns {any} - The default.
    */
   getDefault() {
     throw new Error("getDefault not implemented")
@@ -77,6 +77,13 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
+   * @returns {string | undefined} - The notes.
+   */
+  getNotes() {
+    return undefined
+  }
+
+  /**
    * @abstract
    * @returns {string} - The name.
    */
@@ -125,10 +132,26 @@ export default class VelociousDatabaseDriversBaseColumn {
       default: this.getDefault(),
       isNewColumn: false,
       maxLength: this.getMaxLength(),
+      notes: this.getNotes(),
       null: this.getNull(),
       primaryKey: this.getPrimaryKey(),
       type: this.getType()
     })
+  }
+
+  /**
+   * @returns {string | undefined} - The type hint from notes.
+   */
+  getTypeHintFromNotes() {
+    const notes = this.getNotes()
+
+    if (!notes || typeof notes != "string") return
+
+    const match = notes.match(/velocious:type=([a-z0-9_-]+)/i)
+
+    if (!match) return
+
+    return match[1].toLowerCase()
   }
 
   /**

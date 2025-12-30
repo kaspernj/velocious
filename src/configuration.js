@@ -5,6 +5,7 @@
  */
 
 import {digg} from "diggerize"
+import EventEmitter from "./utils/event-emitter.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
@@ -26,7 +27,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testDirectories, testing, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testDirectories, testing, timezoneOffsetMinutes, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -43,8 +44,10 @@ export default class VelociousConfiguration {
     this._initializers = initializers
     this._testDirectories = testDirectories
     this._testing = testing
+    this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._websocketEvents = undefined
     this._logging = logging
+    this._errorEvents = new EventEmitter()
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
     this.databasePools = {}
@@ -369,6 +372,23 @@ export default class VelociousConfiguration {
     return this._translator || this._defaultTranslator
   }
 
+  /**
+   * @returns {number | undefined} - The timezone offset in minutes.
+   */
+  getTimezoneOffsetMinutes() {
+    if (typeof this._timezoneOffsetMinutes === "function") {
+      const configuredOffset = this._timezoneOffsetMinutes()
+
+      if (typeof configuredOffset === "number") return configuredOffset
+    }
+
+    if (typeof this._timezoneOffsetMinutes === "number") {
+      return this._timezoneOffsetMinutes
+    }
+
+    return new Date().getTimezoneOffset()
+  }
+
   /** @returns {import("./http-server/websocket-events.js").default | undefined} - The websocket events.  */
   getWebsocketEvents() {
     return this._websocketEvents
@@ -380,6 +400,11 @@ export default class VelociousConfiguration {
    */
   setWebsocketEvents(websocketEvents) {
     this._websocketEvents = websocketEvents
+  }
+
+  /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
+  getErrorEvents() {
+    return this._errorEvents
   }
 
   /**

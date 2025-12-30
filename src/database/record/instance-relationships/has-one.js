@@ -19,7 +19,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   _loaded = undefined
 
   /**
-   * @param {Record<string, unknown>} data - Data payload.
+   * @param {Record<string, any>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -76,3 +76,4 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   getTargetModelClass() { return this.relationship.getTargetModelClass() }
 }
+

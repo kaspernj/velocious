@@ -6,6 +6,7 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import {Logger} from "../logger.js"
 import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
+import ensureError from "../utils/ensure-error.js"
 
 export default class VelociousRoutesResolver {
   /** @type {Logger | undefined} */
@@ -83,10 +84,30 @@ export default class VelociousRoutesResolver {
 
     await this._logActionStart({action, controllerClass})
 
-    await this.configuration.ensureConnections(async () => {
-      await controllerInstance._runBeforeCallbacks()
-      await controllerInstance[action]()
-    })
+    try {
+      await this.configuration.ensureConnections(async () => {
+        await controllerInstance._runBeforeCallbacks()
+        await controllerInstance[action]()
+      })
+    } catch (error) {
+      const ensuredError = ensureError(error)
+      const errorContext = {
+        action,
+        controller,
+        httpMethod: this.request.httpMethod(),
+        path: this.request.path(),
+        stage: "controller-action"
+      }
+
+      const errorWithContext = /** @type {{velociousContext?: object}} */ (ensuredError)
+
+      errorWithContext.velociousContext = {
+        ...(errorWithContext.velociousContext || {}),
+        controllerAction: errorContext
+      }
+
+      throw ensuredError
+    }
   }
 
   /**
@@ -127,13 +148,14 @@ export default class VelociousRoutesResolver {
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
     const loggedParams = /** @type {Record<string, unknown>} */ (this._sanitizeParamsForLogging(this.params))
+    const logMethod = this.configuration.getEnvironment() === "test" ? "debug" : "info"
 
     delete loggedParams.action
     delete loggedParams.controller
 
-    await this.logger.info(() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
-    await this.logger.info(() => `Processing by ${controllerClass.name}#${action}`)
-    await this.logger.info(() => [`  Parameters:`, loggedParams])
+    await this.logger[logMethod](() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
+    await this.logger[logMethod](() => `Processing by ${controllerClass.name}#${action}`)
+    await this.logger[logMethod](() => [`  Parameters:`, loggedParams])
   }
 
   /**
@@ -162,8 +184,8 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {unknown} value - Value to use.
-   * @returns {unknown} - The sanitize params for logging.
+   * @param {any} value - Value to use.
+   * @returns {any} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {
     if (value instanceof UploadedFile) {
@@ -179,7 +201,7 @@ export default class VelociousRoutesResolver {
     }
 
     if (value && typeof value === "object") {
-      /** @type {Record<string, unknown>} */
+      /** @type {Record<string, any>} */
       const result = {}
 
       for (const key of Object.keys(value)) {

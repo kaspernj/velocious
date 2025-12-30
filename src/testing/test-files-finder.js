@@ -1,6 +1,7 @@
 // @ts-check
 
 import fs from "fs/promises"
+import path from "path"
 
 import fileExists from "../utils/file-exists.js"
 import {Logger} from "../logger.js"
@@ -19,11 +20,11 @@ export default class TestFilesFinder {
   constructor({directory, directories, processArgs, ...restArgs}) {
     restArgsError(restArgs)
 
-    this.directory = directory
+    this.directory = path.resolve(directory)
     this.logger = new Logger(this)
 
     if (directories) {
-      this.directories = directories
+      this.directories = directories.map((entry) => path.resolve(entry))
     } else {
       this.directories = [
         `${this.directory}/__tests__`,
@@ -48,23 +49,32 @@ export default class TestFilesFinder {
     this.directoryArgs = []
 
     /** @type {string[]} */
+    this.directoryFullPaths = []
+
+    /** @type {string[]} */
     this.fileArgs = []
 
-    for (const testArg of this.testArgs) {
-      if (testArg.endsWith("/")) {
-        this.directoryArgs.push(testArg)
-      } else {
-        this.fileArgs.push(testArg)
-      }
-    }
+    /** @type {string[]} */
+    this.explicitFiles = []
+
+    this._argsPrepared = false
   }
 
   /**
    * @returns {Promise<string[]>} - Resolves with the test files.
    */
   async findTestFiles() {
+    await this.prepareArgs()
+
+    if (this.explicitFiles.length > 0 && this.directoryArgs.length === 0) {
+      return Array.from(new Set(this.explicitFiles))
+    }
+
     await this.withFindingCount(async () => {
-      for (const directory of this.directories) {
+      const hasExplicitArgs = this.directoryFullPaths.length > 0 || this.fileArgs.length > 0
+      const directoriesToScan = hasExplicitArgs ? this.directoryFullPaths : this.directories
+
+      for (const directory of directoriesToScan) {
         if (await fileExists(directory)) {
           await this.findTestFilesInDir(directory)
         }
@@ -73,7 +83,11 @@ export default class TestFilesFinder {
 
     await this.waitForFindingPromises()
 
-    return this.foundFiles
+    if (this.explicitFiles.length > 0) {
+      this.foundFiles.push(...this.explicitFiles)
+    }
+
+    return Array.from(new Set(this.foundFiles))
   }
 
   /**
@@ -188,5 +202,79 @@ export default class TestFilesFinder {
    */
   looksLikeTestFile(file) {
     return Boolean(file.match(/-(spec|test)\.(m|)js$/))
+  }
+
+  /**
+   * @returns {Promise<void>} - Resolves when test args are prepared.
+   */
+  async prepareArgs() {
+    if (this._argsPrepared) return
+
+    for (const testArg of this.testArgs) {
+      if (testArg === "--") continue
+
+      const forceDirectory = testArg.endsWith("/") || testArg.endsWith(path.sep)
+      const fullPath = path.isAbsolute(testArg) ? testArg : path.resolve(this.directory, testArg)
+      const baseName = path.basename(this.directory)
+      const hasBasePrefix = testArg === baseName || testArg.startsWith(`${baseName}/`) || testArg.startsWith(`${baseName}${path.sep}`)
+      const basePrefixedFullPath = (!path.isAbsolute(testArg) && hasBasePrefix) ? path.resolve(path.dirname(this.directory), testArg) : null
+      const fullPathCandidates = basePrefixedFullPath ? [basePrefixedFullPath] : [fullPath]
+
+      if (forceDirectory) {
+        const preferredLocalPath = this.toLocalPath(basePrefixedFullPath || fullPath)
+        this.directoryArgs.push(this.ensureTrailingSlash(preferredLocalPath))
+        this.directoryFullPaths.push(path.resolve(basePrefixedFullPath || fullPath))
+        continue
+      }
+
+      try {
+        let stats
+        let resolvedFullPath
+
+        for (const candidatePath of fullPathCandidates) {
+          try {
+            stats = await fs.stat(candidatePath)
+            resolvedFullPath = candidatePath
+            break
+          } catch {
+            // Keep searching
+          }
+        }
+
+        if (!stats || !resolvedFullPath) throw new Error("Path not found")
+        const localPath = this.toLocalPath(resolvedFullPath)
+
+        if (stats.isDirectory()) {
+          this.directoryArgs.push(this.ensureTrailingSlash(localPath))
+          this.directoryFullPaths.push(resolvedFullPath)
+        } else if (stats.isFile()) {
+          this.fileArgs.push(localPath)
+          this.explicitFiles.push(resolvedFullPath)
+        }
+      } catch {
+        const fallbackLocalPath = this.toLocalPath(basePrefixedFullPath || fullPath)
+        this.fileArgs.push(fallbackLocalPath)
+      }
+    }
+
+    this._argsPrepared = true
+  }
+
+  /**
+   * @param {string} localPath - Local path.
+   * @returns {string} - Normalized local path with trailing slash.
+   */
+  ensureTrailingSlash(localPath) {
+    if (localPath === "") return localPath
+    return localPath.endsWith("/") ? localPath : `${localPath}/`
+  }
+
+  /**
+   * @param {string} fullPath - Full path.
+   * @returns {string} - Local path relative to the base directory.
+   */
+  toLocalPath(fullPath) {
+    const relativePath = path.relative(this.directory, fullPath)
+    return relativePath.split(path.sep).join("/")
   }
 }

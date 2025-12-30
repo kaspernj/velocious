@@ -98,10 +98,10 @@ class VelociousDatabaseRecord {
     return this._validatorTypes
   }
 
-  /** @type {Record<string, unknown>} */
+  /** @type {Record<string, any>} */
   _attributes = {}
 
-  /** @type {Record<string, unknown>} */
+  /** @type {Record<string, any>} */
   _changes = {}
 
   /** @type {Record<string, import("../drivers/base-column.js").default>} */
@@ -354,7 +354,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {Record<string, unknown>} [attributes] - Attributes.
+   * @param {Record<string, any>} [attributes] - Attributes.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the create.
    */
   static async create(attributes) {
@@ -478,7 +478,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {unknown} value - Value to use.
+   * @param {any} value - Value to use.
    * @returns {boolean} - Whether attribute.
    */
   _hasAttribute(value) {
@@ -500,6 +500,15 @@ class VelociousDatabaseRecord {
     if (this._initialized) return true
 
     return false
+  }
+
+  /**
+   * @returns {void} - No return value.
+   */
+  static _assertHasBeenInitialized() {
+    if (this._initialized) return
+
+    throw new Error(`${this.name} used before initialization. Call ${this.name}.initializeRecord(...) or configuration.initialize().`)
   }
 
   static async _defineTranslationMethods() {
@@ -585,7 +594,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name - Name.
-   * @returns {unknown} - The attribute.
+   * @returns {any} - The attribute.
    */
   getAttribute(name) {
     const columnName = inflection.underscore(name)
@@ -609,12 +618,13 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name - Name.
-   * @param {unknown} newValue - New value.
+   * @param {any} newValue - New value.
    * @returns {void} - No return value.
    */
   setAttribute(name, newValue) {
     const setterName = `set${inflection.camelize(name)}`
 
+    this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
     if (!(setterName in this)) throw new Error(`No such setter method: ${this.constructor.name}#${setterName}`)
 
@@ -623,9 +633,10 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name - Name.
-   * @param {unknown} newValue - New value.
+   * @param {any} newValue - New value.
    */
   _setColumnAttribute(name, newValue) {
+    this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass()._attributeNameToColumnName) throw new Error("No attribute-to-column mapping. Has record been initialized?")
 
     const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[name]
@@ -639,14 +650,16 @@ class VelociousDatabaseRecord {
       normalizedValue = this._normalizeDateValue(newValue)
     }
 
+    normalizedValue = this._normalizeSqliteBooleanValue({columnType, value: normalizedValue})
+
     if (this._attributes[columnName] != normalizedValue) {
       this._changes[columnName] = normalizedValue
     }
   }
 
   /**
-   * @param {unknown} value - Value to use.
-   * @returns {unknown} - The date value.
+   * @param {any} value - Value to use.
+   * @returns {any} - The date value.
    */
   _normalizeDateValue(value) {
     if (typeof value != "string") return value
@@ -663,9 +676,26 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {object} args - Options object.
+   * @param {string | undefined} args.columnType - Column type.
+   * @param {any} args.value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeSqliteBooleanValue({columnType, value}) {
+    if (this.getModelClass().getDatabaseType() != "sqlite") return value
+    if (!columnType || typeof columnType != "string") return value
+    if (columnType.toLowerCase() !== "boolean") return value
+    if (value === true) return 1
+    if (value === false) return 0
+
+    return value
+  }
+
+  /**
    * @returns {import("../drivers/base-column.js").default[]} - The columns.
    */
   static getColumns() {
+    this._assertHasBeenInitialized()
     if (!this._columns) throw new Error(`${this.name} hasn't been initialized yet`)
 
     return this._columns
@@ -1039,11 +1069,11 @@ class VelociousDatabaseRecord {
   /**
    * Adds a validation to an attribute.
    * @param {string} attributeName The name of the attribute to validate.
-   * @param {Record<string, boolean | Record<string, unknown>>} validators The validators to add. Key is the validator name, value is the validator arguments.
+   * @param {Record<string, boolean | Record<string, any>>} validators The validators to add. Key is the validator name, value is the validator arguments.
    */
   static async validates(attributeName, validators) {
     for (const validatorName in validators) {
-      /** @type {Record<string, unknown>} */
+      /** @type {Record<string, any>} */
       let validatorArgs
 
       /** @type {boolean} */
@@ -1093,8 +1123,7 @@ class VelociousDatabaseRecord {
     const translation = this.translationsLoaded().find((translation) => translation.locale() == locale)
 
     if (translation) {
-      /** @type {Record<string, unknown>} */
-      // @ts-expect-error
+      /** @type {Record<string, any>} */
       const dict = translation
 
       const attributeMethod = /** @type {function() : string | undefined} */ (dict[name])
@@ -1138,7 +1167,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} name - Name.
    * @param {string} locale - Locale.
-   * @param {unknown} newValue - New value.
+   * @param {any} newValue - New value.
    * @returns {void} - No return value.
    */
   _setTranslatedAttribute(name, locale, newValue) {
@@ -1153,7 +1182,7 @@ class VelociousDatabaseRecord {
       translation = instanceRelationship.build({locale})
     }
 
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const assignments = {}
 
     assignments[name] = newValue
@@ -1167,6 +1196,7 @@ class VelociousDatabaseRecord {
    * @returns {ModelClassQuery<MC>} - The new query.
    */
   static _newQuery() {
+    this._assertHasBeenInitialized()
     const handler = new Handler()
     const query = new ModelClassQuery({
       driver: () => this.connection(),
@@ -1216,7 +1246,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {...string|string[]} columns - Column names.
-   * @returns {Promise<unknown[]>} - Resolves with the pluck.
+   * @returns {Promise<any[]>} - Resolves with the pluck.
    */
   static async pluck(...columns) {
     return await this._newQuery().pluck(...columns)
@@ -1374,9 +1404,10 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Record<string, unknown>} changes - Changes.
+   * @param {Record<string, any>} changes - Changes.
    */
   constructor(changes = {}) {
+    this.getModelClass()._assertHasBeenInitialized()
     this._attributes = {}
     this._changes = {}
     this._isNewRecord = true
@@ -1397,7 +1428,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the given attributes to the record.
-   * @param {Record<string, unknown>} attributesToAssign - Attributes to assign.
+   * @param {Record<string, any>} attributesToAssign - Attributes to assign.
    * @returns {void} - No return value.
    */
   assign(attributesToAssign) {
@@ -1408,12 +1439,12 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns a the current attributes of the record (original attributes from database plus changes)
-   * @returns {Record<string, unknown>} - The attributes.
+   * @returns {Record<string, any>} - The attributes.
    */
   attributes() {
     const data = this.rawAttributes()
     const columnNameToAttributeName = this.getModelClass().getColumnNameToAttributeNameMap()
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const attributes = {}
 
     for (const columnName in data) {
@@ -1427,7 +1458,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns column-name keyed data (original attributes from database plus changes)
-   * @returns {Record<string, unknown>} - The raw attributes.
+   * @returns {Record<string, any>} - The raw attributes.
    */
   rawAttributes() {
     return Object.assign({}, this._attributes, this._changes)
@@ -1492,7 +1523,7 @@ class VelociousDatabaseRecord {
       }
     }
 
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const conditions = {}
 
     conditions[this.getModelClass().primaryKey()] = this.id()
@@ -1543,10 +1574,10 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns the changes that have been made to this record since it was loaded from the database.
-   * @returns {Record<string, unknown[]>} - The changes.
+   * @returns {Record<string, any[]>} - The changes.
    */
   changes() {
-    /** @type {Record<string, unknown[]>} */
+    /** @type {Record<string, any[]>} */
     const changes = {}
 
     for (const changeKey in this._changes) {
@@ -1570,9 +1601,10 @@ class VelociousDatabaseRecord {
   /**
    * Reads an attribute value from the record.
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
-   * @returns {unknown} - The attribute.
+   * @returns {any} - The attribute.
    */
   readAttribute(attributeName) {
+    this.getModelClass()._assertHasBeenInitialized()
     const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[attributeName]
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
@@ -1583,9 +1615,10 @@ class VelociousDatabaseRecord {
   /**
    * Reads a column value from the record.
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
-   * @returns {unknown} - The column.
+   * @returns {any} - The column.
    */
   readColumn(attributeName) {
+    this.getModelClass()._assertHasBeenInitialized()
     const column = this.getModelClass().getColumnsHash()[attributeName]
     let result
 
@@ -1597,19 +1630,44 @@ class VelociousDatabaseRecord {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
 
-    if (column && this.getModelClass().getDatabaseType() == "sqlite") {
-      if (result && (column.getType() == "date" || column.getType() == "datetime")) {
-        if (typeof result == "string") {
-          result = new Date(Date.parse(result))
-        }
-      }
+    const columnType = column?.getType()
+
+    if (columnType && this.getModelClass()._isDateLikeType(columnType)) {
+      result = this._normalizeDateValueForRead(result)
     }
 
     return result
   }
 
+  /**
+   * @param {any} value - Value from database.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeDateValueForRead(value) {
+    if (value === null || value === undefined) return value
+
+    const configuration = this.getModelClass()._getConfiguration()
+    const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
+    const offsetMs = offsetMinutes * 60 * 1000
+
+    if (value instanceof Date) {
+      return new Date(value.getTime() + offsetMs)
+    }
+
+    if (typeof value != "string") return value
+
+    const hasTimezone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value)
+    const normalized = value.includes("T") ? value : value.replace(" ", "T")
+    const parseValue = hasTimezone ? normalized : `${normalized}Z`
+    const parsed = Date.parse(parseValue)
+
+    if (Number.isNaN(parsed)) return value
+
+    return new Date(parsed + offsetMs)
+  }
+
   _belongsToChanges() {
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const belongsToChanges = {}
 
     if (this._instanceRelationships) {
@@ -1650,8 +1708,12 @@ class VelociousDatabaseRecord {
     const shouldAssignUUIDPrimaryKey = isUUIDPrimaryKey && !driverSupportsDefaultUUID
     const currentDate = new Date()
 
-    if (createdAtColumn) data.created_at = currentDate
-    if (updatedAtColumn) data.updated_at = currentDate
+    if (createdAtColumn && (data.created_at === undefined || data.created_at === null || data.created_at === "")) {
+      data.created_at = currentDate
+    }
+    if (updatedAtColumn && (data.updated_at === undefined || data.updated_at === null || data.updated_at === "")) {
+      data.updated_at = currentDate
+    }
 
     const columnNames = this.getModelClass().getColumnNames()
     const hasUserProvidedPrimaryKey = data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
@@ -1659,6 +1721,8 @@ class VelociousDatabaseRecord {
     if (shouldAssignUUIDPrimaryKey && !hasUserProvidedPrimaryKey) {
       data[primaryKey] = new UUID(4).format()
     }
+
+    this._normalizeDateValuesForWrite(data)
 
     const sql = this._connection().insertSql({
       returnLastInsertedColumnNames: columnNames,
@@ -1693,9 +1757,31 @@ class VelociousDatabaseRecord {
     }
   }
 
+  /**
+   * @param {Record<string, any>} data - Column-keyed data.
+   * @returns {void} - No return value.
+   */
+  _normalizeDateValuesForWrite(data) {
+    const configuration = this.getModelClass()._getConfiguration()
+    const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
+    const offsetMs = offsetMinutes * 60 * 1000
+
+    for (const columnName in data) {
+      const columnType = this.getModelClass().getColumnTypeByName(columnName)
+
+      if (!columnType || !this.getModelClass()._isDateLikeType(columnType)) continue
+
+      const value = data[columnName]
+
+      if (!(value instanceof Date)) continue
+
+      data[columnName] = new Date(value.getTime() - offsetMs)
+    }
+  }
+
   /** @returns {Promise<void>} - Resolves when complete.  */
   async _updateRecordWithChanges() {
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const conditions = {}
 
     conditions[this.getModelClass().primaryKey()] = this.id()
@@ -1704,9 +1790,12 @@ class VelociousDatabaseRecord {
     const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
     const currentDate = new Date()
 
-    if (updatedAtColumn) changes.updated_at = currentDate
+    if (updatedAtColumn && (changes.updated_at === undefined || changes.updated_at === null || changes.updated_at === "")) {
+      changes.updated_at = currentDate
+    }
 
     if (Object.keys(changes).length > 0) {
+      this._normalizeDateValuesForWrite(changes)
       const sql = this._connection().updateSql({
         tableName: this._tableName(),
         data: changes,
@@ -1755,7 +1844,7 @@ class VelociousDatabaseRecord {
   async _reloadWithId(id) {
     const primaryKey = this.getModelClass().primaryKey()
 
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, any>} */
     const whereObject = {}
 
     whereObject[primaryKey] = id
