@@ -7,7 +7,7 @@ import fs from "fs/promises"
 import * as ts from "typescript"
 
 describe("Cli - generate - base-models", () => {
-  it("generates base models with valid JSDoc casts", async () => {
+  it("generates base models with valid JSDoc casts", {tags: ["mssql"]}, async () => {
     const cli = new Cli({
       configuration: dummyConfiguration,
       directory: dummyDirectory(),
@@ -62,7 +62,7 @@ describe("Cli - generate - base-models", () => {
     expect(returnType).toEqual("typeof User")
   })
 
-  it("generates boolean attribute types in base models", async () => {
+  it("generates boolean attribute types in base models", {tags: ["mssql"]}, async () => {
     const cli = new Cli({
       configuration: dummyConfiguration,
       directory: dummyDirectory(),

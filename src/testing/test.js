@@ -46,6 +46,19 @@ function normalizeTags(tags) {
   return Array.from(new Set(values))
 }
 
+const testConfig = {
+  excludeTags: []
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {string[] | string} [args.excludeTags] - Tags to exclude.
+ * @returns {void}
+ */
+function configureTests({excludeTags} = {}) {
+  testConfig.excludeTags = normalizeTags(excludeTags)
+}
+
 /**
  * @param {Record<string, any>} baseArgs - Base args.
  * @param {Record<string, any>} extraArgs - Extra args.
@@ -615,5 +628,6 @@ globalThis.expect = expect
 globalThis.it = it
 globalThis.fit = fit
 globalThis.testEvents = testEvents
+globalThis.configureTests = configureTests
 
-export {afterEach, beforeEach, describe, expect, fit, it, testEvents, tests}
+export {afterEach, beforeEach, configureTests, describe, expect, fit, it, testConfig, testEvents, tests}

@@ -5,7 +5,7 @@ import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
 import restArgsError from "../utils/rest-args-error.js"
-import {testEvents, tests} from "./test.js"
+import {testConfig, testEvents, tests} from "./test.js"
 
 /**
  * @typedef {object} TestArgs
@@ -107,6 +107,15 @@ export default class TestRunner {
   }
 
   /**
+   * @returns {Set<string>} - Exclude tag set.
+   */
+  getExcludeTagSet() {
+    const configTags = Array.isArray(testConfig.excludeTags) ? testConfig.excludeTags : []
+
+    return new Set([...this._excludeTags, ...configTags])
+  }
+
+  /**
    * @param {string[] | string | undefined} testTags - Test tags.
    * @param {Set<string>} tagSet - Tag set.
    * @returns {boolean} - Whether any tags match.
@@ -128,7 +137,7 @@ export default class TestRunner {
    * @returns {boolean} - Whether the test should be skipped.
    */
   shouldSkipTest(testArgs) {
-    if (this.hasMatchingTag(testArgs.tags, this._excludeTagSet)) return true
+    if (this.hasMatchingTag(testArgs.tags, this.getExcludeTagSet())) return true
 
     if (this._includeTagSet.size > 0 && !testArgs.focus) {
       if (!this.hasMatchingTag(testArgs.tags, this._includeTagSet)) return true
