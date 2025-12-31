@@ -206,7 +206,10 @@ export default class TestRunner {
 
     if (this.getExamplePatterns().length > 0) {
       const fullDescription = this.buildFullDescription(descriptions, testDescription)
-      const matches = this.getExamplePatterns().some((pattern) => pattern.test(fullDescription))
+      const matches = this.getExamplePatterns().some((pattern) => {
+        pattern.lastIndex = 0
+        return pattern.test(fullDescription)
+      })
 
       if (!matches) return true
     }

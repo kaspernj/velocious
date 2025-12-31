@@ -199,8 +199,13 @@ export default class VelociousCliCommandsTest extends BaseCommand {
 
     const executedTests = testRunner.getExecutedTestsCount()
 
-    if ((includeTags.length > 0 || excludeTags.length > 0) && executedTests === 0) {
-      console.error("\nNo tests matched the provided tag filters")
+    const lineFilters = testRunner.getLineFilters()
+    const hasLineFilters = Object.keys(lineFilters).length > 0
+    const hasExampleFilters = examplePatterns.length > 0
+    const hasTagFilters = includeTags.length > 0 || excludeTags.length > 0
+
+    if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
+      console.error("\nNo tests matched the provided filters")
       process.exit(1)
     }
 
