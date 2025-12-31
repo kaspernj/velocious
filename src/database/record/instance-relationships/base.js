@@ -106,6 +106,15 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @returns {import("../relationships/base.js").default} The relationship object that this instance relationship is based on */
   getRelationship() { return this.relationship }
 
+  /**
+   * @template T
+   * @param {T} query - Query instance.
+   * @returns {T} - Scoped query.
+   */
+  applyScope(query) {
+    return this.getRelationship().applyScope(query)
+  }
+
   /** @returns {TMC | undefined} The model class that this instance relationship */
   getTargetModelClass() {
     const TargetModelClass = /** @type {TMC} */ (this.getRelationship().getTargetModelClass())
@@ -116,4 +125,3 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @returns {string} The type of relationship (e.g. "has_many", "belongs_to", etc.) */
   getType() { return this.getRelationship().getType() }
 }
-

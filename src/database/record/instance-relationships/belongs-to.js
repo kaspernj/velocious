@@ -40,11 +40,19 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     if (!TargetModelClass) throw new Error("Can't load without a target model")
 
-    const foreignModel = await TargetModelClass.find(foreignModelID)
+    const primaryKey = TargetModelClass.primaryKey()
+    const whereArgs = {}
+
+    whereArgs[primaryKey] = foreignModelID
+
+    let query = TargetModelClass.where(whereArgs)
+
+    query = this.applyScope(query)
+
+    const foreignModel = await query.first()
 
     this.setLoaded(foreignModel)
     this.setDirty(false)
     this.setPreloaded(true)
   }
 }
-

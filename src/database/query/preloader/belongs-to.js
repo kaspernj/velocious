@@ -62,7 +62,11 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
         whereArgs[primaryKey] = foreignKeyValuesByType[targetType]
 
-        const foundTargetModels = await targetModelClass.where(whereArgs).toArray()
+        let query = targetModelClass.where(whereArgs)
+
+        query = this.relationship.applyScope(query)
+
+        const foundTargetModels = await query.toArray()
 
         targetModels.push(...foundTargetModels)
         targetModelsByClassName[targetModelClass.name] = foundTargetModels
@@ -107,7 +111,11 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
     // Load target models to be preloaded on the given models
-    const targetModels = await targetModelClass.where(whereArgs).toArray()
+    let query = targetModelClass.where(whereArgs)
+
+    query = this.relationship.applyScope(query)
+
+    const targetModels = await query.toArray()
 
     /** @type {Record<string, import("../../record/index.js").default>} */
     const targetModelsById = {}
