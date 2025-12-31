@@ -36,6 +36,14 @@ npx velocious test --include-tag fast,api
 npx velocious test --exclude-tag slow
 ```
 
+Target a test by line number or description.
+
+```bash
+npx velocious test spec/path/to/test-spec.js:34
+npx velocious test --example "filters on nested relationship attributes"
+npx velocious test --example "/nested.*attributes/i"
+```
+
 Exclude tags via your testing config file.
 
 ```js
