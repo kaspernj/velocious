@@ -15,7 +15,7 @@ import WhereModelClassHash from "./where-model-class-hash.js"
  */
 /**
  * @template {typeof import("../record/index.js").default} MC
- * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default}} ModelClassQueryArgsType
+ * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean}} ModelClassQueryArgsType
  */
 
 /**
@@ -38,6 +38,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     /** @type {string[]} */
     this._joinBasePath = args.joinBasePath || []
     this._joinTracker = args.joinTracker || new JoinTracker({modelClass: this.modelClass})
+    this._forceQualifyBaseTable = Boolean(args.forceQualifyBaseTable)
   }
 
   /** @returns {this} - The clone.  */
@@ -59,7 +60,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       selects: [...this._selects],
       wheres: [...this._wheres],
       joinBasePath: [...this._joinBasePath],
-      joinTracker: this._joinTracker.clone()
+      joinTracker: this._joinTracker.clone(),
+      forceQualifyBaseTable: this._forceQualifyBaseTable
     }))
 
     // @ts-expect-error
@@ -121,6 +123,11 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /** @returns {import("./join-tracker.js").default} - The join tracker. */
   getJoinTracker() {
     return this._joinTracker
+  }
+
+  /** @returns {boolean} - Whether to qualify base table. */
+  getForceQualifyBaseTable() {
+    return this._forceQualifyBaseTable
   }
 
   /**
@@ -216,6 +223,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     scopedQuery._joinTracker = this._joinTracker
     scopedQuery._joinBasePath = joinPath
+    scopedQuery._forceQualifyBaseTable = true
 
     return scopedQuery
   }
@@ -444,7 +452,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       }
 
       if (Object.keys(resolvedHash).length > 0) {
-        const qualifyBaseTable = Object.keys(joinObject).length > 0
+        const qualifyBaseTable = this.getForceQualifyBaseTable() || Object.keys(joinObject).length > 0
         this._wheres.push(new WhereModelClassHash({
           hash: resolvedHash,
           modelClass: this.getModelClass(),
