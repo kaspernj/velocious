@@ -136,6 +136,23 @@ Project.hasOne("activeDetail", function() { return this.where({isActive: true}) 
 Comment.belongsTo("acceptedTask", (scope) => scope.where({state: "accepted"}), {className: "Task"})
 ```
 
+### Join path table references
+
+When joining relationships, use `getTableForJoin` to retrieve the table (or alias) for a join path:
+
+```js
+const query = Task.joins({project: {account: true}})
+const accountTable = query.getTableForJoin("project", "account")
+```
+
+Inside relationship scopes, `getTableForJoin()` is relative to the current scope path:
+
+```js
+Project.hasMany("acceptedTasks", function() {
+  return this.where(`${this.getTableForJoin()}.state = 'accepted'`)
+}, {className: "Task"})
+```
+
 ### Finding records
 
 `find()` and `findByOrFail()` throw an error when no record is found. `findBy()` returns `null`. These apply to records.

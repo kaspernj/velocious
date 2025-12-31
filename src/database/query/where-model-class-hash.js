@@ -40,9 +40,12 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   toSql() {
     let sql = "("
 
-    const baseTableName = this.qualifyBaseTable ? this.getModelClass().tableName() : undefined
+    const modelQuery = /** @type {import("./model-class-query.js").default} */ (this.query)
+    const baseTableName = this.qualifyBaseTable
+      ? modelQuery.getTableReferenceForJoin()
+      : undefined
 
-    sql += this._whereSQLFromHash(this.hash, this.getModelClass(), baseTableName)
+    sql += this._whereSQLFromHash(this.hash, this.getModelClass(), [], baseTableName)
     sql += ")"
 
     return sql
@@ -143,12 +146,14 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   /**
    * @param {WhereHash} hash - Hash.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
+   * @param {string[]} path - Join path.
    * @param {string} [tableName] - Table name.
    * @param {number} index - Index value.
    * @returns {string} - SQL string.
    */
-  _whereSQLFromHash(hash, modelClass, tableName, index = 0) {
+  _whereSQLFromHash(hash, modelClass, path, tableName, index = 0) {
     const options = this.getOptions()
+    const modelQuery = /** @type {import("./model-class-query.js").default} */ (this.query)
     let sql = ""
 
     for (const whereKey in hash) {
@@ -166,8 +171,10 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
         const targetModelClass = relationship.getTargetModelClass()
         const nestedHash = /** @type {WhereHash} */ (whereValue)
+        const nestedPath = path.concat([whereKey])
+        const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
 
-        sql += this._whereSQLFromHash(nestedHash, targetModelClass, targetModelClass.tableName(), index)
+        sql += this._whereSQLFromHash(nestedHash, targetModelClass, nestedPath, nestedTableName, index)
       } else {
         if (index > 0) sql += " AND "
 
