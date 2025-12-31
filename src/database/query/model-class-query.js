@@ -6,6 +6,7 @@ import {isPlainObject} from "is-plain-object"
 import {Logger} from "../../logger.js"
 import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
+import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 
@@ -14,7 +15,7 @@ import WhereModelClassHash from "./where-model-class-hash.js"
  */
 /**
  * @template {typeof import("../record/index.js").default} MC
- * @typedef {import("./index.js").QueryArgsType & {modelClass: MC}} ModelClassQueryArgsType
+ * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default}} ModelClassQueryArgsType
  */
 
 /**
@@ -33,6 +34,10 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     /** @type {MC} */
     this.modelClass = modelClass
+
+    /** @type {string[]} */
+    this._joinBasePath = args.joinBasePath || []
+    this._joinTracker = args.joinTracker || new JoinTracker({modelClass: this.modelClass})
   }
 
   /** @returns {this} - The clone.  */
@@ -52,7 +57,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       preload: {...this._preload},
       distinct: this._distinct,
       selects: [...this._selects],
-      wheres: [...this._wheres]
+      wheres: [...this._wheres],
+      joinBasePath: [...this._joinBasePath],
+      joinTracker: this._joinTracker.clone()
     }))
 
     // @ts-expect-error
@@ -104,6 +111,113 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     if (!this.modelClass) throw new Error("modelClass not set")
 
     return this.modelClass
+  }
+
+  /** @returns {string[]} - The join base path. */
+  getJoinBasePath() {
+    return this._joinBasePath
+  }
+
+  /** @returns {import("./join-tracker.js").default} - The join tracker. */
+  getJoinTracker() {
+    return this._joinTracker
+  }
+
+  /**
+   * @param {string[]} joinBasePath - Join base path.
+   * @returns {this} - The query with updated base path.
+   */
+  setJoinBasePath(joinBasePath) {
+    this._joinBasePath = joinBasePath
+    return this
+  }
+
+  /**
+   * @param {string[]} joinBasePath - Join base path.
+   * @returns {VelociousDatabaseQueryModelClassQuery<MC>} - The scoped query.
+   */
+  withJoinPath(joinBasePath) {
+    const scopedQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
+
+    scopedQuery._joinBasePath = joinBasePath
+    scopedQuery._joinTracker = this._joinTracker
+
+    return scopedQuery
+  }
+
+  /**
+   * @param {string[]} path - Join path.
+   * @returns {string} - Table name for path.
+   */
+  _resolveTableNameForJoinPath(path) {
+    let modelClass = this._joinTracker.getRootModelClass()
+
+    if (path.length === 0) return modelClass.tableName()
+
+    for (const relationshipName of path) {
+      const relationship = modelClass.getRelationshipByName(relationshipName)
+      const targetModelClass = relationship.getTargetModelClass()
+
+      if (!targetModelClass) {
+        throw new Error(`No target model class for ${modelClass.name}#${relationshipName}`)
+      }
+
+      modelClass = targetModelClass
+    }
+
+    return modelClass.tableName()
+  }
+
+  /**
+   * @param {string[]} path - Join path.
+   * @returns {{tableName: string, alias: string | undefined}} - The entry.
+   */
+  _registerJoinPath(path) {
+    const tableName = this._resolveTableNameForJoinPath(path)
+
+    return this._joinTracker.registerPath(path, tableName)
+  }
+
+  /**
+   * @param {string[]} path - Join path.
+   * @returns {string} - Unquoted table reference (alias or table name).
+   */
+  getJoinTableReference(path) {
+    const entry = this._joinTracker.getEntry(path) || this._registerJoinPath(path)
+
+    return entry.alias || entry.tableName
+  }
+
+  /**
+   * @param {...string} path - Join path segments.
+   * @returns {string} - Unquoted table reference (alias or table name).
+   */
+  getTableReferenceForJoin(...path) {
+    const fullPath = this._joinBasePath.concat(path)
+
+    return this.getJoinTableReference(fullPath)
+  }
+
+  /**
+   * @param {...string} path - Join path segments.
+   * @returns {string} - Quoted table name for join path.
+   */
+  getTableForJoin(...path) {
+    return this.driver.quoteTable(this.getTableReferenceForJoin(...path))
+  }
+
+  /**
+   * @param {typeof import("../record/index.js").default} targetModelClass - Target model class.
+   * @param {string[]} joinPath - Join path.
+   * @returns {VelociousDatabaseQueryModelClassQuery<MC>} - The scoped join query.
+   */
+  buildJoinScopeQuery(targetModelClass, joinPath) {
+    const scopedQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (targetModelClass._newQuery())
+
+    scopedQuery._joinTracker = this._joinTracker
+    scopedQuery._joinBasePath = joinPath
+
+    return scopedQuery
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
