@@ -47,7 +47,11 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
     whereArgs[foreignKey] = primaryModelID
 
-    const foreignModel = /** @type {InstanceType<TMC>} */ (await TargetModelClass.where(whereArgs).first())
+    let query = TargetModelClass.where(whereArgs)
+
+    query = this.applyScope(query)
+
+    const foreignModel = /** @type {InstanceType<TMC>} */ (await query.first())
 
     this.setLoaded(foreignModel)
     this.setDirty(false)
@@ -76,4 +80,3 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   getTargetModelClass() { return this.relationship.getTargetModelClass() }
 }
-

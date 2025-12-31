@@ -59,7 +59,11 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
     // Load target models to be preloaded on the given models
-    const targetModels = await targetModelClass.where(whereArgs).toArray()
+    let query = targetModelClass.where(whereArgs)
+
+    query = this.relationship.applyScope(query)
+
+    const targetModels = await query.toArray()
 
     for (const targetModel of targetModels) {
       const foreignKeyValue = /** @type {string | number} */ (targetModel.readColumn(foreignKey))

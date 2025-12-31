@@ -154,9 +154,13 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @typedef {(query: import("../query/model-class-query.js").default) => (import("../query/model-class-query.js").default | void)} RelationshipScopeCallback
+   */
+  /**
    * @typedef {object} RelationshipDataArgumentType
    * @property {string} [className] - Model class name for the related record.
    * @property {typeof VelociousDatabaseRecord} [klass] - Model class for the related record.
+   * @property {RelationshipScopeCallback} [scope] - Optional scope callback for the relationship.
    * @property {string} [type] - Relationship type (e.g. "hasMany", "belongsTo").
    */
   /**
@@ -270,6 +274,25 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {RelationshipScopeCallback | object | undefined} scopeOrOptions - Scope callback or options.
+   * @param {object | undefined} options - Options.
+   * @returns {{scope: (RelationshipScopeCallback | undefined), relationshipOptions: object}} - Normalized arguments.
+   */
+  static _normalizeRelationshipArgs(scopeOrOptions, options) {
+    if (typeof scopeOrOptions == "function") {
+      return {
+        scope: scopeOrOptions,
+        relationshipOptions: options || {}
+      }
+    }
+
+    return {
+      scope: undefined,
+      relationshipOptions: scopeOrOptions || {}
+    }
+  }
+
+  /**
    * @param {string} relationshipName - Relationship name.
    * @returns {import("./relationships/base.js").default} - The relationship by name.
    */
@@ -333,10 +356,13 @@ class VelociousDatabaseRecord {
   /**
    * Adds a belongs-to-relationship to the model.
    * @param {string} relationshipName The name of the relationship.
+   * @param {RelationshipScopeCallback | object} [scopeOrOptions] The scope callback or options for the relationship.
    * @param {object} [options] The options for the relationship.
    */
-  static belongsTo(relationshipName, options) {
-    this._defineRelationship(relationshipName, Object.assign({type: "belongsTo"}, options))
+  static belongsTo(relationshipName, scopeOrOptions, options) {
+    const {scope, relationshipOptions} = this._normalizeRelationshipArgs(scopeOrOptions, options)
+
+    this._defineRelationship(relationshipName, Object.assign({type: "belongsTo", scope}, relationshipOptions))
   }
 
   /**
@@ -390,21 +416,27 @@ class VelociousDatabaseRecord {
   /**
    * Adds a has-many-relationship to the model class.
    * @param {string} relationshipName The name of the relationship (e.g. "posts")
-   * @param {object} options The options for the relationship (e.g. {className: "Post"})
+   * @param {RelationshipScopeCallback | object} [scopeOrOptions] The scope callback or options for the relationship.
+   * @param {object} [options] The options for the relationship (e.g. {className: "Post"})
    * @returns {void} - No return value.
    */
-  static hasMany(relationshipName, options = {}) {
-    return this._defineRelationship(relationshipName, Object.assign({type: "hasMany"}, options))
+  static hasMany(relationshipName, scopeOrOptions, options) {
+    const {scope, relationshipOptions} = this._normalizeRelationshipArgs(scopeOrOptions, options)
+
+    return this._defineRelationship(relationshipName, Object.assign({type: "hasMany", scope}, relationshipOptions))
   }
 
   /**
    * Adds a has-one-relationship to the model class.
    * @param {string} relationshipName The name of the relationship (e.g. "post")
-   * @param {object} options The options for the relationship (e.g. {className: "Post"})
+   * @param {RelationshipScopeCallback | object} [scopeOrOptions] The scope callback or options for the relationship.
+   * @param {object} [options] The options for the relationship (e.g. {className: "Post"})
    * @returns {void} - No return value.
    */
-  static hasOne(relationshipName, options = {}) {
-    return this._defineRelationship(relationshipName, Object.assign({type: "hasOne"}, options))
+  static hasOne(relationshipName, scopeOrOptions, options) {
+    const {scope, relationshipOptions} = this._normalizeRelationshipArgs(scopeOrOptions, options)
+
+    return this._defineRelationship(relationshipName, Object.assign({type: "hasOne", scope}, relationshipOptions))
   }
 
   /**

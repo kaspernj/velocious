@@ -135,7 +135,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
       const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
 
-      return TargetModelClass.joins(joinSql).where(whereSql)
+      const query = TargetModelClass.joins(joinSql).where(whereSql)
+
+      return this.applyScope(query)
     }
 
     const foreignKey = this.getForeignKey()
@@ -149,7 +151,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     const query = TargetModelClass.where(whereArgs)
 
-    return query
+    return this.applyScope(query)
   }
 
   /** @returns {Array<InstanceType<TMC>>} The loaded model or models (depending on relationship type) */
@@ -203,4 +205,3 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     this._loaded = models
   }
 }
-
