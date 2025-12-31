@@ -1,6 +1,7 @@
 // @ts-check
 
 import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
+import path from "path"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
@@ -24,6 +25,8 @@ import {testConfig, testEvents, tests} from "./test.js"
 /**
  * @typedef {object} TestData
  * @property {TestArgs} args - Arguments passed to the test.
+ * @property {string} [filePath] - Source file path.
+ * @property {number} [line] - Source line number.
  * @property {function(TestArgs) : (void|Promise<void>)} function - Test callback to execute.
  */
 
@@ -53,6 +56,8 @@ import {testConfig, testEvents, tests} from "./test.js"
  * @property {BeforeAfterAllCallbackObjectType[]} afterAlls - After-all hooks for this scope.
  * @property {BeforeAfterAllCallbackObjectType[]} beforeAlls - Before-all hooks for this scope.
  * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Before-each hooks for this scope.
+ * @property {string} [filePath] - Source file path.
+ * @property {number} [line] - Source line number.
  * @property {Record<string, TestData>} tests - A unique identifier for the node.
  * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
  */
@@ -64,8 +69,10 @@ export default class TestRunner {
    * @param {string[] | string} [args.excludeTags] - Tags to exclude.
    * @param {string[] | string} [args.includeTags] - Tags to include.
    * @param {Array<string>} args.testFiles - Test files.
+   * @param {Record<string, number[]>} [args.lineFilters] - Line filters by file.
+   * @param {RegExp[]} [args.examplePatterns] - Example patterns.
    */
-  constructor({configuration, excludeTags, includeTags, testFiles, ...restArgs}) {
+  constructor({configuration, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration is required")
@@ -76,6 +83,8 @@ export default class TestRunner {
     this._includeTags = this.normalizeTags(includeTags)
     this._includeTagSet = new Set(this._includeTags)
     this._testFiles = testFiles
+    this._lineFilters = lineFilters || {}
+    this._examplePatterns = examplePatterns || []
 
     this._failedTests = 0
     this._successfulTests = 0
@@ -92,6 +101,12 @@ export default class TestRunner {
    * @returns {string[]} - The test files.
    */
   getTestFiles() { return this._testFiles }
+
+  /** @returns {Record<string, number[]>} - Line filters. */
+  getLineFilters() { return this._lineFilters }
+
+  /** @returns {RegExp[]} - Example patterns. */
+  getExamplePatterns() { return this._examplePatterns }
 
   /**
    * @param {string[] | string | undefined} tags - Tags.
@@ -146,24 +161,29 @@ export default class TestRunner {
 
   /**
    * @param {TestsArgument} tests - Tests.
+   * @param {string[]} [descriptions] - Description stack.
+   * @param {boolean} [lineMatchedInScope] - Whether line matched in scope.
    * @returns {boolean} - Whether any tests in this scope will run.
    */
-  hasRunnableTests(tests) {
+  hasRunnableTests(tests, descriptions = [], lineMatchedInScope = false) {
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
       const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
+      const includeByLine = lineMatchedInScope || this.matchesLineFilter(testData)
 
       if (this._onlyFocussed && !testArgs.focus) continue
-      if (this.shouldSkipTest(testArgs)) continue
+      if (this.shouldSkipTest(testArgs, testData, testDescription, descriptions, includeByLine)) continue
 
       return true
     }
 
     for (const subDescription in tests.subs) {
       const subTest = tests.subs[subDescription]
+      const scopeLineMatch = lineMatchedInScope || this.matchesLineFilter(subTest)
+      const nextDescriptions = descriptions.concat([subDescription])
 
       if (this._onlyFocussed && !subTest.anyTestsFocussed) continue
-      if (this.hasRunnableTests(subTest)) return true
+      if (this.hasRunnableTests(subTest, nextDescriptions, scopeLineMatch)) return true
     }
 
     return false
@@ -171,16 +191,59 @@ export default class TestRunner {
 
   /**
    * @param {TestArgs} testArgs - Test args.
+   * @param {TestData} testData - Test data.
+   * @param {string} testDescription - Test description.
+   * @param {string[]} descriptions - Description stack.
+   * @param {boolean} lineMatchedInScope - Whether line matched in scope.
    * @returns {boolean} - Whether the test should be skipped.
    */
-  shouldSkipTest(testArgs) {
+  shouldSkipTest(testArgs, testData, testDescription, descriptions, lineMatchedInScope) {
     if (this.hasMatchingTag(testArgs.tags, this.getExcludeTagSet())) return true
 
     if (this._includeTagSet.size > 0 && !testArgs.focus) {
       if (!this.hasMatchingTag(testArgs.tags, this._includeTagSet)) return true
     }
 
+    if (this.getExamplePatterns().length > 0) {
+      const fullDescription = this.buildFullDescription(descriptions, testDescription)
+      const matches = this.getExamplePatterns().some((pattern) => pattern.test(fullDescription))
+
+      if (!matches) return true
+    }
+
+    const lineFilters = this.getLineFilters()
+
+    if (Object.keys(lineFilters).length > 0) {
+      if (!lineMatchedInScope && !this.matchesLineFilter(testData)) return true
+    }
+
     return false
+  }
+
+  /**
+   * @param {TestData | TestsArgument} entry - Test entry.
+   * @returns {boolean} - Whether line filter matches entry.
+   */
+  matchesLineFilter(entry) {
+    if (!entry || !entry.filePath || !entry.line) return false
+
+    const filePath = path.resolve(entry.filePath)
+    const lines = this.getLineFilters()[filePath]
+
+    if (!lines || lines.length === 0) return false
+
+    return lines.includes(entry.line)
+  }
+
+  /**
+   * @param {string[]} descriptions - Description stack.
+   * @param {string} testDescription - Test description.
+   * @returns {string} - Full description.
+   */
+  buildFullDescription(descriptions, testDescription) {
+    const parts = descriptions.concat([testDescription])
+
+    return parts.join(" ").trim()
   }
 
   /**
@@ -360,13 +423,15 @@ export default class TestRunner {
    * @param {TestsArgument} args.tests - Tests.
    * @param {string[]} args.descriptions - Descriptions.
    * @param {number} args.indentLevel - Indent level.
+   * @param {boolean} [args.lineMatchedInScope] - Whether line matched in scope.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel}) {
+  async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel, lineMatchedInScope = false}) {
     const leftPadding = " ".repeat(indentLevel * 2)
     const newAfterEaches = [...afterEaches, ...tests.afterEaches]
     const newBeforeEaches = [...beforeEaches, ...tests.beforeEaches]
-    const shouldRunAnyTests = this.hasRunnableTests(tests)
+    const scopeLineMatch = lineMatchedInScope || this.matchesLineFilter(tests)
+    const shouldRunAnyTests = this.hasRunnableTests(tests, descriptions, scopeLineMatch)
 
     if (!shouldRunAnyTests) return
 
@@ -382,9 +447,10 @@ export default class TestRunner {
       for (const testDescription in tests.tests) {
         const testData = tests.tests[testDescription]
         const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
+        const includeByLine = scopeLineMatch || this.matchesLineFilter(testData)
 
         if (this._onlyFocussed && !testArgs.focus) continue
-        if (this.shouldSkipTest(testArgs)) continue
+        if (this.shouldSkipTest(testArgs, testData, testDescription, descriptions, includeByLine)) continue
 
         if (testArgs.type == "model" || testArgs.type == "request") {
           testArgs.application = await this.application()
@@ -448,16 +514,18 @@ export default class TestRunner {
               console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
             }
 
-          await this.emitEvent("testFailed", {
-            configuration: this.getConfiguration(),
-            descriptions,
-            error: failedError,
-            testArgs,
-            testData,
-            testDescription,
-            testRunner: this
-          })
-        }
+            await this.emitEvent("testFailed", {
+              configuration: this.getConfiguration(),
+              descriptions,
+              error: failedError,
+              testArgs,
+              testData,
+              testDescription,
+              testRunner: this
+            })
+
+            this.printRerunCommand({descriptions, testDescription, testData, leftPadding})
+          }
 
           break
         }
@@ -466,6 +534,7 @@ export default class TestRunner {
       for (const subDescription in tests.subs) {
         const subTest = tests.subs[subDescription]
         const newDecriptions = descriptions.concat([subDescription])
+        const childScopeLineMatch = scopeLineMatch || this.matchesLineFilter(subTest)
 
         if (!this._onlyFocussed || subTest.anyTestsFocussed) {
           console.log(`${leftPadding}${subDescription}`)
@@ -474,7 +543,8 @@ export default class TestRunner {
             beforeEaches: newBeforeEaches,
             tests: subTest,
             descriptions: newDecriptions,
-            indentLevel: indentLevel + 1
+            indentLevel: indentLevel + 1,
+            lineMatchedInScope: childScopeLineMatch
           })
         }
       }
@@ -513,5 +583,47 @@ export default class TestRunner {
     for (const listener of listeners) {
       await listener(payload)
     }
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string[]} args.descriptions - Description stack.
+   * @param {string} args.testDescription - Test description.
+   * @param {TestData} args.testData - Test data.
+   * @param {string} args.leftPadding - Left padding.
+   * @returns {void} - No return value.
+   */
+  printRerunCommand({descriptions, testDescription, testData, leftPadding}) {
+    const rerun = this.buildRerunCommand({descriptions, testDescription, testData})
+
+    if (rerun) {
+      console.error(`${leftPadding}  Re-run: ${rerun}`)
+    }
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string[]} args.descriptions - Description stack.
+   * @param {string} args.testDescription - Test description.
+   * @param {TestData} args.testData - Test data.
+   * @returns {string | undefined} - Rerun command.
+   */
+  buildRerunCommand({descriptions, testDescription, testData}) {
+    const baseCommand = "npx velocious test"
+    const filePath = testData.filePath
+    const line = testData.line
+
+    if (filePath && line) {
+      const relativePath = path.relative(process.cwd(), filePath)
+      return `${baseCommand} ${relativePath}:${line}`
+    }
+
+    const fullDescription = this.buildFullDescription(descriptions, testDescription)
+
+    if (fullDescription) {
+      return `${baseCommand} --example ${JSON.stringify(fullDescription)}`
+    }
+
+    return undefined
   }
 }

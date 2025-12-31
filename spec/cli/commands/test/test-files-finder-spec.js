@@ -105,4 +105,24 @@ describe("Cli - Commands - test - TestFilesFinder", () => {
       await fs.rm(tempDirectory, {recursive: true, force: true})
     }
   })
+
+  it("accepts file args with line numbers", async () => {
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-test-files-"))
+
+    try {
+      const specDir = path.join(tempDirectory, "spec")
+      const testFile = path.join(specDir, "line-spec.js")
+
+      await fs.mkdir(specDir, {recursive: true})
+      await fs.writeFile(testFile, "")
+
+      const testFilesFinder = new TestFilesFinder({directory: tempDirectory, processArgs: ["test", `spec/line-spec.js:12`]})
+      const testFiles = await testFilesFinder.findTestFiles()
+
+      expect(testFiles).toEqual([testFile])
+      expect(testFilesFinder.getLineFiltersByFile()[testFile]).toEqual([12])
+    } finally {
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
+  })
 })

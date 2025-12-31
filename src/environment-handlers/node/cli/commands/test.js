@@ -6,6 +6,7 @@ import TestRunner from "../../../../testing/test-runner.js"
 
 const INCLUDE_TAG_FLAGS = new Set(["--tag", "--include-tag", "-t"])
 const EXCLUDE_TAG_FLAGS = new Set(["--exclude-tag", "--skip-tag", "-x"])
+const EXAMPLE_FLAGS = new Set(["--example", "--name", "-e"])
 
 /**
  * @param {string | undefined} value - Tag argument value.
@@ -21,13 +22,42 @@ function splitTags(value) {
 }
 
 /**
- * @param {string[]} processArgs - Process args.
- * @returns {{includeTags: string[], excludeTags: string[], filteredProcessArgs: string[]}} - Parsed tags and process args.
+ * @param {string} value - Value.
+ * @returns {string} - Escaped value for regex.
  */
-function parseTagFilters(processArgs) {
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/**
+ * @param {string[]} patterns - Patterns.
+ * @returns {RegExp[]} - Normalized patterns.
+ */
+function normalizeExamplePatterns(patterns) {
+  const normalized = []
+
+  for (const pattern of patterns) {
+    const regexMatch = pattern.match(/^\/(.+)\/([gimsuy]*)$/)
+
+    if (regexMatch) {
+      normalized.push(new RegExp(regexMatch[1], regexMatch[2]))
+    } else {
+      normalized.push(new RegExp(escapeRegExp(pattern)))
+    }
+  }
+
+  return normalized
+}
+
+/**
+ * @param {string[]} processArgs - Process args.
+ * @returns {{includeTags: string[], excludeTags: string[], examplePatterns: string[], filteredProcessArgs: string[]}} - Parsed tags and process args.
+ */
+function parseFilters(processArgs) {
   const includeTags = []
   const excludeTags = []
   const filteredProcessArgs = processArgs.length > 0 ? [processArgs[0]] : []
+  const examplePatterns = []
   let inRestArgs = false
 
   for (let i = 1; i < processArgs.length; i++) {
@@ -79,6 +109,26 @@ function parseTagFilters(processArgs) {
         excludeTags.push(...splitTags(arg.slice("--skip-tag=".length)))
         continue
       }
+
+      if (EXAMPLE_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (nextValue && !nextValue.startsWith("-")) {
+          examplePatterns.push(nextValue)
+          i++
+        }
+        continue
+      }
+
+      if (arg.startsWith("--example=")) {
+        examplePatterns.push(arg.slice("--example=".length))
+        continue
+      }
+
+      if (arg.startsWith("--name=")) {
+        examplePatterns.push(arg.slice("--name=".length))
+        continue
+      }
     }
 
     filteredProcessArgs.push(arg)
@@ -87,6 +137,7 @@ function parseTagFilters(processArgs) {
   return {
     includeTags: Array.from(new Set(includeTags)),
     excludeTags: Array.from(new Set(excludeTags)),
+    examplePatterns,
     filteredProcessArgs
   }
 }
@@ -108,10 +159,17 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       directories.push(`${this.directory()}/spec`)
     }
 
-    const {includeTags, excludeTags, filteredProcessArgs} = parseTagFilters(this.processArgs || [])
+    const {includeTags, excludeTags, examplePatterns, filteredProcessArgs} = parseFilters(this.processArgs || [])
     const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
     const testFiles = await testFilesFinder.findTestFiles()
-    const testRunner = new TestRunner({configuration: this.getConfiguration(), excludeTags, includeTags, testFiles})
+    const testRunner = new TestRunner({
+      configuration: this.getConfiguration(),
+      excludeTags,
+      includeTags,
+      testFiles,
+      lineFilters: testFilesFinder.getLineFiltersByFile(),
+      examplePatterns: normalizeExamplePatterns(examplePatterns)
+    })
     let signalHandled = false
 
     const handleSignal = async (signal) => {

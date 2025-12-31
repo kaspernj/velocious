@@ -57,6 +57,9 @@ export default class TestFilesFinder {
     /** @type {string[]} */
     this.explicitFiles = []
 
+    /** @type {Record<string, number[]>} */
+    this.lineFiltersByFile = {}
+
     this._argsPrepared = false
   }
 
@@ -89,6 +92,9 @@ export default class TestFilesFinder {
 
     return Array.from(new Set(this.foundFiles))
   }
+
+  /** @returns {Record<string, number[]>} - Line filters by file. */
+  getLineFiltersByFile() { return this.lineFiltersByFile }
 
   /**
    * @returns {number} - The ing promises length.
@@ -213,11 +219,12 @@ export default class TestFilesFinder {
     for (const testArg of this.testArgs) {
       if (testArg === "--") continue
 
+      const {cleanArg, line} = this.splitLineArg(testArg)
       const forceDirectory = testArg.endsWith("/") || testArg.endsWith(path.sep)
-      const fullPath = path.isAbsolute(testArg) ? testArg : path.resolve(this.directory, testArg)
+      const fullPath = path.isAbsolute(cleanArg) ? cleanArg : path.resolve(this.directory, cleanArg)
       const baseName = path.basename(this.directory)
-      const hasBasePrefix = testArg === baseName || testArg.startsWith(`${baseName}/`) || testArg.startsWith(`${baseName}${path.sep}`)
-      const basePrefixedFullPath = (!path.isAbsolute(testArg) && hasBasePrefix) ? path.resolve(path.dirname(this.directory), testArg) : null
+      const hasBasePrefix = cleanArg === baseName || cleanArg.startsWith(`${baseName}/`) || cleanArg.startsWith(`${baseName}${path.sep}`)
+      const basePrefixedFullPath = (!path.isAbsolute(cleanArg) && hasBasePrefix) ? path.resolve(path.dirname(this.directory), cleanArg) : null
       const fullPathCandidates = basePrefixedFullPath ? [basePrefixedFullPath] : [fullPath]
 
       if (forceDirectory) {
@@ -250,14 +257,59 @@ export default class TestFilesFinder {
         } else if (stats.isFile()) {
           this.fileArgs.push(localPath)
           this.explicitFiles.push(resolvedFullPath)
+
+          if (line) {
+            this.addLineFilter(resolvedFullPath, line)
+          }
         }
       } catch {
         const fallbackLocalPath = this.toLocalPath(basePrefixedFullPath || fullPath)
         this.fileArgs.push(fallbackLocalPath)
+
+        if (line) {
+          this.addLineFilter(basePrefixedFullPath || fullPath, line)
+        }
       }
     }
 
     this._argsPrepared = true
+  }
+
+  /**
+   * @param {string} filePath - File path.
+   * @param {number} line - Line number.
+   * @returns {void} - No return value.
+   */
+  addLineFilter(filePath, line) {
+    const fullPath = path.resolve(filePath)
+
+    if (!this.lineFiltersByFile[fullPath]) {
+      this.lineFiltersByFile[fullPath] = []
+    }
+
+    if (!this.lineFiltersByFile[fullPath].includes(line)) {
+      this.lineFiltersByFile[fullPath].push(line)
+    }
+  }
+
+  /**
+   * @param {string} testArg - Test arg.
+   * @returns {{cleanArg: string, line?: number}} - Cleaned arg and line.
+   */
+  splitLineArg(testArg) {
+    const match = testArg.match(/^(.*):(\d+)$/)
+
+    if (!match) {
+      return {cleanArg: testArg}
+    }
+
+    const line = Number(match[2])
+
+    if (!Number.isFinite(line)) {
+      return {cleanArg: testArg}
+    }
+
+    return {cleanArg: match[1], line}
   }
 
   /**

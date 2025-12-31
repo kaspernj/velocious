@@ -1,6 +1,8 @@
 // @ts-check
 
 import {formatValue, minifiedStringify} from "./format-value.js"
+import path from "path"
+import {fileURLToPath} from "url"
 import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
 import EventEmitter from "../utils/event-emitter.js"
 import restArgsError from "../utils/rest-args-error.js"
@@ -17,6 +19,8 @@ const tests = {
   beforeAlls: [],
   /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   beforeEaches: [],
+  filePath: undefined,
+  line: undefined,
   subs: {},
   tests: {}
 }
@@ -24,6 +28,38 @@ const tests = {
 const testEvents = new EventEmitter()
 
 let currentPath = [tests]
+
+/**
+ * @returns {{filePath?: string, line?: number}} - Location.
+ */
+function captureLocation() {
+  const error = new Error()
+  const stack = typeof error.stack === "string" ? error.stack.split("\n") : []
+
+  for (const line of stack) {
+    const trimmed = line.trim()
+
+    if (!trimmed.includes("at")) continue
+    if (trimmed.includes("/src/testing/test.js")) continue
+
+    const match = trimmed.match(/(?:\(|\s)(file:\/\/.*?|\/.*?):(\d+):(\d+)\)?$/)
+
+    if (!match) continue
+
+    const rawPath = match[1]
+    const lineNumber = Number(match[2])
+    const filePath = rawPath.startsWith("file://")
+      ? fileURLToPath(rawPath)
+      : rawPath
+
+    return {
+      filePath: path.resolve(filePath),
+      line: Number.isFinite(lineNumber) ? lineNumber : undefined
+    }
+  }
+
+  return {}
+}
 
 /**
  * @param {string[] | string | undefined} tags - Tags.
@@ -872,7 +908,18 @@ async function describe(description, arg1, arg2) {
     throw new Error(`Duplicate test description: ${description}`)
   }
 
-  const newTestData = {afterEaches: [], afterAlls: [], args: newTestArgs, beforeAlls: [], beforeEaches: [], subs: {}, tests: {}}
+  const location = captureLocation()
+  const newTestData = {
+    afterEaches: [],
+    afterAlls: [],
+    args: newTestArgs,
+    beforeAlls: [],
+    beforeEaches: [],
+    filePath: location.filePath,
+    line: location.line,
+    subs: {},
+    tests: {}
+  }
 
   currentTest.subs[description] = newTestData
   currentPath.push(newTestData)
@@ -920,7 +967,14 @@ function it(description, arg1, arg2) {
 
   const newTestArgs = mergeTestArgs(currentTest.args, testArgs)
 
-  currentTest.tests[description] = {args: newTestArgs, function: testFunction}
+  const location = captureLocation()
+
+  currentTest.tests[description] = {
+    args: newTestArgs,
+    function: testFunction,
+    filePath: location.filePath,
+    line: location.line
+  }
 }
 
 /**
