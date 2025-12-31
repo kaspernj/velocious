@@ -126,6 +126,16 @@ await project.loadTasks()
 const tasks = project.tasks().loaded()
 ```
 
+## Relationship scopes
+
+You can pass a scope callback to `hasMany`, `hasOne`, or `belongsTo` to add custom filters. The callback receives the query and is also bound as `this`:
+
+```js
+Project.hasMany("acceptedTasks", (scope) => scope.where({state: "accepted"}), {className: "Task"})
+Project.hasOne("activeDetail", function() { return this.where({isActive: true}) }, {className: "ProjectDetail"})
+Comment.belongsTo("acceptedTask", (scope) => scope.where({state: "accepted"}), {className: "Task"})
+```
+
 ### Finding records
 
 `find()` and `findByOrFail()` throw an error when no record is found. `findBy()` returns `null`. These apply to records.
