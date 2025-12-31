@@ -115,4 +115,53 @@ describe("TestRunner events", () => {
 
     expect(handlerCompleted).toBe(true)
   })
+
+  it("collects failed test details for summary output", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+
+    const tests = {
+      args: {},
+      afterEaches: [],
+      afterAlls: [],
+      beforeAlls: [],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "fails once": {
+          args: {},
+          filePath: "/tmp/sample-spec.js",
+          line: 42,
+          function: async () => {
+            throw new Error("boom")
+          }
+        }
+      }
+    }
+
+    await testRunner.runTests({
+      afterEaches: [],
+      beforeEaches: [],
+      tests,
+      descriptions: [],
+      indentLevel: 0
+    })
+
+    const failedDetails = testRunner.getFailedTestDetails()
+
+    expect(failedDetails.length).toBe(1)
+    expect(failedDetails[0].fullDescription).toBe("fails once")
+    expect(failedDetails[0].filePath).toBe("/tmp/sample-spec.js")
+    expect(failedDetails[0].line).toBe(42)
+  })
 })

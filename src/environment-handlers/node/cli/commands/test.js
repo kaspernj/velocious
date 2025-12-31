@@ -210,6 +210,19 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     }
 
     if (testRunner.isFailed()) {
+      const failedTests = testRunner.getFailedTestDetails()
+
+      if (failedTests.length > 0) {
+        console.error("\nFailed tests:")
+
+        for (const failed of failedTests) {
+          const location = failed.filePath && failed.line
+            ? ` (${failed.filePath}:${failed.line})`
+            : ""
+          console.error(`- ${failed.fullDescription}${location}`)
+        }
+      }
+
       console.error(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`)
       process.exit(1)
     } else if (testRunner.areAnyTestsFocussed()) {

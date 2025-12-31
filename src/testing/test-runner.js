@@ -90,6 +90,7 @@ export default class TestRunner {
     this._successfulTests = 0
     this._testsCount = 0
     this._activeAfterAllScopes = []
+    this._failedTestDetails = []
   }
 
   /**
@@ -299,6 +300,11 @@ export default class TestRunner {
     return this._failedTests
   }
 
+  /** @returns {Array<{fullDescription: string, filePath?: string, line?: number, error: unknown}>} - Failed test details. */
+  getFailedTestDetails() {
+    return this._failedTestDetails
+  }
+
   /**
    * @returns {number} - The successful tests.
    */
@@ -336,6 +342,7 @@ export default class TestRunner {
     this._failedTests = 0
     this._successfulTests = 0
     this._testsCount = 0
+    this._failedTestDetails = []
     await this.importTestFiles()
     await this.analyzeTests(tests)
     this._onlyFocussed = this.anyTestsFocussed
@@ -499,6 +506,12 @@ export default class TestRunner {
 
           if (failedError) {
             this._failedTests++
+            this._failedTestDetails.push({
+              fullDescription: this.buildFullDescription(descriptions, testDescription),
+              filePath: testData.filePath,
+              line: testData.line,
+              error: failedError
+            })
 
             if (failedError instanceof Error) {
               console.error(`${leftPadding}  Test failed:`, failedError.message)
