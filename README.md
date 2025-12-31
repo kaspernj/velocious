@@ -42,6 +42,7 @@ Target a test by line number or description.
 npx velocious test spec/path/to/test-spec.js:34
 npx velocious test --example "filters on nested relationship attributes"
 npx velocious test --example "/nested.*attributes/i"
+npx velocious test --name "filters on nested relationship attributes"
 ```
 
 Exclude tags via your testing config file.
