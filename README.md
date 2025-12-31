@@ -70,6 +70,17 @@ export default async function configureTesting() {
 }
 ```
 
+## Expectations
+
+Common matchers:
+
+```js
+expect(value).toBeTruthy()
+expect(value).toMatchObject({status: "success"})
+expect({a: 1, b: 2}).toEqual(expect.objectContaining({a: 1}))
+expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 3]))
+```
+
 # Models
 
 ```bash
