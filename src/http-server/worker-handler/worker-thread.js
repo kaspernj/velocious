@@ -109,7 +109,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     } else if (command == "websocketEvent") {
       const {channel, payload} = data
 
-      this.broadcastWebsocketEvent({channel, payload})
+      await this.broadcastWebsocketEvent({channel, payload})
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
@@ -119,14 +119,20 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {any} args.payload - Payload data.
-   * @returns {void} - No return value.
+   * @returns {Promise<void>} - Resolves when complete.
    */
-  broadcastWebsocketEvent({channel, payload}) {
+  async broadcastWebsocketEvent({channel, payload}) {
+    const sendTasks = []
+
     for (const clientKey of Object.keys(this.clients)) {
       const client = this.clients[clientKey]
+      const session = client.websocketSession
 
-      client.websocketSession?.sendEvent(channel, payload)
+      if (!session) continue
+
+      sendTasks.push(session.sendEvent(channel, payload))
     }
+
+    await Promise.all(sendTasks)
   }
 }
-

@@ -16,6 +16,12 @@ services:
       MYSQL_PASSWORD: password
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: velocious_test
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     image: mariadb:latest
     expose:
       - 3306
@@ -42,6 +48,12 @@ services:
       POSTGRES_USER: peakflow
       POSTGRES_PASSWORD: password
       POSTGRES_DB: velocious_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     image: postgres:17.6
     expose:
       - 5432

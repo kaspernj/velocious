@@ -9,6 +9,29 @@ import restArgsError from "../utils/rest-args-error.js"
 import {testConfig, testEvents, tests} from "./test.js"
 
 /**
+ * @param {Promise<unknown> | unknown} promise - Promise or value.
+ * @param {number} timeoutMs - Timeout in milliseconds.
+ * @param {string} testDescription - Test description.
+ * @returns {Promise<unknown>} - Resolves or rejects based on timeout or promise result.
+ */
+function runWithTimeout(promise, timeoutMs, testDescription) {
+  const timeoutSeconds = (timeoutMs / 1000).toFixed(3).replace(/\.?0+$/, "")
+  const timeoutError = new Error(`Timed out after ${timeoutSeconds}s: ${testDescription}`)
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(timeoutError), timeoutMs)
+
+    Promise.resolve(promise).then((result) => {
+      clearTimeout(timeout)
+      resolve(result)
+    }).catch((error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+  })
+}
+
+/**
  * @typedef {object} TestArgs
  * @property {Application} [application] - Application instance for integration tests.
  * @property {RequestClient} [client] - HTTP client for request tests.
@@ -19,6 +42,7 @@ import {testConfig, testEvents, tests} from "./test.js"
  * @property {() => (void|Promise<void>)} [function] - Test callback function.
  * @property {number} [retry] - Number of retries when a test fails.
  * @property {string[] | string} [tags] - Tags for filtering.
+ * @property {number} [timeoutSeconds] - Timeout in seconds for the test.
  * @property {string} [type] - Test type identifier.
  */
 
@@ -468,6 +492,10 @@ export default class TestRunner {
         const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
           ? Math.max(0, Math.floor(testArgs.retry))
           : 0
+        const configTimeoutSeconds = typeof testConfig.defaultTimeoutSeconds === "number" ? testConfig.defaultTimeoutSeconds : undefined
+        const timeoutSeconds = typeof testArgs.timeoutSeconds === "number" ? testArgs.timeoutSeconds : configTimeoutSeconds
+        const useTimeout = typeof timeoutSeconds === "number" && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+        const timeoutMs = useTimeout ? timeoutSeconds * 1000 : undefined
         let retriesUsed = 0
 
         while (true) {
@@ -480,7 +508,13 @@ export default class TestRunner {
               await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
             }
 
-            await testData.function(testArgs)
+            const testPromise = testData.function(testArgs)
+
+            if (useTimeout && timeoutMs !== undefined) {
+              await runWithTimeout(testPromise, timeoutMs, testDescription)
+            } else {
+              await testPromise
+            }
             this._successfulTests++
           } catch (error) {
             if (retriesUsed < retryCount) {

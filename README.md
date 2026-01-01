@@ -557,6 +557,38 @@ this.getConfiguration().getWebsocketEvents().publish(channel, payload)
 this.renderJsonArg({status: "published"})
 ```
 
+## Websocket channels (Rails-style)
+
+You can resolve a websocket channel class per connection and let it subscribe clients server-side:
+
+```js
+import WebsocketChannel from "velocious/build/src/http-server/websocket-channel.js"
+
+class NewsChannel extends WebsocketChannel {
+  async subscribed() {
+    if (this.params().token !== process.env.NEWS_TOKEN) return
+
+    await this.streamFrom("news")
+  }
+
+  async unsubscribed() {
+    // Optional: cleanup when the socket closes
+  }
+}
+
+const configuration = new Configuration({
+  // ...
+  websocketChannelResolver: ({request}) => {
+    const query = request?.path?.().split("?")[1]
+    const channel = new URLSearchParams(query).get("channel")
+
+    if (channel === "news") return NewsChannel
+  }
+})
+```
+
+Channel classes are the recommended place to authorize subscriptions and decide which streams a connection should receive. If authorization fails, simply return without calling `streamFrom` or close the socket in `subscribed()`.
+
 ## Combine: subscribe and invoke another action
 
 You can subscribe first and then call another controller action over the same websocket connection to trigger broadcasts:
@@ -585,6 +617,8 @@ If you are developing on Velocious, you can run the tests with:
 ```bash
 ./run-tests.sh
 ```
+
+Tests default to a 60-second timeout. Override per test with `{timeoutSeconds: 5}` or set a suite-wide default via `configureTests({defaultTimeoutSeconds: 30})`.
 
 # Writing a request test
 

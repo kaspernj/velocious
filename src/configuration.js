@@ -27,7 +27,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, timezoneOffsetMinutes, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -45,6 +45,7 @@ export default class VelociousConfiguration {
     this._testing = testing
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._websocketEvents = undefined
+    this._websocketChannelResolver = websocketChannelResolver
     this._logging = logging
     this._errorEvents = new EventEmitter()
 
@@ -396,6 +397,19 @@ export default class VelociousConfiguration {
    */
   setWebsocketEvents(websocketEvents) {
     this._websocketEvents = websocketEvents
+  }
+
+  /** @returns {import("./configuration-types.js").WebsocketChannelResolverType | undefined} - The websocket channel resolver. */
+  getWebsocketChannelResolver() {
+    return this._websocketChannelResolver
+  }
+
+  /**
+   * @param {import("./configuration-types.js").WebsocketChannelResolverType} resolver - Resolver.
+   * @returns {void} - No return value.
+   */
+  setWebsocketChannelResolver(resolver) {
+    this._websocketChannelResolver = resolver
   }
 
   /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
