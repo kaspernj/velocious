@@ -9,7 +9,7 @@
  */
 
 /**
- * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, websocketSession: import("./http-server/client/websocket-session.js").default, configuration: import("./configuration.js").default}): typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void | Promise<typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void>} WebsocketChannelResolverType
+ * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, subscription?: {channel: string, params?: Record<string, unknown>}, client: import("./http-server/client/index.js").default, websocketSession: import("./http-server/client/websocket-session.js").default, configuration: import("./configuration.js").default}): typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void | Promise<typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void>} WebsocketChannelResolverType
  */
 
 /**
