@@ -9,7 +9,7 @@ describe("TestRunner timeouts", () => {
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
   it("times out tests using the configured default", async () => {
-    const previousTimeoutMs = testConfig.defaultTimeoutMs
+    const previousTimeoutSeconds = testConfig.defaultTimeoutSeconds
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({
       database: {test: {}},
@@ -29,7 +29,7 @@ describe("TestRunner timeouts", () => {
       eventPayload = payload
     }
 
-    configureTests({defaultTimeoutMs: 10})
+    configureTests({defaultTimeoutSeconds: 0.01})
     testEvents.on("testFailed", handler)
 
     try {
@@ -57,15 +57,15 @@ describe("TestRunner timeouts", () => {
       })
     } finally {
       testEvents.off("testFailed", handler)
-      configureTests({defaultTimeoutMs: previousTimeoutMs})
+      configureTests({defaultTimeoutSeconds: previousTimeoutSeconds})
     }
 
     expect(eventPayload).toBeDefined()
-    expect(eventPayload.error.message).toContain("Timed out after 10ms")
+    expect(eventPayload.error.message).toContain("Timed out after 0.01s")
   })
 
   it("honors per-test timeout overrides", async () => {
-    const previousTimeoutMs = testConfig.defaultTimeoutMs
+    const previousTimeoutSeconds = testConfig.defaultTimeoutSeconds
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({
       database: {test: {}},
@@ -85,7 +85,7 @@ describe("TestRunner timeouts", () => {
       eventPayload = payload
     }
 
-    configureTests({defaultTimeoutMs: 1000})
+    configureTests({defaultTimeoutSeconds: 1})
     testEvents.on("testFailed", handler)
 
     try {
@@ -96,7 +96,7 @@ describe("TestRunner timeouts", () => {
         subs: {},
         tests: {
           "uses override timeout": {
-            args: {timeoutMs: 5},
+            args: {timeoutSeconds: 0.005},
             function: async () => {
               await delay(20)
             }
@@ -113,10 +113,10 @@ describe("TestRunner timeouts", () => {
       })
     } finally {
       testEvents.off("testFailed", handler)
-      configureTests({defaultTimeoutMs: previousTimeoutMs})
+      configureTests({defaultTimeoutSeconds: previousTimeoutSeconds})
     }
 
     expect(eventPayload).toBeDefined()
-    expect(eventPayload.error.message).toContain("Timed out after 5ms")
+    expect(eventPayload.error.message).toContain("Timed out after 0.005s")
   })
 })

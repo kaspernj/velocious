@@ -618,7 +618,7 @@ If you are developing on Velocious, you can run the tests with:
 ./run-tests.sh
 ```
 
-Tests default to a 60-second timeout. Override per test with `{timeoutMs: 5000}` or set a suite-wide default via `configureTests({defaultTimeoutMs: 30000})`.
+Tests default to a 60-second timeout. Override per test with `{timeoutSeconds: 5}` or set a suite-wide default via `configureTests({defaultTimeoutSeconds: 30})`.
 
 # Writing a request test
 

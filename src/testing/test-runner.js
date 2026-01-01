@@ -15,7 +15,8 @@ import {testConfig, testEvents, tests} from "./test.js"
  * @returns {Promise<unknown>} - Resolves or rejects based on timeout or promise result.
  */
 function runWithTimeout(promise, timeoutMs, testDescription) {
-  const timeoutError = new Error(`Timed out after ${timeoutMs}ms: ${testDescription}`)
+  const timeoutSeconds = (timeoutMs / 1000).toFixed(3).replace(/\.?0+$/, "")
+  const timeoutError = new Error(`Timed out after ${timeoutSeconds}s: ${testDescription}`)
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(timeoutError), timeoutMs)
@@ -41,7 +42,7 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
  * @property {() => (void|Promise<void>)} [function] - Test callback function.
  * @property {number} [retry] - Number of retries when a test fails.
  * @property {string[] | string} [tags] - Tags for filtering.
- * @property {number} [timeoutMs] - Timeout in milliseconds for the test.
+ * @property {number} [timeoutSeconds] - Timeout in seconds for the test.
  * @property {string} [type] - Test type identifier.
  */
 
@@ -491,9 +492,10 @@ export default class TestRunner {
         const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
           ? Math.max(0, Math.floor(testArgs.retry))
           : 0
-        const configTimeoutMs = typeof testConfig.defaultTimeoutMs === "number" ? testConfig.defaultTimeoutMs : undefined
-        const timeoutMs = typeof testArgs.timeoutMs === "number" ? testArgs.timeoutMs : configTimeoutMs
-        const useTimeout = typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0
+        const configTimeoutSeconds = typeof testConfig.defaultTimeoutSeconds === "number" ? testConfig.defaultTimeoutSeconds : undefined
+        const timeoutSeconds = typeof testArgs.timeoutSeconds === "number" ? testArgs.timeoutSeconds : configTimeoutSeconds
+        const useTimeout = typeof timeoutSeconds === "number" && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+        const timeoutMs = useTimeout ? timeoutSeconds * 1000 : undefined
         let retriesUsed = 0
 
         while (true) {
@@ -508,7 +510,7 @@ export default class TestRunner {
 
             const testPromise = testData.function(testArgs)
 
-            if (useTimeout) {
+            if (useTimeout && timeoutMs !== undefined) {
               await runWithTimeout(testPromise, timeoutMs, testDescription)
             } else {
               await testPromise
