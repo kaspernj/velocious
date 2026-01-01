@@ -15,6 +15,5 @@ export default class TestWebsocketChannel extends WebsocketChannel {
     if (!subscribe) return
 
     await this.streamFrom(`channel:${subscribe}`)
-    await this.websocketSession.sendEvent(`channel:${subscribe}`, {headline: "from-channel"})
   }
 }

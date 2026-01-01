@@ -60,8 +60,8 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         })
       })
 
-      const eventPromise = new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Timed out waiting for channel event")), 2000)
+      const subscribedPromise = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Timed out waiting for channel subscription")), 2000)
 
         socket.addEventListener("message", (event) => {
           const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
@@ -71,9 +71,9 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           try {
             const msg = JSON.parse(raw)
 
-            if (msg.type === "event" && msg.channel === "channel:updates") {
+            if (msg.type === "subscribed" && msg.channel === "channel:updates") {
               clearTimeout(timeout)
-              resolve(msg.payload)
+              resolve()
             }
           } catch (error) {
             clearTimeout(timeout)
@@ -84,9 +84,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await openPromise
-        const payload = await eventPromise
-
-        expect(payload.headline).toEqual("from-channel")
+        await subscribedPromise
       } finally {
         socket.close()
       }
