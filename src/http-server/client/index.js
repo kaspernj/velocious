@@ -139,7 +139,6 @@ export default class VeoliciousHttpServerClient {
       configuration: this.configuration,
       upgradeRequest: this.currentRequest
     })
-    void this.websocketSession.initializeChannel()
     this.websocketSession.events.on("close", () => {
       this.websocketSession?.destroy()
       this.websocketSession = undefined
@@ -147,6 +146,7 @@ export default class VeoliciousHttpServerClient {
     })
     this.state = "websocket"
     this.events.emit("output", response)
+    void this.websocketSession.initializeChannel()
   }
 
   requestDone = () => {
