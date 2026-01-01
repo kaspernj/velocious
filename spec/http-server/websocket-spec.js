@@ -25,17 +25,38 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
   it("broadcasts published events to websocket subscribers", async () => {
     await Dummy.run(async () => {
+      const socket = new WebSocket("ws://127.0.0.1:3006/websocket")
       const client = new WebsocketClient()
 
       try {
+        await new Promise((resolve, reject) => {
+          socket.addEventListener("open", () => resolve())
+          socket.addEventListener("error", (event) => {
+            reject(event?.error || new Error("Websocket connection error"))
+          })
+        })
+        socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
         await client.connect()
 
         const eventPromise = new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error("Timed out waiting for event")), 2000)
-          const unsubscribe = client.on("news", (payload) => {
-            clearTimeout(timeout)
-            unsubscribe()
-            resolve(payload)
+
+          socket.addEventListener("message", (event) => {
+            const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+
+            if (!raw) return
+
+            try {
+              const msg = JSON.parse(raw)
+
+              if (msg.type === "event" && msg.channel === "news") {
+                clearTimeout(timeout)
+                resolve(msg.payload)
+              }
+            } catch (error) {
+              clearTimeout(timeout)
+              reject(error)
+            }
           })
         })
 
@@ -45,6 +66,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         expect(response.statusCode).toEqual(200)
         expect(eventPayload.headline).toEqual("breaking")
       } finally {
+        socket.close()
         await client.close()
       }
     })
@@ -71,7 +93,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           try {
             const msg = JSON.parse(raw)
 
-            if (msg.type === "subscribed" && msg.channel === "channel:updates") {
+            if (msg.type === "subscribed" && msg.channel === "updates") {
               clearTimeout(timeout)
               resolve()
             }
@@ -111,7 +133,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         try {
           const msg = JSON.parse(raw)
 
-          if (msg.type === "event" && msg.channel === "channel:updates") {
+          if (msg.type === "event" && msg.channel === "updates") {
             receivedPayload = msg.payload
           }
         } catch {
