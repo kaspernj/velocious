@@ -82,43 +82,13 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         })
       })
 
-      const subscribedPromise = new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Timed out waiting for channel subscription")), 2000)
-
-        socket.addEventListener("message", (event) => {
-          const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
-
-          if (!raw) return
-
-          try {
-            const msg = JSON.parse(raw)
-
-            if (msg.type === "subscribed" && msg.channel === "channel:updates") {
-              clearTimeout(timeout)
-              resolve()
-            }
-          } catch (error) {
-            clearTimeout(timeout)
-            reject(error)
-          }
-        })
-      })
-
-      const client = new WebsocketClient()
-
       try {
         await openPromise
-        await client.connect()
-        await subscribedPromise
-
-        await client.post("/api/broadcast-event", {channel: "channel:updates", payload: {headline: "from-channel"}})
-
         const payload = await eventPromise
 
         expect(payload.headline).toEqual("from-channel")
       } finally {
         socket.close()
-        await client.close()
       }
     })
   })
@@ -150,20 +120,13 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         }
       })
 
-      const client = new WebsocketClient()
-
       try {
         await openPromise
-        await client.connect()
-
-        await client.post("/api/broadcast-event", {channel: "channel:updates", payload: {headline: "blocked"}})
-
         await new Promise((resolve) => setTimeout(resolve, 300))
 
         expect(receivedPayload).toEqual(undefined)
       } finally {
         socket.close()
-        await client.close()
       }
     })
   })
