@@ -1,15 +1,6 @@
 import dummyConfiguration from "./configuration.js"
-import TestWebsocketChannel from "../channels/test-websocket-channel.js"
 
 export default async function configureTesting() {
-  dummyConfiguration.setWebsocketChannelResolver(({request}) => {
-    const pathValue = request?.path?.()
-    const query = pathValue?.split("?")[1]
-    const channel = query ? new URLSearchParams(query).get("channel") : undefined
-
-    if (channel === "test") return TestWebsocketChannel
-  })
-
   beforeEach(async ({testArgs}) => {
     const transaction = testArgs.databaseCleaning?.transaction
 

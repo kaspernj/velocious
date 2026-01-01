@@ -9,6 +9,16 @@ import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js
 import path from "path"
 import PgsqlDriver from "../../../../src/database/drivers/pgsql/index.js"
 import requireContext from "require-context"
+import TestWebsocketChannel from "../channels/test-websocket-channel.js"
+
+const queryParam = (request, key) => {
+  const pathValue = request?.path?.()
+  const query = pathValue?.split("?")[1]
+
+  if (!query) return
+
+  return new URLSearchParams(query).get(key) || undefined
+}
 
 export default new Configuration({
   database: {
@@ -62,5 +72,10 @@ export default new Configuration({
     en: ["en", "de"]
   },
   locales: ["de", "en"],
-  testing: `${dummyDirectory()}/src/config/testing.js`
+  testing: `${dummyDirectory()}/src/config/testing.js`,
+  websocketChannelResolver: ({request}) => {
+    const channel = queryParam(request, "channel")
+
+    if (channel === "test") return TestWebsocketChannel
+  }
 })
