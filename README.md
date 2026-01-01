@@ -570,6 +570,10 @@ class NewsChannel extends WebsocketChannel {
 
     await this.streamFrom("news")
   }
+
+  async unsubscribed() {
+    // Optional: cleanup when the socket closes
+  }
 }
 
 const configuration = new Configuration({
@@ -582,6 +586,8 @@ const configuration = new Configuration({
   }
 })
 ```
+
+Channel classes are the recommended place to authorize subscriptions and decide which streams a connection should receive. If authorization fails, simply return without calling `streamFrom` or close the socket in `subscribed()`.
 
 ## Combine: subscribe and invoke another action
 
