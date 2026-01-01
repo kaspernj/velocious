@@ -4,6 +4,7 @@ import EventEmitter from "../../utils/event-emitter.js"
 import {Logger} from "../../logger.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
+import WebsocketChannel from "../websocket-channel.js"
 
 const WEBSOCKET_FINAL_FRAME = 0x80
 const WEBSOCKET_OPCODE_TEXT = 0x1
@@ -19,11 +20,13 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {import("./index.js").default} args.client - Client instance.
+   * @param {import("./request.js").default | import("./websocket-request.js").default} [args.upgradeRequest] - Initial websocket upgrade request.
    */
-  constructor({client, configuration}) {
+  constructor({client, configuration, upgradeRequest}) {
     this.buffer = Buffer.alloc(0)
     this.client = client
     this.configuration = configuration
+    this.upgradeRequest = upgradeRequest
     this.logger = new Logger(this)
   }
 
@@ -36,6 +39,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   destroy() {
+    void this._teardownChannel()
     this.events.removeAllListeners()
   }
 
@@ -59,12 +63,53 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * @param {string} channel - Channel name.
    * @param {any} payload - Payload data.
-   * @returns {void} - No return value.
+   * @returns {Promise<void>} - Resolves when complete.
    */
-  sendEvent(channel, payload) {
+  async sendEvent(channel, payload) {
     if (!this.hasSubscription(channel)) return
 
+    try {
+      const allowed = await this._passesWebsocketEventFilters({channel, payload})
+
+      if (!allowed) return
+    } catch (error) {
+      this.logger.warn(() => ["Websocket event filter failed", error])
+      return
+    }
+
     this._sendJson({channel, payload, type: "event"})
+  }
+
+  /**
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializeChannel() {
+    const resolver = this.configuration.getWebsocketChannelResolver?.()
+
+    if (!resolver) return
+
+    try {
+      const resolved = await resolver({
+        client: this.client,
+        configuration: this.configuration,
+        request: this.upgradeRequest,
+        websocketSession: this
+      })
+
+      if (!resolved) return
+
+      this.channel = typeof resolved === "function"
+        ? new resolved({client: this.client, configuration: this.configuration, request: this.upgradeRequest, websocketSession: this})
+        : resolved
+
+      if (this.channel && !(this.channel instanceof WebsocketChannel)) {
+        throw new Error("Resolved websocket channel must extend WebsocketChannel")
+      }
+
+      await this.channel?.subscribed?.()
+    } catch (error) {
+      this.logger.error(() => ["Failed to initialize websocket channel", error])
+    }
   }
 
   /**
@@ -86,9 +131,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       const {channel} = message
 
       if (!channel) throw new Error("channel is required for subscribe")
-
-      this.addSubscription(channel)
-      this._sendJson({channel, type: "subscribed"})
+      await this.subscribeToChannel(channel, {acknowledge: true})
 
       return
     }
@@ -183,7 +226,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       if (opcode === WEBSOCKET_OPCODE_CLOSE) {
-        this.events.emit("close")
+        this._handleClose()
         this.sendGoodbye(this.client)
         continue
       }
@@ -246,6 +289,99 @@ export default class VelociousHttpServerClientWebsocketSession {
     header[0] = WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_TEXT
 
     this.client.events.emit("output", Buffer.concat([header, payload]))
+  }
+
+  /**
+   * @param {string} channel - Channel name.
+   * @param {{acknowledge?: boolean}} [options] - Subscribe options.
+   * @returns {Promise<boolean>} - Whether the subscription was added.
+   */
+  async subscribeToChannel(channel, {acknowledge = true} = {}) {
+    try {
+      const allowed = await this._passesWebsocketSubscriptionFilters({channel})
+
+      if (!allowed) {
+        if (acknowledge) {
+          this._sendJson({channel, error: "Subscription rejected", type: "error"})
+        }
+        return false
+      }
+    } catch (error) {
+      this.logger.warn(() => ["Websocket subscription filter failed", error])
+      if (acknowledge) {
+        this._sendJson({channel, error: "Subscription rejected", type: "error"})
+      }
+      return false
+    }
+
+    this.addSubscription(channel)
+    if (acknowledge) {
+      this._sendJson({channel, type: "subscribed"})
+    }
+    return true
+  }
+
+  _handleClose() {
+    void this._teardownChannel()
+    this.events.emit("close")
+  }
+
+  async _teardownChannel() {
+    try {
+      await this.channel?.unsubscribed?.()
+    } catch (error) {
+      this.logger.error(() => ["Failed to teardown websocket channel", error])
+    }
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {any} [args.payload] - Payload data.
+   * @returns {Promise<boolean>} - Whether the event should be sent.
+   */
+  async _passesWebsocketEventFilters({channel, payload}) {
+    const filters = this.configuration.getWebsocketEventFilters()
+
+    if (filters.length === 0) return true
+
+    for (const filter of filters) {
+      const allowed = await filter({
+        channel,
+        payload,
+        request: this.upgradeRequest,
+        client: this.client,
+        websocketSession: this
+      })
+
+      if (!allowed) return false
+    }
+
+    return true
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @returns {Promise<boolean>} - Whether the subscription should be accepted.
+   */
+  async _passesWebsocketSubscriptionFilters({channel}) {
+    const filters = this.configuration.getWebsocketSubscriptionFilters()
+
+    if (filters.length === 0) return true
+
+    for (const filter of filters) {
+      const allowed = await filter({
+        channel,
+        request: this.upgradeRequest,
+        client: this.client,
+        websocketSession: this
+      })
+
+      if (!allowed) return false
+    }
+
+    return true
   }
 
   /**

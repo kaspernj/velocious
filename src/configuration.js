@@ -27,7 +27,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, timezoneOffsetMinutes, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, timezoneOffsetMinutes, websocketEventFilters, websocketSubscriptionFilters, websocketChannelResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -45,6 +45,9 @@ export default class VelociousConfiguration {
     this._testing = testing
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._websocketEvents = undefined
+    this._websocketEventFilters = websocketEventFilters
+    this._websocketSubscriptionFilters = websocketSubscriptionFilters
+    this._websocketChannelResolver = websocketChannelResolver
     this._logging = logging
     this._errorEvents = new EventEmitter()
 
@@ -396,6 +399,49 @@ export default class VelociousConfiguration {
    */
   setWebsocketEvents(websocketEvents) {
     this._websocketEvents = websocketEvents
+  }
+
+  /** @returns {import("./configuration-types.js").WebsocketEventFilterType[]} - The websocket event filters. */
+  getWebsocketEventFilters() {
+    if (!this._websocketEventFilters) return []
+
+    return Array.isArray(this._websocketEventFilters) ? this._websocketEventFilters : [this._websocketEventFilters]
+  }
+
+  /**
+   * @param {import("./configuration-types.js").WebsocketEventFilterType | import("./configuration-types.js").WebsocketEventFilterType[]} filters - Filters list.
+   * @returns {void} - No return value.
+   */
+  setWebsocketEventFilters(filters) {
+    this._websocketEventFilters = filters
+  }
+
+  /** @returns {import("./configuration-types.js").WebsocketSubscriptionFilterType[]} - The websocket subscription filters. */
+  getWebsocketSubscriptionFilters() {
+    if (!this._websocketSubscriptionFilters) return []
+
+    return Array.isArray(this._websocketSubscriptionFilters) ? this._websocketSubscriptionFilters : [this._websocketSubscriptionFilters]
+  }
+
+  /**
+   * @param {import("./configuration-types.js").WebsocketSubscriptionFilterType | import("./configuration-types.js").WebsocketSubscriptionFilterType[]} filters - Filters list.
+   * @returns {void} - No return value.
+   */
+  setWebsocketSubscriptionFilters(filters) {
+    this._websocketSubscriptionFilters = filters
+  }
+
+  /** @returns {import("./configuration-types.js").WebsocketChannelResolverType | undefined} - The websocket channel resolver. */
+  getWebsocketChannelResolver() {
+    return this._websocketChannelResolver
+  }
+
+  /**
+   * @param {import("./configuration-types.js").WebsocketChannelResolverType} resolver - Resolver.
+   * @returns {void} - No return value.
+   */
+  setWebsocketChannelResolver(resolver) {
+    this._websocketChannelResolver = resolver
   }
 
   /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
