@@ -1,11 +1,11 @@
 # README
 
 * Concurrent multi threadded web server
-* Database framework ala Rails
-* Database models ala Rails
+* Database framework with familiar MVC concepts
+* Database models with migrations and validations
 * Database models that work almost the same in frontend and backend
-* Migrations ala Rails
-* Controllers and views ala Rails
+* Migrations for schema changes
+* Controllers and views for HTTP endpoints
 
 # Setup
 
@@ -559,9 +559,9 @@ this.getConfiguration().getWebsocketEvents().publish(channel, payload)
 this.renderJsonArg({status: "published"})
 ```
 
-## Websocket channels (Rails-style)
+## Websocket channels
 
-You can resolve websocket channel classes from subscribe messages (ActionCable-style) and let them decide which streams to allow:
+You can resolve websocket channel classes from subscribe messages and let them decide which streams to allow:
 
 ```js
 import WebsocketChannel from "velocious/build/src/http-server/websocket-channel.js"
