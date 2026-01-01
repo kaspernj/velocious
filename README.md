@@ -618,6 +618,8 @@ If you are developing on Velocious, you can run the tests with:
 ./run-tests.sh
 ```
 
+Tests default to a 60-second timeout. Override per test with `{timeoutMs: 5000}` or set a suite-wide default via `configureTests({defaultTimeoutMs: 30000})`.
+
 # Writing a request test
 
 First create a test file under something like the following path 'src/routes/accounts/create-test.js' with something like the following content:

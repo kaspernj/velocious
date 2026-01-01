@@ -87,16 +87,21 @@ function normalizeTags(tags) {
 }
 
 const testConfig = {
-  excludeTags: []
+  excludeTags: [],
+  defaultTimeoutMs: 60000
 }
 
 /**
  * @param {object} args - Options.
  * @param {string[] | string} [args.excludeTags] - Tags to exclude.
+ * @param {number} [args.defaultTimeoutMs] - Default timeout in milliseconds.
  * @returns {void}
  */
-function configureTests({excludeTags} = {}) {
+function configureTests({excludeTags, defaultTimeoutMs} = {}) {
   testConfig.excludeTags = normalizeTags(excludeTags)
+  if (typeof defaultTimeoutMs === "number") {
+    testConfig.defaultTimeoutMs = defaultTimeoutMs
+  }
 }
 
 /**
