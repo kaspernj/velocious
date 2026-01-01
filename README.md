@@ -546,6 +546,8 @@ socket.addEventListener("message", (event) => {
 })
 ```
 
+If `websocketChannelResolver` is configured, subscribe messages are treated as channel identifiers (see below).
+
 ## Broadcast an event from backend code
 
 Any backend code (controllers, services, jobs) can publish to subscribed websocket clients using the shared event bus on the configuration:
@@ -559,7 +561,7 @@ this.renderJsonArg({status: "published"})
 
 ## Websocket channels (Rails-style)
 
-You can resolve a websocket channel class per connection and let it subscribe clients server-side:
+You can resolve websocket channel classes from subscribe messages (ActionCable-style) and let them decide which streams to allow:
 
 ```js
 import WebsocketChannel from "velocious/build/src/http-server/websocket-channel.js"
@@ -578,16 +580,31 @@ class NewsChannel extends WebsocketChannel {
 
 const configuration = new Configuration({
   // ...
-  websocketChannelResolver: ({request}) => {
-    const query = request?.path?.().split("?")[1]
-    const channel = new URLSearchParams(query).get("channel")
+  websocketChannelResolver: ({request, subscription}) => {
+    const channel = subscription?.channel
+    const params = subscription?.params || {}
 
     if (channel === "news") return NewsChannel
+
+    const query = request?.path?.().split("?")[1]
+    const legacyChannel = new URLSearchParams(query).get("channel")
+
+    if (legacyChannel === "news") return NewsChannel
   }
 })
 ```
 
 Channel classes are the recommended place to authorize subscriptions and decide which streams a connection should receive. If authorization fails, simply return without calling `streamFrom` or close the socket in `subscribed()`.
+
+Subscribe from the client using a channel identifier and params:
+
+```js
+socket.send(JSON.stringify({
+  type: "subscribe",
+  channel: "news",
+  params: {token: "secret"}
+}))
+```
 
 ## Combine: subscribe and invoke another action
 

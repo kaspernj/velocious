@@ -7,12 +7,14 @@ export default class VelociousHttpServerWebsocketChannel {
    * @param {import("./client/request.js").default | import("./client/websocket-request.js").default | undefined} args.request - Request instance.
    * @param {import("./client/index.js").default} args.client - Client instance.
    * @param {import("./client/websocket-session.js").default} args.websocketSession - Websocket session.
+   * @param {Record<string, unknown>} [args.subscriptionParams] - Params from subscribe message.
    */
-  constructor({configuration, request, client, websocketSession}) {
+  constructor({configuration, request, client, websocketSession, subscriptionParams}) {
     this.configuration = configuration
     this.request = request
     this.client = client
     this.websocketSession = websocketSession
+    this.subscriptionParams = subscriptionParams
     this._params = this._buildParams()
   }
 
@@ -68,6 +70,10 @@ export default class VelociousHttpServerWebsocketChannel {
           params[key] = value
         }
       }
+    }
+
+    if (this.subscriptionParams && typeof this.subscriptionParams === "object") {
+      Object.assign(params, this.subscriptionParams)
     }
 
     return params

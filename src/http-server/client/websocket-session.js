@@ -15,6 +15,7 @@ const WEBSOCKET_OPCODE_PONG = 0xA
 export default class VelociousHttpServerClientWebsocketSession {
   events = new EventEmitter()
   subscriptions = new Set()
+  channels = new Set()
 
   /**
    * @param {object} args - Options object.
@@ -89,15 +90,15 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       if (!resolved) return
 
-      this.channel = typeof resolved === "function"
+      const channel = typeof resolved === "function"
         ? new resolved({client: this.client, configuration: this.configuration, request: this.upgradeRequest, websocketSession: this})
         : resolved
 
-      if (this.channel && !(this.channel instanceof WebsocketChannel)) {
+      if (channel && !(channel instanceof WebsocketChannel)) {
         throw new Error("Resolved websocket channel must extend WebsocketChannel")
       }
 
-      await this.channel?.subscribed?.()
+      await this._registerChannel(channel)
     } catch (error) {
       this.logger.error(() => ["Failed to initialize websocket channel", error])
     }
@@ -119,10 +120,16 @@ export default class VelociousHttpServerClientWebsocketSession {
    */
   async _handleMessage(message) {
     if (message.type === "subscribe") {
-      const {channel} = message
+      const {channel, params} = message
 
       if (!channel) throw new Error("channel is required for subscribe")
-      await this.subscribeToChannel(channel, {acknowledge: true})
+      const resolver = this.configuration.getWebsocketChannelResolver?.()
+
+      if (resolver) {
+        await this._handleChannelSubscription({channel, params})
+      } else {
+        await this.subscribeToChannel(channel, {acknowledge: true})
+      }
 
       return
     }
@@ -301,10 +308,64 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   async _teardownChannel() {
+    for (const channel of this.channels) {
+      await this._teardownSingleChannel(channel)
+    }
+    this.channels.clear()
+  }
+
+  async _teardownSingleChannel(channel) {
     try {
-      await this.channel?.unsubscribed?.()
+      await channel?.unsubscribed?.()
     } catch (error) {
       this.logger.error(() => ["Failed to teardown websocket channel", error])
+    }
+  }
+
+  async _registerChannel(channel) {
+    if (!channel) return
+
+    this.channels.add(channel)
+    await channel?.subscribed?.()
+  }
+
+  async _handleChannelSubscription({channel, params}) {
+    const resolver = this.configuration.getWebsocketChannelResolver?.()
+
+    if (!resolver) return
+
+    try {
+      const resolved = await resolver({
+        client: this.client,
+        configuration: this.configuration,
+        request: this.upgradeRequest,
+        subscription: {channel, params},
+        websocketSession: this
+      })
+
+      if (!resolved) {
+        this._sendJson({channel, error: "Subscription rejected", type: "error"})
+        return
+      }
+
+      const channelInstance = typeof resolved === "function"
+        ? new resolved({
+          client: this.client,
+          configuration: this.configuration,
+          request: this.upgradeRequest,
+          subscriptionParams: params,
+          websocketSession: this
+        })
+        : resolved
+
+      if (channelInstance && !(channelInstance instanceof WebsocketChannel)) {
+        throw new Error("Resolved websocket channel must extend WebsocketChannel")
+      }
+
+      await this._registerChannel(channelInstance)
+    } catch (error) {
+      this.logger.warn(() => ["Websocket channel subscription failed", error])
+      this._sendJson({channel, error: "Subscription rejected", type: "error"})
     }
   }
 

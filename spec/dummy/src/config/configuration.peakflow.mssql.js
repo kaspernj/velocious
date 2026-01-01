@@ -80,8 +80,8 @@ export default new Configuration({
   },
   locales: ["de", "en"],
   testing: `${dummyDirectory()}/src/config/testing.js`,
-  websocketChannelResolver: ({request}) => {
-    const channel = queryParam(request, "channel")
+  websocketChannelResolver: ({request, subscription}) => {
+    const channel = subscription?.channel || queryParam(request, "channel")
 
     if (channel === "test") return TestWebsocketChannel
   }

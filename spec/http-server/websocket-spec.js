@@ -52,7 +52,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
   it("subscribes via websocket channels on connect", async () => {
     await Dummy.run(async () => {
-      const socket = new WebSocket("ws://127.0.0.1:3006/websocket?channel=test&subscribe=updates&token=allow")
+      const socket = new WebSocket("ws://127.0.0.1:3006/websocket")
       const openPromise = new Promise((resolve, reject) => {
         socket.addEventListener("open", () => resolve())
         socket.addEventListener("error", (event) => {
@@ -84,6 +84,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await openPromise
+        socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "updates", token: "allow"}}))
         await subscribedPromise
       } finally {
         socket.close()
@@ -93,7 +94,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
   it("does not subscribe when channel authorization fails", async () => {
     await Dummy.run(async () => {
-      const socket = new WebSocket("ws://127.0.0.1:3006/websocket?channel=test&subscribe=updates&token=deny")
+      const socket = new WebSocket("ws://127.0.0.1:3006/websocket")
       const openPromise = new Promise((resolve, reject) => {
         socket.addEventListener("open", () => resolve())
         socket.addEventListener("error", (event) => {
@@ -120,6 +121,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await openPromise
+        socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "updates", token: "deny"}}))
         await new Promise((resolve) => setTimeout(resolve, 300))
 
         expect(receivedPayload).toEqual(undefined)
