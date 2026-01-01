@@ -50,69 +50,6 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
     })
   })
 
-  it("blocks subscriptions when the subscription filter rejects them", async () => {
-    await Dummy.run(async () => {
-      const client = new WebsocketClient({url: "ws://127.0.0.1:3006/websocket?token=deny"})
-
-      try {
-        await client.connect()
-
-        let receivedPayload
-        client.on("protected:news", (payload) => {
-          receivedPayload = payload
-        })
-
-        await new Promise((resolve) => setTimeout(resolve, 100))
-
-        await client.post("/api/broadcast-event", {channel: "protected:news", payload: {headline: "blocked"}})
-
-        await new Promise((resolve) => setTimeout(resolve, 300))
-
-        expect(receivedPayload).toEqual(undefined)
-      } finally {
-        await client.close()
-      }
-    })
-  })
-
-  it("filters events per websocket client before sending", async () => {
-    await Dummy.run(async () => {
-      const allowedClient = new WebsocketClient({url: "ws://127.0.0.1:3006/websocket?eventToken=allow"})
-      const blockedClient = new WebsocketClient({url: "ws://127.0.0.1:3006/websocket?eventToken=deny"})
-
-      try {
-        await Promise.all([allowedClient.connect(), blockedClient.connect()])
-
-        const allowedEvent = new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error("Timed out waiting for allowed event")), 2000)
-          const unsubscribe = allowedClient.on("filtered:updates", (payload) => {
-            clearTimeout(timeout)
-            unsubscribe()
-            resolve(payload)
-          })
-        })
-
-        let blockedPayload
-        blockedClient.on("filtered:updates", (payload) => {
-          blockedPayload = payload
-        })
-
-        await new Promise((resolve) => setTimeout(resolve, 100))
-
-        await allowedClient.post("/api/broadcast-event", {channel: "filtered:updates", payload: {headline: "visible"}})
-
-        const payload = await allowedEvent
-
-        await new Promise((resolve) => setTimeout(resolve, 300))
-
-        expect(payload.headline).toEqual("visible")
-        expect(blockedPayload).toEqual(undefined)
-      } finally {
-        await Promise.all([allowedClient.close(), blockedClient.close()])
-      }
-    })
-  })
-
   it("subscribes via websocket channels on connect", async () => {
     await Dummy.run(async () => {
       const socket = new WebSocket("ws://127.0.0.1:3006/websocket?channel=test&subscribe=updates&token=allow")
@@ -156,6 +93,51 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         const payload = await eventPromise
 
         expect(payload.headline).toEqual("from-channel")
+      } finally {
+        socket.close()
+        await client.close()
+      }
+    })
+  })
+
+  it("does not subscribe when channel authorization fails", async () => {
+    await Dummy.run(async () => {
+      const socket = new WebSocket("ws://127.0.0.1:3006/websocket?channel=test&subscribe=updates&token=deny")
+      const openPromise = new Promise((resolve, reject) => {
+        socket.addEventListener("open", () => resolve())
+        socket.addEventListener("error", (event) => {
+          reject(event?.error || new Error("Websocket connection error"))
+        })
+      })
+
+      let receivedPayload
+      socket.addEventListener("message", (event) => {
+        const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+
+        if (!raw) return
+
+        try {
+          const msg = JSON.parse(raw)
+
+          if (msg.type === "event" && msg.channel === "channel:updates") {
+            receivedPayload = msg.payload
+          }
+        } catch {
+          // Ignore invalid payloads for this test
+        }
+      })
+
+      const client = new WebsocketClient()
+
+      try {
+        await openPromise
+        await client.connect()
+
+        await client.post("/api/broadcast-event", {channel: "channel:updates", payload: {headline: "blocked"}})
+
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        expect(receivedPayload).toEqual(undefined)
       } finally {
         socket.close()
         await client.close()

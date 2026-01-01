@@ -8,7 +8,10 @@ export default class TestWebsocketChannel extends WebsocketChannel {
     const token = params.token
     const subscribe = params.subscribe
 
-    if (token !== "allow") return
+    if (token !== "allow") {
+      this.websocketSession.sendGoodbye(this.client)
+      return
+    }
     if (!subscribe) return
 
     await this.streamFrom(`channel:${subscribe}`)

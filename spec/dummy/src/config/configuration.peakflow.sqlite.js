@@ -10,16 +10,6 @@ import SqliteDriver from "../../../../src/database/drivers/sqlite/index.js"
 import path from "path"
 import requireContext from "require-context"
 import SingleMultiUsePool from "../../../../src/database/pool/single-multi-use.js"
-import TestWebsocketChannel from "../channels/test-websocket-channel.js"
-
-const queryParam = (request, key) => {
-  const pathValue = request?.path?.()
-  const query = pathValue?.split("?")[1]
-
-  if (!query) return
-
-  return new URLSearchParams(query).get(key) || undefined
-}
 
 export default new Configuration({
   database: {
@@ -69,28 +59,5 @@ export default new Configuration({
     en: ["en", "de"]
   },
   locales: ["de", "en"],
-  testing: `${dummyDirectory()}/src/config/testing.js`,
-  websocketSubscriptionFilters: [
-    ({channel, request}) => {
-      if (!channel.startsWith("protected:")) return true
-
-      const token = request?.params?.()?.token || queryParam(request, "token")
-
-      return token === "allow"
-    }
-  ],
-  websocketEventFilters: [
-    ({channel, request}) => {
-      if (!channel.startsWith("filtered:")) return true
-
-      const token = request?.params?.()?.eventToken || queryParam(request, "eventToken")
-
-      return token === "allow"
-    }
-  ],
-  websocketChannelResolver: ({request}) => {
-    const channel = queryParam(request, "channel")
-
-    if (channel === "test") return TestWebsocketChannel
-  }
+  testing: `${dummyDirectory()}/src/config/testing.js`
 })

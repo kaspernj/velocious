@@ -9,14 +9,6 @@
  */
 
 /**
- * @typedef {function({channel: string, payload: any, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, websocketSession: import("./http-server/client/websocket-session.js").default}): boolean | Promise<boolean>} WebsocketEventFilterType
- */
-
-/**
- * @typedef {function({channel: string, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, websocketSession: import("./http-server/client/websocket-session.js").default}): boolean | Promise<boolean>} WebsocketSubscriptionFilterType
- */
-
-/**
  * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, websocketSession: import("./http-server/client/websocket-session.js").default, configuration: import("./configuration.js").default}): typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void | Promise<typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void>} WebsocketChannelResolverType
  */
 
@@ -97,8 +89,6 @@
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
- * @property {WebsocketEventFilterType | WebsocketEventFilterType[]} [websocketEventFilters] - Filters to validate websocket events before broadcasting.
- * @property {WebsocketSubscriptionFilterType | WebsocketSubscriptionFilterType[]} [websocketSubscriptionFilters] - Filters to validate websocket subscriptions before accepting.
  * @property {WebsocketChannelResolverType} [websocketChannelResolver] - Resolve a websocket channel class/instance for each connection.
  */
 

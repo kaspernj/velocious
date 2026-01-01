@@ -557,31 +557,6 @@ this.getConfiguration().getWebsocketEvents().publish(channel, payload)
 this.renderJsonArg({status: "published"})
 ```
 
-## Filter websocket subscriptions and events
-
-You can validate websocket subscriptions and outgoing events using configuration filters. These run before a subscription is accepted and before an event is sent to a client.
-
-```js
-const configuration = new Configuration({
-  // ...
-  websocketSubscriptionFilters: [
-    ({channel, request}) => {
-      const token = request?.header("x-api-token")
-
-      return channel !== "admin" || token === process.env.ADMIN_TOKEN
-    }
-  ],
-  websocketEventFilters: [
-    ({channel, payload, request}) => {
-      if (channel !== "projects") return true
-
-      const allowedProjectIds = request?.params()?.projectIds || []
-      return allowedProjectIds.includes(payload?.id)
-    }
-  ]
-})
-```
-
 ## Websocket channels (Rails-style)
 
 You can resolve a websocket channel class per connection and let it subscribe clients server-side:

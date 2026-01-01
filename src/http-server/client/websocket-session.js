@@ -68,15 +68,6 @@ export default class VelociousHttpServerClientWebsocketSession {
   async sendEvent(channel, payload) {
     if (!this.hasSubscription(channel)) return
 
-    try {
-      const allowed = await this._passesWebsocketEventFilters({channel, payload})
-
-      if (!allowed) return
-    } catch (error) {
-      this.logger.warn(() => ["Websocket event filter failed", error])
-      return
-    }
-
     this._sendJson({channel, payload, type: "event"})
   }
 
@@ -297,23 +288,6 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<boolean>} - Whether the subscription was added.
    */
   async subscribeToChannel(channel, {acknowledge = true} = {}) {
-    try {
-      const allowed = await this._passesWebsocketSubscriptionFilters({channel})
-
-      if (!allowed) {
-        if (acknowledge) {
-          this._sendJson({channel, error: "Subscription rejected", type: "error"})
-        }
-        return false
-      }
-    } catch (error) {
-      this.logger.warn(() => ["Websocket subscription filter failed", error])
-      if (acknowledge) {
-        this._sendJson({channel, error: "Subscription rejected", type: "error"})
-      }
-      return false
-    }
-
     this.addSubscription(channel)
     if (acknowledge) {
       this._sendJson({channel, type: "subscribed"})
@@ -332,56 +306,6 @@ export default class VelociousHttpServerClientWebsocketSession {
     } catch (error) {
       this.logger.error(() => ["Failed to teardown websocket channel", error])
     }
-  }
-
-  /**
-   * @param {object} args - Options object.
-   * @param {string} args.channel - Channel name.
-   * @param {any} [args.payload] - Payload data.
-   * @returns {Promise<boolean>} - Whether the event should be sent.
-   */
-  async _passesWebsocketEventFilters({channel, payload}) {
-    const filters = this.configuration.getWebsocketEventFilters()
-
-    if (filters.length === 0) return true
-
-    for (const filter of filters) {
-      const allowed = await filter({
-        channel,
-        payload,
-        request: this.upgradeRequest,
-        client: this.client,
-        websocketSession: this
-      })
-
-      if (!allowed) return false
-    }
-
-    return true
-  }
-
-  /**
-   * @param {object} args - Options object.
-   * @param {string} args.channel - Channel name.
-   * @returns {Promise<boolean>} - Whether the subscription should be accepted.
-   */
-  async _passesWebsocketSubscriptionFilters({channel}) {
-    const filters = this.configuration.getWebsocketSubscriptionFilters()
-
-    if (filters.length === 0) return true
-
-    for (const filter of filters) {
-      const allowed = await filter({
-        channel,
-        request: this.upgradeRequest,
-        client: this.client,
-        websocketSession: this
-      })
-
-      if (!allowed) return false
-    }
-
-    return true
   }
 
   /**
