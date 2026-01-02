@@ -53,6 +53,7 @@ export default class VelociousHttpServerClientRequestRunner {
         const startTimeMs = Date.now()
         let timeoutId
         let timeoutReject
+        let timedOut = false
 
         const setRequestTimeoutSeconds = (timeoutSeconds) => {
           if (timeoutId) {
@@ -79,7 +80,10 @@ export default class VelociousHttpServerClientRequestRunner {
         }
 
         const timeoutPromise = new Promise((_, reject) => {
-          timeoutReject = reject
+          timeoutReject = (error) => {
+            timedOut = true
+            reject(error)
+          }
         })
 
         response.setRequestTimeoutMsChangeHandler((timeoutSeconds) => {
@@ -88,10 +92,18 @@ export default class VelociousHttpServerClientRequestRunner {
 
         setRequestTimeoutSeconds(configuration.getRequestTimeoutMs?.())
 
-        try {
-          const resolvePromise = routesResolver.resolve()
+        let resolvePromise
 
+        try {
+          resolvePromise = routesResolver.resolve()
           await Promise.race([resolvePromise, timeoutPromise])
+        } catch (error) {
+          if (timedOut && resolvePromise) {
+            void resolvePromise.catch((resolveError) => {
+              this.logger.warn(() => ["Request finished after timeout", resolveError])
+            })
+          }
+          throw error
         } finally {
           if (timeoutId) clearTimeout(timeoutId)
         }
