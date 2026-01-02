@@ -316,7 +316,9 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   async _teardownSingleChannel(channel) {
     try {
-      await channel?.unsubscribed?.()
+      await this._withConnections(async () => {
+        await channel?.unsubscribed?.()
+      })
     } catch (error) {
       this.logger.error(() => ["Failed to teardown websocket channel", error])
     }
@@ -326,7 +328,15 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (!channel) return
 
     this.channels.add(channel)
-    await channel?.subscribed?.()
+    await this._withConnections(async () => {
+      await channel?.subscribed?.()
+    })
+  }
+
+  async _withConnections(callback) {
+    await this.configuration.ensureConnections(async () => {
+      await callback()
+    })
   }
 
   async _handleChannelSubscription({channel, params}) {
