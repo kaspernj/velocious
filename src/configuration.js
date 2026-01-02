@@ -27,7 +27,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -44,6 +44,7 @@ export default class VelociousConfiguration {
     this._initializers = initializers
     this._testing = testing
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
+    this._requestTimeoutMs = requestTimeoutMs
     this._websocketEvents = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._logging = logging
@@ -138,6 +139,20 @@ export default class VelociousConfiguration {
    * @returns {string} - The environment.
    */
   getEnvironment() { return digg(this, "_environment") }
+
+  /**
+   * @returns {number | undefined} - Request timeout in ms.
+   */
+  getRequestTimeoutMs() {
+    const value = typeof this._requestTimeoutMs === "function"
+      ? this._requestTimeoutMs()
+      : this._requestTimeoutMs
+
+    if (typeof value === "number") return value
+    if (this.getEnvironment() === "test") return 5000
+
+    return undefined
+  }
 
   /**
    * @param {string} newEnvironment - New environment.

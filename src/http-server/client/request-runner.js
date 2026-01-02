@@ -50,8 +50,27 @@ export default class VelociousHttpServerClientRequestRunner {
       } else {
         await this.logger.debug("Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
+        const requestTimeoutMs = configuration.getRequestTimeoutMs?.()
+        let timeoutId
 
-        await routesResolver.resolve()
+        try {
+          const resolvePromise = routesResolver.resolve()
+
+          if (typeof requestTimeoutMs === "number" && Number.isFinite(requestTimeoutMs) && requestTimeoutMs > 0) {
+            await Promise.race([
+              resolvePromise,
+              new Promise((_, reject) => {
+                timeoutId = setTimeout(() => {
+                  reject(new Error(`Request timed out after ${requestTimeoutMs}ms`))
+                }, requestTimeoutMs)
+              })
+            ])
+          } else {
+            await resolvePromise
+          }
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId)
+        }
       }
     } catch (e) {
       const error = ensureError(e)
