@@ -16,6 +16,9 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   async checkout() {
     if (!this.connection) {
       this.connection = await this.spawnConnection()
+      this.logger.debugLowLevel(() => ["checkoutConnection", {identifier: this.identifier, reused: false}])
+    } else {
+      this.logger.debugLowLevel(() => ["checkoutConnection", {identifier: this.identifier, reused: true}])
     }
 
     return this.connection
@@ -28,6 +31,24 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     const connection = await this.checkout()
 
     await callback(connection)
+  }
+
+  /**
+   * Closes the cached connection if it exists.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeAll() {
+    if (!this.connection) return
+
+    const connection = this.connection
+
+    this.connection = undefined
+
+    if (typeof connection.close === "function") {
+      await connection.close()
+    } else if (typeof connection.disconnect === "function") {
+      await connection.disconnect()
+    }
   }
 
   /** @returns {import("../drivers/base.js").default} - The current connection.  */

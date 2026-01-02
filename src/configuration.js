@@ -513,4 +513,28 @@ export default class VelociousConfiguration {
       await this.withConnections(callback)
     }
   }
+
+  /**
+   * Closes all initialized database pools and clears global connections.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeDatabasePools() {
+    const constructors = new Set()
+
+    for (const pool of Object.values(this.databasePools)) {
+      if (!pool) continue
+
+      if (typeof pool.closeAll === "function") {
+        await pool.closeAll()
+      }
+
+      if (pool.constructor && typeof pool.constructor.clearGlobalConnections === "function") {
+        constructors.add(pool.constructor)
+      }
+    }
+
+    for (const constructor of constructors) {
+      constructor.clearGlobalConnections(this)
+    }
+  }
 }

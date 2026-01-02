@@ -44,6 +44,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     connection.setIdSeq(undefined)
 
     this.connections.push(connection)
+
+    this.logger.debugLowLevel(() => ["checkinConnection", {identifier: this.identifier, id}])
   }
 
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
@@ -60,6 +62,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(id)
     this.connectionsInUse[id] = connection
+
+    this.logger.debugLowLevel(() => ["checkoutConnection", {identifier: this.identifier, id}])
 
     return connection
   }
@@ -161,6 +165,29 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const mapForConfiguration = klass.globalConnections.get(this.configuration)
 
     return mapForConfiguration?.[this.identifier]
+  }
+
+  /**
+   * Closes all active and cached connections for this pool.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeAll() {
+    const connections = new Set([
+      ...this.connections,
+      ...Object.values(this.connectionsInUse),
+      this.getGlobalConnection()
+    ].filter(Boolean))
+
+    for (const connection of connections) {
+      if (typeof connection.close === "function") {
+        await connection.close()
+      } else if (typeof connection.disconnect === "function") {
+        await connection.disconnect()
+      }
+    }
+
+    this.connections = []
+    this.connectionsInUse = {}
   }
 
   /**
