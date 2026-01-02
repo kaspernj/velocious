@@ -25,7 +25,7 @@ class VelociousDatabasePoolBase {
    * @param {Configuration} [_configuration] - Configuration instance.
    * @returns {void} - No return value.
    */
-  static clearGlobalConnections(_configuration) {}
+  static clearGlobalConnections() {}
 
   /**
    * @param {object} args - Options object.
