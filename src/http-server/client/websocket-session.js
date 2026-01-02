@@ -334,7 +334,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   async _withConnections(callback) {
-    await this.configuration.withConnections(async () => {
+    await this.configuration.ensureConnections(async () => {
       await callback()
     })
   }

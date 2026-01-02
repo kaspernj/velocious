@@ -297,6 +297,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   async importTestingConfigPath() {
     const testingConfigPath = this.getConfiguration().getTesting()
 
+    if (!testingConfigPath) return
+
     const testingImport = await import(testingConfigPath)
     const testingDefault = testingImport.default
 
