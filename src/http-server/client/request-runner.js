@@ -50,24 +50,48 @@ export default class VelociousHttpServerClientRequestRunner {
       } else {
         await this.logger.debug("Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
-        const requestTimeoutMs = configuration.getRequestTimeoutMs?.()
+        const startTimeMs = Date.now()
         let timeoutId
+        let timeoutReject
+
+        const setRequestTimeoutSeconds = (timeoutSeconds) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = undefined
+          }
+
+          if (typeof timeoutSeconds !== "number" || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+            return
+          }
+
+          const timeoutMs = timeoutSeconds * 1000
+          const elapsedMs = Date.now() - startTimeMs
+          const remainingMs = timeoutMs - elapsedMs
+
+          if (remainingMs <= 0) {
+            timeoutReject?.(new Error(`Request timed out after ${timeoutSeconds}s`))
+            return
+          }
+
+          timeoutId = setTimeout(() => {
+            timeoutReject?.(new Error(`Request timed out after ${timeoutSeconds}s`))
+          }, remainingMs)
+        }
+
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutReject = reject
+        })
+
+        response.setRequestTimeoutMsChangeHandler((timeoutSeconds) => {
+          setRequestTimeoutSeconds(timeoutSeconds)
+        })
+
+        setRequestTimeoutSeconds(configuration.getRequestTimeoutMs?.())
 
         try {
           const resolvePromise = routesResolver.resolve()
 
-          if (typeof requestTimeoutMs === "number" && Number.isFinite(requestTimeoutMs) && requestTimeoutMs > 0) {
-            await Promise.race([
-              resolvePromise,
-              new Promise((_, reject) => {
-                timeoutId = setTimeout(() => {
-                  reject(new Error(`Request timed out after ${requestTimeoutMs}ms`))
-                }, requestTimeoutMs)
-              })
-            ])
-          } else {
-            await resolvePromise
-          }
+          await Promise.race([resolvePromise, timeoutPromise])
         } finally {
           if (timeoutId) clearTimeout(timeoutId)
         }

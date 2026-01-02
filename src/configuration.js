@@ -141,17 +141,19 @@ export default class VelociousConfiguration {
   getEnvironment() { return digg(this, "_environment") }
 
   /**
-   * @returns {number | undefined} - Request timeout in ms.
+   * @returns {number} - Request timeout in seconds.
    */
   getRequestTimeoutMs() {
+    const envValue = process.env.VELOCIOUS_REQUEST_TIMEOUT_MS
+    const envTimeout = envValue !== undefined ? Number(envValue) : undefined
     const value = typeof this._requestTimeoutMs === "function"
       ? this._requestTimeoutMs()
       : this._requestTimeoutMs
 
     if (typeof value === "number") return value
-    if (this.getEnvironment() === "test") return 5000
+    if (typeof envTimeout === "number" && Number.isFinite(envTimeout)) return envTimeout
 
-    return undefined
+    return 60
   }
 
   /**
