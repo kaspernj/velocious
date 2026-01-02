@@ -79,9 +79,5 @@ export default class Dummy {
     if (this.application?.isActive()) {
       await this.application.stop()
     }
-
-    if (typeof dummyConfiguration.closeDatabasePools === "function") {
-      await dummyConfiguration.closeDatabasePools()
-    }
   }
 }
