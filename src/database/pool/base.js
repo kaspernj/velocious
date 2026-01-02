@@ -21,6 +21,13 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Clears any global connections for the given configuration.
+   * @param {Configuration} [_configuration] - Configuration instance.
+   * @returns {void} - No return value.
+   */
+  static clearGlobalConnections(_configuration) {}
+
+  /**
    * @param {object} args - Options object.
    * @param {Configuration} args.configuration - Configuration instance.
    * @param {string} args.identifier - Identifier.
@@ -144,6 +151,12 @@ class VelociousDatabasePoolBase {
   async ensureGlobalConnection() {
     return await this.checkout()
   }
+
+  /**
+   * Closes all connections for this pool.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeAll() {}
 }
 
 baseMethodsForward(VelociousDatabasePoolBase)
