@@ -17,6 +17,8 @@ class FakePool {
     this.closed = false
   }
 
+  setCurrent() {}
+
   async closeAll() {
     this.closed = true
   }

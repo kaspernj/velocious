@@ -487,7 +487,8 @@ export default class VelociousConfiguration {
           (
             error.message == "ID hasn't been set for this async context" ||
             error.message == "A connection hasn't been made yet" ||
-            error.message.startsWith("No async context set for database connection")
+            error.message.startsWith("No async context set for database connection") ||
+            error.message.startsWith("Connection ") && error.message.includes("doesn't exist any more")
           )
         ) {
           // Ignore

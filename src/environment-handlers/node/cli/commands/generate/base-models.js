@@ -282,11 +282,11 @@ export default class DbGenerateModel extends BaseCommand {
       return "boolean"
     } else if (type == "json") {
       return "Record<string, any>"
-    } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid"].includes(type)) {
+    } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
     } else if (["bit", "bigint", "float", "int", "integer", "smallint", "tinyint"].includes(type)) {
       return "number"
-    } else if (["date", "datetime"].includes(type)) {
+    } else if (["date", "datetime", "timestamp without time zone"].includes(type)) {
       return "Date"
     } else {
       console.error(`Unknown column type: ${type}`)
@@ -300,7 +300,7 @@ export default class DbGenerateModel extends BaseCommand {
   jsDocSetterTypeFromColumn(column) {
     const type = column.getType()
 
-    if (["date", "datetime"].includes(type)) {
+    if (["date", "datetime", "timestamp without time zone"].includes(type)) {
       return "Date | string"
     }
 
