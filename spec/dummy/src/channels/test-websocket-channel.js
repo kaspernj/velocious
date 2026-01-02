@@ -1,5 +1,6 @@
 // @ts-check
 
+import User from "../models/user.js"
 import WebsocketChannel from "../../../../src/http-server/websocket-channel.js"
 
 export default class TestWebsocketChannel extends WebsocketChannel {
@@ -13,6 +14,9 @@ export default class TestWebsocketChannel extends WebsocketChannel {
       return
     }
     if (!subscribe) return
+    if (params.checkDb) {
+      await User.first()
+    }
 
     await this.streamFrom(String(subscribe))
   }

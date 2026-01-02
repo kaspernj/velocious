@@ -10,6 +10,7 @@ Prefer functional tests over raw SQL assertions because SQL varies by database. 
 After changing base model generator logic, run `npx velocious g:base-models` from `spec/dummy` so the generated base models stay in sync.
 `spec/dummy/db/structure-default.sql` is a generated schema snapshot; don't edit it manually, and commit updates when migrations/tests change it.
 Always add tests for new or changed behavior.
+Websocket channel callbacks should use `configuration.ensureConnections(...)` so existing async-context DB connections are reused; reserve `configuration.withConnections(...)` for creating new async-context connections when you truly need a fresh context (e.g., concurrent work).
 
 ## Verification commands
 
