@@ -429,6 +429,39 @@ class Expect extends BaseExpect {
    * @returns {void} - No return value.
    */
   toEqual(result) {
+    if (this._object instanceof Set && result instanceof Set) {
+      const objectPrint = formatValue(this._object)
+      const resultPrint = formatValue(result)
+      const actualItems = Array.from(this._object)
+      const expectedItems = Array.from(result)
+      const missingItems = expectedItems.filter((expectedItem) => {
+        return !actualItems.some((actualItem) => !anythingDifferent(actualItem, expectedItem))
+      })
+      const unexpectedItems = actualItems.filter((actualItem) => {
+        return !expectedItems.some((expectedItem) => !anythingDifferent(actualItem, expectedItem))
+      })
+      const isEqual = missingItems.length === 0 && unexpectedItems.length === 0
+
+      if (this._not) {
+        if (isEqual) {
+          throw new Error(`${objectPrint} was unexpected equal to ${resultPrint}`)
+        }
+      } else if (!isEqual) {
+        const missingStrings = missingItems.map((item) => minifiedStringify(item))
+        const unexpectedStrings = unexpectedItems.map((item) => minifiedStringify(item))
+        const diffParts = []
+
+        if (missingStrings.length > 0) diffParts.push(`missing ${missingStrings.join(", ")}`)
+        if (unexpectedStrings.length > 0) diffParts.push(`unexpected ${unexpectedStrings.join(", ")}`)
+
+        const diffMessage = diffParts.length > 0 ? ` (diff: ${diffParts.join("; ")})` : ""
+
+        throw new Error(`${objectPrint} wasn't equal to ${resultPrint}${diffMessage}`)
+      }
+
+      return
+    }
+
     if (isObjectContaining(result)) {
       const expectedValue = /** @type {any} */ (result).value
       const {matches, differences} = matchObject(this._object, expectedValue)

@@ -33,6 +33,10 @@ function minifiedStringify(value) {
 
     if (seen.has(current)) return "[Circular]"
 
+    if (current instanceof Set) {
+      return Array.from(current).map((value) => serialize(value, depth + 1))
+    }
+
     if (!isPlainObject(current) && !Array.isArray(current)) {
       return current.constructor?.name || Object.prototype.toString.call(current)
     }
@@ -76,6 +80,10 @@ function formatValue(value) {
     return minifiedStringify(value)
   }
 
+  if (value instanceof Set) {
+    return `Set(${minifiedStringify(Array.from(value))})`
+  }
+
   if (value && typeof value == "object") {
     const constructorName = value.constructor?.name
 
@@ -86,4 +94,3 @@ function formatValue(value) {
 }
 
 export {formatValue, minifiedStringify}
-
