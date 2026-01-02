@@ -153,6 +153,29 @@ export default class ProjectBase extends DatabaseRecord {
   setTasks(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}
+   */
+  doneTasks() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>} */ (this.getRelationshipByName("doneTasks")) }
+
+  /**
+   * @returns {Array<import("../models/task.js").default>}
+   */
+  doneTasksLoaded() { return /** @type {Array<import("../models/task.js").default>} */ (this.getRelationshipByName("doneTasks").loaded()) }
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  loadDoneTasks() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @param {Array<import("../models/task.js").default>} newModels
+   * @returns {void}
+   */
+  setDoneTasks(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
    * @returns {import("../models/project-detail.js").default}
    */
   projectDetail() { return /** @type {import("../models/project-detail.js").default} */ (this.getRelationshipByName("projectDetail").loaded()) }
@@ -176,6 +199,31 @@ export default class ProjectBase extends DatabaseRecord {
    * @returns {void}
    */
   setProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @returns {import("../models/project-detail.js").default}
+   */
+  activeProjectDetail() { return /** @type {import("../models/project-detail.js").default} */ (this.getRelationshipByName("activeProjectDetail").loaded()) }
+
+  /**
+   * @abstract
+   * @param {Record<string, any>} [attributes]
+   * @returns {import("../models/project-detail.js").default}
+   */
+  buildActiveProjectDetail(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  loadActiveProjectDetail() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @param {import("../models/project-detail.js").default} newModel
+   * @returns {void}
+   */
+  setActiveProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../../../../src/database/record/index.js").default>}

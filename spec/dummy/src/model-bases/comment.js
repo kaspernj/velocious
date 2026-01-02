@@ -111,4 +111,29 @@ export default class CommentBase extends DatabaseRecord {
    * @returns {void}
    */
   setTask(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @returns {import("../models/task.js").default}
+   */
+  doneTask() { return /** @type {import("../models/task.js").default} */ (this.getRelationshipByName("doneTask").loaded()) }
+
+  /**
+   * @abstract
+   * @param {Record<string, any>} [attributes]
+   * @returns {import("../models/task.js").default}
+   */
+  buildDoneTask(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  loadDoneTask() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @param {import("../models/task.js").default} newModel
+   * @returns {void}
+   */
+  setDoneTask(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }
