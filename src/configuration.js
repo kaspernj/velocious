@@ -529,13 +529,15 @@ export default class VelociousConfiguration {
         await pool.closeAll()
       }
 
-      if (pool.constructor && typeof pool.constructor.clearGlobalConnections === "function") {
-        constructors.add(pool.constructor)
+      const poolConstructor = /** @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
+
+      if (typeof poolConstructor?.clearGlobalConnections === "function") {
+        constructors.add(poolConstructor)
       }
     }
 
     for (const constructor of constructors) {
-      constructor.clearGlobalConnections(this)
+      constructor.clearGlobalConnections?.(this)
     }
   }
 }
