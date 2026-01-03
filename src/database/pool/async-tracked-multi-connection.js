@@ -54,8 +54,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
   async checkout() {
     let connection = this.connections.shift()
-    const availableCount = this.connections.length
-    const inUseCount = Object.keys(this.connectionsInUse).length
 
     if (!connection) {
       connection = await this.spawnConnection()
