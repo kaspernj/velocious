@@ -40,12 +40,12 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
   hasUserToken() { return this._hasAttribute(this.userToken()) }
 
   /**
-   * @returns {number | null}
+   * @returns {number}
    */
   userId() { return this.readAttribute("userId") }
 
   /**
-   * @param {number | null} newValue
+   * @param {number} newValue
    * @returns {void}
    */
   setUserId(newValue) { return this._setColumnAttribute("userId", newValue) }

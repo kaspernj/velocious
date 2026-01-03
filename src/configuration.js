@@ -516,10 +516,10 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * Closes all initialized database pools and clears global connections.
+   * Closes active database connections and clears global connections.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async closeDatabasePools() {
+  async closeDatabaseConnections() {
     const constructors = new Set()
 
     for (const pool of Object.values(this.databasePools)) {

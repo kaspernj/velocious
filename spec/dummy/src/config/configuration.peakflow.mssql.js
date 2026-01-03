@@ -62,10 +62,6 @@ export default new Configuration({
       }
     }
   },
-  logging: {
-    debugLowLevel: true,
-    levels: ["error", "warn", "info", "debug", "debug-low-level"]
-  },
   directory: dummyDirectory(),
   environmentHandler: new NodeEnvironmentHandler(),
   initializeModels: async ({configuration}) => {

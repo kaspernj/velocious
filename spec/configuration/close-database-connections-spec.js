@@ -24,8 +24,8 @@ class FakePool {
   }
 }
 
-describe("Configuration.closeDatabasePools", () => {
-  it("closes pools and clears global connections", async () => {
+describe("Configuration.closeDatabaseConnections", () => {
+  it("closes connections and clears global connections", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({
       database: {
@@ -48,7 +48,7 @@ describe("Configuration.closeDatabasePools", () => {
 
     const pool = configuration.getDatabasePool("default")
 
-    await configuration.closeDatabasePools()
+    await configuration.closeDatabaseConnections()
 
     expect(pool.closed).toBe(true)
     expect(FakePool.cleared).toBe(true)

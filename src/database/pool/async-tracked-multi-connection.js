@@ -45,7 +45,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     this.connections.push(connection)
 
-    this.logger.debugLowLevel(() => ["checkinConnection", {identifier: this.identifier, id}])
+    console.log("[db-pool] checkinConnection", {identifier: this.identifier, id})
   }
 
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
@@ -55,10 +55,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const inUseCount = Object.keys(this.connectionsInUse).length
 
     if (!connection) {
-      this.logger.debugLowLevel(() => [
-        "spawnConnection",
-        {identifier: this.identifier, availableCount, inUseCount}
-      ])
+      console.log("[db-pool] spawnConnection", {identifier: this.identifier, availableCount, inUseCount})
       connection = await this.spawnConnection()
     }
 
@@ -69,10 +66,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     connection.setIdSeq(id)
     this.connectionsInUse[id] = connection
 
-    this.logger.debugLowLevel(() => [
-      "checkoutConnection",
-      {identifier: this.identifier, id, availableCount, inUseCount}
-    ])
+    console.log("[db-pool] checkoutConnection", {identifier: this.identifier, id, availableCount, inUseCount})
 
     return connection
   }

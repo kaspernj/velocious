@@ -107,6 +107,10 @@ export default class VelociousHttpServer {
   async stop() {
     await this.stopClients()
     await this.stopServer()
+
+    const stopTasks = this.workerHandlers.map((handler) => handler.stop())
+    await Promise.all(stopTasks)
+    this.workerHandlers = []
   }
 
   /** @returns {void} - No return value.  */

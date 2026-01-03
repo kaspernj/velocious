@@ -16,9 +16,9 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   async checkout() {
     if (!this.connection) {
       this.connection = await this.spawnConnection()
-      this.logger.debugLowLevel(() => ["checkoutConnection", {identifier: this.identifier, reused: false}])
+      console.log("[db-pool] checkoutConnection", {identifier: this.identifier, reused: false})
     } else {
-      this.logger.debugLowLevel(() => ["checkoutConnection", {identifier: this.identifier, reused: true}])
+      console.log("[db-pool] checkoutConnection", {identifier: this.identifier, reused: true})
     }
 
     return this.connection

@@ -110,6 +110,13 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       const {channel, payload} = data
 
       await this.broadcastWebsocketEvent({channel, payload})
+    } else if (command == "shutdown") {
+      if (this.configuration?.closeDatabaseConnections) {
+        await this.configuration.closeDatabaseConnections()
+      }
+
+      this.parentPort.postMessage({command: "shutdownComplete"})
+      process.exit(0)
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
