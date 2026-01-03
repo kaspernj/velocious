@@ -26,4 +26,36 @@ describe("Database - drivers - mssql transaction", () => {
       mssql.Transaction = originalTransaction
     }
   })
+
+  it("reconnects before starting a transaction when disconnected", async () => {
+    const originalTransaction = mssql.Transaction
+
+    class FakeTransaction {
+      constructor(connection) {
+        this.connection = connection
+      }
+
+      async begin() {}
+    }
+
+    mssql.Transaction = FakeTransaction
+
+    try {
+      const driver = new MssqlDriver({sqlConfig: {}}, {debug: false})
+      let didConnect = false
+
+      driver.connect = async () => {
+        didConnect = true
+        driver.connection = {connected: true}
+      }
+
+      await driver.startTransaction()
+
+      expect(didConnect).toBeTrue()
+      expect(driver._currentTransaction).toBeInstanceOf(FakeTransaction)
+      expect(driver._currentTransaction.connection).toEqual(driver.connection)
+    } finally {
+      mssql.Transaction = originalTransaction
+    }
+  })
 })
