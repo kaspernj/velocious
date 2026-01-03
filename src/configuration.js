@@ -507,9 +507,11 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async ensureConnections(callback) {
-    let dbs = this.getCurrentConnections()
+    const dbs = this.getCurrentConnections()
+    const identifiers = this.getDatabaseIdentifiers()
+    const hasAllConnections = identifiers.every((identifier) => dbs[identifier])
 
-    if (Object.keys(dbs).length > 0) {
+    if (hasAllConnections) {
       await callback(dbs)
     } else {
       await this.withConnections(callback)
