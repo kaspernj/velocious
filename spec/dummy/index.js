@@ -45,6 +45,8 @@ export default class Dummy {
 
   /** @param {function(): Promise<void>} callback */
   async run(callback) {
+    let stopApplication = null
+
     await dummyConfiguration.ensureConnections(async () => {
       await Dummy.prepare()
       await this.start()
@@ -52,9 +54,13 @@ export default class Dummy {
       try {
         await callback()
       } finally {
-        await this.stop()
+        stopApplication = () => this.stop()
       }
     })
+
+    if (stopApplication) {
+      await stopApplication()
+    }
   }
 
   async start() {
