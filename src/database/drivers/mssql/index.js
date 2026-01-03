@@ -308,7 +308,12 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
     this._currentTransaction = new mssql.Transaction(this.connection)
 
-    await this._currentTransaction.begin()
+    try {
+      await this._currentTransaction.begin()
+    } catch (error) {
+      this._currentTransaction = null
+      throw error
+    }
   }
 
   async _commitTransactionAction() {
