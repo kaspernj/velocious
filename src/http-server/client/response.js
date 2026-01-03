@@ -13,6 +13,8 @@ export default class VelociousHttpServerClientResponse {
    */
   constructor({configuration}) {
     this.configuration = configuration
+    this._requestTimeoutMs = undefined
+    this._requestTimeoutMsChangeHandler = undefined
   }
 
   /**
@@ -96,5 +98,36 @@ export default class VelociousHttpServerClientResponse {
     } else {
       throw new Error(`Unhandled status: ${status}`)
     }
+  }
+
+  /**
+   * @returns {number | undefined} - Request timeout in seconds.
+   */
+  getRequestTimeoutMs() {
+    return this._requestTimeoutMs
+  }
+
+  /**
+   * @param {number | undefined | null} timeoutSeconds - Timeout in seconds.
+   * @returns {void} - No return value.
+   */
+  setRequestTimeoutMs(timeoutSeconds) {
+    if (typeof timeoutSeconds === "number" && Number.isFinite(timeoutSeconds)) {
+      this._requestTimeoutMs = timeoutSeconds
+    } else {
+      this._requestTimeoutMs = undefined
+    }
+
+    if (this._requestTimeoutMsChangeHandler) {
+      this._requestTimeoutMsChangeHandler(this._requestTimeoutMs)
+    }
+  }
+
+  /**
+   * @param {(timeoutSeconds: number | undefined) => void} handler - Change handler.
+   * @returns {void} - No return value.
+   */
+  setRequestTimeoutMsChangeHandler(handler) {
+    this._requestTimeoutMsChangeHandler = handler
   }
 }

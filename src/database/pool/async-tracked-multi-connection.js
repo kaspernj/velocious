@@ -3,6 +3,8 @@
 import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
+const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
+
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
   /**
    * Global fallback connections keyed by configuration instance and pool identifier.
@@ -43,7 +45,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(undefined)
 
+    if (connection[CLOSED_CONNECTION]) return
+
     this.connections.push(connection)
+
   }
 
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
@@ -161,6 +166,32 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const mapForConfiguration = klass.globalConnections.get(this.configuration)
 
     return mapForConfiguration?.[this.identifier]
+  }
+
+  /**
+   * Closes all active and cached connections for this pool.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeAll() {
+    const connections = new Set([
+      ...this.connections,
+      ...Object.values(this.connectionsInUse),
+      this.getGlobalConnection()
+    ].filter(Boolean))
+
+    this.connections = []
+    this.connectionsInUse = {}
+
+    for (const connection of connections) {
+      connection[CLOSED_CONNECTION] = true
+
+      if (typeof connection.close === "function") {
+        await connection.close()
+      } else if (typeof connection.disconnect === "function") {
+        await connection.disconnect()
+      }
+    }
+
   }
 
   /**

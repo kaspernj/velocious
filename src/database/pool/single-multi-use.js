@@ -30,6 +30,24 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     await callback(connection)
   }
 
+  /**
+   * Closes the cached connection if it exists.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeAll() {
+    if (!this.connection) return
+
+    const connection = this.connection
+
+    this.connection = undefined
+
+    if (typeof connection.close === "function") {
+      await connection.close()
+    } else if (typeof connection.disconnect === "function") {
+      await connection.disconnect()
+    }
+  }
+
   /** @returns {import("../drivers/base.js").default} - The current connection.  */
   getCurrentConnection() {
     if (!this.connection) {

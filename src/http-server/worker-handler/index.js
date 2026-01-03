@@ -20,6 +20,7 @@ export default class VelociousHttpServerWorker {
     this.logger = new Logger(this)
     this.workerCount = workerCount
     this.unregisterFromEventsHost = websocketEventsHost.register(this)
+    this._stopping = false
   }
 
   start() {
@@ -72,6 +73,7 @@ export default class VelociousHttpServerWorker {
    * @param {any} error - Error instance.
    */
   onWorkerError = (error) => {
+    void this._closeAllClients()
     throw ensureError(error) // Throws original error with backtrace and everything into the console
   }
 
@@ -80,13 +82,34 @@ export default class VelociousHttpServerWorker {
    * @returns {void} - No return value.
    */
   onWorkerExit = (code) => {
-    if (code !== 0) {
+    this._hasExited = true
+
+    if (code !== 0 && !this._stopping) {
+      void this._closeAllClients()
       throw new Error(`Client worker stopped with exit code ${code}`)
     } else {
       this.logger.info(() => `Client worker stopped with exit code ${code}`)
     }
 
     this.unregisterFromEventsHost?.()
+    this._stopResolve?.()
+    this._stopResolve = null
+  }
+
+  /**
+   * @returns {void} - No return value.
+   */
+  _closeAllClients() {
+    const clients = Object.values(this.clients)
+    this.clients = {}
+
+    for (const client of clients) {
+      try {
+        void client.end()
+      } catch (error) {
+        this.logger.warn("Failed to close client after worker exit", error)
+      }
+    }
   }
 
   /**
@@ -123,6 +146,9 @@ export default class VelociousHttpServerWorker {
 
       this.clients[clientCount]?.end()
       delete this.clients[clientCount]
+    } else if (command == "shutdownComplete") {
+      this._stopResolve?.()
+      this._stopResolve = null
     } else if (command == "websocketPublish") {
       const {channel, payload} = data
 
@@ -130,6 +156,21 @@ export default class VelociousHttpServerWorker {
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
+  }
+
+  /**
+   * @returns {Promise<void>} - Resolves when stopped.
+   */
+  stop() {
+    if (!this.worker) return Promise.resolve()
+    if (this._hasExited) return Promise.resolve()
+
+    this._stopping = true
+
+    return new Promise((resolve) => {
+      this._stopResolve = resolve
+      this.worker.postMessage({command: "shutdown"})
+    })
   }
 
   /**
@@ -144,4 +185,3 @@ export default class VelociousHttpServerWorker {
     this.worker.postMessage({channel, command: "websocketEvent", payload})
   }
 }
-

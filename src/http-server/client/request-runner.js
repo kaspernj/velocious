@@ -50,8 +50,64 @@ export default class VelociousHttpServerClientRequestRunner {
       } else {
         await this.logger.debug("Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
+        const startTimeMs = Date.now()
+        let timeoutId
+        let timeoutReject
+        let timedOut = false
 
-        await routesResolver.resolve()
+        const setRequestTimeoutSeconds = (timeoutSeconds) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = undefined
+          }
+
+          if (typeof timeoutSeconds !== "number" || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+            return
+          }
+
+          const timeoutMs = timeoutSeconds * 1000
+          const elapsedMs = Date.now() - startTimeMs
+          const remainingMs = timeoutMs - elapsedMs
+
+          if (remainingMs <= 0) {
+            timeoutReject?.(new Error(`Request timed out after ${timeoutSeconds}s`))
+            return
+          }
+
+          timeoutId = setTimeout(() => {
+            timeoutReject?.(new Error(`Request timed out after ${timeoutSeconds}s`))
+          }, remainingMs)
+        }
+
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutReject = (error) => {
+            timedOut = true
+            reject(error)
+          }
+        })
+
+        response.setRequestTimeoutMsChangeHandler((timeoutSeconds) => {
+          setRequestTimeoutSeconds(timeoutSeconds)
+        })
+
+        setRequestTimeoutSeconds(configuration.getRequestTimeoutMs?.())
+
+        let resolvePromise
+
+        try {
+          resolvePromise = routesResolver.resolve()
+          // Keep Promise.race here to allow dynamic timeout updates.
+          await Promise.race([resolvePromise, timeoutPromise])
+        } catch (error) {
+          if (timedOut && resolvePromise) {
+            void resolvePromise.catch((resolveError) => {
+              this.logger.warn(() => ["Request finished after timeout", resolveError])
+            })
+          }
+          throw error
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId)
+        }
       }
     } catch (e) {
       const error = ensureError(e)

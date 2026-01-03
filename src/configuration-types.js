@@ -89,6 +89,7 @@
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
+ * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.
  * @property {WebsocketChannelResolverType} [websocketChannelResolver] - Resolve a websocket channel class/instance for each connection.
  */
 

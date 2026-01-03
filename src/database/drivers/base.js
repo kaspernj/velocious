@@ -115,6 +115,22 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Optional close hook for database drivers.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async close() {
+    // No-op by default
+  }
+
+  /**
+   * Optional disconnect hook for database drivers.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async disconnect() {
+    // No-op by default
+  }
+
+  /**
    * @abstract
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.

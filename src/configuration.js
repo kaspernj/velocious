@@ -19,6 +19,7 @@ class CurrentConfigurationNotSetError extends Error {}
 export {CurrentConfigurationNotSetError}
 
 export default class VelociousConfiguration {
+  _closeDatabaseConnectionsPromise = null
   /** @returns {VelociousConfiguration} - The current.  */
   static current() {
     if (!shared.currentConfiguration) throw new CurrentConfigurationNotSetError("A current configuration hasn't been set")
@@ -27,7 +28,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
+  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this.cors = cors
@@ -44,6 +45,7 @@ export default class VelociousConfiguration {
     this._initializers = initializers
     this._testing = testing
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
+    this._requestTimeoutMs = requestTimeoutMs
     this._websocketEvents = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._logging = logging
@@ -138,6 +140,22 @@ export default class VelociousConfiguration {
    * @returns {string} - The environment.
    */
   getEnvironment() { return digg(this, "_environment") }
+
+  /**
+   * @returns {number} - Request timeout in seconds.
+   */
+  getRequestTimeoutMs() {
+    const envValue = process.env.VELOCIOUS_REQUEST_TIMEOUT_MS
+    const envTimeout = envValue !== undefined ? Number(envValue) : undefined
+    const value = typeof this._requestTimeoutMs === "function"
+      ? this._requestTimeoutMs()
+      : this._requestTimeoutMs
+
+    if (typeof value === "number") return value
+    if (typeof envTimeout === "number" && Number.isFinite(envTimeout)) return envTimeout
+
+    return 60
+  }
 
   /**
    * @param {string} newEnvironment - New environment.
@@ -470,7 +488,8 @@ export default class VelociousConfiguration {
           (
             error.message == "ID hasn't been set for this async context" ||
             error.message == "A connection hasn't been made yet" ||
-            error.message.startsWith("No async context set for database connection")
+            error.message.startsWith("No async context set for database connection") ||
+            error.message.startsWith("Connection ") && error.message.includes("doesn't exist any more")
           )
         ) {
           // Ignore
@@ -488,12 +507,56 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async ensureConnections(callback) {
-    let dbs = this.getCurrentConnections()
+    const dbs = this.getCurrentConnections()
+    const identifiers = this.getDatabaseIdentifiers()
+    const hasAllConnections = identifiers.every((identifier) => dbs[identifier])
 
-    if (Object.keys(dbs).length > 0) {
+    if (hasAllConnections) {
       await callback(dbs)
     } else {
       await this.withConnections(callback)
+    }
+  }
+
+  /**
+   * Closes active database connections and clears global connections.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeDatabaseConnections() {
+    if (this._closeDatabaseConnectionsPromise) {
+      await this._closeDatabaseConnectionsPromise
+      return
+    }
+
+    const constructors = new Set()
+
+    this._closeDatabaseConnectionsPromise = (async () => {
+      for (const pool of Object.values(this.databasePools)) {
+        if (!pool) continue
+
+        if (typeof pool.closeAll === "function") {
+          await pool.closeAll()
+        }
+
+        const poolConstructor = /** @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
+
+        if (typeof poolConstructor?.clearGlobalConnections === "function") {
+          constructors.add(poolConstructor)
+        }
+      }
+
+      for (const constructor of constructors) {
+        constructor.clearGlobalConnections?.(this)
+      }
+
+      // Allow models to be re-initialized after connections are closed.
+      this._modelsInitialized = false
+    })()
+
+    try {
+      await this._closeDatabaseConnectionsPromise
+    } finally {
+      this._closeDatabaseConnectionsPromise = null
     }
   }
 }

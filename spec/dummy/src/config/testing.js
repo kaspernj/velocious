@@ -3,34 +3,47 @@ import dummyConfiguration from "./configuration.js"
 export default async function configureTesting() {
   beforeEach(async ({testArgs}) => {
     const transaction = testArgs.databaseCleaning?.transaction
+    const useTransaction = transaction === undefined ? false : transaction
+    const truncate = testArgs.databaseCleaning?.truncate
+    const shouldTruncate = truncate === undefined ? !useTransaction : truncate
 
-    if (transaction === undefined) {
-      const dbs = dummyConfiguration.getCurrentConnections()
+    if (shouldTruncate) {
+      await dummyConfiguration.ensureConnections(async (dbs) => {
+        for (const dbIdentifier in dbs) {
+          const db = dbs[dbIdentifier]
+          await db.truncateAllTables()
+        }
+      })
+    }
 
-      for (const dbIdentifier in dbs) {
-        const db = dbs[dbIdentifier]
+    if (useTransaction) {
+      await dummyConfiguration.ensureConnections(async (dbs) => {
+        for (const dbIdentifier in dbs) {
+          const db = dbs[dbIdentifier]
 
-        await db.startTransaction()
-      }
+          await db.startTransaction()
+        }
+      })
     }
   })
 
   afterEach(async ({testArgs}) => {
     const transaction = testArgs.databaseCleaning?.transaction
     const truncate = testArgs.databaseCleaning?.truncate
+    const useTransaction = transaction === undefined ? false : transaction
+    const shouldTruncate = truncate === undefined ? !useTransaction : truncate
+    await dummyConfiguration.ensureConnections(async (dbs) => {
+      for (const dbIdentifier in dbs) {
+        const db = dbs[dbIdentifier]
 
-    const dbs = dummyConfiguration.getCurrentConnections()
+        if (useTransaction) {
+          await db.rollbackTransaction()
+        }
 
-    for (const dbIdentifier in dbs) {
-      const db = dbs[dbIdentifier]
-
-      if (transaction === undefined || transaction) {
-        await db.rollbackTransaction()
+        if (shouldTruncate) {
+          await db.truncateAllTables()
+        }
       }
-
-      if (truncate) {
-        await db.truncateAllTables()
-      }
-    }
+    })
   })
 }

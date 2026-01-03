@@ -36,6 +36,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   async disconnect() {
     await this.connection?.end()
+    this.connection = undefined
+    this._transactionsCount = 0
   }
 
   connectArgs() {
@@ -57,6 +59,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   async close() {
     await this.connection?.end()
     this.connection = undefined
+    this._transactionsCount = 0
   }
 
   /**
@@ -141,7 +144,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   async _queryActual(sql) {
     let response
 
-    if (!this.connection) throw new Error("Not yet connected")
+    if (!this.connection) await this.connect()
 
     try {
       response = await this.connection.query(sql)

@@ -89,6 +89,7 @@ export default class VelociousApplication {
   async stop() {
     await this.logger.debug("Stopping server")
     await this.httpServer?.stop()
+    await this.configuration.closeDatabaseConnections()
   }
 
   /** @returns {void} - No return value.  */

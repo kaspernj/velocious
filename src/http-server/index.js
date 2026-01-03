@@ -91,7 +91,10 @@ export default class VelociousHttpServer {
   /** @returns {Promise<void>} - Resolves when complete.  */
   stopServer() {
     return new Promise((resolve, reject) => {
-      if (!this.netServer) throw new Error("No netServer to stop")
+      if (!this.netServer || !this.netServer.listening) {
+        resolve(null)
+        return
+      }
 
       this.netServer.close((error) => {
         if (error) {
@@ -107,6 +110,10 @@ export default class VelociousHttpServer {
   async stop() {
     await this.stopClients()
     await this.stopServer()
+
+    const stopTasks = this.workerHandlers.map((handler) => handler.stop())
+    await Promise.all(stopTasks)
+    this.workerHandlers = []
   }
 
   /** @returns {void} - No return value.  */

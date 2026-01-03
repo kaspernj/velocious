@@ -16,6 +16,7 @@ import net from "node:net"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
+import timeout from "awaitery/build/timeout.js"
 import Update from "./sql/update.js"
 import UUID from "pure-uuid"
 
@@ -38,8 +39,18 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async close() {
-    await this.connection?.close()
+    if (!this.connection) return
+
+    const connection = this.connection
     this.connection = undefined
+    this._currentTransaction = null
+    this._transactionsCount = 0
+
+    try {
+      await timeout({timeout: 2000}, () => connection.close())
+    } catch (error) {
+      this.logger.warn("Failed to close MSSQL connection cleanly", {error})
+    }
   }
 
   /**
@@ -133,18 +144,15 @@ export default class VelociousDatabaseDriversMssql extends Base{
    */
   async _queryActual(sql) {
     let result
-    let request, tries = 0
-
-    if (this._currentTransaction) {
-      request = new mssql.Request(this._currentTransaction)
-    } else {
-      request = new mssql.Request(this.connection)
-    }
+    let tries = 0
 
     while (true) {
       tries++
 
       try {
+        const request = this._currentTransaction
+          ? new mssql.Request(this._currentTransaction)
+          : new mssql.Request(this.connection)
         result = await request.query(sql)
         break
       } catch (error) {
@@ -303,12 +311,17 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async _startTransactionAction() {
-    if (!this.connection) throw new Error("No connection")
     if (this._currentTransaction) throw new Error("A transaction is already running")
+    if (!this.connection) await this.connect()
 
     this._currentTransaction = new mssql.Transaction(this.connection)
 
-    await this._currentTransaction.begin()
+    try {
+      await this._currentTransaction.begin()
+    } catch (error) {
+      this._currentTransaction = null
+      throw error
+    }
   }
 
   async _commitTransactionAction() {

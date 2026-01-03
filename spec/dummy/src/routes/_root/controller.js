@@ -3,6 +3,7 @@ import path from "path"
 import Controller from "../../../../../src/controller.js"
 import MemoryUploadedFile from "../../../../../src/http-server/client/uploaded-file/memory-uploaded-file.js"
 import TemporaryUploadedFile from "../../../../../src/http-server/client/uploaded-file/temporary-uploaded-file.js"
+import wait from "awaitery/build/wait.js"
 
 export default class RootController extends Controller {
   async missingView() {
@@ -25,6 +26,26 @@ export default class RootController extends Controller {
     }
 
     await this.render()
+  }
+
+  async slow() {
+    const queryParameters = this.queryParameters()
+    const waitSeconds = Number(queryParameters.waitSeconds || 0)
+    const timeoutSeconds = queryParameters.timeoutSeconds
+
+    if (timeoutSeconds !== undefined) {
+      this.response().setRequestTimeoutMs(Number(timeoutSeconds))
+    }
+
+    if (Number.isFinite(waitSeconds) && waitSeconds > 0) {
+      await wait(waitSeconds * 1000)
+    }
+
+    await this.render({
+      json: {
+        status: "success"
+      }
+    })
   }
 
   async upload() {

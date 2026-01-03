@@ -20,38 +20,39 @@ export default class DbGenerateModel extends BaseCommand {
       await fs.mkdir(baseModelsDir, {recursive: true})
     }
 
-    for (const modelClassName in modelClasses) {
-      const modelClass = modelClasses[modelClassName]
-      const modelName = inflection.dasherize(modelClassName)
-      const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
-      const modelBaseFileName = `${inflection.dasherize(inflection.underscore(modelName))}.js`
-      const modelPath = `${baseModelsDir}/${modelBaseFileName}`
+    await this.getConfiguration().ensureConnections(async () => {
+      for (const modelClassName in modelClasses) {
+        const modelClass = modelClasses[modelClassName]
+        const modelName = inflection.dasherize(modelClassName)
+        const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
+        const modelBaseFileName = `${inflection.dasherize(inflection.underscore(modelName))}.js`
+        const modelPath = `${baseModelsDir}/${modelBaseFileName}`
 
-      console.log(`create src/model-bases/${modelBaseFileName}`)
+        console.log(`create src/model-bases/${modelBaseFileName}`)
 
-      const sourceModelFullFilePath = `${modelsDir}/${modelBaseFileName}`
-      let sourceModelFilePath
+        const sourceModelFullFilePath = `${modelsDir}/${modelBaseFileName}`
+        let sourceModelFilePath
 
-      if (await fileExists(sourceModelFullFilePath)) {
-        sourceModelFilePath = `../models/${modelBaseFileName}`
-      } else {
-        sourceModelFilePath = "velocious/build/src/database/record/index.js"
-      }
+        if (await fileExists(sourceModelFullFilePath)) {
+          sourceModelFilePath = `../models/${modelBaseFileName}`
+        } else {
+          sourceModelFilePath = "velocious/build/src/database/record/index.js"
+        }
 
-      let fileContent = ""
-      let velociousPath
+        let fileContent = ""
+        let velociousPath
 
-      if (devMode) {
-        velociousPath = "../../../../src"
-      } else {
-        velociousPath = "velocious/build/src"
-      }
+        if (devMode) {
+          velociousPath = "../../../../src"
+        } else {
+          velociousPath = "velocious/build/src"
+        }
 
-      fileContent += `import DatabaseRecord from "${velociousPath}/database/record/index.js"\n\n`
+        fileContent += `import DatabaseRecord from "${velociousPath}/database/record/index.js"\n\n`
 
-      const hasManyRelationFilePath = `${velociousPath}/database/record/instance-relationships/has-many.js`
+        const hasManyRelationFilePath = `${velociousPath}/database/record/instance-relationships/has-many.js`
 
-      fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
+        fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
 
       // --- getModelClass() override (fixes polymorphic typing in JS/JSDoc) ---
       if (await fileExists(sourceModelFullFilePath)) {
@@ -267,8 +268,9 @@ export default class DbGenerateModel extends BaseCommand {
 
       fileContent += "}\n"
 
-      await fs.writeFile(modelPath, fileContent)
-    }
+        await fs.writeFile(modelPath, fileContent)
+      }
+    })
   }
 
   /**
@@ -282,11 +284,11 @@ export default class DbGenerateModel extends BaseCommand {
       return "boolean"
     } else if (type == "json") {
       return "Record<string, any>"
-    } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid"].includes(type)) {
+    } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
     } else if (["bit", "bigint", "float", "int", "integer", "smallint", "tinyint"].includes(type)) {
       return "number"
-    } else if (["date", "datetime"].includes(type)) {
+    } else if (["date", "datetime", "timestamp without time zone"].includes(type)) {
       return "Date"
     } else {
       console.error(`Unknown column type: ${type}`)
@@ -300,7 +302,7 @@ export default class DbGenerateModel extends BaseCommand {
   jsDocSetterTypeFromColumn(column) {
     const type = column.getType()
 
-    if (["date", "datetime"].includes(type)) {
+    if (["date", "datetime", "timestamp without time zone"].includes(type)) {
       return "Date | string"
     }
 
