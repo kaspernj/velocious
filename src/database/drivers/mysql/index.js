@@ -154,7 +154,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
-    if (!this.pool) throw new Error("Not connected to a pool yet")
+    if (!this.pool) await this.connect()
 
     try {
       return await query(this.pool, sql)
@@ -185,9 +185,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {any} - The escape.
    */
   escape(value) {
-    if (!this.pool) throw new Error("Can't escape before connected")
-
-    const escapedValueWithQuotes = this.pool.escape(this._convertValue(value))
+    const escapedValueWithQuotes = this.pool
+      ? this.pool.escape(this._convertValue(value))
+      : mysql.escape(this._convertValue(value))
 
     return escapedValueWithQuotes.slice(1, escapedValueWithQuotes.length - 1)
   }
@@ -197,9 +197,11 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {string} - The quote.
    */
   quote(value) {
-    if (!this.pool) throw new Error("Can't escape before connected")
+    if (this.pool) {
+      return this.pool.escape(this._convertValue(value))
+    }
 
-    return this.pool.escape(this._convertValue(value))
+    return mysql.escape(this._convertValue(value))
   }
 
   /**
@@ -282,4 +284,3 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return update.toSql()
   }
 }
-

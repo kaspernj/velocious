@@ -4,6 +4,13 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 
+const getMessageText = (event) => {
+  if (typeof event.data === "string") return event.data
+  if (Buffer.isBuffer(event.data)) return event.data.toString("utf-8")
+  if (event.data instanceof ArrayBuffer) return Buffer.from(event.data).toString("utf-8")
+  return event.data?.toString?.()
+}
+
 describe("HttpServer - websocket", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
   it("delegates websocket requests through controllers", async () => {
     await Dummy.run(async () => {
@@ -35,14 +42,38 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
             reject(event?.error || new Error("Websocket connection error"))
           })
         })
+
+        const subscribedPromise = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Timed out waiting for channel subscription")), 2000)
+
+          socket.addEventListener("message", (event) => {
+            const raw = getMessageText(event)
+
+            if (!raw) return
+
+            try {
+              const msg = JSON.parse(raw)
+
+              if (msg.type === "subscribed" && msg.channel === "news") {
+                clearTimeout(timeout)
+                resolve()
+              }
+            } catch (error) {
+              clearTimeout(timeout)
+              reject(error)
+            }
+          })
+        })
+
         socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+        await subscribedPromise
         await client.connect()
 
         const eventPromise = new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error("Timed out waiting for event")), 2000)
 
           socket.addEventListener("message", (event) => {
-            const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+            const raw = getMessageText(event)
 
             if (!raw) return
 
@@ -86,7 +117,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         const timeout = setTimeout(() => reject(new Error("Timed out waiting for channel subscription")), 2000)
 
         socket.addEventListener("message", (event) => {
-          const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+            const raw = getMessageText(event)
 
           if (!raw) return
 
@@ -128,7 +159,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         const timeout = setTimeout(() => reject(new Error("Timed out waiting for channel subscription")), 2000)
 
         socket.addEventListener("message", (event) => {
-          const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+            const raw = getMessageText(event)
 
           if (!raw) return
 
@@ -168,7 +199,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       let receivedPayload
       socket.addEventListener("message", (event) => {
-        const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+        const raw = getMessageText(event)
 
         if (!raw) return
 

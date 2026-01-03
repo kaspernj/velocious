@@ -16,6 +16,7 @@ import net from "node:net"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
+import timeout from "awaitery/build/timeout.js"
 import Update from "./sql/update.js"
 import UUID from "pure-uuid"
 
@@ -38,8 +39,18 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async close() {
-    await this.connection?.close()
+    if (!this.connection) return
+
+    const connection = this.connection
     this.connection = undefined
+    this._currentTransaction = null
+    this._transactionsCount = 0
+
+    try {
+      await timeout({timeout: 2000}, () => connection.close())
+    } catch (error) {
+      this.logger.warn("Failed to close MSSQL connection cleanly", {error})
+    }
   }
 
   /**

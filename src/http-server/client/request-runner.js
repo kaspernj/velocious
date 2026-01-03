@@ -96,6 +96,7 @@ export default class VelociousHttpServerClientRequestRunner {
 
         try {
           resolvePromise = routesResolver.resolve()
+          // Keep Promise.race here to allow dynamic timeout updates.
           await Promise.race([resolvePromise, timeoutPromise])
         } catch (error) {
           if (timedOut && resolvePromise) {

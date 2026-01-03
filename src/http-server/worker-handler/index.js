@@ -82,6 +82,8 @@ export default class VelociousHttpServerWorker {
    * @returns {void} - No return value.
    */
   onWorkerExit = (code) => {
+    this._hasExited = true
+
     if (code !== 0 && !this._stopping) {
       void this._closeAllClients()
       throw new Error(`Client worker stopped with exit code ${code}`)
@@ -161,6 +163,7 @@ export default class VelociousHttpServerWorker {
    */
   stop() {
     if (!this.worker) return Promise.resolve()
+    if (this._hasExited) return Promise.resolve()
 
     this._stopping = true
 

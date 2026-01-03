@@ -20,4 +20,17 @@ describe("HttpServer - worker handler", () => {
     expect(closed).toEqual(new Set([1, 2]))
     expect(Object.keys(handler.clients)).toEqual([])
   })
+
+  it("stops cleanly when the worker has already exited", async () => {
+    const configuration = {debug: false}
+    const handler = new WorkerHandler({configuration, workerCount: 1})
+
+    handler.worker = {}
+    handler.unregisterFromEventsHost = () => {}
+
+    handler.onWorkerExit(0)
+
+    await handler.stop()
+    expect(true).toBeTrue()
+  })
 })

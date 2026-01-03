@@ -3,6 +3,8 @@
 import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
+const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
+
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
   /**
    * Global fallback connections keyed by configuration instance and pool identifier.
@@ -43,9 +45,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(undefined)
 
+    if (connection[CLOSED_CONNECTION]) return
+
     this.connections.push(connection)
 
-    console.log("[db-pool] checkinConnection", {identifier: this.identifier, id})
   }
 
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
@@ -55,7 +58,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const inUseCount = Object.keys(this.connectionsInUse).length
 
     if (!connection) {
-      console.log("[db-pool] spawnConnection", {identifier: this.identifier, availableCount, inUseCount})
       connection = await this.spawnConnection()
     }
 
@@ -65,8 +67,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(id)
     this.connectionsInUse[id] = connection
-
-    console.log("[db-pool] checkoutConnection", {identifier: this.identifier, id, availableCount, inUseCount})
 
     return connection
   }
@@ -181,7 +181,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       this.getGlobalConnection()
     ].filter(Boolean))
 
+    this.connections = []
+    this.connectionsInUse = {}
+
     for (const connection of connections) {
+      connection[CLOSED_CONNECTION] = true
+
       if (typeof connection.close === "function") {
         await connection.close()
       } else if (typeof connection.disconnect === "function") {
@@ -189,8 +194,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       }
     }
 
-    this.connections = []
-    this.connectionsInUse = {}
   }
 
   /**

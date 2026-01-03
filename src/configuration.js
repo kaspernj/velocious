@@ -19,6 +19,7 @@ class CurrentConfigurationNotSetError extends Error {}
 export {CurrentConfigurationNotSetError}
 
 export default class VelociousConfiguration {
+  _closeDatabaseConnectionsPromise = null
   /** @returns {VelociousConfiguration} - The current.  */
   static current() {
     if (!shared.currentConfiguration) throw new CurrentConfigurationNotSetError("A current configuration hasn't been set")
@@ -520,24 +521,37 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async closeDatabaseConnections() {
-    const constructors = new Set()
-
-    for (const pool of Object.values(this.databasePools)) {
-      if (!pool) continue
-
-      if (typeof pool.closeAll === "function") {
-        await pool.closeAll()
-      }
-
-      const poolConstructor = /** @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
-
-      if (typeof poolConstructor?.clearGlobalConnections === "function") {
-        constructors.add(poolConstructor)
-      }
+    if (this._closeDatabaseConnectionsPromise) {
+      await this._closeDatabaseConnectionsPromise
+      return
     }
 
-    for (const constructor of constructors) {
-      constructor.clearGlobalConnections?.(this)
+    const constructors = new Set()
+
+    this._closeDatabaseConnectionsPromise = (async () => {
+      for (const pool of Object.values(this.databasePools)) {
+        if (!pool) continue
+
+        if (typeof pool.closeAll === "function") {
+          await pool.closeAll()
+        }
+
+        const poolConstructor = /** @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
+
+        if (typeof poolConstructor?.clearGlobalConnections === "function") {
+          constructors.add(poolConstructor)
+        }
+      }
+
+      for (const constructor of constructors) {
+        constructor.clearGlobalConnections?.(this)
+      }
+    })()
+
+    try {
+      await this._closeDatabaseConnectionsPromise
+    } finally {
+      this._closeDatabaseConnectionsPromise = null
     }
   }
 }
