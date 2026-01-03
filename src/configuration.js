@@ -548,6 +548,9 @@ export default class VelociousConfiguration {
       for (const constructor of constructors) {
         constructor.clearGlobalConnections?.(this)
       }
+
+      // Allow models to be re-initialized after connections are closed.
+      this._modelsInitialized = false
     })()
 
     try {
