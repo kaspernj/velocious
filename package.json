@@ -60,7 +60,7 @@
     "cpy-cli": "^6.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-jsdoc": "^61.4.1",
-    "globals": "^16.5.0",
+    "globals": "^17.0.0",
     "mssql": "^12.0.0",
     "mysql": "^2.18.1",
     "node-fetch": "^3.3.1",
