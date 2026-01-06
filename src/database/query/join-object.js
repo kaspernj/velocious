@@ -2,6 +2,7 @@
 
 import JoinBase from "./join-base.js"
 import WhereHash from "./where-hash.js"
+import WhereNot from "./where-not.js"
 
 /**
  * @typedef {{[key: string]: boolean | JoinObject}} JoinObject
@@ -111,19 +112,37 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
     const parts = []
 
     for (const where of wheres) {
-      if (where instanceof WhereHash) {
-        const hash = where.hash
-        const hasNested = Object.values(hash).some((value) => value !== null && typeof value === "object" && !Array.isArray(value))
-        const whereSql = hasNested
-          ? where.toSql()
-          : `(${where._whereSQLFromHash(hash, targetTableRef)})`
-
-        parts.push(whereSql)
-      } else {
-        parts.push(where.toSql())
-      }
+      parts.push(this._scopeSqlForWhere(where, targetTableRef))
     }
 
     return parts.join(" AND ")
+  }
+
+  /**
+   * @param {import("./where-base.js").default} where - Where.
+   * @param {string} targetTableRef - Target table reference.
+   * @returns {string} - Scope where SQL.
+   */
+  _scopeSqlForWhere(where, targetTableRef) {
+    if (where instanceof WhereHash) {
+      const hash = where.hash
+      const hasNested = Object.values(hash).some((value) => value !== null && typeof value === "object" && !Array.isArray(value))
+
+      return hasNested
+        ? where.toSql()
+        : `(${where._whereSQLFromHash(hash, targetTableRef)})`
+    }
+
+    if (where instanceof WhereNot && where.where instanceof WhereHash) {
+      const hash = where.where.hash
+      const hasNested = Object.values(hash).some((value) => value !== null && typeof value === "object" && !Array.isArray(value))
+      const innerSql = hasNested
+        ? where.where.toSql()
+        : `(${where.where._whereSQLFromHash(hash, targetTableRef)})`
+
+      return `NOT (${innerSql})`
+    }
+
+    return where.toSql()
   }
 }
