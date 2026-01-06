@@ -52,4 +52,24 @@ describe("Database - query - join tracker", () => {
       expect(query.toSql()).toContain(`${driver.quoteTable(expectedAlias)}.${driver.quoteColumn("is_done")}`)
     })
   })
+
+  it("qualifies where.not hash columns in join scopes", async () => {
+    await Dummy.run(async () => {
+      if (!Project.getRelationshipsMap().notDoneTasksForJoinPath) {
+        Project.hasMany("notDoneTasksForJoinPath", function() {
+          return this.where.not({isDone: null})
+        }, {className: "Task"})
+      }
+
+      const joinObject = {project: {}}
+      joinObject.project.notDoneTasksForJoinPath = true
+
+      const query = Task.joins(joinObject)
+      const driver = query.driver
+      const expectedAlias = "tasks__project__notDoneTasksForJoinPath"
+      const expectedCondition = `NOT ((${driver.quoteTable(expectedAlias)}.${driver.quoteColumn("is_done")} IS NULL))`
+
+      expect(query.toSql()).toContain(expectedCondition)
+    })
+  })
 })

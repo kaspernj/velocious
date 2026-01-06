@@ -9,6 +9,7 @@ import DatabaseQuery from "./index.js"
 import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
+import WhereNot from "./where-not.js"
 
 /**
  * @template {typeof import("../record/index.js").default} MC
@@ -463,6 +464,43 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
       if (Object.keys(fallbackHash).length > 0) {
         super.where(fallbackHash)
+      }
+
+      return this
+    }
+
+    throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
+  }
+
+  /**
+   * @param {import("./index.js").WhereArgumentType} where - Where.
+   * @returns {this} This query instance
+   */
+  whereNot(where) {
+    if (typeof where == "string") {
+      return super.whereNot(where)
+    }
+
+    if (isPlainObject(where)) {
+      const {resolvedHash, fallbackHash} = splitWhereHash({hash: where, modelClass: this.getModelClass()})
+      const joinObject = buildJoinObjectFromWhereHash({hash: where, modelClass: this.getModelClass()})
+
+      if (Object.keys(joinObject).length > 0) {
+        this.joins(joinObject)
+      }
+
+      if (Object.keys(resolvedHash).length > 0) {
+        const qualifyBaseTable = this.getForceQualifyBaseTable() || Object.keys(joinObject).length > 0
+        this._wheres.push(new WhereNot(new WhereModelClassHash({
+          hash: resolvedHash,
+          modelClass: this.getModelClass(),
+          qualifyBaseTable,
+          query: this
+        })))
+      }
+
+      if (Object.keys(fallbackHash).length > 0) {
+        super.whereNot(fallbackHash)
       }
 
       return this

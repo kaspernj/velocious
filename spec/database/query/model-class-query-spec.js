@@ -160,4 +160,35 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
       expect(results).toEqual([])
     })
   })
+
+  it("filters with where.not using attribute names", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({nameEn: "Not Attribute", nameDe: "Nicht Attribut"})
+
+      await Task.create({name: "Done Task", project, isDone: true})
+      await Task.create({name: "Open Task", project, isDone: false})
+
+      const names = (await Task.all().where.not({isDone: true}).toArray())
+        .map((task) => task.name())
+        .sort()
+
+      expect(names).toEqual(["Open Task"])
+    })
+  })
+
+  it("filters with where.not using column names", async () => {
+    await Dummy.run(async () => {
+      const projectMatch = await Project.create({nameEn: "Column Match", nameDe: "Spalten Treffer"})
+      const projectMiss = await Project.create({nameEn: "Column Miss", nameDe: "Spalten Fehl"})
+
+      await Task.create({name: "Match Task", project: projectMatch})
+      await Task.create({name: "Miss Task", project: projectMiss})
+
+      const names = (await Task.all().where.not({project_id: projectMatch.id()}).toArray())
+        .map((task) => task.name())
+        .sort()
+
+      expect(names).toEqual(["Miss Task"])
+    })
+  })
 })
