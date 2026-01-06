@@ -42,7 +42,7 @@
     "diggerize": "^1.0.5",
     "ejs": "^3.1.6",
     "env-sense": "^1.0.2",
-    "epic-locks": "^1.0.4",
+    "epic-locks": "^1.0.7",
     "escape-string-regexp": "^1.0.5",
     "eventemitter3": "^5.0.1",
     "incorporator": "^1.0.2",
