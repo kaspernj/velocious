@@ -9,6 +9,7 @@ import OrderPlain from "./order-plain.js"
 import SelectBase from "./select-base.js"
 import SelectPlain from "./select-plain.js"
 import WhereHash from "./where-hash.js"
+import WhereNot from "./where-not.js"
 import WherePlain from "./where-plain.js"
 
 /**
@@ -76,6 +77,10 @@ export default class VelociousDatabaseQuery {
 
     /** @type {import("./where-base.js").default[]} */
     this._wheres = wheres
+
+    const boundWhere = this.where.bind(this)
+    boundWhere.not = this.whereNot.bind(this)
+    this.where = boundWhere
   }
 
   /** @returns {this} - The clone.  */
@@ -295,6 +300,22 @@ export default class VelociousDatabaseQuery {
       this._wheres.push(new WherePlain(this, where))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
       this._wheres.push(new WhereHash(this, where))
+    } else {
+      throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
+    }
+
+    return this
+  }
+
+  /**
+   * @param {WhereArgumentType} where - Where.
+   * @returns {this} This query instance
+   */
+  whereNot(where) {
+    if (typeof where == "string") {
+      this._wheres.push(new WhereNot(new WherePlain(this, where)))
+    } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
+      this._wheres.push(new WhereNot(new WhereHash(this, where)))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }
