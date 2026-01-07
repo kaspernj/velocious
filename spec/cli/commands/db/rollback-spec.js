@@ -9,12 +9,18 @@ describe("Cli - Commands - db:rollback", () => {
     await configuration.ensureConnections(async (dbs) => {
       const tableNames = ["autoindex_test", "uuid_default_test"]
 
-      for (const tableName of tableNames) {
-        await dbs.default.dropTable(tableName, {cascade: true, ifExists: true})
+      const dropTables = async (db) => {
+        await db.withDisabledForeignKeys(async () => {
+          for (const tableName of tableNames) {
+            await db.dropTable(tableName, {cascade: true, ifExists: true})
+          }
+        })
+      }
 
-        if (dbs.default.getType() != "mssql") {
-          await dbs.mssql.dropTable(tableName, {cascade: true, ifExists: true})
-        }
+      await dropTables(dbs.default)
+
+      if (dbs.default.getType() != "mssql") {
+        await dropTables(dbs.mssql)
       }
     })
   }
