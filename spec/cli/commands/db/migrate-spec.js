@@ -48,22 +48,22 @@ describe("Cli - Commands - db:migrate", () => {
       defaultDatabaseType = dbs.default.getType()
 
       const tableNames = [
-        "accounts",
-        "authentication_tokens",
-        "autoindex_test",
         "comments",
         "interactions",
+        "string_subject_interactions",
         "project_details",
         "project_translations",
-        "projects",
-        "schema_migrations",
-        "string_subject_interactions",
-        "string_subjects",
         "tasks",
+        "authentication_tokens",
+        "projects",
         "users",
-        "uuid_default_test",
+        "accounts",
+        "string_subjects",
         "uuid_interactions",
-        "uuid_items"
+        "uuid_items",
+        "autoindex_test",
+        "uuid_default_test",
+        "schema_migrations"
       ]
 
       const dropTables = async (db) => {
