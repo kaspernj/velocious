@@ -9,6 +9,8 @@ export default class JsonSocket extends EventEmitter {
   constructor(socket) {
     super()
     this.socket = socket
+    /** @type {string | undefined} */
+    this.workerId = undefined
     this.buffer = ""
     this.socket.setEncoding("utf8")
     this.socket.on("data", (chunk) => this._onData(String(chunk)))

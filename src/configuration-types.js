@@ -73,6 +73,7 @@
  * @typedef {object} BackgroundJobsConfiguration
  * @property {string} [host] - Hostname for the background jobs main process.
  * @property {number} [port] - Port for the background jobs main process.
+ * @property {string} [databaseIdentifier] - Database identifier used to store background jobs.
  */
 
 /**

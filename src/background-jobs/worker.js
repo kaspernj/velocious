@@ -5,6 +5,8 @@ import {spawn} from "node:child_process"
 import JsonSocket from "./json-socket.js"
 import BackgroundJobRegistry from "./job-registry.js"
 import configurationResolver from "../configuration-resolver.js"
+import BackgroundJobsStatusReporter from "./status-reporter.js"
+import {randomUUID} from "crypto"
 
 export default class BackgroundJobsWorker {
   /**
@@ -18,6 +20,7 @@ export default class BackgroundJobsWorker {
     this.host = host
     this.port = port
     this.shouldStop = false
+    this.workerId = randomUUID()
   }
 
   /**
@@ -27,6 +30,11 @@ export default class BackgroundJobsWorker {
     this.configuration = await this.configurationPromise
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-worker"})
+    this.statusReporter = new BackgroundJobsStatusReporter({
+      configuration: this.configuration,
+      host: this.host,
+      port: this.port
+    })
     await this._connect()
   }
 
@@ -62,7 +70,7 @@ export default class BackgroundJobsWorker {
     })
 
     socket.on("connect", () => {
-      jsonSocket.send({type: "hello", role: "worker"})
+      jsonSocket.send({type: "hello", role: "worker", workerId: this.workerId})
       jsonSocket.send({type: "ready"})
     })
   }
@@ -81,7 +89,12 @@ export default class BackgroundJobsWorker {
       return
     }
 
-    await this._runJobInline(payload)
+    try {
+      await this._runJobInline(payload)
+      void this._reportJobResult({jobId: payload.id, status: "completed"})
+    } catch (error) {
+      void this._reportJobResult({jobId: payload.id, status: "failed", error})
+    }
     this.jsonSocket?.send({type: "ready"})
   }
 
@@ -107,15 +120,35 @@ export default class BackgroundJobsWorker {
     const argvCommand = process.argv[1]
     const command = argvCommand ? argvCommand : `${directory}/bin/velocious.js`
     const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64")
+    const backgroundJobsConfig = this.configuration.getBackgroundJobsConfig()
     const child = spawn(process.execPath, [command, "background-jobs-runner"], {
       cwd: directory,
       detached: true,
       stdio: "ignore",
       env: Object.assign({}, process.env, {
+        VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
+        VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`,
         VELOCIOUS_JOB_PAYLOAD: encodedPayload
       })
     })
 
     child.unref()
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {"completed" | "failed"} args.status - Status.
+   * @param {unknown} [args.error] - Error.
+   * @returns {Promise<void>} - Resolves when reported.
+   */
+  async _reportJobResult({jobId, status, error}) {
+    if (!this.statusReporter) return
+
+    try {
+      await this.statusReporter.reportWithRetry({jobId, status, error})
+    } catch (reportError) {
+      console.error("Background job status reporting failed:", reportError)
+    }
   }
 }

@@ -6,12 +6,15 @@ import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import TestJob from "../dummy/src/jobs-directory/test-job.js"
+import TestJob from "../dummy/src/jobs/test-job.js"
 
 describe("Background jobs", () => {
   it("enqueues and runs a job in a worker", async () => {
     dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
 
     const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
     await main.start()
@@ -28,7 +31,7 @@ describe("Background jobs", () => {
     await fs.mkdir(tmpDir, {recursive: true})
     const outputPath = path.join(tmpDir, `job-${Date.now()}.json`)
 
-    await TestJob.performLaterWithOptions({
+    const jobId = await TestJob.performLaterWithOptions({
       args: ["hello", outputPath],
       options: {forked: false}
     })
@@ -47,6 +50,14 @@ describe("Background jobs", () => {
     const result = JSON.parse(await fs.readFile(outputPath, "utf8"))
 
     expect(result).toEqual({message: "hello"})
+
+    await timeout({timeout: 2000}, async () => {
+      while (true) {
+        const job = await store.getJob(jobId)
+        if (job?.status === "completed") break
+        await wait(0.05)
+      }
+    })
 
     await worker.stop()
     await main.stop()

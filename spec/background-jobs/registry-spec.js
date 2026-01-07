@@ -17,7 +17,7 @@ describe("Background jobs - registry", () => {
   async function createTempProjectDir() {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-jobs-"))
     await fs.writeFile(path.join(directory, "package.json"), JSON.stringify({type: "module"}))
-    await fs.mkdir(path.join(directory, "src", "jobs-directory"), {recursive: true})
+    await fs.mkdir(path.join(directory, "src", "jobs"), {recursive: true})
 
     return {
       directory,
@@ -55,7 +55,7 @@ describe("Background jobs - registry", () => {
 
   it("throws when a job class does not extend VelociousJob", async () => {
     const {directory, cleanup} = await createTempProjectDir()
-    const jobFile = path.join(directory, "src", "jobs-directory", "bad-job.js")
+    const jobFile = path.join(directory, "src", "jobs", "bad-job.js")
     const jobContents = "export default class BadJob {}"
 
     await fs.writeFile(jobFile, jobContents)
@@ -74,8 +74,8 @@ describe("Background jobs - registry", () => {
     const {directory, cleanup} = await createTempProjectDir()
     const testDir = path.dirname(fileURLToPath(import.meta.url))
     const jobPath = path.join(testDir, "..", "..", "src", "background-jobs", "job.js")
-    const jobFile1 = path.join(directory, "src", "jobs-directory", "first.js")
-    const jobFile2 = path.join(directory, "src", "jobs-directory", "second.js")
+    const jobFile1 = path.join(directory, "src", "jobs", "first.js")
+    const jobFile2 = path.join(directory, "src", "jobs", "second.js")
     const jobContents = `import VelociousJob from "${jobPath}"
 
 export default class DuplicateJob extends VelociousJob {}
@@ -103,7 +103,7 @@ export default class DuplicateJob extends VelociousJob {}
 
     expect(() => {
       registry.getJobByName("MissingJob")
-    }).toThrowError('Unknown job "MissingJob". Check src/jobs-directory')
+    }).toThrowError('Unknown job "MissingJob". Check src/jobs')
 
     await cleanup()
   })

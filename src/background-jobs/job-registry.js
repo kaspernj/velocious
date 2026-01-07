@@ -20,7 +20,7 @@ export default class BackgroundJobRegistry {
    */
   async load() {
     const directory = this.configuration.getDirectory()
-    const jobsDir = path.join(directory, "src", "jobs-directory")
+    const jobsDir = path.join(directory, "src", "jobs")
 
     try {
       await fs.access(jobsDir)
@@ -57,7 +57,7 @@ export default class BackgroundJobRegistry {
     const jobClass = this.jobsByName.get(jobName)
 
     if (!jobClass) {
-      throw new Error(`Unknown job "${jobName}". Check src/jobs-directory`)
+      throw new Error(`Unknown job "${jobName}". Check src/jobs`)
     }
 
     return jobClass

@@ -753,7 +753,8 @@ export default new Configuration({
   // ...
   backgroundJobs: {
     host: "127.0.0.1",
-    port: 7331
+    port: 7331,
+    databaseIdentifier: "default"
   }
 })
 ```
@@ -763,6 +764,7 @@ Or via env vars:
 ```
 VELOCIOUS_BACKGROUND_JOBS_HOST=127.0.0.1
 VELOCIOUS_BACKGROUND_JOBS_PORT=7331
+VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER=default
 ```
 
 ## Defining jobs
@@ -791,6 +793,21 @@ await MyJob.performLaterWithOptions({
   options: {forked: false}
 })
 ```
+
+## Persistence and retries
+
+Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the job is marked as handed off and the worker reports completion or failure back to the main process.
+
+Failed jobs are re-queued with backoff and retried up to 10 times by default (10s, 1m, 10m, 1h, then +1h per retry). You can override the retry limit per job:
+
+```js
+await MyJob.performLaterWithOptions({
+  args: ["a", "b"],
+  options: {maxRetries: 3}
+})
+```
+
+If a handed-off job does not report back within 2 hours, it is marked orphaned and re-queued if retries remain.
 
 # Running a server
 

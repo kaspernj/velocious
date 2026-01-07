@@ -6,13 +6,16 @@ import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import AppendJob from "../dummy/src/jobs-directory/append-job.js"
-import DelayedJob from "../dummy/src/jobs-directory/delayed-job.js"
+import AppendJob from "../dummy/src/jobs/append-job.js"
+import DelayedJob from "../dummy/src/jobs/delayed-job.js"
 
 describe("Background jobs - queue", () => {
   it("processes inline jobs in order", async () => {
     dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
 
     const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
     await main.start()
@@ -61,6 +64,8 @@ describe("Background jobs - queue", () => {
 
   it("does not block the worker when running forked jobs", async () => {
     dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
 
     const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
     await main.start()
