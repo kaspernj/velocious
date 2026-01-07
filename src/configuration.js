@@ -28,9 +28,10 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
+  constructor({backgroundJobs, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
     restArgsError(restArgs)
 
+    this._backgroundJobs = backgroundJobs
     this.cors = cors
     this.database = database
     this.debug = debug
@@ -195,6 +196,30 @@ export default class VelociousConfiguration {
       filePath,
       levels
     }
+  }
+
+  /**
+   * @returns {Required<import("./configuration-types.js").BackgroundJobsConfiguration>} - Background jobs configuration.
+   */
+  getBackgroundJobsConfig() {
+    const envHost = process.env.VELOCIOUS_BACKGROUND_JOBS_HOST
+    const envPortRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_PORT
+    const envPort = envPortRaw ? Number(envPortRaw) : undefined
+    const configured = this._backgroundJobs || {}
+    const host = configured.host || envHost || "127.0.0.1"
+    const port = typeof configured.port === "number"
+      ? configured.port
+      : (typeof envPort === "number" && Number.isFinite(envPort) ? envPort : 7331)
+
+    return {host, port}
+  }
+
+  /**
+   * @param {import("./configuration-types.js").BackgroundJobsConfiguration} backgroundJobs - Background jobs config.
+   * @returns {void}
+   */
+  setBackgroundJobsConfig(backgroundJobs) {
+    this._backgroundJobs = Object.assign({}, this._backgroundJobs, backgroundJobs)
   }
 
   /**
