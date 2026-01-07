@@ -70,6 +70,12 @@
  */
 
 /**
+ * @typedef {object} BackgroundJobsConfiguration
+ * @property {string} [host] - Hostname for the background jobs main process.
+ * @property {number} [port] - Port for the background jobs main process.
+ */
+
+/**
  * @typedef {Record<string, string[]>} LocaleFallbacksType
  */
 
@@ -82,6 +88,7 @@
  * @property {string} [environment] - Current environment name.
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
+ * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.
  * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.
  * @property {string | function() : string} locale - Default locale or locale resolver.
