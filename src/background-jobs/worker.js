@@ -25,6 +25,7 @@ export default class BackgroundJobsWorker {
    */
   async start() {
     this.configuration = await this.configurationPromise
+    this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-worker"})
     await this._connect()
   }
@@ -49,6 +50,10 @@ export default class BackgroundJobsWorker {
       if (message?.type === "job") {
         await this._handleJob(message.payload)
       }
+    })
+
+    jsonSocket.on("error", (error) => {
+      console.error("Background jobs worker socket error:", error)
     })
 
     jsonSocket.on("close", () => {
