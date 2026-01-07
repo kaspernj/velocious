@@ -5,6 +5,20 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
+  const dropExtraTables = async (configuration) => {
+    await configuration.ensureConnections(async (dbs) => {
+      const tableNames = ["autoindex_test", "uuid_default_test"]
+
+      for (const tableName of tableNames) {
+        await dbs.default.dropTable(tableName, {cascade: true, ifExists: true})
+
+        if (dbs.default.getType() != "mssql") {
+          await dbs.mssql.dropTable(tableName, {cascade: true, ifExists: true})
+        }
+      }
+    })
+  }
+
   const runMigrations = async () => {
     const cliMigrate = new Cli({
       configuration: dummyConfiguration,
@@ -14,6 +28,7 @@ describe("Cli - Commands - db:rollback", () => {
       testing: true
     })
 
+    await dropExtraTables(cliMigrate.configuration)
     await cliMigrate.execute()
   }
 
