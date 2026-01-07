@@ -25,9 +25,9 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
       sql += " "
     }
 
-    if (driver.getType() == "mssql") {
-      // sql += "BETWEEN"
-    } else {
+    const isMssql = driver.getType() == "mssql"
+
+    if (!isMssql) {
       sql += "LIMIT"
     }
 
@@ -40,8 +40,12 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
       sql += " "
     }
 
-    if (driver.getType() == "mssql") {
-      sql += `OFFSET ${options.quote(offset === null ? 0 : offset)} ROWS FETCH FIRST ${options.quote(limit)} ROWS ONLY`
+    if (isMssql) {
+      if (query._orders.length === 0) {
+        sql += "ORDER BY (SELECT NULL) "
+      }
+
+      sql += `OFFSET ${options.quote(offset === null ? 0 : offset)} ROWS FETCH NEXT ${options.quote(limit)} ROWS ONLY`
     } else {
       sql += options.quote(limit)
 
