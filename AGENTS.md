@@ -17,9 +17,11 @@ Prefer `awaitery`'s `timeout` helper over manual `Promise.race` timeouts when a 
 
 ### Targeted checks (preferred)
 Run only the relevant, changed, or new linters and tests locally:
-- Use `npm run lint`/`npm run typecheck` when changes affect lint or types.
+- Always run `npm run lint` after changing any files.
+- Use `npm run typecheck` when changes affect types.
 - Use `npx velocious test <path-or-example>` for focused specs.
 - Prefer adding or updating tests and running only those.
+- Keep indentation consistent with the surrounding code.
 
 ### Quick check (fast)
 Run as needed while iterating:

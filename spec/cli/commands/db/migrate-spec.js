@@ -47,14 +47,37 @@ describe("Cli - Commands - db:migrate", () => {
     await cli.getConfiguration().ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
 
-      const tableNames = ["accounts", "authentication_tokens", "comments", "interactions", "string_subject_interactions", "string_subjects", "tasks", "project_details", "project_translations", "projects", "schema_migrations", "users", "uuid_interactions", "uuid_items"]
+      const tableNames = [
+        "comments",
+        "interactions",
+        "string_subject_interactions",
+        "project_details",
+        "project_translations",
+        "tasks",
+        "authentication_tokens",
+        "projects",
+        "users",
+        "accounts",
+        "string_subjects",
+        "uuid_interactions",
+        "uuid_items",
+        "autoindex_test",
+        "uuid_default_test",
+        "schema_migrations"
+      ]
 
-      for (const tableName of tableNames) {
-        await dbs.default.dropTable(tableName, {cascade: true, ifExists: true})
+      const dropTables = async (db) => {
+        await db.withDisabledForeignKeys(async () => {
+          for (const tableName of tableNames) {
+            await db.dropTable(tableName, {cascade: true, ifExists: true})
+          }
+        })
+      }
 
-        if (dbs.default.getType() != "mssql") {
-          await dbs.mssql.dropTable(tableName, {cascade: true, ifExists: true})
-        }
+      await dropTables(dbs.default)
+
+      if (dbs.default.getType() != "mssql") {
+        await dropTables(dbs.mssql)
       }
 
       await cli.execute()
