@@ -720,6 +720,78 @@ Create the file `src/routes/testing/another-action.ejs` and so something like th
 </p>
 ```
 
+# Background jobs
+
+Velocious includes a simple background jobs system inspired by Sidekiq.
+
+## Setup
+
+Create a jobs directory in your app:
+
+```
+src/jobs-directory/
+```
+
+Start the background jobs main process (the queue router):
+
+```bash
+npx velocious background-jobs-main
+```
+
+Start one or more workers:
+
+```bash
+npx velocious background-jobs-worker
+```
+
+## Configuration
+
+You can configure the main host/port in your configuration:
+
+```js
+export default new Configuration({
+  // ...
+  backgroundJobs: {
+    host: "127.0.0.1",
+    port: 7331
+  }
+})
+```
+
+Or via env vars:
+
+```
+VELOCIOUS_BACKGROUND_JOBS_HOST=127.0.0.1
+VELOCIOUS_BACKGROUND_JOBS_PORT=7331
+```
+
+## Defining jobs
+
+```js
+import VelociousJob from "velocious/build/src/background-jobs/job.js"
+
+export default class MyJob extends VelociousJob {
+  async perform(arg1, arg2) {
+    await doWork(arg1, arg2)
+  }
+}
+```
+
+Queue a job:
+
+```js
+await MyJob.performLater("a", "b")
+```
+
+Jobs are forked by default (detached from the worker). To run inline:
+
+```js
+await MyJob.performLaterWithOptions({
+  args: ["a", "b"],
+  options: {forked: false}
+})
+```
+
 # Running a server
 
 ```bash
