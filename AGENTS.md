@@ -16,7 +16,8 @@ Prefer `awaitery`'s `timeout` helper over manual `Promise.race` timeouts when a 
 ## Verification commands
 
 ### Targeted checks (preferred)
-Run only the relevant, changed, or new tests locally:
+Run only the relevant, changed, or new linters and tests locally:
+- Use `npm run lint`/`npm run typecheck` when changes affect lint or types.
 - Use `npx velocious test <path-or-example>` for focused specs.
 - Prefer adding or updating tests and running only those.
 
