@@ -12,7 +12,7 @@ export default class VelociousDatabaseConnectionDriversPgsqlSqlUpdate extends Up
 
       sql += this.getOptions().quoteColumnName(columnName)
       sql += " = "
-      sql += this.getOptions().quote(this.data[columnName])
+      sql += this.formatValue(this.data[columnName])
       count++
     }
 
@@ -24,7 +24,7 @@ export default class VelociousDatabaseConnectionDriversPgsqlSqlUpdate extends Up
 
       sql += this.getOptions().quoteColumnName(columnName)
       sql += " = "
-      sql += this.getOptions().quote(this.conditions[columnName])
+      sql += this.formatValue(this.conditions[columnName])
       count++
     }
 

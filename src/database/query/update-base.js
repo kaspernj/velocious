@@ -22,8 +22,17 @@ export default class VelociousDatabaseQueryUpdateBase {
     return this.driver.options()
   }
 
+  /**
+   * @param {any} value - Value to format.
+   * @returns {string | number} - SQL literal.
+   */
+  formatValue(value) {
+    if (value === null) return "NULL"
+
+    return this.getOptions().quote(value)
+  }
+
   toSql() {
     throw new Error("'toSql' wasn't implemented")
   }
 }
-
