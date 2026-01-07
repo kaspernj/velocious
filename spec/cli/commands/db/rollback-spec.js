@@ -5,6 +5,7 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
+  const internalTables = new Set(["background_jobs", "velocious_internal_migrations"])
   const dropExtraTables = async (configuration) => {
     await configuration.ensureConnections(async (dbs) => {
       const tableNames = ["autoindex_test", "uuid_default_test"]
@@ -91,8 +92,10 @@ describe("Cli - Commands - db:rollback", () => {
 
     const {defaultDatabaseType, defaultSchemaMigrations, tablesResult} = await getTestData()
 
+    const filteredTables = tablesResult.filter((tableName) => !internalTables.has(tableName))
+
     if (defaultDatabaseType == "mssql") {
-      expect(uniqunize(tablesResult.sort())).toEqual(
+      expect(uniqunize(filteredTables.sort())).toEqual(
         [
           "accounts",
           "authentication_tokens",
@@ -128,7 +131,7 @@ describe("Cli - Commands - db:rollback", () => {
         "20251228090000"
       ])
     } else {
-      expect(tablesResult.sort()).toEqual(
+      expect(filteredTables.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
@@ -169,9 +172,10 @@ describe("Cli - Commands - db:rollback", () => {
     await runMigrations()
 
     const {defaultSchemaMigrations: newDefaultSchemaMigrations, tablesResult: newTablesResult} = await getTestData()
+    const filteredNewTablesResult = newTablesResult.filter((tableName) => !internalTables.has(tableName))
 
     if (defaultDatabaseType == "mssql") {
-      expect(uniqunize(newTablesResult.sort())).toEqual(
+      expect(uniqunize(filteredNewTablesResult.sort())).toEqual(
         [
           "accounts",
           "authentication_tokens",
@@ -208,7 +212,7 @@ describe("Cli - Commands - db:rollback", () => {
         "20251228090010"
       ])
     } else {
-      expect(newTablesResult.sort()).toEqual(
+      expect(filteredNewTablesResult.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
