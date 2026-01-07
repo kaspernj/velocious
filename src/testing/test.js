@@ -279,6 +279,32 @@ class Expect extends BaseExpect {
    * @param {number} result - Result.
    * @returns {void} - No return value.
    */
+  toBeLessThan(result) {
+    if (typeof this._object !== "number" || typeof result !== "number") {
+      throw new Error(`Expected numbers but got ${typeof this._object} and ${typeof result}`)
+    }
+
+    if (this._not) {
+      if (this._object < result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} was unexpected to be less than ${resultPrint}`)
+      }
+    } else {
+      if (this._object >= result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} wasn't expected to be greater than or equal to ${resultPrint}`)
+      }
+    }
+  }
+
+  /**
+   * @param {number} result - Result.
+   * @returns {void} - No return value.
+   */
   toBeLessThanOrEqual(result) {
     if (typeof this._object !== "number" || typeof result !== "number") {
       throw new Error(`Expected numbers but got ${typeof this._object} and ${typeof result}`)
@@ -324,6 +350,93 @@ class Expect extends BaseExpect {
 
         throw new Error(`${objectPrint} wasn't expected to be less than or equal to ${resultPrint}`)
       }
+    }
+  }
+
+  /**
+   * @param {number} result - Result.
+   * @returns {void} - No return value.
+   */
+  toBeGreaterThanOrEqual(result) {
+    if (typeof this._object !== "number" || typeof result !== "number") {
+      throw new Error(`Expected numbers but got ${typeof this._object} and ${typeof result}`)
+    }
+
+    if (this._not) {
+      if (this._object >= result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} was unexpected to be greater than or equal to ${resultPrint}`)
+      }
+    } else {
+      if (this._object < result) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} wasn't expected to be less than ${resultPrint}`)
+      }
+    }
+  }
+
+  /**
+   * @param {number} result - Result.
+   * @param {number} [precision=2] - Decimal precision.
+   * @returns {void} - No return value.
+   */
+  toBeCloseTo(result, precision = 2) {
+    if (typeof this._object !== "number" || typeof result !== "number") {
+      throw new Error(`Expected numbers but got ${typeof this._object} and ${typeof result}`)
+    }
+
+    if (typeof precision !== "number" || !Number.isFinite(precision)) {
+      throw new Error(`Expected precision to be a number but got ${typeof precision}`)
+    }
+
+    const tolerance = 0.5 * Math.pow(10, -precision)
+    const diff = Math.abs(this._object - result)
+    const isClose = diff <= tolerance
+
+    if (this._not) {
+      if (isClose) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} was unexpected to be close to ${resultPrint}`)
+      }
+    } else {
+      if (!isClose) {
+        const objectPrint = formatValue(this._object)
+        const resultPrint = formatValue(result)
+
+        throw new Error(`${objectPrint} wasn't expected to be close to ${resultPrint}`)
+      }
+    }
+  }
+
+  /**
+   * @param {number} result - Expected length.
+   * @returns {void} - No return value.
+   */
+  toHaveLength(result) {
+    if (typeof result !== "number") {
+      throw new Error(`Expected length number but got ${typeof result}`)
+    }
+
+    if (this._object === null || this._object === undefined || typeof this._object.length !== "number") {
+      throw new Error(`Expected value with length but got ${typeof this._object}`)
+    }
+
+    const objectPrint = formatValue(this._object)
+    const resultPrint = formatValue(result)
+    const lengthValue = this._object.length
+
+    if (this._not) {
+      if (lengthValue === result) {
+        throw new Error(`${objectPrint} was unexpected to have length ${resultPrint}`)
+      }
+    } else if (lengthValue !== result) {
+      throw new Error(`${objectPrint} wasn't expected to have length ${resultPrint}`)
     }
   }
 
@@ -446,6 +559,30 @@ class Expect extends BaseExpect {
         ? minifiedStringify(valueToContain)
         : formatValue(valueToContain)
 
+      throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
+    }
+  }
+
+  /**
+   * @param {any} valueToContain - Value to contain.
+   * @returns {void} - No return value.
+   */
+  toContainEqual(valueToContain) {
+    if (!Array.isArray(this._object)) {
+      throw new Error(`Expected array but got ${typeof this._object}`)
+    }
+
+    const matches = this._object.some((item) => !anythingDifferent(item, valueToContain))
+    const objectPrint = formatValue(this._object)
+    const valuePrint = typeof valueToContain == "string"
+      ? minifiedStringify(valueToContain)
+      : formatValue(valueToContain)
+
+    if (this._not) {
+      if (matches) {
+        throw new Error(`${objectPrint} was unexpected to contain ${valuePrint}`)
+      }
+    } else if (!matches) {
       throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
     }
   }
@@ -667,6 +804,70 @@ class Expect extends BaseExpect {
 
     if (failedErrorMessage != expectedErrorMessage) {
       throw new Error(`Expected to fail with '${expectedErrorMessage}' but failed with '${failedErrorMessage}'`)
+    }
+  }
+
+  /**
+   * @param {string|RegExp|Error|((new (...args: unknown[]) => Error))} [expected] - Expected error.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async toThrow(expected) {
+    if (typeof this._object !== "function") {
+      throw new Error(`Expected function but got ${typeof this._object}`)
+    }
+
+    let failedError
+
+    try {
+      await this._object()
+    } catch (error) {
+      failedError = error
+    }
+
+    const objectPrint = formatValue(this._object)
+
+    if (this._not) {
+      if (failedError) {
+        throw new Error(`${objectPrint} was unexpected to throw`)
+      }
+
+      return
+    }
+
+    if (!failedError) throw new Error("Expected to fail but didn't")
+    if (expected === undefined) return
+
+    const failedErrorMessage = failedError instanceof Error ? failedError.message : String(failedError)
+    const failedErrorName = failedError instanceof Error ? failedError.name : typeof failedError
+
+    if (expected instanceof RegExp) {
+      if (!expected.test(failedErrorMessage)) {
+        throw new Error(`Expected to fail with message matching ${expected} but failed with '${failedErrorMessage}'`)
+      }
+
+      return
+    }
+
+    if (typeof expected === "function" && (expected.prototype instanceof Error || expected === Error)) {
+      if (!(failedError instanceof expected)) {
+        throw new Error(`Expected to throw ${expected.name} but threw ${failedErrorName}`)
+      }
+
+      return
+    }
+
+    let expectedMessage
+
+    if (typeof expected === "string") {
+      expectedMessage = expected
+    } else if (expected instanceof Error) {
+      expectedMessage = expected.message
+    } else {
+      expectedMessage = String(expected)
+    }
+
+    if (failedErrorMessage != expectedMessage) {
+      throw new Error(`Expected to fail with '${expectedMessage}' but failed with '${failedErrorMessage}'`)
     }
   }
 
