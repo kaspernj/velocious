@@ -15,8 +15,14 @@ Prefer `awaitery`'s `timeout` helper over manual `Promise.race` timeouts when a 
 
 ## Verification commands
 
+### Targeted checks (preferred)
+Run only the relevant, changed, or new linters and tests locally:
+- Use `npm run lint`/`npm run typecheck` when changes affect lint or types.
+- Use `npx velocious test <path-or-example>` for focused specs.
+- Prefer adding or updating tests and running only those.
+
 ### Quick check (fast)
-Run this frequently while iterating:
+Run as needed while iterating:
 
 1) Lint
    `npm run lint`
@@ -25,11 +31,7 @@ Run this frequently while iterating:
    `npm run typecheck`
 
 ### Normal check (full validation, slower)
-Before you say the work is done, run:
-
-1) `npm run lint`
-2) `npm run typecheck`
-3) `npm test`
+Skip full local suites; Peakflow will run the full test matrix for all database types on PRs.
 
 If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.
