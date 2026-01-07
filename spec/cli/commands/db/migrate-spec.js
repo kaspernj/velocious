@@ -38,8 +38,8 @@ describe("Cli - Commands - db:migrate", () => {
     /** @type {string[]} */
     const defaultSchemaMigrations = []
 
-      /** @type {string[]} */
-      const tablesResult = []
+    /** @type {string[]} */
+    const tablesResult = []
 
     /** @type {import("../../../../src/database/drivers/base-foreign-key.js").default | undefined} */
     let projectForeignKey
