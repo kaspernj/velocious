@@ -729,7 +729,7 @@ Velocious includes a simple background jobs system inspired by Sidekiq.
 Create a jobs directory in your app:
 
 ```
-src/jobs-directory/
+src/jobs/
 ```
 
 Start the background jobs main process (the queue router):
