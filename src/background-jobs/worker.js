@@ -99,7 +99,8 @@ export default class BackgroundJobsWorker {
    */
   async _spawnDetachedJob(payload) {
     const directory = this.configuration.getDirectory()
-    const command = `${directory}/bin/velocious.js`
+    const argvCommand = process.argv[1]
+    const command = argvCommand ? argvCommand : `${directory}/bin/velocious.js`
     const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64")
     const child = spawn(process.execPath, [command, "background-jobs-runner"], {
       cwd: directory,
