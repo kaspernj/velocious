@@ -18,10 +18,10 @@ describe("Background jobs - store", () => {
       }
     })
 
-    await store.markHandedOff({jobId, workerId: "worker-1"})
+    let handedOffAtMs = await store.markHandedOff({jobId, workerId: "worker-1"})
 
     const before = Date.now()
-    await store.markFailed({jobId, error: "boom"})
+    await store.markFailed({jobId, error: "boom", workerId: "worker-1", handedOffAtMs})
 
     let job = await store.getJob(jobId)
 
@@ -29,7 +29,8 @@ describe("Background jobs - store", () => {
     expect(job?.attempts).toEqual(1)
     expect(job?.scheduledAtMs).toBeGreaterThan(before + 9000)
 
-    await store.markFailed({jobId, error: "boom again"})
+    handedOffAtMs = await store.markHandedOff({jobId, workerId: "worker-1"})
+    await store.markFailed({jobId, error: "boom again", workerId: "worker-1", handedOffAtMs})
 
     job = await store.getJob(jobId)
 

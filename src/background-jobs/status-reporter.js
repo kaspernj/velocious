@@ -25,9 +25,11 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
    * @param {unknown} [args.error] - Error.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async report({jobId, status, error}) {
+  async report({jobId, status, error, handedOffAtMs, workerId}) {
     const config = this.configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
@@ -66,6 +68,8 @@ export default class BackgroundJobsStatusReporter {
           jsonSocket.send({
             type: status === "completed" ? "job-complete" : "job-failed",
             jobId,
+            workerId,
+            handedOffAtMs,
             error: error ? this._normalizeError(error) : undefined
           })
         })
@@ -78,20 +82,29 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
    * @param {unknown} [args.error] - Error.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {string} [args.workerId] - Worker id.
+   * @param {number} [args.maxDurationMs] - Max duration for retries.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async reportWithRetry({jobId, status, error}) {
+  async reportWithRetry({jobId, status, error, handedOffAtMs, workerId, maxDurationMs}) {
     let attempt = 0
+    const startTime = Date.now()
 
     while (true) {
       try {
-        await this.report({jobId, status, error})
+        await this.report({jobId, status, error, handedOffAtMs, workerId})
         return
       } catch (err) {
         attempt += 1
         const delaySeconds = Math.min(30, 0.5 * attempt)
 
         this.logger.debug(() => ["Background job status report failed, retrying", err])
+
+        if (maxDurationMs && Date.now() - startTime >= maxDurationMs) {
+          this.logger.warn(() => ["Background job status report timed out, giving up", err])
+          return
+        }
 
         await wait(delaySeconds)
       }

@@ -152,7 +152,11 @@ export default class BackgroundJobsMain {
 
   async _handleJobComplete({jsonSocket, message}) {
     try {
-      await this.store.markCompleted({jobId: message.jobId})
+      await this.store.markCompleted({
+        jobId: message.jobId,
+        workerId: message.workerId,
+        handedOffAtMs: message.handedOffAtMs
+      })
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
     } catch (error) {
       this.logger.error(() => ["Failed to update job completion:", error])
@@ -162,7 +166,12 @@ export default class BackgroundJobsMain {
 
   async _handleJobFailed({jsonSocket, message}) {
     try {
-      await this.store.markFailed({jobId: message.jobId, error: message.error})
+      await this.store.markFailed({
+        jobId: message.jobId,
+        error: message.error,
+        workerId: message.workerId,
+        handedOffAtMs: message.handedOffAtMs
+      })
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
       await this._dispatch()
     } catch (error) {
@@ -187,7 +196,7 @@ export default class BackgroundJobsMain {
 
         this.readyWorkers.delete(worker)
 
-        await this.store.markHandedOff({jobId: job.id, workerId: worker.workerId})
+        const handedOffAtMs = await this.store.markHandedOff({jobId: job.id, workerId: worker.workerId})
 
         try {
           worker.send({
@@ -196,6 +205,8 @@ export default class BackgroundJobsMain {
               id: job.id,
               jobName: job.jobName,
               args: job.args,
+              workerId: worker.workerId,
+              handedOffAtMs,
               options: {
                 forked: job.forked
               }

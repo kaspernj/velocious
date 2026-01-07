@@ -142,33 +142,44 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {string} [args.workerId] - Worker id.
-   * @returns {Promise<void>} - Resolves when updated.
+   * @returns {Promise<number>} - Resolves with handed off timestamp.
    */
   async markHandedOff({jobId, workerId}) {
     await this.ensureReady()
+
+    const handedOffAtMs = Date.now()
 
     await this._withDb(async (db) => {
       await db.update({
         tableName: JOBS_TABLE,
         data: {
           status: "handed_off",
-          handed_off_at_ms: Date.now(),
+          handed_off_at_ms: handedOffAtMs,
           worker_id: workerId || null
         },
         conditions: {id: jobId}
       })
     })
+
+    return handedOffAtMs
   }
 
   /**
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
+   * @param {string} [args.workerId] - Worker id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @returns {Promise<void>} - Resolves when updated.
    */
-  async markCompleted({jobId}) {
+  async markCompleted({jobId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
     await this._withDb(async (db) => {
+      const job = await this._getJobRowById(db, jobId)
+
+      if (!job) return
+      if (!this._shouldAcceptReport({job, workerId, handedOffAtMs})) return
+
       await db.update({
         tableName: JOBS_TABLE,
         data: {
@@ -206,15 +217,18 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {unknown} args.error - Error.
+   * @param {string} [args.workerId] - Worker id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @returns {Promise<void>} - Resolves when updated.
    */
-  async markFailed({jobId, error}) {
+  async markFailed({jobId, error, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
     await this._withDb(async (db) => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return
+      if (!this._shouldAcceptReport({job, workerId, handedOffAtMs})) return
 
       await this._applyFailure({db, job, error, markOrphaned: false})
     })
@@ -500,6 +514,23 @@ export default class BackgroundJobsStore {
     })
 
     return result
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("./store.js").BackgroundJobRow} args.job - Job row.
+   * @param {string | null | undefined} args.workerId - Worker id from report.
+   * @param {number | null | undefined} args.handedOffAtMs - Handed off timestamp from report.
+   * @returns {boolean} - Whether to accept the report.
+   */
+  _shouldAcceptReport({job, workerId, handedOffAtMs}) {
+    if (job.status !== "handed_off") return false
+
+    if (workerId && job.workerId && workerId !== job.workerId) return false
+
+    if (handedOffAtMs && job.handedOffAtMs && handedOffAtMs !== job.handedOffAtMs) return false
+
+    return true
   }
 
   _migrationKey() {

@@ -23,11 +23,24 @@ export default async function runJobPayload(payload) {
     await jobInstance.perform.apply(jobInstance, payload.args || [])
 
     if (payload.id) {
-      await reporter.reportWithRetry({jobId: payload.id, status: "completed"})
+      await reporter.reportWithRetry({
+        jobId: payload.id,
+        status: "completed",
+        workerId: payload.workerId,
+        handedOffAtMs: payload.handedOffAtMs,
+        maxDurationMs: 30000
+      })
     }
   } catch (error) {
     if (payload.id) {
-      await reporter.reportWithRetry({jobId: payload.id, status: "failed", error})
+      await reporter.reportWithRetry({
+        jobId: payload.id,
+        status: "failed",
+        error,
+        workerId: payload.workerId,
+        handedOffAtMs: payload.handedOffAtMs,
+        maxDurationMs: 30000
+      })
     }
 
     throw error

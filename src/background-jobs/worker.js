@@ -91,9 +91,20 @@ export default class BackgroundJobsWorker {
 
     try {
       await this._runJobInline(payload)
-      void this._reportJobResult({jobId: payload.id, status: "completed"})
+      void this._reportJobResult({
+        jobId: payload.id,
+        status: "completed",
+        handedOffAtMs: payload.handedOffAtMs,
+        workerId: payload.workerId || this.workerId
+      })
     } catch (error) {
-      void this._reportJobResult({jobId: payload.id, status: "failed", error})
+      void this._reportJobResult({
+        jobId: payload.id,
+        status: "failed",
+        error,
+        handedOffAtMs: payload.handedOffAtMs,
+        workerId: payload.workerId || this.workerId
+      })
     }
     this.jsonSocket?.send({type: "ready"})
   }
@@ -140,13 +151,15 @@ export default class BackgroundJobsWorker {
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
    * @param {unknown} [args.error] - Error.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async _reportJobResult({jobId, status, error}) {
+  async _reportJobResult({jobId, status, error, handedOffAtMs, workerId}) {
     if (!this.statusReporter) return
 
     try {
-      await this.statusReporter.reportWithRetry({jobId, status, error})
+      await this.statusReporter.reportWithRetry({jobId, status, error, handedOffAtMs, workerId})
     } catch (reportError) {
       console.error("Background job status reporting failed:", reportError)
     }
