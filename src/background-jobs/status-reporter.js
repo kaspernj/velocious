@@ -34,7 +34,7 @@ export default class BackgroundJobsStatusReporter {
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
 
-    await timeout({timeout: 5}, async () => {
+    await timeout({timeout: 5000}, async () => {
       await new Promise((resolve, reject) => {
         const socket = net.createConnection({host, port})
         const jsonSocket = new JsonSocket(socket)
