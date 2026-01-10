@@ -41,6 +41,13 @@ export default class BackgroundJobsClient {
           cleanup()
           jsonSocket.close()
           resolve(message.jobId)
+          return
+        }
+
+        if (message?.type === "enqueue-error") {
+          cleanup()
+          jsonSocket.close()
+          reject(new Error(message.error || "Failed to enqueue job"))
         }
       })
 

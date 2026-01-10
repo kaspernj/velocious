@@ -7,8 +7,9 @@ export default class DbGenerateModel extends BaseCommand {
   async execute() {
     await this.getConfiguration().initializeModels()
 
-    const modelsDir = `${process.cwd()}/src/models`
-    const baseModelsDir = `${process.cwd()}/src/model-bases`
+    const rootDirectory = this.directory()
+    const modelsDir = `${rootDirectory}/src/models`
+    const baseModelsDir = `${rootDirectory}/src/model-bases`
     const modelClasses = this.getConfiguration().getModelClasses()
     let devMode = false
 
@@ -71,7 +72,8 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
       }
 
-      const columns = await modelClass._getTable().getColumns()
+      const table = await modelClass.connection().getTableByName(modelClass.tableName())
+      const columns = await table.getColumns()
       let methodsCount = 0
 
       for (const column of columns) {

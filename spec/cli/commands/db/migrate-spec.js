@@ -40,6 +40,7 @@ describe("Cli - Commands - db:migrate", () => {
 
     /** @type {string[]} */
     const tablesResult = []
+    const internalTables = new Set(["background_jobs", "velocious_internal_migrations"])
 
     /** @type {import("../../../../src/database/drivers/base-foreign-key.js").default | undefined} */
     let projectForeignKey
@@ -162,8 +163,10 @@ describe("Cli - Commands - db:migrate", () => {
     expect(projectForeignKey.getReferencedTableName()).toEqual("projects")
     expect(projectForeignKey.getReferencedColumnName()).toEqual("id")
 
+    const filteredTables = tablesResult.filter((tableName) => !internalTables.has(tableName))
+
     if (defaultDatabaseType == "mssql") {
-      expect(uniqunize(tablesResult.sort())).toEqual(
+      expect(uniqunize(filteredTables.sort())).toEqual(
         [
           "accounts",
           "authentication_tokens",
@@ -200,7 +203,7 @@ describe("Cli - Commands - db:migrate", () => {
         "20251228090010"
       ])
     } else {
-      expect(tablesResult.sort()).toEqual(
+      expect(filteredTables.sort()).toEqual(
         [
           "accounts",
           "authentication_tokens",
