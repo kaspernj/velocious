@@ -1,10 +1,10 @@
 // @ts-check
 
-import dummyConfiguration from "../../../dummy/src/config/configuration.js"
+import Configuration from "../../../../src/configuration.js"
 
-describe("database - create sql - create index sql", () => {
+describe("database - create sql - create index sql", {tags: ["dummy"]}, () => {
   it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
-    await dummyConfiguration.ensureConnections(async (dbs) => {
+    await Configuration.current().ensureConnections(async (dbs) => {
       const createIndexSQLs = await dbs.default.createIndexSQLs({
         columns: ["id", "created_at"],
         tableName: "projects"

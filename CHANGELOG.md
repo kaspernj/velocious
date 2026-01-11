@@ -19,3 +19,4 @@
 - Allow join shorthand forms like `{project: \"translations\"}` and `{project: [\"translations\", \"projectDetail\"]}`.
 - Merge join array branches targeting the same relationship so nested joins are preserved.
 - Require a test-file require context when importing browser tests to avoid bundling unintended files.
+- Enable browser coverage for table data, transactions, and selected driver specs.

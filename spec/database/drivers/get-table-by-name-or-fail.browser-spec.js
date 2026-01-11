@@ -1,9 +1,9 @@
-import dummyConfiguration from "../../dummy/src/config/configuration.js"
+import Configuration from "../../../src/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("database - drivers - getTableByNameOrFail", () => {
+describe("database - drivers - getTableByNameOrFail", {tags: ["dummy"]}, () => {
   it("returns an existing table", async () => {
-    await dummyConfiguration.ensureConnections(async (dbs) => {
+    await Configuration.current().ensureConnections(async (dbs) => {
       const table = await dbs.default.getTableByNameOrFail("projects")
 
       expect(table.getName()).toBe("projects")
@@ -11,7 +11,7 @@ describe("database - drivers - getTableByNameOrFail", () => {
   })
 
   it("throws when the table is missing", async () => {
-    await dummyConfiguration.ensureConnections(async (dbs) => {
+    await Configuration.current().ensureConnections(async (dbs) => {
       let error
 
       try {
