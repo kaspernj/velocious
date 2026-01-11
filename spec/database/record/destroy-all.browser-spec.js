@@ -1,10 +1,8 @@
-import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("Record - destroyAll", () => {
+describe("Record - destroyAll", {tags: ["dummy"]}, () => {
   it("destroys only filtered records and leaves other models intact", async () => {
-    await Dummy.run(async () => {
       const project1 = await Project.create({nameEn: "Alpha", nameDe: "Alfa"})
       const project2 = await Project.create({nameEn: "Beta", nameDe: "Beta"})
       const task1 = await Task.create({name: "Delete me A", project: project1})
@@ -22,11 +20,9 @@ describe("Record - destroyAll", () => {
       expect(foundTask2).toBeDefined()
       expect(foundTask3).toBeDefined()
       expect(projectsCount).toEqual(2)
-    })
   })
 
   it("destroys all records for a model without deleting related models", async () => {
-    await Dummy.run(async () => {
       const project1 = await Project.create({nameEn: "Project A"})
       const project2 = await Project.create({nameEn: "Project B"})
       await Task.create({name: "Task A", project: project1})
@@ -39,6 +35,5 @@ describe("Record - destroyAll", () => {
 
       expect(tasksCount).toEqual(0)
       expect(projectsCount).toEqual(2)
-    })
   })
 })

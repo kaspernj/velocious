@@ -1,10 +1,8 @@
-import Dummy from "../../dummy/index.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("Record - query", () => {
+describe("Record - query", {tags: ["dummy"]}, () => {
   it("queries for records", async () => {
-    await Dummy.run(async () => {
       const task = new Task({name: "Test task"})
       const project = task.buildProject({nameEn: "Test project", nameDe: "Test projekt"})
 
@@ -38,11 +36,9 @@ describe("Record - query", () => {
       expect(newProject.nameEn()).toEqual("Test project")
 
       expect(newProjectDetail.note()).toEqual("Test note")
-    })
   })
 
   it("finds the first record", async () => {
-    await Dummy.run(async () => {
       const taskIDs = []
       const project = await Project.create()
 
@@ -55,11 +51,9 @@ describe("Record - query", () => {
       const lastTask = await Task.first()
 
       expect(lastTask.id()).toEqual(taskIDs[0])
-    })
   })
 
   it("finds the last record", async () => {
-    await Dummy.run(async () => {
       const taskIDs = []
       const project = await Project.create()
 
@@ -72,11 +66,9 @@ describe("Record - query", () => {
       const lastTask = await Task.last()
 
       expect(lastTask.id()).toEqual(taskIDs[4])
-    })
   })
 
   it("finds the record with joins and where hashes", async () => {
-    await Dummy.run(async () => {
       const project1 = await Project.create({name: "Test project 1"})
       const project2 = await Project.create({name: "Test project 2"})
 
@@ -98,11 +90,9 @@ describe("Record - query", () => {
       expect(tasks.length).toEqual(1)
       expect(task.name()).toEqual("Task 2-2")
       expect(task.project().name()).toEqual("Test project 2")
-    })
   })
 
   it("counts the records", async () => {
-    await Dummy.run(async () => {
       const taskIDs = []
       const project = await Project.create()
 
@@ -115,6 +105,5 @@ describe("Record - query", () => {
       const tasksCount = await Task.count()
 
       expect(tasksCount).toEqual(5)
-    })
   })
 })

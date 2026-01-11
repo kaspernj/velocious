@@ -1,15 +1,13 @@
 // @ts-check
 
-import Dummy from "../../dummy/index.js"
-import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 import {ValidationError} from "../../../src/database/record/index.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
+import Configuration from "../../../src/configuration.js"
 
-describe("Record - create", () => {
+describe("Record - create", {tags: ["dummy"]}, () => {
   it("creates a new simple record with relationships and translations", async () => {
-    await Dummy.run(async () => {
       const task = new Task({name: "Test task"})
       const project = task.buildProject({nameEn: "Test project", nameDe: "Test projekt"})
 
@@ -64,7 +62,6 @@ describe("Record - create", () => {
       const projectTasksIDs = project.tasksLoaded().map((task) => task.id())
 
       expect(projectTasksIDs).toEqual([task.id()])
-    })
   })
 
   it("sets the inversed relationship on has-many-relationships", async () => {
@@ -89,7 +86,6 @@ describe("Record - create", () => {
   })
 
   it("creates a new task with an existing project", async () => {
-    await Dummy.run(async () => {
       const project = await Project.create({name: "Test project"})
       const task = new Task({name: "Test task", project})
 
@@ -99,11 +95,9 @@ describe("Record - create", () => {
       expect(task.name()).toEqual("Test task")
       expect(task.project().id()).toEqual(project.id())
       expect(task.project()).toEqual(project)
-    })
   })
 
   it("accepts ISO datetime strings for datetime attributes", async () => {
-    await Dummy.run(async () => {
       const createdAt = "2025-12-26T16:18:50.641Z"
       const createdAtNoMs = "2025-12-26T16:18:50Z"
       const createdAtOffset = "2025-12-26T16:18:50+01:00"
@@ -122,11 +116,9 @@ describe("Record - create", () => {
       expect(createdAtValue?.toISOString().slice(0, 19)).toEqual(createdAt.slice(0, 19))
       expect(createdAtNoMsValue?.toISOString().slice(0, 19)).toEqual(createdAtNoMs.slice(0, 19))
       expect(createdAtOffsetValue?.toISOString().slice(0, 19)).toEqual("2025-12-26T15:18:50")
-    })
   })
 
   it("round-trips datetime values without timezone shifts", async () => {
-    await Dummy.run(async () => {
       const project = await Project.create({name: "Timezone project"})
       const timestamp = new Date("2025-12-26T12:34:56.789Z")
       const task = await Task.create({name: "Timezone task", createdAt: timestamp, project})
@@ -146,17 +138,15 @@ describe("Record - create", () => {
       } else {
         expect(actualTime).toEqual(expectedTime)
       }
-    })
   })
 
   it("applies per-request timezone offsets on write and read", async () => {
-    await Dummy.run(async () => {
       const project = await Project.create({name: "Timezone offset project"})
       const timestamp = new Date("2025-12-26T12:34:56.789Z")
       /** @type {string | number | undefined} */
       let taskId
 
-      await dummyConfiguration.getEnvironmentHandler().runWithTimezoneOffset(120, async () => {
+      await Configuration.current().getEnvironmentHandler().runWithTimezoneOffset(120, async () => {
         const task = await Task.create({name: "Timezone offset task", createdAt: timestamp, project})
         taskId = task.id()
 
@@ -182,7 +172,7 @@ describe("Record - create", () => {
 
       const resolvedTaskId = /** @type {string | number} */ (taskId)
 
-      await dummyConfiguration.getEnvironmentHandler().runWithTimezoneOffset(0, async () => {
+      await Configuration.current().getEnvironmentHandler().runWithTimezoneOffset(0, async () => {
         const reloaded = await Task.find(resolvedTaskId)
         const expected = new Date(timestamp.getTime() - (120 * 60 * 1000))
 
@@ -201,11 +191,9 @@ describe("Record - create", () => {
           expect(actualTime).toEqual(expectedTime)
         }
       })
-    })
   })
 
   it("returns attribute names from attributes()", async () => {
-    await Dummy.run(async () => {
       const project = await Project.create({name: "Attribute project"})
       const task = await Task.create({name: "Attribute task", project})
       const attrs = task.attributes()
@@ -213,11 +201,9 @@ describe("Record - create", () => {
       expect(attrs.name).toEqual("Attribute task")
       expect(attrs.createdAt).toBeInstanceOf(Date)
       expect("created_at" in attrs).toBeFalse()
-    })
   })
 
   it("returns column names from rawAttributes()", async () => {
-    await Dummy.run(async () => {
       const project = await Project.create({name: "Column project"})
       const task = await Task.create({name: "Column task", project})
       const cols = task.rawAttributes()
@@ -229,11 +215,9 @@ describe("Record - create", () => {
         expect(cols.created_at).toBeInstanceOf(Date)
       }
       expect("createdAt" in cols).toBeFalse()
-    })
   })
 
   it("uses transactions and rolls back in case of an error", async () => {
-    await Dummy.run(async () => {
       const beforeProjectsCount = await Project.count()
       const beforeTasksCount = await Task.count()
 
@@ -266,6 +250,5 @@ describe("Record - create", () => {
       expect(projectsCount).toEqual(0)
       expect(projectDetailsCount).toEqual(0)
       expect(tasksCount).toEqual(0)
-    })
   })
 })

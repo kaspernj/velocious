@@ -1,9 +1,7 @@
-import Dummy from "../../dummy/index.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("Record - translation fallbacks", () => {
+describe("Record - translation fallbacks", {tags: ["dummy"]}, () => {
   it("creates a new simple record with relationships and translations with fallbacks", async () => {
-    await Dummy.run(async () => {
       const task = new Task({name: "Test task"})
       const project = task.buildProject({nameDe: "Test projekt"})
 
@@ -19,6 +17,5 @@ describe("Record - translation fallbacks", () => {
       expect(sameProject.name()).toEqual("Test projekt")
       expect(sameProject.nameEn()).toEqual(undefined)
       expect(sameProject.nameDe()).toEqual("Test projekt")
-    })
   })
 })

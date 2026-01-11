@@ -1,10 +1,8 @@
-import Dummy from "../../../dummy/index.js"
 import Project from "../../../dummy/src/models/project.js"
 import Task from "../../../dummy/src/models/task.js"
 
-describe("Record - instance relationships - has many relationship", () => {
+describe("Record - instance relationships - has many relationship", {tags: ["dummy"]}, () => {
   it("loads a relationship", async () => {
-    await Dummy.run(async () => {
       const project = /** @type {Project} */ (await Project.create())
       const task = await Task.create({name: "Test task", project})
       const foundProject = /** @type {Project} */ (await Project.find(project.id()))
@@ -19,6 +17,5 @@ describe("Record - instance relationships - has many relationship", () => {
       const taskIDs = foundProject.tasksLoaded().map((task) => task.id())
 
       expect(taskIDs).toEqual([task.id()])
-    })
   })
 })

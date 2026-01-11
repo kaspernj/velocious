@@ -1,10 +1,8 @@
-import Dummy from "../../../dummy/index.js"
 import Project from "../../../dummy/src/models/project.js"
 import ProjectDetail from "../../../dummy/src/models/project-detail.js"
 
-describe("Record - instance relationships - has one relationship", () => {
+describe("Record - instance relationships - has one relationship", {tags: ["dummy"]}, () => {
   it("loads a relationship", async () => {
-    await Dummy.run(async () => {
       const project = await Project.create()
       const projectDetail = await ProjectDetail.create({note: "Test project", project})
       const foundProject = /** @type {Project} */ (await Project.find(project.id()))
@@ -19,6 +17,5 @@ describe("Record - instance relationships - has one relationship", () => {
       const projectsLoadedProjectDetail = foundProject.projectDetail()
 
       expect(projectsLoadedProjectDetail.id()).toEqual(projectDetail.id())
-    })
   })
 })
