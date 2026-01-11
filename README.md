@@ -266,6 +266,32 @@ export default class CreateEvents extends Migration {
 npx velocious db:migrate
 ```
 
+## Configure CLI commands (Node vs Browser)
+
+Node loads CLI commands from disk automatically via the Node environment handler:
+
+```js
+import Configuration from "velocious/build/src/configuration.js"
+import NodeEnvironmentHandler from "velocious/build/src/environment-handlers/node.js"
+
+export default new Configuration({
+  // ...
+  environmentHandler: new NodeEnvironmentHandler()
+})
+```
+
+Browser builds can still register commands, but only the browser-safe wrappers are bundled:
+
+```js
+import Configuration from "velocious/build/src/configuration.js"
+import BrowserEnvironmentHandler from "velocious/build/src/environment-handlers/browser.js"
+
+export default new Configuration({
+  // ...
+  environmentHandler: new BrowserEnvironmentHandler()
+})
+```
+
 ## Run migrations from anywhere if you want to:
 
 ```js
