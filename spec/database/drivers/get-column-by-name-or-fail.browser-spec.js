@@ -1,9 +1,9 @@
-import dummyConfiguration from "../../dummy/src/config/configuration.js"
+import Configuration from "../../../src/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("database - drivers - getColumnByNameOrFail", () => {
+describe("database - drivers - getColumnByNameOrFail", {tags: ["dummy"]}, () => {
   it("returns an existing column", async () => {
-    await dummyConfiguration.ensureConnections(async (dbs) => {
+    await Configuration.current().ensureConnections(async (dbs) => {
       const table = await dbs.default.getTableByNameOrFail("projects")
       const column = await table.getColumnByNameOrFail("id")
 
@@ -12,7 +12,7 @@ describe("database - drivers - getColumnByNameOrFail", () => {
   })
 
   it("throws when the column is missing", async () => {
-    await dummyConfiguration.ensureConnections(async (dbs) => {
+    await Configuration.current().ensureConnections(async (dbs) => {
       const table = await dbs.default.getTableByNameOrFail("projects")
 
       await expect(async () => {
