@@ -8,9 +8,11 @@ import initSqlJs from "sql.js"
 import SystemTest from "system-testing/build/system-test.js"
 import Configuration from "../src/configuration.js"
 import BrowserEnvironmentHandler from "../src/environment-handlers/browser.js"
+import NodeEnvironmentHandler from "../src/environment-handlers/node.js"
 import SqliteWebDriver from "../src/database/drivers/sqlite/index.web.js"
 import SingleMultiUsePool from "../src/database/pool/single-multi-use.js"
 import queryWeb from "../src/database/drivers/sqlite/query.web.js"
+import Migrator from "../src/database/migrator.js"
 import TestFilesFinder from "../src/testing/test-files-finder.js"
 import TestRunner from "../src/testing/test-runner.js"
 import {normalizeExamplePatterns, parseFilters} from "../src/testing/test-filter-parser.js"
@@ -23,7 +25,7 @@ const defaultBrowserPattern = /\.browser-(spec|test)\.(m|)js$/
 const shared = {
   sqlJsDatabase: null,
   sqlJsConnection: null,
-  schemaPrepared: false,
+  migrationsPrepared: false,
   modelsPrepared: false
 }
 
@@ -104,39 +106,21 @@ function createSqlJsConnection(database) {
  * @param {import("../src/configuration.js").default} configuration - Configuration instance.
  * @returns {Promise<void>} - Resolves when prepared.
  */
-async function prepareBrowserSchema(configuration) {
-  if (shared.schemaPrepared) return
+async function runDummyMigrations(configuration) {
+  if (shared.migrationsPrepared) return
 
-  const structurePath = path.join(dummyDirectory(), "db/structure-default.sql")
-  const structureSql = await fs.readFile(structurePath, "utf8")
-  const statements = structureSql
-    .split(/;\s*\n/)
-    .map((statement) => statement.trim())
-    .filter(Boolean)
+  const nodeEnvironmentHandler = new NodeEnvironmentHandler()
+  nodeEnvironmentHandler.setConfiguration(configuration)
 
-  await configuration.ensureConnections(async (dbs) => {
-    const db = dbs.default
-    const tableStatements = []
-    const indexStatements = []
+  const migrator = new Migrator({configuration})
 
-    for (const statement of statements) {
-      if (/^create\s+(unique\s+)?index/i.test(statement)) {
-        indexStatements.push(statement)
-      } else {
-        tableStatements.push(statement)
-      }
-    }
-
-    for (const statement of tableStatements) {
-      await db.query(statement)
-    }
-
-    for (const statement of indexStatements) {
-      await db.query(statement)
-    }
+  await configuration.ensureConnections(async () => {
+    await migrator.prepare()
+    const migrations = await nodeEnvironmentHandler.findMigrations()
+    await migrator.migrateFiles(migrations, async (filePath) => await nodeEnvironmentHandler.requireMigration(filePath))
   })
 
-  shared.schemaPrepared = true
+  shared.migrationsPrepared = true
 }
 
 /**
@@ -233,7 +217,7 @@ async function resolveConfiguration() {
 
   configuration.setCurrent()
 
-  await prepareBrowserSchema(configuration)
+  await runDummyMigrations(configuration)
   await initializeDummyModels(configuration)
 
   return configuration
