@@ -13,10 +13,90 @@ import WhereNot from "./where-not.js"
 import WherePlain from "./where-plain.js"
 
 /**
- * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
+ * @typedef {{[key: string]: boolean | string | string[] | NestedPreloadRecord }} NestedPreloadRecord
  * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
  * @typedef {object | string} WhereArgumentType
  */
+
+/**
+ * @param {import("./join-object.js").JoinObjectInput | string | string[]} join - Join data in shorthand or nested form.
+ * @returns {import("./join-object.js").JoinObject} - Normalized join record.
+ */
+function normalizeJoinObject(join) {
+  if (!join) return {}
+
+  if (typeof join == "string") {
+    return {[join]: true}
+  }
+
+  if (Array.isArray(join)) {
+    /** @type {import("./join-object.js").JoinObject} */
+    const result = {}
+
+    for (const entry of join) {
+      if (typeof entry == "string") {
+        const existing = result[entry]
+        result[entry] = mergeJoinValue(existing, true)
+        continue
+      }
+
+      if (isPlainObject(entry)) {
+        const normalized = normalizeJoinObject(entry)
+
+        for (const [key, value] of Object.entries(normalized)) {
+          const existing = result[key]
+          result[key] = mergeJoinValue(existing, value)
+        }
+        continue
+      }
+
+      throw new Error(`Invalid join entry type: ${typeof entry}`)
+    }
+
+    return result
+  }
+
+  if (!isPlainObject(join)) {
+    throw new Error(`Invalid join type: ${typeof join}`)
+  }
+
+  /** @type {import("./join-object.js").JoinObject} */
+  const result = {}
+
+  for (const [key, value] of Object.entries(join)) {
+    if (value === true || value === false) {
+      const existing = result[key]
+      result[key] = mergeJoinValue(existing, value)
+      continue
+    }
+
+    if (typeof value == "string" || Array.isArray(value) || isPlainObject(value)) {
+      const existing = result[key]
+      result[key] = mergeJoinValue(existing, normalizeJoinObject(value))
+      continue
+    }
+
+    throw new Error(`Invalid join value for ${key}: ${typeof value}`)
+  }
+
+  return result
+}
+
+/**
+ * @param {import("./join-object.js").JoinObject[string] | undefined} existing - Existing normalized join value.
+ * @param {import("./join-object.js").JoinObject[string]} incoming - Incoming normalized join value.
+ * @returns {import("./join-object.js").JoinObject[string]} - Merged join value.
+ */
+function mergeJoinValue(existing, incoming) {
+  if (!existing) return incoming
+  if (existing === true || incoming === true) return true
+
+  if (typeof existing == "object" && typeof incoming == "object") {
+    return {...existing, ...incoming}
+  }
+
+  return incoming
+}
 
 /**
  * @typedef {object} QueryArgsType
@@ -143,14 +223,16 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | import("./join-object.js").JoinObject} join - Join clause or join descriptor.
+   * @param {string | string[] | import("./join-object.js").JoinObjectInput} join - Join clause or join descriptor.
    * @returns {this} - The joins.
    */
   joins(join) {
     if (typeof join == "string") {
       this._joins.push(new JoinPlain(join))
+    } else if (Array.isArray(join)) {
+      this._joins.push(new JoinObject(normalizeJoinObject(join)))
     } else if (isPlainObject(join)) {
-      this._joins.push(new JoinObject(join))
+      this._joins.push(new JoinObject(normalizeJoinObject(join)))
     } else {
       throw new Error(`Unknown type of join: ${typeof join}`)
     }

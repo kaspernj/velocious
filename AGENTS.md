@@ -13,6 +13,7 @@ Always add tests for new or changed behavior.
 Websocket channel callbacks should use `configuration.ensureConnections(...)` so existing async-context DB connections are reused; reserve `configuration.withConnections(...)` for creating new async-context connections when you truly need a fresh context (e.g., concurrent work).
 Prefer `awaitery`'s `timeout` helper over manual `Promise.race` timeouts when a simple hard timeout is needed.
 When editing `CHANGELOG.md`, append entries without creating new version headings (agents don't control releases).
+Name specs that should run in browser tests with the `.browser-spec.js` suffix so the browser test runner includes them.
 
 ## Verification commands
 

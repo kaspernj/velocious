@@ -12,6 +12,62 @@ import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
 
 /**
+ * @param {import("./index.js").NestedPreloadRecord | string | string[]} preload - Preload data in shorthand or nested form.
+ * @returns {import("./index.js").NestedPreloadRecord} - Normalized preload record.
+ */
+function normalizePreloadRecord(preload) {
+  if (!preload) return {}
+
+  if (typeof preload == "string") {
+    return {[preload]: true}
+  }
+
+  if (Array.isArray(preload)) {
+    /** @type {import("./index.js").NestedPreloadRecord} */
+    const result = {}
+
+    for (const entry of preload) {
+      if (typeof entry == "string") {
+        result[entry] = true
+        continue
+      }
+
+      if (isPlainObject(entry)) {
+        incorporate(result, normalizePreloadRecord(entry))
+        continue
+      }
+
+      throw new Error(`Invalid preload entry type: ${typeof entry}`)
+    }
+
+    return result
+  }
+
+  if (!isPlainObject(preload)) {
+    throw new Error(`Invalid preload type: ${typeof preload}`)
+  }
+
+  /** @type {import("./index.js").NestedPreloadRecord} */
+  const result = {}
+
+  for (const [key, value] of Object.entries(preload)) {
+    if (value === true || value === false) {
+      result[key] = value
+      continue
+    }
+
+    if (typeof value == "string" || Array.isArray(value) || isPlainObject(value)) {
+      result[key] = normalizePreloadRecord(value)
+      continue
+    }
+
+    throw new Error(`Invalid preload value for ${key}: ${typeof value}`)
+  }
+
+  return result
+}
+
+/**
  * @template {typeof import("../record/index.js").default} MC
  */
 /**
@@ -366,7 +422,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {this} - The preload.
    */
   preload(data) {
-    incorporate(this._preload, data)
+    const normalizedPreload = normalizePreloadRecord(data)
+    incorporate(this._preload, normalizedPreload)
     return this
   }
 
