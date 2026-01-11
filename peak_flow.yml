@@ -109,3 +109,7 @@ builds:
       - sleep 5
       - npm run lint
       - npm run typecheck
+  build_6:
+    name: Browser Tests
+    script:
+      - npm run test:browser

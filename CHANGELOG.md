@@ -7,3 +7,4 @@
 - Add README examples for configuring CLI command loading in Node and browser environments.
 - Add browser system test runner and browser-safe test app harness for System Testing.
 - Add dummy-tag handling for browser tests with a SQLite web driver setup.
+- Add a Peakflow build step for browser system tests.
