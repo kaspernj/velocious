@@ -19,7 +19,7 @@ import WherePlain from "./where-plain.js"
  */
 
 /**
- * @param {import("./join-object.js").JoinObject | string | string[]} join - Join data in shorthand or nested form.
+ * @param {import("./join-object.js").JoinObjectInput | string | string[]} join - Join data in shorthand or nested form.
  * @returns {import("./join-object.js").JoinObject} - Normalized join record.
  */
 function normalizeJoinObject(join) {
@@ -203,7 +203,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | import("./join-object.js").JoinObject} join - Join clause or join descriptor.
+   * @param {string | import("./join-object.js").JoinObjectInput} join - Join clause or join descriptor.
    * @returns {this} - The joins.
    */
   joins(join) {

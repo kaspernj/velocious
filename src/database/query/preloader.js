@@ -5,6 +5,69 @@ import HasManyPreloader from "./preloader/has-many.js"
 import HasOnePreloader from "./preloader/has-one.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
+/**
+ * @param {import("../query/index.js").NestedPreloadRecord | string | string[] | boolean} preload
+ * @returns {import("../query/index.js").NestedPreloadRecord | null}
+ */
+function normalizeNestedPreload(preload) {
+  if (!preload || typeof preload == "boolean") return null
+
+  if (typeof preload == "string") {
+    return {[preload]: true}
+  }
+
+  if (Array.isArray(preload)) {
+    /** @type {import("../query/index.js").NestedPreloadRecord} */
+    const result = {}
+
+    for (const entry of preload) {
+      if (typeof entry == "string") {
+        result[entry] = true
+        continue
+      }
+
+      if (entry && typeof entry == "object") {
+        const normalizedEntry = normalizeNestedPreload(entry)
+
+        if (normalizedEntry) {
+          for (const [key, value] of Object.entries(normalizedEntry)) {
+            result[key] = value
+          }
+        }
+        continue
+      }
+
+      throw new Error(`Invalid preload entry type: ${typeof entry}`)
+    }
+
+    return result
+  }
+
+  if (preload && typeof preload == "object") {
+    /** @type {import("../query/index.js").NestedPreloadRecord} */
+    const result = {}
+
+    for (const [key, value] of Object.entries(preload)) {
+      if (value === true || value === false) {
+        result[key] = value
+        continue
+      }
+
+      const normalizedValue = normalizeNestedPreload(value)
+
+      if (normalizedValue) {
+        result[key] = normalizedValue
+      } else {
+        throw new Error(`Invalid preload value for ${key}: ${typeof value}`)
+      }
+    }
+
+    return result
+  }
+
+  throw new Error(`Invalid preload type: ${typeof preload}`)
+}
+
 export default class VelociousDatabaseQueryPreloader {
   /**
    * @param {object} args - Options object.
@@ -49,8 +112,9 @@ export default class VelociousDatabaseQueryPreloader {
 
       // Handle any further preloads in the tree
       const newPreload = this.preload[preloadRelationshipName]
+      const normalizedPreload = normalizeNestedPreload(newPreload)
 
-      if (typeof newPreload == "object" && targetModels.length > 0) {
+      if (normalizedPreload && targetModels.length > 0) {
         if (relationship.getPolymorphic() && targetModelsByClassName) {
           const configuration = relationship.getConfiguration()
 
@@ -60,7 +124,7 @@ export default class VelociousDatabaseQueryPreloader {
             if (models.length == 0) continue
 
             const targetModelClass = configuration.getModelClass(className)
-            const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models, preload: newPreload})
+            const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models, preload: normalizedPreload})
 
             await preloader.run()
           }
@@ -69,7 +133,7 @@ export default class VelociousDatabaseQueryPreloader {
 
           if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
-          const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models: targetModels, preload: newPreload})
+          const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models: targetModels, preload: normalizedPreload})
 
           await preloader.run()
         }
