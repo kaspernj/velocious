@@ -11,3 +11,7 @@
 - Fix dummy helper path resolution when running tests from spec/dummy.
 - Normalize dummy helper path resolution to avoid trailing-slash mismatches.
 - Run dummy migrations for browser tests instead of loading structure SQL.
+- Enable browser coverage for preloader belongs-to and has-many record specs.
+- Enable browser coverage for database query specs.
+- Enable browser coverage for migration specs that use dummy models.
+- Enable browser coverage for utility specs.
