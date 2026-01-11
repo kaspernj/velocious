@@ -13,10 +13,70 @@ import WhereNot from "./where-not.js"
 import WherePlain from "./where-plain.js"
 
 /**
- * @typedef {{[key: string]: boolean | NestedPreloadRecord }} NestedPreloadRecord
+ * @typedef {{[key: string]: boolean | string | string[] | NestedPreloadRecord }} NestedPreloadRecord
  * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
  * @typedef {object | string} WhereArgumentType
  */
+
+/**
+ * @param {import("./join-object.js").JoinObject | string | string[]} join - Join data in shorthand or nested form.
+ * @returns {import("./join-object.js").JoinObject} - Normalized join record.
+ */
+function normalizeJoinObject(join) {
+  if (!join) return {}
+
+  if (typeof join == "string") {
+    return {[join]: true}
+  }
+
+  if (Array.isArray(join)) {
+    /** @type {import("./join-object.js").JoinObject} */
+    const result = {}
+
+    for (const entry of join) {
+      if (typeof entry == "string") {
+        result[entry] = true
+        continue
+      }
+
+      if (isPlainObject(entry)) {
+        const normalized = normalizeJoinObject(entry)
+
+        for (const [key, value] of Object.entries(normalized)) {
+          result[key] = value
+        }
+        continue
+      }
+
+      throw new Error(`Invalid join entry type: ${typeof entry}`)
+    }
+
+    return result
+  }
+
+  if (!isPlainObject(join)) {
+    throw new Error(`Invalid join type: ${typeof join}`)
+  }
+
+  /** @type {import("./join-object.js").JoinObject} */
+  const result = {}
+
+  for (const [key, value] of Object.entries(join)) {
+    if (value === true || value === false) {
+      result[key] = value
+      continue
+    }
+
+    if (typeof value == "string" || Array.isArray(value) || isPlainObject(value)) {
+      result[key] = normalizeJoinObject(value)
+      continue
+    }
+
+    throw new Error(`Invalid join value for ${key}: ${typeof value}`)
+  }
+
+  return result
+}
 
 /**
  * @typedef {object} QueryArgsType
@@ -150,7 +210,7 @@ export default class VelociousDatabaseQuery {
     if (typeof join == "string") {
       this._joins.push(new JoinPlain(join))
     } else if (isPlainObject(join)) {
-      this._joins.push(new JoinObject(join))
+      this._joins.push(new JoinObject(normalizeJoinObject(join)))
     } else {
       throw new Error(`Unknown type of join: ${typeof join}`)
     }

@@ -20,7 +20,7 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(project.nameDe()).toEqual("Test projekt")
     expect(project.nameEn()).toEqual("Test project")
 
-    const tasks = /** @type {Task[]} */ (await Task.preload({project: {projectDetail: true, translations: true}}).toArray())
+    const tasks = await Task.preload({project: {projectDetail: true, translations: true}}).toArray()
     const newTask = tasks[0]
     const newProject = newTask.project()
     const newProjectDetail = newProject.projectDetail()
@@ -36,6 +36,27 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(newProject.nameEn()).toEqual("Test project")
 
     expect(newProjectDetail.note()).toEqual("Test note")
+  })
+
+  it("preloads nested relationships with shorthand syntax", async () => {
+    const task = new Task({name: "Shorthand task"})
+    const project = task.buildProject({nameEn: "Shorthand project", nameDe: "Kurzprojekt"})
+
+    project.buildProjectDetail({note: "Shorthand note"})
+
+    await task.save()
+
+    const withString = await Task.preload({project: "translations"}).find(task.id())
+    const stringProject = withString.project()
+
+    expect(stringProject.getRelationshipByName("translations").getPreloaded()).toBeTrue()
+
+    const withArray = await Task.preload({project: ["translations", "projectDetail"]}).find(task.id())
+    const arrayProject = withArray.project()
+
+    expect(arrayProject.getRelationshipByName("translations").getPreloaded()).toBeTrue()
+    expect(arrayProject.getRelationshipByName("projectDetail").getPreloaded()).toBeTrue()
+    expect(arrayProject.projectDetail().note()).toEqual("Shorthand note")
   })
 
   it("finds the first record", async () => {
@@ -77,19 +98,36 @@ describe("Record - query", {tags: ["dummy"]}, () => {
       await Task.create({name: `Task 2-${i}`, project: project2})
     }
 
-    const tasks = /** @type {Task[]} */ (
-      await Task
-        .joins({project: {translations: true}})
-        .where({tasks: {name: "Task 2-2"}, project_translations: {name: "Test project 2"}})
-        .preload({project: {translations: true}})
-        .toArray()
-    )
+    const tasks = await Task
+      .joins({project: {translations: true}})
+      .where({tasks: {name: "Task 2-2"}, project_translations: {name: "Test project 2"}})
+      .preload({project: {translations: true}})
+      .toArray()
 
     const task = tasks[0]
 
     expect(tasks.length).toEqual(1)
     expect(task.name()).toEqual("Task 2-2")
     expect(task.project().name()).toEqual("Test project 2")
+  })
+
+  it("joins with shorthand syntax", async () => {
+    const project1 = await Project.create({name: "Join Project 1"})
+    const project2 = await Project.create({name: "Join Project 2"})
+
+    for (let i = 0; i < 3; i++) {
+      await Task.create({name: `Join Task 1-${i}`, project: project1})
+      await Task.create({name: `Join Task 2-${i}`, project: project2})
+    }
+
+    const tasks = await Task
+      .joins({project: "translations"})
+      .where({tasks: {name: "Join Task 2-1"}, project_translations: {name: "Join Project 2"}})
+      .preload({project: ["translations"]})
+      .toArray()
+
+    expect(tasks.length).toEqual(1)
+    expect(tasks[0].project().name()).toEqual("Join Project 2")
   })
 
   it("counts the records", async () => {

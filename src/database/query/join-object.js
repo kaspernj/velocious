@@ -5,7 +5,7 @@ import WhereHash from "./where-hash.js"
 import WhereNot from "./where-not.js"
 
 /**
- * @typedef {{[key: string]: boolean | JoinObject}} JoinObject
+ * @typedef {{[key: string]: boolean | string | string[] | JoinObject}} JoinObject
  */
 
 export default class VelociousDatabaseQueryJoinObject extends JoinBase {

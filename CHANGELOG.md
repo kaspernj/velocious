@@ -15,3 +15,5 @@
 - Enable browser coverage for database query specs.
 - Enable browser coverage for migration specs that use dummy models.
 - Enable browser coverage for utility specs.
+- Allow preload shorthand forms like `{project: \"translations\"}` and `{project: [\"translations\", \"projectDetail\"]}`.
+- Allow join shorthand forms like `{project: \"translations\"}` and `{project: [\"translations\", \"projectDetail\"]}`.
