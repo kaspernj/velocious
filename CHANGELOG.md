@@ -17,3 +17,4 @@
 - Enable browser coverage for utility specs.
 - Allow preload shorthand forms like `{project: \"translations\"}` and `{project: [\"translations\", \"projectDetail\"]}`.
 - Allow join shorthand forms like `{project: \"translations\"}` and `{project: [\"translations\", \"projectDetail\"]}`.
+- Merge join array branches targeting the same relationship so nested joins are preserved.

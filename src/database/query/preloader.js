@@ -6,8 +6,8 @@ import HasOnePreloader from "./preloader/has-one.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 /**
- * @param {import("../query/index.js").NestedPreloadRecord | string | string[] | boolean} preload
- * @returns {import("../query/index.js").NestedPreloadRecord | null}
+ * @param {import("../query/index.js").NestedPreloadRecord | string | string[] | boolean} preload - Preload data in shorthand or nested form.
+ * @returns {import("../query/index.js").NestedPreloadRecord | null} - Normalized nested preload record.
  */
 function normalizeNestedPreload(preload) {
   if (!preload || typeof preload == "boolean") return null

@@ -63,4 +63,16 @@ describe("Database - query - join tracker", {tags: ["dummy"]}, () => {
 
     expect(query.toSql()).toContain(expectedCondition)
   })
+
+  it("merges array join branches for the same relationship", async () => {
+    const query = Task.joins([
+      {project: {translations: true}},
+      {project: {projectDetail: true}}
+    ])
+    const driver = query.driver
+    const sql = query.toSql()
+
+    expect(sql).toContain(driver.quoteTable("project_translations"))
+    expect(sql).toContain(driver.quoteTable("project_details"))
+  })
 })

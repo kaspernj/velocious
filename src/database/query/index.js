@@ -35,7 +35,8 @@ function normalizeJoinObject(join) {
 
     for (const entry of join) {
       if (typeof entry == "string") {
-        result[entry] = true
+        const existing = result[entry]
+        result[entry] = mergeJoinValue(existing, true)
         continue
       }
 
@@ -43,7 +44,8 @@ function normalizeJoinObject(join) {
         const normalized = normalizeJoinObject(entry)
 
         for (const [key, value] of Object.entries(normalized)) {
-          result[key] = value
+          const existing = result[key]
+          result[key] = mergeJoinValue(existing, value)
         }
         continue
       }
@@ -63,12 +65,14 @@ function normalizeJoinObject(join) {
 
   for (const [key, value] of Object.entries(join)) {
     if (value === true || value === false) {
-      result[key] = value
+      const existing = result[key]
+      result[key] = mergeJoinValue(existing, value)
       continue
     }
 
     if (typeof value == "string" || Array.isArray(value) || isPlainObject(value)) {
-      result[key] = normalizeJoinObject(value)
+      const existing = result[key]
+      result[key] = mergeJoinValue(existing, normalizeJoinObject(value))
       continue
     }
 
@@ -76,6 +80,22 @@ function normalizeJoinObject(join) {
   }
 
   return result
+}
+
+/**
+ * @param {import("./join-object.js").JoinObject[string] | undefined} existing - Existing normalized join value.
+ * @param {import("./join-object.js").JoinObject[string]} incoming - Incoming normalized join value.
+ * @returns {import("./join-object.js").JoinObject[string]} - Merged join value.
+ */
+function mergeJoinValue(existing, incoming) {
+  if (!existing) return incoming
+  if (existing === true || incoming === true) return true
+
+  if (typeof existing == "object" && typeof incoming == "object") {
+    return {...existing, ...incoming}
+  }
+
+  return incoming
 }
 
 /**
@@ -203,12 +223,14 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | import("./join-object.js").JoinObjectInput} join - Join clause or join descriptor.
+   * @param {string | string[] | import("./join-object.js").JoinObjectInput} join - Join clause or join descriptor.
    * @returns {this} - The joins.
    */
   joins(join) {
     if (typeof join == "string") {
       this._joins.push(new JoinPlain(join))
+    } else if (Array.isArray(join)) {
+      this._joins.push(new JoinObject(normalizeJoinObject(join)))
     } else if (isPlainObject(join)) {
       this._joins.push(new JoinObject(normalizeJoinObject(join)))
     } else {
