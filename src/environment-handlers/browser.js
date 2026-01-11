@@ -175,6 +175,16 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * @param {string[]} testFiles - Test files.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async importTestFiles(testFiles) {
+    for (const testFile of testFiles) {
+      await import(testFile)
+    }
+  }
+
+  /**
    * @param {string} filePath - File path.
    * @returns {Promise<typeof import("../database/migration/index.js").default>} - Resolves with the require migration.
    */
