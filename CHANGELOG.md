@@ -9,3 +9,5 @@
 - Add dummy-tag handling for browser tests with a SQLite web driver setup.
 - Add a Peakflow build step for browser system tests.
 - Fix dummy helper path resolution when running tests from spec/dummy.
+- Normalize dummy helper path resolution to avoid trailing-slash mismatches.
+- Run dummy migrations for browser tests instead of loading structure SQL.

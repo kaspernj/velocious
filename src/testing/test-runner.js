@@ -214,7 +214,7 @@ export default class TestRunner {
    * @returns {string} - Default dummy helper path.
    */
   defaultDummyPath() {
-    const cwd = process.cwd()
+    const cwd = path.resolve(process.cwd())
     const normalized = cwd.split(path.sep).join("/")
 
     if (normalized.endsWith("/spec/dummy")) {
