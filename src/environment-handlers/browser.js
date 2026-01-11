@@ -18,6 +18,9 @@ import {Logger} from "../logger.js"
  *   id: string
  * }} CommandsRequireContextType
  */
+/**
+ * @typedef {() => Promise<CommandsRequireContextType>} CommandsRequireContextCallbackType
+ */
 
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /** @type {CommandsRequireContextType | undefined} */
@@ -28,12 +31,14 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
   /**
    * @param {object} args - Options object.
+   * @param {CommandsRequireContextCallbackType} [args.commandsRequireContextCallback] - Commands require context callback.
    * @param {() => Promise<MigrationsRequireContextType>} [args.migrationsRequireContextCallback] - Migrations require context callback.
    */
-  constructor({migrationsRequireContextCallback, ...restArgs} = {}) {
+  constructor({commandsRequireContextCallback, migrationsRequireContextCallback, ...restArgs} = {}) {
     super()
     restArgsError(restArgs)
 
+    this.commandsRequireContextCallback = commandsRequireContextCallback
     this.migrationsRequireContextCallback = migrationsRequireContextCallback
     this.logger = new Logger(this)
   }
@@ -56,23 +61,25 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
    * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with the commands.
    */
   async findCommands() {
-    this._findCommandsResult = this._actualFindCommands()
+    this._findCommandsResult = await this._actualFindCommands()
 
     return this._findCommandsResult
   }
 
   /**
-   * @returns {CommandsRequireContextType} - The commands require context.
+   * @returns {Promise<CommandsRequireContextType | undefined>} - The commands require context.
    */
-  _findCommandsRequireContext() {
-    // @ts-expect-error
-    this.findCommandsRequireContextResult ||= /** @type {CommandsRequireContextType} */ (require.context("../cli/commands", true, /\.js$/))
+  async _findCommandsRequireContext() {
+    if (!this.commandsRequireContextCallback) return undefined
+
+    this.findCommandsRequireContextResult ||= await this.commandsRequireContextCallback()
 
     return this.findCommandsRequireContextResult
   }
 
-  _actualFindCommands() {
-    const commandFiles = this._findCommandsRequireContext()
+  async _actualFindCommands() {
+    const commandFiles = await this._findCommandsRequireContext()
+    if (!commandFiles) return []
     const commands = []
 
     for (const aFilePath of commandFiles.keys()) {
@@ -115,6 +122,9 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     filePaths.push(filePath)
 
     const commandsRequireContext = await this._findCommandsRequireContext()
+    if (!commandsRequireContext) {
+      throw new Error("CLI commands are not available in the browser environment without commandsRequireContextCallback")
+    }
     let commandClassImport
 
     for (const aFilePath of filePaths) {
