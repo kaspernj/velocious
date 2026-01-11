@@ -125,6 +125,30 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsBackgroundJobsMain(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsBackgroundJobsMain not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsBackgroundJobsWorker(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsBackgroundJobsWorker not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsBackgroundJobsRunner(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsBackgroundJobsRunner not implemented")
+  }
+
+  /**
    * @abstract
    * @returns {Promise<CommandFileObjectType[]>} - Resolves with the commands.
    */
