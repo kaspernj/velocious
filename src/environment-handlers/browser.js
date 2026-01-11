@@ -211,7 +211,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     const requireKeys = testFilesRequireContext.keys()
     const normalizedKeys = requireKeys.map((key) => ({
       key,
-      normalized: key.replace(/^\.\//, "")
+      normalized: key.replace(/\\/g, "/").replace(/^\.\//, "")
     }))
 
     for (const testFile of testFiles) {
