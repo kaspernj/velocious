@@ -199,7 +199,7 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async runNodeDummy(callback) {
-    const dummyPath = process.env.VELOCIOUS_DUMMY_PATH || path.join(process.cwd(), "spec/dummy/index.js")
+    const dummyPath = process.env.VELOCIOUS_DUMMY_PATH || this.defaultDummyPath()
     const dummyImport = await import(pathToFileURL(dummyPath).href)
     const Dummy = dummyImport.default
 
@@ -208,6 +208,20 @@ export default class TestRunner {
     }
 
     await Dummy.run(callback)
+  }
+
+  /**
+   * @returns {string} - Default dummy helper path.
+   */
+  defaultDummyPath() {
+    const cwd = process.cwd()
+    const normalized = cwd.split(path.sep).join("/")
+
+    if (normalized.endsWith("/spec/dummy")) {
+      return path.join(cwd, "index.js")
+    }
+
+    return path.join(cwd, "spec/dummy/index.js")
   }
 
   /**
