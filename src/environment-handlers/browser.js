@@ -19,6 +19,14 @@ import {Logger} from "../logger.js"
  * }} CommandsRequireContextType
  */
 
+/**
+ * @typedef {(id: string) => unknown} TestFilesRequireContextIDFunctionType
+ * @typedef {TestFilesRequireContextIDFunctionType & {
+ *   keys: () => string[],
+ *   id: string
+ * }} TestFilesRequireContextType
+ */
+
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /** @type {CommandsRequireContextType | undefined} */
   findCommandsRequireContextResult = undefined
@@ -26,15 +34,20 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /** @type {MigrationsRequireContextType | undefined} */
   _migrationsRequireContextResult = undefined
 
+  /** @type {TestFilesRequireContextType | undefined} */
+  _testFilesRequireContextResult = undefined
+
   /**
    * @param {object} args - Options object.
    * @param {() => Promise<MigrationsRequireContextType>} [args.migrationsRequireContextCallback] - Migrations require context callback.
+   * @param {() => Promise<TestFilesRequireContextType>} [args.testFilesRequireContextCallback] - Test files require context callback.
    */
-  constructor({migrationsRequireContextCallback, ...restArgs} = {}) {
+  constructor({migrationsRequireContextCallback, testFilesRequireContextCallback, ...restArgs} = {}) {
     super()
     restArgsError(restArgs)
 
     this.migrationsRequireContextCallback = migrationsRequireContextCallback
+    this.testFilesRequireContextCallback = testFilesRequireContextCallback
     this.logger = new Logger(this)
   }
 
@@ -50,6 +63,21 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     this._migrationsRequireContextResult ||= await migrationsRequireContextCallback()
 
     return this._migrationsRequireContextResult
+  }
+
+  /**
+   * @returns {Promise<TestFilesRequireContextType>} - Resolves with the test files require context.
+   */
+  async testFilesRequireContext() {
+    const {testFilesRequireContextCallback} = this
+
+    if (!testFilesRequireContextCallback) {
+      throw new Error("testFilesRequireContextCallback is required when running browser tests")
+    }
+
+    this._testFilesRequireContextResult ||= await testFilesRequireContextCallback()
+
+    return this._testFilesRequireContextResult
   }
 
   /**
@@ -179,8 +207,26 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async importTestFiles(testFiles) {
+    const testFilesRequireContext = await this.testFilesRequireContext()
+    const requireKeys = testFilesRequireContext.keys()
+    const normalizedKeys = requireKeys.map((key) => ({
+      key,
+      normalized: key.replace(/^\.\//, "")
+    }))
+
     for (const testFile of testFiles) {
-      await import(testFile)
+      const normalizedFile = testFile.replace(/\\/g, "/")
+      const matchedKey = normalizedKeys.find((entry) => normalizedFile.endsWith(entry.normalized))?.key
+
+      if (!matchedKey) {
+        throw new Error(`Test file ${testFile} was not found in the provided require context`)
+      }
+
+      const imported = testFilesRequireContext(matchedKey)
+
+      if (imported && typeof imported.then == "function") {
+        await imported
+      }
     }
   }
 

@@ -30,13 +30,19 @@ const shared = {
 }
 
 /**
+ * @returns {RegExp} - Browser test file regex.
+ */
+function browserTestPattern() {
+  const customPattern = process.env.VELOCIOUS_BROWSER_TEST_PATTERN
+  return customPattern ? new RegExp(customPattern) : defaultBrowserPattern
+}
+
+/**
  * @param {string} filePath - File path.
  * @returns {boolean} - Whether file matches browser test pattern.
  */
 function isBrowserTestFile(filePath) {
-  const customPattern = process.env.VELOCIOUS_BROWSER_TEST_PATTERN
-  const pattern = customPattern ? new RegExp(customPattern) : defaultBrowserPattern
-  return pattern.test(path.basename(filePath))
+  return browserTestPattern().test(path.basename(filePath))
 }
 
 /**
@@ -183,7 +189,7 @@ async function findFiles(directory) {
 /**
  * @returns {Promise<import("../src/configuration.js").default>} - The configuration.
  */
-async function resolveConfiguration() {
+async function resolveConfiguration({testFilesRequireContextCallback} = {}) {
   const sqlJsDatabase = await getSqlJsDatabase()
 
   if (!shared.sqlJsConnection) {
@@ -206,7 +212,9 @@ async function resolveConfiguration() {
     debug: false,
     directory: dummyDirectory(),
     environment: "test",
-    environmentHandler: new BrowserEnvironmentHandler(),
+    environmentHandler: new BrowserEnvironmentHandler({
+      testFilesRequireContextCallback
+    }),
     locale: () => "en",
     localeFallbacks: {
       de: ["de", "en"],
@@ -225,7 +233,7 @@ async function resolveConfiguration() {
 
 /**
  * @param {string[]} processArgs - Process args.
- * @returns {Promise<{testFiles: string[], lineFilters: Record<string, number[]>, includeTags: string[], excludeTags: string[], examplePatterns: RegExp[]}>} - Test data.
+ * @returns {Promise<{directory: string, testFiles: string[], lineFilters: Record<string, number[]>, includeTags: string[], excludeTags: string[], examplePatterns: RegExp[]}>} - Test data.
  */
 async function resolveTests(processArgs) {
   const directory = process.env.VELOCIOUS_TEST_DIR
@@ -249,12 +257,35 @@ async function resolveTests(processArgs) {
   }
 
   return {
+    directory,
     testFiles: browserTestFiles,
     lineFilters: testFilesFinder.getLineFiltersByFile(),
     includeTags,
     excludeTags,
     examplePatterns: normalizeExamplePatterns(examplePatterns)
   }
+}
+
+/**
+ * @param {string[]} testFiles - Test files to import.
+ * @returns {{(key: string): Promise<unknown> | unknown, keys: () => string[], id: string}} - Require context for test files.
+ */
+function createTestFilesRequireContext(testFiles) {
+  const cachedImports = new Map()
+  const keys = [...testFiles]
+
+  const context = (key) => {
+    if (!cachedImports.has(key)) {
+      cachedImports.set(key, import(pathToFileURL(key).href))
+    }
+
+    return cachedImports.get(key)
+  }
+
+  context.keys = () => keys
+  context.id = "velocious-test-files"
+
+  return context
 }
 
 async function main() {
@@ -265,8 +296,10 @@ async function main() {
 
   await buildBrowserTestApp()
 
-  const configuration = await resolveConfiguration()
   const {testFiles, lineFilters, includeTags, excludeTags, examplePatterns} = await resolveTests(processArgs)
+  const configuration = await resolveConfiguration({
+    testFilesRequireContextCallback: async () => createTestFilesRequireContext(testFiles)
+  })
   const testRunner = new TestRunner({
     configuration,
     excludeTags,
