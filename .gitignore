@@ -1,4 +1,5 @@
 build
+dist
 db/structure-default.sql
 node_modules
 spec/dummy/db/*.sqlite

@@ -5,3 +5,4 @@
 - Fix background job status reporting timeout to use milliseconds so network round trips are not prematurely aborted.
 - Move background job CLI commands into the Node environment handler so browser builds avoid Node-only imports.
 - Add README examples for configuring CLI command loading in Node and browser environments.
+- Add browser system test runner and browser-safe test app harness for System Testing.
