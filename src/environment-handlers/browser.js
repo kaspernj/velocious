@@ -224,7 +224,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
       const imported = testFilesRequireContext(matchedKey)
 
-      if (imported && typeof imported.then == "function") {
+      if (imported && typeof imported == "object" && "then" in imported && typeof imported.then == "function") {
         await imported
       }
     }
