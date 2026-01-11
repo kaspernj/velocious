@@ -64,6 +64,16 @@ describe("Tasks", () => {
 })
 ```
 
+## Browser system tests
+
+Run browser compatibility tests via System Testing:
+
+```bash
+npm run test:browser
+```
+
+Browser system tests must be named `*.browser-test.js` or `*.browser-spec.js` (override with `VELOCIOUS_BROWSER_TEST_PATTERN`).
+
 Use beforeAll/afterAll for suite-level setup/teardown.
 
 ```js

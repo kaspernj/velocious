@@ -1,0 +1,348 @@
+// @ts-check
+
+import fs from "node:fs/promises"
+import path from "node:path"
+import {pathToFileURL} from "node:url"
+import {build} from "esbuild"
+import initSqlJs from "sql.js"
+import SystemTest from "system-testing/build/system-test.js"
+import Configuration from "../src/configuration.js"
+import BrowserEnvironmentHandler from "../src/environment-handlers/browser.js"
+import SqliteWebDriver from "../src/database/drivers/sqlite/index.web.js"
+import SingleMultiUsePool from "../src/database/pool/single-multi-use.js"
+import queryWeb from "../src/database/drivers/sqlite/query.web.js"
+import TestFilesFinder from "../src/testing/test-files-finder.js"
+import TestRunner from "../src/testing/test-runner.js"
+import {normalizeExamplePatterns, parseFilters} from "../src/testing/test-filter-parser.js"
+import dummyDirectory from "../spec/dummy/dummy-directory.js"
+
+const rootDir = process.cwd()
+const distDir = path.join(rootDir, "dist")
+const entryFile = path.join(rootDir, "src/testing/browser-test-app.js")
+const defaultBrowserPattern = /\.browser-(spec|test)\.(m|)js$/
+const shared = {
+  sqlJsDatabase: null,
+  sqlJsConnection: null,
+  schemaPrepared: false,
+  modelsPrepared: false
+}
+
+/**
+ * @param {string} filePath - File path.
+ * @returns {boolean} - Whether file matches browser test pattern.
+ */
+function isBrowserTestFile(filePath) {
+  const customPattern = process.env.VELOCIOUS_BROWSER_TEST_PATTERN
+  const pattern = customPattern ? new RegExp(customPattern) : defaultBrowserPattern
+  return pattern.test(path.basename(filePath))
+}
+
+/**
+ * @returns {Promise<void>} - Resolves when the browser test app is built.
+ */
+async function buildBrowserTestApp() {
+  await fs.rm(distDir, {recursive: true, force: true})
+  await fs.mkdir(distDir, {recursive: true})
+
+  await build({
+    entryPoints: [entryFile],
+    bundle: true,
+    format: "esm",
+    outdir: distDir,
+    platform: "browser",
+    target: "es2020",
+    logLevel: "silent",
+    sourcemap: true
+  })
+
+  const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Velocious Browser Tests</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/browser-test-app.js"></script>
+  </body>
+</html>
+`
+
+  await fs.writeFile(path.join(distDir, "index.html"), html, "utf8")
+}
+
+/**
+ * @returns {Promise<import("sql.js").Database>} - The SQL.js database instance.
+ */
+async function getSqlJsDatabase() {
+  if (shared.sqlJsDatabase) return shared.sqlJsDatabase
+
+  const SQL = await initSqlJs({
+    locateFile: (file) => path.join(rootDir, "node_modules/sql.js/dist", file)
+  })
+
+  shared.sqlJsDatabase = new SQL.Database()
+
+  return shared.sqlJsDatabase
+}
+
+/**
+ * @param {import("sql.js").Database} database - SQL.js database instance.
+ * @returns {{query: (sql: string) => Promise<Record<string, unknown>[]>, close: () => Promise<void>}} - Connection wrapper.
+ */
+function createSqlJsConnection(database) {
+  return {
+    query: async (sql) => await queryWeb(database, sql),
+    close: async () => {
+      database.close()
+    }
+  }
+}
+
+/**
+ * @param {import("../src/configuration.js").default} configuration - Configuration instance.
+ * @returns {Promise<void>} - Resolves when prepared.
+ */
+async function prepareBrowserSchema(configuration) {
+  if (shared.schemaPrepared) return
+
+  const structurePath = path.join(dummyDirectory(), "db/structure-default.sql")
+  const structureSql = await fs.readFile(structurePath, "utf8")
+  const statements = structureSql
+    .split(/;\s*\n/)
+    .map((statement) => statement.trim())
+    .filter(Boolean)
+
+  await configuration.ensureConnections(async (dbs) => {
+    const db = dbs.default
+    const tableStatements = []
+    const indexStatements = []
+
+    for (const statement of statements) {
+      if (/^create\s+(unique\s+)?index/i.test(statement)) {
+        indexStatements.push(statement)
+      } else {
+        tableStatements.push(statement)
+      }
+    }
+
+    for (const statement of tableStatements) {
+      await db.query(statement)
+    }
+
+    for (const statement of indexStatements) {
+      await db.query(statement)
+    }
+  })
+
+  shared.schemaPrepared = true
+}
+
+/**
+ * @param {import("../src/configuration.js").default} configuration - Configuration instance.
+ * @returns {Promise<void>} - Resolves when models are initialized.
+ */
+async function initializeDummyModels(configuration) {
+  if (shared.modelsPrepared) return
+
+  const modelsPath = path.join(dummyDirectory(), "src/models")
+  const modelFiles = await findFiles(modelsPath)
+
+  await configuration.ensureConnections(async () => {
+    for (const modelFile of modelFiles) {
+      const modelImport = await import(pathToFileURL(modelFile).href)
+      const modelClass = modelImport.default
+
+      if (!modelClass?.initializeRecord) {
+        throw new Error(`Model wasn't exported from: ${modelFile}`)
+      }
+
+      if (typeof modelClass.getDatabaseIdentifier === "function" && modelClass.getDatabaseIdentifier() !== "default") {
+        continue
+      }
+
+      await modelClass.initializeRecord({configuration})
+
+      if (await modelClass.hasTranslationsTable()) {
+        const translationClass = modelClass.getTranslationClass()
+        await translationClass.initializeRecord({configuration})
+      }
+    }
+  })
+
+  shared.modelsPrepared = true
+}
+
+/**
+ * @param {string} directory - Directory path.
+ * @returns {Promise<string[]>} - Resolved file paths.
+ */
+async function findFiles(directory) {
+  const entries = await fs.readdir(directory, {withFileTypes: true})
+  const files = []
+
+  for (const entry of entries) {
+    const fullPath = path.join(directory, entry.name)
+
+    if (entry.isDirectory()) {
+      const nestedFiles = await findFiles(fullPath)
+      files.push(...nestedFiles)
+    } else if (entry.isFile() && entry.name.endsWith(".js")) {
+      files.push(fullPath)
+    }
+  }
+
+  return files
+}
+
+/**
+ * @returns {Promise<import("../src/configuration.js").default>} - The configuration.
+ */
+async function resolveConfiguration() {
+  const sqlJsDatabase = await getSqlJsDatabase()
+
+  if (!shared.sqlJsConnection) {
+    shared.sqlJsConnection = createSqlJsConnection(sqlJsDatabase)
+  }
+
+  const configuration = new Configuration({
+    database: {
+      test: {
+        default: {
+          driver: SqliteWebDriver,
+          poolType: SingleMultiUsePool,
+          type: "sqlite",
+          name: "browser-test-db",
+          migrations: true,
+          getConnection: () => shared.sqlJsConnection
+        }
+      }
+    },
+    debug: false,
+    directory: dummyDirectory(),
+    environment: "test",
+    environmentHandler: new BrowserEnvironmentHandler(),
+    locale: () => "en",
+    localeFallbacks: {
+      de: ["de", "en"],
+      en: ["en", "de"]
+    },
+    locales: ["de", "en"]
+  })
+
+  configuration.setCurrent()
+
+  await prepareBrowserSchema(configuration)
+  await initializeDummyModels(configuration)
+
+  return configuration
+}
+
+/**
+ * @param {string[]} processArgs - Process args.
+ * @returns {Promise<{testFiles: string[], lineFilters: Record<string, number[]>, includeTags: string[], excludeTags: string[], examplePatterns: RegExp[]}>} - Test data.
+ */
+async function resolveTests(processArgs) {
+  const directory = process.env.VELOCIOUS_TEST_DIR
+    ? path.resolve(process.env.VELOCIOUS_TEST_DIR)
+    : rootDir
+  const directories = process.env.VELOCIOUS_TEST_DIR
+    ? [directory]
+    : [`${rootDir}/__tests__`, `${rootDir}/tests`, `${rootDir}/spec`]
+
+  const {includeTags, excludeTags, examplePatterns, filteredProcessArgs} = parseFilters(processArgs)
+  const testFilesFinder = new TestFilesFinder({
+    directory,
+    directories,
+    processArgs: filteredProcessArgs
+  })
+  const testFiles = await testFilesFinder.findTestFiles()
+  const browserTestFiles = testFiles.filter((file) => isBrowserTestFile(file))
+
+  if (browserTestFiles.length === 0) {
+    throw new Error("No browser tests matched. Use *.browser-test.js or *.browser-spec.js (override with VELOCIOUS_BROWSER_TEST_PATTERN).")
+  }
+
+  return {
+    testFiles: browserTestFiles,
+    lineFilters: testFilesFinder.getLineFiltersByFile(),
+    includeTags,
+    excludeTags,
+    examplePatterns: normalizeExamplePatterns(examplePatterns)
+  }
+}
+
+async function main() {
+  const processArgs = ["test:browser", ...process.argv.slice(2)]
+
+  process.env.VELOCIOUS_BROWSER_TESTS = "true"
+  process.env.SYSTEM_TEST_HOST ||= "dist"
+
+  await buildBrowserTestApp()
+
+  const configuration = await resolveConfiguration()
+  const {testFiles, lineFilters, includeTags, excludeTags, examplePatterns} = await resolveTests(processArgs)
+  const testRunner = new TestRunner({
+    configuration,
+    excludeTags,
+    includeTags,
+    testFiles,
+    lineFilters,
+    examplePatterns
+  })
+  const systemTest = SystemTest.current({debug: process.env.SYSTEM_TEST_DEBUG === "true"})
+
+  await systemTest.start()
+
+  try {
+    await testRunner.prepare()
+
+    if (testRunner.getTestsCount() === 0) {
+      throw new Error(`${testRunner.getTestsCount()} tests was found in ${testFiles.length} file(s)`)
+    }
+
+    await testRunner.run()
+
+    const executedTests = testRunner.getExecutedTestsCount()
+    const hasLineFilters = Object.keys(testRunner.getLineFilters()).length > 0
+    const hasExampleFilters = examplePatterns.length > 0
+    const hasTagFilters = includeTags.length > 0 || excludeTags.length > 0
+
+    if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
+      console.error("\nNo tests matched the provided filters")
+      process.exitCode = 1
+      return
+    }
+
+    if (testRunner.isFailed()) {
+      const failedTests = testRunner.getFailedTestDetails()
+
+      if (failedTests.length > 0) {
+        console.error("\nFailed tests:")
+
+        for (const failed of failedTests) {
+          const location = failed.filePath && failed.line
+            ? ` (${failed.filePath}:${failed.line})`
+            : ""
+          console.error(`- ${failed.fullDescription}${location}`)
+        }
+      }
+
+      console.error(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`)
+      process.exitCode = 1
+    } else if (testRunner.areAnyTestsFocussed()) {
+      console.error(`\nFocussed run with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`)
+      process.exitCode = 1
+    } else {
+      console.log(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`)
+    }
+  } finally {
+    await systemTest.stop()
+  }
+}
+
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})

@@ -7,6 +7,7 @@ import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
 import restArgsError from "../utils/rest-args-error.js"
 import {testConfig, testEvents, tests} from "./test.js"
+import {pathToFileURL} from "url"
 
 /**
  * @param {Promise<unknown> | unknown} promise - Promise or value.
@@ -156,6 +157,97 @@ export default class TestRunner {
     }
 
     return Array.from(new Set(values))
+  }
+
+  /**
+   * @param {TestArgs} testArgs - Test args.
+   * @param {string} tag - Tag to check for.
+   * @returns {boolean} - Whether tag is present.
+   */
+  hasTag(testArgs, tag) {
+    return this.normalizeTags(testArgs?.tags).includes(tag)
+  }
+
+  /**
+   * @returns {boolean} - Whether running browser tests.
+   */
+  isBrowserTestMode() {
+    return process.env.VELOCIOUS_BROWSER_TESTS === "true"
+  }
+
+  /**
+   * @param {TestArgs} testArgs - Test args.
+   * @param {() => Promise<void>} callback - Callback to run.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async runWithDummyIfNeeded(testArgs, callback) {
+    if (!this.hasTag(testArgs, "dummy")) {
+      await callback()
+      return
+    }
+
+    if (this.isBrowserTestMode()) {
+      await this.runBrowserDummy(callback)
+      return
+    }
+
+    await this.runNodeDummy(callback)
+  }
+
+  /**
+   * @param {() => Promise<void>} callback - Callback to run.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async runNodeDummy(callback) {
+    const dummyPath = process.env.VELOCIOUS_DUMMY_PATH || this.defaultDummyPath()
+    const dummyImport = await import(pathToFileURL(dummyPath).href)
+    const Dummy = dummyImport.default
+
+    if (!Dummy?.run) {
+      throw new Error(`Dummy helper not found at ${dummyPath}`)
+    }
+
+    await Dummy.run(callback)
+  }
+
+  /**
+   * @returns {string} - Default dummy helper path.
+   */
+  defaultDummyPath() {
+    const cwd = process.cwd()
+    const normalized = cwd.split(path.sep).join("/")
+
+    if (normalized.endsWith("/spec/dummy")) {
+      return path.join(cwd, "index.js")
+    }
+
+    return path.join(cwd, "spec/dummy/index.js")
+  }
+
+  /**
+   * @param {() => Promise<void>} callback - Callback to run.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async runBrowserDummy(callback) {
+    await this.getConfiguration().ensureConnections(async (dbs) => {
+      await this.truncateDatabases(dbs)
+
+      try {
+        await callback()
+      } finally {
+        await this.truncateDatabases(dbs)
+      }
+    })
+  }
+
+  /**
+   * @param {Record<string, import("../database/drivers/base.js").default>} dbs - Database connections.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async truncateDatabases(dbs) {
+    for (const identifier of Object.keys(dbs)) {
+      await dbs[identifier].truncateAllTables()
+    }
   }
 
   /**
@@ -511,28 +603,32 @@ export default class TestRunner {
           let failedError
 
           try {
-            for (const beforeEachData of newBeforeEaches) {
-              await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-            }
+            await this.runWithDummyIfNeeded(testArgs, async () => {
+              try {
+                for (const beforeEachData of newBeforeEaches) {
+                  await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                }
 
-            const testPromise = testData.function(testArgs)
+                const testPromise = testData.function(testArgs)
 
-            if (useTimeout && timeoutMs !== undefined) {
-              await runWithTimeout(testPromise, timeoutMs, testDescription)
-            } else {
-              await testPromise
-            }
-            this._successfulTests++
+                if (useTimeout && timeoutMs !== undefined) {
+                  await runWithTimeout(testPromise, timeoutMs, testDescription)
+                } else {
+                  await testPromise
+                }
+                this._successfulTests++
+              } finally {
+                for (const afterEachData of newAfterEaches) {
+                  await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                }
+              }
+            })
           } catch (error) {
             if (retriesUsed < retryCount) {
               retriesUsed++
               shouldRetry = true
             } else {
               failedError = error
-            }
-          } finally {
-            for (const afterEachData of newAfterEaches) {
-              await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
             }
           }
 
