@@ -3,19 +3,19 @@ import ProjectDetail from "../../../dummy/src/models/project-detail.js"
 
 describe("Record - instance relationships - has one relationship", {tags: ["dummy"]}, () => {
   it("loads a relationship", async () => {
-      const project = await Project.create()
-      const projectDetail = await ProjectDetail.create({note: "Test project", project})
-      const foundProject = /** @type {Project} */ (await Project.find(project.id()))
-      const projectDetailInstanceRelationship = foundProject.getRelationshipByName("projectDetail")
+    const project = await Project.create()
+    const projectDetail = await ProjectDetail.create({note: "Test project", project})
+    const foundProject = /** @type {Project} */ (await Project.find(project.id()))
+    const projectDetailInstanceRelationship = foundProject.getRelationshipByName("projectDetail")
 
-      expect(projectDetailInstanceRelationship.isLoaded()).toBeFalse()
+    expect(projectDetailInstanceRelationship.isLoaded()).toBeFalse()
 
-      await foundProject.loadProjectDetail()
+    await foundProject.loadProjectDetail()
 
-      expect(projectDetailInstanceRelationship.isLoaded()).toBeTrue()
+    expect(projectDetailInstanceRelationship.isLoaded()).toBeTrue()
 
-      const projectsLoadedProjectDetail = foundProject.projectDetail()
+    const projectsLoadedProjectDetail = foundProject.projectDetail()
 
-      expect(projectsLoadedProjectDetail.id()).toEqual(projectDetail.id())
+    expect(projectsLoadedProjectDetail.id()).toEqual(projectDetail.id())
   })
 })
