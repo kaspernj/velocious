@@ -62,7 +62,15 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
    * @returns {Promise<Record<string, any>[]>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
-    return await this.getConnection().query(sql)
+    const result = await this.getConnection().query(sql)
+
+    if (!Array.isArray(result)) {
+      const connection = this.getConnection()
+      const connectionName = connection?.constructor?.name || "UnknownConnection"
+
+      throw new Error(`Sqlite web connection ${connectionName} returned a non-array result: ${typeof result}`)
+    }
+
+    return result
   }
 }
-
