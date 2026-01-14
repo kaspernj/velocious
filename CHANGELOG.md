@@ -20,3 +20,5 @@
 - Merge join array branches targeting the same relationship so nested joins are preserved.
 - Require a test-file require context when importing browser tests to avoid bundling unintended files.
 - Enable browser coverage for table data, transactions, and selected driver specs.
+- Add npm release patch script entrypoint and ensure npm login before publishing.
+- Refactor release patch script to Node for cross-platform usage.

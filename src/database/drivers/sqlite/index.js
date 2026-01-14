@@ -6,6 +6,7 @@ import sqlite3 from "sqlite3"
 import {open} from "sqlite"
 
 import Base from "./base.js"
+import fileExists from "../../../utils/file-exists.js"
 
 export default class VelociousDatabaseDriversSqliteNode extends Base {
   /** @type {import("sqlite3").Database | undefined} */
@@ -13,17 +14,31 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
   async connect() {
     const args = this.getArgs()
-    const databasePath = `${this.getConfiguration().getDirectory()}/db/${this.localStorageName()}.sqlite`
+    const databaseDir = `${this.getConfiguration().getDirectory()}/db`
+    const databasePath = `${databaseDir}/${this.localStorageName()}.sqlite`
+
+    if (!await fileExists(databaseDir)) {
+      await fs.mkdir(databaseDir, {recursive: true})
+    }
 
     if (args.reset) {
       await fs.unlink(databasePath)
     }
 
-    // @ts-expect-error
-    this.connection = /** @type {import("sqlite3").Database} */ (await open({
-      filename: databasePath,
-      driver: sqlite3.Database
-    }))
+    try {
+      // @ts-expect-error
+      this.connection = /** @type {import("sqlite3").Database} */ (await open({
+        filename: databasePath,
+        driver: sqlite3.Database
+      }))
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Couldn't open database ${databasePath} because of ${error.constructor.name}: ${error.message}`)
+      } else {
+        throw new Error(`Couldn't open database ${databasePath} because of ${typeof error}: ${error}`)
+      }
+    }
+
     await this.registerVersion()
   }
 

@@ -15,7 +15,7 @@
     "compile": "tsc -b && npm run copy:ejs && chmod +x build/bin/velocious.js",
     "copy:ejs": "cpy \"src/**/*.ejs\" build --parents",
     "lint": "eslint",
-    "release:patch": "bash scripts/release-patch.sh",
+    "release:patch": "node scripts/release-patch.js",
     "test": "cd spec/dummy && VELOCIOUS_TEST_DIR=$(pwd)/.. node ../../bin/velocious.js test",
     "test:browser": "node scripts/test-browser.js",
     "prepublishOnly": "npm run build && chmod +x build/bin/velocious.js",
