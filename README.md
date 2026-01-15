@@ -169,6 +169,41 @@ Test deliveries are stored in memory:
 const sent = velociousMailer.deliveries()
 ```
 
+# Translations
+
+Velocious uses gettext-universal by default. Configure your locales and fallbacks in the app configuration:
+
+```js
+export default new Configuration({
+  locale: () => "en",
+  locales: ["en"],
+  localeFallbacks: {en: ["en"]}
+})
+```
+
+Load compiled translations for gettext-universal (for example, JS files generated from .po files):
+
+```js
+import gettextConfig from "gettext-universal/build/src/config.js"
+import en from "./locales/en.js"
+
+Object.assign(gettextConfig.getLocales(), {en})
+```
+
+Use translations in mailer views with `_`:
+
+```ejs
+<b><%= _("Hello %{userName}", {userName}) %></b>
+```
+
+If you want a different translation backend, set a custom translator:
+
+```js
+configuration.setTranslator((msgID, args) => {
+  // return translated string
+})
+```
+
 # Models
 
 ```bash
