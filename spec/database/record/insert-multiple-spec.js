@@ -17,7 +17,7 @@ describe("Record - insertMultiple", {tags: ["dummy"]}, () => {
 
     const task = await Task.findBy({name: "InsertMultiple task"})
 
-    expect(Number(task?.projectId())).toEqual(project.id())
+    expect(Number(task?.projectId())).toEqual(Number(project.id()))
     expect(task?.createdAt()).toBeInstanceOf(Date)
     expect(task?.updatedAt()).toBeNull()
   })
