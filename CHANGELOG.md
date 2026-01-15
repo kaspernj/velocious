@@ -32,3 +32,4 @@
 - Move shared `insertMultiple` implementation into the base driver.
 - Validate `insertMultiple` row lengths against column count.
 - Preserve numeric strings for decimal/numeric columns and unsafe integers.
+- Ensure dummy app stops even when tests fail.
