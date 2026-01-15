@@ -36,6 +36,16 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
+   * @param {any} value - Value to format.
+   * @returns {string | number} - SQL literal.
+   */
+  formatValue(value) {
+    if (value === null) return "NULL"
+
+    return this.getOptions().quote(value)
+  }
+
+  /**
    * @returns {string} SQL statement
    */
   toSql() {
@@ -146,7 +156,7 @@ export default class VelociousDatabaseQueryInsertBase {
     for (const value of data) {
       if (count > 0) sql += ", "
 
-      sql += this.getOptions().quote(value)
+      sql += this.formatValue(value)
       count++
     }
 
@@ -155,4 +165,3 @@ export default class VelociousDatabaseQueryInsertBase {
     return sql
   }
 }
-

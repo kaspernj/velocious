@@ -319,7 +319,7 @@ export default class VelociousDatabaseDriversBase {
    * @abstract
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<string>>} rows - Rows to insert.
+   * @param {Array<Array<unknown>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) { // eslint-disable-line no-unused-vars

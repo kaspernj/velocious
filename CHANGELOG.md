@@ -26,3 +26,5 @@
 - Add mailer support with EJS rendering, background job delivery, and test delivery tracking.
 - Add configurable mailer backends with a built-in SMTP backend.
 - Prefer app-defined background jobs over built-in ones when names collide.
+- Type cast values for `insertMultiple` based on column types.
+- Insert SQL now renders null values as SQL NULL.
