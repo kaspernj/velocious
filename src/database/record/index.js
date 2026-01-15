@@ -802,18 +802,61 @@ class VelociousDatabaseRecord {
    * @param {Array<Array<unknown>>} rows - Rows to insert.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.cast] - Whether to cast values based on column types.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @param {boolean} [args.retryIndividuallyOnFailure] - Retry rows individually if a batch insert fails.
+   * @param {boolean} [args.returnResults] - Return succeeded/failed rows instead of throwing when retries fail.
+   * @returns {Promise<void | {succeededRows: Array<Array<unknown>>, failedRows: Array<Array<unknown>>, errors: Array<{row: Array<unknown>, error: unknown}>}>} - Resolves when complete.
    */
   static async insertMultiple(columns, rows, args = {}) {
-    const {cast = true, ...restArgs} = args
+    const {cast = true, retryIndividuallyOnFailure = false, returnResults = false, ...restArgs} = args
 
     restArgsError(restArgs)
 
     const normalizedRows = cast
       ? this._normalizeInsertMultipleRows({columns, rows})
       : rows
+    const tableName = this.tableName()
 
-    return await this.connection().insertMultiple(this.tableName(), columns, normalizedRows)
+    if (!retryIndividuallyOnFailure) {
+      await this.connection().insertMultiple(tableName, columns, normalizedRows)
+      if (returnResults) return {succeededRows: normalizedRows.slice(), failedRows: [], errors: []}
+      return
+    }
+
+    try {
+      await this.connection().insertMultiple(tableName, columns, normalizedRows)
+      if (returnResults) return {succeededRows: normalizedRows.slice(), failedRows: [], errors: []}
+      return
+    } catch {
+      const results = {
+        succeededRows: [],
+        failedRows: [],
+        errors: []
+      }
+
+      for (const row of normalizedRows) {
+        try {
+          await this.connection().insertMultiple(tableName, columns, [row])
+          results.succeededRows.push(row)
+        } catch (rowError) {
+          results.failedRows.push(row)
+          results.errors.push({row, error: rowError})
+        }
+      }
+
+      if (results.failedRows.length > 0) {
+        const combinedErrors = results.errors.map((entry, index) => {
+          const message = entry.error instanceof Error ? entry.error.message : String(entry.error)
+          return `[${index}] ${message}. Row: ${JSON.stringify(entry.row)}`
+        }).join(" | ")
+        const combinedError = new Error(`insertMultiple failed for ${results.failedRows.length} rows. ${combinedErrors}`)
+
+        if (returnResults) return results
+        throw combinedError
+      }
+
+      if (returnResults) return results
+      return
+    }
   }
 
   /**
