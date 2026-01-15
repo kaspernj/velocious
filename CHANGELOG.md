@@ -30,3 +30,4 @@
 - Insert SQL now renders null values as SQL NULL.
 - Implement `insertMultiple` for MySQL, MariaDB, PostgreSQL, and MSSQL drivers.
 - Move shared `insertMultiple` implementation into the base driver.
+- Validate `insertMultiple` row lengths against column count.

@@ -21,4 +21,15 @@ describe("Record - insertMultiple", {tags: ["dummy"]}, () => {
     expect(task?.createdAt()).toBeInstanceOf(Date)
     expect(task?.updatedAt()).toBeNull()
   })
+
+  it("raises when row lengths don't match columns", async () => {
+    const project = await Project.create({name: "InsertMultiple mismatch"})
+
+    await expect(async () => {
+      await Task.insertMultiple(
+        ["project_id", "name"],
+        [[project.id(), "InsertMultiple mismatch", "extra"]]
+      )
+    }).toThrow(/insertMultiple row length mismatch\. Expected 2 values but got 3\. Row: \[\d+,"InsertMultiple mismatch","extra"\]/)
+  })
 })

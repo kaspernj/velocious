@@ -824,6 +824,12 @@ class VelociousDatabaseRecord {
    */
   static _normalizeInsertMultipleRows({columns, rows}) {
     return rows.map((row) => {
+      if (!Array.isArray(row) || row.length !== columns.length) {
+        const rowLength = Array.isArray(row) ? row.length : "non-array"
+
+        throw new Error(`insertMultiple row length mismatch. Expected ${columns.length} values but got ${rowLength}. Row: ${JSON.stringify(row)}`)
+      }
+
       const normalizedRow = []
 
       for (let index = 0; index < columns.length; index++) {
