@@ -24,3 +24,4 @@
 - Refactor release patch script to Node for cross-platform usage.
 - Document the user module in the README.
 - Add mailer support with EJS rendering, background job delivery, and test delivery tracking.
+- Add configurable mailer backends with a built-in SMTP backend.

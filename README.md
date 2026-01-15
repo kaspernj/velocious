@@ -139,6 +139,30 @@ velociousMailer.setDeliveryHandler(async ({to, subject, html}) => {
 })
 ```
 
+Mailer backends can also be configured via your app configuration.
+
+```js
+import {SmtpMailerBackend} from "velocious/build/src/mailer.js"
+
+export default new Configuration({
+  mailerBackend: new SmtpMailerBackend({
+    connectionOptions: {
+      host: "smtp.example.com",
+      port: 587,
+      secure: false,
+      auth: {user: "smtp-user", pass: "smtp-pass"}
+    },
+    defaultFrom: "no-reply@example.com"
+  })
+})
+```
+
+Install the SMTP peer dependency in your app:
+
+```bash
+npm install smtp-connection
+```
+
 Test deliveries are stored in memory:
 
 ```js

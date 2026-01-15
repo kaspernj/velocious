@@ -77,6 +77,11 @@
  */
 
 /**
+ * @typedef {object} MailerBackend
+ * @property {function({payload: import("./mailer.js").MailerDeliveryPayload, configuration: import("./configuration.js").default}) : Promise<unknown> | unknown} deliver - Deliver a mailer payload.
+ */
+
+/**
  * @typedef {Record<string, string[]>} LocaleFallbacksType
  */
 
@@ -90,6 +95,7 @@
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
+ * @property {MailerBackend} [mailerBackend] - Mail delivery backend.
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.
  * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.
  * @property {string | function() : string} locale - Default locale or locale resolver.

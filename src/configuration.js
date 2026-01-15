@@ -28,7 +28,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({backgroundJobs, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
+  constructor({backgroundJobs, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._backgroundJobs = backgroundJobs
@@ -50,6 +50,7 @@ export default class VelociousConfiguration {
     this._websocketEvents = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._logging = logging
+    this._mailerBackend = mailerBackend
     this._errorEvents = new EventEmitter()
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
@@ -222,6 +223,21 @@ export default class VelociousConfiguration {
    */
   setBackgroundJobsConfig(backgroundJobs) {
     this._backgroundJobs = Object.assign({}, this._backgroundJobs, backgroundJobs)
+  }
+
+  /**
+   * @returns {import("./configuration-types.js").MailerBackend | undefined} - Mailer backend.
+   */
+  getMailerBackend() {
+    return this._mailerBackend
+  }
+
+  /**
+   * @param {import("./configuration-types.js").MailerBackend} mailerBackend - Mailer backend.
+   * @returns {void} - No return value.
+   */
+  setMailerBackend(mailerBackend) {
+    this._mailerBackend = mailerBackend
   }
 
   /**
