@@ -170,7 +170,8 @@ export class VelociousMailerBase {
     const actionName = this._getActionName()
     const fileName = viewFileName(actionName)
     const viewPath = `${configuration.getDirectory()}/src/mailers/${mailerDir}/${fileName}.ejs`
-    const viewParams = incorporate({mailer: this}, this._viewParams)
+    const translate = (msgID, args) => configuration.getTranslator()(msgID, args)
+    const viewParams = incorporate({mailer: this, _: translate}, this._viewParams)
 
     return await new Promise((resolve, reject) => {
       ejs.renderFile(viewPath, viewParams, {}, (err, str) => {

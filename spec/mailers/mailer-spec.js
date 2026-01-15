@@ -18,7 +18,7 @@ class TasksMailer extends velociousMailer {
   newNotification(task, user) {
     this.task = task
     this.user = user
-    this.assignView({task, user})
+    this.assignView({task, user, userName: user.name()})
     this.mail({to: user.email(), subject: "New task"})
   }
 }
@@ -32,7 +32,7 @@ describe("Mailers", () => {
     const viewDir = path.join(directory, "src", "mailers", "tasks")
 
     await fs.mkdir(viewDir, {recursive: true})
-    await fs.writeFile(path.join(viewDir, "new-notification.ejs"), `<b>Hello <%= mailer.user.name() %></b>
+    await fs.writeFile(path.join(viewDir, "new-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
 <p>
   Task <%= task.id() %> has just been created.
 </p>

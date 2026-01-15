@@ -5,6 +5,8 @@
  */
 
 import {digg} from "diggerize"
+import gettextConfig from "gettext-universal/build/src/config.js"
+import translate from "gettext-universal/build/src/translate.js"
 import EventEmitter from "./utils/event-emitter.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -409,25 +411,57 @@ export default class VelociousConfiguration {
   setRoutes(newRoutes) { this.routes = newRoutes }
 
   /**
-   * @param {function(string, {defaultValue: string} | undefined) : string} callback - Translator callback.
+   * @param {function(string, Record<string, any> | undefined) : string} callback - Translator callback.
    * @returns {void} - No return value.
    */
   setTranslator(callback) { this._translator = callback }
 
   /**
    * @param {string} msgID - Msg id.
-   * @param {undefined | {defaultValue: string}} args - Translator options.
+   * @param {Record<string, any> | undefined} args - Translator options and variables.
    * @returns {string} - The default translator.
    */
   _defaultTranslator(msgID, args) {
-    if (args?.defaultValue) return args.defaultValue
+    this._configureDefaultTranslator()
 
-    return msgID
+    const translateArgs = args ? {...args} : undefined
+    const defaultValue = translateArgs?.defaultValue
+    const locales = translateArgs?.locales
+
+    if (translateArgs) {
+      delete translateArgs.defaultValue
+      delete translateArgs.locales
+    }
+
+    const variables = translateArgs && Object.keys(translateArgs).length > 0 ? translateArgs : undefined
+
+    if (locales || defaultValue) {
+      return translate(msgID, variables, {defaultValue, locales})
+    }
+
+    return translate(msgID, variables)
   }
 
-  /** @returns {function(string, {defaultValue: string} | undefined) : string} - The translator.  */
+  /** @returns {function(string, Record<string, any> | undefined) : string} - The translator.  */
   getTranslator() {
-    return this._translator || this._defaultTranslator
+    if (this._translator) return this._translator
+
+    if (!this._defaultTranslatorBound) {
+      this._defaultTranslatorBound = this._defaultTranslator.bind(this)
+    }
+
+    return this._defaultTranslatorBound
+  }
+
+  /** @returns {void} - Configure gettext defaults for this configuration. */
+  _configureDefaultTranslator() {
+    const locale = this.getLocale()
+
+    if (locale) gettextConfig.setLocale(locale)
+
+    const fallbacks = this.getLocaleFallbacks()?.[locale]
+
+    gettextConfig.setFallbacks(fallbacks || [])
   }
 
   /**
