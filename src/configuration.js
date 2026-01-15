@@ -435,9 +435,11 @@ export default class VelociousConfiguration {
 
     const variables = translateArgs && Object.keys(translateArgs).length > 0 ? translateArgs : undefined
 
-    const message = translate(msgID, variables, locales)
+    const locale = this.getLocale()
+    const preferredLocales = locales || (locale ? undefined : [])
+    const message = translate(msgID, variables, preferredLocales)
 
-    if (message === msgID && defaultValue) return defaultValue
+    if (message === msgID && defaultValue) return translate(defaultValue, variables, [])
 
     return message
   }
@@ -457,9 +459,9 @@ export default class VelociousConfiguration {
   _configureDefaultTranslator() {
     const locale = this.getLocale()
 
-    if (locale) gettextConfig.setLocale(locale)
+    gettextConfig.setLocale(locale || "")
 
-    const fallbacks = this.getLocaleFallbacks()?.[locale]
+    const fallbacks = locale ? this.getLocaleFallbacks()?.[locale] : []
 
     gettextConfig.setFallbacks(fallbacks || [])
   }
