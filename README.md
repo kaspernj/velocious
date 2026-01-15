@@ -100,6 +100,51 @@ expect({a: 1, b: 2}).toEqual(expect.objectContaining({a: 1}))
 expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 3]))
 ```
 
+# Mailers
+
+Mailers live under `src/mailers`, with a `mailer.js` and matching `.ejs` templates.
+
+```js
+import velociousMailer from "velocious/build/src/mailer.js"
+
+class TasksMailer extends velociousMailer {
+  newNotification(task, user) {
+    this.task = task
+    this.user = user
+    this.assignView({task, user})
+    this.mail({to: user.email(), subject: "New task"})
+  }
+}
+```
+
+```ejs
+<b>Hello <%= mailer.user.name() %></b>
+<p>
+  Task <%= task.id() %> has just been created.
+</p>
+```
+
+Deliver immediately or enqueue via background jobs:
+
+```js
+await TasksMailer.newNotification(task, user).deliverNow()
+await TasksMailer.newNotification(task, user).deliverLater()
+```
+
+Configure a delivery handler for non-test environments:
+
+```js
+velociousMailer.setDeliveryHandler(async ({to, subject, html}) => {
+  // send the email via your provider
+})
+```
+
+Test deliveries are stored in memory:
+
+```js
+const sent = velociousMailer.deliveries()
+```
+
 # Models
 
 ```bash
@@ -204,6 +249,24 @@ if (task.isNewRecord()) {
 if (task.isPersisted()) {
   console.log("Task already exist")
 }
+```
+
+## User module
+
+Use the user module to add password helpers to a record class. It attaches `setPassword()` and `setPasswordConfirmation()` to the model and stores encrypted values on the record. Your users table should include an `encryptedPassword` column for this to work.
+
+```js
+import Record from "velocious/build/src/database/record/index.js"
+import UserModule from "velocious/build/src/database/record/user-module.js"
+
+class User extends Record {
+}
+
+new UserModule({secretKey: process.env.USER_SECRET_KEY}).attachTo(User)
+
+const user = new User()
+user.setPassword("my-password")
+user.setPasswordConfirmation("my-password")
 ```
 
 ```js

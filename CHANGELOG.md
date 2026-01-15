@@ -22,3 +22,5 @@
 - Enable browser coverage for table data, transactions, and selected driver specs.
 - Add npm release patch script entrypoint and ensure npm login before publishing.
 - Refactor release patch script to Node for cross-platform usage.
+- Document the user module in the README.
+- Add mailer support with EJS rendering, background job delivery, and test delivery tracking.

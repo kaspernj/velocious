@@ -21,7 +21,37 @@ export default class BackgroundJobRegistry {
   async load() {
     const directory = this.configuration.getDirectory()
     const jobsDir = path.join(directory, "src", "jobs")
+    await this._loadJobsFromDirectory(jobsDir)
 
+    const velociousPath = await this.configuration.getEnvironmentHandler().getVelociousPath()
+    const velociousJobsDir = path.join(velociousPath, "src", "jobs")
+    const normalizedJobsDir = path.resolve(jobsDir)
+    const normalizedVelociousJobsDir = path.resolve(velociousJobsDir)
+
+    if (normalizedJobsDir !== normalizedVelociousJobsDir) {
+      await this._loadJobsFromDirectory(velociousJobsDir)
+    }
+  }
+
+  /**
+   * @param {string} jobName - Job name.
+   * @returns {typeof VelociousJob} - Job class.
+   */
+  getJobByName(jobName) {
+    const jobClass = this.jobsByName.get(jobName)
+
+    if (!jobClass) {
+      throw new Error(`Unknown job "${jobName}". Check src/jobs`)
+    }
+
+    return jobClass
+  }
+
+  /**
+   * @param {string} jobsDir - Directory with job files.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _loadJobsFromDirectory(jobsDir) {
     try {
       await fs.access(jobsDir)
     } catch {
@@ -47,19 +77,5 @@ export default class BackgroundJobRegistry {
 
       this.jobsByName.set(jobName, JobClass)
     }
-  }
-
-  /**
-   * @param {string} jobName - Job name.
-   * @returns {typeof VelociousJob} - Job class.
-   */
-  getJobByName(jobName) {
-    const jobClass = this.jobsByName.get(jobName)
-
-    if (!jobClass) {
-      throw new Error(`Unknown job "${jobName}". Check src/jobs`)
-    }
-
-    return jobClass
   }
 }
