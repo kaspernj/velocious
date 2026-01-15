@@ -438,6 +438,31 @@ export default new Configuration({
 })
 ```
 
+## Run CLI commands in the browser
+
+Enable the browser CLI and run commands from devtools or app code:
+
+```js
+import BrowserCli from "velocious/build/src/cli/browser-cli.js"
+
+const browserCli = new BrowserCli({configuration})
+browserCli.enable()
+
+await browserCli.run("db:migrate")
+```
+
+In React, you can use the hook which sets `globalThis.velociousCLI`:
+
+```js
+import useBrowserCli from "velocious/build/src/cli/use-browser-cli.js"
+
+export default function App() {
+  useBrowserCli({configuration})
+
+  return null
+}
+```
+
 ## Run migrations from anywhere if you want to:
 
 ```js
