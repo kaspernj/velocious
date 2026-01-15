@@ -36,3 +36,4 @@
 - Order SQLite structure SQL with tables before indexes.
 - Use gettext-universal as the default translator and expose `_` in mailer views.
 - Document translation setup and mailer view translations in the README.
+- Fix default translator fallback handling for validation attribute names.

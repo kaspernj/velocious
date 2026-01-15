@@ -435,11 +435,11 @@ export default class VelociousConfiguration {
 
     const variables = translateArgs && Object.keys(translateArgs).length > 0 ? translateArgs : undefined
 
-    if (locales || defaultValue) {
-      return translate(msgID, variables, {defaultValue, locales})
-    }
+    const message = translate(msgID, variables, locales)
 
-    return translate(msgID, variables)
+    if (message === msgID && defaultValue) return defaultValue
+
+    return message
   }
 
   /** @returns {function(string, Record<string, any> | undefined) : string} - The translator.  */
