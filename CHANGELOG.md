@@ -41,3 +41,5 @@
 - Emit testRetrying before a retry attempt and testRetried after it finishes.
 - Document test retry events in the README.
 - Document how to run CLI commands in the browser.
+- Add insertMultiple retry-on-failure with per-row results reporting.
+- Safely serialize insertMultiple failed rows with BigInt/circular handling.
