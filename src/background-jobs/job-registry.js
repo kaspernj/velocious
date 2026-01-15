@@ -21,7 +21,39 @@ export default class BackgroundJobRegistry {
   async load() {
     const directory = this.configuration.getDirectory()
     const jobsDir = path.join(directory, "src", "jobs")
+    await this._loadJobsFromDirectory(jobsDir, {skipDuplicates: false})
 
+    const velociousPath = await this.configuration.getEnvironmentHandler().getVelociousPath()
+    const velociousJobsDir = path.join(velociousPath, "src", "jobs")
+    const normalizedJobsDir = path.resolve(jobsDir)
+    const normalizedVelociousJobsDir = path.resolve(velociousJobsDir)
+
+    if (normalizedJobsDir !== normalizedVelociousJobsDir) {
+      await this._loadJobsFromDirectory(velociousJobsDir, {skipDuplicates: true})
+    }
+  }
+
+  /**
+   * @param {string} jobName - Job name.
+   * @returns {typeof VelociousJob} - Job class.
+   */
+  getJobByName(jobName) {
+    const jobClass = this.jobsByName.get(jobName)
+
+    if (!jobClass) {
+      throw new Error(`Unknown job "${jobName}". Check src/jobs`)
+    }
+
+    return jobClass
+  }
+
+  /**
+   * @param {string} jobsDir - Directory with job files.
+   * @param {object} args - Options.
+   * @param {boolean} args.skipDuplicates - Whether to skip duplicate job names.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _loadJobsFromDirectory(jobsDir, {skipDuplicates}) {
     try {
       await fs.access(jobsDir)
     } catch {
@@ -42,24 +74,12 @@ export default class BackgroundJobRegistry {
       const jobName = JobClass.jobName()
 
       if (this.jobsByName.has(jobName)) {
+        if (skipDuplicates) continue
+
         throw new Error(`Duplicate job name "${jobName}" from ${jobFile}`)
       }
 
       this.jobsByName.set(jobName, JobClass)
     }
-  }
-
-  /**
-   * @param {string} jobName - Job name.
-   * @returns {typeof VelociousJob} - Job class.
-   */
-  getJobByName(jobName) {
-    const jobClass = this.jobsByName.get(jobName)
-
-    if (!jobClass) {
-      throw new Error(`Unknown job "${jobName}". Check src/jobs`)
-    }
-
-    return jobClass
   }
 }

@@ -56,6 +56,9 @@
     "sql.js": "^1.12.0",
     "strftime": "^0.10.2"
   },
+  "peerDependencies": {
+    "smtp-connection": "^4.0.2"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "chokidar-cli": "^3.0.0",
