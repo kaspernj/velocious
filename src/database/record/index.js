@@ -846,7 +846,7 @@ class VelociousDatabaseRecord {
       if (results.failedRows.length > 0) {
         const combinedErrors = results.errors.map((entry, index) => {
           const message = entry.error instanceof Error ? entry.error.message : String(entry.error)
-          return `[${index}] ${message}. Row: ${JSON.stringify(entry.row)}`
+          return `[${index}] ${message}. Row: ${this._safeSerializeInsertRow(entry.row)}`
         }).join(" | ")
         const combinedError = new Error(`insertMultiple failed for ${results.failedRows.length} rows. ${combinedErrors}`)
 
@@ -884,6 +884,28 @@ class VelociousDatabaseRecord {
 
       return normalizedRow
     })
+  }
+
+  /**
+   * @param {Array<unknown>} row - Row to serialize.
+   * @returns {string} - Safe row representation.
+   */
+  static _safeSerializeInsertRow(row) {
+    const seen = new WeakSet()
+
+    try {
+      return JSON.stringify(row, (key, value) => {
+        if (typeof value === "bigint") return value.toString()
+        if (value && typeof value === "object") {
+          if (seen.has(value)) return "[Circular]"
+          seen.add(value)
+        }
+
+        return value
+      })
+    } catch {
+      return String(row)
+    }
   }
 
   /**

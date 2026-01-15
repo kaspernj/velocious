@@ -101,4 +101,21 @@ describe("Record - insertMultiple", {tags: ["dummy"]}, () => {
     const user = await User.findBy({email: "retry-user-2@example.com"})
     expect(user).toBeTruthy()
   })
+
+  it("serializes failed rows safely for errors", () => {
+    class SafeSerializeRecord extends Record {}
+
+    const rowWithBigInt = [1n, "value"]
+    const serializedBigInt = SafeSerializeRecord._safeSerializeInsertRow(rowWithBigInt)
+
+    expect(serializedBigInt).toMatch(/1/)
+
+    /** @type {any[]} */
+    const circularRow = []
+    circularRow.push(circularRow)
+
+    const serializedCircular = SafeSerializeRecord._safeSerializeInsertRow(circularRow)
+
+    expect(serializedCircular).toMatch(/\[Circular\]/)
+  })
 })
