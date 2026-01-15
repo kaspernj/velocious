@@ -62,6 +62,7 @@ export default new Configuration({
       }
     }
   },
+  cookieSecret: "dummy-cookie-secret",
   directory: dummyDirectory(),
   environmentHandler: new NodeEnvironmentHandler(),
   initializeModels: async ({configuration}) => {

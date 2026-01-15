@@ -30,11 +30,12 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({backgroundJobs, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
+  constructor({backgroundJobs, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._backgroundJobs = backgroundJobs
     this.cors = cors
+    this._cookieSecret = cookieSecret
     this.database = database
     this.debug = debug
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
@@ -67,6 +68,11 @@ export default class VelociousConfiguration {
   /** @returns {import("./configuration-types.js").CorsType | undefined} - The cors.  */
   getCors() {
     return this.cors
+  }
+
+  /** @returns {string | undefined} - Cookie secret. */
+  getCookieSecret() {
+    return this._cookieSecret
   }
 
   /** @returns {Record<string, import("./configuration-types.js").DatabaseConfigurationType>} - The database configuration.  */
