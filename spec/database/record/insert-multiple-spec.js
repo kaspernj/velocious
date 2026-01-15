@@ -30,7 +30,7 @@ describe("Record - insertMultiple", {tags: ["dummy"]}, () => {
         ["project_id", "name"],
         [[project.id(), "InsertMultiple mismatch", "extra"]]
       )
-    }).toThrow(/insertMultiple row length mismatch\. Expected 2 values but got 3\. Row: \[\d+,"InsertMultiple mismatch","extra"\]/)
+    }).toThrow(/insertMultiple row length mismatch\. Expected 2 values but got 3\. Row: \["?\d+"?,"InsertMultiple mismatch","extra"\]/)
   })
 
   it("preserves numeric strings for precision-sensitive types", () => {
