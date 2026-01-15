@@ -597,11 +597,14 @@ export default class TestRunner {
         const useTimeout = typeof timeoutSeconds === "number" && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
         const timeoutMs = useTimeout ? timeoutSeconds * 1000 : undefined
         let retriesUsed = 0
+        let attemptNumber = 1
 
         while (true) {
           let shouldRetry = false
           /** @type {unknown} */
           let failedError
+          /** @type {unknown} */
+          let lastError
 
           try {
             await this.runWithDummyIfNeeded(testArgs, async () => {
@@ -626,13 +629,43 @@ export default class TestRunner {
               }
             })
           } catch (error) {
+            lastError = error
             if (retriesUsed < retryCount) {
               retriesUsed++
               shouldRetry = true
+              await this.emitEvent("testRetrying", {
+                configuration: this.getConfiguration(),
+                descriptions,
+                error,
+                nextAttempt: attemptNumber + 1,
+                retriesUsed,
+                retryCount,
+                testArgs,
+                testData,
+                testDescription,
+                testRunner: this
+              })
             } else {
               failedError = error
             }
           }
+
+          if (attemptNumber > 1) {
+            await this.emitEvent("testRetried", {
+              configuration: this.getConfiguration(),
+              descriptions,
+              error: lastError,
+              attemptNumber,
+              retriesUsed,
+              retryCount,
+              testArgs,
+              testData,
+              testDescription,
+              testRunner: this
+            })
+          }
+
+          attemptNumber++
 
           if (shouldRetry) continue
 
