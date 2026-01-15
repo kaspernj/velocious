@@ -629,6 +629,17 @@ export default class TestRunner {
             if (retriesUsed < retryCount) {
               retriesUsed++
               shouldRetry = true
+              await this.emitEvent("testRetried", {
+                configuration: this.getConfiguration(),
+                descriptions,
+                error,
+                retriesUsed,
+                retryCount,
+                testArgs,
+                testData,
+                testDescription,
+                testRunner: this
+              })
             } else {
               failedError = error
             }

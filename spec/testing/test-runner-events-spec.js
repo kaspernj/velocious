@@ -116,6 +116,65 @@ describe("TestRunner events", () => {
     expect(handlerCompleted).toBe(true)
   })
 
+  it("emits testRetried with retry details", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+
+    /** @type {any[]} */
+    const retryEvents = []
+    const handler = (payload) => {
+      retryEvents.push(payload)
+    }
+
+    testEvents.on("testRetried", handler)
+
+    try {
+      let attempts = 0
+      const tests = {
+        args: {},
+        afterEaches: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "retries once": {
+            args: {retry: 1},
+            function: async () => {
+              attempts++
+              if (attempts === 1) throw new Error("boom")
+            }
+          }
+        }
+      }
+
+      await testRunner.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
+      })
+    } finally {
+      testEvents.off("testRetried", handler)
+    }
+
+    expect(retryEvents.length).toBe(1)
+    expect(retryEvents[0].testDescription).toBe("retries once")
+    expect(retryEvents[0].retriesUsed).toBe(1)
+    expect(retryEvents[0].retryCount).toBe(1)
+    expect(retryEvents[0].error.message).toBe("boom")
+    expect(retryEvents[0].testRunner).toBe(testRunner)
+  })
+
   it("collects failed test details for summary output", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({
