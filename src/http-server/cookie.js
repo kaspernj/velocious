@@ -155,9 +155,16 @@ export default class Cookie {
    */
   static _serializeEncryptedValue(value) {
     if (typeof value === "string") return {payload: value, type: "s"}
+    if (value === undefined) return {payload: "", type: "s"}
 
     try {
-      return {payload: JSON.stringify(value), type: "j"}
+      const payload = JSON.stringify(value)
+
+      if (payload === undefined) {
+        return {payload: String(value), type: "s"}
+      }
+
+      return {payload, type: "j"}
     } catch {
       return {payload: String(value), type: "s"}
     }

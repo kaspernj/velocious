@@ -45,3 +45,4 @@
 - Safely serialize insertMultiple failed rows with BigInt/circular handling.
 - Document insertMultiple usage in the README.
 - Add controller cookie helpers with encrypted cookie support.
+- Normalize undefined encrypted cookie values to avoid cipher errors.
