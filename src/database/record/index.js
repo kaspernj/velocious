@@ -444,7 +444,7 @@ class VelociousDatabaseRecord {
    * @returns {string} - The human attribute name.
    */
   static humanAttributeName(attributeName) {
-    const modelNameKey = inflection.underscore(this.constructor.name)
+    const modelNameKey = inflection.underscore(this.name)
 
     return this._getConfiguration().getTranslator()(`velocious.database.record.attributes.${modelNameKey}.${attributeName}`, {defaultValue: inflection.camelize(attributeName)})
   }
