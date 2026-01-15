@@ -82,7 +82,7 @@ export default class VelociousController {
   setCookie(name, value, args = {}) {
     const {encrypted = false, ...options} = args
     const secret = encrypted ? this.getConfiguration().getCookieSecret() : undefined
-    const cookieValue = encrypted ? Cookie.encryptValue(value, secret) : value
+    const cookieValue = encrypted ? Cookie.encryptValue(value, secret) : String(value ?? "")
     const cookie = new Cookie({name, value: cookieValue, options, encrypted})
 
     this._response.addHeader("Set-Cookie", cookie.toHeader())
