@@ -316,14 +316,17 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @abstract
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
    * @param {Array<Array<unknown>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async insertMultiple(tableName, columns, rows) { // eslint-disable-line no-unused-vars
-    throw new Error("'insertMultiple' not implemented")
+  async insertMultiple(tableName, columns, rows) {
+    this._assertNotReadOnly()
+
+    const sql = this.insertSql({columns, tableName, rows})
+
+    await this.query(sql)
   }
 
   /**
