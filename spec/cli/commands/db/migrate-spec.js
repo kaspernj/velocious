@@ -263,13 +263,36 @@ describe("Cli - Commands - db:migrate", () => {
 
       const structurePath = path.join(directory, "db", "structure-default.sql")
       const actual = await fs.readFile(structurePath, "utf8")
-      const rows = await dbs.default.query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
-      const expected = rows
-        .map((row) => row.sql)
-        .filter((statement) => Boolean(statement))
-        .map((statement) => normalizeSqlStatement(statement))
-        .filter((statement) => Boolean(statement))
-        .join("\n\n") + "\n"
+      const rows = await dbs.default.query("SELECT type, sql, name FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY name")
+      const tables = []
+      const views = []
+      const indexes = []
+      const triggers = []
+      const others = []
+
+      for (const row of rows) {
+        const rawSql = row.sql || row.SQL
+        const rawType = row.type || row.TYPE
+        const statement = rawSql ? normalizeSqlStatement(String(rawSql)) : ""
+
+        if (!statement) continue
+
+        const normalizedType = rawType ? String(rawType).toLowerCase() : ""
+
+        if (normalizedType === "table") {
+          tables.push(statement)
+        } else if (normalizedType === "view") {
+          views.push(statement)
+        } else if (normalizedType === "index") {
+          indexes.push(statement)
+        } else if (normalizedType === "trigger") {
+          triggers.push(statement)
+        } else {
+          others.push(statement)
+        }
+      }
+
+      const expected = [...tables, ...views, ...indexes, ...triggers, ...others].join("\n\n") + "\n"
 
       expect(actual).toEqual(expected)
     })

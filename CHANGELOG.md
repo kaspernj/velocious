@@ -33,3 +33,4 @@
 - Validate `insertMultiple` row lengths against column count.
 - Preserve numeric strings for decimal/numeric columns and unsafe integers.
 - Ensure dummy app stops even when tests fail.
+- Order SQLite structure SQL with tables before indexes.
