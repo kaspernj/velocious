@@ -43,3 +43,4 @@
 - Document how to run CLI commands in the browser.
 - Add insertMultiple retry-on-failure with per-row results reporting.
 - Safely serialize insertMultiple failed rows with BigInt/circular handling.
+- Document insertMultiple usage in the README.

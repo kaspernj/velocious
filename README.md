@@ -308,6 +308,35 @@ await task.save()
 const task = await Task.create({name: "Task 4"})
 ```
 
+### Bulk insert
+
+Use `insertMultiple` to insert many rows in one call:
+
+```js
+await Task.insertMultiple(
+  ["project_id", "name", "created_at", "updated_at"],
+  [
+    [project.id(), "Task 1", new Date(), new Date()],
+    [project.id(), "Task 2", new Date(), new Date()]
+  ]
+)
+```
+
+If a batch insert fails, you can retry each row and collect results:
+
+```js
+const results = await Task.insertMultiple(
+  ["project_id", "name"],
+  [
+    [project.id(), "Task A"],
+    [project.id(), "Task A"]
+  ],
+  {retryIndividuallyOnFailure: true, returnResults: true}
+)
+
+console.log(results.succeededRows, results.failedRows, results.errors)
+```
+
 ### Find or create records
 
 ```js
