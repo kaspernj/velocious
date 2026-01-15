@@ -1,6 +1,7 @@
 // @ts-check
 
 import Project from "../../dummy/src/models/project.js"
+import Record from "../../../src/database/record/index.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - insertMultiple", {tags: ["dummy"]}, () => {
@@ -31,5 +32,24 @@ describe("Record - insertMultiple", {tags: ["dummy"]}, () => {
         [[project.id(), "InsertMultiple mismatch", "extra"]]
       )
     }).toThrow(/insertMultiple row length mismatch\. Expected 2 values but got 3\. Row: \[\d+,"InsertMultiple mismatch","extra"\]/)
+  })
+
+  it("preserves numeric strings for precision-sensitive types", () => {
+    class NumericInsertRecord extends Record {}
+
+    NumericInsertRecord._initialized = true
+    NumericInsertRecord._databaseType = "mysql"
+    NumericInsertRecord._columnsAsHash = {
+      amount: {getType: () => "decimal", getNull: () => true},
+      bigCount: {getType: () => "bigint", getNull: () => true}
+    }
+
+    const normalized = NumericInsertRecord._normalizeInsertMultipleRows({
+      columns: ["amount", "bigCount"],
+      rows: [["1234567890.123456789", "9007199254740993"]]
+    })
+
+    expect(normalized[0][0]).toEqual("1234567890.123456789")
+    expect(normalized[0][1]).toEqual("9007199254740993")
   })
 })

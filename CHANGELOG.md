@@ -31,3 +31,4 @@
 - Implement `insertMultiple` for MySQL, MariaDB, PostgreSQL, and MSSQL drivers.
 - Move shared `insertMultiple` implementation into the base driver.
 - Validate `insertMultiple` row lengths against column count.
+- Preserve numeric strings for decimal/numeric columns and unsafe integers.

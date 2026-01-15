@@ -869,7 +869,7 @@ class VelociousDatabaseRecord {
     }
 
     if (normalizedType && this._isNumericType(normalizedType)) {
-      normalizedValue = this._normalizeNumericValue(normalizedValue)
+      normalizedValue = this._normalizeNumericValue({columnType: normalizedType, value: normalizedValue})
     }
 
     return normalizedValue
@@ -903,18 +903,29 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {unknown} value - Value to normalize.
+   * @param {object} args - Options object.
+   * @param {string} args.columnType - Column type.
+   * @param {unknown} args.value - Value to normalize.
    * @returns {unknown} - Normalized value.
    */
-  static _normalizeNumericValue(value) {
+  static _normalizeNumericValue({columnType, value}) {
     if (value === "" || value === null || value === undefined) return value
     if (typeof value !== "string") return value
 
+    if (columnType.includes("decimal") || columnType.includes("numeric")) {
+      return value
+    }
+
     const parsed = Number(value)
 
-    if (Number.isFinite(parsed)) return parsed
+    if (!Number.isFinite(parsed)) return value
 
-    return value
+    if (columnType.includes("int")) {
+      if (!Number.isSafeInteger(parsed)) return value
+      if (!/^-?\d+$/.test(value)) return value
+    }
+
+    return parsed
   }
 
   /**
