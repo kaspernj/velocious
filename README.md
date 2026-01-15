@@ -451,6 +451,12 @@ browserCli.enable()
 await browserCli.run("db:migrate")
 ```
 
+Once enabled, you can also run commands directly from the browser console:
+
+```js
+await globalThis.velociousCLI.run("db:migrate")
+```
+
 In React, you can use the hook which sets `globalThis.velociousCLI`:
 
 ```js
