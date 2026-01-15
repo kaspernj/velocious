@@ -94,6 +94,34 @@ export default class DuplicateJob extends VelociousJob {}
     await cleanup()
   })
 
+  it("prefers the app job when a built-in job has the same name", async () => {
+    const {directory, cleanup} = await createTempProjectDir()
+    const testDir = path.dirname(fileURLToPath(import.meta.url))
+    const jobPath = path.join(testDir, "..", "..", "src", "background-jobs", "job.js")
+    const jobFile = path.join(directory, "src", "jobs", "mail-delivery.js")
+    const jobContents = `import VelociousJob from "${jobPath}"
+
+export default class MailDeliveryJob extends VelociousJob {
+  static source() {
+    return "app"
+  }
+}
+`
+
+    await fs.writeFile(jobFile, jobContents)
+
+    const configuration = createConfiguration(directory)
+    const registry = new BackgroundJobRegistry({configuration})
+
+    await registry.load()
+
+    const jobClass = registry.getJobByName("MailDeliveryJob")
+
+    expect(jobClass.source()).toEqual("app")
+
+    await cleanup()
+  })
+
   it("throws when requesting an unknown job", async () => {
     const {directory, cleanup} = await createTempProjectDir()
     const configuration = createConfiguration(directory)

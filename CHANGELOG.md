@@ -25,3 +25,4 @@
 - Document the user module in the README.
 - Add mailer support with EJS rendering, background job delivery, and test delivery tracking.
 - Add configurable mailer backends with a built-in SMTP backend.
+- Prefer app-defined background jobs over built-in ones when names collide.

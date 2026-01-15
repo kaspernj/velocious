@@ -21,7 +21,7 @@ export default class BackgroundJobRegistry {
   async load() {
     const directory = this.configuration.getDirectory()
     const jobsDir = path.join(directory, "src", "jobs")
-    await this._loadJobsFromDirectory(jobsDir)
+    await this._loadJobsFromDirectory(jobsDir, {skipDuplicates: false})
 
     const velociousPath = await this.configuration.getEnvironmentHandler().getVelociousPath()
     const velociousJobsDir = path.join(velociousPath, "src", "jobs")
@@ -29,7 +29,7 @@ export default class BackgroundJobRegistry {
     const normalizedVelociousJobsDir = path.resolve(velociousJobsDir)
 
     if (normalizedJobsDir !== normalizedVelociousJobsDir) {
-      await this._loadJobsFromDirectory(velociousJobsDir)
+      await this._loadJobsFromDirectory(velociousJobsDir, {skipDuplicates: true})
     }
   }
 
@@ -49,9 +49,11 @@ export default class BackgroundJobRegistry {
 
   /**
    * @param {string} jobsDir - Directory with job files.
+   * @param {object} args - Options.
+   * @param {boolean} args.skipDuplicates - Whether to skip duplicate job names.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _loadJobsFromDirectory(jobsDir) {
+  async _loadJobsFromDirectory(jobsDir, {skipDuplicates}) {
     try {
       await fs.access(jobsDir)
     } catch {
@@ -72,6 +74,8 @@ export default class BackgroundJobRegistry {
       const jobName = JobClass.jobName()
 
       if (this.jobsByName.has(jobName)) {
+        if (skipDuplicates) continue
+
         throw new Error(`Duplicate job name "${jobName}" from ${jobFile}`)
       }
 
