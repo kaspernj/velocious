@@ -214,6 +214,20 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+   * @param {string} tableName - Table name.
+   * @param {Array<string>} columns - Column names.
+   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async insertMultiple(tableName, columns, rows) {
+    this._assertNotReadOnly()
+
+    const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
+
+    await this.query(sql)
+  }
+
+  /**
    * @abstract
    * @param {import("../base.js").InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
