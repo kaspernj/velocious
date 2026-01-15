@@ -64,6 +64,20 @@ describe("Tasks", () => {
 })
 ```
 
+Listen for retry events if you need to restart services between attempts.
+
+```js
+import {testEvents} from "velocious/build/src/testing/test.js"
+
+testEvents.on("testRetrying", ({testDescription, nextAttempt}) => {
+  console.log(`Retrying ${testDescription} (attempt ${nextAttempt})`)
+})
+
+testEvents.on("testRetried", ({testDescription, attemptNumber}) => {
+  console.log(`Retry attempt finished for ${testDescription} (attempt ${attemptNumber})`)
+})
+```
+
 ## Browser system tests
 
 Run browser compatibility tests via System Testing:
