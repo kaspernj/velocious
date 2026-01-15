@@ -48,6 +48,7 @@ export default new Configuration({
       }
     }
   },
+  cookieSecret: "dummy-cookie-secret",
   directory: dummyDirectory(),
   environment: "development",
   environmentHandler: new NodeEnvironmentHandler(),

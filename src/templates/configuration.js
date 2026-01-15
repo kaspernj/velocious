@@ -42,6 +42,7 @@ export default new Configuration({
       }
     }
   },
+  cookieSecret: process.env.COOKIE_SECRET,
   initializeModels: async ({configuration}) => {
     const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/../src/models`)
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)

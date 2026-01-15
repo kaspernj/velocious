@@ -942,6 +942,27 @@ export default class TestingController extends Controller {
 }
 ```
 
+## Cookies
+
+Set cookies from controllers:
+
+```js
+this.setCookie("session_id", "abc123", {httpOnly: true, sameSite: "Lax"})
+```
+
+Read cookies from the request:
+
+```js
+const cookies = this.getCookies()
+const sessionCookie = cookies.find((cookie) => cookie.name() === "session_id")
+```
+
+Encrypted cookies use `cookieSecret` from configuration:
+
+```js
+this.setCookie("user_token", "secret", {encrypted: true, httpOnly: true})
+```
+
 # Views
 
 Create the file `src/routes/testing/another-action.ejs` and so something like this:

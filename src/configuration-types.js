@@ -88,6 +88,7 @@
 /**
  * @typedef {object} ConfigurationArgsType
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
+ * @property {string} [cookieSecret] - Secret for encrypting cookies.
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
  * @property {boolean} [debug] - Enable debug logging.
  * @property {string} [directory] - Base directory for the project.

@@ -4,6 +4,7 @@ import ejs from "ejs"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
 import {Logger} from "./logger.js"
+import Cookie from "./http-server/cookie.js"
 import ParamsToObject from "./http-server/client/params-to-object.js"
 import restArgsError from "./utils/rest-args-error.js"
 import querystring from "querystring"
@@ -63,6 +64,43 @@ export default class VelociousController {
 
   /** @returns {import("./http-server/client/request.js").default} - The request.  */
   getRequest() { return this._request }
+
+  /**
+   * @param {string} name - Cookie name.
+   * @param {unknown} value - Cookie value.
+   * @param {object} [args] - Options object.
+   * @param {string} [args.domain] - Domain.
+   * @param {Date} [args.expires] - Expires date.
+   * @param {boolean} [args.httpOnly] - HttpOnly flag.
+   * @param {number} [args.maxAge] - Max-Age in seconds.
+   * @param {string} [args.path] - Path.
+   * @param {boolean} [args.secure] - Secure flag.
+   * @param {"Lax" | "Strict" | "None"} [args.sameSite] - SameSite value.
+   * @param {boolean} [args.encrypted] - Whether to encrypt the cookie value.
+   * @returns {Cookie} - Cookie instance.
+   */
+  setCookie(name, value, args = {}) {
+    const {encrypted = false, ...options} = args
+    const secret = encrypted ? this.getConfiguration().getCookieSecret() : undefined
+    const cookieValue = encrypted ? Cookie.encryptValue(value, secret) : value
+    const cookie = new Cookie({name, value: cookieValue, options, encrypted})
+
+    this._response.addHeader("Set-Cookie", cookie.toHeader())
+
+    return cookie
+  }
+
+  /** @returns {Cookie[]} - Cookies from the request. */
+  getCookies() {
+    if (!this._cookies) {
+      const secret = this.getConfiguration().getCookieSecret()
+      const headerValue = this._request.header("cookie")
+
+      this._cookies = Cookie.parseHeader(headerValue, secret)
+    }
+
+    return this._cookies
+  }
 
   /**
    * @private
@@ -198,4 +236,3 @@ export default class VelociousController {
   /** @returns {import("./http-server/client/response.js").default} - The response.  */
   response() { return this._response }
 }
-

@@ -23,6 +23,11 @@ routes.draw((route) => {
   })
 
   route.get("missing-view")
+  route.namespace("cookies", (route) => {
+    route.get("set")
+    route.get("set-encrypted")
+    route.get("read")
+  })
   route.get("ping")
   route.get("params")
   route.get("slow")
