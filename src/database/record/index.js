@@ -799,11 +799,187 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<string>>} rows - Rows to insert.
+   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.cast] - Whether to cast values based on column types.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  static async insertMultiple(columns, rows) {
-    return await this.connection().insertMultiple(this.tableName(), columns, rows)
+  static async insertMultiple(columns, rows, args = {}) {
+    const {cast = true, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    const normalizedRows = cast
+      ? this._normalizeInsertMultipleRows({columns, rows})
+      : rows
+
+    return await this.connection().insertMultiple(this.tableName(), columns, normalizedRows)
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {Array<string>} args.columns - Column names.
+   * @param {Array<Array<unknown>>} args.rows - Rows to insert.
+   * @returns {Array<Array<unknown>>} - Normalized rows.
+   */
+  static _normalizeInsertMultipleRows({columns, rows}) {
+    return rows.map((row) => {
+      if (!Array.isArray(row) || row.length !== columns.length) {
+        const rowLength = Array.isArray(row) ? row.length : "non-array"
+
+        throw new Error(`insertMultiple row length mismatch. Expected ${columns.length} values but got ${rowLength}. Row: ${JSON.stringify(row)}`)
+      }
+
+      const normalizedRow = []
+
+      for (let index = 0; index < columns.length; index++) {
+        const columnName = columns[index]
+        const value = row[index]
+
+        normalizedRow[index] = this._normalizeInsertValueForColumn({columnName, value})
+      }
+
+      return normalizedRow
+    })
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.columnName - Column name.
+   * @param {unknown} args.value - Column value.
+   * @returns {unknown} - Normalized value.
+   */
+  static _normalizeInsertValueForColumn({columnName, value}) {
+    const column = this.getColumnsHash()[columnName]
+
+    if (!column) return value
+
+    const columnType = column.getType()
+    const normalizedType = typeof columnType === "string" ? columnType.toLowerCase() : undefined
+    let normalizedValue = value
+
+    if (normalizedType && this._isDateLikeType(normalizedType)) {
+      normalizedValue = this._normalizeDateValueForInsert(normalizedValue)
+    }
+
+    normalizedValue = this._normalizeSqliteBooleanValueForInsert({columnType, value: normalizedValue})
+
+    if (normalizedValue === "" && column.getNull() && !this._isStringType(normalizedType)) {
+      normalizedValue = null
+    }
+
+    if (normalizedType && this._isNumericType(normalizedType)) {
+      normalizedValue = this._normalizeNumericValue({columnType: normalizedType, value: normalizedValue})
+    }
+
+    return normalizedValue
+  }
+
+  /**
+   * @param {string | undefined} columnType - Column type.
+   * @returns {boolean} - Whether string-like type.
+   */
+  static _isStringType(columnType) {
+    if (!columnType) return false
+
+    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
+
+    return columnType.includes("uuid") ||
+      columnType.includes("text") ||
+      stringTypes.has(columnType)
+  }
+
+  /**
+   * @param {string} columnType - Column type.
+   * @returns {boolean} - Whether numeric-like type.
+   */
+  static _isNumericType(columnType) {
+    return columnType.includes("int") ||
+      columnType.includes("decimal") ||
+      columnType.includes("numeric") ||
+      columnType.includes("float") ||
+      columnType.includes("double") ||
+      columnType.includes("real")
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.columnType - Column type.
+   * @param {unknown} args.value - Value to normalize.
+   * @returns {unknown} - Normalized value.
+   */
+  static _normalizeNumericValue({columnType, value}) {
+    if (value === "" || value === null || value === undefined) return value
+    if (typeof value !== "string") return value
+
+    if (columnType.includes("decimal") || columnType.includes("numeric")) {
+      return value
+    }
+
+    const parsed = Number(value)
+
+    if (!Number.isFinite(parsed)) return value
+
+    if (columnType.includes("int")) {
+      if (!Number.isSafeInteger(parsed)) return value
+      if (!/^-?\d+$/.test(value)) return value
+    }
+
+    return parsed
+  }
+
+  /**
+   * @param {any} value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  static _normalizeDateValueForInsert(value) {
+    let normalizedValue = value
+
+    if (typeof normalizedValue == "string") {
+      normalizedValue = this._normalizeDateStringForInsert(normalizedValue)
+    }
+
+    if (normalizedValue instanceof Date) {
+      const configuration = this._getConfiguration()
+      const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
+      const offsetMs = offsetMinutes * 60 * 1000
+
+      normalizedValue = new Date(normalizedValue.getTime() - offsetMs)
+    }
+
+    return normalizedValue
+  }
+
+  /**
+   * @param {string} value - Date string value.
+   * @returns {string | Date} - Parsed date or original string.
+   */
+  static _normalizeDateStringForInsert(value) {
+    const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/
+
+    if (!isoDateTimeRegex.test(value)) return value
+
+    const timestamp = Date.parse(value)
+
+    if (Number.isNaN(timestamp)) return value
+
+    return new Date(timestamp)
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string | undefined} args.columnType - Column type.
+   * @param {any} args.value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  static _normalizeSqliteBooleanValueForInsert({columnType, value}) {
+    if (this.getDatabaseType() != "sqlite") return value
+    if (!columnType || typeof columnType != "string") return value
+    if (columnType.toLowerCase() !== "boolean") return value
+    if (value === true) return 1
+    if (value === false) return 0
+
+    return value
   }
 
   /**
