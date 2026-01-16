@@ -150,6 +150,29 @@ export default class VelociousDatabaseDriversMysql extends Base{
   primaryKeyType() { return "bigint" }
 
   /**
+   * @param {Error} error - Error instance.
+   * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
+   */
+  retryableDatabaseError(error) {
+    const errorCode = /** @type {any} */ (error).code
+    const message = error.message || ""
+    const shouldRetry = (
+      errorCode == "ECONNREFUSED" ||
+      message.includes("ECONNREFUSED") ||
+      message.includes("connect ECONNREFUSED") ||
+      message.includes("PROTOCOL_CONNECTION_LOST") ||
+      message.includes("Connection lost")
+    )
+
+    return {
+      retry: shouldRetry,
+      reconnect: shouldRetry,
+      maxTries: 3,
+      waitMs: 50
+    }
+  }
+
+  /**
    * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */

@@ -32,6 +32,13 @@
  * @typedef {Array<QueryRowType>} QueryResultType
  */
 /**
+ * @typedef {object} RetryableDatabaseErrorResult
+ * @property {boolean} retry - Whether the error should be retried.
+ * @property {boolean} reconnect - Whether to reconnect before retrying.
+ * @property {number} [maxTries] - Override the max retry attempts.
+ * @property {number} [waitMs] - Wait time before retrying in milliseconds.
+ */
+/**
  * @typedef {object}UpdateSqlArgsType
  * @property {object} conditions - Conditions used to build the update WHERE clause.
  * @property {object} data - Column/value pairs to update.
@@ -128,6 +135,14 @@ export default class VelociousDatabaseDriversBase {
    */
   async disconnect() {
     // No-op by default
+  }
+
+  /**
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async reconnect() {
+    await this.close()
+    await this.connect()
   }
 
   /**
@@ -591,15 +606,28 @@ export default class VelociousDatabaseDriversBase {
     this._assertWritableQuery(sql)
 
     let tries = 0
+    let maxTries = 5
 
-    while(tries < 5) {
+    while (tries < maxTries) {
       tries++
 
       try {
         return await this._queryActual(sql)
       } catch (error) {
-        if (error instanceof Error && tries < 5 && this.retryableDatabaseError(error)) {
-          await wait(100)
+        if (!(error instanceof Error)) throw error
+
+        const retryInfo = this.retryableDatabaseError(error)
+
+        if (Number.isFinite(retryInfo.maxTries)) {
+          maxTries = Math.max(1, Math.floor(retryInfo.maxTries))
+        }
+
+        if (tries < maxTries && retryInfo.retry) {
+          if (retryInfo.reconnect) await this.reconnect()
+
+          const waitMs = Number.isFinite(retryInfo.waitMs) ? retryInfo.waitMs : 100
+
+          if (waitMs > 0) await wait(waitMs)
           this.logger.warn(`Retrying query because failed with: ${error.stack}`)
           // Retry
         } else {
@@ -629,10 +657,10 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {Error} _error - Error instance.
-   * @returns {boolean} - Whether retryable database error.
+   * @returns {RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(_error) { // eslint-disable-line no-unused-vars
-    return false
+    return {retry: false, reconnect: false}
   }
 
   /**
