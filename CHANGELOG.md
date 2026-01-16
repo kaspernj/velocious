@@ -47,4 +47,3 @@
 - Add controller cookie helpers with encrypted cookie support.
 - Normalize undefined encrypted cookie values to avoid cipher errors.
 - Log when retrying a test.
-- Color retry logs red with chalk.
