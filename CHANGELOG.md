@@ -49,3 +49,4 @@
 - Log when retrying a test.
 - Color retry logs red with picocolors.
 - Color test failure logs red with picocolors.
+- Color CLI test summaries with picocolors.

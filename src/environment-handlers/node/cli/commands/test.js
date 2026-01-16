@@ -1,6 +1,7 @@
 // @ts-check
 
 import BaseCommand from "../../../../cli/base-command.js"
+import picocolors from "picocolors"
 import TestFilesFinder from "../../../../testing/test-files-finder.js"
 import TestRunner from "../../../../testing/test-runner.js"
 import {normalizeExamplePatterns, parseFilters} from "../../../../testing/test-filter-parser.js"
@@ -76,23 +77,23 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       const failedTests = testRunner.getFailedTestDetails()
 
       if (failedTests.length > 0) {
-        console.error("\nFailed tests:")
+      console.error(picocolors.red("\nFailed tests:"))
 
         for (const failed of failedTests) {
           const location = failed.filePath && failed.line
             ? ` (${failed.filePath}:${failed.line})`
             : ""
-          console.error(`- ${failed.fullDescription}${location}`)
+          console.error(picocolors.red(`- ${failed.fullDescription}${location}`))
         }
       }
 
-      console.error(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`)
+      console.error(picocolors.red(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`))
       process.exit(1)
     } else if (testRunner.areAnyTestsFocussed()) {
-      console.error(`\nFocussed run with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`)
+      console.error(picocolors.red(`\nFocussed run with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`))
       process.exit(1)
     } else {
-      console.log(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`)
+      console.log(picocolors.green(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`))
       process.exit(0)
     }
   }
