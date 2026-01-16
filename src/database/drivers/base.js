@@ -606,7 +606,7 @@ export default class VelociousDatabaseDriversBase {
     this._assertWritableQuery(sql)
 
     let tries = 0
-    let maxTries = 5
+    const maxTries = 5
 
     while (tries < maxTries) {
       tries++
@@ -618,12 +618,14 @@ export default class VelociousDatabaseDriversBase {
 
         const retryInfo = this.retryableDatabaseError(error)
 
-        if (Number.isFinite(retryInfo.maxTries)) {
-          maxTries = Math.max(1, Math.floor(retryInfo.maxTries))
-        }
-
         if (tries < maxTries && retryInfo.retry) {
-          if (retryInfo.reconnect) await this.reconnect()
+          if (retryInfo.reconnect) {
+            if (this._transactionsCount > 0) {
+              throw new Error(`Cannot reconnect while a transaction is active (${this._transactionsCount}). Original error: ${error.message}`)
+            }
+
+            await this.reconnect()
+          }
 
           const waitMs = Number.isFinite(retryInfo.waitMs) ? retryInfo.waitMs : 100
 

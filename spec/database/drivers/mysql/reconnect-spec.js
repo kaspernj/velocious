@@ -68,4 +68,29 @@ describe("Database - drivers - mysql reconnect", () => {
     expect(connectCount).toEqual(3)
     expect(closeCount).toEqual(2)
   })
+
+  it("raises when a reconnect would bypass an active transaction", async () => {
+    const driver = new MysqlDriver({}, {debug: false})
+    let didReconnect = false
+
+    driver._transactionsCount = 1
+
+    driver.connect = async () => {
+      driver.pool = {
+        escape: (value) => `'${value}'`,
+        query: (sql, callback) => {
+          callback(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
+        }
+      }
+    }
+
+    driver.reconnect = async () => {
+      didReconnect = true
+    }
+
+    await expect(async () => {
+      await driver.query("SELECT 1")
+    }).toThrowError("Cannot reconnect while a transaction is active (1). Original error: Query failed: Query failed because of Error: connect ECONNREFUSED 127.0.0.1:3306: SELECT 1")
+    expect(didReconnect).toBeFalse()
+  })
 })

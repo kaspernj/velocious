@@ -167,7 +167,6 @@ export default class VelociousDatabaseDriversMysql extends Base{
     return {
       retry: shouldRetry,
       reconnect: shouldRetry,
-      maxTries: 3,
       waitMs: 50
     }
   }
