@@ -633,6 +633,8 @@ export default class TestRunner {
             if (retriesUsed < retryCount) {
               retriesUsed++
               shouldRetry = true
+              const retryMessage = error instanceof Error ? error.message : String(error)
+              console.warn(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${retryMessage}`)
               await this.emitEvent("testRetrying", {
                 configuration: this.getConfiguration(),
                 descriptions,
