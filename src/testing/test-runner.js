@@ -5,6 +5,7 @@ import path from "path"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
+import chalk from "chalk"
 import restArgsError from "../utils/rest-args-error.js"
 import {testConfig, testEvents, tests} from "./test.js"
 import {pathToFileURL} from "url"
@@ -633,8 +634,7 @@ export default class TestRunner {
             if (retriesUsed < retryCount) {
               retriesUsed++
               shouldRetry = true
-              const retryMessage = error instanceof Error ? error.message : String(error)
-              console.warn(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${retryMessage}`)
+              console.warn(chalk.red(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${error instanceof Error ? error.message : String(error)}`))
               await this.emitEvent("testRetrying", {
                 configuration: this.getConfiguration(),
                 descriptions,
