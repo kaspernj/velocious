@@ -5,6 +5,7 @@ import path from "path"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
+import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
 import {testConfig, testEvents, tests} from "./test.js"
 import {pathToFileURL} from "url"
@@ -633,6 +634,7 @@ export default class TestRunner {
             if (retriesUsed < retryCount) {
               retriesUsed++
               shouldRetry = true
+              console.warn(picocolors.red(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${error instanceof Error ? error.message : String(error)}`))
               await this.emitEvent("testRetrying", {
                 configuration: this.getConfiguration(),
                 descriptions,
@@ -679,7 +681,7 @@ export default class TestRunner {
             })
 
             if (failedError instanceof Error) {
-              console.error(`${leftPadding}  Test failed:`, failedError.message)
+              console.error(picocolors.red(`${leftPadding}  Test failed: ${failedError.message}`))
               addTrackedStackToError(failedError)
 
               const backtraceCleaner = new BacktraceCleaner(failedError)
@@ -688,11 +690,11 @@ export default class TestRunner {
 
               if (stackLines) {
                 for (const stackLine of stackLines) {
-                  console.error(`${leftPadding}  ${stackLine}`)
+                  console.error(picocolors.red(`${leftPadding}  ${stackLine}`))
                 }
               }
             } else {
-              console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
+              console.error(picocolors.red(`${leftPadding}  Test failed with a ${typeof failedError}: ${String(failedError)}`))
             }
 
             await this.emitEvent("testFailed", {
