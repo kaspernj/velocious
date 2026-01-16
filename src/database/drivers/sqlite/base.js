@@ -275,14 +275,16 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {Error} error - Error instance.
-   * @returns {boolean} - Whether retryable database error.
+   * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(error) {
-    if (error.message?.startsWith("attempt to write a readonly database")) return true
-    if (error.message?.startsWith("database is locked")) return true
-    if (error.message?.includes("→ Caused by: Error code : database is locked")) return true
+    const shouldRetry = (
+      error.message?.startsWith("attempt to write a readonly database") ||
+      error.message?.startsWith("database is locked") ||
+      error.message?.includes("→ Caused by: Error code : database is locked")
+    )
 
-    return false
+    return {retry: shouldRetry, reconnect: false}
   }
 
   /**
@@ -313,4 +315,3 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     return await new StructureSql({driver: this}).toSql()
   }
 }
-

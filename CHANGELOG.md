@@ -50,3 +50,5 @@
 - Color retry logs red with picocolors.
 - Color test failure logs red with picocolors.
 - Color CLI test summaries with picocolors.
+- Retry MySQL queries on connection failures with reconnect attempts.
+- Prevent reconnect retries when a transaction is active to avoid bypassing transactions.

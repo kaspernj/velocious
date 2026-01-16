@@ -33,4 +33,64 @@ describe("Database - drivers - mysql reconnect", () => {
     expect(escaped).toEqual("hello")
     expect(quoted).toEqual("'hello'")
   })
+
+  it("retries and reconnects after connection failures", async () => {
+    const driver = new MysqlDriver({}, {debug: false})
+    let connectCount = 0
+    let closeCount = 0
+    let attempts = 0
+
+    driver.connect = async () => {
+      connectCount++
+      driver.pool = {
+        escape: (value) => `'${value}'`,
+        query: (sql, callback) => {
+          attempts++
+
+          if (attempts < 3) {
+            callback(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
+          } else {
+            callback(null, [{result: 1}], [{name: "result"}])
+          }
+        }
+      }
+    }
+
+    driver.close = async () => {
+      closeCount++
+      driver.pool = undefined
+    }
+
+    const rows = await driver.query("SELECT 1")
+
+    expect(rows).toEqual([{result: 1}])
+    expect(attempts).toEqual(3)
+    expect(connectCount).toEqual(3)
+    expect(closeCount).toEqual(2)
+  })
+
+  it("raises when a reconnect would bypass an active transaction", async () => {
+    const driver = new MysqlDriver({}, {debug: false})
+    let didReconnect = false
+
+    driver._transactionsCount = 1
+
+    driver.connect = async () => {
+      driver.pool = {
+        escape: (value) => `'${value}'`,
+        query: (sql, callback) => {
+          callback(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
+        }
+      }
+    }
+
+    driver.reconnect = async () => {
+      didReconnect = true
+    }
+
+    await expect(async () => {
+      await driver.query("SELECT 1")
+    }).toThrowError("Cannot reconnect while a transaction is active (1). Original error: Query failed: Query failed because of Error: connect ECONNREFUSED 127.0.0.1:3306: SELECT 1")
+    expect(didReconnect).toBeFalse()
+  })
 })
