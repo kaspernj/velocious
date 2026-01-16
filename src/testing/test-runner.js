@@ -681,7 +681,7 @@ export default class TestRunner {
             })
 
             if (failedError instanceof Error) {
-              console.error(`${leftPadding}  Test failed:`, failedError.message)
+              console.error(picocolors.red(`${leftPadding}  Test failed: ${failedError.message}`))
               addTrackedStackToError(failedError)
 
               const backtraceCleaner = new BacktraceCleaner(failedError)
@@ -690,11 +690,11 @@ export default class TestRunner {
 
               if (stackLines) {
                 for (const stackLine of stackLines) {
-                  console.error(`${leftPadding}  ${stackLine}`)
+                  console.error(picocolors.red(`${leftPadding}  ${stackLine}`))
                 }
               }
             } else {
-              console.error(`${leftPadding}  Test failed with a ${typeof failedError}:`, failedError)
+              console.error(picocolors.red(`${leftPadding}  Test failed with a ${typeof failedError}: ${String(failedError)}`))
             }
 
             await this.emitEvent("testFailed", {
