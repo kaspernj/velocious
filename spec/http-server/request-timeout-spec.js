@@ -49,4 +49,26 @@ describe("HttpServer - request timeout", {databaseCleaning: {transaction: false,
       }
     }
   })
+
+  it("treats large integer env timeouts as milliseconds", async () => {
+    const originalTimeoutEnv = process.env.VELOCIOUS_REQUEST_TIMEOUT_MS
+    process.env.VELOCIOUS_REQUEST_TIMEOUT_MS = "1500"
+
+    try {
+      await Dummy.run(async () => {
+        expect(dummyConfiguration.getRequestTimeoutMs()).toEqual(1.5)
+        const response = await fetch("http://localhost:3006/slow?waitSeconds=2")
+        const body = await response.text()
+
+        expect(response.status).toEqual(500)
+        expect(body).toContain("Request timed out after 1.5s")
+      })
+    } finally {
+      if (originalTimeoutEnv === undefined) {
+        delete process.env.VELOCIOUS_REQUEST_TIMEOUT_MS
+      } else {
+        process.env.VELOCIOUS_REQUEST_TIMEOUT_MS = originalTimeoutEnv
+      }
+    }
+  })
 })

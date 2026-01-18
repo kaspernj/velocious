@@ -14,6 +14,7 @@ Websocket channel callbacks should use `configuration.ensureConnections(...)` so
 Prefer `awaitery`'s `timeout` helper over manual `Promise.race` timeouts when a simple hard timeout is needed.
 When editing `CHANGELOG.md`, append entries without creating new version headings (agents don't control releases).
 Name specs that should run in browser tests with the `.browser-spec.js` suffix so the browser test runner includes them.
+Use spaces inside named imports (e.g. `import {foo, bar} from "..."`).
 
 ## Verification commands
 

@@ -51,6 +51,8 @@ export default class RequestBuffer {
         case "headers":
         case "multi-part-form-data":
         case "multi-part-form-data-header":
+        case "chunked-size":
+        case "chunked-trailer":
           this.data.push(char)
 
           if (char == 10) {
@@ -58,6 +60,28 @@ export default class RequestBuffer {
 
             this.data = []
             this.parse(line)
+          }
+
+          break
+        case "chunked-data":
+          if (this.currentChunkSize === undefined) throw new Error("Chunk size not initialized")
+          if (!this.chunkedBodyChars) throw new Error("Chunked body not initialized")
+
+          this.chunkedBodyChars.push(char)
+          this.currentChunkBytesRead += 1
+
+          if (this.currentChunkBytesRead >= this.currentChunkSize) {
+            this.currentChunkCrlfRead = 0
+            this.setState("chunked-data-crlf")
+          }
+
+          break
+        case "chunked-data-crlf":
+          this.currentChunkCrlfRead = (this.currentChunkCrlfRead || 0) + 1
+
+          if (this.currentChunkCrlfRead >= 2) {
+            this.currentChunkBytesRead = 0
+            this.setState("chunked-size")
           }
 
           break
@@ -175,6 +199,13 @@ export default class RequestBuffer {
       this.parseStatusLine(line)
     } else if (this.state == "headers") {
       this.parseHeader(line)
+    } else if (this.state == "chunked-size") {
+      this.parseChunkSizeLine(line)
+    } else if (this.state == "chunked-trailer") {
+      if (line == "\r\n") {
+        this.finishChunkedBody()
+        this.completeRequest()
+      }
     } else if (this.state == "multi-part-form-data") {
       if (line == this.boundaryLine) {
         this.newFormDataPart()
@@ -236,9 +267,17 @@ export default class RequestBuffer {
       this.addHeader(header)
       this.events.emit("header", header)
     } else if (line == "\r\n") {
-      if (this.httpMethod?.toUpperCase() == "GET" || this.httpMethod?.toUpperCase() == "OPTIONS") {
+      const httpMethod = this.httpMethod?.toUpperCase()
+
+      if (!httpMethod) throw new Error("HTTP method not set")
+
+      if (!this.expectsRequestBody(httpMethod)) {
         this.completeRequest()
-      } else if (this.httpMethod?.toUpperCase() == "POST") {
+      } else if (this.isChunkedEncoding()) {
+        this.readingBody = true
+        this.bodyLength = 0
+        this.initializeChunkedBody()
+      } else {
         this.readingBody = true
         this.bodyLength = 0
 
@@ -251,23 +290,19 @@ export default class RequestBuffer {
           this.boundaryLineEnd = `\r\n--${this.boundary}--`
           this.multiPartyFormData = true
           this.setState("multi-part-form-data")
+        } else if (this.contentLength === 0 || this.contentLength === undefined) {
+          this.completeRequest()
+        } else if (Number.isNaN(this.contentLength)) {
+          throw new Error("Content length is invalid")
         } else {
-          if (this.contentLength === 0) {
-            this.completeRequest()
-          } else if (!this.contentLength) {
-            throw new Error("Content length hasn't been set")
-          } else {
-            /** @type {number[]} */
-            this.postBodyChars = []
+          /** @type {number[]} */
+          this.postBodyChars = []
 
-            // this.postBodyBuffer = new ArrayBuffer(this.contentLength)
-            // this.postBodyChars = new Uint8Array(this.postBodyBuffer)
+          // this.postBodyBuffer = new ArrayBuffer(this.contentLength)
+          // this.postBodyChars = new Uint8Array(this.postBodyBuffer)
 
-            this.setState("post-body")
-          }
+          this.setState("post-body")
         }
-      } else {
-        throw new Error(`Unknown HTTP method: ${this.httpMethod}`)
       }
     }
   }
@@ -277,7 +312,7 @@ export default class RequestBuffer {
    * @returns {void} - No return value.
    */
   parseStatusLine(line) {
-    const match = line.match(/^(GET|OPTIONS|POST) (.+?) HTTP\/(.+)\r\n/)
+    const match = line.match(/^([A-Z-]+) (.+?) HTTP\/(.+)\r\n/)
 
     if (!match) {
       throw new Error(`Couldn't match status line from: ${line}`)
@@ -299,6 +334,71 @@ export default class RequestBuffer {
     // delete this.postBodyBuffer
 
     this.completeRequest()
+  }
+
+  /**
+   * @param {string} httpMethod - HTTP method.
+   * @returns {boolean} - Whether the request expects a body.
+   */
+  expectsRequestBody(httpMethod) {
+    return !["GET", "OPTIONS", "HEAD"].includes(httpMethod)
+  }
+
+  /**
+   * @returns {boolean} - Whether the request uses chunked transfer encoding.
+   */
+  isChunkedEncoding() {
+    const transferEncoding = this.getHeader("transfer-encoding")?.value?.toLowerCase()
+
+    return Boolean(transferEncoding?.includes("chunked"))
+  }
+
+  /**
+   * @returns {void} - No return value.
+   */
+  initializeChunkedBody() {
+    this.chunkedBodyChars = []
+    this.currentChunkSize = undefined
+    this.currentChunkBytesRead = 0
+    this.setState("chunked-size")
+  }
+
+  /**
+   * @param {string} line - Chunk size line.
+   * @returns {void} - No return value.
+   */
+  parseChunkSizeLine(line) {
+    const trimmed = line.trim()
+
+    if (!trimmed) return
+
+    const sizeToken = trimmed.split(";")[0]?.trim()
+
+    if (!sizeToken) throw new Error(`Invalid chunk size line: ${line}`)
+
+    const size = Number.parseInt(sizeToken, 16)
+
+    if (!Number.isFinite(size)) throw new Error(`Invalid chunk size: ${sizeToken}`)
+
+    if (size === 0) {
+      this.setState("chunked-trailer")
+      return
+    }
+
+    this.currentChunkSize = size
+    this.currentChunkBytesRead = 0
+    this.setState("chunked-data")
+  }
+
+  /**
+   * @returns {void} - No return value.
+   */
+  finishChunkedBody() {
+    if (this.chunkedBodyChars) {
+      this.postBody = String.fromCharCode.apply(null, this.chunkedBodyChars)
+    }
+
+    delete this.chunkedBodyChars
   }
 
   /**
