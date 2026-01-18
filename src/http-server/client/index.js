@@ -161,12 +161,13 @@ export default class VeoliciousHttpServerClient {
       if (requestRunner?.getState() == "done") {
         const httpVersion = request.httpVersion()
         const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
+        const shouldCloseConnection = this.shouldCloseConnection(request)
 
         this.requestRunners.shift()
         this.sendResponse(requestRunner)
         this.logger.debug(() => ["sendDoneRequests", {clientCount: this.clientCount, connectionHeader, httpVersion}])
 
-        if (httpVersion == "1.0" && connectionHeader != "keep-alive") {
+        if (shouldCloseConnection) {
           this.logger.debug(() => [`Closing the connection because ${httpVersion} and connection header ${connectionHeader}`, {clientCount: this.clientCount}])
           this.events.emit("close")
         }
@@ -189,13 +190,14 @@ export default class VeoliciousHttpServerClient {
     const date = new Date()
     const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
     const httpVersion = request.httpVersion()
+    const shouldCloseConnection = this.shouldCloseConnection(request)
 
     this.logger.debug("sendResponse", {clientCount: this.clientCount, connectionHeader, httpVersion})
 
-    if (httpVersion == "1.0" && connectionHeader == "keep-alive") {
-      response.setHeader("Connection", "Keep-Alive")
-    } else {
+    if (shouldCloseConnection) {
       response.setHeader("Connection", "Close")
+    } else if (httpVersion == "1.0" && connectionHeader == "keep-alive") {
+      response.setHeader("Connection", "Keep-Alive")
     }
 
     const contentLength = new TextEncoder().encode(body).length
@@ -218,5 +220,21 @@ export default class VeoliciousHttpServerClient {
 
     this.events.emit("output", headers)
     this.events.emit("output", body)
+  }
+
+  /**
+   * @param {import("./request.js").default | import("./websocket-request.js").default} request - Request object.
+   * @returns {boolean} - Whether the connection should be closed.
+   */
+  shouldCloseConnection(request) {
+    const httpVersion = request.httpVersion()
+    const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
+
+    if (httpVersion == "websocket") return false
+    if (connectionHeader == "close") return true
+
+    if (httpVersion == "1.0" && connectionHeader != "keep-alive") return true
+
+    return false
   }
 }

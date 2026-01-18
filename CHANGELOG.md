@@ -52,3 +52,7 @@
 - Color CLI test summaries with picocolors.
 - Retry MySQL queries on connection failures with reconnect attempts.
 - Prevent reconnect retries when a transaction is active to avoid bypassing transactions.
+- Use env-sense to force console logging APIs in browsers.
+- Treat large integer request timeout env values as milliseconds to avoid unintended long waits.
+- Support chunked HTTP request bodies and broader HTTP methods to prevent request parsing hangs.
+- Close HTTP/1.1 connections when clients request `Connection: close`.

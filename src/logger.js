@@ -1,6 +1,7 @@
 // @ts-check
 
 import Configuration from "./configuration.js"
+import useEnvSense from "env-sense/build/use-env-sense.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 /** @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
@@ -14,6 +15,8 @@ const DEFAULT_LOGGING_CONFIGURATION = {
 
 /** @type {LogLevel[]} */
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
+const {isBrowser} = useEnvSense()
+const isNodeRuntime = typeof process !== "undefined" && Boolean(process.versions?.node)
 
 /**
  * @param {string} message - Message text.
@@ -21,7 +24,7 @@ const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
  */
 function consoleLog(message) {
   return new Promise((resolve) => {
-    if (process.stdout) {
+    if (!isBrowser && isNodeRuntime && process.stdout) {
       process.stdout.write(`${message}\n`, "utf8", () => resolve())
     } else {
       console.log(message)
@@ -36,7 +39,7 @@ function consoleLog(message) {
  */
 function consoleError(message) {
   return new Promise((resolve) => {
-    if (process.stderr) {
+    if (!isBrowser && isNodeRuntime && process.stderr) {
       process.stderr.write(`${message}\n`, "utf8", () => resolve())
     } else {
       console.error(message)
@@ -51,7 +54,7 @@ function consoleError(message) {
  */
 function consoleWarn(message) {
   return new Promise((resolve) => {
-    if (process.stderr) {
+    if (!isBrowser && isNodeRuntime && process.stderr) {
       process.stderr.write(`${message}\n`, "utf8", () => resolve())
     } else {
       console.warn(message)

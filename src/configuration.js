@@ -155,8 +155,7 @@ export default class VelociousConfiguration {
    * @returns {number} - Request timeout in seconds.
    */
   getRequestTimeoutMs() {
-    const envValue = process.env.VELOCIOUS_REQUEST_TIMEOUT_MS
-    const envTimeout = envValue !== undefined ? Number(envValue) : undefined
+    const envTimeout = this._parseRequestTimeoutSeconds(process.env.VELOCIOUS_REQUEST_TIMEOUT_MS)
     const value = typeof this._requestTimeoutMs === "function"
       ? this._requestTimeoutMs()
       : this._requestTimeoutMs
@@ -165,6 +164,36 @@ export default class VelociousConfiguration {
     if (typeof envTimeout === "number" && Number.isFinite(envTimeout)) return envTimeout
 
     return 60
+  }
+
+  /**
+   * @param {string | undefined} rawValue - Env value.
+   * @returns {number | undefined} - Timeout in seconds.
+   */
+  _parseRequestTimeoutSeconds(rawValue) {
+    if (rawValue === undefined) return undefined
+
+    const trimmed = rawValue.trim().toLowerCase()
+
+    if (!trimmed) return undefined
+
+    const match = trimmed.match(/^(\d+(?:\.\d+)?)(ms|s)?$/)
+
+    if (!match) return undefined
+
+    const numeric = Number(match[1])
+
+    if (!Number.isFinite(numeric)) return undefined
+
+    const unit = match[2]
+
+    if (unit === "ms") return numeric / 1000
+    if (unit === "s") return numeric
+
+    if (trimmed.includes(".")) return numeric
+    if (numeric >= 1000) return numeric / 1000
+
+    return numeric
   }
 
   /**
