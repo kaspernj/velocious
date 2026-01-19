@@ -293,6 +293,12 @@ async function main() {
 
   process.env.VELOCIOUS_BROWSER_TESTS = "true"
   process.env.SYSTEM_TEST_HOST ||= "dist"
+  const systemTestHttpHost = process.env.SYSTEM_TEST_HTTP_HOST || "127.0.0.1"
+  const systemTestHttpPort = process.env.SYSTEM_TEST_HTTP_PORT ? Number(process.env.SYSTEM_TEST_HTTP_PORT) : 1984
+
+  if (!Number.isFinite(systemTestHttpPort)) {
+    throw new Error(`SYSTEM_TEST_HTTP_PORT must be a number. Got: ${String(process.env.SYSTEM_TEST_HTTP_PORT)}`)
+  }
 
   await buildBrowserTestApp()
 
@@ -308,7 +314,11 @@ async function main() {
     lineFilters,
     examplePatterns
   })
-  const systemTest = SystemTest.current({debug: process.env.SYSTEM_TEST_DEBUG === "true"})
+  const systemTest = SystemTest.current({
+    debug: process.env.SYSTEM_TEST_DEBUG === "true",
+    httpHost: systemTestHttpHost,
+    httpPort: systemTestHttpPort
+  })
 
   await systemTest.start()
 
