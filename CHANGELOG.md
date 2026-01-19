@@ -61,3 +61,4 @@
 - Remove mailer class proxies and require instance action delivery for mailers.
 - Require mailer actions to return `mail(...)` with an explicit action name.
 - Support async mailer setup via `actionPromise` on `mail(...)`.
+- Allow configuring the browser test HTTP host/port via `SYSTEM_TEST_HTTP_HOST`/`SYSTEM_TEST_HTTP_PORT`.
