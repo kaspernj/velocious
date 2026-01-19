@@ -87,7 +87,7 @@ describe("Mailers - backend", () => {
       const configuration = createConfiguration(directory, backend)
       configuration.setCurrent()
 
-      await BackendMailer.notice().deliverNow()
+      await new BackendMailer().notice().deliverNow()
 
       expect(deliveries.length).toEqual(1)
       expect(deliveries[0].to).toEqual("backend@example.com")

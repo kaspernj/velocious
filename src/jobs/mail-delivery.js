@@ -1,7 +1,7 @@
 // @ts-check
 
 import VelociousJob from "../background-jobs/job.js"
-import velociousMailer from "../mailer.js"
+import {deliverPayload} from "../mailer.js"
 
 /**
  * Background job for delivering mailer payloads.
@@ -16,6 +16,6 @@ export default class MailDeliveryJob extends VelociousJob {
       throw new Error(`Missing mail delivery payload. Got: ${String(payload)}`)
     }
 
-    await velociousMailer.deliverPayload(payload)
+    await deliverPayload(payload)
   }
 }

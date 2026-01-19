@@ -29,9 +29,8 @@ export default class MailerDelivery {
   async deliverNow() {
     await this.actionPromise
     const payload = /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
-    const mailerClass = /** @type {typeof import("./base.js").VelociousMailerBase} */ (this.mailer.constructor)
 
-    return await mailerClass.deliverPayload(payload)
+    return await this.mailer._deliverPayload(payload)
   }
 
   /**
@@ -40,9 +39,8 @@ export default class MailerDelivery {
   async deliverLater() {
     await this.actionPromise
     const payload = /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
-    const mailerClass = /** @type {typeof import("./base.js").VelociousMailerBase} */ (this.mailer.constructor)
 
-    return await mailerClass.enqueuePayload(payload)
+    return await this.mailer._enqueuePayload(payload)
   }
 
   /**

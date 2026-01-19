@@ -7,7 +7,7 @@ import Configuration from "../../src/configuration.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
-import velociousMailer from "../../src/mailer.js"
+import velociousMailer, {deliveries} from "../../src/mailer.js"
 
 class TasksMailer extends velociousMailer {
   /**
@@ -86,9 +86,9 @@ describe("Mailers", () => {
         name: () => "Tess"
       }
 
-      await TasksMailer.newNotification(task, user).deliverNow()
+      await new TasksMailer().newNotification(task, user).deliverNow()
 
-      const sent = velociousMailer.deliveries()
+      const sent = deliveries()
 
       expect(sent.length).toEqual(1)
       expect(sent[0].to).toEqual("user@example.com")
@@ -115,7 +115,7 @@ describe("Mailers", () => {
 
       await new TasksMailer().newNotification(task, user).deliverLater()
 
-      const sent = velociousMailer.deliveries()
+      const sent = deliveries()
 
       expect(sent.length).toEqual(1)
       expect(sent[0].to).toEqual("instance@example.com")
@@ -128,7 +128,7 @@ describe("Mailers", () => {
   })
 
   it("clears deliveries between tests", () => {
-    const sent = velociousMailer.deliveries()
+    const sent = deliveries()
 
     expect(sent.length).toEqual(0)
   })

@@ -9,7 +9,7 @@ import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
 import {testConfig, testEvents, tests} from "./test.js"
 import {pathToFileURL} from "url"
-import velociousMailer from "../mailer.js"
+import {clearDeliveries} from "../mailer.js"
 
 /**
  * @param {Promise<unknown> | unknown} promise - Promise or value.
@@ -610,7 +610,7 @@ export default class TestRunner {
           try {
             await this.runWithDummyIfNeeded(testArgs, async () => {
               try {
-                velociousMailer.clearDeliveries()
+                clearDeliveries()
                 for (const beforeEachData of newBeforeEaches) {
                   await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
                 }
