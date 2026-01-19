@@ -229,9 +229,12 @@ export default class VeoliciousHttpServerClient {
   shouldCloseConnection(request) {
     const httpVersion = request.httpVersion()
     const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
+    const connectionTokens = connectionHeader
+      ? connectionHeader.split(",").map((token) => token.trim()).filter(Boolean)
+      : []
 
     if (httpVersion == "websocket") return false
-    if (connectionHeader == "close") return true
+    if (connectionTokens.includes("close")) return true
 
     if (httpVersion == "1.0" && connectionHeader != "keep-alive") return true
 

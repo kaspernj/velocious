@@ -56,3 +56,4 @@
 - Treat large integer request timeout env values as milliseconds to avoid unintended long waits.
 - Support chunked HTTP request bodies and broader HTTP methods to prevent request parsing hangs.
 - Close HTTP/1.1 connections when clients request `Connection: close`.
+- Treat `Connection: close` as a token in comma-separated HTTP/1.1 Connection headers.
