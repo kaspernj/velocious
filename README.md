@@ -143,6 +143,7 @@ Deliver immediately or enqueue via background jobs:
 ```js
 await TasksMailer.newNotification(task, user).deliverNow()
 await TasksMailer.newNotification(task, user).deliverLater()
+await new TasksMailer().newNotification(task, user).deliverLater()
 ```
 
 Configure a delivery handler for non-test environments:

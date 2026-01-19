@@ -57,3 +57,4 @@
 - Support chunked HTTP request bodies and broader HTTP methods to prevent request parsing hangs.
 - Close HTTP/1.1 connections when clients request `Connection: close`.
 - Treat `Connection: close` as a token in comma-separated HTTP/1.1 Connection headers.
+- Allow instance mailer actions to return delivery wrappers for `new Mailer().action(...).deliverLater()` usage.

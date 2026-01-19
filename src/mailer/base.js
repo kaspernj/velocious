@@ -52,6 +52,34 @@ export class VelociousMailerBase {
     this._mailOptions = null
     this._viewParams = {}
     this._configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
+    return this._buildInstanceProxy()
+  }
+
+  /**
+   * @returns {VelociousMailerBase} - Proxy wrapper instance.
+   */
+  _buildInstanceProxy() {
+    const target = this
+
+    return new Proxy(target, {
+      get(proxyTarget, prop, receiver) {
+        if (typeof prop !== "string") {
+          return Reflect.get(proxyTarget, prop, receiver)
+        }
+
+        const value = Reflect.get(proxyTarget, prop, receiver)
+
+        if (typeof value !== "function") {
+          return value
+        }
+
+        if (prop.startsWith("_") || prop in VelociousMailerBase.prototype) {
+          return value.bind(proxyTarget)
+        }
+
+        return (...args) => proxyTarget._buildDelivery(prop, args)
+      }
+    })
   }
 
   /**
