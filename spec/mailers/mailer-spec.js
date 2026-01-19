@@ -7,9 +7,9 @@ import Configuration from "../../src/configuration.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
-import velociousMailer from "../../src/mailer.js"
+import VelociousMailer, {deliveries} from "../../src/mailer.js"
 
-class TasksMailer extends velociousMailer {
+class TasksMailer extends VelociousMailer {
   /**
    * @param {{id: () => number}} task
    * @param {{email: () => string, name: () => string}} user
@@ -86,9 +86,9 @@ describe("Mailers", () => {
         name: () => "Tess"
       }
 
-      await TasksMailer.newNotification(task, user).deliverNow()
+      await new TasksMailer().newNotification(task, user).deliverNow()
 
-      const sent = velociousMailer.deliveries()
+      const sent = deliveries()
 
       expect(sent.length).toEqual(1)
       expect(sent[0].to).toEqual("user@example.com")
@@ -100,8 +100,35 @@ describe("Mailers", () => {
     }
   })
 
+  it("returns a delivery wrapper from instance actions", async () => {
+    const {directory, cleanup} = await createTempProjectDir()
+
+    try {
+      const configuration = createConfiguration(directory)
+      configuration.setCurrent()
+
+      const task = {id: () => 7}
+      const user = {
+        email: () => "instance@example.com",
+        name: () => "Ina"
+      }
+
+      await new TasksMailer().newNotification(task, user).deliverLater()
+
+      const sent = deliveries()
+
+      expect(sent.length).toEqual(1)
+      expect(sent[0].to).toEqual("instance@example.com")
+      expect(sent[0].subject).toEqual("New task")
+      expect(sent[0].html).toMatch(/Hello Ina/)
+      expect(sent[0].html).toMatch(/Task 7 has just been created/)
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("clears deliveries between tests", () => {
-    const sent = velociousMailer.deliveries()
+    const sent = deliveries()
 
     expect(sent.length).toEqual(0)
   })

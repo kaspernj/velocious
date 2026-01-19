@@ -8,7 +8,7 @@ import restArgsError from "../utils/rest-args-error.js"
 import MailerDelivery from "./delivery.js"
 
 /** @type {import("./index.js").MailerDeliveryPayload[]} */
-const deliveries = []
+const deliveriesStore = []
 /** @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown) | null} */
 let deliveryHandler = null
 
@@ -52,6 +52,43 @@ export class VelociousMailerBase {
     this._mailOptions = null
     this._viewParams = {}
     this._configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
+    this._actionMethods = new Map()
+    this._setupActionWrappers()
+  }
+
+  /**
+   * @returns {void} - No return value.
+   */
+  _setupActionWrappers() {
+    const basePrototype = VelociousMailerBase.prototype
+    const wrappedNames = new Set()
+    let prototype = Object.getPrototypeOf(this)
+
+    while (prototype && prototype !== basePrototype) {
+      for (const name of Object.getOwnPropertyNames(prototype)) {
+        if (name === "constructor" || wrappedNames.has(name)) continue
+
+        const descriptor = Object.getOwnPropertyDescriptor(prototype, name)
+
+        if (!descriptor || typeof descriptor.value !== "function") continue
+        if (name.startsWith("_") || name in basePrototype) continue
+
+        wrappedNames.add(name)
+        this._actionMethods.set(name, descriptor.value)
+
+        this[name] = (...args) => this._buildDelivery(name, args)
+      }
+
+      prototype = Object.getPrototypeOf(prototype)
+    }
+  }
+
+  /**
+   * @param {string} actionName - Action name.
+   * @returns {((...args: any[]) => unknown) | undefined} - Action method.
+   */
+  _getActionMethod(actionName) {
+    return this._actionMethods.get(actionName)
   }
 
   /**
@@ -85,7 +122,7 @@ export class VelociousMailerBase {
    * @returns {MailerDelivery} - Delivery wrapper.
    */
   _buildDelivery(actionName, args) {
-    const action = this[actionName]
+    const action = this._getActionMethod(actionName)
 
     if (typeof action !== "function") {
       throw new Error(`Unknown mailer method "${actionName}" on ${this.constructor.name}`)
@@ -191,72 +228,88 @@ export class VelociousMailerBase {
   }
 
   /**
-   * @returns {import("./index.js").MailerDeliveryPayload[]} - Delivered payloads.
-   */
-  static deliveries() {
-    return deliveries.slice()
-  }
-
-  /**
-   * @returns {void} - No return value.
-   */
-  static clearDeliveries() {
-    deliveries.length = 0
-  }
-
-  /**
-   * @param {(payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown} handler - Delivery handler.
-   * @returns {void} - No return value.
-   */
-  static setDeliveryHandler(handler) {
-    deliveryHandler = handler
-  }
-
-  /**
-   * @returns {(payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown | null} - Handler or null.
-   */
-  static getDeliveryHandler() {
-    return deliveryHandler
-  }
-
-  /**
    * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload | unknown>} - Handler result.
    */
-  static async deliverPayload(payload) {
-    if (await isTestingEnvironment()) {
-      deliveries.push(payload)
-      return payload
-    }
-
-    const configuration = await configurationResolver()
-    const backend = configuration.getMailerBackend()
-
-    if (backend?.deliver) {
-      return await backend.deliver({payload, configuration})
-    }
-
-    const handler = deliveryHandler
-
-    if (!handler) {
-      throw new Error(`No mail delivery handler configured for "${payload.subject}" to "${payload.to}"`)
-    }
-
-    return await handler(payload)
+  async _deliverPayload(payload) {
+    return await deliverPayload(payload)
   }
 
   /**
    * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
-  static async enqueuePayload(payload) {
-    if (await isTestingEnvironment()) {
-      deliveries.push(payload)
-      return payload
-    }
-
-    const {default: mailDeliveryJob} = await import("../jobs/mail-delivery.js")
-
-    return await mailDeliveryJob.performLater(payload)
+  async _enqueuePayload(payload) {
+    return await enqueuePayload(payload)
   }
+}
+
+/**
+ * @returns {import("./index.js").MailerDeliveryPayload[]} - Delivered payloads.
+ */
+export function deliveries() {
+  return deliveriesStore.slice()
+}
+
+/**
+ * @returns {void} - No return value.
+ */
+export function clearDeliveries() {
+  deliveriesStore.length = 0
+}
+
+/**
+ * @param {(payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown} handler - Delivery handler.
+ * @returns {void} - No return value.
+ */
+export function setDeliveryHandler(handler) {
+  deliveryHandler = handler
+}
+
+/**
+ * @returns {(payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown | null} - Handler or null.
+ */
+export function getDeliveryHandler() {
+  return deliveryHandler
+}
+
+/**
+ * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
+ * @returns {Promise<import("./index.js").MailerDeliveryPayload | unknown>} - Handler result.
+ */
+export async function deliverPayload(payload) {
+  if (await isTestingEnvironment()) {
+    deliveriesStore.push(payload)
+    return payload
+  }
+
+  const configuration = await configurationResolver()
+  const backend = configuration.getMailerBackend()
+
+  if (backend?.deliver) {
+    return await backend.deliver({payload, configuration})
+  }
+
+  const handler = deliveryHandler
+
+  if (!handler) {
+    throw new Error(`No mail delivery handler configured for "${payload.subject}" to "${payload.to}"`)
+  }
+
+  return await handler(payload)
+}
+
+/**
+ * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
+ * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
+ */
+export async function enqueuePayload(payload) {
+  if (await isTestingEnvironment()) {
+    deliveriesStore.push(payload)
+    return payload
+  }
+
+  const {default: mailDeliveryJob} = await import("../jobs/mail-delivery.js")
+
+  return await mailDeliveryJob.performLater(payload)
 }

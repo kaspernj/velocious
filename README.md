@@ -119,9 +119,9 @@ expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 3]))
 Mailers live under `src/mailers`, with a `mailer.js` and matching `.ejs` templates.
 
 ```js
-import velociousMailer from "velocious/build/src/mailer.js"
+import VelociousMailer, {deliveries, setDeliveryHandler} from "velocious/build/src/mailer.js"
 
-class TasksMailer extends velociousMailer {
+class TasksMailer extends VelociousMailer {
   newNotification(task, user) {
     this.task = task
     this.user = user
@@ -141,14 +141,14 @@ class TasksMailer extends velociousMailer {
 Deliver immediately or enqueue via background jobs:
 
 ```js
-await TasksMailer.newNotification(task, user).deliverNow()
-await TasksMailer.newNotification(task, user).deliverLater()
+await new TasksMailer().newNotification(task, user).deliverNow()
+await new TasksMailer().newNotification(task, user).deliverLater()
 ```
 
 Configure a delivery handler for non-test environments:
 
 ```js
-velociousMailer.setDeliveryHandler(async ({to, subject, html}) => {
+setDeliveryHandler(async ({to, subject, html}) => {
   // send the email via your provider
 })
 ```
@@ -180,7 +180,7 @@ npm install smtp-connection
 Test deliveries are stored in memory:
 
 ```js
-const sent = velociousMailer.deliveries()
+const sent = deliveries()
 ```
 
 # Translations
