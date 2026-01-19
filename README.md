@@ -145,6 +145,22 @@ await new TasksMailer().newNotification(task, user).deliverNow()
 await new TasksMailer().newNotification(task, user).deliverLater()
 ```
 
+If your mailer needs async setup, keep the action sync and pass `actionPromise`:
+
+```js
+resetPassword(user) {
+  return this.mail({
+    to: user.email(),
+    subject: "Reset your password",
+    actionName: "resetPassword",
+    actionPromise: (async () => {
+      this.token = await user.resetToken()
+      this.assignView({user, token: this.token})
+    })()
+  })
+}
+```
+
 Configure a delivery handler for non-test environments:
 
 ```js

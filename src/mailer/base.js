@@ -72,9 +72,10 @@ export class VelociousMailerBase {
    * @param {any} [args.replyTo] - Reply-to address.
    * @param {Record<string, string>} [args.headers] - Custom headers.
    * @param {string} args.actionName - Mailer action name.
+   * @param {Promise<unknown> | unknown} [args.actionPromise] - Action completion promise.
    * @returns {MailerDelivery} - Delivery wrapper.
    */
-  mail({to, subject, from, cc, bcc, replyTo, headers, actionName, ...restArgs}) {
+  mail({to, subject, from, cc, bcc, replyTo, headers, actionName, actionPromise, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!actionName) {
@@ -83,10 +84,11 @@ export class VelociousMailerBase {
 
     this._actionName = actionName
     this._mailOptions = {to, subject, from, cc, bcc, replyTo, headers}
+    const resolvedActionPromise = actionPromise === undefined ? Promise.resolve() : Promise.resolve(actionPromise)
 
     return new MailerDelivery({
       mailer: this,
-      actionPromise: Promise.resolve(),
+      actionPromise: resolvedActionPromise,
       actionName
     })
   }

@@ -21,6 +21,23 @@ class TasksMailer extends VelociousMailer {
     this.assignView({task, user, userName: user.name()})
     return this.mail({to: user.email(), subject: "New task", actionName: "newNotification"})
   }
+
+  /**
+   * @param {{id: () => number}} task
+   * @param {{email: () => string, name: () => string}} user
+   * @returns {import("../../src/mailer/delivery.js").default}
+   */
+  delayedNotification(task, user) {
+    return this.mail({
+      to: user.email(),
+      subject: "Delayed task",
+      actionName: "delayedNotification",
+      actionPromise: (async () => {
+        await Promise.resolve()
+        this.assignView({task, user, userName: user.name()})
+      })()
+    })
+  }
 }
 
 describe("Mailers", () => {
@@ -33,6 +50,11 @@ describe("Mailers", () => {
 
     await fs.mkdir(viewDir, {recursive: true})
     await fs.writeFile(path.join(viewDir, "new-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
+<p>
+  Task <%= task.id() %> has just been created.
+</p>
+`)
+    await fs.writeFile(path.join(viewDir, "delayed-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
 <p>
   Task <%= task.id() %> has just been created.
 </p>
@@ -122,6 +144,33 @@ describe("Mailers", () => {
       expect(sent[0].subject).toEqual("New task")
       expect(sent[0].html).toMatch(/Hello Ina/)
       expect(sent[0].html).toMatch(/Task 7 has just been created/)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("awaits actionPromise before delivering", async () => {
+    const {directory, cleanup} = await createTempProjectDir()
+
+    try {
+      const configuration = createConfiguration(directory)
+      configuration.setCurrent()
+
+      const task = {id: () => 99}
+      const user = {
+        email: () => "delay@example.com",
+        name: () => "Dana"
+      }
+
+      await new TasksMailer().delayedNotification(task, user).deliverNow()
+
+      const sent = deliveries()
+
+      expect(sent.length).toEqual(1)
+      expect(sent[0].to).toEqual("delay@example.com")
+      expect(sent[0].subject).toEqual("Delayed task")
+      expect(sent[0].html).toMatch(/Hello Dana/)
+      expect(sent[0].html).toMatch(/Task 99 has just been created/)
     } finally {
       await cleanup()
     }
