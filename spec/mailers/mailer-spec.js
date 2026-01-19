@@ -19,7 +19,7 @@ class TasksMailer extends VelociousMailer {
     this.task = task
     this.user = user
     this.assignView({task, user, userName: user.name()})
-    this.mail({to: user.email(), subject: "New task"})
+    return this.mail({to: user.email(), subject: "New task", actionName: "newNotification"})
   }
 }
 

@@ -14,7 +14,7 @@ import VelociousMailer from "../../src/mailer.js"
  */
 class BackendMailer extends VelociousMailer {
   notice() {
-    this.mail({to: "backend@example.com", subject: "Backend mail"})
+    return this.mail({to: "backend@example.com", subject: "Backend mail", actionName: "notice"})
   }
 }
 
