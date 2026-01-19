@@ -119,9 +119,9 @@ expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 3]))
 Mailers live under `src/mailers`, with a `mailer.js` and matching `.ejs` templates.
 
 ```js
-import velociousMailer, {deliveries, setDeliveryHandler} from "velocious/build/src/mailer.js"
+import VelociousMailer, {deliveries, setDeliveryHandler} from "velocious/build/src/mailer.js"
 
-class TasksMailer extends velociousMailer {
+class TasksMailer extends VelociousMailer {
   newNotification(task, user) {
     this.task = task
     this.user = user

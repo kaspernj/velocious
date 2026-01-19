@@ -7,9 +7,9 @@ import Configuration from "../../src/configuration.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
-import velociousMailer, {deliveries} from "../../src/mailer.js"
+import VelociousMailer, {deliveries} from "../../src/mailer.js"
 
-class TasksMailer extends velociousMailer {
+class TasksMailer extends VelociousMailer {
   /**
    * @param {{id: () => number}} task
    * @param {{email: () => string, name: () => string}} user

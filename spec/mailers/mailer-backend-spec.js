@@ -7,12 +7,12 @@ import Configuration from "../../src/configuration.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
-import velociousMailer from "../../src/mailer.js"
+import VelociousMailer from "../../src/mailer.js"
 
 /**
  * @extends {import("../../src/mailer.js").default}
  */
-class BackendMailer extends velociousMailer {
+class BackendMailer extends VelociousMailer {
   notice() {
     this.mail({to: "backend@example.com", subject: "Backend mail"})
   }
