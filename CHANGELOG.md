@@ -59,3 +59,5 @@
 - Treat `Connection: close` as a token in comma-separated HTTP/1.1 Connection headers.
 - Allow instance mailer actions to return delivery wrappers for `new Mailer().action(...).deliverLater()` usage.
 - Remove mailer class proxies and require instance action delivery for mailers.
+- Require mailer actions to return `mail(...)` with an explicit action name.
+- Support async mailer setup via `actionPromise` on `mail(...)`.
