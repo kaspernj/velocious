@@ -25,7 +25,10 @@ export default class VelociousRoutesResolver {
 
     this.configuration = configuration
     this.logger = new Logger("RoutesResolver", {configuration})
-    this.params = request.params()
+    const requestParams = request.params() || {}
+    this.params = {...requestParams}
+    delete this.params.action
+    delete this.params.controller
     this.request = request
     this.response = response
   }
