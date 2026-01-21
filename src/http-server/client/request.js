@@ -22,7 +22,7 @@ export default class VelociousHttpServerClientRequest {
 
   /**
    * @param {Buffer} data - Data payload.
-   * @returns {void} - No return value.
+   * @returns {Buffer | undefined} - Remaining data, if any.
    */
   feed(data) { return this.requestParser.feed(data) }
 

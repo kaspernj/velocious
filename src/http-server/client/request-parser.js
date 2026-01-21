@@ -53,7 +53,7 @@ export default class VelociousHttpServerClientRequestParser {
 
   /**
    * @param {Buffer} data - Data payload.
-   * @returns {void} - No return value.
+   * @returns {Buffer | undefined} - Remaining data, if any.
    */
   feed = (data) => {
     if (this.hasCompleted) {

@@ -84,6 +84,7 @@ export default class VeoliciousHttpServerClient {
       return
     }
 
+    /** @type {Buffer | undefined} */
     let remaining = data
 
     while (remaining && remaining.length > 0) {
@@ -233,7 +234,10 @@ export default class VeoliciousHttpServerClient {
     this.events.emit("output", headers)
     this.events.emit("output", body)
 
-    request.getRequestParser().destroy()
+    if ("getRequestParser" in request) {
+      const httpRequest = /** @type {import("./request.js").default} */ (request)
+      httpRequest.getRequestParser().destroy()
+    }
   }
 
   /**

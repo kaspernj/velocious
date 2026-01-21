@@ -41,7 +41,7 @@ export default class RequestBuffer {
 
   /**
    * @param {Buffer} data - Data payload.
-   * @returns {void} - No return value.
+   * @returns {Buffer | undefined} - Remaining data, if any.
    */
   feed(data) {
     for (let index = 0; index < data.length; index += 1) {
@@ -141,6 +141,8 @@ export default class RequestBuffer {
         return data.subarray(index + 1)
       }
     }
+
+    return undefined
   }
 
   /**
