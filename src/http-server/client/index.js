@@ -165,6 +165,7 @@ export default class VeoliciousHttpServerClient {
 
         this.requestRunners.shift()
         this.sendResponse(requestRunner)
+        if (this.currentRequest === request && this.state === "initial") this.currentRequest = undefined
         this.logger.debug(() => ["sendDoneRequests", {clientCount: this.clientCount, connectionHeader, httpVersion}])
 
         if (shouldCloseConnection) {
@@ -208,7 +209,7 @@ export default class VeoliciousHttpServerClient {
 
     let headers = ""
 
-    headers += `HTTP/${this.currentRequest.httpVersion()} ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
+    headers += `HTTP/${request.httpVersion()} ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
 
     for (const headerKey in response.headers) {
       for (const headerValue of response.headers[headerKey]) {
@@ -220,6 +221,8 @@ export default class VeoliciousHttpServerClient {
 
     this.events.emit("output", headers)
     this.events.emit("output", body)
+
+    request.getRequestParser().destroy()
   }
 
   /**
