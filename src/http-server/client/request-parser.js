@@ -60,7 +60,7 @@ export default class VelociousHttpServerClientRequestParser {
       throw new Error("Request parser already completed")
     }
 
-    this.requestBuffer.feed(data)
+    return this.requestBuffer.feed(data)
   }
 
   /**

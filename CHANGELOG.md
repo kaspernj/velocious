@@ -64,3 +64,4 @@
 - Allow configuring the browser test HTTP host/port via `SYSTEM_TEST_HTTP_HOST`/`SYSTEM_TEST_HTTP_PORT`.
 - Prevent reused request params from leaking controller/action between requests.
 - Disallow reusing a request parser after completion to enforce one-request-per-parser.
+- Preserve leftover bytes to support HTTP/1.0 keep-alive requests in a single socket write.

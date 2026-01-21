@@ -21,6 +21,7 @@ export default class RequestBuffer {
 
   multiPartyFormData = false
 
+  completed = false
   params = {}
   readingBody = false
   state = "status"
@@ -43,7 +44,9 @@ export default class RequestBuffer {
    * @returns {void} - No return value.
    */
   feed(data) {
-    for (const char of data) {
+    for (let index = 0; index < data.length; index += 1) {
+      const char = data[index]
+
       if (this.readingBody) this.bodyLength += 1
 
       switch(this.state) {
@@ -132,6 +135,10 @@ export default class RequestBuffer {
           break
         default:
           console.error(`Unknown state for request buffer: ${this.state}`)
+      }
+
+      if (this.completed) {
+        return data.subarray(index + 1)
       }
     }
   }
@@ -412,6 +419,7 @@ export default class RequestBuffer {
 
   completeRequest = () => {
     this.state = "status" // Reset state to new request
+    this.completed = true
 
     if (this.getHeader("content-type")?.value?.startsWith("application/json")) {
       this.parseApplicationJsonParams()

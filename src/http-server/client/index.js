@@ -84,17 +84,28 @@ export default class VeoliciousHttpServerClient {
       return
     }
 
-    if (this.state == "initial") {
-      this.currentRequest = new Request({client: this, configuration: this.configuration})
-      this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
-      this.currentRequest.feed(data)
-      this.state = "requestStarted"
-    } else if (this.state == "requestStarted") {
+    let remaining = data
+
+    while (remaining && remaining.length > 0) {
+      if (this.state == "initial") {
+        this.currentRequest = new Request({client: this, configuration: this.configuration})
+        this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
+        this.state = "requestStarted"
+      } else if (this.state != "requestStarted") {
+        throw new Error(`Unknown state for client: ${this.state}`)
+      }
+
       if (!this.currentRequest) throw new Error("No current request")
 
-      this.currentRequest.feed(data)
-    } else {
-      throw new Error(`Unknown state for client: ${this.state}`)
+      remaining = this.currentRequest.feed(remaining)
+
+      if (remaining && remaining.length > 0) {
+        const requestParser = this.currentRequest.getRequestParser()
+
+        if (!requestParser.hasCompleted) break
+
+        this.state = "initial"
+      }
     }
   }
 
