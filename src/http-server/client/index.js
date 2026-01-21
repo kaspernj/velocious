@@ -84,17 +84,29 @@ export default class VeoliciousHttpServerClient {
       return
     }
 
-    if (this.state == "initial") {
-      this.currentRequest = new Request({client: this, configuration: this.configuration})
-      this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
-      this.currentRequest.feed(data)
-      this.state = "requestStarted"
-    } else if (this.state == "requestStarted") {
+    /** @type {Buffer | undefined} */
+    let remaining = data
+
+    while (remaining && remaining.length > 0) {
+      if (this.state == "initial") {
+        this.currentRequest = new Request({client: this, configuration: this.configuration})
+        this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
+        this.state = "requestStarted"
+      } else if (this.state != "requestStarted") {
+        throw new Error(`Unknown state for client: ${this.state}`)
+      }
+
       if (!this.currentRequest) throw new Error("No current request")
 
-      this.currentRequest.feed(data)
-    } else {
-      throw new Error(`Unknown state for client: ${this.state}`)
+      remaining = this.currentRequest.feed(remaining)
+
+      if (remaining && remaining.length > 0) {
+        const requestParser = this.currentRequest.getRequestParser()
+
+        if (!requestParser.hasCompleted) break
+
+        this.state = "initial"
+      }
     }
   }
 
@@ -165,6 +177,7 @@ export default class VeoliciousHttpServerClient {
 
         this.requestRunners.shift()
         this.sendResponse(requestRunner)
+        if (this.currentRequest === request && this.state === "initial") this.currentRequest = undefined
         this.logger.debug(() => ["sendDoneRequests", {clientCount: this.clientCount, connectionHeader, httpVersion}])
 
         if (shouldCloseConnection) {
@@ -208,7 +221,7 @@ export default class VeoliciousHttpServerClient {
 
     let headers = ""
 
-    headers += `HTTP/${this.currentRequest.httpVersion()} ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
+    headers += `HTTP/${request.httpVersion()} ${response.getStatusCode()} ${response.getStatusMessage()}\r\n`
 
     for (const headerKey in response.headers) {
       for (const headerValue of response.headers[headerKey]) {
@@ -220,6 +233,11 @@ export default class VeoliciousHttpServerClient {
 
     this.events.emit("output", headers)
     this.events.emit("output", body)
+
+    if ("getRequestParser" in request) {
+      const httpRequest = /** @type {import("./request.js").default} */ (request)
+      httpRequest.getRequestParser().destroy()
+    }
   }
 
   /**

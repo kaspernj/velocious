@@ -36,6 +36,47 @@ const sendRawRequest = async (payload) => {
   return response
 }
 
+/**
+ * @param {net.Socket} socket - Socket.
+ * @param {string} [initialBuffer] - Initial buffer.
+ * @returns {Promise<{response: string, remaining: string}>} - Response payload.
+ */
+const readResponse = async (socket, initialBuffer = "") => {
+  let buffer = initialBuffer
+  let headerEndIndex = -1
+  let contentLength = 0
+
+  return await timeout({timeout: 2000}, async () => {
+    return await new Promise((resolve, reject) => {
+      const onData = (chunk) => {
+        buffer += chunk.toString("utf8")
+
+        if (headerEndIndex === -1) {
+          headerEndIndex = buffer.indexOf("\r\n\r\n")
+
+          if (headerEndIndex !== -1) {
+            const headerBlock = buffer.slice(0, headerEndIndex)
+            const match = headerBlock.match(/Content-Length: (\d+)/i)
+
+            if (match) contentLength = Number(match[1])
+          }
+        }
+
+        if (headerEndIndex !== -1 && buffer.length >= headerEndIndex + 4 + contentLength) {
+          const response = buffer.slice(0, headerEndIndex + 4 + contentLength)
+          const remaining = buffer.slice(headerEndIndex + 4 + contentLength)
+
+          socket.off("data", onData)
+          resolve({response, remaining})
+        }
+      }
+
+      socket.on("data", onData)
+      socket.on("error", reject)
+    })
+  })
+}
+
 describe("HttpServer - request behavior", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
   it("closes HTTP/1.1 connections when requested", async () => {
     await Dummy.run(async () => {
@@ -87,6 +128,46 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
       ].join("\r\n"))
 
       expect(response).toContain("HTTP/1.1")
+    })
+  })
+
+  it("supports HTTP 1.0 keep-alive", async () => {
+    await Dummy.run(async () => {
+      const socket = new net.Socket()
+      let remaining = ""
+
+      socket.connect(3006, "127.0.0.1", () => {
+        socket.write([
+          "GET /ping HTTP/1.0",
+          "Host: localhost",
+          "Connection: keep-alive",
+          "",
+          ""
+        ].join("\r\n"))
+      })
+
+      try {
+        const firstResponse = await readResponse(socket)
+        remaining = firstResponse.remaining
+
+        socket.write([
+          "GET /ping HTTP/1.0",
+          "Host: localhost",
+          "Connection: close",
+          "",
+          ""
+        ].join("\r\n"))
+
+        const secondResponse = await readResponse(socket, remaining)
+        const statusLines = [
+          ...(firstResponse.response.match(/HTTP\/1\.0 200 OK/g) || []),
+          ...(secondResponse.response.match(/HTTP\/1\.0 200 OK/g) || [])
+        ]
+
+        expect(statusLines.length).toBe(2)
+      } finally {
+        socket.destroy()
+      }
     })
   })
 })

@@ -17,6 +17,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.configuration = configuration
     this.data = []
     this.events = new EventEmitter()
+    this.hasCompleted = false
     /** @type {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} */
     this.params = {}
 
@@ -52,9 +53,15 @@ export default class VelociousHttpServerClientRequestParser {
 
   /**
    * @param {Buffer} data - Data payload.
-   * @returns {void} - No return value.
+   * @returns {Buffer | undefined} - Remaining data, if any.
    */
-  feed = (data) => this.requestBuffer.feed(data)
+  feed = (data) => {
+    if (this.hasCompleted) {
+      throw new Error("Request parser already completed")
+    }
+
+    return this.requestBuffer.feed(data)
+  }
 
   /**
    * @param {string} name - Name.
@@ -120,6 +127,7 @@ export default class VelociousHttpServerClientRequestParser {
 
   /** @returns {void} - No return value.  */
   requestDone = () => {
+    this.hasCompleted = true
     incorporate(this.params, this.requestBuffer.params)
 
     this.state = "done"

@@ -24,7 +24,11 @@ export default class VelociousRoutesResolver {
     if (!response) throw new Error("No response given")
 
     this.configuration = configuration
-    this.params = request.params()
+    this.logger = new Logger("RoutesResolver", {configuration})
+    const requestParams = request.params() || {}
+    this.params = {...requestParams}
+    delete this.params.action
+    delete this.params.controller
     this.request = request
     this.response = response
   }
@@ -49,7 +53,7 @@ export default class VelociousRoutesResolver {
       const requestedPath = currentPath.replace(/^\//, "") || "_root"
       const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
 
-      await (this.logger || new Logger("RoutesResolver", {configuration: this.configuration})).warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
+      await this.logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
 
       controller = "errors"
       controllerPath = "./built-in/errors/controller.js"
@@ -79,8 +83,6 @@ export default class VelociousRoutesResolver {
     if (!(action in controllerInstance)) {
       throw new Error(`Missing action on controller: ${controller}#${action}`)
     }
-
-    this.logger ||= new Logger(controllerClass.name, {configuration: this.configuration})
 
     await this._logActionStart({action, controllerClass})
 
@@ -153,9 +155,11 @@ export default class VelociousRoutesResolver {
     delete loggedParams.action
     delete loggedParams.controller
 
-    await this.logger[logMethod](() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
-    await this.logger[logMethod](() => `Processing by ${controllerClass.name}#${action}`)
-    await this.logger[logMethod](() => [`  Parameters:`, loggedParams])
+    const controllerLogger = new Logger(controllerClass.name, {configuration: this.configuration})
+
+    await controllerLogger[logMethod](() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
+    await controllerLogger[logMethod](() => `Processing by ${controllerClass.name}#${action}`)
+    await controllerLogger[logMethod](() => [`  Parameters:`, loggedParams])
   }
 
   /**
