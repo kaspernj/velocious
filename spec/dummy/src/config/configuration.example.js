@@ -9,6 +9,23 @@ import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js
 import path from "path"
 import requireContext from "require-context"
 
+function websocketMessageHandlerResolver({request}) {
+  if (!request) return
+
+  const pathValue = request.path().split("?")[0]
+
+  if (pathValue === "/raw-socket") {
+    return {
+      onOpen: ({session}) => {
+        session.sendJson({type: "welcome"})
+      },
+      onMessage: ({message, session}) => {
+        session.sendJson({type: "echo", payload: message})
+      }
+    }
+  }
+}
+
 export default new Configuration({
   database: {
     development: {
@@ -67,5 +84,6 @@ export default new Configuration({
     en: ["en", "de"]
   },
   locales: ["de", "en"],
-  testing: `${dummyDirectory()}/src/config/testing.js`
+  testing: `${dummyDirectory()}/src/config/testing.js`,
+  websocketMessageHandlerResolver
 })

@@ -19,6 +19,23 @@ const queryParam = (request, key) => {
   return new URLSearchParams(query).get(key) || undefined
 }
 
+function websocketMessageHandlerResolver({request}) {
+  if (!request) return
+
+  const pathValue = request.path().split("?")[0]
+
+  if (pathValue === "/raw-socket") {
+    return {
+      onOpen: ({session}) => {
+        session.sendJson({type: "welcome"})
+      },
+      onMessage: ({message, session}) => {
+        session.sendJson({type: "echo", payload: message})
+      }
+    }
+  }
+}
+
 export default new Configuration({
   database: {
     test: {
@@ -81,6 +98,7 @@ export default new Configuration({
   },
   locales: ["de", "en"],
   testing: `${dummyDirectory()}/src/config/testing.js`,
+  websocketMessageHandlerResolver,
   websocketChannelResolver: ({request, subscription}) => {
     const channel = subscription?.channel || queryParam(request, "channel")
 

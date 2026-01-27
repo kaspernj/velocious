@@ -225,4 +225,73 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
       }
     })
   })
+
+  it("handles raw websocket message handlers", async () => {
+    await Dummy.run(async () => {
+      const socket = new WebSocket("ws://127.0.0.1:3006/raw-socket")
+
+      try {
+        await new Promise((resolve, reject) => {
+          socket.addEventListener("open", () => resolve())
+          socket.addEventListener("error", (event) => {
+            reject(event?.error || new Error("Websocket connection error"))
+          })
+        })
+
+        const welcomePromise = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Timed out waiting for welcome message")), 2000)
+
+          socket.addEventListener("message", (event) => {
+            const raw = getMessageText(event)
+
+            if (!raw) return
+
+            try {
+              const msg = JSON.parse(raw)
+
+              if (msg.type === "welcome") {
+                clearTimeout(timeout)
+                resolve(msg)
+              }
+            } catch (error) {
+              clearTimeout(timeout)
+              reject(error)
+            }
+          })
+        })
+
+        await welcomePromise
+
+        const echoPromise = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Timed out waiting for echo message")), 2000)
+
+          socket.addEventListener("message", (event) => {
+            const raw = getMessageText(event)
+
+            if (!raw) return
+
+            try {
+              const msg = JSON.parse(raw)
+
+              if (msg.type === "echo") {
+                clearTimeout(timeout)
+                resolve(msg.payload)
+              }
+            } catch (error) {
+              clearTimeout(timeout)
+              reject(error)
+            }
+          })
+        })
+
+        const payload = {topic: "raw", value: 42}
+        socket.send(JSON.stringify(payload))
+
+        const echoedPayload = await echoPromise
+        expect(echoedPayload).toEqual(payload)
+      } finally {
+        socket.close()
+      }
+    })
+  })
 })
