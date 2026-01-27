@@ -854,6 +854,32 @@ socket.send(JSON.stringify({
 }))
 ```
 
+## Raw websocket handlers
+
+If you need to accept custom websocket message formats (for example, a vendor that does not use the Velocious request/subscribe protocol), provide a `websocketMessageHandlerResolver` in your configuration. It receives the upgrade request and can return a handler object with `onOpen`, `onMessage`, `onClose`, and `onError` hooks:
+
+```js
+const configuration = new Configuration({
+  // ...
+  websocketMessageHandlerResolver: ({request, configuration}) => {
+    const path = request.path().split("?")[0]
+
+    if (path === "/custom/socket") {
+      return {
+        onOpen: ({session}) => {
+          session.sendJson({event: "connected"})
+        },
+        onMessage: ({message}) => {
+          console.log("Inbound message", message)
+        }
+      }
+    }
+  }
+})
+```
+
+When a raw handler is attached, Velocious skips channel resolution and forwards parsed JSON messages directly to the handler.
+
 ## Combine: subscribe and invoke another action
 
 You can subscribe first and then call another controller action over the same websocket connection to trigger broadcasts:

@@ -146,10 +146,26 @@ export default class VeoliciousHttpServerClient {
     ]
     const response = responseLines.join("\r\n")
 
+    const messageHandlerResolver = this.configuration.getWebsocketMessageHandlerResolver?.()
+    let messageHandler
+
+    if (messageHandlerResolver) {
+      const resolvedHandler = messageHandlerResolver({
+        client: this,
+        configuration: this.configuration,
+        request: this.currentRequest
+      })
+
+      if (resolvedHandler) {
+        messageHandler = resolvedHandler
+      }
+    }
+
     this.websocketSession = new WebsocketSession({
       client: this,
       configuration: this.configuration,
-      upgradeRequest: this.currentRequest
+      upgradeRequest: this.currentRequest,
+      messageHandler: messageHandler
     })
     this.websocketSession.events.on("close", () => {
       this.websocketSession?.destroy()
