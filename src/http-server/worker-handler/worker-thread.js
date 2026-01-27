@@ -92,7 +92,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       })
 
       client.events.on("close", (output) => {
-        this.logger.info("Close received from client in worker - forwarding to worker parent")
+        this.logger.debugLowLevel(() => "Close received from client in worker - forwarding to worker parent")
         this.parentPort.postMessage({command: "clientClose", clientCount, output})
       })
 
