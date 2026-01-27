@@ -72,3 +72,4 @@
 - Remove `src/build` template sources in favor of `src/templates`.
 - Preserve `src/routes` when copying EJS templates into build output.
 - Gate worker client close logs behind debug logging.
+- Add a Node console CLI command with `console`/`c` aliases and REPL context setup.

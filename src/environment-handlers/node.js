@@ -12,6 +12,7 @@ import CliCommandsTest from "./node/cli/commands/test.js"
 import CliCommandsBackgroundJobsMain from "./node/cli/commands/background-jobs-main.js"
 import CliCommandsBackgroundJobsWorker from "./node/cli/commands/background-jobs-worker.js"
 import CliCommandsBackgroundJobsRunner from "./node/cli/commands/background-jobs-runner.js"
+import CliCommandsConsole from "./node/cli/commands/console.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
@@ -157,6 +158,14 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsRoutes(command) {
     return await this.forwardCommand(command, CliCommandsRoutes)
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsConsole(command) {
+    return await this.forwardCommand(command, CliCommandsConsole)
   }
 
   /**
