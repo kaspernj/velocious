@@ -70,3 +70,4 @@
 - Add websocketMessageHandlerResolver to support raw websocket message handlers outside the standard request/subscribe protocol.
 - Copy templates into build/src/templates so CLI template paths resolve after builds.
 - Remove `src/build` template sources in favor of `src/templates`.
+- Preserve `src/routes` when copying EJS templates into build output.
