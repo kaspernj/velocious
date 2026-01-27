@@ -30,7 +30,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({backgroundJobs, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, ...restArgs}) {
+  constructor({backgroundJobs, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._backgroundJobs = backgroundJobs
@@ -52,6 +52,7 @@ export default class VelociousConfiguration {
     this._requestTimeoutMs = requestTimeoutMs
     this._websocketEvents = undefined
     this._websocketChannelResolver = websocketChannelResolver
+    this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._errorEvents = new EventEmitter()
@@ -536,12 +537,25 @@ export default class VelociousConfiguration {
     return this._websocketChannelResolver
   }
 
+  /** @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver. */
+  getWebsocketMessageHandlerResolver() {
+    return this._websocketMessageHandlerResolver
+  }
+
   /**
    * @param {import("./configuration-types.js").WebsocketChannelResolverType} resolver - Resolver.
    * @returns {void} - No return value.
    */
   setWebsocketChannelResolver(resolver) {
     this._websocketChannelResolver = resolver
+  }
+
+  /**
+   * @param {import("./configuration-types.js").WebsocketMessageHandlerResolverType} resolver - Resolver.
+   * @returns {void} - No return value.
+   */
+  setWebsocketMessageHandlerResolver(resolver) {
+    this._websocketMessageHandlerResolver = resolver
   }
 
   /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */

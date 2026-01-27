@@ -13,6 +13,18 @@
  */
 
 /**
+ * @typedef {object} WebsocketMessageHandler
+ * @property {function({message: any, session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onMessage] - Handler for incoming websocket messages.
+ * @property {function({session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onOpen] - Handler when the websocket session opens.
+ * @property {function({session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onClose] - Handler when the websocket session closes.
+ * @property {function({error: Error, session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onError] - Handler when a websocket message errors.
+ */
+
+/**
+ * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, configuration: import("./configuration.js").default}): WebsocketMessageHandler | void | Promise<WebsocketMessageHandler | void>} WebsocketMessageHandlerResolverType
+ */
+
+/**
  * @typedef {(id: string) => {default: typeof import("./initializer.js").default}} InitializersRequireContextType
  * @typedef {InitializersRequireContextType & {
  *   keys: () => string[],
@@ -106,6 +118,7 @@
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.
  * @property {WebsocketChannelResolverType} [websocketChannelResolver] - Resolve a websocket channel class/instance for each connection.
+ * @property {WebsocketMessageHandlerResolverType} [websocketMessageHandlerResolver] - Resolve a raw websocket message handler for each connection.
  */
 
 export const nothing = {}

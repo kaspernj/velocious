@@ -1,4 +1,4 @@
-build
+/build
 dist
 db/structure-default.sql
 node_modules

@@ -65,3 +65,9 @@
 - Prevent reused request params from leaking controller/action between requests.
 - Disallow reusing a request parser after completion to enforce one-request-per-parser.
 - Preserve leftover bytes to support HTTP/1.0 keep-alive requests in a single socket write.
+- Copy JS templates into build output so CLI generation can find them after `npm run build`.
+- Exclude `src/build` from TypeScript compilation so `npm run build` succeeds.
+- Add websocketMessageHandlerResolver to support raw websocket message handlers outside the standard request/subscribe protocol.
+- Copy templates into build/src/templates so CLI template paths resolve after builds.
+- Remove `src/build` template sources in favor of `src/templates`.
+- Preserve `src/routes` when copying EJS templates into build output.

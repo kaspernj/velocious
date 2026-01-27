@@ -22,12 +22,18 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {import("./index.js").default} args.client - Client instance.
    * @param {import("./request.js").default | import("./websocket-request.js").default} [args.upgradeRequest] - Initial websocket upgrade request.
+   * @param {import("../../configuration-types.js").WebsocketMessageHandler} [args.messageHandler] - Optional raw message handler.
+   * @param {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} [args.messageHandlerPromise] - Optional raw message handler promise.
    */
-  constructor({client, configuration, upgradeRequest}) {
+  constructor({client, configuration, upgradeRequest, messageHandler, messageHandlerPromise}) {
     this.buffer = Buffer.alloc(0)
     this.client = client
     this.configuration = configuration
     this.upgradeRequest = upgradeRequest
+    this.messageHandler = messageHandler
+    this.messageHandlerPromise = messageHandlerPromise
+    this.messageQueue = []
+    this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
   }
 
@@ -69,13 +75,24 @@ export default class VelociousHttpServerClientWebsocketSession {
   async sendEvent(channel, payload) {
     if (!this.hasSubscription(channel)) return
 
-    this._sendJson({channel, payload, type: "event"})
+    this.sendJson({channel, payload, type: "event"})
   }
 
   /**
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeChannel() {
+    if (this.messageHandlerPromise) {
+      await this._resolveMessageHandlerPromise()
+
+      if (this.messageHandler) return
+    }
+
+    if (this.messageHandler) {
+      await this._runMessageHandlerOpen()
+      return
+    }
+
     const resolver = this.configuration.getWebsocketChannelResolver?.()
 
     if (!resolver) return
@@ -119,6 +136,16 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
+    if (this.pendingMessageHandler) {
+      this.messageQueue.push(message)
+      return
+    }
+
+    if (this.messageHandler) {
+      await this._runMessageHandlerMessage(message)
+      return
+    }
+
     if (message.type === "subscribe") {
       const {channel, params} = message
 
@@ -135,7 +162,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     if (message.type && message.type !== "request") {
-      this._sendJson({error: `Unknown message type: ${message.type}`, type: "error"})
+      this.sendJson({error: `Unknown message type: ${message.type}`, type: "error"})
       return
     }
 
@@ -161,7 +188,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       const body = response.getBody()
       const headers = response.headers
 
-      this._sendJson({
+      this.sendJson({
         body,
         headers,
         id,
@@ -239,11 +266,11 @@ export default class VelociousHttpServerClientWebsocketSession {
 
         this._handleMessage(message).catch((error) => {
           this.logger.error(() => ["Websocket message handler failed", error])
-          this._sendJson({error: error.message, type: "error"})
+          this.sendJson({error: error.message, type: "error"})
         })
       } catch (error) {
         this.logger.error(() => ["Failed to parse websocket message", error])
-        this._sendJson({error: "Invalid websocket message", type: "error"})
+        this.sendJson({error: "Invalid websocket message", type: "error"})
       }
     }
   }
@@ -266,7 +293,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {object} body - Request body.
    * @returns {void} - No return value.
    */
-  _sendJson(body) {
+  sendJson(body) {
     const json = JSON.stringify(body)
     const payload = Buffer.from(json, "utf-8")
     let header
@@ -297,12 +324,13 @@ export default class VelociousHttpServerClientWebsocketSession {
   async subscribeToChannel(channel, {acknowledge = true} = {}) {
     this.addSubscription(channel)
     if (acknowledge) {
-      this._sendJson({channel, type: "subscribed"})
+      this.sendJson({channel, type: "subscribed"})
     }
     return true
   }
 
   _handleClose() {
+    void this._runMessageHandlerClose()
     void this._teardownChannel()
     this.events.emit("close")
   }
@@ -354,7 +382,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       })
 
       if (!resolved) {
-        this._sendJson({channel, error: "Subscription rejected", type: "error"})
+        this.sendJson({channel, error: "Subscription rejected", type: "error"})
         return
       }
 
@@ -375,7 +403,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       await this._registerChannel(channelInstance)
     } catch (error) {
       this.logger.warn(() => ["Websocket channel subscription failed", error])
-      this._sendJson({channel, error: "Subscription rejected", type: "error"})
+      this.sendJson({channel, error: "Subscription rejected", type: "error"})
     }
   }
 
@@ -393,5 +421,100 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     return result
+  }
+
+  async _runMessageHandlerOpen() {
+    try {
+      const handler = this.messageHandler
+      const onOpen = handler ? handler.onOpen : null
+
+      if (onOpen) {
+        await onOpen({session: this})
+      }
+    } catch (error) {
+      this.logger.error(() => ["Websocket open handler failed", error])
+    }
+  }
+
+  async _runMessageHandlerMessage(message) {
+    try {
+      const handler = this.messageHandler
+      const onMessage = handler ? handler.onMessage : null
+
+      if (onMessage) {
+        await onMessage({message, session: this})
+      }
+    } catch (error) {
+      this.logger.error(() => ["Websocket message handler failed", error])
+      const handler = this.messageHandler
+      const onError = handler ? handler.onError : null
+
+      if (onError) {
+        await onError({error, session: this})
+      }
+    }
+  }
+
+  async _runMessageHandlerClose() {
+    try {
+      const handler = this.messageHandler
+      const onClose = handler ? handler.onClose : null
+
+      if (onClose) {
+        await onClose({session: this})
+      }
+    } catch (error) {
+      this.logger.error(() => ["Websocket close handler failed", error])
+    }
+  }
+
+  /**
+   * @param {import("../../configuration-types.js").WebsocketMessageHandler} handler - Handler instance.
+   * @returns {void}
+   */
+  setMessageHandler(handler) {
+    this.messageHandler = handler
+    void this._runMessageHandlerOpen()
+  }
+
+  async _resolveMessageHandlerPromise() {
+    if (!this.messageHandlerPromise) return
+
+    try {
+      const handler = await this.messageHandlerPromise
+
+      if (handler) {
+        this.pendingMessageHandler = false
+        this.messageHandlerPromise = undefined
+        this.setMessageHandler(handler)
+        await this._flushQueuedMessages({useHandler: true})
+        return
+      }
+    } catch (error) {
+      this.logger.error(() => ["Websocket message handler resolver failed", error])
+    }
+
+    this.pendingMessageHandler = false
+    this.messageHandlerPromise = undefined
+    await this._flushQueuedMessages({useHandler: false})
+  }
+
+  /**
+   * @param {{useHandler: boolean}} args - Args.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _flushQueuedMessages({useHandler}) {
+    if (this.messageQueue.length === 0) return
+
+    const queued = this.messageQueue.slice()
+    this.messageQueue = []
+
+    for (const message of queued) {
+      if (useHandler && this.messageHandler) {
+        await this._runMessageHandlerMessage(message)
+      } else {
+        await this._handleMessage(message)
+      }
+    }
   }
 }
