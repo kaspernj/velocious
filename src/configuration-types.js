@@ -21,7 +21,7 @@
  */
 
 /**
- * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, configuration: import("./configuration.js").default}): WebsocketMessageHandler | void} WebsocketMessageHandlerResolverType
+ * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, configuration: import("./configuration.js").default}): WebsocketMessageHandler | void | Promise<WebsocketMessageHandler | void>} WebsocketMessageHandlerResolverType
  */
 
 /**

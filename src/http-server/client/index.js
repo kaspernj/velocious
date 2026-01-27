@@ -148,6 +148,7 @@ export default class VeoliciousHttpServerClient {
 
     const messageHandlerResolver = this.configuration.getWebsocketMessageHandlerResolver?.()
     let messageHandler
+    let messageHandlerPromise
 
     if (messageHandlerResolver) {
       const resolvedHandler = messageHandlerResolver({
@@ -156,8 +157,12 @@ export default class VeoliciousHttpServerClient {
         request: this.currentRequest
       })
 
-      if (resolvedHandler) {
-        messageHandler = resolvedHandler
+      const resolvedThenable = /** @type {{then?: Function}} */ (resolvedHandler)
+
+      if (resolvedThenable?.then) {
+        messageHandlerPromise = /** @type {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} */ (resolvedHandler)
+      } else if (resolvedHandler) {
+        messageHandler = /** @type {import("../../configuration-types.js").WebsocketMessageHandler} */ (resolvedHandler)
       }
     }
 
@@ -165,7 +170,8 @@ export default class VeoliciousHttpServerClient {
       client: this,
       configuration: this.configuration,
       upgradeRequest: this.currentRequest,
-      messageHandler: messageHandler
+      messageHandler: messageHandler,
+      messageHandlerPromise: messageHandlerPromise
     })
     this.websocketSession.events.on("close", () => {
       this.websocketSession?.destroy()

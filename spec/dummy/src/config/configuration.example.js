@@ -9,12 +9,25 @@ import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js
 import path from "path"
 import requireContext from "require-context"
 
-function websocketMessageHandlerResolver({request}) {
+async function websocketMessageHandlerResolver({request}) {
   if (!request) return
 
   const pathValue = request.path().split("?")[0]
 
   if (pathValue === "/raw-socket") {
+    return {
+      onOpen: ({session}) => {
+        session.sendJson({type: "welcome"})
+      },
+      onMessage: ({message, session}) => {
+        session.sendJson({type: "echo", payload: message})
+      }
+    }
+  }
+
+  if (pathValue === "/raw-async-socket") {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
     return {
       onOpen: ({session}) => {
         session.sendJson({type: "welcome"})

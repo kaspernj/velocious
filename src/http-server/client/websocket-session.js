@@ -23,13 +23,17 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {import("./index.js").default} args.client - Client instance.
    * @param {import("./request.js").default | import("./websocket-request.js").default} [args.upgradeRequest] - Initial websocket upgrade request.
    * @param {import("../../configuration-types.js").WebsocketMessageHandler} [args.messageHandler] - Optional raw message handler.
+   * @param {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} [args.messageHandlerPromise] - Optional raw message handler promise.
    */
-  constructor({client, configuration, upgradeRequest, messageHandler}) {
+  constructor({client, configuration, upgradeRequest, messageHandler, messageHandlerPromise}) {
     this.buffer = Buffer.alloc(0)
     this.client = client
     this.configuration = configuration
     this.upgradeRequest = upgradeRequest
     this.messageHandler = messageHandler
+    this.messageHandlerPromise = messageHandlerPromise
+    this.messageQueue = []
+    this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
   }
 
@@ -78,6 +82,12 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeChannel() {
+    if (this.messageHandlerPromise) {
+      await this._resolveMessageHandlerPromise()
+
+      if (this.messageHandler) return
+    }
+
     if (this.messageHandler) {
       await this._runMessageHandlerOpen()
       return
@@ -126,6 +136,11 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
+    if (this.pendingMessageHandler) {
+      this.messageQueue.push(message)
+      return
+    }
+
     if (this.messageHandler) {
       await this._runMessageHandlerMessage(message)
       return
@@ -460,5 +475,46 @@ export default class VelociousHttpServerClientWebsocketSession {
   setMessageHandler(handler) {
     this.messageHandler = handler
     void this._runMessageHandlerOpen()
+  }
+
+  async _resolveMessageHandlerPromise() {
+    if (!this.messageHandlerPromise) return
+
+    try {
+      const handler = await this.messageHandlerPromise
+
+      if (handler) {
+        this.pendingMessageHandler = false
+        this.messageHandlerPromise = undefined
+        this.setMessageHandler(handler)
+        await this._flushQueuedMessages({useHandler: true})
+        return
+      }
+    } catch (error) {
+      this.logger.error(() => ["Websocket message handler resolver failed", error])
+    }
+
+    this.pendingMessageHandler = false
+    this.messageHandlerPromise = undefined
+    await this._flushQueuedMessages({useHandler: false})
+  }
+
+  /**
+   * @param {{useHandler: boolean}} args - Args.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _flushQueuedMessages({useHandler}) {
+    if (this.messageQueue.length === 0) return
+
+    const queued = this.messageQueue.slice()
+    this.messageQueue = []
+
+    for (const message of queued) {
+      if (useHandler && this.messageHandler) {
+        await this._runMessageHandlerMessage(message)
+      } else {
+        await this._handleMessage(message)
+      }
+    }
   }
 }
