@@ -12,8 +12,9 @@
   "scripts": {
     "all-checks": "npm run typecheck && npm run lint && npm run test",
     "build": "rm -rf build && npm run compile",
-    "compile": "tsc -b && npm run copy:ejs && chmod +x build/bin/velocious.js",
-    "copy:ejs": "cpy \"src/**/*.ejs\" build --parents",
+    "compile": "tsc -b && npm run copy:ejs && npm run copy:templates && chmod +x build/bin/velocious.js",
+    "copy:ejs": "cpy \"src/routes/**/*.ejs\" build",
+    "copy:templates": "cpy \"src/templates/**/*.js\" build/src/templates",
     "lint": "eslint",
     "release:patch": "node scripts/release-patch.js",
     "test": "cd spec/dummy && VELOCIOUS_TEST_DIR=$(pwd)/.. node ../../bin/velocious.js test",

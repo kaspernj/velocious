@@ -68,3 +68,7 @@
 - Copy JS templates into build output so CLI generation can find them after `npm run build`.
 - Exclude `src/build` from TypeScript compilation so `npm run build` succeeds.
 - Add websocketMessageHandlerResolver to support raw websocket message handlers outside the standard request/subscribe protocol.
+- Copy templates into build/src/templates so CLI template paths resolve after builds.
+- Include `src/build` in typecheck so generated sources are validated.
+- Add ambient module stubs so template build files pass typecheck.
+- Point build configuration template at packaged initializer import path.

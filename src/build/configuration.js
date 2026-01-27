@@ -1,0 +1,61 @@
+import AsyncTrackedMultiConnection from "velocious/build/src/database/pool/async-tracked-multi-connection.js"
+import Configuration from "velocious/build/src/configuration.js"
+import fs from "fs/promises"
+import InitializerFromRequireContext from "velocious/build/src/database/initializer-from-require-context.js"
+import MysqlDriver from "velocious/build/src/database/drivers/mysql/index.js"
+import path from "path"
+import requireContext from "require-context"
+
+export default new Configuration({
+  database: {
+    development: {
+      default: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "database_development"
+      }
+    },
+    production: {
+      default: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "database_production"
+      }
+    },
+    test: {
+      default: {
+        driver: MysqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mysql",
+        host: "mariadb",
+        username: "username",
+        password: "password",
+        database: "database_test"
+      }
+    }
+  },
+  cookieSecret: process.env.COOKIE_SECRET,
+  initializeModels: async ({configuration}) => {
+    const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/../src/models`)
+    const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
+    const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
+
+    await configuration.ensureConnections(async () => {
+      await initializerFromRequireContext.initialize({configuration})
+    })
+  },
+  locale: () => "en",
+  locales: ["de", "en"],
+  localeFallbacks: {
+    de: ["de", "en"],
+    en: ["en", "de"]
+  }
+})
