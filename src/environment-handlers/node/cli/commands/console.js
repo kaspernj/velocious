@@ -81,14 +81,9 @@ async function startConsoleRepl({configuration, context}) {
     })
   })
 
-  await new Promise((resolve, reject) => {
+  await new Promise((resolve) => {
     replServer.on("exit", () => {
-      configuration
-        .closeDatabaseConnections()
-        .then(() => resolve())
-        .catch((error) => {
-          reject(error)
-        })
+      resolve()
     })
   })
 
@@ -109,10 +104,14 @@ export default class VelociousCliCommandsConsole extends BaseCommand{
 
     const context = buildConsoleContext({application, configuration})
 
-    if (this.cli.getTesting()) {
-      return {modelNames: Object.keys(context.models || {})}
-    }
+    try {
+      if (this.cli.getTesting()) {
+        return {modelNames: Object.keys(context.models || {})}
+      }
 
-    return await startConsoleRepl({configuration, context})
+      return await startConsoleRepl({configuration, context})
+    } finally {
+      await configuration.closeDatabaseConnections()
+    }
   }
 }
