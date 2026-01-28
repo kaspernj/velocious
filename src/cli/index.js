@@ -26,6 +26,7 @@ export default class VelociousCli {
     const parsedCommandParts = []
 
     for (let commandPart of commandParts) {
+      if (commandPart == "c") commandPart = "console"
       if (commandPart == "d") commandPart = "destroy"
       if (commandPart == "g") commandPart = "generate"
       if (commandPart == "s") commandPart = "server"
