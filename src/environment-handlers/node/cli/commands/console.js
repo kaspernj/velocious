@@ -11,12 +11,37 @@ import repl from "node:repl"
  */
 function buildConsoleContext({application, configuration}) {
   /** @type {Record<string, import("../../../../database/drivers/base.js").default>} */
-  const dbs = {}
+  const dbs = configuration.getCurrentConnections()
 
   for (const identifier of configuration.getDatabaseIdentifiers()) {
-    const pool = configuration.getDatabasePool(identifier)
+    if (dbs[identifier]) continue
 
-    dbs[identifier] = pool.getCurrentConnection()
+    const pool = configuration.getDatabasePool(identifier)
+    const poolWithGlobal = /** @type {{getGlobalConnection?: () => import("../../../../database/drivers/base.js").default | undefined}} */ (pool)
+    const globalConnection = poolWithGlobal.getGlobalConnection?.()
+
+    if (globalConnection) {
+      dbs[identifier] = globalConnection
+      continue
+    }
+
+    try {
+      dbs[identifier] = pool.getCurrentConnection()
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (
+          error.message == "ID hasn't been set for this async context" ||
+          error.message == "A connection hasn't been made yet" ||
+          error.message.startsWith("No async context set for database connection") ||
+          error.message.startsWith("Connection ") && error.message.includes("doesn't exist any more")
+        )
+      ) {
+        // Ignore missing connections here; they can be established lazily.
+      } else {
+        throw error
+      }
+    }
   }
 
   const dbIdentifiers = Object.keys(dbs)
