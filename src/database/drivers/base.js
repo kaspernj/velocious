@@ -298,9 +298,24 @@ export default class VelociousDatabaseDriversBase {
       tableNames.push(candidateName)
     }
 
-    if (!table && args?.throwError !== false) throw new Error(`Couldn't find a table by that name "${name}" in: ${tableNames.join(", ")}`)
+    if (!table && args?.throwError !== false) {
+      throw new Error(this._missingTableErrorMessage(name, tableNames))
+    }
 
     return table
+  }
+
+  /**
+   * @param {string} name - Table name.
+   * @param {string[]} tableNames - Available table names.
+   * @returns {string} - Error message.
+   */
+  _missingTableErrorMessage(name, tableNames) {
+    const environment = this.getConfiguration().getEnvironment()
+    const args = this.getArgs()
+    const databaseName = args?.database || args?.name || args?.useDatabase || "unknown"
+
+    return `Couldn't find a table by that name "${name}" in: ${tableNames.join(", ")} (environment: ${environment}, database: ${databaseName})`
   }
 
   /**

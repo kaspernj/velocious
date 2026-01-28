@@ -261,7 +261,11 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
    */
   async getTables() {
-    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo'`)
+    const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
+    const schemaClause = schema
+      ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
+      : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
+    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME()${schemaClause}`)
     const tables = []
 
     for (const row of result) {
@@ -280,7 +284,11 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<import("../base-table.js").default | undefined>} - Resolves with the table by name.
    */
   async getTableByName(name, args) {
-    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_SCHEMA] = 'dbo' AND [TABLE_NAME] = ${this.quote(name)}`)
+    const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
+    const schemaClause = schema
+      ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
+      : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
+    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME()${schemaClause} AND [TABLE_NAME] = ${this.quote(name)}`)
 
     if (result[0]) {
       return new Table(this, /** @type {Record<string, string>} */ (result[0]))
@@ -290,7 +298,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
       const tables = await this.getTables()
       const tableNames = tables.map((table) => table.getName())
 
-      throw new Error(`Couldn't find a table by that name "${name}" in: ${tableNames.join(", ")}`)
+      throw new Error(this._missingTableErrorMessage(name, tableNames))
     }
   }
 

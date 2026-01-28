@@ -111,7 +111,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
       const tables = await this.getTables()
       const tableNames = tables.map((table) => table.getName())
 
-      throw new Error(`Couldn't find a table by that name "${name}" in: ${tableNames.join(", ")}`)
+      throw new Error(this._missingTableErrorMessage(name, tableNames))
     }
   }
 
