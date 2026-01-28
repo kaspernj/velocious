@@ -261,7 +261,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
    */
   async getTables() {
-    const schema = this.getArgs()?.schema || this.getArgs()?.options?.schema
+    const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
     const schemaClause = schema
       ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
       : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
@@ -284,7 +284,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<import("../base-table.js").default | undefined>} - Resolves with the table by name.
    */
   async getTableByName(name, args) {
-    const schema = this.getArgs()?.schema || this.getArgs()?.options?.schema
+    const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
     const schemaClause = schema
       ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
       : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"

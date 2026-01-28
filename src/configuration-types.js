@@ -39,6 +39,7 @@
  * @property {string} [database] - Database name for the SQL driver.
  * @property {object} [options] - Driver-specific connection options.
  * @property {boolean} [options.encrypt] - Whether to encrypt the connection (MSSQL).
+ * @property {string} [options.schema] - Default schema for unqualified table lookups (MSSQL).
  * @property {string} [options.serverName] - TLS SNI server name override for MSSQL (empty string disables SNI).
  * @property {boolean} [options.trustServerCertificate] - Whether to trust the server certificate (MSSQL).
  * @property {string} [password] - Password for the SQL user.
@@ -62,6 +63,7 @@
  * @property {number} [port] - Database port.
  * @property {string} [name] - Friendly name for the configuration.
  * @property {boolean} [readOnly] - Whether writes should be blocked for this database.
+ * @property {string} [schema] - Default schema for unqualified table lookups (MSSQL).
  * @property {object} [record] - Record-level configuration.
  * @property {boolean} [record.transactions] - Whether record operations should use transactions.
  * @property {boolean} [reset] - Whether to reset the database on startup.

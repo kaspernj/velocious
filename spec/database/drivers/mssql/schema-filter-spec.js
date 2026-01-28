@@ -33,7 +33,7 @@ describe("Database - drivers - mssql schema filter", () => {
   })
 
   it("uses schema from options", async () => {
-    const driver = new MssqlDriver({options: {schema: "pyt18"}, sqlConfig: {}}, {debug: false})
+    const driver = new MssqlDriver({sqlConfig: {options: {schema: "pyt18"}}}, {debug: false})
     let lastSql = null
 
     driver.query = async (sql) => {
