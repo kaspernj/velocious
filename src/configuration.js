@@ -89,7 +89,25 @@ export default class VelociousConfiguration {
 
   /** @returns {Array<string>} - The database identifiers.  */
   getDatabaseIdentifiers() {
-    return Object.keys(this.getDatabaseConfiguration())
+    const identifiers = Object.keys(this.getDatabaseConfiguration())
+    const disabledIdentifiers = new Set()
+    const disabledIdentifiersRaw = process.env.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS
+
+    if (disabledIdentifiersRaw) {
+      for (const identifier of disabledIdentifiersRaw.split(",")) {
+        const trimmed = identifier.trim()
+
+        if (trimmed) disabledIdentifiers.add(trimmed)
+      }
+    }
+
+    if (process.env.VELOCIOUS_DISABLE_MSSQL === "1") {
+      disabledIdentifiers.add("mssql")
+    }
+
+    if (disabledIdentifiers.size === 0) return identifiers
+
+    return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier))
   }
 
   /**

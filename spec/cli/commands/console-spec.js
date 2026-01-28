@@ -8,6 +8,10 @@ import EnvironmentHandlerNode from "../../../src/environment-handlers/node.js"
 
 describe("Cli - Commands - console", () => {
   it("loads the console via the alias", async () => {
+    const originalEnvironment = dummyConfiguration.getEnvironment()
+
+    dummyConfiguration.setEnvironment("test")
+
     const cli = new Cli({
       configuration: dummyConfiguration,
       directory: dummyDirectory(),
@@ -15,8 +19,12 @@ describe("Cli - Commands - console", () => {
       processArgs: ["c"],
       testing: true
     })
-    const result = await cli.execute()
+    try {
+      const result = await cli.execute()
 
-    expect(result.modelNames).toContain("User")
+      expect(result.modelNames).toContain("User")
+    } finally {
+      dummyConfiguration.setEnvironment(originalEnvironment)
+    }
   })
 })
