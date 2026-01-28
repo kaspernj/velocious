@@ -29,7 +29,7 @@ describe("Database - drivers - mssql schema filter", () => {
 
     await driver.getTables()
 
-    expect(lastSql.includes("[TABLE_SCHEMA]")).toBe(false)
+    expect(lastSql).toContain("[TABLE_SCHEMA] = SCHEMA_NAME()")
   })
 
   it("uses schema from options", async () => {

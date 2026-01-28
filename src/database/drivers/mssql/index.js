@@ -262,7 +262,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
    */
   async getTables() {
     const schema = this.getArgs()?.schema || this.getArgs()?.options?.schema
-    const schemaClause = schema ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}` : ""
+    const schemaClause = schema
+      ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
+      : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME()${schemaClause}`)
     const tables = []
 
@@ -283,7 +285,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
    */
   async getTableByName(name, args) {
     const schema = this.getArgs()?.schema || this.getArgs()?.options?.schema
-    const schemaClause = schema ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}` : ""
+    const schemaClause = schema
+      ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
+      : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
     const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME()${schemaClause} AND [TABLE_NAME] = ${this.quote(name)}`)
 
     if (result[0]) {
