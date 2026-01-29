@@ -261,8 +261,6 @@ export default class VeoliciousHttpServerClient {
    * @returns {void} - No return value.
    */
   sendResponse(requestRunner) {
-    if (!this.currentRequest) throw new Error("No current request")
-
     const response = digg(requestRunner, "response")
     const request = requestRunner.getRequest()
     const body = response.getBody()

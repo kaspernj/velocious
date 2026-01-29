@@ -149,6 +149,30 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
     })
   })
 
+  it("does not crash when a malformed request follows a valid request", async () => {
+    await Dummy.run(async () => {
+      const response = await sendRawRequest([
+        "GET /ping HTTP/1.1",
+        "Host: localhost",
+        "",
+        "",
+        "GET /\n"
+      ].join("\r\n"))
+
+      expect(response).toContain("HTTP/1.1 400 Bad Request")
+
+      const followUpResponse = await sendRawRequest([
+        "GET /ping HTTP/1.1",
+        "Host: localhost",
+        "Connection: close",
+        "",
+        ""
+      ].join("\r\n"))
+
+      expect(followUpResponse).toContain("HTTP/1.1 200 OK")
+    })
+  })
+
   it("supports HTTP 1.0 keep-alive", async () => {
     await Dummy.run(async () => {
       const socket = new net.Socket()
