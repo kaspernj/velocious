@@ -3,6 +3,7 @@
 import crypto from "crypto"
 import {digg} from "diggerize"
 import EventEmitter from "../../utils/event-emitter.js"
+import ensureError from "../../utils/ensure-error.js"
 import {Logger} from "../../logger.js"
 import Request from "./request.js"
 import RequestRunner from "./request-runner.js"
@@ -50,6 +51,45 @@ export default class VeoliciousHttpServerClient {
     this.events.emit("close")
   }
 
+  /**
+   * @param {string} message - Response message.
+   * @returns {void} - No return value.
+   */
+  _sendBadRequestResponse(message) {
+    const httpVersion = this.currentRequest?.httpVersion() || "1.1"
+    const body = `${message}\n`
+    const headers = [
+      `HTTP/${httpVersion} 400 Bad Request`,
+      "Connection: Close",
+      "Content-Type: text/plain; charset=UTF-8",
+      `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+      "",
+      body
+    ].join("\r\n")
+
+    this.events.emit("output", headers)
+    this.events.emit("close")
+  }
+
+  /**
+   * @param {Error} error - Error instance.
+   * @returns {void} - No return value.
+   */
+  handleBadRequest(error) {
+    this.logger.warn(() => ["Failed to parse HTTP request", error])
+
+    if (this.currentRequest && "getRequestParser" in this.currentRequest) {
+      const httpRequest = /** @type {import("./request.js").default} */ (this.currentRequest)
+
+      httpRequest.getRequestParser().destroy()
+    }
+
+    this.currentRequest = undefined
+    this.state = "initial"
+
+    this._sendBadRequestResponse("Bad Request")
+  }
+
   executeCurrentRequest = () => {
     this.logger.debug("executeCurrentRequest")
 
@@ -84,29 +124,33 @@ export default class VeoliciousHttpServerClient {
       return
     }
 
-    /** @type {Buffer | undefined} */
-    let remaining = data
+    try {
+      /** @type {Buffer | undefined} */
+      let remaining = data
 
-    while (remaining && remaining.length > 0) {
-      if (this.state == "initial") {
-        this.currentRequest = new Request({client: this, configuration: this.configuration})
-        this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
-        this.state = "requestStarted"
-      } else if (this.state != "requestStarted") {
-        throw new Error(`Unknown state for client: ${this.state}`)
+      while (remaining && remaining.length > 0) {
+        if (this.state == "initial") {
+          this.currentRequest = new Request({client: this, configuration: this.configuration})
+          this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
+          this.state = "requestStarted"
+        } else if (this.state != "requestStarted") {
+          throw new Error(`Unknown state for client: ${this.state}`)
+        }
+
+        if (!this.currentRequest) throw new Error("No current request")
+
+        remaining = this.currentRequest.feed(remaining)
+
+        if (remaining && remaining.length > 0) {
+          const requestParser = this.currentRequest.getRequestParser()
+
+          if (!requestParser.hasCompleted) break
+
+          this.state = "initial"
+        }
       }
-
-      if (!this.currentRequest) throw new Error("No current request")
-
-      remaining = this.currentRequest.feed(remaining)
-
-      if (remaining && remaining.length > 0) {
-        const requestParser = this.currentRequest.getRequestParser()
-
-        if (!requestParser.hasCompleted) break
-
-        this.state = "initial"
-      }
+    } catch (error) {
+      this.handleBadRequest(ensureError(error))
     }
   }
 
@@ -157,7 +201,7 @@ export default class VeoliciousHttpServerClient {
         request: this.currentRequest
       })
 
-      const resolvedThenable = /** @type {{then?: Function}} */ (resolvedHandler)
+      const resolvedThenable = /** @type {{then?: (...args: unknown[]) => unknown}} */ (resolvedHandler)
 
       if (resolvedThenable?.then) {
         messageHandlerPromise = /** @type {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} */ (resolvedHandler)
@@ -217,8 +261,6 @@ export default class VeoliciousHttpServerClient {
    * @returns {void} - No return value.
    */
   sendResponse(requestRunner) {
-    if (!this.currentRequest) throw new Error("No current request")
-
     const response = digg(requestRunner, "response")
     const request = requestRunner.getRequest()
     const body = response.getBody()
