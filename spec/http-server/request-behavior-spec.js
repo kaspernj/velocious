@@ -131,6 +131,24 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
     })
   })
 
+  it("responds with bad request on invalid status lines", async () => {
+    await Dummy.run(async () => {
+      const invalidResponse = await sendRawRequest("GET /\n")
+
+      expect(invalidResponse).toContain("HTTP/1.1 400 Bad Request")
+
+      const validResponse = await sendRawRequest([
+        "GET /ping HTTP/1.1",
+        "Host: localhost",
+        "Connection: close",
+        "",
+        ""
+      ].join("\r\n"))
+
+      expect(validResponse).toContain("HTTP/1.1 200 OK")
+    })
+  })
+
   it("supports HTTP 1.0 keep-alive", async () => {
     await Dummy.run(async () => {
       const socket = new net.Socket()
