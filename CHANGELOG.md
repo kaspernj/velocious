@@ -75,3 +75,4 @@
 - Add a Node console CLI command with `console`/`c` aliases and REPL context setup.
 - Allow disabling MSSQL connections via `VELOCIOUS_DISABLE_MSSQL=1` or `VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS`.
 - Respect configured MSSQL schemas when listing tables, and skip schema filtering when none is provided.
+- Return a 400 response for malformed HTTP status lines instead of crashing the server.
