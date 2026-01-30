@@ -1,8 +1,6 @@
 // @ts-check
 
 import Configuration from "./configuration.js"
-import LoggerFileOutput from "./logger/outputs/file-output.js"
-import LoggerStdoutOutput from "./logger/outputs/stdout-output.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 /** @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
@@ -104,31 +102,12 @@ function isLevelAllowed({level, allowedLevels, debugFlag}) {
 /**
  * @param {object} args - Options object.
  * @param {import("./configuration-types.js").LoggingConfiguration} args.loggingConfiguration - Logging configuration.
- * @param {import("./configuration.js").default | undefined} args.configuration - Configuration instance.
  * @returns {import("./configuration-types.js").LoggingOutputConfig[]} - Logging outputs.
  */
-function resolveLoggingOutputs({loggingConfiguration, configuration}) {
+function resolveLoggingOutputs({loggingConfiguration}) {
   if (Array.isArray(loggingConfiguration.outputs)) return loggingConfiguration.outputs
 
-  /** @type {import("./configuration-types.js").LoggingOutputConfig[]} */
-  const outputs = []
-
-  if (loggingConfiguration.console !== false) {
-    outputs.push({
-      output: new LoggerStdoutOutput()
-    })
-  }
-
-  if (loggingConfiguration.file !== false && loggingConfiguration.filePath && configuration) {
-    outputs.push({
-      output: new LoggerFileOutput({
-        configuration,
-        filePath: loggingConfiguration.filePath
-      })
-    })
-  }
-
-  return outputs
+  return []
 }
 
 /**
@@ -165,10 +144,7 @@ function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugF
  */
 async function writeLog({subject, level, messages, configuration, loggingConfiguration, debugFlag}) {
   const resolvedLoggingConfiguration = loggingConfiguration || resolveLoggingConfiguration(configuration)
-  const outputs = resolveLoggingOutputs({
-    loggingConfiguration: resolvedLoggingConfiguration,
-    configuration
-  })
+  const outputs = resolveLoggingOutputs({loggingConfiguration: resolvedLoggingConfiguration})
 
   if (outputs.length === 0) return
 
@@ -365,8 +341,3 @@ export default async function logger(object, ...messages) {
     debugFlag: configuration ? configuration.debug === true : false
   })
 }
-
-export {default as LoggerArrayOutput} from "./logger/outputs/array-output.js"
-export {default as LoggerConsoleOutput} from "./logger/outputs/console-output.js"
-export {default as LoggerFileOutput} from "./logger/outputs/file-output.js"
-export {default as LoggerStdoutOutput} from "./logger/outputs/stdout-output.js"

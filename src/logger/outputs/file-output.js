@@ -6,14 +6,17 @@
 export default class LoggerFileOutput {
   _configuration = undefined
   _filePath = undefined
+  _getConfiguration = undefined
 
   /**
    * @param {object} args - Options object.
-   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("../../configuration.js").default} [args.configuration] - Configuration instance.
+   * @param {() => import("../../configuration.js").default | undefined} [args.getConfiguration] - Configuration resolver.
    * @param {string} args.filePath - File path.
    */
-  constructor({configuration, filePath}) {
+  constructor({configuration, getConfiguration, filePath}) {
     this._configuration = configuration
+    this._getConfiguration = getConfiguration
     this._filePath = filePath
   }
 
@@ -21,7 +24,7 @@ export default class LoggerFileOutput {
   async write({message}) {
     if (!this._filePath) return
 
-    const configuration = this._configuration
+    const configuration = this._configuration || this._getConfiguration?.()
 
     if (!configuration || typeof configuration.getEnvironmentHandler !== "function") return
 
