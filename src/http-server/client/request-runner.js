@@ -3,7 +3,7 @@
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import ensureError from "../../utils/ensure-error.js"
 import EventEmitter from "../../utils/event-emitter.js"
-import {Logger} from "../../logger.js"
+import Logger from "../../logger.js"
 import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
 

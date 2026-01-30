@@ -45,7 +45,7 @@
  * @property {string} tableName - Table name to update.
  */
 
-import {Logger} from "../../logger.js"
+import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
 import Mutex from "epic-locks/build/mutex.js"

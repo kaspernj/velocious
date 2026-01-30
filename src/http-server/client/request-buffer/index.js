@@ -4,7 +4,7 @@ import EventEmitter from "../../../utils/event-emitter.js"
 import FormDataPart from "./form-data-part.js"
 import Header from "./header.js"
 import {incorporate} from "incorporator"
-import {Logger} from "../../../logger.js"
+import Logger from "../../../logger.js"
 import ParamsToObject from "../params-to-object.js"
 import querystring from "querystring"
 

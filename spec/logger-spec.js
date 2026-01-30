@@ -1,6 +1,6 @@
 // @ts-check
 
-import {Logger} from "../src/logger.js"
+import Logger from "../src/logger.js"
 import LoggerArrayOutput from "../src/logger/outputs/array-output.js"
 import LoggerFileOutput from "../src/logger/outputs/file-output.js"
 import LoggerStdoutOutput from "../src/logger/outputs/stdout-output.js"

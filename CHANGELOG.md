@@ -82,3 +82,4 @@
 - Default array logger output levels to debug and above (excluding debug-low-level).
 - Require explicit logger outputs in configuration instead of default console/file outputs.
 - Remove the default logger function export in favor of the Logger class only.
+- Export Logger as the default export without named exports.

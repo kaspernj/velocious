@@ -4,7 +4,7 @@ import fs from "fs/promises"
 import path from "path"
 
 import fileExists from "../utils/file-exists.js"
-import {Logger} from "../logger.js"
+import Logger from "../logger.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 // Incredibly complex class to find files in multiple simultanious running promises to do it as fast as possible.

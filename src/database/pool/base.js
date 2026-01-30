@@ -2,7 +2,7 @@
 
 import Configuration from "../../configuration.js"
 import {digg} from "diggerize"
-import {Logger} from "../../logger.js"
+import Logger from "../../logger.js"
 import baseMethodsForward from "./base-methods-forward.js"
 
 /** @type {{currentPool: VelociousDatabasePoolBase | null}} */

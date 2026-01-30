@@ -181,7 +181,7 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
   }
 }
 
-class Logger {
+export default class Logger {
   /**
    * @param {string | object} object - Object.
    * @param {object} args - Options object.
@@ -306,5 +306,3 @@ class Logger {
     })
   }
 }
-
-export {Logger}

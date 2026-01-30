@@ -4,7 +4,7 @@ import net from "net"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import JsonSocket from "./json-socket.js"
-import {Logger} from "../logger.js"
+import Logger from "../logger.js"
 
 export default class BackgroundJobsStatusReporter {
   /**

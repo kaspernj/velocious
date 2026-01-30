@@ -3,7 +3,7 @@
 import ejs from "ejs"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
-import {Logger} from "./logger.js"
+import Logger from "./logger.js"
 import Cookie from "./http-server/cookie.js"
 import ParamsToObject from "./http-server/client/params-to-object.js"
 import restArgsError from "./utils/rest-args-error.js"
