@@ -212,4 +212,73 @@ describe("Logger", async () => {
     expect(logs.map((log) => log.message)).toEqual(["BugReporter Error"])
     expect(logs.map((log) => log.level)).toEqual(["error"])
   })
+
+  it("does not resolve message callbacks when no outputs accept the level", async () => {
+    let callbackRuns = 0
+    let expensiveRuns = 0
+
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput, levels: ["info"]}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.debugLowLevel(() => {
+      callbackRuns += 1
+      return ["Test message", (() => { expensiveRuns += 1 })()]
+    })
+
+    expect(callbackRuns).toBe(0)
+    expect(expensiveRuns).toBe(0)
+    expect(arrayOutput.getLogs()).toEqual([])
+  })
+
+  it("resolves message callbacks only once across multiple outputs", async () => {
+    let callbackRuns = 0
+    let expensiveRuns = 0
+
+    const arrayOutput = new LoggerArrayOutput()
+    const secondArrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [
+          {output: arrayOutput, levels: ["info"]},
+          {output: secondArrayOutput, levels: ["info"]}
+        ]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.info(() => {
+      callbackRuns += 1
+      return ["Test message", (() => { expensiveRuns += 1 })()]
+    })
+
+    expect(callbackRuns).toBe(1)
+    expect(expensiveRuns).toBe(1)
+    expect(arrayOutput.getLogs().length).toBe(1)
+    expect(secondArrayOutput.getLogs().length).toBe(1)
+  })
 })

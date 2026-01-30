@@ -162,8 +162,6 @@ function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugF
  * @returns {Promise<void>} - Resolves when complete.
  */
 async function writeLog({subject, level, messages, configuration, loggingConfiguration, debugFlag}) {
-  const resolvedMessages = functionOrMessages(...messages)
-  const message = messagesToMessage(subject, ...resolvedMessages)
   const resolvedLoggingConfiguration = loggingConfiguration || resolveLoggingConfiguration(configuration)
   const outputs = resolveLoggingOutputs({
     loggingConfiguration: resolvedLoggingConfiguration,
@@ -172,19 +170,28 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
 
   if (outputs.length === 0) return
 
-  /** @type {import("./configuration-types.js").LoggingOutputPayload} */
-  const payload = {
-    level,
-    message,
-    subject,
-    timestamp: new Date()
-  }
-
   const writes = []
+  /** @type {Array<any> | null} */
+  let resolvedMessages = null
+  /** @type {string | null} */
+  let message = null
+  /** @type {import("./configuration-types.js").LoggingOutputPayload | null} */
+  let payload = null
 
   for (const outputConfig of outputs) {
     if (!outputConfig || !outputConfig.output || typeof outputConfig.output.write !== "function") continue
     if (!isOutputLevelAllowed({level, outputConfig, loggingConfiguration: resolvedLoggingConfiguration, debugFlag})) continue
+
+    if (!payload) {
+      resolvedMessages = functionOrMessages(...messages)
+      message = messagesToMessage(subject, ...resolvedMessages)
+      payload = {
+        level,
+        message,
+        subject,
+        timestamp: new Date()
+      }
+    }
 
     writes.push(outputConfig.output.write(payload))
   }
