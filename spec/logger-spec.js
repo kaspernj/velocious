@@ -281,4 +281,32 @@ describe("Logger", async () => {
     expect(arrayOutput.getLogs().length).toBe(1)
     expect(secondArrayOutput.getLogs().length).toBe(1)
   })
+
+  it("keeps debug overrides when outputs do not override levels", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        levels: ["info", "warn", "error"],
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration, debug: true})
+
+    await logger.debug("Debug")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs.map((log) => log.level)).toEqual(["debug"])
+    expect(logs.map((log) => log.message)).toEqual(["BugReporter Debug"])
+  })
 })

@@ -115,8 +115,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
 
   if (loggingConfiguration.console !== false) {
     outputs.push({
-      output: new LoggerStdoutOutput(),
-      levels: loggingConfiguration.levels
+      output: new LoggerStdoutOutput()
     })
   }
 
@@ -125,8 +124,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
       output: new LoggerFileOutput({
         configuration,
         filePath: loggingConfiguration.filePath
-      }),
-      levels: loggingConfiguration.levels
+      })
     })
   }
 
