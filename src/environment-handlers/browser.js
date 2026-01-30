@@ -1,7 +1,7 @@
 import Base from "./base.js"
 import * as inflection from "inflection"
 import restArgsError from "../utils/rest-args-error.js"
-import {Logger} from "../logger.js"
+import Logger from "../logger.js"
 
 /**
  * @typedef {(id: string) => {default: typeof import("../database/migration/index.js").default}} MigrationsRequireContextIDFunctionType

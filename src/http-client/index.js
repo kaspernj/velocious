@@ -3,7 +3,7 @@
 import net from "net"
 import Request from "./request.js"
 import Response from "./response.js"
-import {Logger} from "../logger.js"
+import Logger from "../logger.js"
 
 export default class HttpClient {
   /**

@@ -3,7 +3,7 @@
 import net from "net"
 import JsonSocket from "./json-socket.js"
 import BackgroundJobsStore from "./store.js"
-import {Logger} from "../logger.js"
+import Logger from "../logger.js"
 
 export default class BackgroundJobsMain {
   /**

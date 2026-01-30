@@ -3,7 +3,7 @@
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
-import {Logger} from "../../logger.js"
+import Logger from "../../logger.js"
 import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
 import JoinTracker from "./join-tracker.js"

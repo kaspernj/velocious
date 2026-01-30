@@ -1,6 +1,6 @@
 // @ts-check
 
-import {Logger} from "../../logger.js"
+import Logger from "../../logger.js"
 import {Worker} from "worker_threads"
 import ensureError from "../../utils/ensure-error.js"
 import websocketEventsHost from "../websocket-events-host.js"

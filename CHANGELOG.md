@@ -76,3 +76,10 @@
 - Allow disabling MSSQL connections via `VELOCIOUS_DISABLE_MSSQL=1` or `VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS`.
 - Respect configured MSSQL schemas when listing tables, and skip schema filtering when none is provided.
 - Return a 400 response for malformed HTTP status lines instead of crashing the server.
+- Add configurable logger outputs with console/stdout/array support and per-output levels.
+- Avoid resolving logger message callbacks when no outputs accept a level and only resolve once across outputs.
+- Preserve per-logger debug overrides when outputs inherit global levels.
+- Default array logger output levels to debug and above (excluding debug-low-level).
+- Require explicit logger outputs in configuration instead of default console/file outputs.
+- Remove the default logger function export in favor of the Logger class only.
+- Export Logger as the default export without named exports.

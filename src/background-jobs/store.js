@@ -1,7 +1,7 @@
 // @ts-check
 
 import {randomUUID} from "crypto"
-import {Logger} from "../logger.js"
+import Logger from "../logger.js"
 import TableData from "../database/table-data/index.js"
 import BackgroundJobRecord from "./job-record.js"
 

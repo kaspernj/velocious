@@ -1,6 +1,9 @@
 // @ts-check
 
-import {Logger} from "../src/logger.js"
+import Logger from "../src/logger.js"
+import LoggerArrayOutput from "../src/logger/outputs/array-output.js"
+import LoggerFileOutput from "../src/logger/outputs/file-output.js"
+import LoggerStdoutOutput from "../src/logger/outputs/stdout-output.js"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -33,7 +36,9 @@ describe("Logger", async () => {
         locale: "en",
         localeFallbacks: {en: ["en"]},
         locales: ["en"],
-        logging: {console: true, file: false}
+        logging: {
+          outputs: [{output: new LoggerStdoutOutput()}]
+        }
       })
 
       const logger = new Logger("PartnersEventsController", {configuration})
@@ -48,7 +53,7 @@ describe("Logger", async () => {
     expect(writes[0]).toBe("PartnersEventsController Processing by PartnersEventsController#show\n")
   })
 
-  it("disables console logging by default in test environment but still writes to file", async () => {
+  it("writes to file without console output when only file output is configured", async () => {
     /** @type {string[]} */
     const writes = []
     const originalWrite = process.stdout.write
@@ -63,7 +68,14 @@ describe("Logger", async () => {
       }
 
       const environmentHandler = new EnvironmentHandlerNode()
-      const configuration = new Configuration({
+      const logFilePath = path.join(tempDirectory, "log", "test.log")
+      let configuration
+      const fileOutput = new LoggerFileOutput({
+        filePath: logFilePath,
+        getConfiguration: () => configuration
+      })
+
+      configuration = new Configuration({
         database: {test: {}},
         directory: tempDirectory,
         environment: "test",
@@ -71,16 +83,18 @@ describe("Logger", async () => {
         initializeModels: async () => {},
         locale: "en",
         localeFallbacks: {en: ["en"]},
-        locales: ["en"]
+        locales: ["en"],
+        logging: {
+          outputs: [{output: fileOutput}]
+        }
       })
       const logger = new Logger("PartnersEventsController", {configuration})
 
       await logger.log("Processing by PartnersEventsController#show")
 
-      const logFilePath = path.join(tempDirectory, "log", "test.log")
       const logContents = await fs.readFile(logFilePath, "utf8")
 
-      expect(writes.length).toBe(1)
+      expect(writes.length).toBe(0)
       expect(logContents.trim()).toBe("PartnersEventsController Processing by PartnersEventsController#show")
     } finally {
       // @ts-ignore Restore original stdout
@@ -123,7 +137,10 @@ describe("Logger", async () => {
         locale: "en",
         localeFallbacks: {en: ["en"]},
         locales: ["en"],
-        logging: {console: false, file: false, levels: ["error"]}
+        logging: {
+          levels: ["error"],
+          outputs: [{output: new LoggerStdoutOutput()}]
+        }
       })
       const logger = new Logger("PartnersEventsController", {configuration})
 
@@ -149,5 +166,196 @@ describe("Logger", async () => {
       "PartnersEventsController Warn\n",
       "PartnersEventsController Error\n"
     ])
+  })
+
+  it("stores logs in an array output with a limit", async () => {
+    const arrayOutput = new LoggerArrayOutput({limit: 2})
+
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.info("First")
+    await logger.warn("Second")
+    await logger.error("Third")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs.map((log) => log.message)).toEqual([
+      "BugReporter Second",
+      "BugReporter Third"
+    ])
+    expect(logs.map((log) => log.level)).toEqual(["warn", "error"])
+  })
+
+  it("respects output-specific levels", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput, levels: ["error"]}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.info("Info")
+    await logger.error("Error")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs.map((log) => log.message)).toEqual(["BugReporter Error"])
+    expect(logs.map((log) => log.level)).toEqual(["error"])
+  })
+
+  it("does not resolve message callbacks when no outputs accept the level", async () => {
+    let callbackRuns = 0
+    let expensiveRuns = 0
+
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput, levels: ["info"]}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.debugLowLevel(() => {
+      callbackRuns += 1
+      return ["Test message", (() => { expensiveRuns += 1 })()]
+    })
+
+    expect(callbackRuns).toBe(0)
+    expect(expensiveRuns).toBe(0)
+    expect(arrayOutput.getLogs()).toEqual([])
+  })
+
+  it("resolves message callbacks only once across multiple outputs", async () => {
+    let callbackRuns = 0
+    let expensiveRuns = 0
+
+    const arrayOutput = new LoggerArrayOutput()
+    const secondArrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [
+          {output: arrayOutput, levels: ["info"]},
+          {output: secondArrayOutput, levels: ["info"]}
+        ]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.info(() => {
+      callbackRuns += 1
+      return ["Test message", (() => { expensiveRuns += 1 })()]
+    })
+
+    expect(callbackRuns).toBe(1)
+    expect(expensiveRuns).toBe(1)
+    expect(arrayOutput.getLogs().length).toBe(1)
+    expect(secondArrayOutput.getLogs().length).toBe(1)
+  })
+
+  it("keeps debug overrides when outputs do not override levels", async () => {
+    /** @type {Array<{level: string, message: string}>} */
+    const writes = []
+    class TestOutput {
+      async write({level, message}) {
+        writes.push({level, message})
+      }
+    }
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        levels: ["info", "warn", "error"],
+        outputs: [{output: new TestOutput()}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration, debug: true})
+
+    await logger.debug("Debug")
+
+    expect(writes.map((log) => log.level)).toEqual(["debug"])
+    expect(writes.map((log) => log.message)).toEqual(["BugReporter Debug"])
+  })
+
+  it("does not include debug-low-level by default for array outputs", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration, debug: true})
+
+    await logger.debugLowLevel("Low level")
+    await logger.debug("Debug")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs.map((log) => log.level)).toEqual(["debug"])
+    expect(logs.map((log) => log.message)).toEqual(["BugReporter Debug"])
   })
 })

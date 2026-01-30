@@ -2,7 +2,7 @@
 
 import {digg} from "diggerize"
 import * as inflection from "inflection"
-import {Logger} from "../logger.js"
+import Logger from "../logger.js"
 import {NotImplementedError} from "./migration/index.js"
 import restArgsError from "../utils/rest-args-error.js"
 import TableData from "./table-data/index.js"

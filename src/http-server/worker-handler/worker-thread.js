@@ -4,7 +4,7 @@ import Application from "../../application.js"
 import Client from "../client/index.js"
 import {digg} from "diggerize"
 import errorLogger from "../../error-logger.js"
-import {Logger} from "../../logger.js"
+import Logger from "../../logger.js"
 import WebsocketEvents from "../websocket-events.js"
 
 export default class VelociousHttpServerWorkerHandlerWorkerThread {

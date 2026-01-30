@@ -1,7 +1,7 @@
 // @ts-check
 
 import AppRoutes from "./routes/app-routes.js"
-import {Logger} from "./logger.js"
+import Logger from "./logger.js"
 import HttpServer from "./http-server/index.js"
 import restArgsError from "./utils/rest-args-error.js"
 

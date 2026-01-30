@@ -1,7 +1,7 @@
 // @ts-check
 
 import EventEmitter from "../../utils/event-emitter.js"
-import {Logger} from "../../logger.js"
+import Logger from "../../logger.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
 import WebsocketChannel from "../websocket-channel.js"

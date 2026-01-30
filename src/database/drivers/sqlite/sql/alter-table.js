@@ -2,7 +2,7 @@
 
 import AlterTableBase from "../../../query/alter-table-base.js"
 import CreateIndexBase from "../../../query/create-index-base.js"
-import {Logger} from "../../../../logger.js"
+import Logger from "../../../../logger.js"
 import restArgsError from "../../../../utils/rest-args-error.js"
 import TableData from "../../../table-data/index.js"
 
