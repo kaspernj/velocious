@@ -1,7 +1,8 @@
 // @ts-check
 
 import Configuration from "./configuration.js"
-import useEnvSense from "env-sense/build/use-env-sense.js"
+import LoggerFileOutput from "./logger/outputs/file-output.js"
+import LoggerStdoutOutput from "./logger/outputs/stdout-output.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 /** @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
@@ -15,53 +16,6 @@ const DEFAULT_LOGGING_CONFIGURATION = {
 
 /** @type {LogLevel[]} */
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
-const {isBrowser} = useEnvSense()
-const isNodeRuntime = typeof process !== "undefined" && Boolean(process.versions?.node)
-
-/**
- * @param {string} message - Message text.
- * @returns {Promise<void>} - Resolves when complete.
- */
-function consoleLog(message) {
-  return new Promise((resolve) => {
-    if (!isBrowser && isNodeRuntime && process.stdout) {
-      process.stdout.write(`${message}\n`, "utf8", () => resolve())
-    } else {
-      console.log(message)
-      resolve()
-    }
-  })
-}
-
-/**
- * @param {string} message - Message text.
- * @returns {Promise<void>} - Resolves when complete.
- */
-function consoleError(message) {
-  return new Promise((resolve) => {
-    if (!isBrowser && isNodeRuntime && process.stderr) {
-      process.stderr.write(`${message}\n`, "utf8", () => resolve())
-    } else {
-      console.error(message)
-      resolve()
-    }
-  })
-}
-
-/**
- * @param {string} message - Message text.
- * @returns {Promise<void>} - Resolves when complete.
- */
-function consoleWarn(message) {
-  return new Promise((resolve) => {
-    if (!isBrowser && isNodeRuntime && process.stderr) {
-      process.stderr.write(`${message}\n`, "utf8", () => resolve())
-    } else {
-      console.warn(message)
-      resolve()
-    }
-  })
-}
 
 /**
  * @param {...any|function() : Array<any>} messages - Messages.
@@ -103,11 +57,7 @@ function messagesToMessage(...messages) {
 
 /**
  * @param {import("./configuration.js").default | undefined} configuration - Configuration instance.
- * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} - The logging configuration.
- */
-/**
- * @param {import("./configuration.js").default | undefined} configuration - Configuration instance.
- * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} - The logging configuration.
+ * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath" | "outputs">>} - The logging configuration.
  */
 function resolveLoggingConfiguration(configuration) {
   const debugEnabled = configuration?.debug === true
@@ -139,18 +89,111 @@ function resolveLoggingConfiguration(configuration) {
 /**
  * @param {object} args - Options object.
  * @param {LogLevel} args.level - Level.
- * @param {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} args.loggingConfiguration - Logging configuration.
+ * @param {LogLevel[]} args.allowedLevels - Allowed levels.
  * @param {boolean} [args.debugFlag] - Whether debug flag.
  * @returns {boolean} - Whether level allowed.
  */
-function isLevelAllowed({level, loggingConfiguration, debugFlag}) {
-  const allowedLevels = loggingConfiguration.levels || DEFAULT_LOGGING_CONFIGURATION.levels
-
+function isLevelAllowed({level, allowedLevels, debugFlag}) {
   if (allowedLevels.includes(level)) return true
 
   if (debugFlag && LEVEL_ORDER.indexOf(level) >= LEVEL_ORDER.indexOf("debug")) return true
 
   return false
+}
+
+/**
+ * @param {object} args - Options object.
+ * @param {import("./configuration-types.js").LoggingConfiguration} args.loggingConfiguration - Logging configuration.
+ * @param {import("./configuration.js").default | undefined} args.configuration - Configuration instance.
+ * @returns {import("./configuration-types.js").LoggingOutputConfig[]} - Logging outputs.
+ */
+function resolveLoggingOutputs({loggingConfiguration, configuration}) {
+  if (Array.isArray(loggingConfiguration.outputs)) return loggingConfiguration.outputs
+
+  /** @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+  const outputs = []
+
+  if (loggingConfiguration.console !== false) {
+    outputs.push({
+      output: new LoggerStdoutOutput(),
+      levels: loggingConfiguration.levels
+    })
+  }
+
+  if (loggingConfiguration.file !== false && loggingConfiguration.filePath && configuration) {
+    outputs.push({
+      output: new LoggerFileOutput({
+        configuration,
+        filePath: loggingConfiguration.filePath
+      }),
+      levels: loggingConfiguration.levels
+    })
+  }
+
+  return outputs
+}
+
+/**
+ * @param {object} args - Options object.
+ * @param {LogLevel} args.level - Level.
+ * @param {import("./configuration-types.js").LoggingOutputConfig} args.outputConfig - Output configuration.
+ * @param {import("./configuration-types.js").LoggingConfiguration} args.loggingConfiguration - Logging configuration.
+ * @param {boolean} [args.debugFlag] - Whether debug flag.
+ * @returns {boolean} - Whether output should log.
+ */
+function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugFlag}) {
+  if (Array.isArray(outputConfig.levels)) {
+    return isLevelAllowed({level, allowedLevels: outputConfig.levels, debugFlag: false})
+  }
+
+  const allowedLevels = loggingConfiguration.levels || DEFAULT_LOGGING_CONFIGURATION.levels
+
+  return isLevelAllowed({level, allowedLevels, debugFlag})
+}
+
+/**
+ * @param {object} args - Options object.
+ * @param {string} args.subject - Log subject.
+ * @param {LogLevel} args.level - Level.
+ * @param {Parameters<typeof functionOrMessages>} args.messages - Messages.
+ * @param {import("./configuration.js").default | undefined} args.configuration - Configuration instance.
+ * @param {import("./configuration-types.js").LoggingConfiguration | undefined} args.loggingConfiguration - Logging configuration.
+ * @param {boolean} [args.debugFlag] - Whether debug flag.
+ * @returns {Promise<void>} - Resolves when complete.
+ */
+async function writeLog({subject, level, messages, configuration, loggingConfiguration, debugFlag}) {
+  const resolvedMessages = functionOrMessages(...messages)
+  const message = messagesToMessage(subject, ...resolvedMessages)
+  const resolvedLoggingConfiguration = loggingConfiguration || resolveLoggingConfiguration(configuration)
+  const outputs = resolveLoggingOutputs({
+    loggingConfiguration: resolvedLoggingConfiguration,
+    configuration
+  })
+
+  if (outputs.length === 0) return
+
+  /** @type {import("./configuration-types.js").LoggingOutputPayload} */
+  const payload = {
+    level,
+    message,
+    subject,
+    timestamp: new Date()
+  }
+
+  const writes = []
+
+  for (const outputConfig of outputs) {
+    if (!outputConfig || !outputConfig.output || typeof outputConfig.output.write !== "function") continue
+    if (!isOutputLevelAllowed({level, outputConfig, loggingConfiguration: resolvedLoggingConfiguration, debugFlag})) continue
+
+    writes.push(outputConfig.output.write(payload))
+  }
+
+  if (writes.length === 1) {
+    await writes[0]
+  } else if (writes.length > 1) {
+    await Promise.all(writes)
+  }
 }
 
 class Logger {
@@ -265,43 +308,17 @@ class Logger {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _write({level, messages}) {
-    const resolvedMessages = functionOrMessages(...messages)
-    const message = messagesToMessage(this._subject, ...resolvedMessages)
     const configuration = this._safeConfiguration()
-    const loggingConfiguration = /** @type {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath">>} */ (
-      this._loggingConfiguration || resolveLoggingConfiguration(configuration)
-    )
-    const shouldLog = isLevelAllowed({level, loggingConfiguration, debugFlag: this._debug})
+    const loggingConfiguration = this._loggingConfiguration || resolveLoggingConfiguration(configuration)
 
-    if (!shouldLog) return
-    const writes = []
-
-    if (loggingConfiguration.console !== false) {
-      if (level === "error") {
-        writes.push(consoleError(message))
-      } else if (level === "warn") {
-        writes.push(consoleWarn(message))
-      } else {
-        writes.push(consoleLog(message))
-      }
-    }
-
-    if (loggingConfiguration.file !== false && loggingConfiguration.filePath && configuration) {
-      const environmentHandler = configuration.getEnvironmentHandler?.()
-
-      if (environmentHandler?.writeLogToFile) {
-        writes.push(environmentHandler.writeLogToFile({
-          filePath: loggingConfiguration.filePath,
-          message
-        }))
-      }
-    }
-
-    if (writes.length === 1) {
-      await writes[0]
-    } else if (writes.length > 1) {
-      await Promise.all(writes)
-    }
+    await writeLog({
+      subject: this._subject,
+      level,
+      messages,
+      configuration,
+      loggingConfiguration,
+      debugFlag: this._debug
+    })
   }
 }
 
@@ -329,32 +346,18 @@ export default async function logger(object, ...messages) {
   }
 
   const loggingConfiguration = resolveLoggingConfiguration(configuration)
-  /** @type {LogLevel} */
-  const level = "debug"
 
-  if (!isLevelAllowed({level, loggingConfiguration, debugFlag: configuration?.debug || false})) return
-
-  const message = messagesToMessage(className, ...functionOrMessages(...messages))
-  const writes = []
-
-  if (loggingConfiguration.console !== false) {
-    writes.push(consoleLog(message))
-  }
-
-  if (loggingConfiguration.file !== false && loggingConfiguration.filePath && configuration) {
-    const environmentHandler = configuration.getEnvironmentHandler?.()
-
-    if (environmentHandler?.writeLogToFile) {
-      writes.push(environmentHandler.writeLogToFile({
-        filePath: loggingConfiguration.filePath,
-        message
-      }))
-    }
-  }
-
-  if (writes.length === 1) {
-    await writes[0]
-  } else if (writes.length > 1) {
-    await Promise.all(writes)
-  }
+  await writeLog({
+    subject: className,
+    level: "debug",
+    messages,
+    configuration,
+    loggingConfiguration,
+    debugFlag: configuration ? configuration.debug === true : false
+  })
 }
+
+export {default as LoggerArrayOutput} from "./logger/outputs/array-output.js"
+export {default as LoggerConsoleOutput} from "./logger/outputs/console-output.js"
+export {default as LoggerFileOutput} from "./logger/outputs/file-output.js"
+export {default as LoggerStdoutOutput} from "./logger/outputs/stdout-output.js"

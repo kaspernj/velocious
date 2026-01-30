@@ -224,7 +224,7 @@ export default class VelociousConfiguration {
   /**
    * @param {object} [args] - Options object.
    * @param {boolean} [args.defaultConsole] - Whether default console.
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>} - The logging configuration.
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs">>} - The logging configuration.
    */
   getLoggingConfiguration({defaultConsole} = {}) {
     const environment = this.getEnvironment()
@@ -251,7 +251,8 @@ export default class VelociousConfiguration {
       directory,
       file: fileLogging ?? false,
       filePath,
-      levels
+      levels,
+      outputs: this._logging?.outputs
     }
   }
 
@@ -298,7 +299,7 @@ export default class VelociousConfiguration {
 
   /**
    * Logging configuration tailored for HTTP request logging. Defaults console logging to true and applies the user `logging.console` flag only for request logging.
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">>} - The http logging configuration.
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs">>} - The http logging configuration.
    */
   getHttpLoggingConfiguration() {
     return this.getLoggingConfiguration({defaultConsole: true})

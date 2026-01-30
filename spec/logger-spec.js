@@ -1,6 +1,6 @@
 // @ts-check
 
-import {Logger} from "../src/logger.js"
+import {Logger, LoggerArrayOutput} from "../src/logger.js"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -149,5 +149,67 @@ describe("Logger", async () => {
       "PartnersEventsController Warn\n",
       "PartnersEventsController Error\n"
     ])
+  })
+
+  it("stores logs in an array output with a limit", async () => {
+    const arrayOutput = new LoggerArrayOutput({limit: 2})
+
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.info("First")
+    await logger.warn("Second")
+    await logger.error("Third")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs.map((log) => log.message)).toEqual([
+      "BugReporter Second",
+      "BugReporter Third"
+    ])
+    expect(logs.map((log) => log.level)).toEqual(["warn", "error"])
+  })
+
+  it("respects output-specific levels", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput, levels: ["error"]}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration})
+
+    await logger.info("Info")
+    await logger.error("Error")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs.map((log) => log.message)).toEqual(["BugReporter Error"])
+    expect(logs.map((log) => log.level)).toEqual(["error"])
   })
 })

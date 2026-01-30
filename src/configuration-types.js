@@ -74,6 +74,29 @@
  */
 
 /**
+ * @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel
+ */
+
+/**
+ * @typedef {object} LoggingOutputPayload
+ * @property {LogLevel} level - Log level.
+ * @property {string} message - Formatted message.
+ * @property {string} subject - Log subject.
+ * @property {Date} timestamp - Timestamp.
+ */
+
+/**
+ * @typedef {object} LoggingOutput
+ * @property {function(LoggingOutputPayload): Promise<void> | void} write - Write a log entry.
+ */
+
+/**
+ * @typedef {object} LoggingOutputConfig
+ * @property {LoggingOutput} output - Output instance.
+ * @property {Array<LogLevel>} [levels] - Levels enabled for this output.
+ */
+
+/**
  * @typedef {object} LoggingConfiguration
  * @property {boolean} [console] - Enable/disable console logging for request logging. Defaults to true outside of "test" and for HTTP server logs.
  * @property {boolean} [file] - Enable/disable writing logs to a file. Defaults to true.
@@ -81,6 +104,7 @@
  * @property {string} [filePath] - Explicit path for the log file. Defaults to "<directory>/<environment>.log".
  * @property {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [levels] - Override which log levels are emitted.
  * @property {boolean} [debugLowLevel] - Convenience flag to include very low-level debug logs.
+ * @property {LoggingOutputConfig[]} [outputs] - Explicit logger outputs (overrides console/file defaults when provided).
  */
 
 /**
