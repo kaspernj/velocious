@@ -308,36 +308,3 @@ class Logger {
 }
 
 export {Logger}
-
-/**
- * @param {any} object - Object.
- * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
- */
-/**
- * @param {object} object - Log subject.
- * @param {...Parameters<typeof functionOrMessages>} messages - forwarded args
- */
-export default async function logger(object, ...messages) {
-  const objectWithConfig = /** @type {{constructor: {name: string}, configuration?: import("./configuration.js").default}} */ (object)
-  const className = objectWithConfig.constructor.name
-  let configuration = objectWithConfig.configuration
-
-  if (!configuration) {
-    try {
-      configuration = Configuration.current()
-    } catch {
-      // Ignore missing configuration
-    }
-  }
-
-  const loggingConfiguration = resolveLoggingConfiguration(configuration)
-
-  await writeLog({
-    subject: className,
-    level: "debug",
-    messages,
-    configuration,
-    loggingConfiguration,
-    debugFlag: configuration ? configuration.debug === true : false
-  })
-}
