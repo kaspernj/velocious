@@ -309,4 +309,32 @@ describe("Logger", async () => {
     expect(logs.map((log) => log.level)).toEqual(["debug"])
     expect(logs.map((log) => log.message)).toEqual(["BugReporter Debug"])
   })
+
+  it("does not include debug-low-level by default for array outputs", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("BugReporter", {configuration, debug: true})
+
+    await logger.debugLowLevel("Low level")
+    await logger.debug("Debug")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs.map((log) => log.level)).toEqual(["debug"])
+    expect(logs.map((log) => log.message)).toEqual(["BugReporter Debug"])
+  })
 })

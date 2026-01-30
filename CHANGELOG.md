@@ -79,3 +79,4 @@
 - Add configurable logger outputs with console/stdout/array support and per-output levels.
 - Avoid resolving logger message callbacks when no outputs accept a level and only resolve once across outputs.
 - Preserve per-logger debug overrides when outputs inherit global levels.
+- Default array logger output levels to debug and above (excluding debug-low-level).

@@ -88,6 +88,7 @@
 /**
  * @typedef {object} LoggingOutput
  * @property {function(LoggingOutputPayload): Promise<void> | void} write - Write a log entry.
+ * @property {LogLevel[]} [levels] - Default levels for this output.
  */
 
 /**

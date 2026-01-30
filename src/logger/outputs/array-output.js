@@ -5,6 +5,8 @@
 /** Logger array output. */
 export default class LoggerArrayOutput {
   _limit = 2000
+  /** @type {import("../../configuration-types.js").LogLevel[]} */
+  levels = ["debug", "info", "warn", "error"]
   /** @type {LoggingOutputPayload[]} */
   _logs = []
 

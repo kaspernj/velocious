@@ -144,6 +144,10 @@ function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugF
     return isLevelAllowed({level, allowedLevels: outputConfig.levels, debugFlag: false})
   }
 
+  if (Array.isArray(outputConfig.output?.levels)) {
+    return isLevelAllowed({level, allowedLevels: outputConfig.output.levels, debugFlag: false})
+  }
+
   const allowedLevels = loggingConfiguration.levels || DEFAULT_LOGGING_CONFIGURATION.levels
 
   return isLevelAllowed({level, allowedLevels, debugFlag})
