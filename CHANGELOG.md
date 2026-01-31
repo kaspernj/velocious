@@ -83,3 +83,4 @@
 - Require explicit logger outputs in configuration instead of default console/file outputs.
 - Remove the default logger function export in favor of the Logger class only.
 - Export Logger as the default export without named exports.
+- Allow skipping structure SQL file generation per environment via configuration.

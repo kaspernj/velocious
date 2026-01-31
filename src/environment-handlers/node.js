@@ -375,7 +375,11 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async afterMigrations({dbs}) {
-    const dbDir = path.join(this.getConfiguration().getDirectory(), "db")
+    const configuration = this.getConfiguration()
+
+    if (!configuration.shouldWriteStructureSql()) return
+
+    const dbDir = path.join(configuration.getDirectory(), "db")
     const structureSqlByIdentifier = await this._structureSqlByIdentifier({dbs})
 
     await fs.mkdir(dbDir, {recursive: true})

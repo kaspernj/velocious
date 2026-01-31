@@ -30,7 +30,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({backgroundJobs, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({backgroundJobs, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._backgroundJobs = backgroundJobs
@@ -50,6 +50,7 @@ export default class VelociousConfiguration {
     this._testing = testing
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._requestTimeoutMs = requestTimeoutMs
+    this._structureSql = structureSql
     this._websocketEvents = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
@@ -324,6 +325,31 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
+
+  /** @returns {import("./configuration-types.js").StructureSqlConfiguration | undefined} - Structure SQL config. */
+  getStructureSqlConfig() { return this._structureSql }
+
+  /**
+   * @returns {boolean} - Whether structure SQL files should be generated for the current environment.
+   */
+  shouldWriteStructureSql() {
+    const config = this.getStructureSqlConfig()
+    const disabledEnvironments = config?.disabledEnvironments
+
+    if (Array.isArray(disabledEnvironments) && disabledEnvironments.includes(this.getEnvironment())) {
+      return false
+    }
+
+    return true
+  }
+
+  /**
+   * @param {import("./configuration-types.js").StructureSqlConfiguration} structureSql - Structure SQL config.
+   * @returns {void} - No return value.
+   */
+  setStructureSqlConfig(structureSql) {
+    this._structureSql = structureSql
+  }
 
   /**
    * @returns {string} - The locale.
