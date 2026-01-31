@@ -83,4 +83,7 @@
 - Require explicit logger outputs in configuration instead of default console/file outputs.
 - Remove the default logger function export in favor of the Logger class only.
 - Export Logger as the default export without named exports.
+- Allow configuring explicit logger instances with per-logger levels.
+- Add BaseLogger for custom logger implementations, reject unknown logger configs, and default to console logging when no logging is provided.
+- Allow per-output log levels for default console and file outputs via configuration.
 - Allow skipping structure SQL file generation per environment via configuration.

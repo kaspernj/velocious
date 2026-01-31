@@ -1,6 +1,8 @@
 // @ts-check
 
 import Configuration from "./configuration.js"
+import LoggerConsoleOutput from "./logger/outputs/console-output.js"
+import LoggerFileOutput from "./logger/outputs/file-output.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 /** @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
@@ -102,12 +104,70 @@ function isLevelAllowed({level, allowedLevels, debugFlag}) {
 /**
  * @param {object} args - Options object.
  * @param {import("./configuration-types.js").LoggingConfiguration} args.loggingConfiguration - Logging configuration.
+ * @param {import("./configuration.js").default | undefined} args.configuration - Configuration instance.
  * @returns {import("./configuration-types.js").LoggingOutputConfig[]} - Logging outputs.
  */
-function resolveLoggingOutputs({loggingConfiguration}) {
+function resolveLoggingOutputs({loggingConfiguration, configuration}) {
   if (Array.isArray(loggingConfiguration.outputs)) return loggingConfiguration.outputs
 
-  return []
+  if (Array.isArray(loggingConfiguration.loggers)) {
+    /** @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+    const loggerOutputs = []
+
+    for (const logger of loggingConfiguration.loggers) {
+      if (!logger) continue
+
+      const loggerConfig = /** @type {any} */ (logger)
+
+      if (typeof loggerConfig.toOutputConfig === "function") {
+        loggerOutputs.push(loggerConfig.toOutputConfig({configuration}))
+        continue
+      }
+
+      if (loggerConfig.output && typeof loggerConfig.output.write === "function") {
+        loggerOutputs.push({
+          output: loggerConfig.output,
+          levels: loggerConfig.levels
+        })
+        continue
+      }
+
+      if (typeof loggerConfig.write === "function") {
+        loggerOutputs.push({
+          output: loggerConfig,
+          levels: loggerConfig.levels
+        })
+        continue
+      }
+
+      const loggerName = loggerConfig?.constructor?.name || "UnknownLogger"
+      throw new Error(`Logger must implement toOutputConfig or write: ${loggerName}`)
+    }
+
+    return loggerOutputs
+  }
+
+  /** @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+  const outputs = []
+  if (loggingConfiguration.console !== false) {
+    outputs.push({
+      output: new LoggerConsoleOutput(),
+      levels: loggingConfiguration.levels
+    })
+  }
+
+  if (loggingConfiguration.file !== false && loggingConfiguration.filePath) {
+    outputs.push({
+      output: new LoggerFileOutput({
+        configuration,
+        getConfiguration: () => configuration,
+        filePath: loggingConfiguration.filePath
+      }),
+      levels: loggingConfiguration.levels
+    })
+  }
+
+  return outputs
 }
 
 /**
@@ -144,7 +204,7 @@ function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugF
  */
 async function writeLog({subject, level, messages, configuration, loggingConfiguration, debugFlag}) {
   const resolvedLoggingConfiguration = loggingConfiguration || resolveLoggingConfiguration(configuration)
-  const outputs = resolveLoggingOutputs({loggingConfiguration: resolvedLoggingConfiguration})
+  const outputs = resolveLoggingOutputs({loggingConfiguration: resolvedLoggingConfiguration, configuration})
 
   if (outputs.length === 0) return
 

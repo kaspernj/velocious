@@ -98,6 +98,10 @@
  */
 
 /**
+ * @typedef {LoggingOutputConfig | LoggingOutput | import("./logger/base-logger.js").default} LoggerConfig
+ */
+
+/**
  * @typedef {object} LoggingConfiguration
  * @property {boolean} [console] - Enable/disable console logging for request logging. Defaults to true outside of "test" and for HTTP server logs.
  * @property {boolean} [file] - Enable/disable writing logs to a file. Defaults to true.
@@ -105,6 +109,7 @@
  * @property {string} [filePath] - Explicit path for the log file. Defaults to "<directory>/<environment>.log".
  * @property {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [levels] - Override which log levels are emitted.
  * @property {boolean} [debugLowLevel] - Convenience flag to include very low-level debug logs.
+ * @property {LoggerConfig[]} [loggers] - Logger instances (converted to outputs when configured).
  * @property {LoggingOutputConfig[]} [outputs] - Explicit logger outputs (overrides console/file defaults when provided).
  */
 

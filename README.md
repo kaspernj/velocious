@@ -725,7 +725,7 @@ socket.addEventListener("message", (event) => {
 
 Velocious includes a lightweight logger that can write to both console and file and is environment-aware.
 
-- **Defaults**: In the `test` environment, console logging is disabled, but file logging still happens to `log/test.log` (created automatically). In other environments, console logging is enabled and file logging is enabled if a file path is available.
+- **Defaults**: When no `logging` config is provided, Velocious sets up a console logger with `info`, `warn`, and `error` levels.
 - **Configuration**: Supply a `logging` object when creating your configuration:
 
 ```js
@@ -738,6 +738,35 @@ const configuration = new Configuration({
     filePath: "/tmp/app.log"   // optional explicit path
   }
 })
+```
+
+- **Custom logger list**: Configure an explicit list of logger instances with levels:
+
+```js
+import ConsoleLogger from "velocious/build/src/logger/console-logger.js"
+import FileLogger from "velocious/build/src/logger/file-logger.js"
+
+const configuration = new Configuration({
+  // ...
+  logging: {
+    loggers: [
+      new ConsoleLogger({levels: ["info", "warn", "error"]}),
+      new FileLogger({path: `log/${environment}.log`, levels: ["debug", "info", "warn", "error"]})
+    ]
+  }
+})
+```
+
+- **Base logger**: Custom loggers should extend `BaseLogger` and implement either `write(...)` or `toOutputConfig(...)`:
+
+```js
+import BaseLogger from "velocious/build/src/logger/base-logger.js"
+
+class MyLogger extends BaseLogger {
+  async write({message}) {
+    console.log(message)
+  }
+}
 ```
 
 - **Environment handlers**: File-path resolution and file writes are delegated to the environment handler so browser builds stay bundle-friendly.
