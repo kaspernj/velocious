@@ -109,6 +109,11 @@
  */
 
 /**
+ * @typedef {object} StructureSqlConfiguration
+ * @property {string[]} [disabledEnvironments] - Environments that should skip writing structure sql files.
+ */
+
+/**
  * @typedef {object} BackgroundJobsConfiguration
  * @property {string} [host] - Hostname for the background jobs main process.
  * @property {number} [port] - Port for the background jobs main process.
@@ -141,6 +146,7 @@
  * @property {string | function() : string} locale - Default locale or locale resolver.
  * @property {string[]} locales - Supported locales.
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
+ * @property {StructureSqlConfiguration} [structureSql] - Structure SQL generation configuration.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.

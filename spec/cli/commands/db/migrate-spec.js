@@ -1,6 +1,7 @@
 // @ts-check
 
 import Cli from "../../../../src/cli/index.js"
+import Configuration from "../../../../src/configuration.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
@@ -295,6 +296,46 @@ describe("Cli - Commands - db:migrate", () => {
       const expected = [...tables, ...views, ...indexes, ...triggers, ...others].join("\n\n") + "\n"
 
       expect(actual).toEqual(expected)
+    })
+  })
+
+  it("skips writing structure sql when disabled for the environment", {databaseCleaning: {transaction: false}}, async () => {
+    const directory = dummyDirectory()
+    const configuration = new Configuration({
+      database: dummyConfiguration.database,
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      locale: dummyConfiguration.locale,
+      localeFallbacks: dummyConfiguration.localeFallbacks,
+      locales: dummyConfiguration.locales,
+      structureSql: {
+        disabledEnvironments: ["test"]
+      },
+      testing: dummyConfiguration.getTesting()
+    })
+    const cli = new Cli({
+      configuration,
+      directory,
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["db:migrate"],
+      testing: true
+    })
+
+    if (cli.getConfiguration().getDatabaseType("default") != "sqlite") {
+      console.warn(`Skipping structure sql disable assertion: default database is ${cli.getConfiguration().getDatabaseType("default")}`)
+      return
+    }
+
+    await cli.getConfiguration().ensureConnections(async () => {
+      const structurePath = path.join(directory, "db", "structure-default.sql")
+
+      await fs.rm(structurePath, {force: true})
+      await cli.execute()
+
+      await expect(async () => {
+        await fs.readFile(structurePath, "utf8")
+      }).toThrow(/ENOENT/i)
     })
   })
 })

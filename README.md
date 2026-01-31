@@ -457,6 +457,17 @@ export default class CreateEvents extends Migration {
 npx velocious db:migrate
 ```
 
+By default, migrations write `db/structure-<identifier>.sql` files for each database. Disable writing for specific environments in your configuration:
+
+```js
+export default new Configuration({
+  // ...
+  structureSql: {
+    disabledEnvironments: ["test"]
+  }
+})
+```
+
 ## Configure CLI commands (Node vs Browser)
 
 Node loads CLI commands from disk automatically via the Node environment handler:
