@@ -108,8 +108,6 @@
  * @property {string} [directory] - Directory where log files are stored. Defaults to "<project>/log".
  * @property {string} [filePath] - Explicit path for the log file. Defaults to "<directory>/<environment>.log".
  * @property {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [levels] - Override which log levels are emitted.
- * @property {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [consoleLevels] - Override levels for the default console output.
- * @property {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [fileLevels] - Override levels for the default file output.
  * @property {boolean} [debugLowLevel] - Convenience flag to include very low-level debug logs.
  * @property {LoggerConfig[]} [loggers] - Logger instances (converted to outputs when configured).
  * @property {LoggingOutputConfig[]} [outputs] - Explicit logger outputs (overrides console/file defaults when provided).

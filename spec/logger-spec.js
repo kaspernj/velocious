@@ -171,58 +171,42 @@ describe("Logger", async () => {
     ])
   })
 
-  it("supports per-output levels for default console and file outputs", async () => {
+  it("defaults to console logging when no logging config is provided", async () => {
     /** @type {string[]} */
     const logWrites = []
-    /** @type {string[]} */
-    const debugWrites = []
     const originalConsoleLog = console.log
     const originalConsoleWarn = console.warn
     const originalConsoleError = console.error
     const originalConsoleDebug = console.debug
-    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-logger-"))
 
     try {
       console.log = (message) => logWrites.push(String(message))
       console.warn = () => {}
       console.error = () => {}
-      console.debug = (message) => debugWrites.push(String(message))
+      console.debug = () => {}
 
       const environmentHandler = new EnvironmentHandlerNode()
-      const logFilePath = path.join(tempDirectory, "log", "test.log")
       const configuration = new Configuration({
         database: {test: {}},
-        directory: tempDirectory,
+        directory: process.cwd(),
         environment: "test",
         environmentHandler,
         initializeModels: async () => {},
         locale: "en",
         localeFallbacks: {en: ["en"]},
-        locales: ["en"],
-        logging: {
-          consoleLevels: ["info", "warn", "error"],
-          fileLevels: ["debug", "info", "warn", "error"],
-          filePath: logFilePath
-        }
+        locales: ["en"]
       })
       const logger = new Logger("PartnersEventsController", {configuration})
 
-      await logger.debug("Debug message")
       await logger.info("Info message")
 
-      const logContents = await fs.readFile(logFilePath, "utf8")
-
-      expect(debugWrites.length).toBe(0)
       expect(logWrites.length).toBe(1)
       expect(logWrites[0]).toBe("PartnersEventsController Info message")
-      expect(logContents).toContain("PartnersEventsController Debug message")
-      expect(logContents).toContain("PartnersEventsController Info message")
     } finally {
       console.log = originalConsoleLog
       console.warn = originalConsoleWarn
       console.error = originalConsoleError
       console.debug = originalConsoleDebug
-      await fs.rm(tempDirectory, {recursive: true, force: true})
     }
   })
 
@@ -302,6 +286,28 @@ describe("Logger", async () => {
     await expect(async () => {
       await logger.info("Info message")
     }).toThrowError("BaseLogger#write must be implemented")
+  })
+
+  it("raises when an unknown logger argument is provided", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        loggers: [{bogus: true}]
+      }
+    })
+    const logger = new Logger("PartnersEventsController", {configuration})
+
+    await expect(async () => {
+      await logger.info("Info message")
+    }).toThrowError("Logger must implement toOutputConfig or write: Object")
   })
 
   it("stores logs in an array output with a limit", async () => {

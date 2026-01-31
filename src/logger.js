@@ -149,27 +149,22 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
 
   /** @type {import("./configuration-types.js").LoggingOutputConfig[]} */
   const outputs = []
-
-  if (Array.isArray(loggingConfiguration.consoleLevels)) {
-    if (loggingConfiguration.console !== false) {
-      outputs.push({
-        output: new LoggerConsoleOutput(),
-        levels: loggingConfiguration.consoleLevels
-      })
-    }
+  if (loggingConfiguration.console !== false) {
+    outputs.push({
+      output: new LoggerConsoleOutput(),
+      levels: loggingConfiguration.levels
+    })
   }
 
-  if (Array.isArray(loggingConfiguration.fileLevels)) {
-    if (loggingConfiguration.file !== false && loggingConfiguration.filePath) {
-      outputs.push({
-        output: new LoggerFileOutput({
-          configuration,
-          getConfiguration: () => configuration,
-          filePath: loggingConfiguration.filePath
-        }),
-        levels: loggingConfiguration.fileLevels
-      })
-    }
+  if (loggingConfiguration.file !== false && loggingConfiguration.filePath) {
+    outputs.push({
+      output: new LoggerFileOutput({
+        configuration,
+        getConfiguration: () => configuration,
+        filePath: loggingConfiguration.filePath
+      }),
+      levels: loggingConfiguration.levels
+    })
   }
 
   return outputs

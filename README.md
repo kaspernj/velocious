@@ -725,7 +725,7 @@ socket.addEventListener("message", (event) => {
 
 Velocious includes a lightweight logger that can write to both console and file and is environment-aware.
 
-- **Defaults**: In the `test` environment, console logging is disabled, but file logging still happens to `log/test.log` (created automatically). In other environments, console logging is enabled and file logging is enabled if a file path is available.
+- **Defaults**: When no `logging` config is provided, Velocious sets up a console logger with `info`, `warn`, and `error` levels.
 - **Configuration**: Supply a `logging` object when creating your configuration:
 
 ```js
@@ -736,19 +736,6 @@ const configuration = new Configuration({
     file: true,                // enable file output
     directory: "/custom/logs", // optional, defaults to "<project>/log" in Node
     filePath: "/tmp/app.log"   // optional explicit path
-  }
-})
-```
-
-- **Per-output levels**: Provide `consoleLevels` and `fileLevels` to set different thresholds for default console/file outputs:
-
-```js
-const configuration = new Configuration({
-  // ...
-  logging: {
-    consoleLevels: ["info", "warn", "error"],
-    fileLevels: ["debug", "info", "warn", "error"],
-    filePath: "/tmp/app.log"
   }
 })
 ```
