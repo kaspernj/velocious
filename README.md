@@ -740,6 +740,48 @@ const configuration = new Configuration({
 })
 ```
 
+- **Per-output levels**: Provide `consoleLevels` and `fileLevels` to set different thresholds for default console/file outputs:
+
+```js
+const configuration = new Configuration({
+  // ...
+  logging: {
+    consoleLevels: ["info", "warn", "error"],
+    fileLevels: ["debug", "info", "warn", "error"],
+    filePath: "/tmp/app.log"
+  }
+})
+```
+
+- **Custom logger list**: Configure an explicit list of logger instances with levels:
+
+```js
+import ConsoleLogger from "velocious/build/src/logger/console-logger.js"
+import FileLogger from "velocious/build/src/logger/file-logger.js"
+
+const configuration = new Configuration({
+  // ...
+  logging: {
+    loggers: [
+      new ConsoleLogger({levels: ["info", "warn", "error"]}),
+      new FileLogger({path: `log/${environment}.log`, levels: ["debug", "info", "warn", "error"]})
+    ]
+  }
+})
+```
+
+- **Base logger**: Custom loggers should extend `BaseLogger` and implement either `write(...)` or `toOutputConfig(...)`:
+
+```js
+import BaseLogger from "velocious/build/src/logger/base-logger.js"
+
+class MyLogger extends BaseLogger {
+  async write({message}) {
+    console.log(message)
+  }
+}
+```
+
 - **Environment handlers**: File-path resolution and file writes are delegated to the environment handler so browser builds stay bundle-friendly.
   - Node handler writes to `<directory>/<environment>.log` by default.
   - Custom handlers can override `getDefaultLogDirectory`, `getLogFilePath`, and `writeLogToFile` if needed.

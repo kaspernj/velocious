@@ -225,7 +225,7 @@ export default class VelociousConfiguration {
   /**
    * @param {object} [args] - Options object.
    * @param {boolean} [args.defaultConsole] - Whether default console.
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs">>} - The logging configuration.
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs" | "consoleLevels" | "fileLevels" | "loggers">>} - The logging configuration.
    */
   getLoggingConfiguration({defaultConsole} = {}) {
     const environment = this.getEnvironment()
@@ -236,6 +236,9 @@ export default class VelociousConfiguration {
     const fileLogging = this._logging?.file ?? Boolean(filePath)
     const configuredLevels = this._logging?.levels
     const includeLowLevelDebug = this._logging?.debugLowLevel === true
+    const consoleLevels = this._logging?.consoleLevels
+    const fileLevels = this._logging?.fileLevels
+    const loggers = this._logging?.loggers
 
     const consoleDefault = defaultConsole !== undefined ? defaultConsole : true
     const consoleLogging = consoleOverride !== undefined ? consoleOverride : consoleDefault
@@ -252,6 +255,9 @@ export default class VelociousConfiguration {
       directory,
       file: fileLogging ?? false,
       filePath,
+      consoleLevels,
+      fileLevels,
+      loggers,
       levels,
       outputs: this._logging?.outputs
     }
@@ -300,7 +306,7 @@ export default class VelociousConfiguration {
 
   /**
    * Logging configuration tailored for HTTP request logging. Defaults console logging to true and applies the user `logging.console` flag only for request logging.
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs">>} - The http logging configuration.
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs" | "consoleLevels" | "fileLevels" | "loggers">>} - The http logging configuration.
    */
   getHttpLoggingConfiguration() {
     return this.getLoggingConfiguration({defaultConsole: true})
