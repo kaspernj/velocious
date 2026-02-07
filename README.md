@@ -17,6 +17,8 @@ npm install velocious
 npx velocious init
 ```
 
+By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
+
 # Testing
 
 Tag tests to filter runs.
