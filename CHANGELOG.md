@@ -1,5 +1,6 @@
 # Changelog
 
+- Move `db:schema:dump` implementation under the Node environment handler so browser/Expo builds avoid Node-only command code.
 - Add a `db:schema:dump` CLI command that generates missing `db/structure-*.sql` files and cover it with a command spec.
 - Fix base-model generation to use the current database connection when reading table columns, avoiding SQLite "No connection" errors.
 - Fix base-model generation to honor the configured project directory instead of always using the current working directory.
