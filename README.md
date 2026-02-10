@@ -470,6 +470,14 @@ export default new Configuration({
 })
 ```
 
+If you need to regenerate missing structure files without rerunning migrations, use:
+
+```bash
+npx velocious db:schema:dump
+```
+
+`db:schema:dump` only writes `db/structure-<identifier>.sql` files when one or more expected files are missing.
+
 ## Configure CLI commands (Node vs Browser)
 
 Node loads CLI commands from disk automatically via the Node environment handler:
