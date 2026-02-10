@@ -17,6 +17,8 @@ npm install velocious
 npx velocious init
 ```
 
+By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
+
 # Testing
 
 Tag tests to filter runs.
@@ -467,6 +469,14 @@ export default new Configuration({
   }
 })
 ```
+
+If you need to regenerate missing structure files without rerunning migrations, use:
+
+```bash
+npx velocious db:schema:dump
+```
+
+`db:schema:dump` only writes `db/structure-<identifier>.sql` files when one or more expected files are missing.
 
 ## Configure CLI commands (Node vs Browser)
 
