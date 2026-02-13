@@ -22,7 +22,7 @@ import * as inflection from "inflection"
 import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 
-/** @typedef {{offsetMinutes: number}} TimezoneStore */
+/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number}} TimezoneStore */
 
 export default class VelociousEnvironmentHandlerNode extends Base{
   /** @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
@@ -52,7 +52,12 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       return await callback()
     }
 
-    return await this._timezoneAsyncLocalStorage.run({offsetMinutes}, callback)
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    return await this._timezoneAsyncLocalStorage.run({
+      ability: existingStore?.ability,
+      offsetMinutes
+    }, callback)
   }
 
   /**
@@ -67,7 +72,12 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     if (store) {
       store.offsetMinutes = offsetMinutes
     } else {
-      this._timezoneAsyncLocalStorage.enterWith({offsetMinutes})
+      const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+      this._timezoneAsyncLocalStorage.enterWith({
+        ability: existingStore?.ability,
+        offsetMinutes
+      })
     }
   }
 
@@ -85,6 +95,57 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     }
 
     return super.getTimezoneOffsetMinutes(configuration)
+  }
+
+  /**
+   * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithAbility(ability, callback) {
+    if (!this._timezoneAsyncLocalStorage) {
+      return await super.runWithAbility(ability, callback)
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    return await this._timezoneAsyncLocalStorage.run({
+      ability,
+      offsetMinutes: existingStore?.offsetMinutes || this.getTimezoneOffsetMinutes(this.getConfiguration())
+    }, callback)
+  }
+
+  /**
+   * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentAbility(ability) {
+    if (!this._timezoneAsyncLocalStorage) {
+      super.setCurrentAbility(ability)
+      return
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    if (existingStore) {
+      existingStore.ability = ability
+    } else {
+      this._timezoneAsyncLocalStorage.enterWith({
+        ability,
+        offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration())
+      })
+    }
+  }
+
+  /**
+   * @returns {import("../authorization/ability.js").default | undefined} - Current ability.
+   */
+  getCurrentAbility() {
+    if (!this._timezoneAsyncLocalStorage) {
+      return super.getCurrentAbility()
+    }
+
+    return this._timezoneAsyncLocalStorage.getStore()?.ability
   }
 
   async _actualFindCommands() {

@@ -59,6 +59,36 @@ export default class VelociousEnvironmentHandlerBase {
 
     return activeConfiguration.getTimezoneOffsetMinutes()
   }
+
+  /**
+   * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithAbility(ability, callback) {
+    this._currentAbility = ability
+
+    try {
+      return await callback()
+    } finally {
+      this._currentAbility = undefined
+    }
+  }
+
+  /**
+   * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentAbility(ability) {
+    this._currentAbility = ability
+  }
+
+  /**
+   * @returns {import("../authorization/ability.js").default | undefined} - Current ability.
+   */
+  getCurrentAbility() {
+    return this._currentAbility
+  }
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.

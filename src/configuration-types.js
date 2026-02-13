@@ -151,9 +151,19 @@
  */
 
 /**
+ * @typedef {typeof import("./authorization/base-resource.js").default} AbilityResourceClassType
+ */
+
+/**
+ * @typedef {function({configuration: import("./configuration.js").default, params: Record<string, any>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default}) : import("./authorization/ability.js").default | void | Promise<import("./authorization/ability.js").default | void>} AbilityResolverType
+ */
+
+/**
  * @typedef {object} ConfigurationArgsType
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
  * @property {string} [cookieSecret] - Secret for encrypting cookies.
+ * @property {AbilityResourceClassType[]} [abilityResources] - Resource classes used to define abilities per model.
+ * @property {AbilityResolverType} [abilityResolver] - Resolver for creating request-scoped ability instances.
  * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
  * @property {boolean} [debug] - Enable debug logging.
