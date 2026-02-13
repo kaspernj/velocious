@@ -137,7 +137,7 @@
 
 /**
  * @typedef {object} FrontendModelResourceConfiguration
- * @property {string[]} attributes - Attributes to expose on the frontend model.
+ * @property {string[] | Record<string, any>} attributes - Attributes to expose on the frontend model.
  * @property {Record<string, string>} [commands] - Command names keyed by action (`find`, `update`, `destroy`).
  * @property {string} [path] - HTTP path prefix used by frontend model commands.
  * @property {string} [primaryKey] - Primary key attribute name.
