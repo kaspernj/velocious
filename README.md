@@ -243,6 +243,43 @@ npx velocious g:model Account
 npx velocious g:model Task
 ```
 
+## Frontend models from backend resources
+
+You can generate lightweight frontend model classes from resource definitions in your configuration.
+
+```js
+export default new Configuration({
+  // ...
+  backendProjects: [
+    {
+      path: "/path/to/backend-project",
+      resources: {
+        User: {
+          attributes: ["id", "name", "email"],
+          commands: {find: "find", update: "update", destroy: "destroy"},
+          path: "/api/frontend-models/users",
+          primaryKey: "id"
+        }
+      }
+    }
+  ]
+})
+```
+
+Generate classes:
+
+```bash
+npx velocious g:frontend-models
+```
+
+This creates `src/frontend-models/user.js` (and one file per configured resource). Generated classes support:
+
+- `await User.find(5)`
+- `await user.update({...})`
+- `await user.destroy()`
+- Attribute methods like `user.name()` and `user.setName(...)`
+
+
 ```js
 import Record from "velocious/build/src/database/record/index.js"
 

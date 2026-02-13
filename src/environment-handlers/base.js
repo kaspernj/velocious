@@ -68,6 +68,14 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsGenerateFrontendModels(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsGenerateFrontendModels not implemented")
+  }
+
+  /**
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.
    */

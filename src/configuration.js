@@ -30,10 +30,11 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({backgroundJobs, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._backgroundJobs = backgroundJobs
+    this._backendProjects = backendProjects || []
     this.cors = cors
     this._cookieSecret = cookieSecret
     this.database = database
@@ -165,6 +166,11 @@ export default class VelociousConfiguration {
 
     return this._directory
   }
+
+  /**
+   * @returns {import("./configuration-types.js").BackendProjectConfiguration[]} - Backend projects.
+   */
+  getBackendProjects() { return this._backendProjects }
 
   /**
    * @returns {string} - The environment.

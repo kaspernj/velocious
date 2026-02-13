@@ -130,14 +130,31 @@
  * @property {function({payload: import("./mailer.js").MailerDeliveryPayload, configuration: import("./configuration.js").default}) : Promise<unknown> | unknown} deliver - Deliver a mailer payload.
  */
 
+
 /**
  * @typedef {Record<string, string[]>} LocaleFallbacksType
+ */
+
+/**
+ * @typedef {object} FrontendModelResourceConfiguration
+ * @property {string[] | Record<string, any>} attributes - Attributes to expose on the frontend model.
+ * @property {Record<string, string>} [commands] - Command names keyed by action (`find`, `update`, `destroy`).
+ * @property {string} [path] - HTTP path prefix used by frontend model commands.
+ * @property {string} [primaryKey] - Primary key attribute name.
+ */
+
+/**
+ * @typedef {object} BackendProjectConfiguration
+ * @property {string} path - Path to the backend project.
+ * @property {Record<string, FrontendModelResourceConfiguration>} [frontendModels] - Frontend model definitions keyed by model class name.
+ * @property {Record<string, FrontendModelResourceConfiguration>} [resources] - Alias for `frontendModels`.
  */
 
 /**
  * @typedef {object} ConfigurationArgsType
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
  * @property {string} [cookieSecret] - Secret for encrypting cookies.
+ * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
  * @property {boolean} [debug] - Enable debug logging.
  * @property {string} [directory] - Base directory for the project.
