@@ -1,5 +1,8 @@
 # Changelog
 
+- Add `g:frontend-models` generation from `backendProjects` resource config to create `src/frontend-models/*.js` classes.
+- Add a frontend model runtime base with first-iteration `find`, `update`, `destroy`, and attribute helpers.
+- Add specs for frontend model generation and runtime command behavior.
 - Move `db:schema:dump` implementation under the Node environment handler so browser/Expo builds avoid Node-only command code.
 - Add a `db:schema:dump` CLI command that generates missing `db/structure-*.sql` files and cover it with a command spec.
 - Fix base-model generation to use the current database connection when reading table columns, avoiding SQLite "No connection" errors.
