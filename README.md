@@ -1196,3 +1196,54 @@ If a handed-off job does not report back within 2 hours, it is marked orphaned a
 ```bash
 npx velocious server --host 0.0.0.0 --port 8082
 ```
+
+# Authorization (CanCan-style)
+
+Define resource classes with an `abilities()` method and use `can` / `cannot` rules to constrain model access.
+
+```js
+import Ability from "velocious/build/src/authorization/ability.js"
+import BaseResource from "velocious/build/src/authorization/base-resource.js"
+import User from "@/src/models/user"
+
+class UserResource extends BaseResource {
+  static ModelClass = User
+
+  abilities() {
+    const currentUser = this.currentUser()
+
+    if (currentUser) {
+      this.can("read", User, {id: currentUser.id()})
+    }
+  }
+}
+
+export default new Configuration({
+  // ...
+  abilityResolver: ({configuration, params, request, response}) => {
+    return new Ability({
+      context: {
+        configuration,
+        currentUser: undefined, // set from your auth/session layer
+        params,
+        request,
+        response
+      },
+      resources: [UserResource]
+    })
+  }
+})
+```
+
+Then query through authorization rules:
+
+```js
+const users = await User.accessible().toArray()
+```
+
+You can also pass an ability explicitly:
+
+```js
+const ability = new Ability({context: {currentUser}, resources: [UserResource]})
+const users = await User.accessible(ability).toArray()
+```

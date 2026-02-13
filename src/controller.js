@@ -230,6 +230,11 @@ export default class VelociousController {
     throw new Error("renderText stub")
   }
 
+  /** @returns {import("./authorization/ability.js").default | undefined} - Current ability for request scope. */
+  currentAbility() {
+    return this.getConfiguration().getCurrentAbility()
+  }
+
   /** @returns {import("./http-server/client/request.js").default} - The request.  */
   request() { return this._request }
 

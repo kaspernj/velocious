@@ -88,8 +88,16 @@ export default class VelociousRoutesResolver {
 
     try {
       await this.configuration.ensureConnections(async () => {
-        await controllerInstance._runBeforeCallbacks()
-        await controllerInstance[action]()
+        const ability = await this.configuration.resolveAbility({
+          params: this.params,
+          request: this.request,
+          response: this.response
+        })
+
+        await this.configuration.runWithAbility(ability, async () => {
+          await controllerInstance._runBeforeCallbacks()
+          await controllerInstance[action]()
+        })
       })
     } catch (error) {
       const ensuredError = ensureError(error)

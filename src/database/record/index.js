@@ -1496,6 +1496,37 @@ class VelociousDatabaseRecord {
     return this._newQuery()
   }
 
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {import("../../authorization/ability.js").default | undefined} [ability] - Ability instance.
+   * @returns {ModelClassQuery<MC>} - Authorized query.
+   */
+  static accessible(ability) {
+    const query = this._newQuery()
+    const currentAbility = ability || this._getConfiguration().getCurrentAbility()
+
+    if (!currentAbility) {
+      throw new Error(`No ability in context for ${this.name}. Pass an ability or configure ability resolver on the request`)
+    }
+
+    return /** @type {ModelClassQuery<MC>} */ (currentAbility.applyToQuery({
+      action: "read",
+      modelClass: this,
+      query
+    }))
+  }
+
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {import("../../authorization/ability.js").default | undefined} [ability] - Ability instance.
+   * @returns {ModelClassQuery<MC>} - Authorized query.
+   */
+  static accessibleBy(ability) {
+    return this.accessible(ability)
+  }
+
   /** @returns {Promise<number>} - Resolves with the count.  */
   static async count() {
     return await this._newQuery().count()

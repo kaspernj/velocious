@@ -7,6 +7,7 @@
 import {digg} from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
+import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -30,9 +31,11 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
+    this._abilityResolver = abilityResolver
+    this._abilityResources = abilityResources || []
     this._backgroundJobs = backgroundJobs
     this._backendProjects = backendProjects || []
     this.cors = cors
@@ -171,6 +174,24 @@ export default class VelociousConfiguration {
    * @returns {import("./configuration-types.js").BackendProjectConfiguration[]} - Backend projects.
    */
   getBackendProjects() { return this._backendProjects }
+
+  /** @returns {import("./configuration-types.js").AbilityResourceClassType[]} - Ability resource classes. */
+  getAbilityResources() { return this._abilityResources }
+
+  /**
+   * @param {import("./configuration-types.js").AbilityResourceClassType[]} resources - Ability resource classes.
+   * @returns {void} - No return value.
+   */
+  setAbilityResources(resources) { this._abilityResources = resources }
+
+  /** @returns {import("./configuration-types.js").AbilityResolverType | undefined} - Ability resolver. */
+  getAbilityResolver() { return this._abilityResolver }
+
+  /**
+   * @param {import("./configuration-types.js").AbilityResolverType | undefined} resolver - Ability resolver.
+   * @returns {void} - No return value.
+   */
+  setAbilityResolver(resolver) { this._abilityResolver = resolver }
 
   /**
    * @returns {string} - The environment.
@@ -610,6 +631,48 @@ export default class VelociousConfiguration {
    */
   setWebsocketMessageHandlerResolver(resolver) {
     this._websocketMessageHandlerResolver = resolver
+  }
+
+  /**
+   * @param {object} args - Ability resolver args.
+   * @param {Record<string, any>} args.params - Request params.
+   * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} args.request - Request object.
+   * @param {import("./http-server/client/response.js").default} args.response - Response object.
+   * @returns {Promise<import("./authorization/ability.js").default | undefined>} - Resolved ability.
+   */
+  async resolveAbility({params, request, response}) {
+    const resolver = this.getAbilityResolver()
+
+    if (resolver) {
+      const resolved = await resolver({configuration: this, params, request, response})
+
+      if (resolved) return resolved
+    }
+
+    const resources = this.getAbilityResources()
+
+    if (resources.length === 0) return
+
+    return new Ability({
+      context: {configuration: this, params, request, response},
+      resources
+    })
+  }
+
+  /**
+   * @param {import("./authorization/ability.js").default | undefined} ability - Ability instance.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithAbility(ability, callback) {
+    return await this.getEnvironmentHandler().runWithAbility(ability, callback)
+  }
+
+  /**
+   * @returns {import("./authorization/ability.js").default | undefined} - Current ability from context.
+   */
+  getCurrentAbility() {
+    return this.getEnvironmentHandler().getCurrentAbility()
   }
 
   /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
