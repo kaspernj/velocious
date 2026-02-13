@@ -111,7 +111,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     return await this._timezoneAsyncLocalStorage.run({
       ability,
-      offsetMinutes: existingStore?.offsetMinutes || this.getTimezoneOffsetMinutes(this.getConfiguration())
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration())
     }, callback)
   }
 
