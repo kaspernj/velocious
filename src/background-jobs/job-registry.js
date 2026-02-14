@@ -2,6 +2,7 @@
 
 import fs from "fs/promises"
 import path from "path"
+import toImportSpecifier from "../utils/to-import-specifier.js"
 import VelociousJob from "./job.js"
 
 export default class BackgroundJobRegistry {
@@ -63,7 +64,7 @@ export default class BackgroundJobRegistry {
     const jobFiles = fs.glob(`${jobsDir}/**/*.js`)
 
     for await (const jobFile of jobFiles) {
-      const jobImport = await import(jobFile)
+      const jobImport = await import(toImportSpecifier(jobFile))
       const JobClass = jobImport.default
 
       if (!JobClass) throw new Error(`Job file must export a default class: ${jobFile}`)

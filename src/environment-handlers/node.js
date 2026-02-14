@@ -21,6 +21,7 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
+import toImportSpecifier from "../utils/to-import-specifier.js"
 
 /** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number}} TimezoneStore */
 
@@ -303,7 +304,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       throw new Error(`Unknown command: ${commandParts.join(":")} which should have been one of: ${possibleCommands.sort().join(", ")}`)
     }
 
-    const commandClassImport = await import(command.file)
+    const commandClassImport = await import(toImportSpecifier(command.file))
     const CommandClass = commandClassImport.default
 
     return CommandClass
@@ -345,7 +346,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<import("../routes/index.js").default>} - Resolves with the import application routes.
    */
   async importApplicationRoutes() {
-    const routesImport = await import(`${this.getConfiguration().getDirectory()}/src/config/routes.js`)
+    const routesImport = await import(toImportSpecifier(`${this.getConfiguration().getDirectory()}/src/config/routes.js`))
 
     return routesImport.default
   }
@@ -370,7 +371,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async importTestFiles(testFiles) {
     for (const testFile of testFiles) {
-      await import(testFile)
+      await import(toImportSpecifier(testFile))
     }
   }
 
@@ -414,7 +415,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     if (!testingConfigPath) return
 
-    const testingImport = await import(testingConfigPath)
+    const testingImport = await import(toImportSpecifier(testingConfigPath))
     const testingDefault = testingImport.default
 
     if (!testingDefault) throw new Error("Testing config must export a default function")
@@ -432,7 +433,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<import("../database/migration/index.js").default>} - Resolves with the require migration.
    */
   async requireMigration(filePath) {
-    const migrationImport = await import(filePath)
+    const migrationImport = await import(toImportSpecifier(filePath))
     const migrationImportDefault = migrationImport.default
 
     if (!migrationImportDefault) throw new Error("Migration file must export a default migration class")

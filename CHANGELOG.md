@@ -93,3 +93,4 @@
 - Add BaseLogger for custom logger implementations, reject unknown logger configs, and default to console logging when no logging is provided.
 - Allow per-output log levels for default console and file outputs via configuration.
 - Allow skipping structure SQL file generation per environment via configuration.
+- Normalize dynamic import file paths to file URLs for Windows ESM compatibility across configuration, routes, workers, migrations, tests, and jobs.
