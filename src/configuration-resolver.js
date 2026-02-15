@@ -3,6 +3,7 @@
 import Configuration, {CurrentConfigurationNotSetError} from "./configuration.js"
 import envSense from "env-sense/build/use-env-sense.js"
 import fileExists from "./utils/file-exists.js"
+import toImportSpecifier from "./utils/to-import-specifier.js"
 
 /**
  * @param {import("./configuration-types.js").ConfigurationArgsType} [args] - Options object.
@@ -39,7 +40,7 @@ export default async function configurationResolver(args) {
   }
 
   try {
-    const configurationImport = await import(configurationPath)
+    const configurationImport = await import(toImportSpecifier(configurationPath))
 
     configuration = configurationImport.default
   } catch (error) {

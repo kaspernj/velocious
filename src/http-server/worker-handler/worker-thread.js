@@ -5,6 +5,7 @@ import Client from "../client/index.js"
 import {digg} from "diggerize"
 import errorLogger from "../../error-logger.js"
 import Logger from "../../logger.js"
+import toImportSpecifier from "../../utils/to-import-specifier.js"
 import WebsocketEvents from "../websocket-events.js"
 
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
@@ -44,7 +45,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   async initialize() {
     const {directory, environment} = this.workerData
     const configurationPath = `${directory}/src/config/configuration.js`
-    const configurationImport = await import(configurationPath)
+    const configurationImport = await import(toImportSpecifier(configurationPath))
 
     /** @type {import("../../configuration.js").default} */
     this.configuration = configurationImport.default

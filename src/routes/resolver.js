@@ -7,6 +7,7 @@ import * as inflection from "inflection"
 import Logger from "../logger.js"
 import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
 import ensureError from "../utils/ensure-error.js"
+import toImportSpecifier from "../utils/to-import-specifier.js"
 
 export default class VelociousRoutesResolver {
   /** @type {Logger | undefined} */
@@ -68,7 +69,7 @@ export default class VelociousRoutesResolver {
       throw new Error(`Matched the route but didn't know what to do with it: ${rawPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
     }
 
-    const controllerClassImport = await import(controllerPath)
+    const controllerClassImport = await import(toImportSpecifier(controllerPath))
     const controllerClass = controllerClassImport.default
     const controllerInstance = new controllerClass({
       action,
