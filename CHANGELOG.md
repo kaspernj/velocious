@@ -94,3 +94,4 @@
 - Allow per-output log levels for default console and file outputs via configuration.
 - Allow skipping structure SQL file generation per environment via configuration.
 - Normalize dynamic import file paths to file URLs for Windows ESM compatibility across configuration, routes, workers, migrations, tests, and jobs.
+- Fix Windows CLI command discovery by parsing both `\` and `/` command file path separators.
