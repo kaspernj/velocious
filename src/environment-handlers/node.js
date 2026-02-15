@@ -149,31 +149,48 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     return this._timezoneAsyncLocalStorage.getStore()?.ability
   }
 
+  /**
+   * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with discovered command files.
+   */
   async _actualFindCommands() {
     const basePath = await this.getBasePath()
     const commandFiles = fs.glob(`${basePath}/src/cli/commands/**/*.js`)
     const commands = []
 
     for await (const aFilePath of commandFiles) {
-      const aFilePathParts = aFilePath.split("/")
-      const commandPathLocation = aFilePathParts.indexOf("commands") + 1
-      const lastPart = aFilePathParts[aFilePathParts.length - 1]
-      let name, paths
-
-      if (lastPart == "index.js") {
-        name = aFilePathParts[aFilePathParts.length - 2]
-        paths = aFilePathParts.slice(commandPathLocation, -2)
-      } else {
-        name = lastPart.replace(".js", "")
-        paths = aFilePathParts.slice(commandPathLocation, -1)
-      }
-
-      const commandName = `${paths.join(":")}${paths.length > 0 ? ":" : ""}${name}`
+      const commandName = this.commandNameFromFilePath(aFilePath)
 
       commands.push({name: commandName, file: aFilePath})
     }
 
     return commands
+  }
+
+  /**
+   * @param {string} filePath - Full command file path.
+   * @returns {string} - Parsed command name.
+   */
+  commandNameFromFilePath(filePath) {
+    const aFilePathParts = filePath.split(/[\\/]/)
+    const commandPathLocation = aFilePathParts.indexOf("commands")
+
+    if (commandPathLocation === -1) {
+      throw new Error(`Could not parse command file path: ${filePath}`)
+    }
+
+    const commandParts = aFilePathParts.slice(commandPathLocation + 1)
+    const lastPart = commandParts[commandParts.length - 1]
+    let name, paths
+
+    if (lastPart == "index.js") {
+      name = commandParts[commandParts.length - 2]
+      paths = commandParts.slice(0, -2)
+    } else {
+      name = lastPart.replace(".js", "")
+      paths = commandParts.slice(0, -1)
+    }
+
+    return `${paths.join(":")}${paths.length > 0 ? ":" : ""}${name}`
   }
 
   /**
