@@ -100,3 +100,4 @@
 - Inline browser `EXPO_PUBLIC_SYSTEM_TEST*` env values in the browser test bundle to prevent websocket startup failures when `process` is unavailable in the browser runtime.
 - Resolve built-in controller frontend model actions (`frontendIndex`, `frontendFind`, `frontendUpdate`, `frontendDestroy`) from `backendProjects.resources` configuration so controllers no longer need a `frontendModelClass()` implementation.
 - Add optional `backendProjects.resources.*.server` hooks (`beforeAction`, `records`, `serialize`, `find`, `update`, `destroy`) for backend-side customization without controller action overrides.
+- Move built-in frontend model actions out of the base `Controller` class into a dedicated `FrontendModelController` class so projects opt in explicitly.

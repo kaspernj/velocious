@@ -1,6 +1,6 @@
 // @ts-check
 
-import Controller from "../../src/controller.js"
+import FrontendModelController from "../../src/frontend-model-controller.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
 /** Fake request for controller unit tests. */
@@ -140,7 +140,7 @@ class MockFrontendModel {
 }
 
 /** Test controller using built-in frontend model actions. */
-class FrontendController extends Controller {}
+class FrontendController extends FrontendModelController {}
 
 describe("Controller frontend model actions", () => {
   it("returns models from frontendIndex", async () => {
