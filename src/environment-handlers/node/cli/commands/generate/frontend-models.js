@@ -13,17 +13,20 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       throw new Error("No backend projects configured. Configure 'backendProjects' in your configuration first")
     }
 
-    const rootDirectory = this.directory()
-    const frontendModelsDir = `${rootDirectory}/src/frontend-models`
-    const devMode = frontendModelsDir.includes("/spec/dummy/src/frontend-models")
-    const importPath = devMode ? "../../../../src/frontend-models/base.js" : "velocious/build/src/frontend-models/base.js"
-
-    await fs.mkdir(frontendModelsDir, {recursive: true})
-
     /** @type {Set<string>} */
     const generatedModelNames = new Set()
+    /** @type {Set<string>} */
+    const ensuredDirectories = new Set()
 
     for (const backendProject of backendProjects) {
+      const frontendModelsDir = this.frontendModelsDirectoryForBackendProject(backendProject)
+      const importPath = this.importPathForFrontendModelsDirectory(frontendModelsDir)
+
+      if (!ensuredDirectories.has(frontendModelsDir)) {
+        await fs.mkdir(frontendModelsDir, {recursive: true})
+        ensuredDirectories.add(frontendModelsDir)
+      }
+
       const resources = this.resourcesForBackendProject(backendProject)
 
       for (const modelClassName in resources) {
@@ -92,6 +95,30 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
+   * @param {{frontendModelsOutputPath?: string}} backendProject - Backend project config.
+   * @returns {string} - Absolute frontend models output directory.
+   */
+  frontendModelsDirectoryForBackendProject(backendProject) {
+    const outputPath = backendProject.frontendModelsOutputPath || this.directory()
+
+    return `${outputPath}/src/frontend-models`
+  }
+
+  /**
+   * @param {string} frontendModelsDir - Frontend models output directory.
+   * @returns {string} - Base class import path.
+   */
+  importPathForFrontendModelsDirectory(frontendModelsDir) {
+    const devMode = frontendModelsDir.includes("/spec/dummy/src/frontend-models")
+
+    if (devMode) {
+      return "../../../../src/frontend-models/base.js"
+    }
+
+    return "velocious/build/src/frontend-models/base.js"
+  }
+
+  /**
    * @param {object} args - Method args.
    * @param {string} args.className - Model class name.
    * @param {string} args.importPath - Base class import path.
@@ -100,6 +127,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    */
   buildModelFileContent({className, importPath, modelConfig}) {
     const attributes = this.attributeNamesForModel(modelConfig)
+    const attributesTypeName = `${className}Attributes`
     const commands = {
       destroy: modelConfig.commands?.destroy || "destroy",
       find: modelConfig.commands?.find || "find",
@@ -114,6 +142,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     let fileContent = ""
 
     fileContent += `import FrontendModelBase from "${importPath}"\n\n`
+    fileContent += "/**\n"
+    fileContent += ` * @typedef {object} ${attributesTypeName}\n`
+    for (const attributeName of attributes) {
+      fileContent += ` * @property {any} ${attributeName} - Attribute value.\n`
+    }
+    fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
     fileContent += "  /**\n"
@@ -134,14 +168,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += "   * @returns {any} - Attribute value.\n"
+      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attributeName)}]} - Attribute value.\n`
       fileContent += "   */\n"
       fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attributeName)}) }\n`
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += "   * @param {any} newValue - New attribute value.\n"
-      fileContent += "   * @returns {any} - Assigned value.\n"
+      fileContent += `   * @param {${attributesTypeName}[${JSON.stringify(attributeName)}]} newValue - New attribute value.\n`
+      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attributeName)}]} - Assigned value.\n`
       fileContent += "   */\n"
       fileContent += `  set${camelizedAttributeUpper}(newValue) { return this.setAttribute(${JSON.stringify(attributeName)}, newValue) }\n`
     }
