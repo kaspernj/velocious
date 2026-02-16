@@ -1,6 +1,7 @@
 // @ts-check
 
 import Configuration from "./configuration.js"
+import {CurrentConfigurationNotSetError} from "./configuration.js"
 
 export default class Current {
   /**
@@ -14,7 +15,13 @@ export default class Current {
    * @returns {import("./authorization/ability.js").default | undefined} - Current ability.
    */
   static ability() {
-    return this.configuration().getCurrentAbility()
+    try {
+      return this.configuration().getCurrentAbility()
+    } catch (error) {
+      if (error instanceof CurrentConfigurationNotSetError) return
+
+      throw error
+    }
   }
 
   /**
