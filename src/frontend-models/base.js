@@ -93,7 +93,7 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @param {"find" | "update" | "destroy"} commandType - Command type.
+   * @param {"find" | "index" | "update" | "destroy"} commandType - Command type.
    * @returns {string} - Resolved command name.
    */
   static commandName(commandType) {
@@ -148,6 +148,23 @@ export default class FrontendModelBase {
   }
 
   /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
+   */
+  static async toArray() {
+    const response = await this.executeCommand("index", {})
+
+    if (!response || typeof response !== "object") {
+      throw new Error(`Expected object response but got: ${response}`)
+    }
+
+    const models = Array.isArray(response.models) ? response.models : []
+
+    return /** @type {InstanceType<T>[]} */ (models.map((model) => this.instantiateFromResponse(model)))
+  }
+
+  /**
    * @param {Record<string, any>} [newAttributes] - New values to assign before update.
    * @returns {Promise<this>} - Updated model.
    */
@@ -179,7 +196,7 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @param {"find" | "update" | "destroy"} commandType - Command type.
+   * @param {"find" | "index" | "update" | "destroy"} commandType - Command type.
    * @param {Record<string, any>} payload - Command payload.
    * @returns {Promise<Record<string, any>>} - Parsed JSON response.
    */

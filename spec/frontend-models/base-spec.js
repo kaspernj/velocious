@@ -77,6 +77,27 @@ function stubFetch(responseBody) {
 }
 
 describe("Frontend models - base", () => {
+  it("loads model collection with toArray", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})
+
+    try {
+      const users = await User.toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {},
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(users.length).toEqual(1)
+      expect(users[0].id()).toEqual(5)
+      expect(users[0].name()).toEqual("John")
+    } finally {
+      fetchStub.restore()
+    }
+  })
+
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "John"}})
