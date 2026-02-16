@@ -48,10 +48,12 @@ describe("Cli - generate - frontend-models", () => {
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
     expect(taskContents).toContain("path: \"/api/frontend-models/tasks\"")
+    expect(taskContents).toContain("\"index\":\"list\"")
     expect(taskContents).toContain("identifier() { return this.readAttribute(\"identifier\") }")
     expect(taskContents).toContain("setIdentifier(newValue) { return this.setAttribute(\"identifier\", newValue) }")
 
     expect(userContents).toContain("class User extends FrontendModelBase")
+    expect(userContents).toContain("\"index\":\"index\"")
     expect(userContents).toContain("email() { return this.readAttribute(\"email\") }")
     expect(userContents).toContain("setEmail(newValue) { return this.setAttribute(\"email\", newValue) }")
   })
@@ -68,5 +70,29 @@ describe("Cli - generate - frontend-models", () => {
     await expect(async () => {
       await cli.execute()
     }).toThrow(/No backend projects configured/)
+  })
+
+  it("fails when a resource is missing abilities config", async () => {
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            Task: {
+              attributes: ["id", "name"],
+              path: "/tasks"
+            }
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => {
+      await cli.execute()
+    }).toThrow(/missing required 'abilities' config/)
   })
 })

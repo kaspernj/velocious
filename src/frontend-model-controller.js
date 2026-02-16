@@ -1,0 +1,466 @@
+// @ts-check
+
+import Controller from "./controller.js"
+import * as inflection from "inflection"
+
+/** Controller with built-in frontend model resource actions. */
+export default class FrontendModelController extends Controller {
+  /**
+   * @returns {typeof import("./database/record/index.js").default} - Frontend model class for controller resource actions.
+   */
+  frontendModelClass() {
+    const frontendModelClass = this.frontendModelClassFromConfiguration()
+
+    if (frontendModelClass) return frontendModelClass
+
+    throw new Error(`No frontend model configured for controller '${this.params().controller}'. Configure backendProjects resources.`)
+  }
+
+  /**
+   * @returns {{modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
+   */
+  frontendModelResourceConfiguration() {
+    const params = this.params()
+    const controllerName = typeof params.controller === "string" ? params.controller : undefined
+
+    if (!controllerName || controllerName.length < 1) return null
+
+    const backendProjects = this.getConfiguration().getBackendProjects()
+
+    for (const backendProject of backendProjects) {
+      const resources = backendProject.frontendModels || backendProject.resources || {}
+
+      for (const modelName in resources) {
+        const resourceConfiguration = resources[modelName]
+        const resourcePath = this.frontendModelResourcePath(modelName, resourceConfiguration)
+
+        if (this.frontendModelResourceMatchesController({controllerName, resourcePath})) {
+          return {modelName, resourceConfiguration}
+        }
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * @returns {typeof import("./database/record/index.js").default | null} - Frontend model class resolved from backend project configuration.
+   */
+  frontendModelClassFromConfiguration() {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) return null
+
+    const modelClasses = this.getConfiguration().getModelClasses()
+    const modelClass = modelClasses[frontendModelResource.modelName]
+
+    if (!modelClass) {
+      throw new Error(`Frontend model '${frontendModelResource.modelName}' is configured for '${this.params().controller}', but no model class was registered. Registered models: ${Object.keys(modelClasses).join(", ")}`)
+    }
+
+    return modelClass
+  }
+
+  /**
+   * @param {string} modelName - Model class name.
+   * @param {import("./configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+   * @returns {string} - Normalized resource path.
+   */
+  frontendModelResourcePath(modelName, resourceConfiguration) {
+    if (resourceConfiguration.path) return `/${resourceConfiguration.path.replace(/^\/+/, "")}`
+
+    return `/${inflection.dasherize(inflection.pluralize(modelName))}`
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {string} args.controllerName - Controller name from params.
+   * @param {string} args.resourcePath - Resource path from configuration.
+   * @returns {boolean} - Whether resource path matches current controller.
+   */
+  frontendModelResourceMatchesController({controllerName, resourcePath}) {
+    const normalizedController = controllerName.replace(/^\/+|\/+$/g, "")
+    const normalizedResourcePath = resourcePath.replace(/^\/+|\/+$/g, "")
+
+    if (normalizedResourcePath === normalizedController) return true
+
+    return normalizedResourcePath.endsWith(`/${normalizedController}`)
+  }
+
+  /**
+   * @returns {import("./configuration-types.js").FrontendModelResourceServerConfiguration | null} - Optional server behavior config for frontend model actions.
+   */
+  frontendModelServerConfiguration() {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) return null
+
+    return frontendModelResource.resourceConfiguration.server || null
+  }
+
+  /**
+   * @returns {string} - Frontend model primary key.
+   */
+  frontendModelPrimaryKey() {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) {
+      throw new Error(`No frontend model resource configuration for controller '${this.params().controller}'`)
+    }
+
+    return frontendModelResource.resourceConfiguration.primaryKey || "id"
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
+   * @returns {string} - Ability action configured for the frontend action.
+   */
+  frontendModelAbilityAction(action) {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) {
+      throw new Error(`No frontend model resource configuration for controller '${this.params().controller}'`)
+    }
+
+    const abilities = frontendModelResource.resourceConfiguration.abilities
+
+    if (!abilities || typeof abilities !== "object") {
+      throw new Error(`Resource '${frontendModelResource.modelName}' must define an 'abilities' object`)
+    }
+
+    const abilityAction = abilities[action]
+
+    if (typeof abilityAction !== "string" || abilityAction.length < 1) {
+      throw new Error(`Resource '${frontendModelResource.modelName}' must define abilities.${action}`)
+    }
+
+    return abilityAction
+  }
+
+  /**
+   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @returns {import("./database/query/model-class-query.js").default<any>} - Authorized query for the action.
+   */
+  frontendModelAuthorizedQuery(action) {
+    const abilityAction = this.frontendModelAbilityAction(action)
+
+    return this.frontendModelClass().accessibleFor(abilityAction)
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Model instance.
+   * @returns {string} - Primary key value as string.
+   */
+  frontendModelPrimaryKeyValue(model) {
+    const value = model.attributes()[this.frontendModelPrimaryKey()]
+
+    return String(value)
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {"index" | "find" | "update" | "destroy"} args.action - Frontend action.
+   * @param {import("./database/record/index.js").default[]} args.models - Candidate models.
+   * @returns {Promise<import("./database/record/index.js").default[]>} - Authorized models.
+   */
+  async frontendModelFilterAuthorizedModels({action, models}) {
+    if (models.length === 0) return models
+
+    const primaryKey = this.frontendModelPrimaryKey()
+    const ids = models.map((model) => this.frontendModelPrimaryKeyValue(model))
+    const authorizedIdsRaw = await this.frontendModelAuthorizedQuery(action).where({[primaryKey]: ids}).pluck(primaryKey)
+    const authorizedIds = new Set(authorizedIdsRaw.map((id) => String(id)))
+
+    return models.filter((model) => authorizedIds.has(this.frontendModelPrimaryKeyValue(model)))
+  }
+
+  /**
+   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @returns {Promise<boolean>} - Whether action should continue.
+   */
+  async runFrontendModelBeforeAction(action) {
+    const serverConfiguration = this.frontendModelServerConfiguration()
+
+    if (!serverConfiguration?.beforeAction) return true
+
+    const modelClass = this.frontendModelClass()
+    const result = await serverConfiguration.beforeAction({
+      action,
+      controller: this,
+      modelClass,
+      params: this.params()
+    })
+
+    return result !== false
+  }
+
+  /**
+   * @param {"find" | "update" | "destroy"} action - Frontend action.
+   * @param {string | number} id - Record id.
+   * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
+   */
+  async frontendModelFindRecord(action, id) {
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const primaryKey = this.frontendModelPrimaryKey()
+
+    if (serverConfiguration?.find) {
+      const model = await serverConfiguration.find({
+        action,
+        controller: this,
+        id,
+        modelClass,
+        params: this.params()
+      })
+
+      if (!model) return null
+
+      const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
+
+      return authorizedModels[0] || null
+    }
+
+    return await this.frontendModelAuthorizedQuery(action).findBy({[primaryKey]: id})
+  }
+
+  /**
+   * @returns {Promise<import("./database/record/index.js").default[]>} - Frontend model records.
+   */
+  async frontendModelRecords() {
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+
+    if (serverConfiguration?.records) {
+      const models = await serverConfiguration.records({
+        action: "index",
+        controller: this,
+        modelClass,
+        params: this.params()
+      })
+
+      return await this.frontendModelFilterAuthorizedModels({action: "index", models})
+    }
+
+    return await this.frontendModelAuthorizedQuery("index").toArray()
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Frontend model record.
+   * @returns {Record<string, any>} - Serialized frontend model payload.
+   */
+  serializeFrontendModel(model) {
+    return model.attributes()
+  }
+
+  /**
+   * @param {string} errorMessage - Error message.
+   * @returns {Promise<void>} - Resolves when error has been rendered.
+   */
+  async frontendModelRenderError(errorMessage) {
+    const renderError = /** @type {((errorMessage: string) => Promise<void>) | undefined} */ (
+      /** @type {any} */ (this).renderError
+    )
+
+    if (typeof renderError === "function") {
+      await renderError.call(this, errorMessage)
+      return
+    }
+
+    await this.render({
+      json: {
+        errorMessage,
+        status: "error"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Collection action for frontend model resources. */
+  async frontendIndex() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    if (!(await this.runFrontendModelBeforeAction("index"))) return
+
+    const models = await this.frontendModelRecords()
+
+    await this.render({
+      json: {
+        models: await Promise.all(models.map(async (model) => {
+          const serverConfiguration = this.frontendModelServerConfiguration()
+
+          if (serverConfiguration?.serialize) {
+            return await serverConfiguration.serialize({
+              action: "index",
+              controller: this,
+              model,
+              modelClass: this.frontendModelClass(),
+              params: this.params()
+            })
+          }
+
+          return this.serializeFrontendModel(model)
+        })),
+        status: "success"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Member find action for frontend model resources. */
+  async frontendFind() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    if (!(await this.runFrontendModelBeforeAction("find"))) return
+
+    const params = this.params()
+    const id = params.id
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      await this.frontendModelRenderError("Expected model id.")
+      return
+    }
+
+    const modelClass = this.frontendModelClass()
+    const model = await this.frontendModelFindRecord("find", id)
+
+    if (!model) {
+      await this.frontendModelRenderError(`${modelClass.name} not found.`)
+      return
+    }
+
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const serializedModel = serverConfiguration?.serialize
+      ? await serverConfiguration.serialize({
+        action: "find",
+        controller: this,
+        model,
+        modelClass,
+        params
+      })
+      : this.serializeFrontendModel(model)
+
+    await this.render({
+      json: {
+        model: serializedModel,
+        status: "success"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Member update action for frontend model resources. */
+  async frontendUpdate() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    if (!(await this.runFrontendModelBeforeAction("update"))) return
+
+    const params = this.params()
+    const id = params.id
+    const attributes = params.attributes
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      await this.frontendModelRenderError("Expected model id.")
+      return
+    }
+
+    if (!attributes || typeof attributes !== "object") {
+      await this.frontendModelRenderError("Expected model attributes.")
+      return
+    }
+
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const model = await this.frontendModelFindRecord("update", id)
+
+    if (!model) {
+      await this.frontendModelRenderError(`${modelClass.name} not found.`)
+      return
+    }
+
+    let updatedModel = model
+
+    if (serverConfiguration?.update) {
+      const callbackModel = await serverConfiguration.update({
+        action: "update",
+        attributes,
+        controller: this,
+        model,
+        modelClass,
+        params
+      })
+
+      if (callbackModel) updatedModel = callbackModel
+    } else {
+      model.assign(attributes)
+      await model.save()
+    }
+
+    const serializedModel = serverConfiguration?.serialize
+      ? await serverConfiguration.serialize({
+        action: "update",
+        controller: this,
+        model: updatedModel,
+        modelClass,
+        params
+      })
+      : this.serializeFrontendModel(updatedModel)
+
+    await this.render({
+      json: {
+        model: serializedModel,
+        status: "success"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Member destroy action for frontend model resources. */
+  async frontendDestroy() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    if (!(await this.runFrontendModelBeforeAction("destroy"))) return
+
+    const params = this.params()
+    const id = params.id
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      await this.frontendModelRenderError("Expected model id.")
+      return
+    }
+
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const model = await this.frontendModelFindRecord("destroy", id)
+
+    if (!model) {
+      await this.frontendModelRenderError(`${modelClass.name} not found.`)
+      return
+    }
+
+    if (serverConfiguration?.destroy) {
+      await serverConfiguration.destroy({
+        action: "destroy",
+        controller: this,
+        model,
+        modelClass,
+        params
+      })
+    } else {
+      await model.destroy()
+    }
+
+    await this.render({
+      json: {
+        status: "success"
+      }
+    })
+  }
+}

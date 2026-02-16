@@ -32,6 +32,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const fileName = `${inflection.dasherize(inflection.underscore(className))}.js`
         const filePath = `${frontendModelsDir}/${fileName}`
 
+        this.validateModelConfig({className, modelConfig})
+
         if (generatedModelNames.has(className)) {
           throw new Error(`Duplicate frontend model definition for '${className}'`)
         }
@@ -47,6 +49,30 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         await fs.writeFile(filePath, fileContent)
 
         console.log(`create src/frontend-models/${fileName}`)
+      }
+    }
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {string} args.className - Model class name.
+   * @param {Record<string, any>} args.modelConfig - Model configuration.
+   * @returns {void} - No return value.
+   */
+  validateModelConfig({className, modelConfig}) {
+    const abilities = modelConfig.abilities
+
+    if (!abilities || typeof abilities !== "object") {
+      throw new Error(`Model '${className}' is missing required 'abilities' config`)
+    }
+
+    const readActions = ["index", "find"]
+
+    for (const action of readActions) {
+      const abilityAction = abilities[action]
+
+      if (typeof abilityAction !== "string" || abilityAction.length < 1) {
+        throw new Error(`Model '${className}' is missing required abilities.${action} config`)
       }
     }
   }
@@ -77,6 +103,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const commands = {
       destroy: modelConfig.commands?.destroy || "destroy",
       find: modelConfig.commands?.find || "find",
+      index: modelConfig.commands?.index || "index",
       update: modelConfig.commands?.update || "update"
     }
 
@@ -90,7 +117,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
     fileContent += "  /**\n"
-    fileContent += "   * @returns {{attributes: string[], commands: {destroy: string, find: string, update: string}, path: string, primaryKey: string}} - Resource config.\n"
+    fileContent += "   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource config.\n"
     fileContent += "   */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
