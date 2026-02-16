@@ -138,9 +138,20 @@
 /**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {string[] | Record<string, any>} attributes - Attributes to expose on the frontend model.
- * @property {Record<string, string>} [commands] - Command names keyed by action (`find`, `update`, `destroy`).
+ * @property {Record<string, string>} [commands] - Command names keyed by action (`index`, `find`, `update`, `destroy`).
  * @property {string} [path] - HTTP path prefix used by frontend model commands.
  * @property {string} [primaryKey] - Primary key attribute name.
+ * @property {FrontendModelResourceServerConfiguration} [server] - Optional backend behavior overrides for built-in frontend actions.
+ */
+
+/**
+ * @typedef {object} FrontendModelResourceServerConfiguration
+ * @property {function({action: "index" | "find" | "update" | "destroy", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default}) : (boolean | void | Promise<boolean | void>)} [beforeAction] - Optional callback run before built-in frontend actions.
+ * @property {function({action: "index", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default}) : Promise<import("./database/record/index.js").default[]>} [records] - Records loader for frontendIndex.
+ * @property {function({action: "index" | "find" | "update", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Record<string, any> | Promise<Record<string, any>>} [serialize] - Record serializer for response payloads.
+ * @property {function({action: "find" | "update" | "destroy", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, id: string | number}) : Promise<import("./database/record/index.js").default | null>} [find] - Record loader for find/update/destroy actions.
+ * @property {function({action: "update", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default, attributes: Record<string, any>}) : Promise<import("./database/record/index.js").default | void>} [update] - Custom update callback.
+ * @property {function({action: "destroy", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Promise<void>} [destroy] - Custom destroy callback.
  */
 
 /**

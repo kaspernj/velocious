@@ -59,16 +59,31 @@ class FakeResponse {
  * @param {object} [args]
  * @param {Record<string, any>} [args.params]
  * @param {string} [args.httpMethod]
+ * @param {import("../../src/configuration-types.js").FrontendModelResourceServerConfiguration} [args.serverConfiguration]
  * @returns {FrontendController}
  */
 function buildController(args = {}) {
   const request = new FakeRequest({httpMethod: args.httpMethod})
   const response = new FakeResponse()
+  /** @type {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  const frontendModelResourceConfiguration = {
+    attributes: ["id", "name"],
+    path: "/frontend-models",
+    primaryKey: "id",
+    server: args.serverConfiguration
+  }
 
   return new FrontendController({
     action: "frontendIndex",
     configuration: {
-      getCurrentAbility: () => undefined
+      getBackendProjects: () => [{
+        path: "/tmp/example",
+        resources: {
+          MockFrontendModel: frontendModelResourceConfiguration
+        }
+      }],
+      getCurrentAbility: () => undefined,
+      getModelClasses: () => ({MockFrontendModel})
     },
     controller: "frontend-models",
     params: args.params || {},
@@ -125,12 +140,7 @@ class MockFrontendModel {
 }
 
 /** Test controller using built-in frontend model actions. */
-class FrontendController extends Controller {
-  /** @returns {typeof MockFrontendModel} */
-  frontendModelClass() {
-    return MockFrontendModel
-  }
-}
+class FrontendController extends Controller {}
 
 describe("Controller frontend model actions", () => {
   it("returns models from frontendIndex", async () => {
@@ -180,5 +190,55 @@ describe("Controller frontend model actions", () => {
 
     expect(payload.status).toEqual("error")
     expect(payload.errorMessage).toEqual("MockFrontendModel not found.")
+  })
+
+  it("runs server beforeAction callback", async () => {
+    let beforeActionCalls = 0
+    const controller = buildController({
+      serverConfiguration: {
+        beforeAction: async () => {
+          beforeActionCalls += 1
+          return true
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(beforeActionCalls).toEqual(1)
+  })
+
+  it("supports server records callback", async () => {
+    const controller = buildController({
+      serverConfiguration: {
+        records: async () => [new MockFrontendModel({id: "9", name: "Nine"})]
+      }
+    })
+
+    await controller.frontendIndex()
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload.models).toEqual([{id: "9", name: "Nine"}])
+  })
+
+  it("supports server serialize callback", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {id: "1"},
+      serverConfiguration: {
+        serialize: async ({model}) => {
+          return {
+            id: model.attributes().id,
+            label: model.attributes().name
+          }
+        }
+      }
+    })
+
+    await controller.frontendFind()
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload.model).toEqual({id: "1", label: "One"})
   })
 })

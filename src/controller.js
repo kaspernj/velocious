@@ -229,18 +229,154 @@ export default class VelociousController {
    * @returns {typeof import("./database/record/index.js").default} - Frontend model class for controller resource actions.
    */
   frontendModelClass() {
-    throw new Error(`${this.constructor.name} must implement frontendModelClass()`)
-    // eslint-disable-next-line no-unreachable
-    return /** @type {typeof import("./database/record/index.js").default} */ (/** @type {unknown} */ (Object))
+    const frontendModelClass = this.frontendModelClassFromConfiguration()
+
+    if (frontendModelClass) return frontendModelClass
+
+    throw new Error(`No frontend model configured for controller '${this.params().controller}'. Configure backendProjects resources or override frontendModelClass().`)
+  }
+
+  /**
+   * @returns {{modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
+   */
+  frontendModelResourceConfiguration() {
+    const params = this.params()
+    const controllerName = typeof params.controller === "string" ? params.controller : undefined
+
+    if (!controllerName || controllerName.length < 1) return null
+
+    const backendProjects = this.getConfiguration().getBackendProjects()
+
+    for (const backendProject of backendProjects) {
+      const resources = backendProject.frontendModels || backendProject.resources || {}
+
+      for (const modelName in resources) {
+        const resourceConfiguration = resources[modelName]
+        const resourcePath = this.frontendModelResourcePath(modelName, resourceConfiguration)
+
+        if (this.frontendModelResourceMatchesController({controllerName, resourcePath})) {
+          return {modelName, resourceConfiguration}
+        }
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * @returns {typeof import("./database/record/index.js").default | null} - Frontend model class resolved from backend project configuration.
+   */
+  frontendModelClassFromConfiguration() {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) return null
+
+    const modelClasses = this.getConfiguration().getModelClasses()
+    const modelClass = modelClasses[frontendModelResource.modelName]
+
+    if (!modelClass) {
+      throw new Error(`Frontend model '${frontendModelResource.modelName}' is configured for '${this.params().controller}', but no model class was registered. Registered models: ${Object.keys(modelClasses).join(", ")}`)
+    }
+
+    return modelClass
+  }
+
+  /**
+   * @param {string} modelName - Model class name.
+   * @param {import("./configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+   * @returns {string} - Normalized resource path.
+   */
+  frontendModelResourcePath(modelName, resourceConfiguration) {
+    if (resourceConfiguration.path) return `/${resourceConfiguration.path.replace(/^\/+/, "")}`
+
+    return `/${inflection.dasherize(inflection.pluralize(modelName))}`
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {string} args.controllerName - Controller name from params.
+   * @param {string} args.resourcePath - Resource path from configuration.
+   * @returns {boolean} - Whether resource path matches current controller.
+   */
+  frontendModelResourceMatchesController({controllerName, resourcePath}) {
+    const normalizedController = controllerName.replace(/^\/+|\/+$/g, "")
+    const normalizedResourcePath = resourcePath.replace(/^\/+|\/+$/g, "")
+
+    if (normalizedResourcePath === normalizedController) return true
+
+    return normalizedResourcePath.endsWith(`/${normalizedController}`)
+  }
+
+  /**
+   * @returns {import("./configuration-types.js").FrontendModelResourceServerConfiguration | null} - Optional server behavior config for frontend model actions.
+   */
+  frontendModelServerConfiguration() {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) return null
+
+    return frontendModelResource.resourceConfiguration.server || null
+  }
+
+  /**
+   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @returns {Promise<boolean>} - Whether action should continue.
+   */
+  async runFrontendModelBeforeAction(action) {
+    const serverConfiguration = this.frontendModelServerConfiguration()
+
+    if (!serverConfiguration?.beforeAction) return true
+
+    const modelClass = this.frontendModelClass()
+    const result = await serverConfiguration.beforeAction({
+      action,
+      controller: this,
+      modelClass,
+      params: this.params()
+    })
+
+    return result !== false
+  }
+
+  /**
+   * @param {"find" | "update" | "destroy"} action - Frontend action.
+   * @param {string | number} id - Record id.
+   * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
+   */
+  async frontendModelFindRecord(action, id) {
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+
+    if (serverConfiguration?.find) {
+      return await serverConfiguration.find({
+        action,
+        controller: this,
+        id,
+        modelClass,
+        params: this.params()
+      })
+    }
+
+    return await modelClass.findBy({id})
   }
 
   /**
    * @returns {Promise<import("./database/record/index.js").default[]>} - Frontend model records.
    */
   async frontendModelRecords() {
-    const ModelClass = this.frontendModelClass()
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
 
-    return await ModelClass.toArray()
+    if (serverConfiguration?.records) {
+      return await serverConfiguration.records({
+        action: "index",
+        controller: this,
+        modelClass,
+        params: this.params()
+      })
+    }
+
+    return await modelClass.toArray()
   }
 
   /**
@@ -280,11 +416,27 @@ export default class VelociousController {
       return
     }
 
+    if (!(await this.runFrontendModelBeforeAction("index"))) return
+
     const models = await this.frontendModelRecords()
 
     await this.render({
       json: {
-        models: models.map((model) => this.serializeFrontendModel(model)),
+        models: await Promise.all(models.map(async (model) => {
+          const serverConfiguration = this.frontendModelServerConfiguration()
+
+          if (serverConfiguration?.serialize) {
+            return await serverConfiguration.serialize({
+              action: "index",
+              controller: this,
+              model,
+              modelClass: this.frontendModelClass(),
+              params: this.params()
+            })
+          }
+
+          return this.serializeFrontendModel(model)
+        })),
         status: "success"
       }
     })
@@ -297,6 +449,8 @@ export default class VelociousController {
       return
     }
 
+    if (!(await this.runFrontendModelBeforeAction("find"))) return
+
     const params = this.params()
     const id = params.id
 
@@ -305,17 +459,28 @@ export default class VelociousController {
       return
     }
 
-    const ModelClass = this.frontendModelClass()
-    const model = await ModelClass.findBy({id})
+    const modelClass = this.frontendModelClass()
+    const model = await this.frontendModelFindRecord("find", id)
 
     if (!model) {
-      await this.frontendModelRenderError(`${ModelClass.name} not found.`)
+      await this.frontendModelRenderError(`${modelClass.name} not found.`)
       return
     }
 
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const serializedModel = serverConfiguration?.serialize
+      ? await serverConfiguration.serialize({
+        action: "find",
+        controller: this,
+        model,
+        modelClass,
+        params
+      })
+      : this.serializeFrontendModel(model)
+
     await this.render({
       json: {
-        model: this.serializeFrontendModel(model),
+        model: serializedModel,
         status: "success"
       }
     })
@@ -327,6 +492,8 @@ export default class VelociousController {
       await this.render({status: 204, json: {}})
       return
     }
+
+    if (!(await this.runFrontendModelBeforeAction("update"))) return
 
     const params = this.params()
     const id = params.id
@@ -342,20 +509,46 @@ export default class VelociousController {
       return
     }
 
-    const ModelClass = this.frontendModelClass()
-    const model = await ModelClass.findBy({id})
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const model = await this.frontendModelFindRecord("update", id)
 
     if (!model) {
-      await this.frontendModelRenderError(`${ModelClass.name} not found.`)
+      await this.frontendModelRenderError(`${modelClass.name} not found.`)
       return
     }
 
-    model.assign(attributes)
-    await model.save()
+    let updatedModel = model
+
+    if (serverConfiguration?.update) {
+      const callbackModel = await serverConfiguration.update({
+        action: "update",
+        attributes,
+        controller: this,
+        model,
+        modelClass,
+        params
+      })
+
+      if (callbackModel) updatedModel = callbackModel
+    } else {
+      model.assign(attributes)
+      await model.save()
+    }
+
+    const serializedModel = serverConfiguration?.serialize
+      ? await serverConfiguration.serialize({
+        action: "update",
+        controller: this,
+        model: updatedModel,
+        modelClass,
+        params
+      })
+      : this.serializeFrontendModel(updatedModel)
 
     await this.render({
       json: {
-        model: this.serializeFrontendModel(model),
+        model: serializedModel,
         status: "success"
       }
     })
@@ -368,6 +561,8 @@ export default class VelociousController {
       return
     }
 
+    if (!(await this.runFrontendModelBeforeAction("destroy"))) return
+
     const params = this.params()
     const id = params.id
 
@@ -376,15 +571,26 @@ export default class VelociousController {
       return
     }
 
-    const ModelClass = this.frontendModelClass()
-    const model = await ModelClass.findBy({id})
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const model = await this.frontendModelFindRecord("destroy", id)
 
     if (!model) {
-      await this.frontendModelRenderError(`${ModelClass.name} not found.`)
+      await this.frontendModelRenderError(`${modelClass.name} not found.`)
       return
     }
 
-    await model.destroy()
+    if (serverConfiguration?.destroy) {
+      await serverConfiguration.destroy({
+        action: "destroy",
+        controller: this,
+        model,
+        modelClass,
+        params
+      })
+    } else {
+      await model.destroy()
+    }
 
     await this.render({
       json: {
