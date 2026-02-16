@@ -225,6 +225,174 @@ export default class VelociousController {
     })
   }
 
+  /**
+   * @returns {typeof import("./database/record/index.js").default} - Frontend model class for controller resource actions.
+   */
+  frontendModelClass() {
+    throw new Error(`${this.constructor.name} must implement frontendModelClass()`)
+    // eslint-disable-next-line no-unreachable
+    return /** @type {typeof import("./database/record/index.js").default} */ (/** @type {unknown} */ (Object))
+  }
+
+  /**
+   * @returns {Promise<import("./database/record/index.js").default[]>} - Frontend model records.
+   */
+  async frontendModelRecords() {
+    const ModelClass = this.frontendModelClass()
+
+    return await ModelClass.toArray()
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Frontend model record.
+   * @returns {Record<string, any>} - Serialized frontend model payload.
+   */
+  serializeFrontendModel(model) {
+    return model.attributes()
+  }
+
+  /**
+   * @param {string} errorMessage - Error message.
+   * @returns {Promise<void>} - Resolves when error has been rendered.
+   */
+  async frontendModelRenderError(errorMessage) {
+    const renderError = /** @type {((errorMessage: string) => Promise<void>) | undefined} */ (
+      /** @type {any} */ (this).renderError
+    )
+
+    if (typeof renderError === "function") {
+      await renderError.call(this, errorMessage)
+      return
+    }
+
+    await this.render({
+      json: {
+        errorMessage,
+        status: "error"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Collection action for frontend model resources. */
+  async frontendIndex() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const models = await this.frontendModelRecords()
+
+    await this.render({
+      json: {
+        models: models.map((model) => this.serializeFrontendModel(model)),
+        status: "success"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Member find action for frontend model resources. */
+  async frontendFind() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = this.params()
+    const id = params.id
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      await this.frontendModelRenderError("Expected model id.")
+      return
+    }
+
+    const ModelClass = this.frontendModelClass()
+    const model = await ModelClass.findBy({id})
+
+    if (!model) {
+      await this.frontendModelRenderError(`${ModelClass.name} not found.`)
+      return
+    }
+
+    await this.render({
+      json: {
+        model: this.serializeFrontendModel(model),
+        status: "success"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Member update action for frontend model resources. */
+  async frontendUpdate() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = this.params()
+    const id = params.id
+    const attributes = params.attributes
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      await this.frontendModelRenderError("Expected model id.")
+      return
+    }
+
+    if (!attributes || typeof attributes !== "object") {
+      await this.frontendModelRenderError("Expected model attributes.")
+      return
+    }
+
+    const ModelClass = this.frontendModelClass()
+    const model = await ModelClass.findBy({id})
+
+    if (!model) {
+      await this.frontendModelRenderError(`${ModelClass.name} not found.`)
+      return
+    }
+
+    model.assign(attributes)
+    await model.save()
+
+    await this.render({
+      json: {
+        model: this.serializeFrontendModel(model),
+        status: "success"
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} - Member destroy action for frontend model resources. */
+  async frontendDestroy() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = this.params()
+    const id = params.id
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      await this.frontendModelRenderError("Expected model id.")
+      return
+    }
+
+    const ModelClass = this.frontendModelClass()
+    const model = await ModelClass.findBy({id})
+
+    if (!model) {
+      await this.frontendModelRenderError(`${ModelClass.name} not found.`)
+      return
+    }
+
+    await model.destroy()
+
+    await this.render({
+      json: {
+        status: "success"
+      }
+    })
+  }
+
   /** @returns {void} - No return value.  */
   renderText() {
     throw new Error("renderText stub")
