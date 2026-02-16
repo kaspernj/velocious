@@ -100,6 +100,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    */
   buildModelFileContent({className, importPath, modelConfig}) {
     const attributes = this.attributeNamesForModel(modelConfig)
+    const attributesTypeName = `${className}Attributes`
     const commands = {
       destroy: modelConfig.commands?.destroy || "destroy",
       find: modelConfig.commands?.find || "find",
@@ -114,6 +115,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     let fileContent = ""
 
     fileContent += `import FrontendModelBase from "${importPath}"\n\n`
+    fileContent += "/**\n"
+    fileContent += ` * @typedef {object} ${attributesTypeName}\n`
+    for (const attributeName of attributes) {
+      fileContent += ` * @property {unknown} ${attributeName} - Attribute value.\n`
+    }
+    fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
     fileContent += "  /**\n"
@@ -134,14 +141,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += "   * @returns {any} - Attribute value.\n"
+      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attributeName)}]} - Attribute value.\n`
       fileContent += "   */\n"
       fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attributeName)}) }\n`
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += "   * @param {any} newValue - New attribute value.\n"
-      fileContent += "   * @returns {any} - Assigned value.\n"
+      fileContent += `   * @param {${attributesTypeName}[${JSON.stringify(attributeName)}]} newValue - New attribute value.\n`
+      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attributeName)}]} - Assigned value.\n`
       fileContent += "   */\n"
       fileContent += `  set${camelizedAttributeUpper}(newValue) { return this.setAttribute(${JSON.stringify(attributeName)}, newValue) }\n`
     }

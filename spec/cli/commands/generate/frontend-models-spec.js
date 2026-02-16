@@ -49,6 +49,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("class Task extends FrontendModelBase")
     expect(taskContents).toContain("path: \"/api/frontend-models/tasks\"")
     expect(taskContents).toContain("\"index\":\"list\"")
+    expect(taskContents).toContain("@typedef {object} TaskAttributes")
+    expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
     expect(taskContents).toContain("identifier() { return this.readAttribute(\"identifier\") }")
     expect(taskContents).toContain("setIdentifier(newValue) { return this.setAttribute(\"identifier\", newValue) }")
 

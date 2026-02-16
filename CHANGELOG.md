@@ -104,3 +104,4 @@
 - Require `backendProjects.resources.*.abilities` for frontend model generation and runtime actions, and enforce CanCan-style action scoping via ability-aware queries (`read`, `update`, `destroy`, etc.).
 - Make `Model.accessibleBy(ability)` require an explicit ability object and raise a clear error when called without one.
 - Add a Rails-style `Current` API backed by async-local request context and make `Model.accessible()` resolve ability from `Current.ability()` by default.
+- Improve `g:frontend-models` output JSDoc typing by generating per-model `@typedef` attribute maps and using typed getter/setter signatures (`ModelAttributes["field"]`) instead of `any`.
