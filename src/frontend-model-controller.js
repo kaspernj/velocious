@@ -13,7 +13,7 @@ export default class FrontendModelController extends Controller {
 
     if (frontendModelClass) return frontendModelClass
 
-    throw new Error(`No frontend model configured for controller '${this.params().controller}'. Configure backendProjects resources or override frontendModelClass().`)
+    throw new Error(`No frontend model configured for controller '${this.params().controller}'. Configure backendProjects resources.`)
   }
 
   /**
@@ -99,6 +99,82 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @returns {string} - Frontend model primary key.
+   */
+  frontendModelPrimaryKey() {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) {
+      throw new Error(`No frontend model resource configuration for controller '${this.params().controller}'`)
+    }
+
+    return frontendModelResource.resourceConfiguration.primaryKey || "id"
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
+   * @returns {string} - Ability action configured for the frontend action.
+   */
+  frontendModelAbilityAction(action) {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) {
+      throw new Error(`No frontend model resource configuration for controller '${this.params().controller}'`)
+    }
+
+    const abilities = frontendModelResource.resourceConfiguration.abilities
+
+    if (!abilities || typeof abilities !== "object") {
+      throw new Error(`Resource '${frontendModelResource.modelName}' must define an 'abilities' object`)
+    }
+
+    const abilityAction = abilities[action]
+
+    if (typeof abilityAction !== "string" || abilityAction.length < 1) {
+      throw new Error(`Resource '${frontendModelResource.modelName}' must define abilities.${action}`)
+    }
+
+    return abilityAction
+  }
+
+  /**
+   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @returns {import("./database/query/model-class-query.js").default<any>} - Authorized query for the action.
+   */
+  frontendModelAuthorizedQuery(action) {
+    const abilityAction = this.frontendModelAbilityAction(action)
+
+    return this.frontendModelClass().accessibleFor(abilityAction)
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Model instance.
+   * @returns {string} - Primary key value as string.
+   */
+  frontendModelPrimaryKeyValue(model) {
+    const value = model.attributes()[this.frontendModelPrimaryKey()]
+
+    return String(value)
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {"index" | "find" | "update" | "destroy"} args.action - Frontend action.
+   * @param {import("./database/record/index.js").default[]} args.models - Candidate models.
+   * @returns {Promise<import("./database/record/index.js").default[]>} - Authorized models.
+   */
+  async frontendModelFilterAuthorizedModels({action, models}) {
+    if (models.length === 0) return models
+
+    const primaryKey = this.frontendModelPrimaryKey()
+    const ids = models.map((model) => this.frontendModelPrimaryKeyValue(model))
+    const authorizedIdsRaw = await this.frontendModelAuthorizedQuery(action).where({[primaryKey]: ids}).pluck(primaryKey)
+    const authorizedIds = new Set(authorizedIdsRaw.map((id) => String(id)))
+
+    return models.filter((model) => authorizedIds.has(this.frontendModelPrimaryKeyValue(model)))
+  }
+
+  /**
    * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
    * @returns {Promise<boolean>} - Whether action should continue.
    */
@@ -126,18 +202,25 @@ export default class FrontendModelController extends Controller {
   async frontendModelFindRecord(action, id) {
     const modelClass = this.frontendModelClass()
     const serverConfiguration = this.frontendModelServerConfiguration()
+    const primaryKey = this.frontendModelPrimaryKey()
 
     if (serverConfiguration?.find) {
-      return await serverConfiguration.find({
+      const model = await serverConfiguration.find({
         action,
         controller: this,
         id,
         modelClass,
         params: this.params()
       })
+
+      if (!model) return null
+
+      const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
+
+      return authorizedModels[0] || null
     }
 
-    return await modelClass.findBy({id})
+    return await this.frontendModelAuthorizedQuery(action).findBy({[primaryKey]: id})
   }
 
   /**
@@ -148,15 +231,17 @@ export default class FrontendModelController extends Controller {
     const serverConfiguration = this.frontendModelServerConfiguration()
 
     if (serverConfiguration?.records) {
-      return await serverConfiguration.records({
+      const models = await serverConfiguration.records({
         action: "index",
         controller: this,
         modelClass,
         params: this.params()
       })
+
+      return await this.frontendModelFilterAuthorizedModels({action: "index", models})
     }
 
-    return await modelClass.toArray()
+    return await this.frontendModelAuthorizedQuery("index").toArray()
   }
 
   /**

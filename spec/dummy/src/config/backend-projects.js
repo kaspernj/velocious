@@ -5,6 +5,13 @@ const backendProjects = [
     resources: {
       Task: {
         attributes: ["id", "identifier", "name"],
+        abilities: {
+          create: "create",
+          destroy: "destroy",
+          find: "read",
+          index: "read",
+          update: "update"
+        },
         commands: {
           destroy: "destroy",
           find: "find",
@@ -19,6 +26,10 @@ const backendProjects = [
           email: true,
           id: true,
           name: true
+        },
+        abilities: {
+          find: "read",
+          index: "read"
         },
         path: "/api/frontend-models/users"
       }

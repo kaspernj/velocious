@@ -138,10 +138,20 @@
 /**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {string[] | Record<string, any>} attributes - Attributes to expose on the frontend model.
+ * @property {FrontendModelResourceAbilitiesConfiguration} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`).
  * @property {Record<string, string>} [commands] - Command names keyed by action (`index`, `find`, `update`, `destroy`).
  * @property {string} [path] - HTTP path prefix used by frontend model commands.
  * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional backend behavior overrides for built-in frontend actions.
+ */
+
+/**
+ * @typedef {object} FrontendModelResourceAbilitiesConfiguration
+ * @property {string} [index] - Ability action for frontend index.
+ * @property {string} [find] - Ability action for frontend find.
+ * @property {string} [create] - Ability action for frontend create.
+ * @property {string} [update] - Ability action for frontend update.
+ * @property {string} [destroy] - Ability action for frontend destroy.
  */
 
 /**

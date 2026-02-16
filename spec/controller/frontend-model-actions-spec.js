@@ -59,6 +59,7 @@ class FakeResponse {
  * @param {object} [args]
  * @param {Record<string, any>} [args.params]
  * @param {string} [args.httpMethod]
+ * @param {Partial<import("../../src/configuration-types.js").FrontendModelResourceConfiguration>} [args.resourceConfiguration]
  * @param {import("../../src/configuration-types.js").FrontendModelResourceServerConfiguration} [args.serverConfiguration]
  * @returns {FrontendController}
  */
@@ -68,9 +69,16 @@ function buildController(args = {}) {
   /** @type {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   const frontendModelResourceConfiguration = {
     attributes: ["id", "name"],
+    abilities: {
+      destroy: "destroy",
+      find: "read",
+      index: "read",
+      update: "update"
+    },
     path: "/frontend-models",
     primaryKey: "id",
-    server: args.serverConfiguration
+    server: args.serverConfiguration,
+    ...args.resourceConfiguration
   }
 
   return new FrontendController({
@@ -118,6 +126,13 @@ class MockFrontendModel {
     return attributes ? new this(attributes) : null
   }
 
+  /**
+   * @returns {MockFrontendModelQuery}
+   */
+  static accessibleFor() {
+    return new MockFrontendModelQuery(this)
+  }
+
   /** @returns {Record<string, any>} */
   attributes() {
     return {...this._attributes}
@@ -136,6 +151,72 @@ class MockFrontendModel {
   /** @returns {Promise<void>} */
   async destroy() {
     MockFrontendModel.data = MockFrontendModel.data.filter((record) => `${record.id}` !== `${this._attributes.id}`)
+  }
+}
+
+/** Minimal query object for ability-scoped mock model tests. */
+class MockFrontendModelQuery {
+  /**
+   * @param {typeof MockFrontendModel} modelClass
+   */
+  constructor(modelClass) {
+    this.modelClass = modelClass
+    this.conditions = {}
+  }
+
+  /**
+   * @param {Record<string, any>} conditions
+   * @returns {this}
+   */
+  where(conditions) {
+    this.conditions = {...this.conditions, ...conditions}
+    return this
+  }
+
+  /** @returns {Promise<MockFrontendModel[]>} */
+  async toArray() {
+    const records = this.modelClass.data.filter((record) => this.matches(record))
+    return records.map((record) => new this.modelClass(record))
+  }
+
+  /**
+   * @param {Record<string, any>} conditions
+   * @returns {Promise<MockFrontendModel | null>}
+   */
+  async findBy(conditions) {
+    const records = this.modelClass.data.filter((record) => this.matches(record))
+    const key = Object.keys(conditions)[0]
+    const value = conditions[key]
+    const found = records.find((record) => `${record[key]}` === `${value}`)
+
+    return found ? new this.modelClass(found) : null
+  }
+
+  /**
+   * @param {string} column
+   * @returns {Promise<any[]>}
+   */
+  async pluck(column) {
+    const records = this.modelClass.data.filter((record) => this.matches(record))
+    return records.map((record) => record[column])
+  }
+
+  /**
+   * @param {Record<string, any>} record
+   * @returns {boolean}
+   */
+  matches(record) {
+    for (const key in this.conditions) {
+      const expectedValue = this.conditions[key]
+
+      if (Array.isArray(expectedValue)) {
+        if (!expectedValue.map((value) => `${value}`).includes(`${record[key]}`)) return false
+      } else if (`${record[key]}` !== `${expectedValue}`) {
+        return false
+      }
+    }
+
+    return true
   }
 }
 
@@ -209,6 +290,8 @@ describe("Controller frontend model actions", () => {
   })
 
   it("supports server records callback", async () => {
+    MockFrontendModel.data = [{id: "9", name: "Nine"}]
+
     const controller = buildController({
       serverConfiguration: {
         records: async () => [new MockFrontendModel({id: "9", name: "Nine"})]
@@ -240,5 +323,17 @@ describe("Controller frontend model actions", () => {
     const payload = JSON.parse(controller.response().body)
 
     expect(payload.model).toEqual({id: "1", label: "One"})
+  })
+
+  it("fails when resource abilities are missing", async () => {
+    const controller = buildController({
+      resourceConfiguration: {
+        abilities: undefined
+      }
+    })
+
+    await expect(async () => {
+      await controller.frontendIndex()
+    }).toThrow(/must define an 'abilities' object/)
   })
 })

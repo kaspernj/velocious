@@ -71,4 +71,28 @@ describe("Cli - generate - frontend-models", () => {
       await cli.execute()
     }).toThrow(/No backend projects configured/)
   })
+
+  it("fails when a resource is missing abilities config", async () => {
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            Task: {
+              attributes: ["id", "name"],
+              path: "/tasks"
+            }
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => {
+      await cli.execute()
+    }).toThrow(/missing required 'abilities' config/)
+  })
 })

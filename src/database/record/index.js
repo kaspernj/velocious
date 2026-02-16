@@ -1499,10 +1499,11 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
+   * @param {string} action - Ability action to scope by.
    * @param {import("../../authorization/ability.js").default | undefined} [ability] - Ability instance.
    * @returns {ModelClassQuery<MC>} - Authorized query.
    */
-  static accessible(ability) {
+  static accessibleFor(action, ability) {
     const query = this._newQuery()
     const currentAbility = ability || this._getConfiguration().getCurrentAbility()
 
@@ -1511,10 +1512,20 @@ class VelociousDatabaseRecord {
     }
 
     return /** @type {ModelClassQuery<MC>} */ (currentAbility.applyToQuery({
-      action: "read",
+      action,
       modelClass: this,
       query
     }))
+  }
+
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {import("../../authorization/ability.js").default | undefined} [ability] - Ability instance.
+   * @returns {ModelClassQuery<MC>} - Authorized query.
+   */
+  static accessible(ability) {
+    return this.accessibleFor("read", ability)
   }
 
   /**
