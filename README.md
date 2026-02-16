@@ -288,6 +288,31 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await user.destroy()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 
+You do not need to manually define `frontend-index` / `frontend-find` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
+
+## Route resolver hooks
+
+Libraries can hook unresolved routes and hijack them before Velocious falls back to the built-in 404 controller.
+
+```js
+export default new Configuration({
+  // ...
+  routeResolverHooks: [
+    ({currentPath}) => {
+      if (currentPath !== "/special-route") return null
+
+      return {controller: "hijacked", action: "index"}
+    }
+  ]
+})
+```
+
+Hook return value:
+
+- `null` to skip
+- `{controller, action}` to resolve the request
+- Optional `params` object to merge into request params
+
 
 ```js
 import Record from "velocious/build/src/database/record/index.js"
