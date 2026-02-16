@@ -9,6 +9,7 @@ import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
+import frontendModelCommandRouteHook from "./routes/hooks/frontend-model-command-route-hook.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
@@ -31,7 +32,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -60,6 +61,7 @@ export default class VelociousConfiguration {
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
     this._logging = logging
     this._mailerBackend = mailerBackend
+    this._routeResolverHooks = [...(routeResolverHooks || []), frontendModelCommandRouteHook]
     this._errorEvents = new EventEmitter()
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
@@ -186,6 +188,17 @@ export default class VelociousConfiguration {
 
   /** @returns {import("./configuration-types.js").AbilityResolverType | undefined} - Ability resolver. */
   getAbilityResolver() { return this._abilityResolver }
+
+  /** @returns {import("./configuration-types.js").RouteResolverHookType[]} - Route resolver hooks. */
+  getRouteResolverHooks() { return this._routeResolverHooks }
+
+  /**
+   * @param {import("./configuration-types.js").RouteResolverHookType} hook - Route resolver hook.
+   * @returns {void} - No return value.
+   */
+  addRouteResolverHook(hook) {
+    this._routeResolverHooks.push(hook)
+  }
 
   /**
    * @param {import("./configuration-types.js").AbilityResolverType | undefined} resolver - Ability resolver.

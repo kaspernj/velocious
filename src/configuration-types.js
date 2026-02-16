@@ -173,6 +173,27 @@
  */
 
 /**
+ * @typedef {object} RouteResolverHookArgs
+ * @property {import("./configuration.js").default} configuration - Configuration instance.
+ * @property {Record<string, any>} params - Mutable request params object.
+ * @property {string} currentPath - Request path without query.
+ * @property {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} request - Request object.
+ * @property {import("./http-server/client/response.js").default} response - Response object.
+ * @property {import("./routes/resolver.js").default} resolver - Resolver instance.
+ */
+
+/**
+ * @typedef {object} RouteResolverHookResult
+ * @property {string} action - Dasherized action name (for example `frontend-index`).
+ * @property {string} controller - Controller path (for example `accounts`).
+ * @property {Record<string, any>} [params] - Extra params to merge for controller/action.
+ */
+
+/**
+ * @typedef {function(RouteResolverHookArgs) : RouteResolverHookResult | null | Promise<RouteResolverHookResult | null>} RouteResolverHookType
+ */
+
+/**
  * @typedef {typeof import("./authorization/base-resource.js").default} AbilityResourceClassType
  */
 
@@ -204,6 +225,7 @@
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.
+ * @property {RouteResolverHookType[]} [routeResolverHooks] - Hook callbacks that can hijack unresolved routes.
  * @property {WebsocketChannelResolverType} [websocketChannelResolver] - Resolve a websocket channel class/instance for each connection.
  * @property {WebsocketMessageHandlerResolverType} [websocketMessageHandlerResolver] - Resolve a raw websocket message handler for each connection.
  */

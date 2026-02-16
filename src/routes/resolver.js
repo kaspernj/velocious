@@ -49,17 +49,28 @@ export default class VelociousRoutesResolver {
     let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
 
     if (!matchResult) {
-      const __filename = fileURLToPath(import.meta.url)
-      const __dirname = dirname(__filename)
-      const requestedPath = currentPath.replace(/^\//, "") || "_root"
-      const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
+      const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath)
 
-      await this.logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
+      if (routeResolverHookMatch) {
+        controller = routeResolverHookMatch.controller
+        action = inflection.camelize(routeResolverHookMatch.action.replaceAll("-", "_"), true)
+        this.params.controller = controller
+        this.params.action = routeResolverHookMatch.action
+        controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+        viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
+      } else {
+        const __filename = fileURLToPath(import.meta.url)
+        const __dirname = dirname(__filename)
+        const requestedPath = currentPath.replace(/^\//, "") || "_root"
+        const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
 
-      controller = "errors"
-      controllerPath = "./built-in/errors/controller.js"
-      action = "notFound"
-      viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
+        await this.logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
+
+        controller = "errors"
+        controllerPath = "./built-in/errors/controller.js"
+        action = "notFound"
+        viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
+      }
     } else if (action) {
       if (!controller) controller = "_root"
 
@@ -146,6 +157,47 @@ export default class VelociousRoutesResolver {
 
       return matchResult
     }
+  }
+
+  /**
+   * @param {string} currentPath - Request path without query string.
+   * @returns {Promise<import("../configuration-types.js").RouteResolverHookResult | null>} - Matched action/controller from hooks.
+   */
+  async resolveRouteResolverHooks(currentPath) {
+    const hooks = this.configuration.getRouteResolverHooks?.() || []
+
+    for (const hook of hooks) {
+      const hookResult = await hook({
+        configuration: this.configuration,
+        currentPath,
+        params: this.params,
+        request: this.request,
+        resolver: this,
+        response: this.response
+      })
+
+      if (!hookResult) continue
+
+      if (typeof hookResult.action !== "string" || hookResult.action.length < 1) {
+        throw new Error(`Expected route resolver hook action to be a string, got: ${hookResult.action}`)
+      }
+
+      if (typeof hookResult.controller !== "string" || hookResult.controller.length < 1) {
+        throw new Error(`Expected route resolver hook controller to be a string, got: ${hookResult.controller}`)
+      }
+
+      if (hookResult.params && typeof hookResult.params !== "object") {
+        throw new Error(`Expected route resolver hook params to be an object, got: ${hookResult.params}`)
+      }
+
+      if (hookResult.params) {
+        Object.assign(this.params, hookResult.params)
+      }
+
+      return hookResult
+    }
+
+    return null
   }
 
   /**

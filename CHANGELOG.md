@@ -106,3 +106,5 @@
 - Add a Rails-style `Current` API backed by async-local request context and make `Model.accessible()` resolve ability from `Current.ability()` by default.
 - Improve `g:frontend-models` output JSDoc typing by generating per-model `@typedef` attribute maps and using typed getter/setter signatures (`ModelAttributes["field"]`) instead of `any`.
 - Support `backendProjects[].frontendModelsOutputPath` so `g:frontend-models` can write generated files to another project directory (for example a separate frontend app).
+- Auto-resolve frontend model command paths (for example `/accounts/frontend-index`) from `backendProjects.resources` even when those custom command routes are not explicitly declared in app route files.
+- Add a general `routeResolverHooks` configuration API (plus `configuration.addRouteResolverHook(...)`) so libraries can hijack unresolved routes before 404 handling.
