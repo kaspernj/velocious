@@ -1250,9 +1250,17 @@ Then query through authorization rules:
 const users = await User.accessible().toArray()
 ```
 
+`accessible()` reads from `Current.ability()` (request-scoped via AsyncLocalStorage on Node).
+
 You can also pass an ability explicitly:
 
 ```js
 const ability = new Ability({context: {currentUser}, resources: [UserResource]})
 const users = await User.accessible(ability).toArray()
+```
+
+Or require explicit ability passing:
+
+```js
+const users = await User.accessibleBy(ability).toArray()
 ```
