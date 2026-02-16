@@ -167,6 +167,7 @@
 /**
  * @typedef {object} BackendProjectConfiguration
  * @property {string} path - Path to the backend project.
+ * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
  * @property {Record<string, FrontendModelResourceConfiguration>} [frontendModels] - Frontend model definitions keyed by model class name.
  * @property {Record<string, FrontendModelResourceConfiguration>} [resources] - Alias for `frontendModels`.
  */

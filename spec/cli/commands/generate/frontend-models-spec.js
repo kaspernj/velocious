@@ -7,6 +7,7 @@ import Configuration from "../../../../src/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import fs from "fs/promises"
+import path from "node:path"
 
 /**
  * @param {object} args - Build args.
@@ -96,5 +97,32 @@ describe("Cli - generate - frontend-models", () => {
     await expect(async () => {
       await cli.execute()
     }).toThrow(/missing required 'abilities' config/)
+  })
+
+  it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {
+    const outputDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-output")
+    await fs.rm(outputDirectory, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          ...backendProjects[0],
+          frontendModelsOutputPath: outputDirectory
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const generatedTaskPath = `${outputDirectory}/src/frontend-models/task.js`
+    const generatedTaskContents = await fs.readFile(generatedTaskPath, "utf8")
+
+    expect(generatedTaskContents).toContain("class Task extends FrontendModelBase")
+
+    await fs.rm(outputDirectory, {force: true, recursive: true})
   })
 })
