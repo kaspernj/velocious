@@ -1531,10 +1531,14 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {import("../../authorization/ability.js").default | undefined} [ability] - Ability instance.
+   * @param {import("../../authorization/ability.js").default} ability - Ability instance.
    * @returns {ModelClassQuery<MC>} - Authorized query.
    */
   static accessibleBy(ability) {
+    if (!ability) {
+      throw new Error(`No ability passed to ${this.name}.accessibleBy(ability).`)
+    }
+
     return this.accessible(ability)
   }
 
