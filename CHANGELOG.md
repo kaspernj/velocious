@@ -96,3 +96,5 @@
 - Normalize dynamic import file paths to file URLs for Windows ESM compatibility across configuration, routes, workers, migrations, tests, and jobs.
 - Fix Windows CLI command discovery by parsing both `\` and `/` command file path separators.
 - Make npm build/test scripts Windows-compatible by replacing POSIX shell commands with Node script wrappers.
+- Bump `system-testing` from `1.0.76` to `1.0.77`.
+- Inline browser `EXPO_PUBLIC_SYSTEM_TEST*` env values in the browser test bundle to prevent websocket startup failures when `process` is unavailable in the browser runtime.

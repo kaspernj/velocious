@@ -55,6 +55,10 @@ async function buildBrowserTestApp() {
   await build({
     entryPoints: [entryFile],
     bundle: true,
+    define: {
+      "process.env.EXPO_PUBLIC_SYSTEM_TEST": JSON.stringify(process.env.EXPO_PUBLIC_SYSTEM_TEST || ""),
+      "process.env.EXPO_PUBLIC_SYSTEM_TEST_HOST": JSON.stringify(process.env.EXPO_PUBLIC_SYSTEM_TEST_HOST || "")
+    },
     format: "esm",
     outdir: distDir,
     platform: "browser",
