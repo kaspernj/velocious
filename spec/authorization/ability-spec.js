@@ -145,4 +145,28 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
       await User.accessible().toArray()
     }).toThrow(/No ability in context/)
   })
+
+  it("supports explicit ability with accessibleBy", async () => {
+    const userOne = await createUser("accessible-by-one@example.com", "ab-one")
+    const userTwo = await createUser("accessible-by-two@example.com", "ab-two")
+
+    class UserResource extends BaseResource {
+      static ModelClass = User
+
+      abilities() {
+        this.can("read", User, {id: userOne.id()})
+      }
+    }
+
+    const ability = new Ability({resources: [UserResource]})
+    const foundUsers = await User.accessibleBy(ability).where({id: [userOne.id(), userTwo.id()]}).order("id").toArray()
+
+    expect(foundUsers.map((user) => user.id())).toEqual([userOne.id()])
+  })
+
+  it("raises an error when accessibleBy is called without an ability", async () => {
+    await expect(async () => {
+      await User.accessibleBy(/** @type {any} */ (undefined)).toArray()
+    }).toThrow(/accessibleBy\(ability\)/)
+  })
 })

@@ -7,6 +7,7 @@
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
 import Configuration from "../../configuration.js"
+import Current from "../../current.js"
 import FromTable from "../query/from-table.js"
 import Handler from "../handler.js"
 import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
@@ -1505,7 +1506,7 @@ class VelociousDatabaseRecord {
    */
   static accessibleFor(action, ability) {
     const query = this._newQuery()
-    const currentAbility = ability || this._getConfiguration().getCurrentAbility()
+    const currentAbility = ability || Current.ability()
 
     if (!currentAbility) {
       throw new Error(`No ability in context for ${this.name}. Pass an ability or configure ability resolver on the request`)
@@ -1531,10 +1532,14 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {import("../../authorization/ability.js").default | undefined} [ability] - Ability instance.
+   * @param {import("../../authorization/ability.js").default} ability - Ability instance.
    * @returns {ModelClassQuery<MC>} - Authorized query.
    */
   static accessibleBy(ability) {
+    if (!ability) {
+      throw new Error(`No ability passed to ${this.name}.accessibleBy(ability).`)
+    }
+
     return this.accessible(ability)
   }
 
