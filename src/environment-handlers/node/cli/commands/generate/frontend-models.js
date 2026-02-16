@@ -77,6 +77,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const commands = {
       destroy: modelConfig.commands?.destroy || "destroy",
       find: modelConfig.commands?.find || "find",
+      index: modelConfig.commands?.index || "index",
       update: modelConfig.commands?.update || "update"
     }
 
@@ -90,7 +91,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
     fileContent += "  /**\n"
-    fileContent += "   * @returns {{attributes: string[], commands: {destroy: string, find: string, update: string}, path: string, primaryKey: string}} - Resource config.\n"
+    fileContent += "   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource config.\n"
     fileContent += "   */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"

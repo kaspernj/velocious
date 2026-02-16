@@ -8,6 +8,7 @@ const backendProjects = [
         commands: {
           destroy: "destroy",
           find: "find",
+          index: "list",
           update: "update"
         },
         path: "/api/frontend-models/tasks",
