@@ -41,24 +41,22 @@ export default class VelociousRoutesResolver {
     const currentPath = rawPath.split("?")[0]
     let viewPath
 
-    const matchResult = this.matchPathWithRoutes(currentRoute, currentPath)
+    const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath)
+    const matchResult = routeResolverHookMatch ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
     const actionParam = this.params.action
     const controllerParam = this.params.controller
     const actionValue = typeof actionParam == "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
     let action = typeof actionValue == "string" ? inflection.camelize(actionValue.replaceAll("-", "_"), true) : undefined
     let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
 
-    if (!matchResult) {
-      const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath)
-
-      if (routeResolverHookMatch) {
-        controller = routeResolverHookMatch.controller
-        action = inflection.camelize(routeResolverHookMatch.action.replaceAll("-", "_"), true)
-        this.params.controller = controller
-        this.params.action = routeResolverHookMatch.action
-        controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
-        viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
-      } else {
+    if (routeResolverHookMatch) {
+      controller = routeResolverHookMatch.controller
+      action = inflection.camelize(routeResolverHookMatch.action.replaceAll("-", "_"), true)
+      this.params.controller = controller
+      this.params.action = routeResolverHookMatch.action
+      controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+      viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
+    } else if (!matchResult) {
         const __filename = fileURLToPath(import.meta.url)
         const __dirname = dirname(__filename)
         const requestedPath = currentPath.replace(/^\//, "") || "_root"
@@ -70,7 +68,6 @@ export default class VelociousRoutesResolver {
         controllerPath = "./built-in/errors/controller.js"
         action = "notFound"
         viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
-      }
     } else if (action) {
       if (!controller) controller = "_root"
 
