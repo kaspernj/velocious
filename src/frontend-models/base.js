@@ -1,6 +1,67 @@
 // @ts-check
 
 /** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
+/**
+ * @typedef {object} FrontendModelTransportConfig
+ * @property {string} [baseUrl] - Optional base URL prefixed before resource paths.
+ * @property {(() => string | undefined | null)} [baseUrlResolver] - Optional resolver used per request for dynamic base URL.
+ * @property {string} [pathPrefix] - Optional path prefix inserted between base URL and resource path.
+ * @property {(() => string | undefined | null)} [pathPrefixResolver] - Optional resolver used per request for dynamic path prefix.
+ * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
+ * @property {((args: {commandName: string, commandType: "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
+ */
+
+/** @type {FrontendModelTransportConfig} */
+const frontendModelTransportConfig = {}
+
+/**
+ * @param {string | undefined | null} value - Base URL candidate.
+ * @returns {string} - Normalized base URL without trailing slash.
+ */
+function normalizeBaseUrl(value) {
+  if (typeof value !== "string") return ""
+
+  const trimmed = value.trim()
+
+  if (!trimmed.length) return ""
+
+  return trimmed.replace(/\/+$/, "")
+}
+
+/**
+ * @param {string | undefined | null} value - Path prefix candidate.
+ * @returns {string} - Normalized path prefix with leading slash and no trailing slash.
+ */
+function normalizePathPrefix(value) {
+  if (typeof value !== "string") return ""
+
+  const trimmed = value.trim()
+
+  if (!trimmed.length) return ""
+
+  const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
+
+  return withLeadingSlash.replace(/\/+$/, "")
+}
+
+/**
+ * @param {string} resourcePath - Resource path (expected absolute path).
+ * @param {string} commandName - Command name.
+ * @returns {string} - Combined command URL.
+ */
+function frontendModelCommandUrl(resourcePath, commandName) {
+  const resolvedBaseUrl = frontendModelTransportConfig.baseUrlResolver
+    ? frontendModelTransportConfig.baseUrlResolver()
+    : frontendModelTransportConfig.baseUrl
+  const baseUrl = normalizeBaseUrl(resolvedBaseUrl)
+  const resolvedPathPrefix = frontendModelTransportConfig.pathPrefixResolver
+    ? frontendModelTransportConfig.pathPrefixResolver()
+    : frontendModelTransportConfig.pathPrefix
+  const pathPrefix = normalizePathPrefix(resolvedPathPrefix)
+  const normalizedResourcePath = resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`
+
+  return `${baseUrl}${pathPrefix}${normalizedResourcePath}/${commandName}`
+}
 
 /** Base class for generated frontend model classes. */
 export default class FrontendModelBase {
@@ -103,6 +164,40 @@ export default class FrontendModelBase {
   }
 
   /**
+   * @param {FrontendModelTransportConfig} config - Frontend model transport configuration.
+   * @returns {void} - No return value.
+   */
+  static configureTransport(config) {
+    if (!config || typeof config !== "object") {
+      return
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "baseUrl")) {
+      frontendModelTransportConfig.baseUrl = config.baseUrl
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "baseUrlResolver")) {
+      frontendModelTransportConfig.baseUrlResolver = config.baseUrlResolver
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "credentials")) {
+      frontendModelTransportConfig.credentials = config.credentials
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "pathPrefix")) {
+      frontendModelTransportConfig.pathPrefix = config.pathPrefix
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "pathPrefixResolver")) {
+      frontendModelTransportConfig.pathPrefixResolver = config.pathPrefixResolver
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "request")) {
+      frontendModelTransportConfig.request = config.request
+    }
+  }
+
+  /**
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
    * @returns {Record<string, any>} - Attributes from payload.
@@ -202,8 +297,21 @@ export default class FrontendModelBase {
    */
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
-    const response = await fetch(`${this.resourcePath()}/${commandName}`, {
+    const url = frontendModelCommandUrl(this.resourcePath(), commandName)
+
+    if (frontendModelTransportConfig.request) {
+      return await frontendModelTransportConfig.request({
+        commandName,
+        commandType,
+        modelClass: this,
+        payload,
+        url
+      })
+    }
+
+    const response = await fetch(url, {
       body: JSON.stringify(payload),
+      credentials: frontendModelTransportConfig.credentials,
       headers: {
         "Content-Type": "application/json"
       },
