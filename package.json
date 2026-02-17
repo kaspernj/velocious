@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.212",
+  "version": "1.0.213",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
