@@ -290,6 +290,25 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 
 You do not need to manually define `frontend-index` / `frontend-find` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
 
+When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
+
+```js
+import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
+
+FrontendModelBase.configureTransport({
+  baseUrlResolver: () => "http://127.0.0.1:4501",
+  pathPrefixResolver: () => "",
+  credentials: "include"
+})
+```
+
+Available transport options:
+
+- `baseUrl` / `baseUrlResolver`
+- `pathPrefix` / `pathPrefixResolver`
+- `credentials`
+- `request` (custom request handler)
+
 ## Route resolver hooks
 
 Libraries can hook unresolved routes and hijack them before Velocious falls back to the built-in 404 controller.

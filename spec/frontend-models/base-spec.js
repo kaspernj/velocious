@@ -76,6 +76,18 @@ function stubFetch(responseBody) {
   }
 }
 
+/** @returns {void} */
+function resetFrontendModelTransport() {
+  FrontendModelBase.configureTransport({
+    baseUrl: undefined,
+    baseUrlResolver: undefined,
+    credentials: undefined,
+    pathPrefix: undefined,
+    pathPrefixResolver: undefined,
+    request: undefined
+  })
+}
+
 describe("Frontend models - base", () => {
   it("loads model collection with toArray", async () => {
     const User = buildTestModelClass()
@@ -94,6 +106,7 @@ describe("Frontend models - base", () => {
       expect(users[0].id()).toEqual(5)
       expect(users[0].name()).toEqual("John")
     } finally {
+      resetFrontendModelTransport()
       fetchStub.restore()
     }
   })
@@ -114,6 +127,7 @@ describe("Frontend models - base", () => {
       expect(user.id()).toEqual(5)
       expect(user.name()).toEqual("John")
     } finally {
+      resetFrontendModelTransport()
       fetchStub.restore()
     }
   })
@@ -138,6 +152,7 @@ describe("Frontend models - base", () => {
       expect(user.name()).toEqual("Johnny")
       expect(user.readAttribute("email")).toEqual("johnny@example.com")
     } finally {
+      resetFrontendModelTransport()
       fetchStub.restore()
     }
   })
@@ -157,7 +172,109 @@ describe("Frontend models - base", () => {
         }
       ])
     } finally {
+      resetFrontendModelTransport()
       fetchStub.restore()
+    }
+  })
+
+  it("prefixes command URL with configured base URL", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    FrontendModelBase.configureTransport({
+      baseUrl: "http://127.0.0.1:4501/"
+    })
+
+    try {
+      await User.toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {},
+          url: "http://127.0.0.1:4501/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("adds configured path prefix before resource path", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    FrontendModelBase.configureTransport({
+      baseUrl: "http://127.0.0.1:4501",
+      pathPrefix: "/backend-api"
+    })
+
+    try {
+      await User.toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {},
+          url: "http://127.0.0.1:4501/backend-api/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("supports dynamic base URL and path prefix resolvers", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    FrontendModelBase.configureTransport({
+      baseUrlResolver: () => "http://localhost:4500/",
+      pathPrefixResolver: () => "v1"
+    })
+
+    try {
+      await User.toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {},
+          url: "http://localhost:4500/v1/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("supports custom request transport", async () => {
+    const User = buildTestModelClass()
+    /** @type {any[]} */
+    const calls = []
+
+    FrontendModelBase.configureTransport({
+      request: async (args) => {
+        calls.push(args)
+        return {model: {id: 9, name: "Custom transport user"}}
+      }
+    })
+
+    try {
+      const user = await User.find(9)
+
+      expect(calls).toEqual([
+        {
+          commandName: "find",
+          commandType: "find",
+          modelClass: User,
+          payload: {id: 9},
+          url: "/api/frontend-models/users/find"
+        }
+      ])
+      expect(user.name()).toEqual("Custom transport user")
+    } finally {
+      resetFrontendModelTransport()
     }
   })
 })
