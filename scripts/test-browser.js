@@ -461,12 +461,6 @@ async function loadBrowserBackendConfiguration() {
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
   const backendConfiguration = dummyConfigurationImport.default
 
-  // Browser integration backend endpoints used by test:browser do not require model initialization.
-  // Skipping model initialization avoids environment-specific table assumptions in dummy config.
-  backendConfiguration.initializeModels = async () => {}
-  backendConfiguration._initializeModels = undefined
-  backendConfiguration._modelsInitialized = true
-
   return backendConfiguration
 }
 

@@ -17,6 +17,7 @@ When editing `CHANGELOG.md`, append entries without creating new version heading
 When adding or changing features, update `README.md` with the relevant usage and behavior details.
 Name specs that should run in browser tests with the `.browser-spec.js` suffix so the browser test runner includes them.
 Use spaces inside named imports (e.g. `import {foo, bar} from "..."`).
+Do not override methods on runtime instances to change behavior; add explicit hooks/flags in the owning class instead.
 
 ## Verification commands
 

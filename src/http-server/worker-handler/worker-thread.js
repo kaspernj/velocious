@@ -8,11 +8,6 @@ import Logger from "../../logger.js"
 import toImportSpecifier from "../../utils/to-import-specifier.js"
 import WebsocketEvents from "../websocket-events.js"
 
-/** @returns {boolean} - Whether model initialization should be skipped. */
-function shouldSkipModelInitialization() {
-  return process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
-}
-
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
    * @param {object} args - Options object.
@@ -56,10 +51,6 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     this.configuration = configurationImport.default
 
     if (!this.configuration) throw new Error(`Configuration couldn't be loaded from: ${configurationPath}`)
-
-    if (shouldSkipModelInitialization()) {
-      this.configuration._initializeModels = async () => {}
-    }
 
     this.configuration.setEnvironment(environment)
     this.configuration.setCurrent()
