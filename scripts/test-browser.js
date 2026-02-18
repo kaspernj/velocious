@@ -39,6 +39,22 @@ function browserTestPattern() {
 }
 
 /**
+ * @param {string} variableName - Environment variable name.
+ * @param {number} defaultValue - Default value when env is not set.
+ * @returns {number} - Parsed positive integer value.
+ */
+function parsePositiveIntegerEnv(variableName, defaultValue) {
+  const rawValue = process.env[variableName]
+  const parsedValue = rawValue === undefined ? defaultValue : Number(rawValue)
+
+  if (!Number.isInteger(parsedValue) || parsedValue < 1) {
+    throw new Error(`${variableName} must be a positive integer. Got: ${String(rawValue)}`)
+  }
+
+  return parsedValue
+}
+
+/**
  * @param {string} filePath - File path.
  * @returns {boolean} - Whether file matches browser test pattern.
  */
@@ -342,17 +358,11 @@ async function main() {
   process.env.VELOCIOUS_BROWSER_TESTS = "true"
   process.env.VELOCIOUS_DISABLE_MSSQL = "1"
   process.env.SYSTEM_TEST_HOST ||= "dist"
-  const browserBackendPort = process.env.VELOCIOUS_BROWSER_BACKEND_PORT ? Number(process.env.VELOCIOUS_BROWSER_BACKEND_PORT) : 4501
+  const browserBackendPort = parsePositiveIntegerEnv("VELOCIOUS_BROWSER_BACKEND_PORT", 4501)
   const systemTestHttpHost = process.env.SYSTEM_TEST_HTTP_HOST || "127.0.0.1"
-  const systemTestHttpPort = process.env.SYSTEM_TEST_HTTP_PORT ? Number(process.env.SYSTEM_TEST_HTTP_PORT) : 1984
-
-  if (!Number.isFinite(browserBackendPort)) {
-    throw new Error(`VELOCIOUS_BROWSER_BACKEND_PORT must be a number. Got: ${String(process.env.VELOCIOUS_BROWSER_BACKEND_PORT)}`)
-  }
-
-  if (!Number.isFinite(systemTestHttpPort)) {
-    throw new Error(`SYSTEM_TEST_HTTP_PORT must be a number. Got: ${String(process.env.SYSTEM_TEST_HTTP_PORT)}`)
-  }
+  const systemTestHttpPort = parsePositiveIntegerEnv("SYSTEM_TEST_HTTP_PORT", 1984)
+  process.env.VELOCIOUS_BROWSER_BACKEND_PORT = String(browserBackendPort)
+  process.env.SYSTEM_TEST_HTTP_PORT = String(systemTestHttpPort)
 
   await buildBrowserTestApp()
 

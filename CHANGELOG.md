@@ -117,3 +117,4 @@
 - Make `test:browser` require `spec/dummy/src/config/configuration.js` explicitly and raise a clear error when the dummy backend configuration is missing.
 - Harden `test:browser` backend startup by stopping partially initialized apps on startup errors and skipping dummy model initialization for browser integration backend endpoints.
 - Fix frontend `findBy` condition matching for array-valued attributes by using deep array equality when both expected and actual values are arrays.
+- Validate browser test runner ports (`VELOCIOUS_BROWSER_BACKEND_PORT`, `SYSTEM_TEST_HTTP_PORT`) as positive integers and normalize env values so specs and server share the same resolved ports.
