@@ -6,6 +6,7 @@ import {pathToFileURL} from "node:url"
 import {build} from "esbuild"
 import initSqlJs from "sql.js"
 import SystemTest from "system-testing/build/system-test.js"
+import Application from "../src/application.js"
 import Configuration from "../src/configuration.js"
 import BrowserEnvironmentHandler from "../src/environment-handlers/browser.js"
 import NodeEnvironmentHandler from "../src/environment-handlers/node.js"
@@ -35,6 +36,22 @@ const shared = {
 function browserTestPattern() {
   const customPattern = process.env.VELOCIOUS_BROWSER_TEST_PATTERN
   return customPattern ? new RegExp(customPattern) : defaultBrowserPattern
+}
+
+/**
+ * @param {string} variableName - Environment variable name.
+ * @param {number} defaultValue - Default value when env is not set.
+ * @returns {number} - Parsed positive integer value.
+ */
+function parsePositiveIntegerEnv(variableName, defaultValue) {
+  const rawValue = process.env[variableName]
+  const parsedValue = rawValue === undefined ? defaultValue : Number(rawValue)
+
+  if (!Number.isInteger(parsedValue) || parsedValue < 1) {
+    throw new Error(`${variableName} must be a positive integer. Got: ${String(rawValue)}`)
+  }
+
+  return parsedValue
 }
 
 /**
@@ -143,7 +160,9 @@ async function initializeDummyModels(configuration) {
   const modelsPath = path.join(dummyDirectory(), "src/models")
   const modelFiles = await findFiles(modelsPath)
 
-  await configuration.ensureConnections(async () => {
+  await configuration.ensureConnections(async (dbs) => {
+    const db = dbs.default
+
     for (const modelFile of modelFiles) {
       const modelImport = await import(pathToFileURL(modelFile).href)
       const modelClass = modelImport.default
@@ -156,11 +175,21 @@ async function initializeDummyModels(configuration) {
         continue
       }
 
+      const tableName = modelClass.tableName()
+
+      if (!db || !await db.tableExists(tableName)) {
+        continue
+      }
+
       await modelClass.initializeRecord({configuration})
 
       if (await modelClass.hasTranslationsTable()) {
         const translationClass = modelClass.getTranslationClass()
-        await translationClass.initializeRecord({configuration})
+        const translationTableName = translationClass.tableName()
+
+        if (db && await db.tableExists(translationTableName)) {
+          await translationClass.initializeRecord({configuration})
+        }
       }
     }
   })
@@ -292,17 +321,49 @@ function createTestFilesRequireContext(testFiles) {
   return context
 }
 
+/**
+ * @param {import("../src/configuration.js").default} configuration - Configuration instance.
+ * @param {number} port - Backend server port.
+ * @returns {Promise<Application>} - Started backend app instance.
+ */
+async function startBrowserBackendServer(configuration, port) {
+  const application = new Application({
+    configuration,
+    httpServer: {
+      host: "127.0.0.1",
+      port
+    },
+    type: "server"
+  })
+
+  try {
+    await application.initialize()
+    await application.startHttpServer()
+  } catch (error) {
+    try {
+      await application.stop()
+    } catch {
+      // no-op: preserve original startup error
+    }
+
+    throw error
+  }
+
+  return application
+}
+
 async function main() {
   const processArgs = ["test:browser", ...process.argv.slice(2)]
 
   process.env.VELOCIOUS_BROWSER_TESTS = "true"
+  process.env.VELOCIOUS_DISABLE_MSSQL = "1"
+  process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION = "1"
   process.env.SYSTEM_TEST_HOST ||= "dist"
+  const browserBackendPort = parsePositiveIntegerEnv("VELOCIOUS_BROWSER_BACKEND_PORT", 4501)
   const systemTestHttpHost = process.env.SYSTEM_TEST_HTTP_HOST || "127.0.0.1"
-  const systemTestHttpPort = process.env.SYSTEM_TEST_HTTP_PORT ? Number(process.env.SYSTEM_TEST_HTTP_PORT) : 1984
-
-  if (!Number.isFinite(systemTestHttpPort)) {
-    throw new Error(`SYSTEM_TEST_HTTP_PORT must be a number. Got: ${String(process.env.SYSTEM_TEST_HTTP_PORT)}`)
-  }
+  const systemTestHttpPort = parsePositiveIntegerEnv("SYSTEM_TEST_HTTP_PORT", 1984)
+  process.env.VELOCIOUS_BROWSER_BACKEND_PORT = String(browserBackendPort)
+  process.env.SYSTEM_TEST_HTTP_PORT = String(systemTestHttpPort)
 
   await buildBrowserTestApp()
 
@@ -323,10 +384,16 @@ async function main() {
     httpHost: systemTestHttpHost,
     httpPort: systemTestHttpPort
   })
-
-  await systemTest.start()
+  /** @type {Application | undefined} */
+  let backendApplication
+  let systemTestStarted = false
 
   try {
+    const backendConfiguration = await loadBrowserBackendConfiguration()
+    backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
+    await systemTest.start()
+    systemTestStarted = true
+
     await testRunner.prepare()
 
     if (testRunner.getTestsCount() === 0) {
@@ -369,8 +436,32 @@ async function main() {
       console.log(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`)
     }
   } finally {
-    await systemTest.stop()
+    if (systemTestStarted) {
+      await systemTest.stop()
+    }
+
+    if (backendApplication) {
+      await backendApplication.stop()
+    }
   }
+}
+
+/**
+ * @returns {Promise<import("../src/configuration.js").default>} - Backend configuration for browser tests.
+ */
+async function loadBrowserBackendConfiguration() {
+  const dummyConfigurationPath = path.join(dummyDirectory(), "src/config/configuration.js")
+
+  try {
+    await fs.access(dummyConfigurationPath)
+  } catch {
+    throw new Error(`Missing dummy backend configuration for browser tests: ${dummyConfigurationPath}`)
+  }
+
+  const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
+  const backendConfiguration = dummyConfigurationImport.default
+
+  return backendConfiguration
 }
 
 main().catch((error) => {

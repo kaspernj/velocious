@@ -464,6 +464,10 @@ export default class VelociousConfiguration {
     if (!this._modelsInitialized) {
       this._modelsInitialized = true
 
+      if (process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1") {
+        return
+      }
+
       if (this._initializeModels) {
         await this._initializeModels({configuration: this, type: args.type})
       }

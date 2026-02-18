@@ -110,3 +110,15 @@
 - Add a general `routeResolverHooks` configuration API (plus `configuration.addRouteResolverHook(...)`) so libraries can hijack unresolved routes before 404 handling.
 - Run `routeResolverHooks` before regular route matching so hooks can truly hijack routable paths (for example frontend model command endpoints that overlap resource routes).
 - Add `FrontendModelBase.configureTransport(...)` with `baseUrl`/`baseUrlResolver`, `pathPrefix`/`pathPrefixResolver`, `credentials`, and custom `request` support so apps configure backend endpoint location without overriding frontend model internals.
+- Add `FrontendModelBase.findBy(...)` and `FrontendModelBase.findByOrFail(...)` for generated frontend models with condition matching via `index` payloads.
+- Harden frontend `findBy`/`findByOrFail` condition handling by rejecting undefined/function/symbol/bigint/non-finite values, normalizing condition serialization before matching, and supporting deep object/array equality checks.
+- Make frontend `findBy`/`findByOrFail` fail fast when top-level conditions are not plain objects (for example primitives/arrays), preventing accidental broad lookups from invalid inputs.
+- Normalize numeric string/number primitive comparisons in frontend `findBy` matching so conditions like `{id: 2}` match serialized backend ids like `"2"`.
+- Make `test:browser` require `spec/dummy/src/config/configuration.js` explicitly and raise a clear error when the dummy backend configuration is missing.
+- Harden `test:browser` backend startup by stopping partially initialized apps on startup errors and skipping dummy model initialization for browser integration backend endpoints.
+- Fix frontend `findBy` condition matching for array-valued attributes by using deep array equality when both expected and actual values are arrays.
+- Validate browser test runner ports (`VELOCIOUS_BROWSER_BACKEND_PORT`, `SYSTEM_TEST_HTTP_PORT`) as positive integers and normalize env values so specs and server share the same resolved ports.
+- Reject symbol-keyed frontend `findBy` conditions explicitly and iterate own condition keys during validation/matching so symbol-based inputs cannot degrade into unfiltered lookups.
+- Make `test:browser` skip dummy model initialization in worker-loaded backend configs via `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1`, preventing table-dependent startup failures (for example missing `accounts`) in CI environments.
+- Enforce `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` inside HTTP worker threads by overriding worker-loaded configuration model initialization hooks before app initialization.
+- Move `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` handling into `Configuration.initializeModels(...)` and remove runtime method overrides in browser test startup paths.

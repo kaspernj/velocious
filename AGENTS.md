@@ -7,6 +7,7 @@ This repo uses an automated “definition of done” for changes. Before declari
 ## Testing guidance
 Prefer using the dummy app for tests instead of fake classes or stubbing.
 Prefer functional tests over raw SQL assertions because SQL varies by database. Only assert SQL when validating a query parser, and normalize it to avoid quoting differences.
+Document newly discovered behavior, constraints, edge cases, and integration caveats in the `docs/` folder as part of normal development flow.
 After changing base model generator logic, run `npx velocious g:base-models` from `spec/dummy` so the generated base models stay in sync.
 `spec/dummy/db/structure-default.sql` is a generated schema snapshot; don't edit it manually, and commit updates when migrations/tests change it.
 Always add tests for new or changed behavior.
@@ -16,6 +17,7 @@ When editing `CHANGELOG.md`, append entries without creating new version heading
 When adding or changing features, update `README.md` with the relevant usage and behavior details.
 Name specs that should run in browser tests with the `.browser-spec.js` suffix so the browser test runner includes them.
 Use spaces inside named imports (e.g. `import {foo, bar} from "..."`).
+Do not override methods on runtime instances to change behavior; add explicit hooks/flags in the owning class instead.
 
 ## Verification commands
 

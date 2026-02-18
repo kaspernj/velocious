@@ -32,6 +32,18 @@ const backendProjects = [
           index: "read"
         },
         path: "/api/frontend-models/users"
+      },
+      BrowserFrontendModel: {
+        attributes: ["id", "email", "createdAt"],
+        abilities: {
+          find: "read",
+          index: "read"
+        },
+        commands: {
+          find: "frontend-find",
+          index: "frontend-index"
+        },
+        path: "/frontend-model-system-tests"
       }
     }
   }

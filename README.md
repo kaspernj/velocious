@@ -284,6 +284,9 @@ npx velocious g:frontend-models
 This creates `src/frontend-models/user.js` (and one file per configured resource). Generated classes support:
 
 - `await User.find(5)`
+- `await User.findBy({email: "john@example.com"})`
+- `await User.findByOrFail({email: "john@example.com"})`
+- `await User.toArray()`
 - `await user.update({...})`
 - `await user.destroy()`
 - Attribute methods like `user.name()` and `user.setName(...)`
