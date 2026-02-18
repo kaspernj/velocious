@@ -330,7 +330,7 @@ async function main() {
   const processArgs = ["test:browser", ...process.argv.slice(2)]
 
   process.env.VELOCIOUS_BROWSER_TESTS = "true"
-  process.env.VELOCIOUS_DISABLE_MSSQL ||= "1"
+  process.env.VELOCIOUS_DISABLE_MSSQL = "1"
   process.env.SYSTEM_TEST_HOST ||= "dist"
   const browserBackendPort = process.env.VELOCIOUS_BROWSER_BACKEND_PORT ? Number(process.env.VELOCIOUS_BROWSER_BACKEND_PORT) : 4501
   const systemTestHttpHost = process.env.SYSTEM_TEST_HTTP_HOST || "127.0.0.1"
