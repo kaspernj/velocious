@@ -215,6 +215,22 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("findBy raises when conditions include symbol keys", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const key = Symbol("id")
+
+        await expect(async () => {
+          await HttpFrontendModel.findBy({[key]: "2"})
+        }).toThrow(/findBy does not support symbol condition keys/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("findByOrFail raises when conditions include undefined", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

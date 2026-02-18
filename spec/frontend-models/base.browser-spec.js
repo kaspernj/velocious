@@ -241,6 +241,24 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("findBy raises when conditions include symbol keys", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const key = Symbol("id")
+
+      await expect(async () => {
+        await BrowserFrontendModel.findBy({[key]: "2"})
+      }).toThrow(/findBy does not support symbol condition keys/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findByOrFail raises when conditions include undefined", async () => {
     if (!runBrowserHttpIntegration()) {
       return

@@ -101,6 +101,12 @@ function assertFindByConditionsShape(conditions) {
   if (conditionsPrototype !== Object.prototype && conditionsPrototype !== null) {
     throw new Error(`findBy expects conditions to be a plain object, got: ${conditions}`)
   }
+
+  const symbolKeys = Object.getOwnPropertySymbols(conditions)
+
+  if (symbolKeys.length > 0) {
+    throw new Error(`findBy does not support symbol condition keys (keys: ${symbolKeys.map((key) => key.toString()).join(", ")})`)
+  }
 }
 
 /**
@@ -148,11 +154,17 @@ function assertDefinedFindByConditionValue(value, keyPath) {
       throw new Error(`findBy does not support non-plain object condition values (key: ${keyPath})`)
     }
 
+    const symbolKeys = Object.getOwnPropertySymbols(objectValue)
+
+    if (symbolKeys.length > 0) {
+      throw new Error(`findBy does not support symbol condition keys (key: ${keyPath})`)
+    }
+
     const valueObject = /** @type {Record<string, unknown>} */ (value)
 
-    for (const nestedKey in valueObject) {
+    Object.keys(valueObject).forEach((nestedKey) => {
       assertDefinedFindByConditionValue(valueObject[nestedKey], `${keyPath}.${nestedKey}`)
-    }
+    })
   }
 }
 
@@ -203,13 +215,13 @@ function assertFindByConditionSerializationPreservesValue(originalValue, normali
     const normalizedObject = /** @type {Record<string, unknown>} */ (normalizedValue)
     const originalObject = /** @type {Record<string, unknown>} */ (originalValue)
 
-    for (const nestedKey in originalObject) {
+    Object.keys(originalObject).forEach((nestedKey) => {
       if (!(nestedKey in normalizedObject)) {
         throw new Error(`findBy condition key was removed during serialization (key: ${keyPath}.${nestedKey})`)
       }
 
       assertFindByConditionSerializationPreservesValue(originalObject[nestedKey], normalizedObject[nestedKey], `${keyPath}.${nestedKey}`)
-    }
+    })
 
     return
   }
@@ -471,10 +483,10 @@ export default class FrontendModelBase {
     assertFindByConditionsShape(conditions)
     const normalizedConditions = normalizeFindConditions(conditions)
 
-    for (const key in conditions) {
+    Object.keys(conditions).forEach((key) => {
       assertDefinedFindByConditionValue(conditions[key], key)
       assertFindByConditionSerializationPreservesValue(conditions[key], normalizedConditions[key], key)
-    }
+    })
   }
 
   /**
@@ -484,7 +496,7 @@ export default class FrontendModelBase {
    * @returns {boolean} - Whether the model matches all conditions.
    */
   static matchesFindByConditions(model, conditions) {
-    for (const key in conditions) {
+    for (const key of Object.keys(conditions)) {
       const expectedValue = conditions[key]
       const actualValue = model.readAttribute(key)
 
@@ -541,7 +553,7 @@ export default class FrontendModelBase {
       const actualObject = /** @type {Record<string, unknown>} */ (actualValue)
       const expectedObject = /** @type {Record<string, unknown>} */ (expectedValue)
 
-      for (const key in expectedObject) {
+      for (const key of Object.keys(expectedObject)) {
         if (!this.findByConditionValueMatches(actualObject[key], expectedObject[key])) {
           return false
         }
