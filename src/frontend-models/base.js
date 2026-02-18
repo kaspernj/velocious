@@ -552,8 +552,18 @@ export default class FrontendModelBase {
 
       const actualObject = /** @type {Record<string, unknown>} */ (actualValue)
       const expectedObject = /** @type {Record<string, unknown>} */ (expectedValue)
+      const actualKeys = Object.keys(actualObject)
+      const expectedKeys = Object.keys(expectedObject)
 
-      for (const key of Object.keys(expectedObject)) {
+      if (actualKeys.length !== expectedKeys.length) {
+        return false
+      }
+
+      for (const key of expectedKeys) {
+        if (!Object.prototype.hasOwnProperty.call(actualObject, key)) {
+          return false
+        }
+
         if (!this.findByConditionValueMatches(actualObject[key], expectedObject[key])) {
           return false
         }
