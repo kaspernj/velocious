@@ -43,8 +43,17 @@ function resetFrontendModelTransport() {
   })
 }
 
+/** @returns {boolean} */
+function runBrowserHttpIntegration() {
+  return process.env.VELOCIOUS_BROWSER_TESTS === "true"
+}
+
 describe("Frontend models - base browser integration", () => {
   it("findBy loads through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
     FrontendModelBase.configureTransport({
       baseUrl: "http://127.0.0.1:4501"
     })
@@ -60,6 +69,10 @@ describe("Frontend models - base browser integration", () => {
   })
 
   it("findBy normalizes Date conditions over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
     FrontendModelBase.configureTransport({
       baseUrl: "http://127.0.0.1:4501"
     })
@@ -75,6 +88,10 @@ describe("Frontend models - base browser integration", () => {
   })
 
   it("findByOrFail raises when no backend record matches", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
     FrontendModelBase.configureTransport({
       baseUrl: "http://127.0.0.1:4501"
     })

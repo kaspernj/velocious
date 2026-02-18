@@ -97,6 +97,22 @@ function assertDefinedFindByConditionValue(value, keyPath) {
     throw new Error(`findBy does not support undefined condition values (key: ${keyPath})`)
   }
 
+  if (typeof value === "function") {
+    throw new Error(`findBy does not support function condition values (key: ${keyPath})`)
+  }
+
+  if (typeof value === "symbol") {
+    throw new Error(`findBy does not support symbol condition values (key: ${keyPath})`)
+  }
+
+  if (typeof value === "bigint") {
+    throw new Error(`findBy does not support bigint condition values (key: ${keyPath})`)
+  }
+
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new Error(`findBy does not support non-finite number condition values (key: ${keyPath})`)
+  }
+
   if (Array.isArray(value)) {
     value.forEach((entry, index) => {
       assertDefinedFindByConditionValue(entry, `${keyPath}[${index}]`)
@@ -110,6 +126,69 @@ function assertDefinedFindByConditionValue(value, keyPath) {
     for (const nestedKey in valueObject) {
       assertDefinedFindByConditionValue(valueObject[nestedKey], `${keyPath}.${nestedKey}`)
     }
+  }
+}
+
+/**
+ * @param {unknown} originalValue - Original condition value.
+ * @param {unknown} normalizedValue - JSON-normalized condition value.
+ * @param {string} keyPath - Key path for error output.
+ * @returns {void}
+ */
+function assertFindByConditionSerializationPreservesValue(originalValue, normalizedValue, keyPath) {
+  if (originalValue === null) {
+    if (normalizedValue !== null) {
+      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
+    }
+
+    return
+  }
+
+  if (Array.isArray(originalValue)) {
+    if (!Array.isArray(normalizedValue)) {
+      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
+    }
+
+    if (originalValue.length !== normalizedValue.length) {
+      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
+    }
+
+    for (let index = 0; index < originalValue.length; index += 1) {
+      assertFindByConditionSerializationPreservesValue(originalValue[index], normalizedValue[index], `${keyPath}[${index}]`)
+    }
+
+    return
+  }
+
+  if (originalValue instanceof Date) {
+    if (typeof normalizedValue !== "string") {
+      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
+    }
+
+    return
+  }
+
+  if (originalValue && typeof originalValue === "object") {
+    if (!normalizedValue || typeof normalizedValue !== "object" || Array.isArray(normalizedValue)) {
+      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
+    }
+
+    const normalizedObject = /** @type {Record<string, unknown>} */ (normalizedValue)
+    const originalObject = /** @type {Record<string, unknown>} */ (originalValue)
+
+    for (const nestedKey in originalObject) {
+      if (!(nestedKey in normalizedObject)) {
+        throw new Error(`findBy condition key was removed during serialization (key: ${keyPath}.${nestedKey})`)
+      }
+
+      assertFindByConditionSerializationPreservesValue(originalObject[nestedKey], normalizedObject[nestedKey], `${keyPath}.${nestedKey}`)
+    }
+
+    return
+  }
+
+  if (normalizedValue !== originalValue) {
+    throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
   }
 }
 
@@ -362,8 +441,11 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   static assertFindByConditions(conditions) {
+    const normalizedConditions = normalizeFindConditions(conditions)
+
     for (const key in conditions) {
       assertDefinedFindByConditionValue(conditions[key], key)
+      assertFindByConditionSerializationPreservesValue(conditions[key], normalizedConditions[key], key)
     }
   }
 
@@ -399,6 +481,41 @@ export default class FrontendModelBase {
   static findByConditionValueMatches(actualValue, expectedValue) {
     if (expectedValue === null) {
       return actualValue === null
+    }
+
+    if (Array.isArray(expectedValue)) {
+      if (!Array.isArray(actualValue)) {
+        return false
+      }
+
+      if (actualValue.length !== expectedValue.length) {
+        return false
+      }
+
+      for (let index = 0; index < expectedValue.length; index += 1) {
+        if (!this.findByConditionValueMatches(actualValue[index], expectedValue[index])) {
+          return false
+        }
+      }
+
+      return true
+    }
+
+    if (expectedValue && typeof expectedValue === "object") {
+      if (!actualValue || typeof actualValue !== "object" || Array.isArray(actualValue)) {
+        return false
+      }
+
+      const actualObject = /** @type {Record<string, unknown>} */ (actualValue)
+      const expectedObject = /** @type {Record<string, unknown>} */ (expectedValue)
+
+      for (const key in expectedObject) {
+        if (!this.findByConditionValueMatches(actualObject[key], expectedObject[key])) {
+          return false
+        }
+      }
+
+      return true
     }
 
     return actualValue === expectedValue

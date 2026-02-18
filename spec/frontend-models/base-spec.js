@@ -186,6 +186,26 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("matches nested object conditions by value", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {email: "jane@example.com", id: 4, metadata: {region: "us"}, name: "Jane"},
+        {email: "john@example.com", id: 5, metadata: {region: "eu"}, name: "John"}
+      ]
+    })
+
+    try {
+      const user = await User.findBy({metadata: {region: "eu"}})
+
+      expect(user?.id()).toEqual(5)
+      expect(user?.name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("returns null from findBy when no records match", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({

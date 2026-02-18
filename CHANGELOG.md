@@ -111,3 +111,4 @@
 - Run `routeResolverHooks` before regular route matching so hooks can truly hijack routable paths (for example frontend model command endpoints that overlap resource routes).
 - Add `FrontendModelBase.configureTransport(...)` with `baseUrl`/`baseUrlResolver`, `pathPrefix`/`pathPrefixResolver`, `credentials`, and custom `request` support so apps configure backend endpoint location without overriding frontend model internals.
 - Add `FrontendModelBase.findBy(...)` and `FrontendModelBase.findByOrFail(...)` for generated frontend models with condition matching via `index` payloads.
+- Harden frontend `findBy`/`findByOrFail` condition handling by rejecting undefined/function/symbol/bigint/non-finite values, normalizing condition serialization before matching, and supporting deep object/array equality checks.
