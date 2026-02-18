@@ -132,6 +132,65 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("finds a model by conditions with findBy", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {email: "jane@example.com", id: 4, name: "Jane"},
+        {email: "john@example.com", id: 5, name: "John"}
+      ]
+    })
+
+    try {
+      const user = await User.findBy({email: "john@example.com"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            limit: 1,
+            where: {email: "john@example.com"}
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+      expect(user?.name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("returns null from findBy when no records match", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [{email: "jane@example.com", id: 4, name: "Jane"}]
+    })
+
+    try {
+      const user = await User.findBy({email: "john@example.com"})
+
+      expect(user).toEqual(null)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("raises from findByOrFail when record is missing", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await expect(async () => {
+        await User.findByOrFail({email: "missing@example.com"})
+      }).toThrow(/User not found for conditions/)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("updates a model and refreshes local attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})

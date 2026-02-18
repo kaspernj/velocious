@@ -63,6 +63,18 @@ function frontendModelCommandUrl(resourcePath, commandName) {
   return `${baseUrl}${pathPrefix}${normalizedResourcePath}/${commandName}`
 }
 
+/**
+ * @param {Record<string, any>} conditions - findBy conditions.
+ * @returns {string} - Serialized conditions for error messages.
+ */
+function serializeFindConditions(conditions) {
+  try {
+    return JSON.stringify(conditions)
+  } catch {
+    return "[unserializable conditions]"
+  }
+}
+
 /** Base class for generated frontend model classes. */
 export default class FrontendModelBase {
   /**
@@ -245,6 +257,51 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {Record<string, any>} conditions - Attribute match conditions.
+   * @returns {Promise<InstanceType<T> | null>} - Found model or null.
+   */
+  static async findBy(conditions) {
+    const response = await this.executeCommand("index", {
+      limit: 1,
+      where: conditions
+    })
+
+    if (!response || typeof response !== "object") {
+      throw new Error(`Expected object response but got: ${response}`)
+    }
+
+    const models = Array.isArray(response.models) ? response.models : []
+
+    for (const modelData of models) {
+      const model = this.instantiateFromResponse(modelData)
+
+      if (this.matchesFindByConditions(model, conditions)) {
+        return model
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {Record<string, any>} conditions - Attribute match conditions.
+   * @returns {Promise<InstanceType<T>>} - Found model.
+   */
+  static async findByOrFail(conditions) {
+    const model = await this.findBy(conditions)
+
+    if (!model) {
+      throw new Error(`${this.name} not found for conditions: ${serializeFindConditions(conditions)}`)
+    }
+
+    return model
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   static async toArray() {
@@ -257,6 +314,43 @@ export default class FrontendModelBase {
     const models = Array.isArray(response.models) ? response.models : []
 
     return /** @type {InstanceType<T>[]} */ (models.map((model) => this.instantiateFromResponse(model)))
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {FrontendModelBase} model - Candidate model.
+   * @param {Record<string, any>} conditions - Match conditions.
+   * @returns {boolean} - Whether the model matches all conditions.
+   */
+  static matchesFindByConditions(model, conditions) {
+    for (const key in conditions) {
+      const expectedValue = conditions[key]
+      const actualValue = model.readAttribute(key)
+
+      if (Array.isArray(expectedValue)) {
+        if (!expectedValue.some((entry) => this.findByConditionValueMatches(actualValue, entry))) {
+          return false
+        }
+      } else if (!this.findByConditionValueMatches(actualValue, expectedValue)) {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {unknown} actualValue - Actual model value.
+   * @param {unknown} expectedValue - Expected find condition value.
+   * @returns {boolean} - Whether values match.
+   */
+  static findByConditionValueMatches(actualValue, expectedValue) {
+    if (expectedValue === null) {
+      return actualValue === null || actualValue === undefined
+    }
+
+    return actualValue === expectedValue
   }
 
   /**
