@@ -50,8 +50,11 @@ function runBrowserHttpIntegration() {
 
 /** @returns {void} */
 function configureBrowserTransport() {
+  const configuredPort = Number(process.env.VELOCIOUS_BROWSER_BACKEND_PORT)
+  const backendPort = Number.isFinite(configuredPort) ? configuredPort : 4501
+
   FrontendModelBase.configureTransport({
-    baseUrl: "http://127.0.0.1:4501"
+    baseUrl: `http://127.0.0.1:${backendPort}`
   })
 }
 
