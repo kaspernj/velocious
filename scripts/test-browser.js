@@ -357,6 +357,7 @@ async function main() {
 
   process.env.VELOCIOUS_BROWSER_TESTS = "true"
   process.env.VELOCIOUS_DISABLE_MSSQL = "1"
+  process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION = "1"
   process.env.SYSTEM_TEST_HOST ||= "dist"
   const browserBackendPort = parsePositiveIntegerEnv("VELOCIOUS_BROWSER_BACKEND_PORT", 4501)
   const systemTestHttpHost = process.env.SYSTEM_TEST_HTTP_HOST || "127.0.0.1"

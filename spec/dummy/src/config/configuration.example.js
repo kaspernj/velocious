@@ -83,6 +83,8 @@ export default new Configuration({
   environment: "development",
   environmentHandler: new NodeEnvironmentHandler(),
   initializeModels: async ({configuration}) => {
+    if (process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1") return
+
     const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/../src/models`)
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
     const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
