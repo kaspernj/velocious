@@ -147,7 +147,6 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            limit: 1,
             where: {email: "john@example.com"}
           },
           url: "/api/frontend-models/users/index"
@@ -171,6 +170,26 @@ describe("Frontend models - base", () => {
       const user = await User.findBy({email: "john@example.com"})
 
       expect(user).toEqual(null)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("only matches explicit null values in findBy conditions", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {email: "jane@example.com", id: 4, name: "Jane"},
+        {email: "john@example.com", id: 5, name: "John", nickName: null}
+      ]
+    })
+
+    try {
+      const user = await User.findBy({nickName: null})
+
+      expect(user?.id()).toEqual(5)
+      expect(user?.name()).toEqual("John")
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

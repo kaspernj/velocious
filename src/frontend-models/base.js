@@ -262,7 +262,6 @@ export default class FrontendModelBase {
    */
   static async findBy(conditions) {
     const response = await this.executeCommand("index", {
-      limit: 1,
       where: conditions
     })
 
@@ -347,7 +346,7 @@ export default class FrontendModelBase {
    */
   static findByConditionValueMatches(actualValue, expectedValue) {
     if (expectedValue === null) {
-      return actualValue === null || actualValue === undefined
+      return actualValue === null
     }
 
     return actualValue === expectedValue
