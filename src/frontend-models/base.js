@@ -76,6 +76,18 @@ function serializeFindConditions(conditions) {
 }
 
 /**
+ * @param {Record<string, any>} conditions - findBy conditions.
+ * @returns {Record<string, any>} - JSON-normalized conditions.
+ */
+function normalizeFindConditions(conditions) {
+  try {
+    return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(conditions)))
+  } catch (error) {
+    throw new Error(`findBy conditions could not be serialized: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+/**
  * @param {unknown} value - Condition value to validate.
  * @param {string} keyPath - Key path for error output.
  * @returns {void}
@@ -288,9 +300,10 @@ export default class FrontendModelBase {
    */
   static async findBy(conditions) {
     this.assertFindByConditions(conditions)
+    const normalizedConditions = normalizeFindConditions(conditions)
 
     const response = await this.executeCommand("index", {
-      where: conditions
+      where: normalizedConditions
     })
 
     if (!response || typeof response !== "object") {
@@ -302,7 +315,7 @@ export default class FrontendModelBase {
     for (const modelData of models) {
       const model = this.instantiateFromResponse(modelData)
 
-      if (this.matchesFindByConditions(model, conditions)) {
+      if (this.matchesFindByConditions(model, normalizedConditions)) {
         return model
       }
     }

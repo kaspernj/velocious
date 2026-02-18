@@ -160,6 +160,32 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("normalizes Date conditions for request and local matching", async () => {
+    const User = buildTestModelClass()
+    const createdAtIso = "2026-02-18T08:00:00.000Z"
+    const fetchStub = stubFetch({
+      models: [{createdAt: createdAtIso, email: "john@example.com", id: 5, name: "John"}]
+    })
+
+    try {
+      const user = await User.findBy({createdAt: new Date(createdAtIso)})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            where: {createdAt: createdAtIso}
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+      expect(user?.name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("returns null from findBy when no records match", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
