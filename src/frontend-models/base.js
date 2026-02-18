@@ -546,7 +546,47 @@ export default class FrontendModelBase {
       return true
     }
 
-    return actualValue === expectedValue
+    if (actualValue === expectedValue) {
+      return true
+    }
+
+    return this.findByPrimitiveValuesMatch(actualValue, expectedValue)
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {unknown} actualValue - Actual model value.
+   * @param {unknown} expectedValue - Expected find condition value.
+   * @returns {boolean} - Whether primitive values match after safe coercion.
+   */
+  static findByPrimitiveValuesMatch(actualValue, expectedValue) {
+    if (typeof actualValue === "number" && typeof expectedValue === "string") {
+      return this.findByNumericStringMatchesNumber(expectedValue, actualValue)
+    }
+
+    if (typeof actualValue === "string" && typeof expectedValue === "number") {
+      return this.findByNumericStringMatchesNumber(actualValue, expectedValue)
+    }
+
+    return false
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {string} numericString - Numeric string value.
+   * @param {number} expectedNumber - Number value.
+   * @returns {boolean} - Whether values represent the same number.
+   */
+  static findByNumericStringMatchesNumber(numericString, expectedNumber) {
+    if (!Number.isFinite(expectedNumber)) {
+      return false
+    }
+
+    if (!/^-?\d+(?:\.\d+)?$/.test(numericString)) {
+      return false
+    }
+
+    return Number(numericString) === expectedNumber
   }
 
   /**

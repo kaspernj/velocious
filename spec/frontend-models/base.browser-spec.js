@@ -76,6 +76,23 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("findBy matches numeric id conditions against string ids over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel.findBy({id: 2})
+
+      expect(model?.id()).toEqual("2")
+      expect(model?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findBy normalizes Date conditions over real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return

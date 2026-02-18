@@ -113,3 +113,4 @@
 - Add `FrontendModelBase.findBy(...)` and `FrontendModelBase.findByOrFail(...)` for generated frontend models with condition matching via `index` payloads.
 - Harden frontend `findBy`/`findByOrFail` condition handling by rejecting undefined/function/symbol/bigint/non-finite values, normalizing condition serialization before matching, and supporting deep object/array equality checks.
 - Make frontend `findBy`/`findByOrFail` fail fast when top-level conditions are not plain objects (for example primitives/arrays), preventing accidental broad lookups from invalid inputs.
+- Normalize numeric string/number primitive comparisons in frontend `findBy` matching so conditions like `{id: 2}` match serialized backend ids like `"2"`.

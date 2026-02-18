@@ -368,8 +368,8 @@ async function main() {
   let systemTestStarted = false
 
   try {
-    const dummyConfigurationImport = await import("../spec/dummy/src/config/configuration.js")
-    backendApplication = await startBrowserBackendServer(dummyConfigurationImport.default, browserBackendPort)
+    const backendConfiguration = await resolveBrowserBackendConfiguration(configuration)
+    backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
     await systemTest.start()
     systemTestStarted = true
 
@@ -422,6 +422,22 @@ async function main() {
     if (backendApplication) {
       await backendApplication.stop()
     }
+  }
+}
+
+/**
+ * @param {import("../src/configuration.js").default} fallbackConfiguration - Fallback configuration.
+ * @returns {Promise<import("../src/configuration.js").default>} - Backend configuration for browser tests.
+ */
+async function resolveBrowserBackendConfiguration(fallbackConfiguration) {
+  const dummyConfigurationPath = path.join(dummyDirectory(), "src/config/configuration.js")
+
+  try {
+    await fs.access(dummyConfigurationPath)
+    const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
+    return dummyConfigurationImport.default
+  } catch {
+    return fallbackConfiguration
   }
 }
 

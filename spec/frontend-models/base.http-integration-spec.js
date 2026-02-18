@@ -70,6 +70,21 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("findBy matches numeric id conditions against string ids over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const model = await HttpFrontendModel.findBy({id: 2})
+
+        expect(model?.id()).toEqual("2")
+        expect(model?.email()).toEqual("john@example.com")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("findBy normalizes Date conditions over real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()
