@@ -11,7 +11,7 @@ class BrowserFrontendModel extends FrontendModelBase {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt"],
+      attributes: ["id", "email", "createdAt", "metadata", "nickName"],
       commands: {
         find: "frontend-find",
         index: "frontend-index"
@@ -48,15 +48,20 @@ function runBrowserHttpIntegration() {
   return process.env.VELOCIOUS_BROWSER_TESTS === "true"
 }
 
+/** @returns {void} */
+function configureBrowserTransport() {
+  FrontendModelBase.configureTransport({
+    baseUrl: "http://127.0.0.1:4501"
+  })
+}
+
 describe("Frontend models - base browser integration", () => {
   it("findBy loads through real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return
     }
 
-    FrontendModelBase.configureTransport({
-      baseUrl: "http://127.0.0.1:4501"
-    })
+    configureBrowserTransport()
 
     try {
       const model = await BrowserFrontendModel.findBy({email: "john@example.com"})
@@ -73,9 +78,7 @@ describe("Frontend models - base browser integration", () => {
       return
     }
 
-    FrontendModelBase.configureTransport({
-      baseUrl: "http://127.0.0.1:4501"
-    })
+    configureBrowserTransport()
 
     try {
       const model = await BrowserFrontendModel.findBy({createdAt: new Date("2026-02-18T08:00:00.000Z")})
@@ -87,19 +90,115 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("findBy matches nested object conditions by value over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel.findBy({metadata: {region: "eu"}})
+
+      expect(model?.id()).toEqual("2")
+      expect(model?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("findBy only matches explicit null values over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel.findBy({nickName: null})
+
+      expect(model?.id()).toEqual("2")
+      expect(model?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("findBy returns null when no backend record matches", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel.findBy({email: "missing@example.com"})
+
+      expect(model).toEqual(null)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findByOrFail raises when no backend record matches", async () => {
     if (!runBrowserHttpIntegration()) {
       return
     }
 
-    FrontendModelBase.configureTransport({
-      baseUrl: "http://127.0.0.1:4501"
-    })
+    configureBrowserTransport()
 
     try {
       await expect(async () => {
         await BrowserFrontendModel.findByOrFail({email: "missing@example.com"})
       }).toThrow(/BrowserFrontendModel not found for conditions/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("findBy raises when conditions include undefined", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      await expect(async () => {
+        await BrowserFrontendModel.findBy({email: undefined})
+      }).toThrow(/findBy does not support undefined condition values/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("findBy raises when conditions include non-plain objects", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      await expect(async () => {
+        await BrowserFrontendModel.findBy({email: /john/i})
+      }).toThrow(/findBy does not support non-plain object condition values/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("findByOrFail raises when conditions include undefined", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      await expect(async () => {
+        await BrowserFrontendModel.findByOrFail({email: undefined})
+      }).toThrow(/findBy does not support undefined condition values/)
     } finally {
       resetFrontendModelTransport()
     }

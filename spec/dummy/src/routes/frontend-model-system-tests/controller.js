@@ -10,12 +10,19 @@ export default class FrontendModelSystemTestsController extends Controller {
           {
             createdAt: "2026-02-18T08:00:00.000Z",
             email: "jane@example.com",
-            id: "1"
+            id: "1",
+            metadata: {
+              region: "us"
+            }
           },
           {
             createdAt: "2026-02-18T08:00:00.000Z",
             email: "john@example.com",
-            id: "2"
+            id: "2",
+            metadata: {
+              region: "eu"
+            },
+            nickName: null
           }
         ],
         status: "success"
