@@ -320,8 +320,18 @@ async function startBrowserBackendServer(configuration, port) {
     type: "server"
   })
 
-  await application.initialize()
-  await application.startHttpServer()
+  try {
+    await application.initialize()
+    await application.startHttpServer()
+  } catch (error) {
+    try {
+      await application.stop()
+    } catch {
+      // no-op: preserve original startup error
+    }
+
+    throw error
+  }
 
   return application
 }
@@ -438,8 +448,14 @@ async function loadBrowserBackendConfiguration() {
   }
 
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
+  const backendConfiguration = dummyConfigurationImport.default
 
-  return dummyConfigurationImport.default
+  // Browser integration backend endpoints used by test:browser do not require model initialization.
+  // Skipping model initialization avoids environment-specific table assumptions in dummy config.
+  backendConfiguration._initializeModels = undefined
+  backendConfiguration._modelsInitialized = true
+
+  return backendConfiguration
 }
 
 main().catch((error) => {
