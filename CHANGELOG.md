@@ -114,3 +114,4 @@
 - Harden frontend `findBy`/`findByOrFail` condition handling by rejecting undefined/function/symbol/bigint/non-finite values, normalizing condition serialization before matching, and supporting deep object/array equality checks.
 - Make frontend `findBy`/`findByOrFail` fail fast when top-level conditions are not plain objects (for example primitives/arrays), preventing accidental broad lookups from invalid inputs.
 - Normalize numeric string/number primitive comparisons in frontend `findBy` matching so conditions like `{id: 2}` match serialized backend ids like `"2"`.
+- Make `test:browser` require `spec/dummy/src/config/configuration.js` explicitly and raise a clear error when the dummy backend configuration is missing.

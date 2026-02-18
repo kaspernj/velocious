@@ -368,7 +368,7 @@ async function main() {
   let systemTestStarted = false
 
   try {
-    const backendConfiguration = await resolveBrowserBackendConfiguration(configuration)
+    const backendConfiguration = await loadBrowserBackendConfiguration()
     backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
     await systemTest.start()
     systemTestStarted = true
@@ -426,19 +426,20 @@ async function main() {
 }
 
 /**
- * @param {import("../src/configuration.js").default} fallbackConfiguration - Fallback configuration.
  * @returns {Promise<import("../src/configuration.js").default>} - Backend configuration for browser tests.
  */
-async function resolveBrowserBackendConfiguration(fallbackConfiguration) {
+async function loadBrowserBackendConfiguration() {
   const dummyConfigurationPath = path.join(dummyDirectory(), "src/config/configuration.js")
 
   try {
     await fs.access(dummyConfigurationPath)
-    const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
-    return dummyConfigurationImport.default
   } catch {
-    return fallbackConfiguration
+    throw new Error(`Missing dummy backend configuration for browser tests: ${dummyConfigurationPath}`)
   }
+
+  const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
+
+  return dummyConfigurationImport.default
 }
 
 main().catch((error) => {
