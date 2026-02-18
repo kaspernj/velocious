@@ -8,6 +8,10 @@ routes.draw((route) => {
     route.post("version")
   })
 
+  route.namespace("frontend-model-system-tests", (route) => {
+    route.post("frontend-index")
+  })
+
   route.resources("projects", (route) => {
     route.resources("tasks", (route) => {
       route.get("custom")
