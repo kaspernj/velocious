@@ -6,6 +6,7 @@ import {pathToFileURL} from "node:url"
 import {build} from "esbuild"
 import initSqlJs from "sql.js"
 import SystemTest from "system-testing/build/system-test.js"
+import Application from "../src/application.js"
 import Configuration from "../src/configuration.js"
 import BrowserEnvironmentHandler from "../src/environment-handlers/browser.js"
 import NodeEnvironmentHandler from "../src/environment-handlers/node.js"
@@ -143,7 +144,9 @@ async function initializeDummyModels(configuration) {
   const modelsPath = path.join(dummyDirectory(), "src/models")
   const modelFiles = await findFiles(modelsPath)
 
-  await configuration.ensureConnections(async () => {
+  await configuration.ensureConnections(async (dbs) => {
+    const db = dbs.default
+
     for (const modelFile of modelFiles) {
       const modelImport = await import(pathToFileURL(modelFile).href)
       const modelClass = modelImport.default
@@ -156,11 +159,21 @@ async function initializeDummyModels(configuration) {
         continue
       }
 
+      const tableName = modelClass.tableName()
+
+      if (!db || !await db.tableExists(tableName)) {
+        continue
+      }
+
       await modelClass.initializeRecord({configuration})
 
       if (await modelClass.hasTranslationsTable()) {
         const translationClass = modelClass.getTranslationClass()
-        await translationClass.initializeRecord({configuration})
+        const translationTableName = translationClass.tableName()
+
+        if (db && await db.tableExists(translationTableName)) {
+          await translationClass.initializeRecord({configuration})
+        }
       }
     }
   })
@@ -292,13 +305,40 @@ function createTestFilesRequireContext(testFiles) {
   return context
 }
 
+/**
+ * @param {import("../src/configuration.js").default} configuration - Configuration instance.
+ * @param {number} port - Backend server port.
+ * @returns {Promise<Application>} - Started backend app instance.
+ */
+async function startBrowserBackendServer(configuration, port) {
+  const application = new Application({
+    configuration,
+    httpServer: {
+      host: "127.0.0.1",
+      port
+    },
+    type: "server"
+  })
+
+  await application.initialize()
+  await application.startHttpServer()
+
+  return application
+}
+
 async function main() {
   const processArgs = ["test:browser", ...process.argv.slice(2)]
 
   process.env.VELOCIOUS_BROWSER_TESTS = "true"
+  process.env.VELOCIOUS_DISABLE_MSSQL ||= "1"
   process.env.SYSTEM_TEST_HOST ||= "dist"
+  const browserBackendPort = process.env.VELOCIOUS_BROWSER_BACKEND_PORT ? Number(process.env.VELOCIOUS_BROWSER_BACKEND_PORT) : 4501
   const systemTestHttpHost = process.env.SYSTEM_TEST_HTTP_HOST || "127.0.0.1"
   const systemTestHttpPort = process.env.SYSTEM_TEST_HTTP_PORT ? Number(process.env.SYSTEM_TEST_HTTP_PORT) : 1984
+
+  if (!Number.isFinite(browserBackendPort)) {
+    throw new Error(`VELOCIOUS_BROWSER_BACKEND_PORT must be a number. Got: ${String(process.env.VELOCIOUS_BROWSER_BACKEND_PORT)}`)
+  }
 
   if (!Number.isFinite(systemTestHttpPort)) {
     throw new Error(`SYSTEM_TEST_HTTP_PORT must be a number. Got: ${String(process.env.SYSTEM_TEST_HTTP_PORT)}`)
@@ -323,6 +363,8 @@ async function main() {
     httpHost: systemTestHttpHost,
     httpPort: systemTestHttpPort
   })
+  const dummyConfigurationImport = await import("../spec/dummy/src/config/configuration.js")
+  const backendApplication = await startBrowserBackendServer(dummyConfigurationImport.default, browserBackendPort)
 
   await systemTest.start()
 
@@ -370,6 +412,7 @@ async function main() {
     }
   } finally {
     await systemTest.stop()
+    await backendApplication.stop()
   }
 }
 
