@@ -75,6 +75,32 @@ function serializeFindConditions(conditions) {
   }
 }
 
+/**
+ * @param {unknown} value - Condition value to validate.
+ * @param {string} keyPath - Key path for error output.
+ * @returns {void}
+ */
+function assertDefinedFindByConditionValue(value, keyPath) {
+  if (value === undefined) {
+    throw new Error(`findBy does not support undefined condition values (key: ${keyPath})`)
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => {
+      assertDefinedFindByConditionValue(entry, `${keyPath}[${index}]`)
+    })
+    return
+  }
+
+  if (value && typeof value === "object") {
+    const valueObject = /** @type {Record<string, unknown>} */ (value)
+
+    for (const nestedKey in valueObject) {
+      assertDefinedFindByConditionValue(valueObject[nestedKey], `${keyPath}.${nestedKey}`)
+    }
+  }
+}
+
 /** Base class for generated frontend model classes. */
 export default class FrontendModelBase {
   /**
@@ -261,6 +287,8 @@ export default class FrontendModelBase {
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
    */
   static async findBy(conditions) {
+    this.assertFindByConditions(conditions)
+
     const response = await this.executeCommand("index", {
       where: conditions
     })
@@ -313,6 +341,17 @@ export default class FrontendModelBase {
     const models = Array.isArray(response.models) ? response.models : []
 
     return /** @type {InstanceType<T>[]} */ (models.map((model) => this.instantiateFromResponse(model)))
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {Record<string, any>} conditions - findBy conditions.
+   * @returns {void}
+   */
+  static assertFindByConditions(conditions) {
+    for (const key in conditions) {
+      assertDefinedFindByConditionValue(conditions[key], key)
+    }
   }
 
   /**

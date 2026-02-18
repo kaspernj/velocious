@@ -176,6 +176,21 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("raises from findBy when conditions include undefined", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await expect(async () => {
+        await User.findBy({email: undefined})
+      }).toThrow(/findBy does not support undefined condition values/)
+      expect(fetchStub.calls).toEqual([])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("only matches explicit null values in findBy conditions", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
@@ -204,6 +219,21 @@ describe("Frontend models - base", () => {
       await expect(async () => {
         await User.findByOrFail({email: "missing@example.com"})
       }).toThrow(/User not found for conditions/)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("raises from findByOrFail when conditions include undefined", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await expect(async () => {
+        await User.findByOrFail({email: undefined})
+      }).toThrow(/findBy does not support undefined condition values/)
+      expect(fetchStub.calls).toEqual([])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
