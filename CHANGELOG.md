@@ -120,3 +120,4 @@
 - Validate browser test runner ports (`VELOCIOUS_BROWSER_BACKEND_PORT`, `SYSTEM_TEST_HTTP_PORT`) as positive integers and normalize env values so specs and server share the same resolved ports.
 - Reject symbol-keyed frontend `findBy` conditions explicitly and iterate own condition keys during validation/matching so symbol-based inputs cannot degrade into unfiltered lookups.
 - Make `test:browser` skip dummy model initialization in worker-loaded backend configs via `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1`, preventing table-dependent startup failures (for example missing `accounts`) in CI environments.
+- Enforce `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` inside HTTP worker threads by overriding worker-loaded configuration model initialization hooks before app initialization.
