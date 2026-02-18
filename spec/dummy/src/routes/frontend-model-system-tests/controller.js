@@ -13,7 +13,8 @@ export default class FrontendModelSystemTestsController extends Controller {
             id: "1",
             metadata: {
               region: "us"
-            }
+            },
+            tags: ["a"]
           },
           {
             createdAt: "2026-02-18T08:00:00.000Z",
@@ -22,7 +23,8 @@ export default class FrontendModelSystemTestsController extends Controller {
             metadata: {
               region: "eu"
             },
-            nickName: null
+            nickName: null,
+            tags: ["a", "b"]
           }
         ],
         status: "success"

@@ -489,7 +489,11 @@ export default class FrontendModelBase {
       const actualValue = model.readAttribute(key)
 
       if (Array.isArray(expectedValue)) {
-        if (!expectedValue.some((entry) => this.findByConditionValueMatches(actualValue, entry))) {
+        if (Array.isArray(actualValue)) {
+          if (!this.findByConditionValueMatches(actualValue, expectedValue)) {
+            return false
+          }
+        } else if (!expectedValue.some((entry) => this.findByConditionValueMatches(actualValue, entry))) {
           return false
         }
       } else if (!this.findByConditionValueMatches(actualValue, expectedValue)) {

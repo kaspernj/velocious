@@ -15,7 +15,7 @@ class HttpFrontendModel extends FrontendModelBase {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt", "metadata", "nickName"],
+      attributes: ["id", "email", "createdAt", "metadata", "nickName", "tags"],
       commands: {
         find: "frontend-find",
         index: "frontend-index"
@@ -106,6 +106,21 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
       try {
         const model = await HttpFrontendModel.findBy({metadata: {region: "eu"}})
+
+        expect(model?.id()).toEqual("2")
+        expect(model?.email()).toEqual("john@example.com")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("findBy matches exact array attribute values over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const model = await HttpFrontendModel.findBy({tags: ["a", "b"]})
 
         expect(model?.id()).toEqual("2")
         expect(model?.email()).toEqual("john@example.com")

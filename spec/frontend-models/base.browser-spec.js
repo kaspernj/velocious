@@ -11,7 +11,7 @@ class BrowserFrontendModel extends FrontendModelBase {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt", "metadata", "nickName"],
+      attributes: ["id", "email", "createdAt", "metadata", "nickName", "tags"],
       commands: {
         find: "frontend-find",
         index: "frontend-index"
@@ -119,6 +119,23 @@ describe("Frontend models - base browser integration", () => {
 
     try {
       const model = await BrowserFrontendModel.findBy({metadata: {region: "eu"}})
+
+      expect(model?.id()).toEqual("2")
+      expect(model?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("findBy matches exact array attribute values over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel.findBy({tags: ["a", "b"]})
 
       expect(model?.id()).toEqual("2")
       expect(model?.email()).toEqual("john@example.com")
