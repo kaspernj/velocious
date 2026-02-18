@@ -12,7 +12,8 @@ export default class FrontendModelSystemTestsController extends Controller {
             email: "jane@example.com",
             id: "1",
             metadata: {
-              region: "us"
+              region: "eu",
+              tier: "pro"
             },
             tags: ["a"]
           },

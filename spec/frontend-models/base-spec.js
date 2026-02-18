@@ -132,6 +132,36 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("findBy matches objects by exact own-key equality", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {id: 1, metadata: {region: "eu", tier: "pro"}, name: "Superset"},
+        {id: 2, metadata: {region: "eu"}, name: "Exact"}
+      ]
+    })
+
+    try {
+      const user = await User.findBy({metadata: {region: "eu"}})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            where: {
+              metadata: {region: "eu"}
+            }
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(2)
+      expect(user?.name()).toEqual("Exact")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("updates a model and refreshes local attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
