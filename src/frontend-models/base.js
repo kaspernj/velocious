@@ -121,6 +121,17 @@ function assertDefinedFindByConditionValue(value, keyPath) {
   }
 
   if (value && typeof value === "object") {
+    if (value instanceof Date) {
+      return
+    }
+
+    const objectValue = /** @type {Record<string, unknown>} */ (value)
+    const prototype = Object.getPrototypeOf(objectValue)
+
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error(`findBy does not support non-plain object condition values (key: ${keyPath})`)
+    }
+
     const valueObject = /** @type {Record<string, unknown>} */ (value)
 
     for (const nestedKey in valueObject) {

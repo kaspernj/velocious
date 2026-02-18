@@ -363,12 +363,16 @@ async function main() {
     httpHost: systemTestHttpHost,
     httpPort: systemTestHttpPort
   })
-  const dummyConfigurationImport = await import("../spec/dummy/src/config/configuration.js")
-  const backendApplication = await startBrowserBackendServer(dummyConfigurationImport.default, browserBackendPort)
-
-  await systemTest.start()
+  /** @type {Application | undefined} */
+  let backendApplication
+  let systemTestStarted = false
 
   try {
+    const dummyConfigurationImport = await import("../spec/dummy/src/config/configuration.js")
+    backendApplication = await startBrowserBackendServer(dummyConfigurationImport.default, browserBackendPort)
+    await systemTest.start()
+    systemTestStarted = true
+
     await testRunner.prepare()
 
     if (testRunner.getTestsCount() === 0) {
@@ -411,8 +415,13 @@ async function main() {
       console.log(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`)
     }
   } finally {
-    await systemTest.stop()
-    await backendApplication.stop()
+    if (systemTestStarted) {
+      await systemTest.stop()
+    }
+
+    if (backendApplication) {
+      await backendApplication.stop()
+    }
   }
 }
 

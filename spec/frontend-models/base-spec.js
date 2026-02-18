@@ -237,6 +237,21 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("raises from findBy when conditions include non-plain objects", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await expect(async () => {
+        await User.findBy({email: /john/i})
+      }).toThrow(/findBy does not support non-plain object condition values/)
+      expect(fetchStub.calls).toEqual([])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("only matches explicit null values in findBy conditions", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
