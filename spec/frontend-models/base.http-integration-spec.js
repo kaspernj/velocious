@@ -171,6 +171,20 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("findBy raises when conditions is not a plain object", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await expect(async () => {
+          await HttpFrontendModel.findBy(/** @type {any} */ (5))
+        }).toThrow(/findBy expects conditions to be a plain object/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("findByOrFail raises when conditions include undefined", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

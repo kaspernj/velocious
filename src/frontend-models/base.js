@@ -88,6 +88,22 @@ function normalizeFindConditions(conditions) {
 }
 
 /**
+ * @param {unknown} conditions - findBy conditions.
+ * @returns {void}
+ */
+function assertFindByConditionsShape(conditions) {
+  if (!conditions || typeof conditions !== "object" || Array.isArray(conditions)) {
+    throw new Error(`findBy expects conditions to be a plain object, got: ${conditions}`)
+  }
+
+  const conditionsPrototype = Object.getPrototypeOf(conditions)
+
+  if (conditionsPrototype !== Object.prototype && conditionsPrototype !== null) {
+    throw new Error(`findBy expects conditions to be a plain object, got: ${conditions}`)
+  }
+}
+
+/**
  * @param {unknown} value - Condition value to validate.
  * @param {string} keyPath - Key path for error output.
  * @returns {void}
@@ -452,6 +468,7 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   static assertFindByConditions(conditions) {
+    assertFindByConditionsShape(conditions)
     const normalizedConditions = normalizeFindConditions(conditions)
 
     for (const key in conditions) {

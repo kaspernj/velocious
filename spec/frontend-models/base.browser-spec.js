@@ -191,6 +191,22 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("findBy raises when conditions is not a plain object", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      await expect(async () => {
+        await BrowserFrontendModel.findBy(/** @type {any} */ (5))
+      }).toThrow(/findBy expects conditions to be a plain object/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findByOrFail raises when conditions include undefined", async () => {
     if (!runBrowserHttpIntegration()) {
       return
