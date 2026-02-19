@@ -81,16 +81,18 @@ function buildPreloadTestModelClasses() {
      */
     static relationshipModelClasses() {
       return {
-        comments: Comment
+        comments: Comment,
+        project: Project
       }
     }
 
     /**
-     * @returns {Record<string, {type: "hasMany"}>}
+     * @returns {Record<string, {type: "hasMany" | "belongsTo"}>}
      */
     static relationshipDefinitions() {
       return {
-        comments: {type: "hasMany"}
+        comments: {type: "hasMany"},
+        project: {type: "belongsTo"}
       }
     }
 
@@ -317,6 +319,29 @@ describe("Frontend models - base", () => {
     expect(builtTask.readAttribute("id")).toEqual("11")
     expect(loadedTasks.length).toEqual(1)
     expect(loadedTasks[0]).toEqual(builtTask)
+  })
+
+  it("clears cached preloaded relationships when attributes change", () => {
+    const {Task} = buildPreloadTestModelClasses()
+    const task = Task.instantiateFromResponse({
+      id: "11",
+      name: "Task one",
+      projectId: "1",
+      __preloadedRelationships: {
+        project: {
+          id: "1",
+          name: "Project one"
+        }
+      }
+    })
+
+    expect(task.getRelationshipByName("project").loaded().readAttribute("id")).toEqual("1")
+
+    task.setAttribute("projectId", "2")
+
+    expect(() => {
+      task.getRelationshipByName("project").loaded()
+    }).toThrow(/Task#project hasn't been preloaded/)
   })
 
   it("updates a model and refreshes local attributes", async () => {

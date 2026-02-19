@@ -402,38 +402,94 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {object} args - Arguments.
+   * @param {import("./database/record/index.js").default[]} args.models - Frontend model records.
+   * @param {boolean} args.relationshipIsCollection - Whether relation is has-many.
+   * @returns {Promise<import("./database/record/index.js").default[]>} - Serializable related models.
+   */
+  async frontendModelFilterSerializableRelatedModels({models, relationshipIsCollection}) {
+    if (!this.currentAbility()) return models
+    if (models.length === 0) return models
+
+    /** @type {Map<typeof import("./database/record/index.js").default, import("./database/record/index.js").default[]>} */
+    const modelsByClass = new Map()
+
+    for (const model of models) {
+      const relatedModelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
+      const existingModelsForClass = modelsByClass.get(relatedModelClass) || []
+
+      existingModelsForClass.push(model)
+      modelsByClass.set(relatedModelClass, existingModelsForClass)
+    }
+
+    /** @type {Map<typeof import("./database/record/index.js").default, Set<string>>} */
+    const authorizedIdsByClass = new Map()
+    /** @type {Map<typeof import("./database/record/index.js").default, string>} */
+    const primaryKeysByClass = new Map()
+
+    for (const [relatedModelClass, relatedModels] of modelsByClass.entries()) {
+      const relatedResource = this.frontendModelResourceConfigurationForModelClass(relatedModelClass)
+
+      if (!relatedResource) {
+        authorizedIdsByClass.set(relatedModelClass, new Set())
+        continue
+      }
+
+      const abilityAction = relationshipIsCollection
+        ? relatedResource.resourceConfiguration.abilities?.index
+        : relatedResource.resourceConfiguration.abilities?.find
+
+      if (typeof abilityAction !== "string" || abilityAction.length < 1) {
+        authorizedIdsByClass.set(relatedModelClass, new Set())
+        continue
+      }
+
+      const primaryKey = relatedResource.resourceConfiguration.primaryKey || "id"
+      const ids = relatedModels
+        .map((model) => model.attributes()[primaryKey])
+        .filter((id) => id !== undefined && id !== null)
+
+      if (ids.length < 1) {
+        authorizedIdsByClass.set(relatedModelClass, new Set())
+        continue
+      }
+
+      const authorizedIdsRaw = await relatedModelClass
+        .accessibleFor(abilityAction)
+        .where({[primaryKey]: ids})
+        .pluck(primaryKey)
+
+      primaryKeysByClass.set(relatedModelClass, primaryKey)
+      authorizedIdsByClass.set(relatedModelClass, new Set(authorizedIdsRaw.map((id) => String(id))))
+    }
+
+    return models.filter((model) => {
+      const relatedModelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
+      const authorizedIds = authorizedIdsByClass.get(relatedModelClass)
+      const primaryKey = primaryKeysByClass.get(relatedModelClass)
+
+      if (!authorizedIds || !primaryKey) return false
+
+      const primaryKeyValue = model.attributes()[primaryKey]
+
+      if (primaryKeyValue === undefined || primaryKeyValue === null) return false
+
+      return authorizedIds.has(String(primaryKeyValue))
+    })
+  }
+
+  /**
+   * @param {object} args - Arguments.
    * @param {import("./database/record/index.js").default} args.model - Frontend model record.
    * @param {boolean} args.relationshipIsCollection - Whether relation is has-many.
    * @returns {Promise<boolean>} - Whether nested model can be serialized.
    */
   async frontendModelCanSerializeRelatedModel({model, relationshipIsCollection}) {
-    if (!this.currentAbility()) return true
+    const serializableRelatedModels = await this.frontendModelFilterSerializableRelatedModels({
+      models: [model],
+      relationshipIsCollection
+    })
 
-    const relatedModelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
-    const relatedResource = this.frontendModelResourceConfigurationForModelClass(relatedModelClass)
-
-    if (!relatedResource) return false
-
-    const abilityAction = relationshipIsCollection
-      ? relatedResource.resourceConfiguration.abilities?.index
-      : relatedResource.resourceConfiguration.abilities?.find
-
-    if (typeof abilityAction !== "string" || abilityAction.length < 1) {
-      return false
-    }
-
-    const primaryKey = relatedResource.resourceConfiguration.primaryKey || "id"
-    const primaryKeyValue = model.attributes()[primaryKey]
-
-    if (primaryKeyValue === undefined || primaryKeyValue === null) {
-      return false
-    }
-
-    const authorizedModel = await relatedModelClass
-      .accessibleFor(abilityAction)
-      .findBy({[primaryKey]: primaryKeyValue})
-
-    return Boolean(authorizedModel)
+    return serializableRelatedModels.length > 0
   }
 
   /**
@@ -454,13 +510,14 @@ export default class FrontendModelController extends Controller {
       const loadedRelationship = relationship.loaded()
 
       if (Array.isArray(loadedRelationship)) {
-        const relatedModels = await Promise.all(loadedRelationship.map(async (relatedModel) => {
-          if (!(await this.frontendModelCanSerializeRelatedModel({model: relatedModel, relationshipIsCollection: true}))) return null
+        const serializableRelatedModels = await this.frontendModelFilterSerializableRelatedModels({
+          models: loadedRelationship,
+          relationshipIsCollection: true
+        })
 
+        preloadedRelationships[relationshipName] = await Promise.all(serializableRelatedModels.map(async (relatedModel) => {
           return await this.serializeFrontendModel(relatedModel)
         }))
-
-        preloadedRelationships[relationshipName] = relatedModels.filter((relatedModel) => Boolean(relatedModel))
       } else if (loadedRelationship && typeof loadedRelationship === "object" && typeof loadedRelationship.attributes === "function") {
         if (await this.frontendModelCanSerializeRelatedModel({model: loadedRelationship, relationshipIsCollection: false})) {
           preloadedRelationships[relationshipName] = await this.serializeFrontendModel(loadedRelationship)

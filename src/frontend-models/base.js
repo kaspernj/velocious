@@ -686,6 +686,13 @@ export default class FrontendModelBase {
   }
 
   /**
+   * @returns {void} - Clears cached relationship state.
+   */
+  clearRelationshipCache() {
+    this._relationships = {}
+  }
+
+  /**
    * @this {typeof FrontendModelBase}
    * @returns {string} - Primary key name.
    */
@@ -721,7 +728,13 @@ export default class FrontendModelBase {
    * @returns {any} - Assigned value.
    */
   setAttribute(attributeName, newValue) {
+    const previousValue = this._attributes[attributeName]
+
     this._attributes[attributeName] = newValue
+
+    if (!Object.is(previousValue, newValue)) {
+      this.clearRelationshipCache()
+    }
 
     return newValue
   }

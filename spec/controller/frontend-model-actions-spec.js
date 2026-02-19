@@ -485,6 +485,9 @@ describe("Controller frontend model actions", () => {
   it("does not serialize unauthorized nested preloaded relationships", async () => {
     /** Related model class used in nested authorization serialization test. */
     class RelatedFrontendModel {
+      static whereCalls = 0
+      static pluckCalls = 0
+
       /** @param {Record<string, any>} attributes */
       constructor(attributes) {
         this._attributes = attributes
@@ -493,12 +496,30 @@ describe("Controller frontend model actions", () => {
       /** @returns {Record<string, any>} */
       attributes() { return this._attributes }
 
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {}
+      }
+
       /**
-       * @returns {{findBy: ({id}: {id: string}) => Promise<RelatedFrontendModel | null>}}
+       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
        */
       static accessibleFor() {
+        const RelatedClass = this
+
         return {
-          findBy: async ({id}) => id === "allowed" ? new this({id}) : null
+          where: ({id}) => {
+            RelatedClass.whereCalls += 1
+
+            return {
+              pluck: async (column) => {
+                void column
+                RelatedClass.pluckCalls += 1
+
+                return id.filter((entry) => entry === "allowed")
+              }
+            }
+          }
         }
       }
     }
@@ -557,6 +578,113 @@ describe("Controller frontend model actions", () => {
       id: "1",
       name: "One"
     })
+    expect(RelatedFrontendModel.whereCalls).toEqual(1)
+    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
+  })
+
+  it("authorizes preloaded has-many relationships in bulk", async () => {
+    /** Related model class used in nested bulk authorization serialization test. */
+    class RelatedFrontendModel {
+      static whereCalls = 0
+      static pluckCalls = 0
+
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {}
+      }
+
+      /**
+       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
+       */
+      static accessibleFor() {
+        const RelatedClass = this
+
+        return {
+          where: ({id}) => {
+            RelatedClass.whereCalls += 1
+
+            return {
+              pluck: async (column) => {
+                void column
+                RelatedClass.pluckCalls += 1
+
+                return id.filter((entry) => entry === "allowed-1" || entry === "allowed-2")
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        MockFrontendModel,
+        RelatedFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        },
+        RelatedFrontendModel: {
+          abilities: {find: "read", index: "read"},
+          attributes: ["id"],
+          path: "/related-frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const relatedOne = new RelatedFrontendModel({id: "allowed-1", value: "One"})
+    const relatedTwo = new RelatedFrontendModel({id: "denied", value: "Two"})
+    const relatedThree = new RelatedFrontendModel({id: "allowed-2", value: "Three"})
+    const parentModel = {
+      constructor: fakeParentModelClass,
+      attributes() {
+        return {id: "1", name: "Parent"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return [relatedOne, relatedTwo, relatedThree]
+          }
+        }
+      }
+    }
+
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        related: [
+          {id: "allowed-1", value: "One"},
+          {id: "allowed-2", value: "Three"}
+        ]
+      },
+      id: "1",
+      name: "Parent"
+    })
+    expect(RelatedFrontendModel.whereCalls).toEqual(1)
+    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
   })
 
   it("does not serialize nested preloaded models without frontend resource definitions", async () => {
