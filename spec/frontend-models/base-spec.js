@@ -44,6 +44,81 @@ function buildTestModelClass() {
 }
 
 /**
+ * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
+ */
+function buildPreloadTestModelClasses() {
+  /** Frontend model comment test class. */
+  class Comment extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "body"],
+        commands: {index: "index"},
+        path: "/api/frontend-models/comments",
+        primaryKey: "id"
+      }
+    }
+  }
+
+  /** Frontend model task test class. */
+  class Task extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "name"],
+        commands: {index: "index"},
+        path: "/api/frontend-models/tasks",
+        primaryKey: "id"
+      }
+    }
+
+    /**
+     * @returns {Record<string, typeof FrontendModelBase>}
+     */
+    static relationshipModelClasses() {
+      return {
+        comments: Comment
+      }
+    }
+
+    /** @returns {import("../../src/frontend-models/base.js").default} */
+    primaryInteraction() {
+      return this.getRelationshipByName("primaryInteraction").loaded()
+    }
+  }
+
+  /** Frontend model project test class. */
+  class Project extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "name"],
+        commands: {index: "index"},
+        path: "/api/frontend-models/projects",
+        primaryKey: "id"
+      }
+    }
+
+    /**
+     * @returns {Record<string, typeof FrontendModelBase>}
+     */
+    static relationshipModelClasses() {
+      return {
+        tasks: Task
+      }
+    }
+  }
+
+  return {Comment, Project, Task}
+}
+
+/**
  * @param {Record<string, any>} responseBody - Body to return from fetch.
  * @returns {{calls: FetchCall[], restore: () => void}} - Recorded calls and restore callback.
  */
@@ -156,6 +231,59 @@ describe("Frontend models - base", () => {
       ])
       expect(user?.id()).toEqual(2)
       expect(user?.name()).toEqual("Exact")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("includes preload payload and hydrates nested relationship models", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({
+      models: [
+        {
+          id: "1",
+          name: "One",
+          __preloadedRelationships: {
+            tasks: [
+              {
+                id: "11",
+                name: "Task 1",
+                __preloadedRelationships: {
+                  comments: [
+                    {body: "Comment 1", id: "101"}
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    })
+
+    try {
+      const projects = await Project.preload({tasks: ["comments"]}).toArray()
+      const tasks = projects[0].getRelationshipByName("tasks").loaded()
+      const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            preload: {
+              tasks: {
+                comments: true
+              }
+            }
+          },
+          url: "/api/frontend-models/projects/index"
+        }
+      ])
+      expect(tasks[0].constructor.name).toEqual("Task")
+      expect(commentsForFirstTask[0].constructor.name).toEqual("Comment")
+
+      await expect(async () => {
+        tasks[0].primaryInteraction()
+      }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

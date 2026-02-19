@@ -3,6 +3,82 @@
 import Controller from "./controller.js"
 import * as inflection from "inflection"
 
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {value is Record<string, any>} - Whether value is a plain object.
+ */
+function isPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+
+  const prototype = Object.getPrototypeOf(value)
+
+  return prototype === Object.prototype || prototype === null
+}
+
+/**
+ * @param {import("./database/query/index.js").NestedPreloadRecord | string | string[] | boolean | undefined | null} preload - Preload shorthand.
+ * @returns {import("./database/query/index.js").NestedPreloadRecord | null} - Normalized preload.
+ */
+function normalizeFrontendModelPreload(preload) {
+  if (!preload) return null
+
+  if (preload === true) return {}
+
+  if (typeof preload === "string") {
+    return {[preload]: true}
+  }
+
+  if (Array.isArray(preload)) {
+    /** @type {import("./database/query/index.js").NestedPreloadRecord} */
+    const normalized = {}
+
+    for (const entry of preload) {
+      if (typeof entry === "string") {
+        normalized[entry] = true
+        continue
+      }
+
+      if (isPlainObject(entry)) {
+        const nested = normalizeFrontendModelPreload(entry)
+
+        if (nested) {
+          Object.assign(normalized, nested)
+        }
+        continue
+      }
+
+      throw new Error(`Invalid preload entry type: ${typeof entry}`)
+    }
+
+    return normalized
+  }
+
+  if (!isPlainObject(preload)) {
+    throw new Error(`Invalid preload type: ${typeof preload}`)
+  }
+
+  /** @type {import("./database/query/index.js").NestedPreloadRecord} */
+  const normalized = {}
+
+  for (const [relationshipName, relationshipPreload] of Object.entries(preload)) {
+    if (relationshipPreload === true || relationshipPreload === false) {
+      normalized[relationshipName] = relationshipPreload
+      continue
+    }
+
+    if (typeof relationshipPreload === "string" || Array.isArray(relationshipPreload) || isPlainObject(relationshipPreload)) {
+      const nested = normalizeFrontendModelPreload(relationshipPreload)
+
+      normalized[relationshipName] = nested || {}
+      continue
+    }
+
+    throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+  }
+
+  return normalized
+}
+
 /** Controller with built-in frontend model resource actions. */
 export default class FrontendModelController extends Controller {
   /**
@@ -220,7 +296,14 @@ export default class FrontendModelController extends Controller {
       return authorizedModels[0] || null
     }
 
-    return await this.frontendModelAuthorizedQuery(action).findBy({[primaryKey]: id})
+    let query = this.frontendModelAuthorizedQuery(action)
+    const preload = action === "find" ? this.frontendModelPreload() : null
+
+    if (preload) {
+      query = query.preload(preload)
+    }
+
+    return await query.findBy({[primaryKey]: id})
   }
 
   /**
@@ -241,7 +324,50 @@ export default class FrontendModelController extends Controller {
       return await this.frontendModelFilterAuthorizedModels({action: "index", models})
     }
 
-    return await this.frontendModelAuthorizedQuery("index").toArray()
+    let query = this.frontendModelAuthorizedQuery("index")
+    const preload = this.frontendModelPreload()
+
+    if (preload) {
+      query = query.preload(preload)
+    }
+
+    return await query.toArray()
+  }
+
+  /**
+   * @returns {import("./database/query/index.js").NestedPreloadRecord | null} - Frontend preload data.
+   */
+  frontendModelPreload() {
+    return normalizeFrontendModelPreload(this.params().preload)
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Frontend model record.
+   * @returns {Record<string, any>} - Serialized preloaded relationships.
+   */
+  serializeFrontendModelPreloadedRelationships(model) {
+    const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
+    const relationshipsMap = modelClass.getRelationshipsMap()
+    /** @type {Record<string, any>} */
+    const preloadedRelationships = {}
+
+    for (const relationshipName in relationshipsMap) {
+      const relationship = model.getRelationshipByName(relationshipName)
+
+      if (!relationship.getPreloaded()) continue
+
+      const loadedRelationship = relationship.loaded()
+
+      if (Array.isArray(loadedRelationship)) {
+        preloadedRelationships[relationshipName] = loadedRelationship.map((relatedModel) => this.serializeFrontendModel(relatedModel))
+      } else if (loadedRelationship && typeof loadedRelationship === "object" && typeof loadedRelationship.attributes === "function") {
+        preloadedRelationships[relationshipName] = this.serializeFrontendModel(loadedRelationship)
+      } else {
+        preloadedRelationships[relationshipName] = loadedRelationship
+      }
+    }
+
+    return preloadedRelationships
   }
 
   /**
@@ -249,7 +375,16 @@ export default class FrontendModelController extends Controller {
    * @returns {Record<string, any>} - Serialized frontend model payload.
    */
   serializeFrontendModel(model) {
-    return model.attributes()
+    const preloadedRelationships = this.serializeFrontendModelPreloadedRelationships(model)
+
+    if (Object.keys(preloadedRelationships).length < 1) {
+      return model.attributes()
+    }
+
+    return {
+      ...model.attributes(),
+      __preloadedRelationships: preloadedRelationships
+    }
   }
 
   /**

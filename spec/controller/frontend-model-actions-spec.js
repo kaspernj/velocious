@@ -108,10 +108,18 @@ class MockFrontendModel {
     {id: "1", name: "One"},
     {id: "2", name: "Two"}
   ]
+  static lastQuery = null
 
   /** @param {Record<string, any>} attributes */
   constructor(attributes) {
     this._attributes = {...attributes}
+  }
+
+  /**
+   * @returns {Record<string, any>}
+   */
+  static getRelationshipsMap() {
+    return {}
   }
 
   /** @returns {Promise<MockFrontendModel[]>} */
@@ -131,6 +139,16 @@ class MockFrontendModel {
    */
   static accessibleFor() {
     return new MockFrontendModelQuery(this)
+  }
+
+  /**
+   * @returns {{getPreloaded: () => boolean, loaded: () => any}}
+   */
+  getRelationshipByName() {
+    return {
+      getPreloaded: () => false,
+      loaded: () => undefined
+    }
   }
 
   /** @returns {Record<string, any>} */
@@ -162,6 +180,8 @@ class MockFrontendModelQuery {
   constructor(modelClass) {
     this.modelClass = modelClass
     this.conditions = {}
+    this.preloads = []
+    this.modelClass.lastQuery = this
   }
 
   /**
@@ -170,6 +190,15 @@ class MockFrontendModelQuery {
    */
   where(conditions) {
     this.conditions = {...this.conditions, ...conditions}
+    return this
+  }
+
+  /**
+   * @param {Record<string, any>} preload
+   * @returns {this}
+   */
+  preload(preload) {
+    this.preloads.push(preload)
     return this
   }
 
@@ -245,6 +274,34 @@ describe("Controller frontend model actions", () => {
     })
   })
 
+  it("applies preload params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        preload: {
+          tasks: ["comments"]
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      models: [{id: "1", name: "One"}],
+      status: "success"
+    })
+    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
+      {
+        tasks: {
+          comments: true
+        }
+      }
+    ])
+  })
+
   it("returns one model from frontendFind", async () => {
     MockFrontendModel.data = [{id: "2", name: "Two"}]
 
@@ -258,6 +315,33 @@ describe("Controller frontend model actions", () => {
       model: {id: "2", name: "Two"},
       status: "success"
     })
+  })
+
+  it("applies preload params to frontendFind query", async () => {
+    MockFrontendModel.data = [{id: "2", name: "Two"}]
+
+    const controller = buildController({
+      params: {
+        id: "2",
+        preload: {
+          project: true
+        }
+      }
+    })
+
+    await controller.frontendFind()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      model: {id: "2", name: "Two"},
+      status: "success"
+    })
+    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
+      {
+        project: true
+      }
+    ])
   })
 
   it("returns error payload when frontendFind record is missing", async () => {

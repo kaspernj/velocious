@@ -13,6 +13,262 @@
 
 /** @type {FrontendModelTransportConfig} */
 const frontendModelTransportConfig = {}
+const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
+
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {value is Record<string, any>} - Whether value is a plain object.
+ */
+function isPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+
+  const prototype = Object.getPrototypeOf(value)
+
+  return prototype === Object.prototype || prototype === null
+}
+
+/**
+ * @param {import("../database/query/index.js").NestedPreloadRecord | string | string[] | boolean | undefined | null} preload - Preload shorthand.
+ * @returns {import("../database/query/index.js").NestedPreloadRecord} - Normalized preload.
+ */
+function normalizePreload(preload) {
+  if (!preload) return {}
+
+  if (preload === true) return {}
+
+  if (typeof preload === "string") {
+    return {[preload]: true}
+  }
+
+  if (Array.isArray(preload)) {
+    /** @type {import("../database/query/index.js").NestedPreloadRecord} */
+    const normalized = {}
+
+    for (const entry of preload) {
+      if (typeof entry === "string") {
+        normalized[entry] = true
+        continue
+      }
+
+      if (isPlainObject(entry)) {
+        mergePreloadRecord(normalized, normalizePreload(entry))
+        continue
+      }
+
+      throw new Error(`Invalid preload entry type: ${typeof entry}`)
+    }
+
+    return normalized
+  }
+
+  if (!isPlainObject(preload)) {
+    throw new Error(`Invalid preload type: ${typeof preload}`)
+  }
+
+  /** @type {import("../database/query/index.js").NestedPreloadRecord} */
+  const normalized = {}
+
+  for (const [relationshipName, relationshipPreload] of Object.entries(preload)) {
+    if (relationshipPreload === true || relationshipPreload === false) {
+      normalized[relationshipName] = relationshipPreload
+      continue
+    }
+
+    if (typeof relationshipPreload === "string" || Array.isArray(relationshipPreload) || isPlainObject(relationshipPreload)) {
+      normalized[relationshipName] = normalizePreload(relationshipPreload)
+      continue
+    }
+
+    throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+  }
+
+  return normalized
+}
+
+/**
+ * @param {import("../database/query/index.js").NestedPreloadRecord} targetPreload - Existing preload data.
+ * @param {import("../database/query/index.js").NestedPreloadRecord} incomingPreload - New preload data.
+ * @returns {void}
+ */
+function mergePreloadRecord(targetPreload, incomingPreload) {
+  for (const [relationshipName, incomingValue] of Object.entries(incomingPreload)) {
+    const existingValue = targetPreload[relationshipName]
+
+    if (incomingValue === false) {
+      targetPreload[relationshipName] = false
+      continue
+    }
+
+    if (incomingValue === true) {
+      if (existingValue === undefined) {
+        targetPreload[relationshipName] = true
+      }
+      continue
+    }
+
+    if (!isPlainObject(incomingValue)) {
+      throw new Error(`Invalid preload value for ${relationshipName}: ${typeof incomingValue}`)
+    }
+
+    if (isPlainObject(existingValue)) {
+      mergePreloadRecord(
+        /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (existingValue),
+        /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (incomingValue)
+      )
+      continue
+    }
+
+    targetPreload[relationshipName] = normalizePreload(incomingValue)
+  }
+}
+
+/** Lightweight relationship state holder for frontend model instances. */
+class FrontendModelRelationship {
+  /**
+   * @param {FrontendModelBase} model - Parent model.
+   * @param {string} relationshipName - Relationship name.
+   */
+  constructor(model, relationshipName) {
+    this.model = model
+    this.relationshipName = relationshipName
+    this._preloaded = false
+    this._loadedValue = undefined
+  }
+
+  /**
+   * @param {any} loadedValue - Loaded relationship value.
+   * @returns {void}
+   */
+  setLoaded(loadedValue) {
+    this._loadedValue = loadedValue
+    this._preloaded = true
+  }
+
+  /**
+   * @returns {boolean} - Whether relationship is preloaded.
+   */
+  getPreloaded() {
+    return this._preloaded
+  }
+
+  /**
+   * @returns {any} - Loaded relationship value.
+   */
+  loaded() {
+    if (!this._preloaded) {
+      throw new Error(`${this.model.constructor.name}#${this.relationshipName} hasn't been preloaded`)
+    }
+
+    return this._loadedValue
+  }
+}
+
+/**
+ * Query wrapper for frontend model commands.
+ * @template {typeof FrontendModelBase} T
+ */
+class FrontendModelQuery {
+  /**
+   * @param {object} args - Constructor args.
+   * @param {T} args.modelClass - Frontend model class.
+   * @param {import("../database/query/index.js").NestedPreloadRecord} [args.preload] - Preload map.
+   */
+  constructor({modelClass, preload = {}}) {
+    this.modelClass = modelClass
+    this._preload = normalizePreload(preload)
+  }
+
+  /**
+   * @param {import("../database/query/index.js").NestedPreloadRecord | string | string[]} preload - Preload to merge.
+   * @returns {this} - Query with merged preloads.
+   */
+  preload(preload) {
+    mergePreloadRecord(this._preload, normalizePreload(preload))
+
+    return this
+  }
+
+  /**
+   * @returns {Record<string, any>} - Payload preload hash when present.
+   */
+  preloadPayload() {
+    if (Object.keys(this._preload).length === 0) return {}
+
+    return {preload: this._preload}
+  }
+
+  /**
+   * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
+   */
+  async toArray() {
+    const response = await this.modelClass.executeCommand("index", this.preloadPayload())
+
+    if (!response || typeof response !== "object") {
+      throw new Error(`Expected object response but got: ${response}`)
+    }
+
+    const models = Array.isArray(response.models) ? response.models : []
+
+    return /** @type {InstanceType<T>[]} */ (models.map((model) => this.modelClass.instantiateFromResponse(model)))
+  }
+
+  /**
+   * @param {number | string} id - Record id.
+   * @returns {Promise<InstanceType<T>>} - Found model.
+   */
+  async find(id) {
+    const response = await this.modelClass.executeCommand("find", {
+      id,
+      ...this.preloadPayload()
+    })
+
+    return this.modelClass.instantiateFromResponse(response)
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Conditions.
+   * @returns {Promise<InstanceType<T> | null>} - Found model or null.
+   */
+  async findBy(conditions) {
+    this.modelClass.assertFindByConditions(conditions)
+    const normalizedConditions = normalizeFindConditions(conditions)
+
+    const response = await this.modelClass.executeCommand("index", {
+      ...this.preloadPayload(),
+      where: normalizedConditions
+    })
+
+    if (!response || typeof response !== "object") {
+      throw new Error(`Expected object response but got: ${response}`)
+    }
+
+    const models = Array.isArray(response.models) ? response.models : []
+
+    for (const modelData of models) {
+      const model = this.modelClass.instantiateFromResponse(modelData)
+
+      if (this.modelClass.matchesFindByConditions(model, normalizedConditions)) {
+        return model
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Conditions.
+   * @returns {Promise<InstanceType<T>>} - Found model.
+   */
+  async findByOrFail(conditions) {
+    const model = await this.findBy(conditions)
+
+    if (!model) {
+      throw new Error(`${this.modelClass.name} not found for conditions: ${serializeFindConditions(conditions)}`)
+    }
+
+    return model
+  }
+}
 
 /**
  * @param {string | undefined | null} value - Base URL candidate.
@@ -238,6 +494,7 @@ export default class FrontendModelBase {
    */
   constructor(attributes = {}) {
     this._attributes = {}
+    this._relationships = {}
     this.assignAttributes(attributes)
   }
 
@@ -251,10 +508,39 @@ export default class FrontendModelBase {
   }
 
   /**
+   * @this {typeof FrontendModelBase}
+   * @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes keyed by relationship name.
+   */
+  static relationshipModelClasses() {
+    return {}
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {string} relationshipName - Relationship name.
+   * @returns {typeof FrontendModelBase | null} - Target relationship model class.
+   */
+  static relationshipModelClass(relationshipName) {
+    const relationshipModelClasses = this.relationshipModelClasses()
+
+    return relationshipModelClasses[relationshipName] || null
+  }
+
+  /**
    * @returns {Record<string, any>} - Attributes hash.
    */
   attributes() {
     return this._attributes
+  }
+
+  /**
+   * @param {string} relationshipName - Relationship name.
+   * @returns {FrontendModelRelationship} - Relationship state object.
+   */
+  getRelationshipByName(relationshipName) {
+    this._relationships[relationshipName] ||= new FrontendModelRelationship(this, relationshipName)
+
+    return this._relationships[relationshipName]
   }
 
   /**
@@ -371,19 +657,74 @@ export default class FrontendModelBase {
    * @returns {Record<string, any>} - Attributes from payload.
    */
   static attributesFromResponse(response) {
+    const modelData = this.modelDataFromResponse(response)
+
+    return modelData.attributes
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {object} response - Response payload.
+   * @returns {{attributes: Record<string, any>, preloadedRelationships: Record<string, any>}} - Attributes and preload payload.
+   */
+  static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
       throw new Error(`Expected object response but got: ${response}`)
     }
 
+    /** @type {Record<string, any>} */
+    let modelData
+
     if (response.model && typeof response.model === "object") {
-      return response.model
+      modelData = response.model
+    } else if (response.attributes && typeof response.attributes === "object") {
+      modelData = response.attributes
+    } else {
+      modelData = /** @type {Record<string, any>} */ (response)
     }
 
-    if (response.attributes && typeof response.attributes === "object") {
-      return response.attributes
-    }
+    const attributes = {...modelData}
+    const preloadedRelationships = isPlainObject(attributes[PRELOADED_RELATIONSHIPS_KEY])
+      ? /** @type {Record<string, any>} */ (attributes[PRELOADED_RELATIONSHIPS_KEY])
+      : {}
 
-    return /** @type {Record<string, any>} */ (response)
+    delete attributes[PRELOADED_RELATIONSHIPS_KEY]
+
+    return {attributes, preloadedRelationships}
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {FrontendModelBase} model - Model instance.
+   * @param {Record<string, any>} preloadedRelationships - Preloaded relationship payload.
+   * @returns {void}
+   */
+  static applyPreloadedRelationships(model, preloadedRelationships) {
+    for (const [relationshipName, relationshipPayload] of Object.entries(preloadedRelationships)) {
+      const relationship = model.getRelationshipByName(relationshipName)
+      const targetModelClass = this.relationshipModelClass(relationshipName)
+
+      if (Array.isArray(relationshipPayload)) {
+        relationship.setLoaded(relationshipPayload.map((entry) => this.instantiateRelationshipValue(entry, targetModelClass)))
+        continue
+      }
+
+      relationship.setLoaded(this.instantiateRelationshipValue(relationshipPayload, targetModelClass))
+    }
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {any} relationshipPayload - Relationship payload value.
+   * @param {typeof FrontendModelBase | null} targetModelClass - Target model class.
+   * @returns {any} - Instantiated relationship value.
+   */
+  static instantiateRelationshipValue(relationshipPayload, targetModelClass) {
+    if (!targetModelClass) return relationshipPayload
+
+    if (!relationshipPayload || typeof relationshipPayload !== "object") return relationshipPayload
+
+    return targetModelClass.instantiateFromResponse(relationshipPayload)
   }
 
   /**
@@ -393,9 +734,14 @@ export default class FrontendModelBase {
    * @returns {InstanceType<T>} - New model instance.
    */
   static instantiateFromResponse(response) {
-    const attributes = this.attributesFromResponse(response)
+    const modelData = this.modelDataFromResponse(response)
+    const attributes = modelData.attributes
+    const preloadedRelationships = modelData.preloadedRelationships
+    const model = /** @type {InstanceType<T>} */ (new this(attributes))
 
-    return /** @type {InstanceType<T>} */ (new this(attributes))
+    this.applyPreloadedRelationships(model, preloadedRelationships)
+
+    return model
   }
 
   /**
@@ -405,9 +751,7 @@ export default class FrontendModelBase {
    * @returns {Promise<InstanceType<T>>} - Resolved model.
    */
   static async find(id) {
-    const response = await this.executeCommand("find", {id})
-
-    return this.instantiateFromResponse(response)
+    return await this.query().find(id)
   }
 
   /**
@@ -417,28 +761,7 @@ export default class FrontendModelBase {
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
    */
   static async findBy(conditions) {
-    this.assertFindByConditions(conditions)
-    const normalizedConditions = normalizeFindConditions(conditions)
-
-    const response = await this.executeCommand("index", {
-      where: normalizedConditions
-    })
-
-    if (!response || typeof response !== "object") {
-      throw new Error(`Expected object response but got: ${response}`)
-    }
-
-    const models = Array.isArray(response.models) ? response.models : []
-
-    for (const modelData of models) {
-      const model = this.instantiateFromResponse(modelData)
-
-      if (this.matchesFindByConditions(model, normalizedConditions)) {
-        return model
-      }
-    }
-
-    return null
+    return await this.query().findBy(conditions)
   }
 
   /**
@@ -448,13 +771,7 @@ export default class FrontendModelBase {
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
   static async findByOrFail(conditions) {
-    const model = await this.findBy(conditions)
-
-    if (!model) {
-      throw new Error(`${this.name} not found for conditions: ${serializeFindConditions(conditions)}`)
-    }
-
-    return model
+    return await this.query().findByOrFail(conditions)
   }
 
   /**
@@ -463,15 +780,26 @@ export default class FrontendModelBase {
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   static async toArray() {
-    const response = await this.executeCommand("index", {})
+    return await this.query().toArray()
+  }
 
-    if (!response || typeof response !== "object") {
-      throw new Error(`Expected object response but got: ${response}`)
-    }
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @returns {FrontendModelQuery<T>} - Query builder.
+   */
+  static query() {
+    return /** @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({modelClass: this}))
+  }
 
-    const models = Array.isArray(response.models) ? response.models : []
-
-    return /** @type {InstanceType<T>[]} */ (models.map((model) => this.instantiateFromResponse(model)))
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {import("../database/query/index.js").NestedPreloadRecord | string | string[]} preload - Preload graph.
+   * @returns {FrontendModelQuery<T>} - Query with preload.
+   */
+  static preload(preload) {
+    return /** @type {FrontendModelQuery<T>} */ (this.query().preload(preload))
   }
 
   /**
