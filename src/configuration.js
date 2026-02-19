@@ -464,7 +464,11 @@ export default class VelociousConfiguration {
     if (!this._modelsInitialized) {
       this._modelsInitialized = true
 
-      if (process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1") {
+      const shouldSkipDummyModelInitialization = process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
+        && process.env.VELOCIOUS_BROWSER_TESTS === "true"
+        && this.getEnvironment() === "test"
+
+      if (shouldSkipDummyModelInitialization) {
         return
       }
 

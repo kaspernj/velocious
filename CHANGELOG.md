@@ -124,3 +124,4 @@
 - Move `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` handling into `Configuration.initializeModels(...)` and remove runtime method overrides in browser test startup paths.
 - Make frontend `findBy` object matching exact by own-key set and value (not subset matching), so object conditions do not incorrectly match broader nested payloads.
 - Log request failures with a separate cleaned backtrace block so stack frames are visible without node internals and `node_modules` noise.
+- Scope `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` to browser test runs (`VELOCIOUS_BROWSER_TESTS=true` in test environment) so regular app/server initialization still loads models.
