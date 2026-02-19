@@ -379,20 +379,20 @@ async function main() {
     lineFilters,
     examplePatterns
   })
-  const systemTest = SystemTest.current({
-    debug: process.env.SYSTEM_TEST_DEBUG === "true",
-    httpHost: systemTestHttpHost,
-    httpPort: systemTestHttpPort
-  })
+  /** @type {SystemTest | undefined} */
+  let systemTest
   /** @type {Application | undefined} */
   let backendApplication
-  let systemTestStarted = false
 
   try {
     const backendConfiguration = await loadBrowserBackendConfiguration()
     backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
+    systemTest = SystemTest.current({
+      debug: process.env.SYSTEM_TEST_DEBUG === "true",
+      httpHost: systemTestHttpHost,
+      httpPort: systemTestHttpPort
+    })
     await systemTest.start()
-    systemTestStarted = true
 
     await testRunner.prepare()
 
@@ -436,7 +436,7 @@ async function main() {
       console.log(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`)
     }
   } finally {
-    if (systemTestStarted) {
+    if (systemTest) {
       await systemTest.stop()
     }
 
@@ -466,5 +466,5 @@ async function loadBrowserBackendConfiguration() {
 
 main().catch((error) => {
   console.error(error)
-  process.exitCode = 1
+  process.exit(1)
 })
