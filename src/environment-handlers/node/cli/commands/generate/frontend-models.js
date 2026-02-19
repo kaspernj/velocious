@@ -28,6 +28,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       }
 
       const resources = this.resourcesForBackendProject(backendProject)
+      const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
       for (const modelClassName in resources) {
         const modelConfig = resources[modelClassName]
@@ -35,7 +36,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const fileName = `${inflection.dasherize(inflection.underscore(className))}.js`
         const filePath = `${frontendModelsDir}/${fileName}`
 
-        this.validateModelConfig({className, modelConfig})
+        this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig})
 
         if (generatedModelNames.has(className)) {
           throw new Error(`Duplicate frontend model definition for '${className}'`)
@@ -58,11 +59,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * @param {object} args - Arguments.
+   * @param {Set<string>} args.availableFrontendModelClassNames - Available frontend model class names in backend project.
    * @param {string} args.className - Model class name.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @returns {void} - No return value.
    */
-  validateModelConfig({className, modelConfig}) {
+  validateModelConfig({availableFrontendModelClassNames, className, modelConfig}) {
     const abilities = modelConfig.abilities
 
     if (!abilities || typeof abilities !== "object") {
@@ -105,6 +107,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       if (typeof relationshipModelName !== "string" || relationshipModelName.length < 1) {
         throw new Error(`Model '${className}' relationship '${relationshipName}' must define model/className/modelClassName`)
       }
+
+      const relationshipTargetClassName = inflection.camelize(relationshipModelName.replaceAll("-", "_"))
+
+      if (!availableFrontendModelClassNames.has(relationshipTargetClassName)) {
+        throw new Error(`Model '${className}' relationship '${relationshipName}' references '${relationshipTargetClassName}', but no frontend model resource exists for that target in this backend project`)
+      }
     }
   }
 
@@ -120,6 +128,21 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return resources
+  }
+
+  /**
+   * @param {Record<string, any>} resources - Resource configuration keyed by model name.
+   * @returns {Set<string>} - Available frontend model class names.
+   */
+  availableFrontendModelClassNames(resources) {
+    /** @type {Set<string>} */
+    const classNames = new Set()
+
+    for (const resourceModelName in resources) {
+      classNames.add(inflection.camelize(resourceModelName.replaceAll("-", "_")))
+    }
+
+    return classNames
   }
 
   /**

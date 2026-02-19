@@ -59,6 +59,9 @@ class FakeResponse {
  * @param {object} [args]
  * @param {Record<string, any>} [args.params]
  * @param {string} [args.httpMethod]
+ * @param {Record<string, import("../../src/configuration-types.js").FrontendModelResourceConfiguration>} [args.resources]
+ * @param {Record<string, any>} [args.modelClasses]
+ * @param {any} [args.currentAbility]
  * @param {Partial<import("../../src/configuration-types.js").FrontendModelResourceConfiguration>} [args.resourceConfiguration]
  * @param {import("../../src/configuration-types.js").FrontendModelResourceServerConfiguration} [args.serverConfiguration]
  * @returns {FrontendController}
@@ -86,12 +89,12 @@ function buildController(args = {}) {
     configuration: {
       getBackendProjects: () => [{
         path: "/tmp/example",
-        resources: {
+        resources: args.resources || {
           MockFrontendModel: frontendModelResourceConfiguration
         }
       }],
-      getCurrentAbility: () => undefined,
-      getModelClasses: () => ({MockFrontendModel})
+      getCurrentAbility: () => args.currentAbility,
+      getModelClasses: () => args.modelClasses || ({MockFrontendModel})
     },
     controller: "frontend-models",
     params: args.params || {},
@@ -445,7 +448,7 @@ describe("Controller frontend model actions", () => {
     }).toThrow(/must define an 'abilities' object/)
   })
 
-  it("serializes missing preloaded singular relationships as null", () => {
+  it("serializes missing preloaded singular relationships as null", async () => {
     const controller = buildController()
     const fakeModelClass = {
       getRelationshipsMap() {
@@ -468,11 +471,88 @@ describe("Controller frontend model actions", () => {
         }
       }
     }
-    const payload = controller.serializeFrontendModel(/** @type {any} */ (fakeModel))
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (fakeModel))
 
     expect(payload).toEqual({
       __preloadedRelationships: {
         projectDetail: null
+      },
+      id: "1",
+      name: "One"
+    })
+  })
+
+  it("does not serialize unauthorized nested preloaded relationships", async () => {
+    /** Related model class used in nested authorization serialization test. */
+    class RelatedFrontendModel {
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+
+      /**
+       * @returns {{findBy: ({id}: {id: string}) => Promise<RelatedFrontendModel | null>}}
+       */
+      static accessibleFor() {
+        return {
+          findBy: async ({id}) => id === "allowed" ? new this({id}) : null
+        }
+      }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        MockFrontendModel,
+        RelatedFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        },
+        RelatedFrontendModel: {
+          abilities: {find: "read", index: "read"},
+          attributes: ["id"],
+          path: "/related-frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const deniedRelated = new RelatedFrontendModel({id: "denied"})
+    const parentModel = {
+      constructor: fakeParentModelClass,
+      attributes() {
+        return {id: "1", name: "One"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return deniedRelated
+          }
+        }
+      }
+    }
+
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        related: null
       },
       id: "1",
       name: "One"

@@ -6,6 +6,8 @@
 - Add specs for frontend model generation and runtime command behavior.
 - Add frontend-model `preload(...)` query chaining with nested relationship hydration from `__preloadedRelationships`, and pass preload params through built-in frontend model controller index/find actions.
 - Generate typed frontend-model relationship helpers from `backendProjects.resources.*.relationships`, including belongs-to/has-one getter methods and has-many relationship helpers with `.loaded()`/`.build()`.
+- Authorize nested preloaded frontend-model relationship serialization using each related model resource ability scope, and null out unauthorized singular relationships.
+- Fail frontend-model generation when a configured relationship target has no corresponding frontend resource in the same backend project.
 - Move `db:schema:dump` implementation under the Node environment handler so browser/Expo builds avoid Node-only command code.
 - Add a `db:schema:dump` CLI command that generates missing `db/structure-*.sql` files and cover it with a command spec.
 - Fix base-model generation to use the current database connection when reading table columns, avoiding SQLite "No connection" errors.

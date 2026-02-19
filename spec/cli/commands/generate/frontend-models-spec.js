@@ -110,6 +110,40 @@ describe("Cli - generate - frontend-models", () => {
     }).toThrow(/missing required 'abilities' config/)
   })
 
+  it("fails when a relationship target has no frontend model resource", async () => {
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            Task: {
+              abilities: {
+                find: "read",
+                index: "read"
+              },
+              attributes: ["id", "name"],
+              path: "/tasks",
+              relationships: {
+                project: {
+                  model: "Project",
+                  type: "belongsTo"
+                }
+              }
+            }
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => {
+      await cli.execute()
+    }).toThrow(/no frontend model resource exists for that target/)
+  })
+
   it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {
     const outputDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-output")
     await fs.rm(outputDirectory, {force: true, recursive: true})
