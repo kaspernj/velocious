@@ -687,6 +687,155 @@ describe("Controller frontend model actions", () => {
     expect(RelatedFrontendModel.pluckCalls).toEqual(1)
   })
 
+  it("authorizes preloaded singular relationships in bulk for index serialization", async () => {
+    /** Related model class used in nested singular bulk authorization serialization test. */
+    class RelatedFrontendModel {
+      static whereCalls = 0
+      static pluckCalls = 0
+
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {}
+      }
+
+      /**
+       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
+       */
+      static accessibleFor() {
+        const RelatedClass = this
+
+        return {
+          where: ({id}) => {
+            RelatedClass.whereCalls += 1
+
+            return {
+              pluck: async (column) => {
+                void column
+                RelatedClass.pluckCalls += 1
+
+                return id.filter((entry) => entry.startsWith("allowed"))
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        MockFrontendModel,
+        RelatedFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        },
+        RelatedFrontendModel: {
+          abilities: {find: "read", index: "read"},
+          attributes: ["id"],
+          path: "/related-frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const parentModels = [
+      {
+        constructor: fakeParentModelClass,
+        attributes() {
+          return {id: "1", name: "One"}
+        },
+        getRelationshipByName() {
+          return {
+            getPreloaded() {
+              return true
+            },
+            loaded() {
+              return new RelatedFrontendModel({id: "allowed-1", value: "Allowed one"})
+            }
+          }
+        }
+      },
+      {
+        constructor: fakeParentModelClass,
+        attributes() {
+          return {id: "2", name: "Two"}
+        },
+        getRelationshipByName() {
+          return {
+            getPreloaded() {
+              return true
+            },
+            loaded() {
+              return new RelatedFrontendModel({id: "denied-2", value: "Denied"})
+            }
+          }
+        }
+      },
+      {
+        constructor: fakeParentModelClass,
+        attributes() {
+          return {id: "3", name: "Three"}
+        },
+        getRelationshipByName() {
+          return {
+            getPreloaded() {
+              return true
+            },
+            loaded() {
+              return new RelatedFrontendModel({id: "allowed-3", value: "Allowed three"})
+            }
+          }
+        }
+      }
+    ]
+
+    const serialized = await controller.serializeFrontendModels(/** @type {any} */ (parentModels))
+
+    expect(serialized).toEqual([
+      {
+        __preloadedRelationships: {
+          related: {id: "allowed-1", value: "Allowed one"}
+        },
+        id: "1",
+        name: "One"
+      },
+      {
+        __preloadedRelationships: {
+          related: null
+        },
+        id: "2",
+        name: "Two"
+      },
+      {
+        __preloadedRelationships: {
+          related: {id: "allowed-3", value: "Allowed three"}
+        },
+        id: "3",
+        name: "Three"
+      }
+    ])
+    expect(RelatedFrontendModel.whereCalls).toEqual(1)
+    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
+  })
+
   it("does not serialize nested preloaded models without frontend resource definitions", async () => {
     /** Related backend-only model class used in nested authorization serialization test. */
     class BackendOnlyRelatedModel {

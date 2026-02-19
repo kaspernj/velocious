@@ -344,6 +344,26 @@ describe("Frontend models - base", () => {
     }).toThrow(/Task#project hasn't been preloaded/)
   })
 
+  it("keeps cached preloaded relationships when attribute value does not change", () => {
+    const {Task} = buildPreloadTestModelClasses()
+    const task = Task.instantiateFromResponse({
+      id: "11",
+      name: "Task one",
+      projectId: "1",
+      __preloadedRelationships: {
+        project: {
+          id: "1",
+          name: "Project one"
+        }
+      }
+    })
+    const beforeProject = task.getRelationshipByName("project").loaded()
+
+    task.setAttribute("projectId", "1")
+
+    expect(task.getRelationshipByName("project").loaded()).toEqual(beforeProject)
+  })
+
   it("updates a model and refreshes local attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})

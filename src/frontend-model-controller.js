@@ -130,7 +130,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @returns {{modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
+   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
    */
   frontendModelResourceConfiguration() {
     const params = this.params()
@@ -148,7 +148,7 @@ export default class FrontendModelController extends Controller {
         const resourcePath = this.frontendModelResourcePath(modelName, resourceConfiguration)
 
         if (this.frontendModelResourceMatchesController({controllerName, resourcePath})) {
-          return {modelName, resourceConfiguration}
+          return {backendProject, modelName, resourceConfiguration}
         }
       }
     }
@@ -161,21 +161,19 @@ export default class FrontendModelController extends Controller {
    * @returns {{modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
    */
   frontendModelResourceConfigurationForModelClass(modelClass) {
-    const backendProjects = this.getConfiguration().getBackendProjects()
+    const frontendModelResource = this.frontendModelResourceConfiguration()
 
-    for (const backendProject of backendProjects) {
-      const resources = backendProject.frontendModels || backendProject.resources || {}
-      const resourceConfiguration = resources[modelClass.name]
+    if (!frontendModelResource) return null
 
-      if (resourceConfiguration) {
-        return {
-          modelName: modelClass.name,
-          resourceConfiguration
-        }
-      }
+    const resources = frontendModelResource.backendProject.frontendModels || frontendModelResource.backendProject.resources || {}
+    const resourceConfiguration = resources[modelClass.name]
+
+    if (!resourceConfiguration) return null
+
+    return {
+      modelName: modelClass.name,
+      resourceConfiguration
     }
-
-    return null
   }
 
   /**
@@ -478,58 +476,100 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {object} args - Arguments.
-   * @param {import("./database/record/index.js").default} args.model - Frontend model record.
-   * @param {boolean} args.relationshipIsCollection - Whether relation is has-many.
-   * @returns {Promise<boolean>} - Whether nested model can be serialized.
+   * @param {unknown} value - Candidate preloaded value.
+   * @returns {value is import("./database/record/index.js").default} - Whether value behaves like a model.
    */
-  async frontendModelCanSerializeRelatedModel({model, relationshipIsCollection}) {
-    const serializableRelatedModels = await this.frontendModelFilterSerializableRelatedModels({
-      models: [model],
-      relationshipIsCollection
-    })
-
-    return serializableRelatedModels.length > 0
+  isSerializableFrontendModel(value) {
+    return Boolean(value && typeof value === "object" && typeof /** @type {any} */ (value).attributes === "function")
   }
 
   /**
-   * @param {import("./database/record/index.js").default} model - Frontend model record.
-   * @returns {Promise<Record<string, any>>} - Serialized preloaded relationships.
+   * @param {import("./database/record/index.js").default[]} models - Models to serialize.
+   * @returns {Promise<Record<string, any>[]>} - Serialized model payloads.
    */
-  async serializeFrontendModelPreloadedRelationships(model) {
-    const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
-    const relationshipsMap = modelClass.getRelationshipsMap()
-    /** @type {Record<string, any>} */
-    const preloadedRelationships = {}
+  async serializeFrontendModels(models) {
+    if (models.length < 1) return []
 
-    for (const relationshipName in relationshipsMap) {
-      const relationship = model.getRelationshipByName(relationshipName)
+    /** @type {Array<Record<string, any>>} */
+    const preloadedRelationshipsPerModel = Array.from({length: models.length}, () => ({}))
 
-      if (!relationship.getPreloaded()) continue
+    /** @type {Array<{loadedModels: import("./database/record/index.js").default[], modelIndex: number, relationshipName: string}>} */
+    const collectionRelationshipEntries = []
+    /** @type {Array<{loadedModel: import("./database/record/index.js").default, modelIndex: number, relationshipName: string}>} */
+    const singularRelationshipEntries = []
 
-      const loadedRelationship = relationship.loaded()
+    models.forEach((model, modelIndex) => {
+      const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
+      const relationshipsMap = modelClass.getRelationshipsMap()
 
-      if (Array.isArray(loadedRelationship)) {
-        const serializableRelatedModels = await this.frontendModelFilterSerializableRelatedModels({
-          models: loadedRelationship,
-          relationshipIsCollection: true
-        })
+      for (const relationshipName in relationshipsMap) {
+        const relationship = model.getRelationshipByName(relationshipName)
 
-        preloadedRelationships[relationshipName] = await Promise.all(serializableRelatedModels.map(async (relatedModel) => {
-          return await this.serializeFrontendModel(relatedModel)
-        }))
-      } else if (loadedRelationship && typeof loadedRelationship === "object" && typeof loadedRelationship.attributes === "function") {
-        if (await this.frontendModelCanSerializeRelatedModel({model: loadedRelationship, relationshipIsCollection: false})) {
-          preloadedRelationships[relationshipName] = await this.serializeFrontendModel(loadedRelationship)
-        } else {
-          preloadedRelationships[relationshipName] = null
+        if (!relationship.getPreloaded()) continue
+
+        const loadedRelationship = relationship.loaded()
+
+        if (Array.isArray(loadedRelationship)) {
+          collectionRelationshipEntries.push({loadedModels: loadedRelationship, modelIndex, relationshipName})
+          continue
         }
-      } else {
-        preloadedRelationships[relationshipName] = loadedRelationship == undefined ? null : loadedRelationship
+
+        if (this.isSerializableFrontendModel(loadedRelationship)) {
+          singularRelationshipEntries.push({loadedModel: loadedRelationship, modelIndex, relationshipName})
+          continue
+        }
+
+        preloadedRelationshipsPerModel[modelIndex][relationshipName] = loadedRelationship == undefined ? null : loadedRelationship
+      }
+    })
+
+    if (collectionRelationshipEntries.length > 0) {
+      const allCollectionModels = collectionRelationshipEntries.flatMap((entry) => entry.loadedModels)
+      const serializableCollectionModels = await this.frontendModelFilterSerializableRelatedModels({
+        models: allCollectionModels,
+        relationshipIsCollection: true
+      })
+      const serializableCollectionModelsSet = new Set(serializableCollectionModels)
+
+      for (const relationshipEntry of collectionRelationshipEntries) {
+        const allowedModels = relationshipEntry.loadedModels.filter((relatedModel) => serializableCollectionModelsSet.has(relatedModel))
+        const serializedRelatedModels = await this.serializeFrontendModels(allowedModels)
+
+        preloadedRelationshipsPerModel[relationshipEntry.modelIndex][relationshipEntry.relationshipName] = serializedRelatedModels
       }
     }
 
-    return preloadedRelationships
+    if (singularRelationshipEntries.length > 0) {
+      const allSingularModels = singularRelationshipEntries.map((entry) => entry.loadedModel)
+      const serializableSingularModels = await this.frontendModelFilterSerializableRelatedModels({
+        models: allSingularModels,
+        relationshipIsCollection: false
+      })
+      const serializableSingularModelsSet = new Set(serializableSingularModels)
+
+      for (const relationshipEntry of singularRelationshipEntries) {
+        if (!serializableSingularModelsSet.has(relationshipEntry.loadedModel)) {
+          preloadedRelationshipsPerModel[relationshipEntry.modelIndex][relationshipEntry.relationshipName] = null
+          continue
+        }
+
+        const serializedModel = (await this.serializeFrontendModels([relationshipEntry.loadedModel]))[0]
+        preloadedRelationshipsPerModel[relationshipEntry.modelIndex][relationshipEntry.relationshipName] = serializedModel
+      }
+    }
+
+    return models.map((model, modelIndex) => {
+      const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
+
+      if (Object.keys(preloadedRelationships).length < 1) {
+        return model.attributes()
+      }
+
+      return {
+        ...model.attributes(),
+        __preloadedRelationships: preloadedRelationships
+      }
+    })
   }
 
   /**
@@ -537,16 +577,9 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<Record<string, any>>} - Serialized frontend model payload.
    */
   async serializeFrontendModel(model) {
-    const preloadedRelationships = await this.serializeFrontendModelPreloadedRelationships(model)
+    const serializedModels = await this.serializeFrontendModels([model])
 
-    if (Object.keys(preloadedRelationships).length < 1) {
-      return model.attributes()
-    }
-
-    return {
-      ...model.attributes(),
-      __preloadedRelationships: preloadedRelationships
-    }
+    return serializedModels[0]
   }
 
   /**
@@ -582,23 +615,22 @@ export default class FrontendModelController extends Controller {
 
     const models = await this.frontendModelRecords()
 
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const serializedModels = serverConfiguration?.serialize
+      ? await Promise.all(models.map(async (model) => {
+        return await serverConfiguration.serialize({
+          action: "index",
+          controller: this,
+          model,
+          modelClass: this.frontendModelClass(),
+          params: this.params()
+        })
+      }))
+      : await this.serializeFrontendModels(models)
+
     await this.render({
       json: {
-        models: await Promise.all(models.map(async (model) => {
-          const serverConfiguration = this.frontendModelServerConfiguration()
-
-          if (serverConfiguration?.serialize) {
-            return await serverConfiguration.serialize({
-              action: "index",
-              controller: this,
-              model,
-              modelClass: this.frontendModelClass(),
-              params: this.params()
-            })
-          }
-
-          return await this.serializeFrontendModel(model)
-        })),
+        models: serializedModels,
         status: "success"
       }
     })

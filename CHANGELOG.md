@@ -11,6 +11,8 @@
 - Deny nested preload serialization for related models without frontend resource configuration when ability context is active.
 - Authorize preloaded has-many nested frontend-model serialization in bulk per related model class to avoid N+1 authorization queries.
 - Clear frontend-model relationship cache on attribute changes so stale preloaded relationships do not survive after updates/foreign-key changes.
+- Scope nested preload authorization resource lookup to the current backend project so same-named models in other backend projects do not affect authorization.
+- Authorize preloaded singular nested relationships in bulk during collection serialization to avoid per-row authorization queries.
 - Move `db:schema:dump` implementation under the Node environment handler so browser/Expo builds avoid Node-only command code.
 - Add a `db:schema:dump` CLI command that generates missing `db/structure-*.sql` files and cover it with a command spec.
 - Fix base-model generation to use the current database connection when reading table columns, avoiding SQLite "No connection" errors.
