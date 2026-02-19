@@ -1,5 +1,13 @@
 // @ts-check
 
+/**
+ * @param {string} value - Value to escape.
+ * @returns {string} - Escaped value for a RegExp pattern.
+ */
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 export default class BacktraceCleaner {
   /**
    * @param {Error} error - Error instance.
@@ -60,6 +68,8 @@ export default class BacktraceCleaner {
 
     if (trimmedLine.startsWith("Error:")) return true
 
-    return trimmedLine.startsWith(`${this.error.name}:`)
+    const errorNamePattern = new RegExp(`^${escapeRegExp(this.error.name)}(?:\\s*\\[[^\\]]+\\])?:`)
+
+    return errorNamePattern.test(trimmedLine)
   }
 }
