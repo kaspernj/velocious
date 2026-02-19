@@ -412,7 +412,7 @@ export default class FrontendModelController extends Controller {
     const relatedModelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
     const relatedResource = this.frontendModelResourceConfigurationForModelClass(relatedModelClass)
 
-    if (!relatedResource) return true
+    if (!relatedResource) return false
 
     const abilityAction = relationshipIsCollection
       ? relatedResource.resourceConfiguration.abilities?.index

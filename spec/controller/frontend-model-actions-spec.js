@@ -558,4 +558,66 @@ describe("Controller frontend model actions", () => {
       name: "One"
     })
   })
+
+  it("does not serialize nested preloaded models without frontend resource definitions", async () => {
+    /** Related backend-only model class used in nested authorization serialization test. */
+    class BackendOnlyRelatedModel {
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        BackendOnlyRelatedModel,
+        MockFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const backendOnlyRelated = new BackendOnlyRelatedModel({id: "secret"})
+    const parentModel = {
+      constructor: fakeParentModelClass,
+      attributes() {
+        return {id: "1", name: "One"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return backendOnlyRelated
+          }
+        }
+      }
+    }
+
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        related: null
+      },
+      id: "1",
+      name: "One"
+    })
+  })
 })
