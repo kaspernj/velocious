@@ -112,4 +112,5 @@ builds:
   build_6:
     name: Browser Tests
     script:
+      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - npm run test:browser
