@@ -8,6 +8,16 @@ import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
 
 /**
+ * @param {string | undefined} line - Potential header line.
+ * @returns {boolean} - Whether the line is a stack frame.
+ */
+function stackFrameLine(line) {
+  if (!line) return false
+
+  return /^at\s+/u.test(line.trim())
+}
+
+/**
  * @param {Error} error - Error to format for logging.
  * @param {string | undefined} cleanedStackWithHeader - Cleaned stack with header line.
  * @returns {string} - Error summary line with type information.
@@ -15,7 +25,7 @@ import RoutesResolver from "../../routes/resolver.js"
 function requestErrorSummary(error, cleanedStackWithHeader) {
   const stackHeader = cleanedStackWithHeader?.split("\n")[0]?.trim()
 
-  if (stackHeader) return stackHeader
+  if (stackHeader && !stackFrameLine(stackHeader)) return stackHeader
 
   const errorCode = typeof /** @type {any} */ (error).code === "string"
     ? /** @type {any} */ (error).code

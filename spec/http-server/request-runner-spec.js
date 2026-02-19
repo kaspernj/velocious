@@ -93,4 +93,48 @@ describe("HttpServer - request runner", async () => {
     expect(consoleErrorWrites[0]).toContain("handleRequest")
     expect(consoleErrorWrites[0].includes("node_modules")).toEqual(false)
   })
+
+  it("falls back to error summary when cleaned stack header is filtered out", async () => {
+    const originalConsoleError = console.error
+    const consoleErrorWrites = []
+    const error = new Error("Cannot resolve /app/node_modules/demo")
+
+    error.stack = [
+      "Error: Cannot resolve /app/node_modules/demo",
+      "    at resolveRequest (/app/src/services/resolver.js:10:2)",
+      "    at runInNodeModule (/app/node_modules/demo/index.js:1:1)",
+      "    at handleRequest (/app/src/routes/root.js:44:8)"
+    ].join("\n")
+
+    try {
+      console.error = (message) => {
+        consoleErrorWrites.push(String(message))
+      }
+
+      const configuration = /** @type {any} */ ({
+        getCors: () => async () => {
+          throw error
+        },
+        getErrorEvents: () => ({
+          emit: () => {}
+        })
+      })
+      const request = /** @type {any} */ ({
+        header: () => undefined,
+        httpMethod: () => "GET"
+      })
+      const requestRunner = new VelociousHttpServerClientRequestRunner({configuration, request})
+
+      await requestRunner.run()
+    } finally {
+      console.error = originalConsoleError
+    }
+
+    expect(consoleErrorWrites.length).toEqual(1)
+    expect(consoleErrorWrites[0]).toContain("Error while running request: Error: Cannot resolve /app/node_modules/demo")
+    expect(consoleErrorWrites[0]).toContain("Cleaned backtrace:")
+    expect(consoleErrorWrites[0]).toContain("resolveRequest")
+    expect(consoleErrorWrites[0]).toContain("handleRequest")
+    expect(consoleErrorWrites[0].includes("Error while running request: at ")).toEqual(false)
+  })
 })
