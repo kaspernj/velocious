@@ -42,7 +42,7 @@ function normalizeFrontendModelPreload(preload) {
         const nested = normalizeFrontendModelPreload(entry)
 
         if (nested) {
-          Object.assign(normalized, nested)
+          mergeNormalizedPreload(normalized, nested)
         }
         continue
       }
@@ -77,6 +77,43 @@ function normalizeFrontendModelPreload(preload) {
   }
 
   return normalized
+}
+
+/**
+ * @param {import("./database/query/index.js").NestedPreloadRecord} target - Target preload object.
+ * @param {import("./database/query/index.js").NestedPreloadRecord} source - Source preload object.
+ * @returns {void} - Mutates target with merged nested preload tree.
+ */
+function mergeNormalizedPreload(target, source) {
+  for (const [relationshipName, relationshipPreload] of Object.entries(source)) {
+    const existingValue = target[relationshipName]
+
+    if (relationshipPreload === false) {
+      target[relationshipName] = false
+      continue
+    }
+
+    if (relationshipPreload === true) {
+      if (existingValue === undefined) {
+        target[relationshipName] = true
+      }
+      continue
+    }
+
+    if (!isPlainObject(relationshipPreload)) {
+      throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+    }
+
+    if (isPlainObject(existingValue)) {
+      mergeNormalizedPreload(
+        /** @type {import("./database/query/index.js").NestedPreloadRecord} */ (existingValue),
+        /** @type {import("./database/query/index.js").NestedPreloadRecord} */ (relationshipPreload)
+      )
+      continue
+    }
+
+    target[relationshipName] = relationshipPreload
+  }
 }
 
 /** Controller with built-in frontend model resource actions. */
@@ -363,7 +400,7 @@ export default class FrontendModelController extends Controller {
       } else if (loadedRelationship && typeof loadedRelationship === "object" && typeof loadedRelationship.attributes === "function") {
         preloadedRelationships[relationshipName] = this.serializeFrontendModel(loadedRelationship)
       } else {
-        preloadedRelationships[relationshipName] = loadedRelationship
+        preloadedRelationships[relationshipName] = loadedRelationship == undefined ? null : loadedRelationship
       }
     }
 

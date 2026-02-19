@@ -302,6 +302,30 @@ describe("Controller frontend model actions", () => {
     ])
   })
 
+  it("merges nested preload entries from array shorthand", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        preload: [
+          {tasks: ["comments"]},
+          {tasks: ["labels"]}
+        ]
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
+      {
+        tasks: {
+          comments: true,
+          labels: true
+        }
+      }
+    ])
+  })
+
   it("returns one model from frontendFind", async () => {
     MockFrontendModel.data = [{id: "2", name: "Two"}]
 
@@ -419,5 +443,39 @@ describe("Controller frontend model actions", () => {
     await expect(async () => {
       await controller.frontendIndex()
     }).toThrow(/must define an 'abilities' object/)
+  })
+
+  it("serializes missing preloaded singular relationships as null", () => {
+    const controller = buildController()
+    const fakeModelClass = {
+      getRelationshipsMap() {
+        return {projectDetail: {}}
+      }
+    }
+    const fakeModel = {
+      constructor: fakeModelClass,
+      attributes() {
+        return {id: "1", name: "One"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return undefined
+          }
+        }
+      }
+    }
+    const payload = controller.serializeFrontendModel(/** @type {any} */ (fakeModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        projectDetail: null
+      },
+      id: "1",
+      name: "One"
+    })
   })
 })
