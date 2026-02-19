@@ -7,6 +7,66 @@ import Logger from "../../logger.js"
 import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
 
+/**
+ * @param {string | undefined} line - Potential header line.
+ * @returns {boolean} - Whether the line is a stack frame.
+ */
+function stackFrameLine(line) {
+  if (!line) return false
+
+  return /^at\s+/u.test(line.trim())
+}
+
+/**
+ * @param {Error} error - Error to format for logging.
+ * @param {string | undefined} cleanedStackWithHeader - Cleaned stack with header line.
+ * @returns {string} - Error summary line with type information.
+ */
+function requestErrorSummary(error, cleanedStackWithHeader) {
+  const stackHeader = cleanedStackWithHeader?.split("\n")[0]?.trim()
+
+  if (stackHeader && !stackFrameLine(stackHeader)) return stackHeader
+
+  const errorCode = typeof /** @type {any} */ (error).code === "string"
+    ? /** @type {any} */ (error).code
+    : undefined
+  const errorMessage = error.message || String(error)
+
+  if (errorCode) return `${error.name} [${errorCode}]: ${errorMessage}`
+
+  return `${error.name}: ${errorMessage}`
+}
+
+/**
+ * @param {Error} error - Error to format for logging.
+ * @returns {{
+ *   errorSummary: string,
+ *   cleanedBacktrace: string | undefined,
+ * }} - Log details.
+ */
+function requestErrorLogDetails(error) {
+  const cleanedStackWithHeader = BacktraceCleaner.getCleanedStack(error)
+  const errorSummary = requestErrorSummary(error, cleanedStackWithHeader)
+  const cleanedBacktrace = BacktraceCleaner.getCleanedStack(error, {includeErrorHeader: false}) || cleanedStackWithHeader
+
+  return {errorSummary, cleanedBacktrace}
+}
+
+/**
+ * @param {{
+ *   errorSummary: string,
+ *   cleanedBacktrace: string | undefined,
+ * }} logDetails - Log details.
+ * @returns {string} - Single request error log message.
+ */
+function requestErrorLogMessage(logDetails) {
+  if (!logDetails.cleanedBacktrace) {
+    return `Error while running request: ${logDetails.errorSummary}`
+  }
+
+  return `Error while running request: ${logDetails.errorSummary}\nCleaned backtrace:\n${logDetails.cleanedBacktrace}`
+}
+
 export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
@@ -113,8 +173,9 @@ export default class VelociousHttpServerClientRequestRunner {
       const error = ensureError(e)
       const errorWithContext = /** @type {{velociousContext?: object}} */ (error)
       const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
+      const logDetails = requestErrorLogDetails(error)
 
-      await this.logger.error(() => `Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`)
+      await this.logger.error(() => requestErrorLogMessage(logDetails))
 
       const errorPayload = {
         context: errorContext,

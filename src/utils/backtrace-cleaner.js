@@ -1,12 +1,22 @@
 // @ts-check
 
+/**
+ * @param {string} value - Value to escape.
+ * @returns {string} - Escaped value for a RegExp pattern.
+ */
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 export default class BacktraceCleaner {
   /**
    * @param {Error} error - Error instance.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.includeErrorHeader] - Whether to include the `Error: ...` header line.
    * @returns {string | undefined} - The cleaned stack.
    */
-  static getCleanedStack(error) {
-    return new BacktraceCleaner(error).getCleanedStack()
+  static getCleanedStack(error, args) {
+    return new BacktraceCleaner(error).getCleanedStack(args)
   }
 
   /**
@@ -17,11 +27,49 @@ export default class BacktraceCleaner {
   }
 
   /**
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.includeErrorHeader] - Whether to include the `Error: ...` header line.
    * @returns {string | undefined} - The cleaned stack.
    */
-  getCleanedStack() {
+  getCleanedStack({includeErrorHeader = true} = {}) {
+    const backtrace = this.getCleanedStackLines()
+
+    if (!backtrace || backtrace.length === 0) return undefined
+
+    if (includeErrorHeader) return backtrace.join("\n")
+
+    const firstLine = backtrace[0]
+    const remainingLines = this.isErrorHeaderLine(firstLine) ? backtrace.slice(1) : backtrace
+
+    if (remainingLines.length === 0) return undefined
+
+    return remainingLines.join("\n")
+  }
+
+  /**
+   * @returns {string[] | undefined} - Filtered stack lines.
+   */
+  getCleanedStackLines() {
     const backtrace = this.error?.stack?.split("\n")
 
-    return backtrace?.filter((line) => !line.includes("node_modules") && !line.includes("(node:internal/process/")).join("\n")
+    return backtrace?.filter((line) => !line.includes("node_modules") && !line.includes("(node:internal/process/"))
+  }
+
+  /**
+   * @param {string | undefined} line - Backtrace line.
+   * @returns {boolean} - True when the line is an error header.
+   */
+  isErrorHeaderLine(line) {
+    if (!line) return false
+
+    const trimmedLine = line.trim()
+
+    if (!trimmedLine) return false
+
+    if (trimmedLine.startsWith("Error:")) return true
+
+    const errorNamePattern = new RegExp(`^${escapeRegExp(this.error.name)}(?:\\s*\\[[^\\]]+\\])?:`)
+
+    return errorNamePattern.test(trimmedLine)
   }
 }
