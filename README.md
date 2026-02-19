@@ -265,6 +265,9 @@ export default new Configuration({
       resources: {
         User: {
           attributes: ["id", "name", "email"],
+          relationships: {
+            projects: {type: "hasMany", model: "Project"}
+          },
           commands: {find: "find", update: "update", destroy: "destroy"},
           path: "/api/frontend-models/users",
           primaryKey: "id"
@@ -287,9 +290,13 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await User.findBy({email: "john@example.com"})`
 - `await User.findByOrFail({email: "john@example.com"})`
 - `await User.toArray()`
+- `await User.preload({projects: ["tasks"]}).toArray()`
 - `await user.update({...})`
 - `await user.destroy()`
 - Attribute methods like `user.name()` and `user.setName(...)`
+- Relationship helpers (when `relationships` are configured), for example `task.project()`, `project.tasks().loaded()`, and `project.tasks().build({...})`
+
+When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
 
 You do not need to manually define `frontend-index` / `frontend-find` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
 

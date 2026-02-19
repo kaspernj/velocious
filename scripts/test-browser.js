@@ -17,6 +17,7 @@ import Migrator from "../src/database/migrator.js"
 import TestFilesFinder from "../src/testing/test-files-finder.js"
 import TestRunner from "../src/testing/test-runner.js"
 import {normalizeExamplePatterns, parseFilters} from "../src/testing/test-filter-parser.js"
+import fileExists from "../src/utils/file-exists.js"
 import dummyDirectory from "../spec/dummy/dummy-directory.js"
 
 const rootDir = process.cwd()
@@ -452,10 +453,8 @@ async function main() {
 async function loadBrowserBackendConfiguration() {
   const dummyConfigurationPath = path.join(dummyDirectory(), "src/config/configuration.js")
 
-  try {
-    await fs.access(dummyConfigurationPath)
-  } catch {
-    throw new Error(`Missing dummy backend configuration for browser tests: ${dummyConfigurationPath}`)
+  if (!(await fileExists(dummyConfigurationPath))) {
+    throw new Error(`Missing dummy backend configuration for browser tests: ${dummyConfigurationPath}. Copy one of spec/dummy/src/config/configuration.*.js files to configuration.js before running browser tests.`)
   }
 
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)

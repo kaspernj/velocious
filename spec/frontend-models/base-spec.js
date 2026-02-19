@@ -44,6 +44,101 @@ function buildTestModelClass() {
 }
 
 /**
+ * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
+ */
+function buildPreloadTestModelClasses() {
+  /** Frontend model comment test class. */
+  class Comment extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "body"],
+        commands: {index: "index"},
+        path: "/api/frontend-models/comments",
+        primaryKey: "id"
+      }
+    }
+  }
+
+  /** Frontend model task test class. */
+  class Task extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "name"],
+        commands: {index: "index"},
+        path: "/api/frontend-models/tasks",
+        primaryKey: "id"
+      }
+    }
+
+    /**
+     * @returns {Record<string, typeof FrontendModelBase>}
+     */
+    static relationshipModelClasses() {
+      return {
+        comments: Comment,
+        project: Project
+      }
+    }
+
+    /**
+     * @returns {Record<string, {type: "hasMany" | "belongsTo"}>}
+     */
+    static relationshipDefinitions() {
+      return {
+        comments: {type: "hasMany"},
+        project: {type: "belongsTo"}
+      }
+    }
+
+    /** @returns {import("../../src/frontend-models/base.js").default} */
+    primaryInteraction() {
+      return this.getRelationshipByName("primaryInteraction").loaded()
+    }
+  }
+
+  /** Frontend model project test class. */
+  class Project extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "name"],
+        commands: {index: "index"},
+        path: "/api/frontend-models/projects",
+        primaryKey: "id"
+      }
+    }
+
+    /**
+     * @returns {Record<string, typeof FrontendModelBase>}
+     */
+    static relationshipModelClasses() {
+      return {
+        tasks: Task
+      }
+    }
+
+    /**
+     * @returns {Record<string, {type: "hasMany"}>}
+     */
+    static relationshipDefinitions() {
+      return {
+        tasks: {type: "hasMany"}
+      }
+    }
+  }
+
+  return {Comment, Project, Task}
+}
+
+/**
  * @param {Record<string, any>} responseBody - Body to return from fetch.
  * @returns {{calls: FetchCall[], restore: () => void}} - Recorded calls and restore callback.
  */
@@ -160,6 +255,113 @@ describe("Frontend models - base", () => {
       resetFrontendModelTransport()
       fetchStub.restore()
     }
+  })
+
+  it("includes preload payload and hydrates nested relationship models", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({
+      models: [
+        {
+          id: "1",
+          name: "One",
+          __preloadedRelationships: {
+            tasks: [
+              {
+                id: "11",
+                name: "Task 1",
+                __preloadedRelationships: {
+                  comments: [
+                    {body: "Comment 1", id: "101"}
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    })
+
+    try {
+      const projects = await Project.preload({tasks: ["comments"]}).toArray()
+      const tasks = projects[0].getRelationshipByName("tasks").loaded()
+      const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            preload: {
+              tasks: {
+                comments: true
+              }
+            }
+          },
+          url: "/api/frontend-models/projects/index"
+        }
+      ])
+      expect(tasks[0].constructor.name).toEqual("Task")
+      expect(commentsForFirstTask[0].constructor.name).toEqual("Comment")
+
+      await expect(async () => {
+        tasks[0].primaryInteraction()
+      }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("supports build() for has-many relationship helpers", () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const project = new Project({id: "1"})
+    const builtTask = project.getRelationshipByName("tasks").build({id: "11", name: "Task 1"})
+    const loadedTasks = project.getRelationshipByName("tasks").loaded()
+
+    expect(builtTask.readAttribute("id")).toEqual("11")
+    expect(loadedTasks.length).toEqual(1)
+    expect(loadedTasks[0]).toEqual(builtTask)
+  })
+
+  it("clears cached preloaded relationships when attributes change", () => {
+    const {Task} = buildPreloadTestModelClasses()
+    const task = Task.instantiateFromResponse({
+      id: "11",
+      name: "Task one",
+      projectId: "1",
+      __preloadedRelationships: {
+        project: {
+          id: "1",
+          name: "Project one"
+        }
+      }
+    })
+
+    expect(task.getRelationshipByName("project").loaded().readAttribute("id")).toEqual("1")
+
+    task.setAttribute("projectId", "2")
+
+    expect(() => {
+      task.getRelationshipByName("project").loaded()
+    }).toThrow(/Task#project hasn't been preloaded/)
+  })
+
+  it("keeps cached preloaded relationships when attribute value does not change", () => {
+    const {Task} = buildPreloadTestModelClasses()
+    const task = Task.instantiateFromResponse({
+      id: "11",
+      name: "Task one",
+      projectId: "1",
+      __preloadedRelationships: {
+        project: {
+          id: "1",
+          name: "Project one"
+        }
+      }
+    })
+    const beforeProject = task.getRelationshipByName("project").loaded()
+
+    task.setAttribute("projectId", "1")
+
+    expect(task.getRelationshipByName("project").loaded()).toEqual(beforeProject)
   })
 
   it("updates a model and refreshes local attributes", async () => {

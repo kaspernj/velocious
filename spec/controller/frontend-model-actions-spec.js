@@ -59,6 +59,9 @@ class FakeResponse {
  * @param {object} [args]
  * @param {Record<string, any>} [args.params]
  * @param {string} [args.httpMethod]
+ * @param {Record<string, import("../../src/configuration-types.js").FrontendModelResourceConfiguration>} [args.resources]
+ * @param {Record<string, any>} [args.modelClasses]
+ * @param {any} [args.currentAbility]
  * @param {Partial<import("../../src/configuration-types.js").FrontendModelResourceConfiguration>} [args.resourceConfiguration]
  * @param {import("../../src/configuration-types.js").FrontendModelResourceServerConfiguration} [args.serverConfiguration]
  * @returns {FrontendController}
@@ -86,12 +89,12 @@ function buildController(args = {}) {
     configuration: {
       getBackendProjects: () => [{
         path: "/tmp/example",
-        resources: {
+        resources: args.resources || {
           MockFrontendModel: frontendModelResourceConfiguration
         }
       }],
-      getCurrentAbility: () => undefined,
-      getModelClasses: () => ({MockFrontendModel})
+      getCurrentAbility: () => args.currentAbility,
+      getModelClasses: () => args.modelClasses || ({MockFrontendModel})
     },
     controller: "frontend-models",
     params: args.params || {},
@@ -108,10 +111,18 @@ class MockFrontendModel {
     {id: "1", name: "One"},
     {id: "2", name: "Two"}
   ]
+  static lastQuery = null
 
   /** @param {Record<string, any>} attributes */
   constructor(attributes) {
     this._attributes = {...attributes}
+  }
+
+  /**
+   * @returns {Record<string, any>}
+   */
+  static getRelationshipsMap() {
+    return {}
   }
 
   /** @returns {Promise<MockFrontendModel[]>} */
@@ -131,6 +142,16 @@ class MockFrontendModel {
    */
   static accessibleFor() {
     return new MockFrontendModelQuery(this)
+  }
+
+  /**
+   * @returns {{getPreloaded: () => boolean, loaded: () => any}}
+   */
+  getRelationshipByName() {
+    return {
+      getPreloaded: () => false,
+      loaded: () => undefined
+    }
   }
 
   /** @returns {Record<string, any>} */
@@ -162,6 +183,8 @@ class MockFrontendModelQuery {
   constructor(modelClass) {
     this.modelClass = modelClass
     this.conditions = {}
+    this.preloads = []
+    this.modelClass.lastQuery = this
   }
 
   /**
@@ -170,6 +193,15 @@ class MockFrontendModelQuery {
    */
   where(conditions) {
     this.conditions = {...this.conditions, ...conditions}
+    return this
+  }
+
+  /**
+   * @param {Record<string, any>} preload
+   * @returns {this}
+   */
+  preload(preload) {
+    this.preloads.push(preload)
     return this
   }
 
@@ -245,6 +277,58 @@ describe("Controller frontend model actions", () => {
     })
   })
 
+  it("applies preload params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        preload: {
+          tasks: ["comments"]
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      models: [{id: "1", name: "One"}],
+      status: "success"
+    })
+    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
+      {
+        tasks: {
+          comments: true
+        }
+      }
+    ])
+  })
+
+  it("merges nested preload entries from array shorthand", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        preload: [
+          {tasks: ["comments"]},
+          {tasks: ["labels"]}
+        ]
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
+      {
+        tasks: {
+          comments: true,
+          labels: true
+        }
+      }
+    ])
+  })
+
   it("returns one model from frontendFind", async () => {
     MockFrontendModel.data = [{id: "2", name: "Two"}]
 
@@ -258,6 +342,33 @@ describe("Controller frontend model actions", () => {
       model: {id: "2", name: "Two"},
       status: "success"
     })
+  })
+
+  it("applies preload params to frontendFind query", async () => {
+    MockFrontendModel.data = [{id: "2", name: "Two"}]
+
+    const controller = buildController({
+      params: {
+        id: "2",
+        preload: {
+          project: true
+        }
+      }
+    })
+
+    await controller.frontendFind()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      model: {id: "2", name: "Two"},
+      status: "success"
+    })
+    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
+      {
+        project: true
+      }
+    ])
   })
 
   it("returns error payload when frontendFind record is missing", async () => {
@@ -335,5 +446,455 @@ describe("Controller frontend model actions", () => {
     await expect(async () => {
       await controller.frontendIndex()
     }).toThrow(/must define an 'abilities' object/)
+  })
+
+  it("serializes missing preloaded singular relationships as null", async () => {
+    const controller = buildController()
+    const fakeModelClass = {
+      getRelationshipsMap() {
+        return {projectDetail: {}}
+      }
+    }
+    const fakeModel = {
+      constructor: fakeModelClass,
+      attributes() {
+        return {id: "1", name: "One"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return undefined
+          }
+        }
+      }
+    }
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (fakeModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        projectDetail: null
+      },
+      id: "1",
+      name: "One"
+    })
+  })
+
+  it("does not serialize unauthorized nested preloaded relationships", async () => {
+    /** Related model class used in nested authorization serialization test. */
+    class RelatedFrontendModel {
+      static whereCalls = 0
+      static pluckCalls = 0
+
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {}
+      }
+
+      /**
+       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
+       */
+      static accessibleFor() {
+        const RelatedClass = this
+
+        return {
+          where: ({id}) => {
+            RelatedClass.whereCalls += 1
+
+            return {
+              pluck: async (column) => {
+                void column
+                RelatedClass.pluckCalls += 1
+
+                return id.filter((entry) => entry === "allowed")
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        MockFrontendModel,
+        RelatedFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        },
+        RelatedFrontendModel: {
+          abilities: {find: "read", index: "read"},
+          attributes: ["id"],
+          path: "/related-frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const deniedRelated = new RelatedFrontendModel({id: "denied"})
+    const parentModel = {
+      constructor: fakeParentModelClass,
+      attributes() {
+        return {id: "1", name: "One"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return deniedRelated
+          }
+        }
+      }
+    }
+
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        related: null
+      },
+      id: "1",
+      name: "One"
+    })
+    expect(RelatedFrontendModel.whereCalls).toEqual(1)
+    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
+  })
+
+  it("authorizes preloaded has-many relationships in bulk", async () => {
+    /** Related model class used in nested bulk authorization serialization test. */
+    class RelatedFrontendModel {
+      static whereCalls = 0
+      static pluckCalls = 0
+
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {}
+      }
+
+      /**
+       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
+       */
+      static accessibleFor() {
+        const RelatedClass = this
+
+        return {
+          where: ({id}) => {
+            RelatedClass.whereCalls += 1
+
+            return {
+              pluck: async (column) => {
+                void column
+                RelatedClass.pluckCalls += 1
+
+                return id.filter((entry) => entry === "allowed-1" || entry === "allowed-2")
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        MockFrontendModel,
+        RelatedFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        },
+        RelatedFrontendModel: {
+          abilities: {find: "read", index: "read"},
+          attributes: ["id"],
+          path: "/related-frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const relatedOne = new RelatedFrontendModel({id: "allowed-1", value: "One"})
+    const relatedTwo = new RelatedFrontendModel({id: "denied", value: "Two"})
+    const relatedThree = new RelatedFrontendModel({id: "allowed-2", value: "Three"})
+    const parentModel = {
+      constructor: fakeParentModelClass,
+      attributes() {
+        return {id: "1", name: "Parent"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return [relatedOne, relatedTwo, relatedThree]
+          }
+        }
+      }
+    }
+
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        related: [
+          {id: "allowed-1", value: "One"},
+          {id: "allowed-2", value: "Three"}
+        ]
+      },
+      id: "1",
+      name: "Parent"
+    })
+    expect(RelatedFrontendModel.whereCalls).toEqual(1)
+    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
+  })
+
+  it("authorizes preloaded singular relationships in bulk for index serialization", async () => {
+    /** Related model class used in nested singular bulk authorization serialization test. */
+    class RelatedFrontendModel {
+      static whereCalls = 0
+      static pluckCalls = 0
+
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {}
+      }
+
+      /**
+       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
+       */
+      static accessibleFor() {
+        const RelatedClass = this
+
+        return {
+          where: ({id}) => {
+            RelatedClass.whereCalls += 1
+
+            return {
+              pluck: async (column) => {
+                void column
+                RelatedClass.pluckCalls += 1
+
+                return id.filter((entry) => entry.startsWith("allowed"))
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        MockFrontendModel,
+        RelatedFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        },
+        RelatedFrontendModel: {
+          abilities: {find: "read", index: "read"},
+          attributes: ["id"],
+          path: "/related-frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const parentModels = [
+      {
+        constructor: fakeParentModelClass,
+        attributes() {
+          return {id: "1", name: "One"}
+        },
+        getRelationshipByName() {
+          return {
+            getPreloaded() {
+              return true
+            },
+            loaded() {
+              return new RelatedFrontendModel({id: "allowed-1", value: "Allowed one"})
+            }
+          }
+        }
+      },
+      {
+        constructor: fakeParentModelClass,
+        attributes() {
+          return {id: "2", name: "Two"}
+        },
+        getRelationshipByName() {
+          return {
+            getPreloaded() {
+              return true
+            },
+            loaded() {
+              return new RelatedFrontendModel({id: "denied-2", value: "Denied"})
+            }
+          }
+        }
+      },
+      {
+        constructor: fakeParentModelClass,
+        attributes() {
+          return {id: "3", name: "Three"}
+        },
+        getRelationshipByName() {
+          return {
+            getPreloaded() {
+              return true
+            },
+            loaded() {
+              return new RelatedFrontendModel({id: "allowed-3", value: "Allowed three"})
+            }
+          }
+        }
+      }
+    ]
+
+    const serialized = await controller.serializeFrontendModels(/** @type {any} */ (parentModels))
+
+    expect(serialized).toEqual([
+      {
+        __preloadedRelationships: {
+          related: {id: "allowed-1", value: "Allowed one"}
+        },
+        id: "1",
+        name: "One"
+      },
+      {
+        __preloadedRelationships: {
+          related: null
+        },
+        id: "2",
+        name: "Two"
+      },
+      {
+        __preloadedRelationships: {
+          related: {id: "allowed-3", value: "Allowed three"}
+        },
+        id: "3",
+        name: "Three"
+      }
+    ])
+    expect(RelatedFrontendModel.whereCalls).toEqual(1)
+    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
+  })
+
+  it("does not serialize nested preloaded models without frontend resource definitions", async () => {
+    /** Related backend-only model class used in nested authorization serialization test. */
+    class BackendOnlyRelatedModel {
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+    }
+
+    const controller = buildController({
+      currentAbility: {},
+      modelClasses: {
+        BackendOnlyRelatedModel,
+        MockFrontendModel
+      },
+      resources: {
+        MockFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    const fakeParentModelClass = {
+      getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+    const backendOnlyRelated = new BackendOnlyRelatedModel({id: "secret"})
+    const parentModel = {
+      constructor: fakeParentModelClass,
+      attributes() {
+        return {id: "1", name: "One"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return backendOnlyRelated
+          }
+        }
+      }
+    }
+
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        related: null
+      },
+      id: "1",
+      name: "One"
+    })
   })
 })

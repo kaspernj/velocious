@@ -35,6 +35,105 @@ class HttpFrontendModel extends FrontendModelBase {
   createdAt() { return this.readAttribute("createdAt") }
 }
 
+/** Frontend model comment class for preload integration tests. */
+class HttpPreloadComment extends FrontendModelBase {
+  /**
+   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+   */
+  static resourceConfig() {
+    return {
+      abilities: {
+        index: "read"
+      },
+      attributes: ["id", "body"],
+      commands: {
+        index: "frontend-index"
+      },
+      path: "/frontend-model-system-tests",
+      primaryKey: "id"
+    }
+  }
+}
+
+/** Frontend model task class for preload integration tests. */
+class HttpPreloadTask extends FrontendModelBase {
+  /**
+   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+   */
+  static resourceConfig() {
+    return {
+      abilities: {
+        index: "read"
+      },
+      attributes: ["id", "name"],
+      commands: {
+        index: "frontend-index"
+      },
+      path: "/frontend-model-system-tests",
+      primaryKey: "id"
+    }
+  }
+
+  /**
+   * @returns {Record<string, typeof FrontendModelBase>}
+   */
+  static relationshipModelClasses() {
+    return {
+      comments: HttpPreloadComment
+    }
+  }
+
+  /**
+   * @returns {Record<string, {type: "hasMany"}>}
+   */
+  static relationshipDefinitions() {
+    return {
+      comments: {type: "hasMany"}
+    }
+  }
+
+  /** @returns {unknown} */
+  primaryInteraction() { return this.getRelationshipByName("primaryInteraction").loaded() }
+}
+
+/** Frontend model project class for preload integration tests. */
+class HttpPreloadProject extends FrontendModelBase {
+  /**
+   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+   */
+  static resourceConfig() {
+    return {
+      abilities: {
+        index: "read"
+      },
+      attributes: ["id", "email"],
+      commands: {
+        index: "frontend-index"
+      },
+      path: "/frontend-model-system-tests",
+      primaryKey: "id"
+    }
+  }
+
+  /**
+   * @returns {Record<string, typeof FrontendModelBase>}
+   */
+  static relationshipModelClasses() {
+    return {
+      tasks: HttpPreloadTask
+    }
+  }
+
+  /**
+   * @returns {Record<string, {type: "hasMany"}>}
+   */
+  static relationshipDefinitions() {
+    return {
+      tasks: {type: "hasMany"}
+    }
+  }
+}
+
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
@@ -239,6 +338,27 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         await expect(async () => {
           await HttpFrontendModel.findByOrFail({email: undefined})
         }).toThrow(/findBy does not support undefined condition values/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("preloads nested relationships over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const projects = await HttpPreloadProject.preload({tasks: ["comments"]}).toArray()
+        const tasks = projects[0].getRelationshipByName("tasks").loaded()
+        const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
+
+        expect(tasks.length).toEqual(1)
+        expect(commentsForFirstTask.length).toEqual(1)
+
+        await expect(async () => {
+          tasks[0].primaryInteraction()
+        }).toThrow(/HttpPreloadTask#primaryInteraction hasn't been preloaded/)
       } finally {
         resetFrontendModelTransport()
       }
