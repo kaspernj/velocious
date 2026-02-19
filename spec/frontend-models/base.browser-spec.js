@@ -79,6 +79,15 @@ class BrowserPreloadTask extends FrontendModelBase {
     }
   }
 
+  /**
+   * @returns {Record<string, {type: "hasMany"}>}
+   */
+  static relationshipDefinitions() {
+    return {
+      comments: {type: "hasMany"}
+    }
+  }
+
   /** @returns {unknown} */
   primaryInteraction() { return this.getRelationshipByName("primaryInteraction").loaded() }
 }
@@ -108,6 +117,15 @@ class BrowserPreloadProject extends FrontendModelBase {
   static relationshipModelClasses() {
     return {
       tasks: BrowserPreloadTask
+    }
+  }
+
+  /**
+   * @returns {Record<string, {type: "hasMany"}>}
+   */
+  static relationshipDefinitions() {
+    return {
+      tasks: {type: "hasMany"}
     }
   }
 }

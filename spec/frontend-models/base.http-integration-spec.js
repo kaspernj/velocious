@@ -83,6 +83,15 @@ class HttpPreloadTask extends FrontendModelBase {
     }
   }
 
+  /**
+   * @returns {Record<string, {type: "hasMany"}>}
+   */
+  static relationshipDefinitions() {
+    return {
+      comments: {type: "hasMany"}
+    }
+  }
+
   /** @returns {unknown} */
   primaryInteraction() { return this.getRelationshipByName("primaryInteraction").loaded() }
 }
@@ -112,6 +121,15 @@ class HttpPreloadProject extends FrontendModelBase {
   static relationshipModelClasses() {
     return {
       tasks: HttpPreloadTask
+    }
+  }
+
+  /**
+   * @returns {Record<string, {type: "hasMany"}>}
+   */
+  static relationshipDefinitions() {
+    return {
+      tasks: {type: "hasMany"}
     }
   }
 }

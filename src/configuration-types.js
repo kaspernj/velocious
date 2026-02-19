@@ -136,10 +136,19 @@
  */
 
 /**
+ * @typedef {object} FrontendModelRelationshipConfiguration
+ * @property {"belongsTo" | "hasOne" | "hasMany"} type - Relationship type.
+ * @property {string} [model] - Target model class name.
+ * @property {string} [className] - Alias of target model class name.
+ * @property {string} [modelClassName] - Explicit target model class name.
+ */
+
+/**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {string[] | Record<string, any>} attributes - Attributes to expose on the frontend model.
  * @property {FrontendModelResourceAbilitiesConfiguration} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`).
  * @property {Record<string, string>} [commands] - Command names keyed by action (`index`, `find`, `update`, `destroy`).
+ * @property {Record<string, FrontendModelRelationshipConfiguration>} [relationships] - Relationship helpers to generate for frontend model files.
  * @property {string} [path] - HTTP path prefix used by frontend model commands.
  * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional backend behavior overrides for built-in frontend actions.

@@ -85,6 +85,15 @@ function buildPreloadTestModelClasses() {
       }
     }
 
+    /**
+     * @returns {Record<string, {type: "hasMany"}>}
+     */
+    static relationshipDefinitions() {
+      return {
+        comments: {type: "hasMany"}
+      }
+    }
+
     /** @returns {import("../../src/frontend-models/base.js").default} */
     primaryInteraction() {
       return this.getRelationshipByName("primaryInteraction").loaded()
@@ -111,6 +120,15 @@ function buildPreloadTestModelClasses() {
     static relationshipModelClasses() {
       return {
         tasks: Task
+      }
+    }
+
+    /**
+     * @returns {Record<string, {type: "hasMany"}>}
+     */
+    static relationshipDefinitions() {
+      return {
+        tasks: {type: "hasMany"}
       }
     }
   }
@@ -288,6 +306,17 @@ describe("Frontend models - base", () => {
       resetFrontendModelTransport()
       fetchStub.restore()
     }
+  })
+
+  it("supports build() for has-many relationship helpers", () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const project = new Project({id: "1"})
+    const builtTask = project.getRelationshipByName("tasks").build({id: "11", name: "Task 1"})
+    const loadedTasks = project.getRelationshipByName("tasks").loaded()
+
+    expect(builtTask.readAttribute("id")).toEqual("11")
+    expect(loadedTasks.length).toEqual(1)
+    expect(loadedTasks[0]).toEqual(builtTask)
   })
 
   it("updates a model and refreshes local attributes", async () => {

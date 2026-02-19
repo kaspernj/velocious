@@ -43,8 +43,10 @@ describe("Cli - generate - frontend-models", () => {
     await cli.execute()
 
     const taskPath = `${dummyDirectory()}/src/frontend-models/task.js`
+    const projectPath = `${dummyDirectory()}/src/frontend-models/project.js`
     const userPath = `${dummyDirectory()}/src/frontend-models/user.js`
     const taskContents = await fs.readFile(taskPath, "utf8")
+    const projectContents = await fs.readFile(projectPath, "utf8")
     const userContents = await fs.readFile(userPath, "utf8")
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
@@ -54,6 +56,15 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
     expect(taskContents).toContain("identifier() { return this.readAttribute(\"identifier\") }")
     expect(taskContents).toContain("setIdentifier(newValue) { return this.setAttribute(\"identifier\", newValue) }")
+    expect(taskContents).toContain("import Project from \"./project.js\"")
+    expect(taskContents).toContain("static relationshipDefinitions()")
+    expect(taskContents).toContain("project: {type: \"belongsTo\"}")
+    expect(taskContents).toContain("project() { return /** @type {import(\"./project.js\").default | null} */ (this.getRelationshipByName(\"project\").loaded()) }")
+
+    expect(projectContents).toContain("import Task from \"./task.js\"")
+    expect(projectContents).toContain("tasks: {type: \"hasMany\"}")
+    expect(projectContents).toContain("tasks() { return /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelHasManyRelationship<typeof import(\"./project.js\").default, typeof import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\")) }")
+    expect(projectContents).toContain("tasksLoaded() { return /** @type {Array<import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\").loaded()) }")
 
     expect(userContents).toContain("class User extends FrontendModelBase")
     expect(userContents).toContain("\"index\":\"index\"")

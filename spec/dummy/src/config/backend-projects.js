@@ -18,8 +18,28 @@ const backendProjects = [
           index: "list",
           update: "update"
         },
+        relationships: {
+          project: {
+            model: "Project",
+            type: "belongsTo"
+          }
+        },
         path: "/api/frontend-models/tasks",
         primaryKey: "id"
+      },
+      Project: {
+        attributes: ["id", "name"],
+        abilities: {
+          find: "read",
+          index: "read"
+        },
+        relationships: {
+          tasks: {
+            model: "Task",
+            type: "hasMany"
+          }
+        },
+        path: "/api/frontend-models/projects"
       },
       User: {
         attributes: {

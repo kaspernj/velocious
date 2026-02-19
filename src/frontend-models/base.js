@@ -122,17 +122,23 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
   }
 }
 
-/** Lightweight relationship state holder for frontend model instances. */
-class FrontendModelRelationship {
+/**
+ * Lightweight singular relationship state holder for frontend model instances.
+ * @template {typeof FrontendModelBase} S
+ * @template {typeof FrontendModelBase} T
+ */
+export class FrontendModelSingularRelationship {
   /**
-   * @param {FrontendModelBase} model - Parent model.
+   * @param {InstanceType<S>} model - Parent model.
    * @param {string} relationshipName - Relationship name.
+   * @param {T | null} targetModelClass - Target model class.
    */
-  constructor(model, relationshipName) {
+  constructor(model, relationshipName, targetModelClass) {
     this.model = model
     this.relationshipName = relationshipName
+    this.targetModelClass = targetModelClass
     this._preloaded = false
-    this._loadedValue = undefined
+    this._loadedValue = null
   }
 
   /**
@@ -140,7 +146,7 @@ class FrontendModelRelationship {
    * @returns {void}
    */
   setLoaded(loadedValue) {
-    this._loadedValue = loadedValue
+    this._loadedValue = loadedValue == undefined ? null : loadedValue
     this._preloaded = true
   }
 
@@ -161,6 +167,103 @@ class FrontendModelRelationship {
 
     return this._loadedValue
   }
+
+  /**
+   * @param {Record<string, any>} [attributes] - New model attributes.
+   * @returns {InstanceType<T>} - Built model.
+   */
+  build(attributes = {}) {
+    if (!this.targetModelClass) {
+      throw new Error(`No target model class configured for ${this.model.constructor.name}#${this.relationshipName}`)
+    }
+
+    const model = /** @type {InstanceType<T>} */ (new this.targetModelClass(attributes))
+
+    this.setLoaded(model)
+
+    return model
+  }
+}
+
+/**
+ * Lightweight has-many relationship state holder for frontend model instances.
+ * @template {typeof FrontendModelBase} S
+ * @template {typeof FrontendModelBase} T
+ */
+export class FrontendModelHasManyRelationship {
+  /**
+   * @param {InstanceType<S>} model - Parent model.
+   * @param {string} relationshipName - Relationship name.
+   * @param {T | null} targetModelClass - Target model class.
+   */
+  constructor(model, relationshipName, targetModelClass) {
+    this.model = model
+    this.relationshipName = relationshipName
+    this.targetModelClass = targetModelClass
+    this._preloaded = false
+    this._loadedValue = []
+  }
+
+  /**
+   * @param {Array<InstanceType<T>>} loadedValue - Loaded relationship value.
+   * @returns {void}
+   */
+  setLoaded(loadedValue) {
+    this._loadedValue = Array.isArray(loadedValue) ? loadedValue : []
+    this._preloaded = true
+  }
+
+  /**
+   * @returns {boolean} - Whether relationship is preloaded.
+   */
+  getPreloaded() {
+    return this._preloaded
+  }
+
+  /**
+   * @returns {Array<InstanceType<T>>} - Loaded relationship values.
+   */
+  loaded() {
+    if (!this._preloaded) {
+      throw new Error(`${this.model.constructor.name}#${this.relationshipName} hasn't been preloaded`)
+    }
+
+    return this._loadedValue
+  }
+
+  /**
+   * @param {Array<InstanceType<T>>} models - Models to append.
+   * @returns {void}
+   */
+  addToLoaded(models) {
+    const loadedModels = this.getPreloaded() ? this.loaded() : []
+
+    this.setLoaded([...loadedModels, ...models])
+  }
+
+  /**
+   * @param {Record<string, any>} [attributes] - New model attributes.
+   * @returns {InstanceType<T>} - Built model.
+   */
+  build(attributes = {}) {
+    if (!this.targetModelClass) {
+      throw new Error(`No target model class configured for ${this.model.constructor.name}#${this.relationshipName}`)
+    }
+
+    const model = /** @type {InstanceType<T>} */ (new this.targetModelClass(attributes))
+
+    this.addToLoaded([model])
+
+    return model
+  }
+}
+
+/**
+ * @param {string} relationshipType - Relationship type.
+ * @returns {boolean} - Whether relationship type is has-many.
+ */
+function relationshipTypeIsCollection(relationshipType) {
+  return relationshipType == "hasMany"
 }
 
 /**
@@ -517,6 +620,25 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
+   * @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationship definitions keyed by relationship name.
+   */
+  static relationshipDefinitions() {
+    return {}
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {string} relationshipName - Relationship name.
+   * @returns {{type: "belongsTo" | "hasOne" | "hasMany"} | null} - Relationship definition.
+   */
+  static relationshipDefinition(relationshipName) {
+    const definitions = this.relationshipDefinitions()
+
+    return definitions[relationshipName] || null
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
    * @param {string} relationshipName - Relationship name.
    * @returns {typeof FrontendModelBase | null} - Target relationship model class.
    */
@@ -535,10 +657,20 @@ export default class FrontendModelBase {
 
   /**
    * @param {string} relationshipName - Relationship name.
-   * @returns {FrontendModelRelationship} - Relationship state object.
+   * @returns {FrontendModelHasManyRelationship<any, any> | FrontendModelSingularRelationship<any, any>} - Relationship state object.
    */
   getRelationshipByName(relationshipName) {
-    this._relationships[relationshipName] ||= new FrontendModelRelationship(this, relationshipName)
+    if (!this._relationships[relationshipName]) {
+      const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+      const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
+      const targetModelClass = ModelClass.relationshipModelClass(relationshipName)
+
+      if (relationshipDefinition && relationshipTypeIsCollection(relationshipDefinition.type)) {
+        this._relationships[relationshipName] = new FrontendModelHasManyRelationship(this, relationshipName, targetModelClass)
+      } else {
+        this._relationships[relationshipName] = new FrontendModelSingularRelationship(this, relationshipName, targetModelClass)
+      }
+    }
 
     return this._relationships[relationshipName]
   }
