@@ -16,7 +16,7 @@ import RoutesResolver from "../../routes/resolver.js"
  */
 function requestErrorLogDetails(error) {
   const errorMessage = error.message || String(error)
-  const cleanedBacktrace = BacktraceCleaner.getCleanedBacktrace(error) || BacktraceCleaner.getCleanedStack(error)
+  const cleanedBacktrace = BacktraceCleaner.getCleanedStack(error, {includeErrorHeader: false}) || BacktraceCleaner.getCleanedStack(error)
 
   return {errorMessage, cleanedBacktrace}
 }

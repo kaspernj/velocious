@@ -3,18 +3,12 @@
 export default class BacktraceCleaner {
   /**
    * @param {Error} error - Error instance.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.includeErrorHeader] - Whether to include the `Error: ...` header line.
    * @returns {string | undefined} - The cleaned stack.
    */
-  static getCleanedStack(error) {
-    return new BacktraceCleaner(error).getCleanedStack()
-  }
-
-  /**
-   * @param {Error} error - Error instance.
-   * @returns {string | undefined} - The cleaned backtrace.
-   */
-  static getCleanedBacktrace(error) {
-    return new BacktraceCleaner(error).getCleanedBacktrace()
+  static getCleanedStack(error, args) {
+    return new BacktraceCleaner(error).getCleanedStack(args)
   }
 
   /**
@@ -25,26 +19,19 @@ export default class BacktraceCleaner {
   }
 
   /**
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.includeErrorHeader] - Whether to include the `Error: ...` header line.
    * @returns {string | undefined} - The cleaned stack.
    */
-  getCleanedStack() {
+  getCleanedStack({includeErrorHeader = true} = {}) {
     const backtrace = this.getCleanedStackLines()
 
     if (!backtrace || backtrace.length === 0) return undefined
 
-    return backtrace.join("\n")
-  }
-
-  /**
-   * @returns {string | undefined} - The cleaned backtrace without the error header line.
-   */
-  getCleanedBacktrace() {
-    const backtrace = this.getCleanedStackLines()
-
-    if (!backtrace || backtrace.length === 0) return undefined
+    if (includeErrorHeader) return backtrace.join("\n")
 
     const firstLine = backtrace[0]
-    const remainingLines = this.isErrorHeaderLine(firstLine) ? backtrace.slice(1) : backtrace.slice(0)
+    const remainingLines = this.isErrorHeaderLine(firstLine) ? backtrace.slice(1) : backtrace
 
     if (remainingLines.length === 0) return undefined
 
