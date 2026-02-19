@@ -9,16 +9,52 @@ import RoutesResolver from "../../routes/resolver.js"
 
 /**
  * @param {Error} error - Error to format for logging.
+ * @param {string | undefined} cleanedStackWithHeader - Cleaned stack with header line.
+ * @returns {string} - Error summary line with type information.
+ */
+function requestErrorSummary(error, cleanedStackWithHeader) {
+  const stackHeader = cleanedStackWithHeader?.split("\n")[0]?.trim()
+
+  if (stackHeader) return stackHeader
+
+  const errorCode = typeof /** @type {any} */ (error).code === "string"
+    ? /** @type {any} */ (error).code
+    : undefined
+  const errorMessage = error.message || String(error)
+
+  if (errorCode) return `${error.name} [${errorCode}]: ${errorMessage}`
+
+  return `${error.name}: ${errorMessage}`
+}
+
+/**
+ * @param {Error} error - Error to format for logging.
  * @returns {{
- *   errorMessage: string,
+ *   errorSummary: string,
  *   cleanedBacktrace: string | undefined,
  * }} - Log details.
  */
 function requestErrorLogDetails(error) {
-  const errorMessage = error.message || String(error)
-  const cleanedBacktrace = BacktraceCleaner.getCleanedStack(error, {includeErrorHeader: false}) || BacktraceCleaner.getCleanedStack(error)
+  const cleanedStackWithHeader = BacktraceCleaner.getCleanedStack(error)
+  const errorSummary = requestErrorSummary(error, cleanedStackWithHeader)
+  const cleanedBacktrace = BacktraceCleaner.getCleanedStack(error, {includeErrorHeader: false}) || cleanedStackWithHeader
 
-  return {errorMessage, cleanedBacktrace}
+  return {errorSummary, cleanedBacktrace}
+}
+
+/**
+ * @param {{
+ *   errorSummary: string,
+ *   cleanedBacktrace: string | undefined,
+ * }} logDetails - Log details.
+ * @returns {string} - Single request error log message.
+ */
+function requestErrorLogMessage(logDetails) {
+  if (!logDetails.cleanedBacktrace) {
+    return `Error while running request: ${logDetails.errorSummary}`
+  }
+
+  return `Error while running request: ${logDetails.errorSummary}\nCleaned backtrace:\n${logDetails.cleanedBacktrace}`
 }
 
 export default class VelociousHttpServerClientRequestRunner {
@@ -129,11 +165,7 @@ export default class VelociousHttpServerClientRequestRunner {
       const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
       const logDetails = requestErrorLogDetails(error)
 
-      await this.logger.error(() => `Error while running request: ${logDetails.errorMessage}`)
-
-      if (logDetails.cleanedBacktrace) {
-        await this.logger.error(() => `Cleaned backtrace:\n${logDetails.cleanedBacktrace}`)
-      }
+      await this.logger.error(() => requestErrorLogMessage(logDetails))
 
       const errorPayload = {
         context: errorContext,

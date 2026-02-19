@@ -41,13 +41,56 @@ describe("HttpServer - request runner", async () => {
       console.error = originalConsoleError
     }
 
-    expect(consoleErrorWrites.length).toEqual(2)
-    expect(consoleErrorWrites[0]).toContain("Error while running request: Boom")
-    expect(consoleErrorWrites[1]).toContain("Cleaned backtrace:")
-    expect(consoleErrorWrites[1]).toContain("RootController.partnerSignIn")
-    expect(consoleErrorWrites[1]).toContain("someHandler")
-    expect(consoleErrorWrites[1].includes("Error: Boom")).toEqual(false)
-    expect(consoleErrorWrites[1].includes("node_modules")).toEqual(false)
-    expect(consoleErrorWrites[1].includes("node:internal/process/")).toEqual(false)
+    expect(consoleErrorWrites.length).toEqual(1)
+    expect(consoleErrorWrites[0]).toContain("Error while running request: Error: Boom")
+    expect(consoleErrorWrites[0]).toContain("Cleaned backtrace:")
+    expect(consoleErrorWrites[0]).toContain("RootController.partnerSignIn")
+    expect(consoleErrorWrites[0]).toContain("someHandler")
+    expect(consoleErrorWrites[0].includes("node_modules")).toEqual(false)
+    expect(consoleErrorWrites[0].includes("node:internal/process/")).toEqual(false)
+  })
+
+  it("keeps error type and code in request error summary", async () => {
+    const originalConsoleError = console.error
+    const consoleErrorWrites = []
+    const error = new TypeError("Unknown encoding: utf16")
+
+    error.stack = [
+      "TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: utf16",
+      "    at decodePayload (/app/src/services/decoder.js:12:3)",
+      "    at parseInput (/app/node_modules/some-lib/index.js:1:1)",
+      "    at handleRequest (/app/src/routes/root.js:44:8)"
+    ].join("\n")
+
+    try {
+      console.error = (message) => {
+        consoleErrorWrites.push(String(message))
+      }
+
+      const configuration = /** @type {any} */ ({
+        getCors: () => async () => {
+          throw error
+        },
+        getErrorEvents: () => ({
+          emit: () => {}
+        })
+      })
+      const request = /** @type {any} */ ({
+        header: () => undefined,
+        httpMethod: () => "GET"
+      })
+      const requestRunner = new VelociousHttpServerClientRequestRunner({configuration, request})
+
+      await requestRunner.run()
+    } finally {
+      console.error = originalConsoleError
+    }
+
+    expect(consoleErrorWrites.length).toEqual(1)
+    expect(consoleErrorWrites[0]).toContain("Error while running request: TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: utf16")
+    expect(consoleErrorWrites[0]).toContain("Cleaned backtrace:")
+    expect(consoleErrorWrites[0]).toContain("decodePayload")
+    expect(consoleErrorWrites[0]).toContain("handleRequest")
+    expect(consoleErrorWrites[0].includes("node_modules")).toEqual(false)
   })
 })
