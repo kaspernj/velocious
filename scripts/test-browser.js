@@ -450,18 +450,49 @@ async function main() {
  * @returns {Promise<import("../src/configuration.js").default>} - Backend configuration for browser tests.
  */
 async function loadBrowserBackendConfiguration() {
-  const dummyConfigurationPath = path.join(dummyDirectory(), "src/config/configuration.js")
-
-  try {
-    await fs.access(dummyConfigurationPath)
-  } catch {
-    throw new Error(`Missing dummy backend configuration for browser tests: ${dummyConfigurationPath}`)
-  }
-
+  const dummyConfigurationPath = await resolveBrowserBackendConfigurationPath()
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
   const backendConfiguration = dummyConfigurationImport.default
 
   return backendConfiguration
+}
+
+/**
+ * @returns {Promise<string>} - Existing dummy backend configuration path for browser tests.
+ */
+async function resolveBrowserBackendConfigurationPath() {
+  const configDirectory = path.join(dummyDirectory(), "src/config")
+  const explicitConfigPath = process.env.VELOCIOUS_BROWSER_BACKEND_CONFIG_PATH
+  /** @type {string[]} */
+  const candidatePaths = []
+
+  if (explicitConfigPath) {
+    candidatePaths.push(path.isAbsolute(explicitConfigPath) ? explicitConfigPath : path.resolve(explicitConfigPath))
+  }
+
+  candidatePaths.push(
+    path.join(configDirectory, "configuration.js"),
+    path.join(configDirectory, "configuration.peakflow.sqlite.js"),
+    path.join(configDirectory, "configuration.sqlite.js"),
+    path.join(configDirectory, "configuration.peakflow.pgsql.js"),
+    path.join(configDirectory, "configuration.pgsql.js"),
+    path.join(configDirectory, "configuration.peakflow.mariadb.js"),
+    path.join(configDirectory, "configuration.mariadb.js"),
+    path.join(configDirectory, "configuration.peakflow.mssql.js"),
+    path.join(configDirectory, "configuration.mssql.js"),
+    path.join(configDirectory, "configuration.example.js")
+  )
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      await fs.access(candidatePath)
+      return candidatePath
+    } catch {
+      // Continue searching fallback paths.
+    }
+  }
+
+  throw new Error(`Missing dummy backend configuration for browser tests. Looked in: ${candidatePaths.join(", ")}`)
 }
 
 main().catch((error) => {
