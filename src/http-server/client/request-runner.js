@@ -7,6 +7,20 @@ import Logger from "../../logger.js"
 import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
 
+/**
+ * @param {Error} error - Error to format for logging.
+ * @returns {{
+ *   errorMessage: string,
+ *   cleanedBacktrace: string | undefined,
+ * }} - Log details.
+ */
+function requestErrorLogDetails(error) {
+  const errorMessage = error.message || String(error)
+  const cleanedBacktrace = BacktraceCleaner.getCleanedBacktrace(error) || BacktraceCleaner.getCleanedStack(error)
+
+  return {errorMessage, cleanedBacktrace}
+}
+
 export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
@@ -113,8 +127,13 @@ export default class VelociousHttpServerClientRequestRunner {
       const error = ensureError(e)
       const errorWithContext = /** @type {{velociousContext?: object}} */ (error)
       const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
+      const logDetails = requestErrorLogDetails(error)
 
-      await this.logger.error(() => `Error while running request: ${BacktraceCleaner.getCleanedStack(error)}`)
+      await this.logger.error(() => `Error while running request: ${logDetails.errorMessage}`)
+
+      if (logDetails.cleanedBacktrace) {
+        await this.logger.error(() => `Cleaned backtrace:\n${logDetails.cleanedBacktrace}`)
+      }
 
       const errorPayload = {
         context: errorContext,
