@@ -852,6 +852,27 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("raises when custom request transport returns status error with message envelope", async () => {
+    const User = buildTestModelClass()
+
+    FrontendModelBase.configureTransport({
+      request: async () => {
+        return {
+          message: "Forbidden by custom renderer.",
+          status: "error"
+        }
+      }
+    })
+
+    try {
+      await expect(async () => {
+        await User.find(9)
+      }).toThrow(/Request failed for User#find/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("serializes special values before calling custom request transport", async () => {
     const User = buildTestModelClass()
     /** @type {any[]} */

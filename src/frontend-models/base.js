@@ -1033,14 +1033,38 @@ export default class FrontendModelBase {
       response.code !== undefined
       || response.error !== undefined
       || response.errors !== undefined
+      || response.message !== undefined
     )
+    const nonStatusKeys = responseKeys.filter((key) => key !== "status")
+    const configuredAttributeNames = this.configuredFrontendModelAttributeNames()
+    const looksLikeRawModelPayload = nonStatusKeys.length > 0
+      && nonStatusKeys.every((key) => configuredAttributeNames.has(key))
 
-    if (!hasErrorMessage && !hasOnlyStatus && !hasErrorEnvelopeKeys) return
+    if (!hasErrorMessage && !hasOnlyStatus && !hasErrorEnvelopeKeys && looksLikeRawModelPayload) return
 
     const errorMessage = hasErrorMessage
       ? response.errorMessage
       : `Request failed for ${this.name}#${commandType}`
 
     throw new Error(errorMessage)
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @returns {Set<string>} - Configured frontend model attribute names.
+   */
+  static configuredFrontendModelAttributeNames() {
+    const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
+    const attributes = resourceConfig.attributes
+
+    if (Array.isArray(attributes)) {
+      return new Set(attributes.filter((attributeName) => typeof attributeName === "string"))
+    }
+
+    if (attributes && typeof attributes === "object") {
+      return new Set(Object.keys(attributes))
+    }
+
+    return new Set()
   }
 }
