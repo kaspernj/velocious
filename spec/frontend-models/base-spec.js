@@ -229,23 +229,32 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("serializes Date and undefined payload values and deserializes marker responses", async () => {
+  it("serializes Date/undefined/bigint/non-finite values and deserializes marker responses", async () => {
     const User = buildTestModelClass()
     const requestDate = new Date("2026-02-20T12:00:00.000Z")
     const responseDateString = "2026-02-21T10:30:00.000Z"
     const fetchStub = stubFetch({
       nested: {
+        hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
         missing: {__velocious_type: "undefined"},
+        negativeInfinity: {__velocious_type: "number", value: "-Infinity"},
+        notANumber: {__velocious_type: "number", value: "NaN"},
+        positiveInfinity: {__velocious_type: "number", value: "Infinity"},
         when: {__velocious_type: "date", value: responseDateString}
       }
     })
 
     try {
       const response = await User.executeCommand("find", {
+        hugeCounter: 9007199254740993n,
         id: 5,
         missing: undefined,
         nested: {
+          hugeCounter: 9007199254740995n,
           missing: undefined,
+          negativeInfinity: Number.NEGATIVE_INFINITY,
+          notANumber: Number.NaN,
+          positiveInfinity: Number.POSITIVE_INFINITY,
           when: requestDate
         }
       })
@@ -253,17 +262,26 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
+            hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
             id: 5,
             missing: {__velocious_type: "undefined"},
             nested: {
+              hugeCounter: {__velocious_type: "bigint", value: "9007199254740995"},
               missing: {__velocious_type: "undefined"},
+              negativeInfinity: {__velocious_type: "number", value: "-Infinity"},
+              notANumber: {__velocious_type: "number", value: "NaN"},
+              positiveInfinity: {__velocious_type: "number", value: "Infinity"},
               when: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"}
             }
           },
           url: "/api/frontend-models/users/find"
         }
       ])
+      expect(response.nested.hugeCounter).toEqual(9007199254740993n)
       expect(response.nested.missing).toEqual(undefined)
+      expect(response.nested.positiveInfinity).toEqual(Number.POSITIVE_INFINITY)
+      expect(response.nested.negativeInfinity).toEqual(Number.NEGATIVE_INFINITY)
+      expect(Number.isNaN(response.nested.notANumber)).toEqual(true)
       expect(response.nested.when instanceof Date).toEqual(true)
       expect(response.nested.when.toISOString()).toEqual(responseDateString)
     } finally {

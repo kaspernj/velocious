@@ -328,6 +328,8 @@ Available transport options:
 Frontend-model command transport preserves `Date` and `undefined` by encoding them as marker objects in JSON and decoding them on the other side:
 - `Date` -> `{__velocious_type: "date", value: "<ISO string>"}`
 - `undefined` -> `{__velocious_type: "undefined"}`
+- `bigint` -> `{__velocious_type: "bigint", value: "<decimal string>"}`
+- `NaN` / `Infinity` / `-Infinity` -> `{__velocious_type: "number", value: "NaN" | "Infinity" | "-Infinity"}`
 
 ## Route resolver hooks
 

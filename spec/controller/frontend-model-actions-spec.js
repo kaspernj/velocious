@@ -498,7 +498,7 @@ describe("Controller frontend model actions", () => {
     expect(seen.attributes?.optionalValue).toEqual(undefined)
   })
 
-  it("serializes Date and undefined values in frontend JSON responses", async () => {
+  it("serializes Date, undefined, bigint and non-finite number values in frontend JSON responses", async () => {
     MockFrontendModel.data = [{id: "1", name: "One"}]
     const createdAt = new Date("2026-02-20T12:00:00.000Z")
 
@@ -508,8 +508,11 @@ describe("Controller frontend model actions", () => {
         serialize: async ({model}) => {
           return {
             createdAt,
+            hugeCounter: 9007199254740993n,
             id: model.attributes().id,
-            missing: undefined
+            missing: undefined,
+            notANumber: Number.NaN,
+            positiveInfinity: Number.POSITIVE_INFINITY
           }
         }
       }
@@ -521,8 +524,11 @@ describe("Controller frontend model actions", () => {
     expect(payload).toEqual({
       model: {
         createdAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
+        hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
         id: "1",
-        missing: {__velocious_type: "undefined"}
+        missing: {__velocious_type: "undefined"},
+        notANumber: {__velocious_type: "number", value: "NaN"},
+        positiveInfinity: {__velocious_type: "number", value: "Infinity"}
       },
       status: "success"
     })
