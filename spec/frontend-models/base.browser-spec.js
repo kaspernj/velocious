@@ -382,7 +382,9 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const projects = await BrowserPreloadProject.preload({tasks: ["comments"]}).toArray()
+      const projects = await BrowserPreloadProject
+        .preload({tasks: ["comments"]})
+        .toArray()
       const tasks = projects[0].getRelationshipByName("tasks").loaded()
       const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
 

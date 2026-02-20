@@ -291,7 +291,10 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await User.findByOrFail({email: "john@example.com"})`
 - `await User.toArray()`
 - `await User.preload({projects: ["tasks"]}).toArray()`
-- `await Project.preload(["tasks"]).select({Project: ["id", "createdAt"], Task: ["updatedAt"]}).toArray()`
+- `await Project`
+  `.preload(["tasks"])`
+  `.select({Project: ["id", "createdAt"], Task: ["updatedAt"]})`
+  `.toArray()`
 - `await user.update({...})`
 - `await user.destroy()`
 - Attribute methods like `user.name()` and `user.setName(...)`

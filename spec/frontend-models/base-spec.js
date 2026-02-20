@@ -282,7 +282,9 @@ describe("Frontend models - base", () => {
     })
 
     try {
-      const projects = await Project.preload({tasks: ["comments"]}).toArray()
+      const projects = await Project
+        .preload({tasks: ["comments"]})
+        .toArray()
       const tasks = projects[0].getRelationshipByName("tasks").loaded()
       const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
 
@@ -315,10 +317,13 @@ describe("Frontend models - base", () => {
     const fetchStub = stubFetch({models: []})
 
     try {
-      await Project.preload(["tasks"]).select({
-        Project: ["id", "createdAt"],
-        Task: ["updatedAt"]
-      }).toArray()
+      await Project
+        .preload(["tasks"])
+        .select({
+          Project: ["id", "createdAt"],
+          Task: ["updatedAt"]
+        })
+        .toArray()
 
       expect(fetchStub.calls).toEqual([
         {
@@ -360,10 +365,13 @@ describe("Frontend models - base", () => {
     })
 
     try {
-      const projects = await Project.preload(["tasks"]).select({
-        Project: ["id"],
-        Task: ["updatedAt"]
-      }).toArray()
+      const projects = await Project
+        .preload(["tasks"])
+        .select({
+          Project: ["id"],
+          Task: ["updatedAt"]
+        })
+        .toArray()
       const tasks = projects[0].getRelationshipByName("tasks").loaded()
       const firstTask = tasks[0]
 
