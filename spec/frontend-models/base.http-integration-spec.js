@@ -1,7 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import FrontendModelBase from "../../src/frontend-models/base.js"
+import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 import Dummy from "../dummy/index.js"
 
 /** Frontend model used for Node HTTP integration tests against dummy backend routes. */
@@ -359,6 +359,38 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         await expect(async () => {
           tasks[0].primaryInteraction()
         }).toThrow(/HttpPreloadTask#primaryInteraction hasn't been preloaded/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("throws AttributeNotSelectedError for non-selected frontend attributes", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const projects = await HttpPreloadProject
+          .preload(["tasks"])
+          .select({
+            HttpPreloadProject: ["id"],
+            HttpPreloadTask: ["updatedAt"]
+          })
+          .toArray()
+        const tasks = projects[0].getRelationshipByName("tasks").loaded()
+
+        expect(tasks[0].readAttribute("updatedAt")).toEqual("2026-02-20T10:00:00.000Z")
+        expect(() => tasks[0].readAttribute("id")).toThrow(/HttpPreloadTask#id was not selected/)
+
+        let thrownError = null
+
+        try {
+          tasks[0].readAttribute("id")
+        } catch (error) {
+          thrownError = error
+        }
+
+        expect(thrownError instanceof AttributeNotSelectedError).toEqual(true)
       } finally {
         resetFrontendModelTransport()
       }

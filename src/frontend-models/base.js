@@ -1,6 +1,7 @@
 // @ts-check
 
 /** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
+/** @typedef {Record<string, string[]>} FrontendModelSelectRecord */
 /**
  * @typedef {object} FrontendModelTransportConfig
  * @property {string} [baseUrl] - Optional base URL prefixed before resource paths.
@@ -14,6 +15,19 @@
 /** @type {FrontendModelTransportConfig} */
 const frontendModelTransportConfig = {}
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
+const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
+
+/** Error raised when reading an attribute that was not selected in query payloads. */
+export class AttributeNotSelectedError extends Error {
+  /**
+   * @param {string} modelName - Model class name.
+   * @param {string} attributeName - Attribute that was requested.
+   */
+  constructor(modelName, attributeName) {
+    super(`${modelName}#${attributeName} was not selected`)
+    this.name = "AttributeNotSelectedError"
+  }
+}
 
 /**
  * @param {unknown} value - Candidate value.
@@ -119,6 +133,55 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
     }
 
     targetPreload[relationshipName] = normalizePreload(incomingValue)
+  }
+}
+
+/**
+ * @param {unknown} select - Select payload.
+ * @returns {FrontendModelSelectRecord} - Normalized model-name keyed select record.
+ */
+function normalizeSelect(select) {
+  if (!select) return {}
+
+  if (!isPlainObject(select)) {
+    throw new Error(`Invalid select type: ${typeof select}`)
+  }
+
+  /** @type {FrontendModelSelectRecord} */
+  const normalized = {}
+
+  for (const [modelName, selection] of Object.entries(select)) {
+    if (typeof selection === "string") {
+      normalized[modelName] = [selection]
+      continue
+    }
+
+    if (!Array.isArray(selection)) {
+      throw new Error(`Invalid select value for ${modelName}: ${typeof selection}`)
+    }
+
+    for (const attributeName of selection) {
+      if (typeof attributeName !== "string") {
+        throw new Error(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
+      }
+    }
+
+    normalized[modelName] = Array.from(new Set(selection))
+  }
+
+  return normalized
+}
+
+/**
+ * @param {FrontendModelSelectRecord} targetSelect - Existing select record.
+ * @param {FrontendModelSelectRecord} incomingSelect - Incoming select record.
+ * @returns {void}
+ */
+function mergeSelectRecord(targetSelect, incomingSelect) {
+  for (const [modelName, incomingAttributes] of Object.entries(incomingSelect)) {
+    const existingAttributes = targetSelect[modelName] || []
+
+    targetSelect[modelName] = Array.from(new Set([...existingAttributes, ...incomingAttributes]))
   }
 }
 
@@ -279,6 +342,7 @@ class FrontendModelQuery {
   constructor({modelClass, preload = {}}) {
     this.modelClass = modelClass
     this._preload = normalizePreload(preload)
+    this._select = {}
   }
 
   /**
@@ -287,6 +351,16 @@ class FrontendModelQuery {
    */
   preload(preload) {
     mergePreloadRecord(this._preload, normalizePreload(preload))
+
+    return this
+  }
+
+  /**
+   * @param {FrontendModelSelectRecord} select - Model-aware attribute select map.
+   * @returns {this} - Query with merged selected attributes.
+   */
+  select(select) {
+    mergeSelectRecord(this._select, normalizeSelect(select))
 
     return this
   }
@@ -301,10 +375,22 @@ class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload select hash when present.
+   */
+  selectPayload() {
+    if (Object.keys(this._select).length === 0) return {}
+
+    return {select: this._select}
+  }
+
+  /**
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async toArray() {
-    const response = await this.modelClass.executeCommand("index", this.preloadPayload())
+    const response = await this.modelClass.executeCommand("index", {
+      ...this.preloadPayload(),
+      ...this.selectPayload()
+    })
 
     if (!response || typeof response !== "object") {
       throw new Error(`Expected object response but got: ${response}`)
@@ -322,7 +408,8 @@ class FrontendModelQuery {
   async find(id) {
     const response = await this.modelClass.executeCommand("find", {
       id,
-      ...this.preloadPayload()
+      ...this.preloadPayload(),
+      ...this.selectPayload()
     })
 
     return this.modelClass.instantiateFromResponse(response)
@@ -338,6 +425,7 @@ class FrontendModelQuery {
 
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
+      ...this.selectPayload(),
       where: normalizedConditions
     })
 
@@ -598,6 +686,7 @@ export default class FrontendModelBase {
   constructor(attributes = {}) {
     this._attributes = {}
     this._relationships = {}
+    this._selectedAttributes = null
     this.assignAttributes(attributes)
   }
 
@@ -719,6 +808,10 @@ export default class FrontendModelBase {
    * @returns {any} - Attribute value.
    */
   readAttribute(attributeName) {
+    if (this._selectedAttributes && !this._selectedAttributes.has(attributeName)) {
+      throw new AttributeNotSelectedError(this.constructor.name, attributeName)
+    }
+
     return this._attributes[attributeName]
   }
 
@@ -731,6 +824,10 @@ export default class FrontendModelBase {
     const previousValue = this._attributes[attributeName]
 
     this._attributes[attributeName] = newValue
+
+    if (this._selectedAttributes) {
+      this._selectedAttributes.add(attributeName)
+    }
 
     if (!Object.is(previousValue, newValue)) {
       this.clearRelationshipCache()
@@ -810,7 +907,7 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
-   * @returns {{attributes: Record<string, any>, preloadedRelationships: Record<string, any>}} - Attributes and preload payload.
+   * @returns {{attributes: Record<string, any>, preloadedRelationships: Record<string, any>, selectedAttributes: string[] | null}} - Attributes and preload/select payload.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
@@ -832,10 +929,14 @@ export default class FrontendModelBase {
     const preloadedRelationships = isPlainObject(attributes[PRELOADED_RELATIONSHIPS_KEY])
       ? /** @type {Record<string, any>} */ (attributes[PRELOADED_RELATIONSHIPS_KEY])
       : {}
+    const selectedAttributes = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
+      ? /** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string")
+      : null
 
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
+    delete attributes[SELECTED_ATTRIBUTES_KEY]
 
-    return {attributes, preloadedRelationships}
+    return {attributes, preloadedRelationships, selectedAttributes}
   }
 
   /**
@@ -882,7 +983,9 @@ export default class FrontendModelBase {
     const modelData = this.modelDataFromResponse(response)
     const attributes = modelData.attributes
     const preloadedRelationships = modelData.preloadedRelationships
+    const selectedAttributes = modelData.selectedAttributes
     const model = /** @type {InstanceType<T>} */ (new this(attributes))
+    model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
 
     this.applyPreloadedRelationships(model, preloadedRelationships)
 
@@ -945,6 +1048,16 @@ export default class FrontendModelBase {
    */
   static preload(preload) {
     return /** @type {FrontendModelQuery<T>} */ (this.query().preload(preload))
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {FrontendModelSelectRecord} select - Model-aware attribute select map.
+   * @returns {FrontendModelQuery<T>} - Query with selected attributes.
+   */
+  static select(select) {
+    return /** @type {FrontendModelQuery<T>} */ (this.query().select(select))
   }
 
   /**

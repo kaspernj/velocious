@@ -1,7 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import FrontendModelBase from "../../src/frontend-models/base.js"
+import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 
 /** @typedef {{body: Record<string, any>, url: string}} FetchCall */
 
@@ -304,6 +304,81 @@ describe("Frontend models - base", () => {
       await expect(async () => {
         tasks[0].primaryInteraction()
       }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("includes select payload when querying frontend models", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await Project.preload(["tasks"]).select({
+        Project: ["id", "createdAt"],
+        Task: ["updatedAt"]
+      }).toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            preload: {
+              tasks: true
+            },
+            select: {
+              Project: ["id", "createdAt"],
+              Task: ["updatedAt"]
+            }
+          },
+          url: "/api/frontend-models/projects/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("raises AttributeNotSelectedError for non-selected attributes", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({
+      models: [
+        {
+          __selectedAttributes: ["id"],
+          id: "1",
+          __preloadedRelationships: {
+            tasks: [
+              {
+                __selectedAttributes: ["updatedAt"],
+                updatedAt: "2026-02-20T10:00:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    })
+
+    try {
+      const projects = await Project.preload(["tasks"]).select({
+        Project: ["id"],
+        Task: ["updatedAt"]
+      }).toArray()
+      const tasks = projects[0].getRelationshipByName("tasks").loaded()
+      const firstTask = tasks[0]
+
+      expect(firstTask.readAttribute("updatedAt")).toEqual("2026-02-20T10:00:00.000Z")
+
+      let thrownError = null
+
+      try {
+        firstTask.readAttribute("id")
+      } catch (error) {
+        thrownError = error
+      }
+
+      expect(thrownError instanceof AttributeNotSelectedError).toEqual(true)
+      expect(String(thrownError)).toMatch(/Task#id was not selected/)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

@@ -329,6 +329,39 @@ describe("Controller frontend model actions", () => {
     ])
   })
 
+  it("filters serialized frontendIndex attributes by select map", async () => {
+    MockFrontendModel.data = [
+      {email: "one@example.com", id: "1", name: "One"},
+      {email: "two@example.com", id: "2", name: "Two"}
+    ]
+
+    const controller = buildController({
+      params: {
+        select: {
+          MockFrontendModel: ["id"]
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      models: [
+        {
+          __selectedAttributes: ["id"],
+          id: "1"
+        },
+        {
+          __selectedAttributes: ["id"],
+          id: "2"
+        }
+      ],
+      status: "success"
+    })
+  })
+
   it("returns one model from frontendFind", async () => {
     MockFrontendModel.data = [{id: "2", name: "Two"}]
 
@@ -479,6 +512,71 @@ describe("Controller frontend model actions", () => {
       },
       id: "1",
       name: "One"
+    })
+  })
+
+  it("filters serialized preloaded model attributes by select map", async () => {
+    /** Related model class used in select-map preload serialization test. */
+    class RelatedFrontendModel {
+      /** @param {Record<string, any>} attributes */
+      constructor(attributes) {
+        this._attributes = attributes
+      }
+
+      /** @returns {Record<string, any>} */
+      attributes() { return this._attributes }
+
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {}
+      }
+    }
+
+    /** Parent model class used in select-map preload serialization test. */
+    class ParentFrontendModel {
+      /** @returns {Record<string, any>} */
+      static getRelationshipsMap() {
+        return {related: {}}
+      }
+    }
+
+    const controller = buildController({
+      params: {
+        select: {
+          ParentFrontendModel: ["id"],
+          RelatedFrontendModel: ["value"]
+        }
+      }
+    })
+    const relatedModel = new RelatedFrontendModel({id: "related-1", value: "Allowed one"})
+    const parentModel = {
+      constructor: ParentFrontendModel,
+      attributes() {
+        return {id: "1", name: "Parent"}
+      },
+      getRelationshipByName() {
+        return {
+          getPreloaded() {
+            return true
+          },
+          loaded() {
+            return relatedModel
+          }
+        }
+      }
+    }
+
+    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
+
+    expect(payload).toEqual({
+      __preloadedRelationships: {
+        related: {
+          __selectedAttributes: ["value"],
+          value: "Allowed one"
+        }
+      },
+      __selectedAttributes: ["id"],
+      id: "1"
     })
   })
 

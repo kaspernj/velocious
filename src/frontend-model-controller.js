@@ -3,6 +3,8 @@
 import Controller from "./controller.js"
 import * as inflection from "inflection"
 
+const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
+
 /**
  * @param {unknown} value - Candidate value.
  * @returns {value is Record<string, any>} - Whether value is a plain object.
@@ -114,6 +116,42 @@ function mergeNormalizedPreload(target, source) {
 
     target[relationshipName] = relationshipPreload
   }
+}
+
+/**
+ * @param {unknown} select - Select payload.
+ * @returns {Record<string, string[]> | null} - Normalized model-name keyed select record.
+ */
+function normalizeFrontendModelSelect(select) {
+  if (!select) return null
+
+  if (!isPlainObject(select)) {
+    throw new Error(`Invalid select type: ${typeof select}`)
+  }
+
+  /** @type {Record<string, string[]>} */
+  const normalized = {}
+
+  for (const [modelName, selectValue] of Object.entries(select)) {
+    if (typeof selectValue === "string") {
+      normalized[modelName] = [selectValue]
+      continue
+    }
+
+    if (!Array.isArray(selectValue)) {
+      throw new Error(`Invalid select value for ${modelName}: ${typeof selectValue}`)
+    }
+
+    for (const attributeName of selectValue) {
+      if (typeof attributeName !== "string") {
+        throw new Error(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
+      }
+    }
+
+    normalized[modelName] = Array.from(new Set(selectValue))
+  }
+
+  return normalized
 }
 
 /** Controller with built-in frontend model resource actions. */
@@ -399,6 +437,52 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @returns {Record<string, string[]> | null} - Frontend select data.
+   */
+  frontendModelSelect() {
+    return normalizeFrontendModelSelect(this.params().select)
+  }
+
+  /**
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {string[] | null} - Selected attributes for model class.
+   */
+  frontendModelSelectedAttributesForModelClass(modelClass) {
+    const select = this.frontendModelSelect()
+
+    if (!select) return null
+
+    return select[modelClass.name] || null
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Model instance.
+   * @returns {Record<string, any>} - Serialized attributes filtered by select map.
+   */
+  serializeFrontendModelAttributes(model) {
+    const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
+    const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+    const modelAttributes = model.attributes()
+
+    if (!selectedAttributes) {
+      return modelAttributes
+    }
+
+    /** @type {Record<string, any>} */
+    const serializedAttributes = {}
+
+    for (const attributeName of selectedAttributes) {
+      if (attributeName in modelAttributes) {
+        serializedAttributes[attributeName] = modelAttributes[attributeName]
+      }
+    }
+
+    serializedAttributes[SELECTED_ATTRIBUTES_KEY] = selectedAttributes
+
+    return serializedAttributes
+  }
+
+  /**
    * @param {object} args - Arguments.
    * @param {import("./database/record/index.js").default[]} args.models - Frontend model records.
    * @param {boolean} args.relationshipIsCollection - Whether relation is has-many.
@@ -559,14 +643,15 @@ export default class FrontendModelController extends Controller {
     }
 
     return models.map((model, modelIndex) => {
+      const serializedAttributes = this.serializeFrontendModelAttributes(model)
       const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
 
       if (Object.keys(preloadedRelationships).length < 1) {
-        return model.attributes()
+        return serializedAttributes
       }
 
       return {
-        ...model.attributes(),
+        ...serializedAttributes,
         __preloadedRelationships: preloadedRelationships
       }
     })

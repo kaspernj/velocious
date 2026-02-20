@@ -135,3 +135,4 @@
 - Make frontend `findBy` object matching exact by own-key set and value (not subset matching), so object conditions do not incorrectly match broader nested payloads.
 - Log request failures with a separate cleaned backtrace block so stack frames are visible without node internals and `node_modules` noise.
 - Scope `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` to browser test runs (`VELOCIOUS_BROWSER_TESTS=true` in test environment) so regular app/server initialization still loads models.
+- Add frontend-model `select({ModelName: [...]})` query payload support with model-aware serialization filtering (including nested preloads), and raise `AttributeNotSelectedError` when frontend code reads attributes that were not selected.

@@ -1,4 +1,4 @@
-import FrontendModelBase from "../../src/frontend-models/base.js"
+import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 
 /** Frontend model used for browser integration tests against dummy backend routes. */
 class BrowserFrontendModel extends FrontendModelBase {
@@ -392,6 +392,40 @@ describe("Frontend models - base browser integration", () => {
       await expect(async () => {
         tasks[0].primaryInteraction()
       }).toThrow(/BrowserPreloadTask#primaryInteraction hasn't been preloaded/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("throws AttributeNotSelectedError for non-selected frontend attributes", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const projects = await BrowserPreloadProject
+        .preload(["tasks"])
+        .select({
+          BrowserPreloadProject: ["id"],
+          BrowserPreloadTask: ["updatedAt"]
+        })
+        .toArray()
+      const tasks = projects[0].getRelationshipByName("tasks").loaded()
+
+      expect(tasks[0].readAttribute("updatedAt")).toEqual("2026-02-20T10:00:00.000Z")
+      expect(() => tasks[0].readAttribute("id")).toThrow(/BrowserPreloadTask#id was not selected/)
+
+      let thrownError = null
+
+      try {
+        tasks[0].readAttribute("id")
+      } catch (error) {
+        thrownError = error
+      }
+
+      expect(thrownError instanceof AttributeNotSelectedError).toEqual(true)
     } finally {
       resetFrontendModelTransport()
     }
