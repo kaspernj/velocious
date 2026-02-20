@@ -981,7 +981,14 @@ export default class FrontendModelBase {
         url
       })
 
-      return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
+      const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
+
+      this.throwOnErrorFrontendModelResponse({
+        commandType,
+        response: decodedResponse
+      })
+
+      return decodedResponse
     }
 
     const response = await fetch(url, {
@@ -1001,14 +1008,28 @@ export default class FrontendModelBase {
     const json = responseText.length > 0 ? JSON.parse(responseText) : {}
     const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
 
-    if (decodedResponse?.status === "error") {
-      const errorMessage = typeof decodedResponse.errorMessage === "string" && decodedResponse.errorMessage.length > 0
-        ? decodedResponse.errorMessage
-        : `Request failed for ${this.name}#${commandType}`
-
-      throw new Error(errorMessage)
-    }
+    this.throwOnErrorFrontendModelResponse({
+      commandType,
+      response: decodedResponse
+    })
 
     return decodedResponse
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {object} args - Arguments.
+   * @param {"find" | "index" | "update" | "destroy"} args.commandType - Command type.
+   * @param {Record<string, any>} args.response - Decoded response.
+   * @returns {void}
+   */
+  static throwOnErrorFrontendModelResponse({commandType, response}) {
+    if (response?.status !== "error") return
+
+    const errorMessage = typeof response.errorMessage === "string" && response.errorMessage.length > 0
+      ? response.errorMessage
+      : `Request failed for ${this.name}#${commandType}`
+
+    throw new Error(errorMessage)
   }
 }

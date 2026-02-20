@@ -770,6 +770,27 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("raises when custom request transport returns an error status payload", async () => {
+    const User = buildTestModelClass()
+
+    FrontendModelBase.configureTransport({
+      request: async () => {
+        return {
+          errorMessage: "Custom transport unauthorized.",
+          status: "error"
+        }
+      }
+    })
+
+    try {
+      await expect(async () => {
+        await User.find(9)
+      }).toThrow(/Custom transport unauthorized./)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("serializes special values before calling custom request transport", async () => {
     const User = buildTestModelClass()
     /** @type {any[]} */
