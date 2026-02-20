@@ -1029,8 +1029,13 @@ export default class FrontendModelBase {
     const responseKeys = Object.keys(response)
     const hasOnlyStatus = responseKeys.length === 1 && responseKeys[0] === "status"
     const hasErrorMessage = typeof response.errorMessage === "string" && response.errorMessage.length > 0
+    const hasErrorEnvelopeKeys = Boolean(
+      response.code !== undefined
+      || response.error !== undefined
+      || response.errors !== undefined
+    )
 
-    if (!hasErrorMessage && !hasOnlyStatus) return
+    if (!hasErrorMessage && !hasOnlyStatus && !hasErrorEnvelopeKeys) return
 
     const errorMessage = hasErrorMessage
       ? response.errorMessage
