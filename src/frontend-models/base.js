@@ -972,13 +972,15 @@ export default class FrontendModelBase {
     const url = frontendModelCommandUrl(this.resourcePath(), commandName)
 
     if (frontendModelTransportConfig.request) {
-      return await frontendModelTransportConfig.request({
+      const customResponse = await frontendModelTransportConfig.request({
         commandName,
         commandType,
         modelClass: this,
         payload,
         url
       })
+
+      return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
     }
 
     const response = await fetch(url, {

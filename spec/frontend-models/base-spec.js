@@ -720,13 +720,21 @@ describe("Frontend models - base", () => {
 
   it("supports custom request transport", async () => {
     const User = buildTestModelClass()
+    const responseDateString = "2026-02-22T09:30:00.000Z"
     /** @type {any[]} */
     const calls = []
 
     FrontendModelBase.configureTransport({
       request: async (args) => {
         calls.push(args)
-        return {model: {id: 9, name: "Custom transport user"}}
+        return {
+          model: {
+            createdAt: {__velocious_type: "date", value: responseDateString},
+            id: 9,
+            maybeMissing: {__velocious_type: "undefined"},
+            name: "Custom transport user"
+          }
+        }
       }
     })
 
@@ -742,6 +750,9 @@ describe("Frontend models - base", () => {
           url: "/api/frontend-models/users/find"
         }
       ])
+      expect(user.readAttribute("createdAt") instanceof Date).toEqual(true)
+      expect(user.readAttribute("createdAt").toISOString()).toEqual(responseDateString)
+      expect(user.readAttribute("maybeMissing")).toEqual(undefined)
       expect(user.name()).toEqual("Custom transport user")
     } finally {
       resetFrontendModelTransport()
