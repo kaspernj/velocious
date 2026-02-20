@@ -291,12 +291,18 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await User.findByOrFail({email: "john@example.com"})`
 - `await User.toArray()`
 - `await User.preload({projects: ["tasks"]}).toArray()`
+- `await Project`
+  `.preload(["tasks"])`
+  `.select({Project: ["id", "createdAt"], Task: ["updatedAt"]})`
+  `.toArray()`
 - `await user.update({...})`
 - `await user.destroy()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `project.tasks().loaded()`, and `project.tasks().build({...})`
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
+
+When queries include `select(...)`, backend frontend-model actions only serialize selected attributes for each model class. Reading a non-selected attribute on a frontend model raises `AttributeNotSelectedError`.
 
 You do not need to manually define `frontend-index` / `frontend-find` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
 
@@ -318,6 +324,12 @@ Available transport options:
 - `pathPrefix` / `pathPrefixResolver`
 - `credentials`
 - `request` (custom request handler)
+
+Frontend-model command transport preserves `Date` and `undefined` by encoding them as marker objects in JSON and decoding them on the other side:
+- `Date` -> `{__velocious_type: "date", value: "<ISO string>"}`
+- `undefined` -> `{__velocious_type: "undefined"}`
+- `bigint` -> `{__velocious_type: "bigint", value: "<decimal string>"}`
+- `NaN` / `Infinity` / `-Infinity` -> `{__velocious_type: "number", value: "NaN" | "Infinity" | "-Infinity"}`
 
 ## Route resolver hooks
 

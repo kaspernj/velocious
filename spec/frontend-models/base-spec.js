@@ -1,7 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import FrontendModelBase from "../../src/frontend-models/base.js"
+import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 
 /** @typedef {{body: Record<string, any>, url: string}} FetchCall */
 
@@ -158,6 +158,8 @@ function stubFetch(responseBody) {
     return {
       ok: true,
       status: 200,
+      /** @returns {Promise<string>} */
+      text: async () => JSON.stringify(responseBody),
       /** @returns {Promise<Record<string, any>>} */
       json: async () => responseBody
     }
@@ -227,6 +229,67 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("serializes Date/undefined/bigint/non-finite values and deserializes marker responses", async () => {
+    const User = buildTestModelClass()
+    const requestDate = new Date("2026-02-20T12:00:00.000Z")
+    const responseDateString = "2026-02-21T10:30:00.000Z"
+    const fetchStub = stubFetch({
+      nested: {
+        hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
+        missing: {__velocious_type: "undefined"},
+        negativeInfinity: {__velocious_type: "number", value: "-Infinity"},
+        notANumber: {__velocious_type: "number", value: "NaN"},
+        positiveInfinity: {__velocious_type: "number", value: "Infinity"},
+        when: {__velocious_type: "date", value: responseDateString}
+      }
+    })
+
+    try {
+      const response = await User.executeCommand("find", {
+        hugeCounter: 9007199254740993n,
+        id: 5,
+        missing: undefined,
+        nested: {
+          hugeCounter: 9007199254740995n,
+          missing: undefined,
+          negativeInfinity: Number.NEGATIVE_INFINITY,
+          notANumber: Number.NaN,
+          positiveInfinity: Number.POSITIVE_INFINITY,
+          when: requestDate
+        }
+      })
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
+            id: 5,
+            missing: {__velocious_type: "undefined"},
+            nested: {
+              hugeCounter: {__velocious_type: "bigint", value: "9007199254740995"},
+              missing: {__velocious_type: "undefined"},
+              negativeInfinity: {__velocious_type: "number", value: "-Infinity"},
+              notANumber: {__velocious_type: "number", value: "NaN"},
+              positiveInfinity: {__velocious_type: "number", value: "Infinity"},
+              when: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"}
+            }
+          },
+          url: "/api/frontend-models/users/find"
+        }
+      ])
+      expect(response.nested.hugeCounter).toEqual(9007199254740993n)
+      expect(response.nested.missing).toEqual(undefined)
+      expect(response.nested.positiveInfinity).toEqual(Number.POSITIVE_INFINITY)
+      expect(response.nested.negativeInfinity).toEqual(Number.NEGATIVE_INFINITY)
+      expect(Number.isNaN(response.nested.notANumber)).toEqual(true)
+      expect(response.nested.when instanceof Date).toEqual(true)
+      expect(response.nested.when.toISOString()).toEqual(responseDateString)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("findBy matches objects by exact own-key equality", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
@@ -251,6 +314,100 @@ describe("Frontend models - base", () => {
       ])
       expect(user?.id()).toEqual(2)
       expect(user?.name()).toEqual("Exact")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("findBy matches Date conditions when response values deserialize to Date objects", async () => {
+    const User = buildTestModelClass()
+    const conditionDate = new Date("2026-02-20T12:00:00.000Z")
+    const fetchStub = stubFetch({
+      models: [
+        {
+          createdAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
+          id: 5,
+          name: "John"
+        }
+      ]
+    })
+
+    try {
+      const user = await User.findBy({createdAt: conditionDate})
+
+      expect(user?.id()).toEqual(5)
+      expect(user?.name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("includes condition keys in select payload for findBy matching", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {email: "john@example.com", id: 5}
+      ]
+    })
+
+    try {
+      const user = await User
+        .select({
+          User: ["id"]
+        })
+        .findBy({email: "john@example.com"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            select: {
+              User: ["id", "email"]
+            },
+            where: {
+              email: "john@example.com"
+            }
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("auto-selects primary key for selected root model find and keeps destroy working", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5}})
+
+    try {
+      const user = await User
+        .select({
+          User: ["email"]
+        })
+        .find(5)
+
+      expect(user.id()).toEqual(5)
+      await user.destroy()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            id: 5,
+            select: {
+              User: ["id", "email"]
+            }
+          },
+          url: "/api/frontend-models/users/find"
+        },
+        {
+          body: {id: 5},
+          url: "/api/frontend-models/users/destroy"
+        }
+      ])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
@@ -282,7 +439,9 @@ describe("Frontend models - base", () => {
     })
 
     try {
-      const projects = await Project.preload({tasks: ["comments"]}).toArray()
+      const projects = await Project
+        .preload({tasks: ["comments"]})
+        .toArray()
       const tasks = projects[0].getRelationshipByName("tasks").loaded()
       const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
 
@@ -304,6 +463,85 @@ describe("Frontend models - base", () => {
       await expect(async () => {
         tasks[0].primaryInteraction()
       }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("includes select payload when querying frontend models", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await Project
+        .preload(["tasks"])
+        .select({
+          Project: ["id", "createdAt"],
+          Task: ["updatedAt"]
+        })
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            preload: {
+              tasks: true
+            },
+            select: {
+              Project: ["id", "createdAt"],
+              Task: ["updatedAt"]
+            }
+          },
+          url: "/api/frontend-models/projects/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("raises AttributeNotSelectedError for non-selected attributes", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({
+      models: [
+        {
+          id: "1",
+          __preloadedRelationships: {
+            tasks: [
+              {
+                updatedAt: "2026-02-20T10:00:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    })
+
+    try {
+      const projects = await Project
+        .preload(["tasks"])
+        .select({
+          Project: ["id"],
+          Task: ["updatedAt"]
+        })
+        .toArray()
+      const tasks = projects[0].getRelationshipByName("tasks").loaded()
+      const firstTask = tasks[0]
+
+      expect(firstTask.readAttribute("updatedAt")).toEqual("2026-02-20T10:00:00.000Z")
+
+      let thrownError = null
+
+      try {
+        firstTask.readAttribute("id")
+      } catch (error) {
+        thrownError = error
+      }
+
+      expect(thrownError instanceof AttributeNotSelectedError).toEqual(true)
+      expect(String(thrownError)).toMatch(/Task#id was not selected/)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
@@ -482,6 +720,44 @@ describe("Frontend models - base", () => {
 
   it("supports custom request transport", async () => {
     const User = buildTestModelClass()
+    const responseDateString = "2026-02-22T09:30:00.000Z"
+    /** @type {any[]} */
+    const calls = []
+
+    FrontendModelBase.configureTransport({
+      request: async (args) => {
+        calls.push(args)
+        return {
+          model: {
+            createdAt: {__velocious_type: "date", value: responseDateString},
+            id: 9,
+            maybeMissing: {__velocious_type: "undefined"},
+            name: "Custom transport user"
+          }
+        }
+      }
+    })
+
+    try {
+      const user = await User.find(9)
+
+      expect(calls.length).toEqual(1)
+      expect(calls[0].commandName).toEqual("find")
+      expect(calls[0].commandType).toEqual("find")
+      expect(calls[0].modelClass).toEqual(User)
+      expect(calls[0].payload.id).toEqual(9)
+      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
+      expect(user.readAttribute("createdAt") instanceof Date).toEqual(true)
+      expect(user.readAttribute("createdAt").toISOString()).toEqual(responseDateString)
+      expect(user.readAttribute("maybeMissing")).toEqual(undefined)
+      expect(user.name()).toEqual("Custom transport user")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("serializes special values before calling custom request transport", async () => {
+    const User = buildTestModelClass()
     /** @type {any[]} */
     const calls = []
 
@@ -493,18 +769,26 @@ describe("Frontend models - base", () => {
     })
 
     try {
-      const user = await User.find(9)
+      await User.executeCommand("find", {
+        hugeCounter: 9007199254740993n,
+        id: 9,
+        missing: undefined,
+        negativeInfinity: Number.NEGATIVE_INFINITY,
+        notANumber: Number.NaN,
+        positiveInfinity: Number.POSITIVE_INFINITY
+      })
 
-      expect(calls).toEqual([
-        {
-          commandName: "find",
-          commandType: "find",
-          modelClass: User,
-          payload: {id: 9},
-          url: "/api/frontend-models/users/find"
-        }
-      ])
-      expect(user.name()).toEqual("Custom transport user")
+      expect(calls.length).toEqual(1)
+      expect(calls[0].commandName).toEqual("find")
+      expect(calls[0].commandType).toEqual("find")
+      expect(calls[0].modelClass).toEqual(User)
+      expect(calls[0].payload.hugeCounter).toEqual({__velocious_type: "bigint", value: "9007199254740993"})
+      expect(calls[0].payload.id).toEqual(9)
+      expect(calls[0].payload.missing).toEqual({__velocious_type: "undefined"})
+      expect(calls[0].payload.negativeInfinity).toEqual({__velocious_type: "number", value: "-Infinity"})
+      expect(calls[0].payload.notANumber).toEqual({__velocious_type: "number", value: "NaN"})
+      expect(calls[0].payload.positiveInfinity).toEqual({__velocious_type: "number", value: "Infinity"})
+      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
     } finally {
       resetFrontendModelTransport()
     }
