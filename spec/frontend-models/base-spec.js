@@ -758,4 +758,47 @@ describe("Frontend models - base", () => {
       resetFrontendModelTransport()
     }
   })
+
+  it("serializes special values before calling custom request transport", async () => {
+    const User = buildTestModelClass()
+    /** @type {any[]} */
+    const calls = []
+
+    FrontendModelBase.configureTransport({
+      request: async (args) => {
+        calls.push(args)
+        return {model: {id: 9, name: "Custom transport user"}}
+      }
+    })
+
+    try {
+      await User.executeCommand("find", {
+        hugeCounter: 9007199254740993n,
+        id: 9,
+        missing: undefined,
+        negativeInfinity: Number.NEGATIVE_INFINITY,
+        notANumber: Number.NaN,
+        positiveInfinity: Number.POSITIVE_INFINITY
+      })
+
+      expect(calls).toEqual([
+        {
+          commandName: "find",
+          commandType: "find",
+          modelClass: User,
+          payload: {
+            hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
+            id: 9,
+            missing: {__velocious_type: "undefined"},
+            negativeInfinity: {__velocious_type: "number", value: "-Infinity"},
+            notANumber: {__velocious_type: "number", value: "NaN"},
+            positiveInfinity: {__velocious_type: "number", value: "Infinity"}
+          },
+          url: "/api/frontend-models/users/find"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
 })

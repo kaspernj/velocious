@@ -970,13 +970,14 @@ export default class FrontendModelBase {
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
     const url = frontendModelCommandUrl(this.resourcePath(), commandName)
+    const serializedPayload = /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(payload))
 
     if (frontendModelTransportConfig.request) {
       const customResponse = await frontendModelTransportConfig.request({
         commandName,
         commandType,
         modelClass: this,
-        payload,
+        payload: serializedPayload,
         url
       })
 
@@ -984,7 +985,7 @@ export default class FrontendModelBase {
     }
 
     const response = await fetch(url, {
-      body: JSON.stringify(serializeFrontendModelTransportValue(payload)),
+      body: JSON.stringify(serializedPayload),
       credentials: frontendModelTransportConfig.credentials,
       headers: {
         "Content-Type": "application/json"
