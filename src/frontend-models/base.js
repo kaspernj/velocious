@@ -1026,7 +1026,13 @@ export default class FrontendModelBase {
   static throwOnErrorFrontendModelResponse({commandType, response}) {
     if (response?.status !== "error") return
 
-    const errorMessage = typeof response.errorMessage === "string" && response.errorMessage.length > 0
+    const responseKeys = Object.keys(response)
+    const hasOnlyStatus = responseKeys.length === 1 && responseKeys[0] === "status"
+    const hasErrorMessage = typeof response.errorMessage === "string" && response.errorMessage.length > 0
+
+    if (!hasErrorMessage && !hasOnlyStatus) return
+
+    const errorMessage = hasErrorMessage
       ? response.errorMessage
       : `Request failed for ${this.name}#${commandType}`
 

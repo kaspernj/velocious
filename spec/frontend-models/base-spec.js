@@ -243,6 +243,22 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("does not treat raw model status attributes as command errors for fetch transport", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({id: 5, name: "Domain status model", status: "error"})
+
+    try {
+      const user = await User.find(5)
+
+      expect(user.id()).toEqual(5)
+      expect(user.name()).toEqual("Domain status model")
+      expect(user.readAttribute("status")).toEqual("error")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("serializes Date/undefined/bigint/non-finite values and deserializes marker responses", async () => {
     const User = buildTestModelClass()
     const requestDate = new Date("2026-02-20T12:00:00.000Z")
@@ -786,6 +802,30 @@ describe("Frontend models - base", () => {
       await expect(async () => {
         await User.find(9)
       }).toThrow(/Custom transport unauthorized./)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("does not treat raw model status attributes as command errors for custom transport", async () => {
+    const User = buildTestModelClass()
+
+    FrontendModelBase.configureTransport({
+      request: async () => {
+        return {
+          id: 9,
+          name: "Custom domain status model",
+          status: "error"
+        }
+      }
+    })
+
+    try {
+      const user = await User.find(9)
+
+      expect(user.id()).toEqual(9)
+      expect(user.name()).toEqual("Custom domain status model")
+      expect(user.readAttribute("status")).toEqual("error")
     } finally {
       resetFrontendModelTransport()
     }
