@@ -325,6 +325,10 @@ Available transport options:
 - `credentials`
 - `request` (custom request handler)
 
+Frontend-model command transport preserves `Date` and `undefined` by encoding them as marker objects in JSON and decoding them on the other side:
+- `Date` -> `{__velocious_type: "date", value: "<ISO string>"}`
+- `undefined` -> `{__velocious_type: "undefined"}`
+
 ## Route resolver hooks
 
 Libraries can hook unresolved routes and hijack them before Velocious falls back to the built-in 404 controller.

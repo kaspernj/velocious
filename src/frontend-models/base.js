@@ -1,6 +1,7 @@
 // @ts-check
 
 import FrontendModelQuery from "./query.js"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
 /** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
 /**
@@ -969,7 +970,7 @@ export default class FrontendModelBase {
     }
 
     const response = await fetch(url, {
-      body: JSON.stringify(payload),
+      body: JSON.stringify(serializeFrontendModelTransportValue(payload)),
       credentials: frontendModelTransportConfig.credentials,
       headers: {
         "Content-Type": "application/json"
@@ -981,6 +982,9 @@ export default class FrontendModelBase {
       throw new Error(`Request failed (${response.status}) for ${this.name}#${commandType}`)
     }
 
-    return await response.json()
+    const responseText = await response.text()
+    const json = responseText.length > 0 ? JSON.parse(responseText) : {}
+
+    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
   }
 }

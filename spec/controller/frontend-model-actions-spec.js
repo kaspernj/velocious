@@ -467,6 +467,67 @@ describe("Controller frontend model actions", () => {
     expect(payload.model).toEqual({id: "1", label: "One"})
   })
 
+  it("deserializes Date and undefined markers from request params", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const seen = {attributes: null}
+    const controller = buildController({
+      params: {
+        attributes: {
+          dueAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
+          optionalValue: {__velocious_type: "undefined"}
+        },
+        id: "1"
+      },
+      serverConfiguration: {
+        update: async ({attributes, model}) => {
+          seen.attributes = attributes
+          model.assign({
+            id: model.attributes().id,
+            name: "Updated"
+          })
+          return model
+        }
+      }
+    })
+
+    await controller.frontendUpdate()
+
+    expect(seen.attributes?.dueAt instanceof Date).toEqual(true)
+    expect(seen.attributes?.dueAt.toISOString()).toEqual("2026-02-20T12:00:00.000Z")
+    expect("optionalValue" in /** @type {Record<string, any>} */ (seen.attributes)).toEqual(true)
+    expect(seen.attributes?.optionalValue).toEqual(undefined)
+  })
+
+  it("serializes Date and undefined values in frontend JSON responses", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const createdAt = new Date("2026-02-20T12:00:00.000Z")
+
+    const controller = buildController({
+      params: {id: "1"},
+      serverConfiguration: {
+        serialize: async ({model}) => {
+          return {
+            createdAt,
+            id: model.attributes().id,
+            missing: undefined
+          }
+        }
+      }
+    })
+
+    await controller.frontendFind()
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      model: {
+        createdAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
+        id: "1",
+        missing: {__velocious_type: "undefined"}
+      },
+      status: "success"
+    })
+  })
+
   it("fails when resource abilities are missing", async () => {
     const controller = buildController({
       resourceConfiguration: {

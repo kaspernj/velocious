@@ -137,3 +137,4 @@
 - Scope `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` to browser test runs (`VELOCIOUS_BROWSER_TESTS=true` in test environment) so regular app/server initialization still loads models.
 - Add frontend-model `select({ModelName: [...]})` query payload support with model-aware serialization filtering (including nested preloads), and raise `AttributeNotSelectedError` when frontend code reads attributes that were not selected.
 - Extract frontend model query-builder logic from `FrontendModelBase` into a dedicated `src/frontend-models/query.js` class to align frontend/backend query structure.
+- Add frontend-model transport markers for `Date` and `undefined` values (`{__velocious_type: "date", value: ...}` / `{__velocious_type: "undefined"}`) with decode support on request and response paths.

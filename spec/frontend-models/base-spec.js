@@ -158,6 +158,8 @@ function stubFetch(responseBody) {
     return {
       ok: true,
       status: 200,
+      /** @returns {Promise<string>} */
+      text: async () => JSON.stringify(responseBody),
       /** @returns {Promise<Record<string, any>>} */
       json: async () => responseBody
     }
@@ -221,6 +223,49 @@ describe("Frontend models - base", () => {
       ])
       expect(user.id()).toEqual(5)
       expect(user.name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("serializes Date and undefined payload values and deserializes marker responses", async () => {
+    const User = buildTestModelClass()
+    const requestDate = new Date("2026-02-20T12:00:00.000Z")
+    const responseDateString = "2026-02-21T10:30:00.000Z"
+    const fetchStub = stubFetch({
+      nested: {
+        missing: {__velocious_type: "undefined"},
+        when: {__velocious_type: "date", value: responseDateString}
+      }
+    })
+
+    try {
+      const response = await User.executeCommand("find", {
+        id: 5,
+        missing: undefined,
+        nested: {
+          missing: undefined,
+          when: requestDate
+        }
+      })
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            id: 5,
+            missing: {__velocious_type: "undefined"},
+            nested: {
+              missing: {__velocious_type: "undefined"},
+              when: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"}
+            }
+          },
+          url: "/api/frontend-models/users/find"
+        }
+      ])
+      expect(response.nested.missing).toEqual(undefined)
+      expect(response.nested.when instanceof Date).toEqual(true)
+      expect(response.nested.when.toISOString()).toEqual(responseDateString)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

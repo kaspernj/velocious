@@ -2,6 +2,7 @@
 
 import Controller from "./controller.js"
 import * as inflection from "inflection"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 
 /**
  * @param {unknown} value - Candidate value.
@@ -154,6 +155,18 @@ function normalizeFrontendModelSelect(select) {
 
 /** Controller with built-in frontend model resource actions. */
 export default class FrontendModelController extends Controller {
+  /** @type {Record<string, any> | undefined} */
+  _frontendModelParams = undefined
+
+  /**
+   * @returns {Record<string, any>} - Decoded request params.
+   */
+  frontendModelParams() {
+    this._frontendModelParams ||= /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(this.params()))
+
+    return this._frontendModelParams
+  }
+
   /**
    * @returns {typeof import("./database/record/index.js").default} - Frontend model class for controller resource actions.
    */
@@ -162,14 +175,14 @@ export default class FrontendModelController extends Controller {
 
     if (frontendModelClass) return frontendModelClass
 
-    throw new Error(`No frontend model configured for controller '${this.params().controller}'. Configure backendProjects resources.`)
+    throw new Error(`No frontend model configured for controller '${this.frontendModelParams().controller}'. Configure backendProjects resources.`)
   }
 
   /**
    * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
    */
   frontendModelResourceConfiguration() {
-    const params = this.params()
+    const params = this.frontendModelParams()
     const controllerName = typeof params.controller === "string" ? params.controller : undefined
 
     if (!controllerName || controllerName.length < 1) return null
@@ -224,7 +237,7 @@ export default class FrontendModelController extends Controller {
     const modelClass = modelClasses[frontendModelResource.modelName]
 
     if (!modelClass) {
-      throw new Error(`Frontend model '${frontendModelResource.modelName}' is configured for '${this.params().controller}', but no model class was registered. Registered models: ${Object.keys(modelClasses).join(", ")}`)
+      throw new Error(`Frontend model '${frontendModelResource.modelName}' is configured for '${this.frontendModelParams().controller}', but no model class was registered. Registered models: ${Object.keys(modelClasses).join(", ")}`)
     }
 
     return modelClass
@@ -274,7 +287,7 @@ export default class FrontendModelController extends Controller {
     const frontendModelResource = this.frontendModelResourceConfiguration()
 
     if (!frontendModelResource) {
-      throw new Error(`No frontend model resource configuration for controller '${this.params().controller}'`)
+      throw new Error(`No frontend model resource configuration for controller '${this.frontendModelParams().controller}'`)
     }
 
     return frontendModelResource.resourceConfiguration.primaryKey || "id"
@@ -288,7 +301,7 @@ export default class FrontendModelController extends Controller {
     const frontendModelResource = this.frontendModelResourceConfiguration()
 
     if (!frontendModelResource) {
-      throw new Error(`No frontend model resource configuration for controller '${this.params().controller}'`)
+      throw new Error(`No frontend model resource configuration for controller '${this.frontendModelParams().controller}'`)
     }
 
     const abilities = frontendModelResource.resourceConfiguration.abilities
@@ -357,7 +370,7 @@ export default class FrontendModelController extends Controller {
       action,
       controller: this,
       modelClass,
-      params: this.params()
+      params: this.frontendModelParams()
     })
 
     return result !== false
@@ -379,7 +392,7 @@ export default class FrontendModelController extends Controller {
         controller: this,
         id,
         modelClass,
-        params: this.params()
+        params: this.frontendModelParams()
       })
 
       if (!model) return null
@@ -411,7 +424,7 @@ export default class FrontendModelController extends Controller {
         action: "index",
         controller: this,
         modelClass,
-        params: this.params()
+        params: this.frontendModelParams()
       })
 
       return await this.frontendModelFilterAuthorizedModels({action: "index", models})
@@ -431,14 +444,14 @@ export default class FrontendModelController extends Controller {
    * @returns {import("./database/query/index.js").NestedPreloadRecord | null} - Frontend preload data.
    */
   frontendModelPreload() {
-    return normalizeFrontendModelPreload(this.params().preload)
+    return normalizeFrontendModelPreload(this.frontendModelParams().preload)
   }
 
   /**
    * @returns {Record<string, string[]> | null} - Frontend select data.
    */
   frontendModelSelect() {
-    return normalizeFrontendModelSelect(this.params().select)
+    return normalizeFrontendModelSelect(this.frontendModelParams().select)
   }
 
   /**
@@ -678,10 +691,10 @@ export default class FrontendModelController extends Controller {
     }
 
     await this.render({
-      json: {
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
         errorMessage,
         status: "error"
-      }
+      }))
     })
   }
 
@@ -704,16 +717,16 @@ export default class FrontendModelController extends Controller {
           controller: this,
           model,
           modelClass: this.frontendModelClass(),
-          params: this.params()
+          params: this.frontendModelParams()
         })
       }))
       : await this.serializeFrontendModels(models)
 
     await this.render({
-      json: {
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
         models: serializedModels,
         status: "success"
-      }
+      }))
     })
   }
 
@@ -726,7 +739,7 @@ export default class FrontendModelController extends Controller {
 
     if (!(await this.runFrontendModelBeforeAction("find"))) return
 
-    const params = this.params()
+    const params = this.frontendModelParams()
     const id = params.id
 
     if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
@@ -754,10 +767,10 @@ export default class FrontendModelController extends Controller {
       : await this.serializeFrontendModel(model)
 
     await this.render({
-      json: {
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
         model: serializedModel,
         status: "success"
-      }
+      }))
     })
   }
 
@@ -770,7 +783,7 @@ export default class FrontendModelController extends Controller {
 
     if (!(await this.runFrontendModelBeforeAction("update"))) return
 
-    const params = this.params()
+    const params = this.frontendModelParams()
     const id = params.id
     const attributes = params.attributes
 
@@ -822,10 +835,10 @@ export default class FrontendModelController extends Controller {
       : await this.serializeFrontendModel(updatedModel)
 
     await this.render({
-      json: {
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
         model: serializedModel,
         status: "success"
-      }
+      }))
     })
   }
 
@@ -838,7 +851,7 @@ export default class FrontendModelController extends Controller {
 
     if (!(await this.runFrontendModelBeforeAction("destroy"))) return
 
-    const params = this.params()
+    const params = this.frontendModelParams()
     const id = params.id
 
     if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
@@ -868,9 +881,9 @@ export default class FrontendModelController extends Controller {
     }
 
     await this.render({
-      json: {
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
         status: "success"
-      }
+      }))
     })
   }
 }
