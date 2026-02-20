@@ -252,6 +252,35 @@ class MockFrontendModelQuery {
   }
 }
 
+/**
+ * @param {string} deniedAbilityAction
+ * @returns {typeof MockFrontendModel}
+ */
+function buildAbilityDeniedModelClass(deniedAbilityAction) {
+  /** Frontend model class that can deny one ability action through accessibleFor scopes. */
+  class AbilityDeniedFrontendModel extends MockFrontendModel {
+    /** @type {string[]} */
+    static seenAbilityActions = []
+
+    /**
+     * @param {string} abilityAction
+     * @returns {MockFrontendModelQuery}
+     */
+    static accessibleFor(abilityAction) {
+      this.seenAbilityActions.push(abilityAction)
+      const query = new MockFrontendModelQuery(this)
+
+      if (abilityAction === deniedAbilityAction) {
+        query.matches = () => false
+      }
+
+      return query
+    }
+  }
+
+  return AbilityDeniedFrontendModel
+}
+
 /** Test controller using built-in frontend model actions. */
 class FrontendController extends FrontendModelController {}
 
@@ -413,6 +442,109 @@ describe("Controller frontend model actions", () => {
 
     expect(payload.status).toEqual("error")
     expect(payload.errorMessage).toEqual("MockFrontendModel not found.")
+  })
+
+  it("returns no models from frontendIndex when read ability scope denies access", async () => {
+    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("read")
+    AbilityDeniedFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      modelClasses: {AbilityDeniedFrontendModel},
+      resources: {
+        AbilityDeniedFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id", "name"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      models: [],
+      status: "success"
+    })
+    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["read"])
+  })
+
+  it("returns not found from frontendFind when read ability scope denies access", async () => {
+    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("read")
+    AbilityDeniedFrontendModel.data = [{id: "2", name: "Two"}]
+    const controller = buildController({
+      modelClasses: {AbilityDeniedFrontendModel},
+      params: {id: "2"},
+      resources: {
+        AbilityDeniedFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id", "name"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    await controller.frontendFind()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload.status).toEqual("error")
+    expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
+    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["read"])
+  })
+
+  it("returns not found from frontendUpdate when update ability scope denies access", async () => {
+    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("update")
+    AbilityDeniedFrontendModel.data = [{id: "2", name: "Two"}]
+    const controller = buildController({
+      modelClasses: {AbilityDeniedFrontendModel},
+      params: {attributes: {name: "Changed"}, id: "2"},
+      resources: {
+        AbilityDeniedFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id", "name"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    await controller.frontendUpdate()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload.status).toEqual("error")
+    expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
+    expect(AbilityDeniedFrontendModel.data).toEqual([{id: "2", name: "Two"}])
+    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["update"])
+  })
+
+  it("returns not found from frontendDestroy when destroy ability scope denies access", async () => {
+    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("destroy")
+    AbilityDeniedFrontendModel.data = [{id: "2", name: "Two"}]
+    const controller = buildController({
+      modelClasses: {AbilityDeniedFrontendModel},
+      params: {id: "2"},
+      resources: {
+        AbilityDeniedFrontendModel: {
+          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id", "name"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    await controller.frontendDestroy()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload.status).toEqual("error")
+    expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
+    expect(AbilityDeniedFrontendModel.data).toEqual([{id: "2", name: "Two"}])
+    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["destroy"])
   })
 
   it("runs server beforeAction callback", async () => {
