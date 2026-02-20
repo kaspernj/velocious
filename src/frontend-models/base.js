@@ -890,6 +890,18 @@ export default class FrontendModelBase {
    * @returns {boolean} - Whether primitive values match after safe coercion.
    */
   static findByPrimitiveValuesMatch(actualValue, expectedValue) {
+    if (actualValue instanceof Date && typeof expectedValue === "string") {
+      return actualValue.toISOString() === expectedValue
+    }
+
+    if (typeof actualValue === "string" && expectedValue instanceof Date) {
+      return actualValue === expectedValue.toISOString()
+    }
+
+    if (actualValue instanceof Date && expectedValue instanceof Date) {
+      return actualValue.toISOString() === expectedValue.toISOString()
+    }
+
     if (typeof actualValue === "number" && typeof expectedValue === "string") {
       return this.findByNumericStringMatchesNumber(expectedValue, actualValue)
     }

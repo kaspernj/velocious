@@ -25,7 +25,7 @@ function isUndefinedMarker(value) {
 
   const keys = Object.keys(value)
 
-  return keys.length === 1 && value[TYPE_KEY] === TYPE_UNDEFINED
+  return keys.length === 1 && Object.prototype.hasOwnProperty.call(value, TYPE_KEY) && value[TYPE_KEY] === TYPE_UNDEFINED
 }
 
 /**
@@ -37,7 +37,13 @@ function isDateMarker(value) {
 
   const keys = Object.keys(value)
 
-  return keys.length === 2 && value[TYPE_KEY] === TYPE_DATE && typeof value.value === "string"
+  return (
+    keys.length === 2
+    && Object.prototype.hasOwnProperty.call(value, TYPE_KEY)
+    && Object.prototype.hasOwnProperty.call(value, "value")
+    && value[TYPE_KEY] === TYPE_DATE
+    && typeof value.value === "string"
+  )
 }
 
 /**

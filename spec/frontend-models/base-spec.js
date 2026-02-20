@@ -302,6 +302,30 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("findBy matches Date conditions when response values deserialize to Date objects", async () => {
+    const User = buildTestModelClass()
+    const conditionDate = new Date("2026-02-20T12:00:00.000Z")
+    const fetchStub = stubFetch({
+      models: [
+        {
+          createdAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
+          id: 5,
+          name: "John"
+        }
+      ]
+    })
+
+    try {
+      const user = await User.findBy({createdAt: conditionDate})
+
+      expect(user?.id()).toEqual(5)
+      expect(user?.name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("includes condition keys in select payload for findBy matching", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
