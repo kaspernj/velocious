@@ -197,6 +197,26 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {string[]} [requiredAttributes] - Extra required attributes for the root model.
+   * @returns {Record<string, string[]>} - Select map with required root attributes merged when root select exists.
+   */
+  selectWithRequiredRootAttributes(requiredAttributes = []) {
+    const rootModelName = this.modelClass.name
+    const existingRootAttributes = this._select[rootModelName]
+
+    if (!existingRootAttributes) {
+      return this._select
+    }
+
+    const rootPrimaryKey = this.modelClass.primaryKey()
+
+    return {
+      ...this._select,
+      [rootModelName]: Array.from(new Set([rootPrimaryKey, ...existingRootAttributes, ...requiredAttributes]))
+    }
+  }
+
+  /**
    * @param {import("../database/query/index.js").NestedPreloadRecord | string | string[]} preload - Preload to merge.
    * @returns {this} - Query with merged preloads.
    */
@@ -226,12 +246,15 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {string[]} [requiredAttributes] - Extra required attributes for root model selection.
    * @returns {Record<string, any>} - Payload select hash when present.
    */
-  selectPayload() {
-    if (Object.keys(this._select).length === 0) return {}
+  selectPayload(requiredAttributes = []) {
+    const select = this.selectWithRequiredRootAttributes(requiredAttributes)
 
-    return {select: this._select}
+    if (Object.keys(select).length === 0) return {}
+
+    return {select}
   }
 
   /**
@@ -276,7 +299,7 @@ export default class FrontendModelQuery {
 
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
-      ...this.selectPayload(),
+      ...this.selectPayload(Object.keys(normalizedConditions)),
       where: normalizedConditions
     })
 

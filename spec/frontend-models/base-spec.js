@@ -257,6 +257,76 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("includes condition keys in select payload for findBy matching", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {email: "john@example.com", id: 5}
+      ]
+    })
+
+    try {
+      const user = await User
+        .select({
+          User: ["id"]
+        })
+        .findBy({email: "john@example.com"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            select: {
+              User: ["id", "email"]
+            },
+            where: {
+              email: "john@example.com"
+            }
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("auto-selects primary key for selected root model find and keeps destroy working", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5}})
+
+    try {
+      const user = await User
+        .select({
+          User: ["email"]
+        })
+        .find(5)
+
+      expect(user.id()).toEqual(5)
+      await user.destroy()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            id: 5,
+            select: {
+              User: ["id", "email"]
+            }
+          },
+          url: "/api/frontend-models/users/find"
+        },
+        {
+          body: {id: 5},
+          url: "/api/frontend-models/users/destroy"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("includes preload payload and hydrates nested relationship models", async () => {
     const {Project} = buildPreloadTestModelClasses()
     const fetchStub = stubFetch({
