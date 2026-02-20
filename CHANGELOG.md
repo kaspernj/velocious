@@ -140,3 +140,4 @@
 - Add frontend-model transport markers for `Date` and `undefined` values (`{__velocious_type: "date", value: ...}` / `{__velocious_type: "undefined"}`) with decode support on request and response paths.
 - Extend frontend-model transport markers to preserve `bigint`, `NaN`, `Infinity`, and `-Infinity` values across request/response JSON payloads.
 - Harden frontend-model transport serialization/deserialization against `__proto__` prototype pollution by using null-prototype object accumulators.
+- Add controller specs proving frontend model `index`, `find`, `update`, and `destroy` actions deny unauthorized records via resource ability scopes (`accessibleFor(...)`).
