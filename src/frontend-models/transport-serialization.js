@@ -129,7 +129,7 @@ export function serializeFrontendModelTransportValue(value) {
 
   if (isPlainObject(value)) {
     /** @type {Record<string, unknown>} */
-    const serialized = {}
+    const serialized = /** @type {Record<string, unknown>} */ (Object.create(null))
 
     for (const [key, nestedValue] of Object.entries(value)) {
       serialized[key] = serializeFrontendModelTransportValue(nestedValue)
@@ -177,7 +177,7 @@ export function deserializeFrontendModelTransportValue(value) {
 
   if (isPlainObject(value)) {
     /** @type {Record<string, unknown>} */
-    const deserialized = {}
+    const deserialized = /** @type {Record<string, unknown>} */ (Object.create(null))
 
     for (const [key, nestedValue] of Object.entries(value)) {
       deserialized[key] = deserializeFrontendModelTransportValue(nestedValue)

@@ -741,15 +741,12 @@ describe("Frontend models - base", () => {
     try {
       const user = await User.find(9)
 
-      expect(calls).toEqual([
-        {
-          commandName: "find",
-          commandType: "find",
-          modelClass: User,
-          payload: {id: 9},
-          url: "/api/frontend-models/users/find"
-        }
-      ])
+      expect(calls.length).toEqual(1)
+      expect(calls[0].commandName).toEqual("find")
+      expect(calls[0].commandType).toEqual("find")
+      expect(calls[0].modelClass).toEqual(User)
+      expect(calls[0].payload.id).toEqual(9)
+      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
       expect(user.readAttribute("createdAt") instanceof Date).toEqual(true)
       expect(user.readAttribute("createdAt").toISOString()).toEqual(responseDateString)
       expect(user.readAttribute("maybeMissing")).toEqual(undefined)
@@ -781,22 +778,17 @@ describe("Frontend models - base", () => {
         positiveInfinity: Number.POSITIVE_INFINITY
       })
 
-      expect(calls).toEqual([
-        {
-          commandName: "find",
-          commandType: "find",
-          modelClass: User,
-          payload: {
-            hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
-            id: 9,
-            missing: {__velocious_type: "undefined"},
-            negativeInfinity: {__velocious_type: "number", value: "-Infinity"},
-            notANumber: {__velocious_type: "number", value: "NaN"},
-            positiveInfinity: {__velocious_type: "number", value: "Infinity"}
-          },
-          url: "/api/frontend-models/users/find"
-        }
-      ])
+      expect(calls.length).toEqual(1)
+      expect(calls[0].commandName).toEqual("find")
+      expect(calls[0].commandType).toEqual("find")
+      expect(calls[0].modelClass).toEqual(User)
+      expect(calls[0].payload.hugeCounter).toEqual({__velocious_type: "bigint", value: "9007199254740993"})
+      expect(calls[0].payload.id).toEqual(9)
+      expect(calls[0].payload.missing).toEqual({__velocious_type: "undefined"})
+      expect(calls[0].payload.negativeInfinity).toEqual({__velocious_type: "number", value: "-Infinity"})
+      expect(calls[0].payload.notANumber).toEqual({__velocious_type: "number", value: "NaN"})
+      expect(calls[0].payload.positiveInfinity).toEqual({__velocious_type: "number", value: "Infinity"})
+      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
     } finally {
       resetFrontendModelTransport()
     }
