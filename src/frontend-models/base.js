@@ -999,7 +999,16 @@ export default class FrontendModelBase {
 
     const responseText = await response.text()
     const json = responseText.length > 0 ? JSON.parse(responseText) : {}
+    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
 
-    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
+    if (decodedResponse?.status === "error") {
+      const errorMessage = typeof decodedResponse.errorMessage === "string" && decodedResponse.errorMessage.length > 0
+        ? decodedResponse.errorMessage
+        : `Request failed for ${this.name}#${commandType}`
+
+      throw new Error(errorMessage)
+    }
+
+    return decodedResponse
   }
 }

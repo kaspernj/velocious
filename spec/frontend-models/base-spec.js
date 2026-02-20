@@ -229,6 +229,20 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("raises when backend returns an error status payload", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({errorMessage: "Task not found.", status: "error"})
+
+    try {
+      await expect(async () => {
+        await User.find(123)
+      }).toThrow(/Task not found./)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("serializes Date/undefined/bigint/non-finite values and deserializes marker responses", async () => {
     const User = buildTestModelClass()
     const requestDate = new Date("2026-02-20T12:00:00.000Z")
