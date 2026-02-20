@@ -350,11 +350,9 @@ describe("Controller frontend model actions", () => {
     expect(payload).toEqual({
       models: [
         {
-          __selectedAttributes: ["id"],
           id: "1"
         },
         {
-          __selectedAttributes: ["id"],
           id: "2"
         }
       ],
@@ -571,11 +569,9 @@ describe("Controller frontend model actions", () => {
     expect(payload).toEqual({
       __preloadedRelationships: {
         related: {
-          __selectedAttributes: ["value"],
           value: "Allowed one"
         }
       },
-      __selectedAttributes: ["id"],
       id: "1"
     })
   })

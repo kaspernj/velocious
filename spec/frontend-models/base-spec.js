@@ -350,12 +350,10 @@ describe("Frontend models - base", () => {
     const fetchStub = stubFetch({
       models: [
         {
-          __selectedAttributes: ["id"],
           id: "1",
           __preloadedRelationships: {
             tasks: [
               {
-                __selectedAttributes: ["updatedAt"],
                 updatedAt: "2026-02-20T10:00:00.000Z"
               }
             ]

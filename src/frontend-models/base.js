@@ -929,12 +929,14 @@ export default class FrontendModelBase {
     const preloadedRelationships = isPlainObject(attributes[PRELOADED_RELATIONSHIPS_KEY])
       ? /** @type {Record<string, any>} */ (attributes[PRELOADED_RELATIONSHIPS_KEY])
       : {}
-    const selectedAttributes = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
+    const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
       ? /** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string")
       : null
 
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
     delete attributes[SELECTED_ATTRIBUTES_KEY]
+
+    const selectedAttributes = selectedAttributesFromPayload || Object.keys(attributes)
 
     return {attributes, preloadedRelationships, selectedAttributes}
   }
@@ -1082,9 +1084,11 @@ export default class FrontendModelBase {
    * @returns {boolean} - Whether the model matches all conditions.
    */
   static matchesFindByConditions(model, conditions) {
+    const modelAttributes = model.attributes()
+
     for (const key of Object.keys(conditions)) {
       const expectedValue = conditions[key]
-      const actualValue = model.readAttribute(key)
+      const actualValue = modelAttributes[key]
 
       if (Array.isArray(expectedValue)) {
         if (Array.isArray(actualValue)) {

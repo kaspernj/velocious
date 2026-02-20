@@ -3,8 +3,6 @@
 import Controller from "./controller.js"
 import * as inflection from "inflection"
 
-const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
-
 /**
  * @param {unknown} value - Candidate value.
  * @returns {value is Record<string, any>} - Whether value is a plain object.
@@ -476,8 +474,6 @@ export default class FrontendModelController extends Controller {
         serializedAttributes[attributeName] = modelAttributes[attributeName]
       }
     }
-
-    serializedAttributes[SELECTED_ATTRIBUTES_KEY] = selectedAttributes
 
     return serializedAttributes
   }

@@ -27,9 +27,7 @@ export default class FrontendModelSystemTestsController extends Controller {
     if (!selectedAttributes) return attributes
 
     /** @type {Record<string, any>} */
-    const filtered = {
-      __selectedAttributes: selectedAttributes
-    }
+    const filtered = {}
 
     for (const attributeName of selectedAttributes) {
       if (attributeName in attributes) {
