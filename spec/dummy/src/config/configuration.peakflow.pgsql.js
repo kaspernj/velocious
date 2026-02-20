@@ -1,5 +1,8 @@
 import "../../../../src/utils/with-tracked-stack-async-hooks.js"
+import Ability from "../../../../src/authorization/ability.js"
 import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tracked-multi-connection.js"
+import backendProjects from "./backend-projects.js"
+import BaseResource from "../../../../src/authorization/base-resource.js"
 import Configuration from "../../../../src/configuration.js"
 import dummyDirectory from "../../dummy-directory.js"
 import fs from "fs/promises"
@@ -9,6 +12,7 @@ import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js
 import path from "path"
 import PgsqlDriver from "../../../../src/database/drivers/pgsql/index.js"
 import requireContext from "require-context"
+import Task from "../models/task.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
 
 const queryParam = (request, key) => {
@@ -50,7 +54,47 @@ async function websocketMessageHandlerResolver({request}) {
   }
 }
 
+class TaskFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Task
+
+  /** @returns {void} */
+  abilities() {
+    this.can(["destroy", "read", "update"], Task)
+
+    const deniedAction = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
+
+    if (deniedAction === "destroy" || deniedAction === "read" || deniedAction === "update") {
+      this.cannot(deniedAction, Task)
+    }
+  }
+}
+
+/**
+ * @param {object} args - Ability resolver args.
+ * @param {Record<string, any>} args.params - Request params.
+ * @param {import("../../../../src/http-server/client/request.js").default | import("../../../../src/http-server/client/websocket-request.js").default} args.request - Request object.
+ * @param {import("../../../../src/http-server/client/response.js").default} args.response - Response object.
+ * @param {import("../../../../src/configuration.js").default} args.configuration - Configuration object.
+ * @returns {Ability | undefined}
+ */
+function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
+  const deniedAction = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
+  if (!deniedAction) return
+
+  const requestPath = request.path().split("?")[0]
+  const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
+
+  if (!isTaskFrontendModelCommand) return
+
+  return new Ability({
+    context: {configuration, params, request, response},
+    resources: [TaskFrontendModelAbilityResource]
+  })
+}
+
 export default new Configuration({
+  abilityResolver: resolveTaskFrontendModelAbility,
+  backendProjects,
   database: {
     test: {
       default: {

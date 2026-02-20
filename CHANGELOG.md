@@ -141,3 +141,5 @@
 - Extend frontend-model transport markers to preserve `bigint`, `NaN`, `Infinity`, and `-Infinity` values across request/response JSON payloads.
 - Harden frontend-model transport serialization/deserialization against `__proto__` prototype pollution by using null-prototype object accumulators.
 - Add controller specs proving frontend model `index`, `find`, `update`, and `destroy` actions deny unauthorized records via resource ability scopes (`accessibleFor(...)`).
+- Make frontend model commands raise on backend `{status: "error"}` responses so unauthorized `find`/`update`/`destroy` requests fail instead of being treated as success.
+- Add dummy-app end-to-end frontend-model authorization integration tests using generated frontend models for denied `index`/`find`/`update`/`destroy` flows.

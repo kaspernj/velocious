@@ -229,6 +229,36 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("raises when backend returns an error status payload", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({errorMessage: "Task not found.", status: "error"})
+
+    try {
+      await expect(async () => {
+        await User.find(123)
+      }).toThrow(/Task not found./)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("does not treat raw model status attributes as command errors for fetch transport", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({id: 5, name: "Domain status model", status: "error"})
+
+    try {
+      const user = await User.find(5)
+
+      expect(user.id()).toEqual(5)
+      expect(user.name()).toEqual("Domain status model")
+      expect(user.readAttribute("status")).toEqual("error")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("serializes Date/undefined/bigint/non-finite values and deserializes marker responses", async () => {
     const User = buildTestModelClass()
     const requestDate = new Date("2026-02-20T12:00:00.000Z")
@@ -751,6 +781,93 @@ describe("Frontend models - base", () => {
       expect(user.readAttribute("createdAt").toISOString()).toEqual(responseDateString)
       expect(user.readAttribute("maybeMissing")).toEqual(undefined)
       expect(user.name()).toEqual("Custom transport user")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("raises when custom request transport returns an error status payload", async () => {
+    const User = buildTestModelClass()
+
+    FrontendModelBase.configureTransport({
+      request: async () => {
+        return {
+          errorMessage: "Custom transport unauthorized.",
+          status: "error"
+        }
+      }
+    })
+
+    try {
+      await expect(async () => {
+        await User.find(9)
+      }).toThrow(/Custom transport unauthorized./)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("does not treat raw model status attributes as command errors for custom transport", async () => {
+    const User = buildTestModelClass()
+
+    FrontendModelBase.configureTransport({
+      request: async () => {
+        return {
+          id: 9,
+          name: "Custom domain status model",
+          status: "error"
+        }
+      }
+    })
+
+    try {
+      const user = await User.find(9)
+
+      expect(user.id()).toEqual(9)
+      expect(user.name()).toEqual("Custom domain status model")
+      expect(user.readAttribute("status")).toEqual("error")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("raises when custom request transport returns status error with envelope keys", async () => {
+    const User = buildTestModelClass()
+
+    FrontendModelBase.configureTransport({
+      request: async () => {
+        return {
+          code: "forbidden",
+          status: "error"
+        }
+      }
+    })
+
+    try {
+      await expect(async () => {
+        await User.find(9)
+      }).toThrow(/Request failed for User#find/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("raises when custom request transport returns status error with message envelope", async () => {
+    const User = buildTestModelClass()
+
+    FrontendModelBase.configureTransport({
+      request: async () => {
+        return {
+          message: "Forbidden by custom renderer.",
+          status: "error"
+        }
+      }
+    })
+
+    try {
+      await expect(async () => {
+        await User.find(9)
+      }).toThrow(/Request failed for User#find/)
     } finally {
       resetFrontendModelTransport()
     }

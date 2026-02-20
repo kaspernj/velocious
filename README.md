@@ -331,6 +331,8 @@ Frontend-model command transport preserves `Date` and `undefined` by encoding th
 - `bigint` -> `{__velocious_type: "bigint", value: "<decimal string>"}`
 - `NaN` / `Infinity` / `-Infinity` -> `{__velocious_type: "number", value: "NaN" | "Infinity" | "-Infinity"}`
 
+Frontend-model commands raise an `Error` when the backend responds with `{status: "error"}` (using `errorMessage` when present), so unauthorized or missing-record update/find/destroy responses fail fast in frontend code.
+
 ## Route resolver hooks
 
 Libraries can hook unresolved routes and hijack them before Velocious falls back to the built-in 404 controller.

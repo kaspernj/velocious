@@ -6,6 +6,15 @@ routes.draw((route) => {
   route.namespace("api", (route) => {
     route.post("broadcast-event")
     route.post("version")
+
+    route.namespace("frontend-models", (route) => {
+      route.namespace("tasks", (route) => {
+        route.post("list")
+        route.post("find")
+        route.post("update")
+        route.post("destroy")
+      })
+    })
   })
 
   route.namespace("frontend-model-system-tests", (route) => {

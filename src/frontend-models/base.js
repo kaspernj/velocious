@@ -981,7 +981,14 @@ export default class FrontendModelBase {
         url
       })
 
-      return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
+      const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
+
+      this.throwOnErrorFrontendModelResponse({
+        commandType,
+        response: decodedResponse
+      })
+
+      return decodedResponse
     }
 
     const response = await fetch(url, {
@@ -999,7 +1006,65 @@ export default class FrontendModelBase {
 
     const responseText = await response.text()
     const json = responseText.length > 0 ? JSON.parse(responseText) : {}
+    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
 
-    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
+    this.throwOnErrorFrontendModelResponse({
+      commandType,
+      response: decodedResponse
+    })
+
+    return decodedResponse
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {object} args - Arguments.
+   * @param {"find" | "index" | "update" | "destroy"} args.commandType - Command type.
+   * @param {Record<string, any>} args.response - Decoded response.
+   * @returns {void}
+   */
+  static throwOnErrorFrontendModelResponse({commandType, response}) {
+    if (response?.status !== "error") return
+
+    const responseKeys = Object.keys(response)
+    const hasOnlyStatus = responseKeys.length === 1 && responseKeys[0] === "status"
+    const hasErrorMessage = typeof response.errorMessage === "string" && response.errorMessage.length > 0
+    const hasErrorEnvelopeKeys = Boolean(
+      response.code !== undefined
+      || response.error !== undefined
+      || response.errors !== undefined
+      || response.message !== undefined
+    )
+    const nonStatusKeys = responseKeys.filter((key) => key !== "status")
+    const configuredAttributeNames = this.configuredFrontendModelAttributeNames()
+    const looksLikeRawModelPayload = nonStatusKeys.length > 0
+      && nonStatusKeys.every((key) => configuredAttributeNames.has(key))
+
+    if (!hasErrorMessage && !hasOnlyStatus && !hasErrorEnvelopeKeys && looksLikeRawModelPayload) return
+
+    const errorMessage = hasErrorMessage
+      ? response.errorMessage
+      : `Request failed for ${this.name}#${commandType}`
+
+    throw new Error(errorMessage)
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @returns {Set<string>} - Configured frontend model attribute names.
+   */
+  static configuredFrontendModelAttributeNames() {
+    const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
+    const attributes = resourceConfig.attributes
+
+    if (Array.isArray(attributes)) {
+      return new Set(attributes.filter((attributeName) => typeof attributeName === "string"))
+    }
+
+    if (attributes && typeof attributes === "object") {
+      return new Set(Object.keys(attributes))
+    }
+
+    return new Set()
   }
 }
