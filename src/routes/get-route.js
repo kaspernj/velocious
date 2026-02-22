@@ -5,6 +5,27 @@ import escapeStringRegexp from "escape-string-regexp"
 import BaseRoute from "./base-route.js"
 import restArgsError from "../utils/rest-args-error.js"
 
+/**
+ * @param {Record<string, any>} params - Route params object.
+ * @param {string} name - Route name.
+ * @returns {void} - No return value.
+ */
+function assignActionAndController(params, name) {
+  const segments = name.split("/").filter((segment) => segment.length > 0)
+
+  if (segments.length <= 1) {
+    params.action = name
+    return
+  }
+
+  const actionSegment = segments[segments.length - 1]
+  const controllerSuffix = segments.slice(0, -1).join("/")
+  const existingController = typeof params.controller === "string" && params.controller.length > 0 ? params.controller : null
+
+  params.action = actionSegment
+  params.controller = existingController ? `${existingController}/${controllerSuffix}` : controllerSuffix
+}
+
 class VelociousRouteGetRoute extends BaseRoute {
   /**
    * @param {object} args - Options object.
@@ -39,7 +60,7 @@ class VelociousRouteGetRoute extends BaseRoute {
       // Prevent partial prefix matches (e.g., "params" matching "params-with-query")
       if (restPath && !restPath.startsWith("/")) return
 
-      params.action = this.name
+      assignActionAndController(params, this.name)
 
       return {restPath}
     }
@@ -49,4 +70,3 @@ class VelociousRouteGetRoute extends BaseRoute {
 BaseRoute.registerRouteGetType(VelociousRouteGetRoute)
 
 export default VelociousRouteGetRoute
-

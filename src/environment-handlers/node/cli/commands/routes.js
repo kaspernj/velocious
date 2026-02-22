@@ -6,6 +6,14 @@ import BaseCommand from "../../../../cli/base-command.js"
 export default class VelociousCliCommandsServer extends BaseCommand{
   output = ""
 
+  /**
+   * @param {string} actionName - Raw route action name.
+   * @returns {string} - Normalized method name.
+   */
+  normalizeActionName(actionName) {
+    return inflection.camelize(actionName.replaceAll("-", "_").replaceAll("/", "_"), true)
+  }
+
   async execute() {
     const application = new Application({
       configuration: this.getConfiguration(),
@@ -28,7 +36,7 @@ export default class VelociousCliCommandsServer extends BaseCommand{
     const prefix = "  ".repeat(level)
 
     for (const routeData of route.getHumanPaths()) {
-      this.log(`${prefix}${routeData.method} ${routeData.path}${routeData.action ? ` -> ${inflection.camelize(routeData.action.replaceAll("-", "_"), true)}` : ""}`)
+      this.log(`${prefix}${routeData.method} ${routeData.path}${routeData.action ? ` -> ${this.normalizeActionName(routeData.action)}` : ""}`)
     }
 
     for (const subRoute of route.getSubRoutes()) {

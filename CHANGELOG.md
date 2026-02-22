@@ -143,3 +143,4 @@
 - Add controller specs proving frontend model `index`, `find`, `update`, and `destroy` actions deny unauthorized records via resource ability scopes (`accessibleFor(...)`).
 - Make frontend model commands raise on backend `{status: "error"}` responses so unauthorized `find`/`update`/`destroy` requests fail instead of being treated as success.
 - Add dummy-app end-to-end frontend-model authorization integration tests using generated frontend models for denied `index`/`find`/`update`/`destroy` flows.
+- Normalize route action-name resolution to treat slash-delimited actions like `current-user/update` as `currentUserUpdate`, with resolver + CLI normalization updates and regression coverage.
