@@ -4,6 +4,27 @@ import BaseRoute from "./base-route.js"
 import escapeStringRegexp from "escape-string-regexp"
 import restArgsError from "../utils/rest-args-error.js"
 
+/**
+ * @param {Record<string, any>} params - Route params object.
+ * @param {string} name - Route name.
+ * @returns {void} - No return value.
+ */
+function assignActionAndController(params, name) {
+  const segments = name.split("/").filter((segment) => segment.length > 0)
+
+  if (segments.length <= 1) {
+    params.action = name
+    return
+  }
+
+  const actionSegment = segments[segments.length - 1]
+  const controllerSuffix = segments.slice(0, -1).join("/")
+  const existingController = typeof params.controller === "string" && params.controller.length > 0 ? params.controller : null
+
+  params.action = actionSegment
+  params.controller = existingController ? `${existingController}/${controllerSuffix}` : controllerSuffix
+}
+
 class VelociousRoutePostRoute extends BaseRoute {
   /**
    * @param {object} args - Options object.
@@ -35,7 +56,7 @@ class VelociousRoutePostRoute extends BaseRoute {
     if (match) {
       const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
 
-      params.action = this.name
+      assignActionAndController(params, this.name)
 
       return {restPath}
     }
@@ -45,4 +66,3 @@ class VelociousRoutePostRoute extends BaseRoute {
 BaseRoute.registerRoutePostType(VelociousRoutePostRoute)
 
 export default VelociousRoutePostRoute
-

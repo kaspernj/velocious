@@ -42,6 +42,7 @@ routes.draw((route) => {
     route.get("read")
   })
   route.get("ping")
+  route.post("current-user/update")
   route.get("params")
   route.get("slow")
   route.post("upload")

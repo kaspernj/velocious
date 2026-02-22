@@ -9,6 +9,14 @@ import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
 import ensureError from "../utils/ensure-error.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 
+/**
+ * @param {string} actionName - Raw action name from route params or route hook.
+ * @returns {string} - Normalized controller method name.
+ */
+function normalizeActionName(actionName) {
+  return inflection.camelize(actionName.replaceAll("-", "_").replaceAll("/", "_"), true)
+}
+
 export default class VelociousRoutesResolver {
   /** @type {Logger | undefined} */
   logger
@@ -46,12 +54,12 @@ export default class VelociousRoutesResolver {
     const actionParam = this.params.action
     const controllerParam = this.params.controller
     const actionValue = typeof actionParam == "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
-    let action = typeof actionValue == "string" ? inflection.camelize(actionValue.replaceAll("-", "_"), true) : undefined
+    let action = typeof actionValue == "string" ? normalizeActionName(actionValue) : undefined
     let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
 
     if (routeResolverHookMatch) {
       controller = routeResolverHookMatch.controller
-      action = inflection.camelize(routeResolverHookMatch.action.replaceAll("-", "_"), true)
+      action = normalizeActionName(routeResolverHookMatch.action)
       this.params.controller = controller
       this.params.action = routeResolverHookMatch.action
       controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
