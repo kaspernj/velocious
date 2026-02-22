@@ -10,4 +10,13 @@ export default class CurrentUserController extends Controller {
       }
     })
   }
+
+  /** @returns {Promise<void>} - Resolves when complete. */
+  async updatePassword() {
+    await this.render({
+      json: {
+        message: "Current user password updated"
+      }
+    })
+  }
 }

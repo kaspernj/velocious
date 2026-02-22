@@ -146,18 +146,29 @@ export default class VelociousRoutesResolver {
     const pathWithoutSlash = path.replace(/^\//, "").split("?")[0]
 
     for (const subRoute of route.routes) {
+      const paramsSnapshot = {...this.params}
       const matchResult = subRoute.matchWithPath({
         params: this.params,
         path: pathWithoutSlash,
         request: this.request
       })
 
-      if (!matchResult) continue
+      if (!matchResult) {
+        this.params = paramsSnapshot
+        continue
+      }
 
       const {restPath} = matchResult
 
       if (restPath) {
-        return this.matchPathWithRoutes(subRoute, restPath)
+        const recursiveMatch = this.matchPathWithRoutes(subRoute, restPath)
+
+        if (recursiveMatch) {
+          return recursiveMatch
+        }
+
+        this.params = paramsSnapshot
+        continue
       }
 
       return matchResult

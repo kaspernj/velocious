@@ -56,6 +56,9 @@ class VelociousRoutePostRoute extends BaseRoute {
     if (match) {
       const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
 
+      // Prevent partial prefix matches (e.g., "update" matching "update-password")
+      if (restPath && !restPath.startsWith("/")) return
+
       assignActionAndController(params, this.name)
 
       return {restPath}
