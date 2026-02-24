@@ -144,3 +144,5 @@
 - Make frontend model commands raise on backend `{status: "error"}` responses so unauthorized `find`/`update`/`destroy` requests fail instead of being treated as success.
 - Add dummy-app end-to-end frontend-model authorization integration tests using generated frontend models for denied `index`/`find`/`update`/`destroy` flows.
 - Normalize route action-name resolution to treat slash-delimited actions like `current-user/update` as `currentUserUpdate`, with resolver + CLI normalization updates and regression coverage.
+- Bump `@eslint/js` from `9.39.2` to `10.0.1` and `eslint-plugin-jsdoc` from `62.5.5` to `62.7.0`.
+- Add `cause` when rethrowing errors in caught-error paths and remove useless initial assignments to satisfy ESLint 10 recommended rules (`preserve-caught-error`, `no-useless-assignment`).

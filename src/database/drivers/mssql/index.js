@@ -34,7 +34,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
       await this.connection.connect()
     } catch (error) {
       // Re-throw to fix unuseable stack trace.
-      throw new Error(`Couldn't connect to database: ${error instanceof Error ? error.message : error}`)
+      throw new Error(`Couldn't connect to database: ${error instanceof Error ? error.message : error}`, {cause: error})
     }
   }
 
@@ -162,9 +162,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
           // Retry
         } else if (error instanceof Error) {
           // Re-throw error because the stack-trace is broken and can't be used for app-development.
-          throw new Error(`Query failed '${error.message}': ${sql}`)
+          throw new Error(`Query failed '${error.message}': ${sql}`, {cause: error})
         } else {
-          throw new Error(`Query failed '${error}': ${sql}`)
+          throw new Error(`Query failed '${error}': ${sql}`, {cause: error})
         }
       }
     }

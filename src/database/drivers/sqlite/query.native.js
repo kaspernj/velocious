@@ -17,10 +17,14 @@ export default async function query(connection, sql) {
       sqlInErrorMessage = `${sqlInErrorMessage.substring(0, 4096)}...`
     }
 
-    error.message += `\n\n${sqlInErrorMessage}`
+    if (error instanceof Error) {
+      error.message += `\n\n${sqlInErrorMessage}`
 
-    // Re-throw to recover stack trace
-    throw new Error(error.message)
+      // Re-throw to recover stack trace
+      throw new Error(error.message, {cause: error})
+    }
+
+    throw new Error(`An error occurred: ${error}\n\n${sqlInErrorMessage}`, {cause: error})
   }
 
   for await (const entry of result) {

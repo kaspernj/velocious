@@ -410,7 +410,7 @@ export default class VelociousDatabaseMigrator {
               await migrationInstance.up()
             } catch (upError) {
               if (upError instanceof NotImplementedError) {
-                throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`)
+                throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`, {cause: upError})
               } else {
                 throw upError
               }
@@ -433,7 +433,7 @@ export default class VelociousDatabaseMigrator {
           await migrationInstance.down()
         } catch (downError) {
           if (downError instanceof NotImplementedError) {
-            throw new Error(`'down' didn't exist on migration: ${migration.file} or migrating down with a change method isn't currently supported`)
+            throw new Error(`'down' didn't exist on migration: ${migration.file} or migrating down with a change method isn't currently supported`, {cause: downError})
           } else {
             throw downError
           }

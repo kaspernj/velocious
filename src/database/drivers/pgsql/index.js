@@ -25,9 +25,9 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     } catch (error) {
       // Re-throw to recover real stack trace
       if (error instanceof Error) {
-        throw new Error(`Connect to Postgres server failed: ${error.message}`)
+        throw new Error(`Connect to Postgres server failed: ${error.message}`, {cause: error})
       } else {
-        throw new Error(`Connect to Postgres server failed: ${error}`)
+        throw new Error(`Connect to Postgres server failed: ${error}`, {cause: error})
       }
     }
 
@@ -150,9 +150,9 @@ export default class VelociousDatabaseDriversPgsql extends Base{
       response = await this.connection.query(sql)
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`Query failed: ${error.message} with SQL: ${sql}`)
+        throw new Error(`Query failed: ${error.message} with SQL: ${sql}`, {cause: error})
       } else {
-        throw new Error(`Query failed: ${error} with SQL: ${sql}`)
+        throw new Error(`Query failed: ${error} with SQL: ${sql}`, {cause: error})
       }
     }
 

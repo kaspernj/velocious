@@ -176,7 +176,6 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
   it("supports HTTP 1.0 keep-alive", async () => {
     await Dummy.run(async () => {
       const socket = new net.Socket()
-      let remaining = ""
 
       socket.connect(3006, "127.0.0.1", () => {
         socket.write([
@@ -190,7 +189,7 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
 
       try {
         const firstResponse = await readResponse(socket)
-        remaining = firstResponse.remaining
+        const remaining = firstResponse.remaining
 
         socket.write([
           "GET /ping HTTP/1.0",

@@ -33,9 +33,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
       }))
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`Couldn't open database ${databasePath} because of ${error.constructor.name}: ${error.message}`)
+        throw new Error(`Couldn't open database ${databasePath} because of ${error.constructor.name}: ${error.message}`, {cause: error})
       } else {
-        throw new Error(`Couldn't open database ${databasePath} because of ${typeof error}: ${error}`)
+        throw new Error(`Couldn't open database ${databasePath} because of ${typeof error}: ${error}`, {cause: error})
       }
     }
 
@@ -65,4 +65,3 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     return await query(this.connection, sql)
   }
 }
-

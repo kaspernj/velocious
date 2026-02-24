@@ -30,7 +30,7 @@ describe("database - transactions", {tags: ["dummy"]}, () => {
             if (error instanceof Error) {
               expect(error.message).toEqual("Name can't be blank")
             } else {
-              throw new Error(`'error' wasn't an 'Error': ${typeof error}`)
+              throw new Error(`'error' wasn't an 'Error': ${typeof error}`, {cause: error})
             }
           }
         })
