@@ -239,7 +239,7 @@ describe("Record - create", {tags: ["dummy"]}, () => {
       if (error instanceof Error) {
         expect(error.message).toEqual("Name can't be blank")
       } else {
-        throw new Error(`Expected error to be an instance of Error: ${typeof error}`)
+        throw new Error(`Expected error to be an instance of Error: ${typeof error}`, {cause: error})
       }
     }
 

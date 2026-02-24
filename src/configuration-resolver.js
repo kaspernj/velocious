@@ -54,7 +54,7 @@ export default async function configurationResolver(args) {
     }
 
     if (!args) {
-      throw new Error("Can't spawn a new configuration because no configuration-arguments was given")
+      throw new Error("Can't spawn a new configuration because no configuration-arguments was given", {cause: error})
     }
 
     configuration = new Configuration(args)

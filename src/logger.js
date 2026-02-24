@@ -209,10 +209,10 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
   if (outputs.length === 0) return
 
   const writes = []
-  /** @type {Array<any> | null} */
-  let resolvedMessages = null
-  /** @type {string | null} */
-  let message = null
+  /** @type {Array<any> | undefined} */
+  let resolvedMessages
+  /** @type {string | undefined} */
+  let message
   /** @type {import("./configuration-types.js").LoggingOutputPayload | null} */
   let payload = null
 

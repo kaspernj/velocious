@@ -636,7 +636,7 @@ export default class VelociousDatabaseDriversBase {
         if (tries < maxTries && retryInfo.retry) {
           if (retryInfo.reconnect) {
             if (this._transactionsCount > 0) {
-              throw new Error(`Cannot reconnect while a transaction is active (${this._transactionsCount}). Original error: ${error.message}`)
+              throw new Error(`Cannot reconnect while a transaction is active (${this._transactionsCount}). Original error: ${error.message}`, {cause: error})
             }
 
             await this.reconnect()

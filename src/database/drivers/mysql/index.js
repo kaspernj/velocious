@@ -183,9 +183,9 @@ export default class VelociousDatabaseDriversMysql extends Base{
     } catch (error) {
       // Re-throw to un-corrupt stacktrace
       if (error instanceof Error) {
-        throw new Error(`Query failed: ${error.message}`)
+        throw new Error(`Query failed: ${error.message}`, {cause: error})
       } else {
-        throw new Error(`Query failed: ${error}`)
+        throw new Error(`Query failed: ${error}`, {cause: error})
       }
     }
   }

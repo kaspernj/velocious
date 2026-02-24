@@ -176,7 +176,7 @@ function normalizeFindConditions(conditions) {
   try {
     return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(conditions)))
   } catch (error) {
-    throw new Error(`findBy conditions could not be serialized: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(`findBy conditions could not be serialized: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
   }
 }
 
