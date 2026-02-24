@@ -579,10 +579,16 @@ Run project seeds from `src/db/seed.js` (default export should be an async funct
 npx velocious db:seed
 ```
 
-Run custom scripts with initialized app/database context:
+Run script files with initialized app/database context:
 
 ```bash
-npx velocious runner src/scripts/my-task.js
+npx velocious run-script src/scripts/my-task.js
+```
+
+Evaluate inline JavaScript (Rails-style runner) with initialized app/database context:
+
+```bash
+npx velocious runner "const users = await db.query('SELECT COUNT(*) AS count FROM users'); console.log(users[0].count)"
 ```
 
 By default, migrations write `db/structure-<identifier>.sql` files for each database. Disable writing for specific environments in your configuration:

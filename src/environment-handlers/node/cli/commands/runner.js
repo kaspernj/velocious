@@ -1,44 +1,25 @@
 import BaseCommand from "../../../../cli/base-command.js"
-import path from "node:path"
-import toImportSpecifier from "../../../../utils/to-import-specifier.js"
 
 /**
  * @typedef {object} RunnerContext
  * @property {import("../../../../configuration.js").default} configuration - Configuration instance.
  * @property {import("../../../../database/drivers/base.js").default | undefined} db - Default database connection.
  * @property {Record<string, import("../../../../database/drivers/base.js").default>} dbs - Database connections keyed by identifier.
- * @property {string[]} args - CLI args after the script path.
+ * @property {string[]} args - CLI args after the code expression.
  */
 
-/**
- * @param {string} filePath - Absolute path to script file.
- * @returns {Promise<(context: RunnerContext) => Promise<unknown>>} - The default-exported async function.
- */
-async function importRunnerFunction(filePath) {
-  const runnerImport = await import(toImportSpecifier(filePath))
-  const runnerFunction = runnerImport.default
-
-  if (typeof runnerFunction !== "function") {
-    throw new Error(`Expected default export to be a function in: ${filePath}`)
-  }
-
-  return runnerFunction
-}
-
-/** Node command for running a custom script file in initialized app/DB context. */
+/** Node command for evaluating inline JavaScript in initialized app/DB context. */
 export default class RunnerCommand extends BaseCommand {
-  /** @returns {Promise<unknown>} - Resolves with the script function result. */
+  /** @returns {Promise<unknown>} - Resolves with the evaluated code result. */
   async execute() {
     const configuration = this.getConfiguration()
-    const scriptPath = this.runnerFilePath()
+    const code = this.runnerCode()
 
     await this.initializeRuntime()
     await configuration.ensureGlobalConnections()
 
     try {
-      const runnerFunction = await importRunnerFunction(scriptPath)
-
-      return await runnerFunction(this.buildRunnerContext())
+      return await this.evaluateCode(code)
     } finally {
       await configuration.closeDatabaseConnections()
     }
@@ -55,18 +36,18 @@ export default class RunnerCommand extends BaseCommand {
     }
   }
 
-  /** @returns {string} - Absolute path to the user-provided runner script. */
-  runnerFilePath() {
-    const filePath = this.processArgs[1]
+  /** @returns {string} - Inline JavaScript code to evaluate. */
+  runnerCode() {
+    const code = this.processArgs.slice(1).join(" ").trim()
 
-    if (!filePath) {
-      throw new Error("Missing file path argument. Usage: npx velocious runner [file-path]")
+    if (!code) {
+      throw new Error("Missing code argument. Usage: npx velocious runner \"<javascript-code>\"")
     }
 
-    return path.resolve(this.directory(), filePath)
+    return code
   }
 
-  /** @returns {RunnerContext} - Runtime context passed to the script function. */
+  /** @returns {RunnerContext} - Runtime context passed to evaluated code. */
   buildRunnerContext() {
     const configuration = this.getConfiguration()
     const dbs = configuration.getCurrentConnections()
@@ -78,5 +59,23 @@ export default class RunnerCommand extends BaseCommand {
       dbs,
       args: this.processArgs.slice(2)
     }
+  }
+
+  /**
+   * @param {string} code - JavaScript code to evaluate.
+   * @returns {Promise<unknown>} - Evaluated code result.
+   */
+  async evaluateCode(code) {
+    const context = this.buildRunnerContext()
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
+    const runFunction = new AsyncFunction(
+      "configuration",
+      "db",
+      "dbs",
+      "args",
+      code
+    )
+
+    return await runFunction(context.configuration, context.db, context.dbs, context.args)
   }
 }
