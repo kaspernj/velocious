@@ -573,6 +573,18 @@ export default class CreateEvents extends Migration {
 npx velocious db:migrate
 ```
 
+Run project seeds from `src/db/seed.js` (default export should be an async function):
+
+```bash
+npx velocious db:seed
+```
+
+Run custom scripts with initialized app/database context:
+
+```bash
+npx velocious runner src/scripts/my-task.js
+```
+
 By default, migrations write `db/structure-<identifier>.sql` files for each database. Disable writing for specific environments in your configuration:
 
 ```js
