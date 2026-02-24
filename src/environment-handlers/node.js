@@ -15,6 +15,9 @@ import CliCommandsBackgroundJobsWorker from "./node/cli/commands/background-jobs
 import CliCommandsBackgroundJobsRunner from "./node/cli/commands/background-jobs-runner.js"
 import CliCommandsConsole from "./node/cli/commands/console.js"
 import CliCommandsDbSchemaDump from "./node/cli/commands/db/schema/dump.js"
+import CliCommandsDbSeed from "./node/cli/commands/db/seed.js"
+import CliCommandsRunner from "./node/cli/commands/runner.js"
+import CliCommandsRunScript from "./node/cli/commands/run-script.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
@@ -303,6 +306,30 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsDbSchemaDump(command) {
     return await this.forwardCommand(command, CliCommandsDbSchemaDump)
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsDbSeed(command) {
+    return await this.forwardCommand(command, CliCommandsDbSeed)
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsRunner(command) {
+    return await this.forwardCommand(command, CliCommandsRunner)
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsRunScript(command) {
+    return await this.forwardCommand(command, CliCommandsRunScript)
   }
 
   /**
