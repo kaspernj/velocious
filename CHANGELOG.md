@@ -1,6 +1,5 @@
 # Changelog
 
-- Generate explicit `static async count()` wrappers in `g:frontend-models` output so model classes support direct `Model.count()` calls without relying on inherited static methods.
 - Add a CanCan-style authorization library with request-scoped abilities, resource-defined `abilities()` rules, and `Model.accessible()` query filtering.
 - Add `g:frontend-models` generation from `backendProjects` resource config to create `src/frontend-models/*.js` classes.
 - Add a frontend model runtime base with first-iteration `find`, `update`, `destroy`, and attribute helpers.

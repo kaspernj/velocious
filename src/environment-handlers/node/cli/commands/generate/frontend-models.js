@@ -228,13 +228,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey || "id")}\n`
     fileContent += "    }\n"
     fileContent += "  }\n"
-    fileContent += "\n"
-    fileContent += "  /**\n"
-    fileContent += "   * @returns {Promise<number>} - Number of records matching the current query scope.\n"
-    fileContent += "   */\n"
-    fileContent += "  static async count() {\n"
-    fileContent += "    return await this.query().count()\n"
-    fileContent += "  }\n"
 
     if (relationships.length > 0) {
       fileContent += "\n"

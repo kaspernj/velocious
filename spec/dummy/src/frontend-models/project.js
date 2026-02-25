@@ -21,13 +21,6 @@ export default class Project extends FrontendModelBase {
   }
 
   /**
-   * @returns {Promise<number>} - Number of records matching the current query scope.
-   */
-  static async count() {
-    return await this.query().count()
-  }
-
-  /**
    * @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationship definitions.
    */
   static relationshipDefinitions() {

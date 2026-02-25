@@ -7,6 +7,7 @@ import Configuration from "../../../../src/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import fs from "fs/promises"
+import FrontendModelBase from "../../../../src/frontend-models/base.js"
 import path from "node:path"
 
 /**
@@ -50,8 +51,6 @@ describe("Cli - generate - frontend-models", () => {
     const userContents = await fs.readFile(userPath, "utf8")
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
-    expect(taskContents).toContain("static async count()")
-    expect(taskContents).toContain("return await this.query().count()")
     expect(taskContents).toContain("path: \"/api/frontend-models/tasks\"")
     expect(taskContents).toContain("\"index\":\"list\"")
     expect(taskContents).toContain("@typedef {object} TaskAttributes")
@@ -69,7 +68,6 @@ describe("Cli - generate - frontend-models", () => {
     expect(projectContents).toContain("tasksLoaded() { return /** @type {Array<import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\").loaded()) }")
 
     expect(userContents).toContain("class User extends FrontendModelBase")
-    expect(userContents).toContain("static async count()")
     expect(userContents).toContain("\"index\":\"index\"")
     expect(userContents).toContain("email() { return this.readAttribute(\"email\") }")
     expect(userContents).toContain("setEmail(newValue) { return this.setAttribute(\"email\", newValue) }")
@@ -172,5 +170,26 @@ describe("Cli - generate - frontend-models", () => {
     expect(generatedTaskContents).toContain("class Task extends FrontendModelBase")
 
     await fs.rm(outputDirectory, {force: true, recursive: true})
+  })
+
+  it("exposes inherited count() on generated frontend model classes", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({backendProjectsList: backendProjects}),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const generatedUserModule = await import(`${dummyDirectory()}/src/frontend-models/user.js`)
+    const GeneratedUser = generatedUserModule.default
+
+    expect(typeof GeneratedUser.count).toBe("function")
+    expect(Object.hasOwn(GeneratedUser, "count")).toBe(false)
+    expect(GeneratedUser.count).toBe(FrontendModelBase.count)
   })
 })

@@ -289,7 +289,6 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await User.find(5)`
 - `await User.findBy({email: "john@example.com"})`
 - `await User.findByOrFail({email: "john@example.com"})`
-- `await User.count()`
 - `await User.toArray()`
 - `await User.preload({projects: ["tasks"]}).toArray()`
 - `await Project`
