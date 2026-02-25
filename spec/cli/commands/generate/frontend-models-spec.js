@@ -50,6 +50,8 @@ describe("Cli - generate - frontend-models", () => {
     const userContents = await fs.readFile(userPath, "utf8")
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
+    expect(taskContents).toContain("static async count()")
+    expect(taskContents).toContain("return await this.query().count()")
     expect(taskContents).toContain("path: \"/api/frontend-models/tasks\"")
     expect(taskContents).toContain("\"index\":\"list\"")
     expect(taskContents).toContain("@typedef {object} TaskAttributes")
@@ -67,6 +69,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(projectContents).toContain("tasksLoaded() { return /** @type {Array<import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\").loaded()) }")
 
     expect(userContents).toContain("class User extends FrontendModelBase")
+    expect(userContents).toContain("static async count()")
     expect(userContents).toContain("\"index\":\"index\"")
     expect(userContents).toContain("email() { return this.readAttribute(\"email\") }")
     expect(userContents).toContain("setEmail(newValue) { return this.setAttribute(\"email\", newValue) }")

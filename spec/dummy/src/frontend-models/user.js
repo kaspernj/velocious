@@ -21,6 +21,13 @@ export default class User extends FrontendModelBase {
   }
 
   /**
+   * @returns {Promise<number>} - Number of records matching the current query scope.
+   */
+  static async count() {
+    return await this.query().count()
+  }
+
+  /**
    * @returns {UserAttributes["email"]} - Attribute value.
    */
   email() { return this.readAttribute("email") }
