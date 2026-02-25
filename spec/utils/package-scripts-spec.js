@@ -34,7 +34,7 @@ describe("package scripts", () => {
 
     expectNoPosixOnlyCommands(scripts)
     expect(scripts.build).toEqual("node scripts/clean-build.js && npm run compile")
-    expect(scripts.compile).toEqual("tsc -b && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js")
+    expect(scripts.compile).toEqual("tsc -b && npm run copy:ejs && npm run copy:templates && npm run copy:sqljs-wasm && node scripts/ensure-bin-executable.js")
     expect(scripts.prepublishOnly).toEqual("npm run build && node scripts/ensure-bin-executable.js")
     expect(scripts.test).toEqual("node scripts/run-tests.js")
   })
