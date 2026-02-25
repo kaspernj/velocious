@@ -534,6 +534,24 @@ describe("Controller frontend model actions", () => {
     MockFrontendModel.relationshipsMap = {}
   })
 
+  it("applies where params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        where: {
+          name: "One"
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.whereSqls).toEqual([
+      "\"mock_frontend_models\".\"name\" = \"One\""
+    ])
+  })
+
   it("returns one model from frontendFind", async () => {
     MockFrontendModel.data = [{id: "2", name: "Two"}]
 

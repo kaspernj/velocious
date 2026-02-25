@@ -750,6 +750,16 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {Record<string, any>} conditions - Root-model where conditions.
+   * @returns {import("./query.js").default<T>} - Query with where conditions.
+   */
+  static where(conditions) {
+    return this.query().where(conditions)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @returns {Promise<number>} - Number of loaded model instances.
    */
   static async count() {

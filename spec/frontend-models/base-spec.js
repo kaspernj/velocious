@@ -297,6 +297,29 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends where payload when using where(...).toArray()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User.where({name: "John"}).toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            where: {
+              name: "John"
+            }
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "John"}})
@@ -485,6 +508,38 @@ describe("Frontend models - base", () => {
               User: ["id", "email"]
             },
             where: {
+              email: "john@example.com"
+            }
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("merges chained where(...) conditions into findBy payload", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {email: "john@example.com", id: 5}
+      ]
+    })
+
+    try {
+      const user = await User.where({name: "John"}).findBy({email: "john@example.com"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            select: {
+              User: ["name", "email"]
+            },
+            where: {
+              name: "John",
               email: "john@example.com"
             }
           },

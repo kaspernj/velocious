@@ -215,6 +215,20 @@ function normalizeFrontendModelSearches(searches) {
 }
 
 /**
+ * @param {unknown} where - Where payload.
+ * @returns {Record<string, any> | null} - Normalized where hash.
+ */
+function normalizeFrontendModelWhere(where) {
+  if (!where) return null
+
+  if (!isPlainObject(where)) {
+    throw new Error(`Invalid where type: ${typeof where}`)
+  }
+
+  return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(where)))
+}
+
+/**
  * @param {string[]} path - Relationship path.
  * @returns {Record<string, any>} - Join object.
  */
@@ -516,6 +530,12 @@ export default class FrontendModelController extends Controller {
       query = query.preload(preload)
     }
 
+    const where = this.frontendModelWhere()
+
+    if (where) {
+      this.applyFrontendModelWhere({query, where})
+    }
+
     const searches = this.frontendModelSearches()
 
     for (const search of searches) {
@@ -544,6 +564,13 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelSearches() {
     return normalizeFrontendModelSearches(this.frontendModelParams().searches)
+  }
+
+  /**
+   * @returns {Record<string, any> | null} - Frontend where filters.
+   */
+  frontendModelWhere() {
+    return normalizeFrontendModelWhere(this.frontendModelParams().where)
   }
 
   /**
@@ -643,6 +670,44 @@ export default class FrontendModelController extends Controller {
     }
 
     query.where(`${columnSql} ${sqlOperator} ${query.driver.quote(search.value)}`)
+  }
+
+  /**
+   * @param {object} args - Where args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {Record<string, any>} args.where - Root-model where conditions.
+   * @returns {void}
+   */
+  applyFrontendModelWhere({query, where}) {
+    const modelClass = this.frontendModelClass()
+    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
+    const rootTableReference = query.getTableReferenceForJoin()
+
+    for (const [attributeName, value] of Object.entries(where)) {
+      const columnName = attributeNameToColumnNameMap[attributeName]
+
+      if (!columnName) {
+        throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
+      }
+
+      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+
+      if (Array.isArray(value)) {
+        if (value.length === 0) {
+          query.where("1=0")
+        } else {
+          query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(entry)).join(", ")})`)
+        }
+
+        continue
+      }
+
+      if (value == null) {
+        query.where(`${columnSql} IS NULL`)
+      } else {
+        query.where(`${columnSql} = ${query.driver.quote(value)}`)
+      }
+    }
   }
 
   /**
