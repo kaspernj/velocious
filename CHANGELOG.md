@@ -147,3 +147,5 @@
 - Normalize route action-name resolution to treat slash-delimited actions like `current-user/update` as `currentUserUpdate`, with resolver + CLI normalization updates and regression coverage.
 - Bump `@eslint/js` from `9.39.2` to `10.0.1` and `eslint-plugin-jsdoc` from `62.5.5` to `62.7.0`.
 - Add `cause` when rethrowing errors in caught-error paths and remove useless initial assignments to satisfy ESLint 10 recommended rules (`preserve-caught-error`, `no-useless-assignment`).
+- Add `FrontendModelBase.count()` / query `count()` for generated frontend models, returning the current index-query result size for model-first dashboard metrics.
+- Add frontend-model query `search(path, column, operator, value)` support (`eq`/`notEq`/`gt`/`gteq`/`lt`/`lteq`) and apply `searches` payload filters in built-in `frontendIndex`.

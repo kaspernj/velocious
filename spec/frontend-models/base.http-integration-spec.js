@@ -169,6 +169,20 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("count loads through real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const usersCount = await HttpFrontendModel.count()
+
+        expect(usersCount).toEqual(2)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("findBy matches numeric id conditions against string ids over real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

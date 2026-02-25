@@ -208,6 +208,95 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("returns model count with count", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {email: "john@example.com", id: 5, name: "John"},
+        {email: "jane@example.com", id: 6, name: "Jane"}
+      ]
+    })
+
+    try {
+      const usersCount = await User.count()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {},
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(usersCount).toEqual(2)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("sends searches payload when using search(...).toArray()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      const oneDayAgo = new Date("2026-02-24T10:00:00.000Z")
+
+      await User
+        .search([], "createdAt", "gteq", oneDayAgo)
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "createdAt",
+                operator: "gteq",
+                path: [],
+                value: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("sends relationship-path searches payload when using search(...).count()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: [{id: 1}, {id: 2}]})
+
+    try {
+      const oneDayAgo = new Date("2026-02-24T10:00:00.000Z")
+      const usersCount = await User
+        .search(["accountUsers", "account"], "createdAt", "gteq", oneDayAgo)
+        .count()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "createdAt",
+                operator: "gteq",
+                path: ["accountUsers", "account"],
+                value: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(usersCount).toEqual(2)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "John"}})

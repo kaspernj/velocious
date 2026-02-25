@@ -750,6 +750,28 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @returns {Promise<number>} - Number of loaded model instances.
+   */
+  static async count() {
+    return await this.query().count()
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {string[]} path - Relationship path.
+   * @param {string} column - Column or attribute name.
+   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {any} value - Search value.
+   * @returns {FrontendModelQuery<T>} - Query builder with search filter.
+   */
+  static search(path, column, operator, value) {
+    return this.query().search(path, column, operator, value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @returns {FrontendModelQuery<T>} - Query builder.
    */
   static query() {
