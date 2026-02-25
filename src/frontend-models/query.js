@@ -193,8 +193,25 @@ export default class FrontendModelQuery {
   constructor({modelClass, preload = {}}) {
     this.modelClass = modelClass
     this._preload = normalizePreload(preload)
+    this._where = {}
     this._searches = []
     this._select = {}
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Root-model where conditions.
+   * @returns {this} - Query with merged where conditions.
+   */
+  where(conditions) {
+    this.modelClass.assertFindByConditions(conditions)
+    const normalizedConditions = normalizeFindConditions(conditions)
+
+    this._where = {
+      ...this._where,
+      ...normalizedConditions
+    }
+
+    return this
   }
 
   /**
@@ -311,13 +328,25 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload where hash when present.
+   */
+  wherePayload() {
+    if (Object.keys(this._where).length === 0) return {}
+
+    return {
+      where: this._where
+    }
+  }
+
+  /**
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async toArray() {
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
       ...this.searchPayload(),
-      ...this.selectPayload()
+      ...this.selectPayload(),
+      ...this.wherePayload()
     })
 
     if (!response || typeof response !== "object") {
@@ -359,12 +388,16 @@ export default class FrontendModelQuery {
   async findBy(conditions) {
     this.modelClass.assertFindByConditions(conditions)
     const normalizedConditions = normalizeFindConditions(conditions)
+    const mergedWhere = {
+      ...this._where,
+      ...normalizedConditions
+    }
 
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
       ...this.searchPayload(),
-      ...this.selectPayload(Object.keys(normalizedConditions)),
-      where: normalizedConditions
+      ...this.selectPayload(Object.keys(mergedWhere)),
+      where: mergedWhere
     })
 
     if (!response || typeof response !== "object") {
@@ -376,7 +409,7 @@ export default class FrontendModelQuery {
     for (const modelData of models) {
       const model = this.modelClass.instantiateFromResponse(modelData)
 
-      if (this.modelClass.matchesFindByConditions(model, normalizedConditions)) {
+      if (this.modelClass.matchesFindByConditions(model, mergedWhere)) {
         return model
       }
     }

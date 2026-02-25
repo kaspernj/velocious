@@ -191,6 +191,43 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("where(...).toArray() filters records through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const models = await BrowserFrontendModel.where({email: "john@example.com"}).toArray()
+
+      expect(models.length).toEqual(1)
+      expect(models[0].id()).toEqual("2")
+      expect(models[0].email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("where(...).findBy(...) merges conditions through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel
+        .where({email: "john@example.com"})
+        .findBy({id: "2"})
+
+      expect(model?.id()).toEqual("2")
+      expect(model?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findBy matches numeric id conditions against string ids over real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return

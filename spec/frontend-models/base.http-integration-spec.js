@@ -183,6 +183,39 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("where(...).toArray() filters records through real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const models = await HttpFrontendModel.where({email: "john@example.com"}).toArray()
+
+        expect(models.length).toEqual(1)
+        expect(models[0].id()).toEqual("2")
+        expect(models[0].email()).toEqual("john@example.com")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("where(...).findBy(...) merges conditions through real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const model = await HttpFrontendModel
+          .where({email: "john@example.com"})
+          .findBy({id: "2"})
+
+        expect(model?.id()).toEqual("2")
+        expect(model?.email()).toEqual("john@example.com")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("findBy matches numeric id conditions against string ids over real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

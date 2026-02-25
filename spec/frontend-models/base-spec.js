@@ -297,6 +297,7 @@ describe("Frontend models - base", () => {
     }
   })
 
+
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "John"}})
