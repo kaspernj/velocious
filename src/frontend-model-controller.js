@@ -153,6 +153,85 @@ function normalizeFrontendModelSelect(select) {
   return normalized
 }
 
+/**
+ * @typedef {object} FrontendModelSearch
+ * @property {string[]} path - Relationship path.
+ * @property {string} column - Column or attribute name.
+ * @property {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {any} value - Search value.
+ */
+
+/**
+ * @param {unknown} searches - Search payload.
+ * @returns {FrontendModelSearch[]} - Normalized searches.
+ */
+function normalizeFrontendModelSearches(searches) {
+  if (!searches) return []
+
+  if (!Array.isArray(searches)) {
+    throw new Error(`Invalid searches type: ${typeof searches}`)
+  }
+
+  /** @type {FrontendModelSearch[]} */
+  const normalized = []
+  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
+
+  for (const search of searches) {
+    if (!isPlainObject(search)) {
+      throw new Error(`Invalid search entry type: ${typeof search}`)
+    }
+
+    const path = search.path
+    const column = search.column
+    const operator = search.operator
+
+    if (!Array.isArray(path)) {
+      throw new Error("Invalid search path: expected an array")
+    }
+
+    for (const pathEntry of path) {
+      if (typeof pathEntry !== "string" || pathEntry.length < 1) {
+        throw new Error("Invalid search path entry: expected non-empty string")
+      }
+    }
+
+    if (typeof column !== "string" || column.length < 1) {
+      throw new Error("Invalid search column: expected non-empty string")
+    }
+
+    if (typeof operator !== "string" || !supportedOperators.has(operator)) {
+      throw new Error(`Invalid search operator: ${operator}`)
+    }
+
+    normalized.push({
+      column,
+      operator: /** @type {FrontendModelSearch["operator"]} */ (operator),
+      path: [...path],
+      value: search.value
+    })
+  }
+
+  return normalized
+}
+
+/**
+ * @param {string[]} path - Relationship path.
+ * @returns {Record<string, any>} - Join object.
+ */
+function buildFrontendModelJoinObjectFromPath(path) {
+  /** @type {Record<string, any>} */
+  const joinObject = {}
+  /** @type {Record<string, any>} */
+  let currentNode = joinObject
+
+  for (const relationshipName of path) {
+    currentNode[relationshipName] = {}
+    currentNode = currentNode[relationshipName]
+  }
+
+  return joinObject
+}
+
 /** Controller with built-in frontend model resource actions. */
 export default class FrontendModelController extends Controller {
   /** @type {Record<string, any> | undefined} */
@@ -437,6 +516,12 @@ export default class FrontendModelController extends Controller {
       query = query.preload(preload)
     }
 
+    const searches = this.frontendModelSearches()
+
+    for (const search of searches) {
+      this.applyFrontendModelSearch({query, search})
+    }
+
     return await query.toArray()
   }
 
@@ -452,6 +537,112 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelSelect() {
     return normalizeFrontendModelSelect(this.frontendModelParams().select)
+  }
+
+  /**
+   * @returns {FrontendModelSearch[]} - Frontend search filters.
+   */
+  frontendModelSearches() {
+    return normalizeFrontendModelSearches(this.frontendModelParams().searches)
+  }
+
+  /**
+   * @param {object} args - Search args.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Root model class.
+   * @param {string[]} args.path - Relationship path.
+   * @returns {typeof import("./database/record/index.js").default} - Target model class.
+   */
+  frontendModelSearchTargetModelClass({modelClass, path}) {
+    let targetModelClass = modelClass
+
+    for (const relationshipName of path) {
+      const relationship = targetModelClass.getRelationshipsMap()[relationshipName]
+
+      if (!relationship) {
+        throw new Error(`Unknown search relationship "${relationshipName}" for ${targetModelClass.name}`)
+      }
+
+      const relationshipTargetModelClass = relationship.getTargetModelClass()
+
+      if (!relationshipTargetModelClass) {
+        throw new Error(`No target model class for ${targetModelClass.name}#${relationshipName}`)
+      }
+
+      targetModelClass = relationshipTargetModelClass
+    }
+
+    return targetModelClass
+  }
+
+  /**
+   * @param {object} args - Search args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelSearch} args.search - Search filter.
+   * @returns {void}
+   */
+  applyFrontendModelSearch({query, search}) {
+    const modelClass = this.frontendModelClass()
+    const targetModelClass = this.frontendModelSearchTargetModelClass({
+      modelClass,
+      path: search.path
+    })
+    const columnName = targetModelClass.getAttributeNameToColumnNameMap()[search.column]
+
+    if (!columnName) {
+      throw new Error(`Unknown search column "${search.column}" for ${targetModelClass.name}`)
+    }
+
+    if (search.path.length > 0) {
+      query.joins(buildFrontendModelJoinObjectFromPath(search.path))
+    }
+
+    const tableReference = query.getTableReferenceForJoin(...search.path)
+    const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
+    const operatorMap = {
+      eq: "=",
+      gt: ">",
+      gteq: ">=",
+      lt: "<",
+      lteq: "<=",
+      notEq: "!="
+    }
+    const sqlOperator = operatorMap[search.operator]
+
+    if (search.operator === "eq") {
+      if (Array.isArray(search.value)) {
+        if (search.value.length === 0) {
+          query.where("1=0")
+        } else {
+          query.where(`${columnSql} IN (${search.value.map((entry) => query.driver.quote(entry)).join(", ")})`)
+        }
+
+        return
+      }
+
+      if (search.value === null) {
+        query.where(`${columnSql} IS NULL`)
+        return
+      }
+    }
+
+    if (search.operator === "notEq") {
+      if (Array.isArray(search.value)) {
+        if (search.value.length === 0) {
+          query.where("1=1")
+        } else {
+          query.where(`${columnSql} NOT IN (${search.value.map((entry) => query.driver.quote(entry)).join(", ")})`)
+        }
+
+        return
+      }
+
+      if (search.value === null) {
+        query.where(`${columnSql} IS NOT NULL`)
+        return
+      }
+    }
+
+    query.where(`${columnSql} ${sqlOperator} ${query.driver.quote(search.value)}`)
   }
 
   /**

@@ -112,6 +112,18 @@ class MockFrontendModel {
     {id: "2", name: "Two"}
   ]
   static lastQuery = null
+  static relationshipsMap = {}
+
+  /**
+   * @returns {Record<string, string>}
+   */
+  static getAttributeNameToColumnNameMap() {
+    return {
+      createdAt: "created_at",
+      id: "id",
+      name: "name"
+    }
+  }
 
   /** @param {Record<string, any>} attributes */
   constructor(attributes) {
@@ -122,7 +134,7 @@ class MockFrontendModel {
    * @returns {Record<string, any>}
    */
   static getRelationshipsMap() {
-    return {}
+    return this.relationshipsMap
   }
 
   /** @returns {Promise<MockFrontendModel[]>} */
@@ -183,15 +195,22 @@ class MockFrontendModelQuery {
   constructor(modelClass) {
     this.modelClass = modelClass
     this.conditions = {}
+    this.joinsArgs = []
     this.preloads = []
+    this.whereSqls = []
     this.modelClass.lastQuery = this
   }
 
   /**
-   * @param {Record<string, any>} conditions
+   * @param {Record<string, any> | string} conditions
    * @returns {this}
    */
   where(conditions) {
+    if (typeof conditions === "string") {
+      this.whereSqls.push(conditions)
+      return this
+    }
+
     this.conditions = {...this.conditions, ...conditions}
     return this
   }
@@ -203,6 +222,34 @@ class MockFrontendModelQuery {
   preload(preload) {
     this.preloads.push(preload)
     return this
+  }
+
+  /**
+   * @param {Record<string, any>} _joinObject
+   * @returns {this}
+   */
+  joins(_joinObject) {
+    this.joinsArgs.push(_joinObject)
+    return this
+  }
+
+  /**
+   * @param {...string} path
+   * @returns {string}
+   */
+  getTableReferenceForJoin(...path) {
+    if (path.length === 0) return "mock_frontend_models"
+
+    return path.join("__")
+  }
+
+  /** @returns {{quote: (value: any) => string, quoteColumn: (value: string) => string, quoteTable: (value: string) => string}} */
+  get driver() {
+    return {
+      quote: (value) => JSON.stringify(value),
+      quoteColumn: (value) => `"${value}"`,
+      quoteTable: (value) => `"${value}"`
+    }
   }
 
   /** @returns {Promise<MockFrontendModel[]>} */
@@ -387,6 +434,104 @@ describe("Controller frontend model actions", () => {
       ],
       status: "success"
     })
+  })
+
+  it("applies search params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        searches: [
+          {
+            column: "createdAt",
+            operator: "gteq",
+            path: [],
+            value: "2026-02-24T10:00:00.000Z"
+          }
+        ]
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.whereSqls).toEqual([
+      "\"mock_frontend_models\".\"created_at\" >= \"2026-02-24T10:00:00.000Z\""
+    ])
+  })
+
+  it("applies relationship-path search params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    class MockAccountModel {
+      /**
+       * @returns {Record<string, string>}
+       */
+      static getAttributeNameToColumnNameMap() {
+        return {
+          createdAt: "created_at"
+        }
+      }
+
+      /**
+       * @returns {Record<string, any>}
+       */
+      static getRelationshipsMap() {
+        return {}
+      }
+    }
+
+    class MockAccountUserModel {
+      /**
+       * @returns {Record<string, string>}
+       */
+      static getAttributeNameToColumnNameMap() {
+        return {}
+      }
+
+      /**
+       * @returns {Record<string, any>}
+       */
+      static getRelationshipsMap() {
+        return {
+          account: {
+            getTargetModelClass: () => MockAccountModel
+          }
+        }
+      }
+    }
+
+    MockFrontendModel.relationshipsMap = {
+      accountUsers: {
+        getTargetModelClass: () => MockAccountUserModel
+      }
+    }
+
+    const controller = buildController({
+      params: {
+        searches: [
+          {
+            column: "createdAt",
+            operator: "gteq",
+            path: ["accountUsers", "account"],
+            value: "2026-02-24T10:00:00.000Z"
+          }
+        ]
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.joinsArgs).toEqual([
+      {
+        accountUsers: {
+          account: {}
+        }
+      }
+    ])
+    expect(MockFrontendModel.lastQuery?.whereSqls).toEqual([
+      "\"accountUsers__account\".\"created_at\" >= \"2026-02-24T10:00:00.000Z\""
+    ])
+    MockFrontendModel.relationshipsMap = {}
   })
 
   it("returns one model from frontendFind", async () => {

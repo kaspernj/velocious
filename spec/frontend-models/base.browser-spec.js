@@ -175,6 +175,22 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("count loads through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const usersCount = await BrowserFrontendModel.count()
+
+      expect(usersCount).toEqual(2)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findBy matches numeric id conditions against string ids over real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return

@@ -193,6 +193,7 @@ export default class FrontendModelQuery {
   constructor({modelClass, preload = {}}) {
     this.modelClass = modelClass
     this._preload = normalizePreload(preload)
+    this._searches = []
     this._select = {}
   }
 
@@ -237,6 +238,42 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {string[]} path - Relationship path.
+   * @param {string} column - Column or attribute name.
+   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {any} value - Search value.
+   * @returns {this} - Query with appended search.
+   */
+  search(path, column, operator, value) {
+    if (!Array.isArray(path)) {
+      throw new Error(`search path must be an array, got: ${typeof path}`)
+    }
+
+    for (const pathEntry of path) {
+      if (typeof pathEntry !== "string" || pathEntry.length < 1) {
+        throw new Error("search path entries must be non-empty strings")
+      }
+    }
+
+    if (typeof column !== "string" || column.length < 1) {
+      throw new Error("search column must be a non-empty string")
+    }
+
+    if (typeof operator !== "string" || operator.length < 1) {
+      throw new Error("search operator must be a non-empty string")
+    }
+
+    this._searches.push({
+      column,
+      operator,
+      path: [...path],
+      value
+    })
+
+    return this
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload preload hash when present.
    */
   preloadPayload() {
@@ -258,11 +295,28 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload searches array when present.
+   */
+  searchPayload() {
+    if (this._searches.length === 0) return {}
+
+    return {
+      searches: this._searches.map((search) => ({
+        column: search.column,
+        operator: search.operator,
+        path: [...search.path],
+        value: search.value
+      }))
+    }
+  }
+
+  /**
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async toArray() {
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
+      ...this.searchPayload(),
       ...this.selectPayload()
     })
 
@@ -273,6 +327,15 @@ export default class FrontendModelQuery {
     const models = Array.isArray(response.models) ? response.models : []
 
     return /** @type {InstanceType<T>[]} */ (models.map((model) => this.modelClass.instantiateFromResponse(model)))
+  }
+
+  /**
+   * @returns {Promise<number>} - Number of loaded model instances.
+   */
+  async count() {
+    const models = await this.toArray()
+
+    return models.length
   }
 
   /**
@@ -299,6 +362,7 @@ export default class FrontendModelQuery {
 
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
+      ...this.searchPayload(),
       ...this.selectPayload(Object.keys(normalizedConditions)),
       where: normalizedConditions
     })
