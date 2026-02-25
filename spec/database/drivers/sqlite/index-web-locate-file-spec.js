@@ -8,13 +8,4 @@ describe("database - sqlite web driver - locateFile", () => {
 
     expect(sqlWasmFile).toContain("database/drivers/sqlite/sql/sql-wasm.wasm")
   })
-
-  it("uses custom locateFile callback when provided", () => {
-    const locateFileResolver = (file) => `/assets/sqljs/${file}`
-    const driver = new SqliteWebDriver({locateFile: locateFileResolver, name: "test-db"}, {debug: false})
-    const locateFile = driver.sqlJsLocateFile()
-    const sqlWasmFile = locateFile("sql-wasm.wasm")
-
-    expect(sqlWasmFile).toBe("/assets/sqljs/sql-wasm.wasm")
-  })
 })

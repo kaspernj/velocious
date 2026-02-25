@@ -62,7 +62,6 @@
  * @property {string} [password] - Password for the database user.
  * @property {number} [port] - Database port.
  * @property {string} [name] - Friendly name for the configuration.
- * @property {(file: string) => string} [locateFile] - Optional sqlite-web sql.js wasm resolver (`initSqlJs({locateFile})`).
  * @property {boolean} [readOnly] - Whether writes should be blocked for this database.
  * @property {string} [schema] - Default schema for unqualified table lookups (MSSQL).
  * @property {object} [record] - Record-level configuration.

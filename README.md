@@ -325,24 +325,7 @@ Available transport options:
 - `credentials`
 - `request` (custom request handler)
 
-For sqlite web databases, Velocious now loads `sql.js` wasm from the package itself by default (no hardcoded CDN URL). You can still override wasm resolution per database config with `locateFile`:
-
-```js
-import SqliteDriver from "velocious/build/src/database/drivers/sqlite/index.web.js"
-
-export default new Configuration({
-  database: {
-    test: {
-      default: {
-        driver: SqliteDriver,
-        type: "sqlite",
-        name: "app-db",
-        locateFile: (file) => `/assets/sqljs/${file}`
-      }
-    }
-  }
-})
-```
+For sqlite web databases, Velocious now loads `sql.js` wasm from the package itself by default (no hardcoded CDN URL).
 
 Frontend-model command transport preserves `Date` and `undefined` by encoding them as marker objects in JSON and decoding them on the other side:
 - `Date` -> `{__velocious_type: "date", value: "<ISO string>"}`
