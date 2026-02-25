@@ -397,7 +397,7 @@ export default class FrontendModelQuery {
       ...this.preloadPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(Object.keys(mergedWhere)),
-      ...this.wherePayload()
+      where: mergedWhere
     })
 
     if (!response || typeof response !== "object") {
