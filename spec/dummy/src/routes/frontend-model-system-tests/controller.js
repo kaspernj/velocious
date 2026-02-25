@@ -3,6 +3,41 @@ import Controller from "../../../../../src/controller.js"
 /** Dummy backend endpoint used by browser frontend-model integration specs. */
 export default class FrontendModelSystemTestsController extends Controller {
   /**
+   * @param {Record<string, any>} model - Model payload.
+   * @param {Record<string, any> | undefined} where - Where payload.
+   * @returns {boolean} - Whether model matches where conditions.
+   */
+  matchesWhere(model, where) {
+    if (!where || typeof where !== "object") return true
+
+    for (const [attributeName, expectedValue] of Object.entries(where)) {
+      const actualValue = model[attributeName]
+
+      if (Array.isArray(expectedValue)) {
+        if (!expectedValue.includes(actualValue)) {
+          return false
+        }
+
+        continue
+      }
+
+      if (expectedValue === null) {
+        if (actualValue !== null) {
+          return false
+        }
+
+        continue
+      }
+
+      if (actualValue !== expectedValue) {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  /**
    * @param {Record<string, any>} attributes - Model attributes.
    * @param {string[]} modelNames - Candidate model class names.
    * @param {Record<string, any> | undefined} select - Select payload.
@@ -69,6 +104,7 @@ export default class FrontendModelSystemTestsController extends Controller {
   async frontendIndex() {
     const preload = this.params().preload
     const select = this.params().select
+    const where = /** @type {Record<string, any> | undefined} */ (this.params().where)
     const preloadingTasks = preload && typeof preload === "object" && "tasks" in preload
     const preloadPayload = this.preloadModelPayload()
     const selectedPreloadTasks = preloadPayload.__preloadedRelationships.tasks.map((task) => this.applySelect(
@@ -103,13 +139,14 @@ export default class FrontendModelSystemTestsController extends Controller {
       nickName: null,
       tags: ["a", "b"]
     }, ["HttpFrontendModel", "BrowserFrontendModel"], select)
+    const models = [
+      preloadingTasks ? selectedPreloadProject : firstDefaultModel,
+      secondDefaultModel
+    ].filter((model) => this.matchesWhere(model, where))
 
     await this.render({
       json: {
-        models: [
-          preloadingTasks ? selectedPreloadProject : firstDefaultModel,
-          secondDefaultModel
-        ],
+        models,
         status: "success"
       }
     })
