@@ -1,10 +1,8 @@
-import path from "node:path"
-import {fileURLToPath} from "node:url"
-
 /**
  * @typedef {object} AddRouteOptions
  * @property {Record<string, any>} [params] - Static params to merge for matched route.
  * @property {[typeof import("../controller.js").default, string]} to - Controller class and action tuple.
+ * @property {string} [viewPath] - Optional view path for controllers using renderView().
  */
 
 /** Lightweight plugin route DSL for route-hook backed endpoints. */
@@ -52,6 +50,7 @@ export default class PluginRoutes {
 
     const to = options?.to
     const staticParams = options?.params
+    const viewPath = options?.viewPath
     const controllerClass = to?.[0]
     const action = to?.[1]
 
@@ -67,6 +66,10 @@ export default class PluginRoutes {
       ? controllerClass.name
       : "pluginController"
 
+    if (viewPath !== undefined && typeof viewPath !== "string") {
+      throw new Error(`Expected route viewPath to be a string when provided, got: ${String(viewPath)}`)
+    }
+
     this.configuration.addRouteResolverHook(({currentPath, request}) => {
       if (request.httpMethod() !== method) return null
       const matchedParams = this.matchPath(routePath, currentPath)
@@ -81,7 +84,7 @@ export default class PluginRoutes {
           ...(staticParams || {}),
           ...matchedParams
         },
-        viewPath: path.dirname(fileURLToPath(import.meta.url))
+        viewPath: viewPath || `${this.configuration.getDirectory()}/src/routes`
       }
     })
   }
