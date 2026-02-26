@@ -1,6 +1,8 @@
 // @ts-check
 
 import Configuration from "../../src/configuration.js"
+import AppRoutes from "../../src/routes/app-routes.js"
+import Client from "../../src/http-server/client/index.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import dummyRoutes from "../dummy/src/config/routes.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
@@ -59,14 +61,13 @@ describe("plugins - sqljs wasm route", () => {
     }
 
     const contentType = response.headers["Content-Type"]?.[0]
+    const responseFilePath = response.getFilePath()
     const responseBody = response.getBody()
 
     expect(contentType).toEqual("application/wasm")
-    expect(responseBody instanceof Uint8Array).toEqual(true)
-    expect(responseBody[0]).toEqual(0)
-    expect(responseBody[1]).toEqual(97)
-    expect(responseBody[2]).toEqual(115)
-    expect(responseBody[3]).toEqual(109)
+    expect(typeof responseFilePath === "string").toEqual(true)
+    expect(responseFilePath?.endsWith("/sql-wasm.wasm")).toEqual(true)
+    expect(responseBody).toEqual(null)
   })
 
   it("builds locateFile URLs for backend-hosted sql.js assets", () => {
@@ -78,5 +79,58 @@ describe("plugins - sqljs wasm route", () => {
     const sqlWasmUrl = locateFile("sql-wasm.wasm")
 
     expect(sqlWasmUrl).toEqual("http://127.0.0.1:4501/velocious/sqljs/sql-wasm.wasm")
+  })
+
+  it("streams wasm bytes through the HTTP client send pipeline", async () => {
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: dummyDirectory(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {console: true, file: false, levels: ["info", "warn", "error"]}
+    })
+
+    installSqlJsWasmRoute({configuration})
+    const routes = await AppRoutes.getRoutes(configuration)
+
+    configuration.setRoutes(routes)
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+    const closePromise = new Promise((resolve) => {
+      const client = new Client({
+        clientCount: 11,
+        configuration
+      })
+
+      client.events.on("output", (output) => outputs.push(output))
+      client.events.on("close", resolve)
+      client.onWrite(Buffer.from([
+        "GET /velocious/sqljs/sql-wasm.wasm HTTP/1.1",
+        "Host: example.com",
+        "Connection: close",
+        "",
+        ""
+      ].join("\r\n"), "utf8"))
+    })
+
+    await closePromise
+
+    const headerOutput = outputs.find((output) => typeof output === "string")
+    const binaryChunks = outputs.filter((output) => output instanceof Uint8Array)
+    const wasmPrefixChunk = binaryChunks.find((chunk) => chunk.length >= 4)
+
+    expect(typeof headerOutput).toEqual("string")
+    expect(headerOutput.includes("200 OK")).toEqual(true)
+    expect(headerOutput.includes("Content-Type: application/wasm")).toEqual(true)
+    expect(Boolean(wasmPrefixChunk)).toEqual(true)
+    expect(wasmPrefixChunk[0]).toEqual(0)
+    expect(wasmPrefixChunk[1]).toEqual(97)
+    expect(wasmPrefixChunk[2]).toEqual(115)
+    expect(wasmPrefixChunk[3]).toEqual(109)
   })
 })

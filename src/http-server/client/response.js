@@ -4,6 +4,9 @@ export default class VelociousHttpServerClientResponse {
   /** @type {string | Uint8Array | null} */
   body = null
 
+  /** @type {string | null} */
+  filePath = null
+
   /** @type {Record<string, string[]>} */
   headers = {}
 
@@ -69,7 +72,24 @@ export default class VelociousHttpServerClientResponse {
    * @returns {void} - No return value.
    */
   setBody(value) {
+    this.filePath = null
     this.body = value
+  }
+
+  /**
+   * @returns {string | null} - File path.
+   */
+  getFilePath() {
+    return this.filePath
+  }
+
+  /**
+   * @param {string} path - File path.
+   * @returns {void} - No return value.
+   */
+  setFilePath(path) {
+    this.filePath = path
+    this.body = null
   }
 
   /**

@@ -230,6 +230,34 @@ export default class VelociousController {
     throw new Error("renderText stub")
   }
 
+  /**
+   * Streams a file response from disk without loading the full file into controller memory.
+   * @param {string} filePath - File path.
+   * @param {object} [args] - Options object.
+   * @param {string} [args.contentType] - Content type.
+   * @param {number | string} [args.status] - Status.
+   * @returns {void} - No return value.
+   */
+  sendFile(filePath, args = {}) {
+    const {contentType, status, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    if (typeof filePath !== "string" || filePath.length < 1) {
+      throw new Error(`Expected file path to be a non-empty string, got: ${String(filePath)}`)
+    }
+
+    if (contentType) {
+      this._response.setHeader("Content-Type", contentType)
+    }
+
+    if (status) {
+      this._response.setStatus(status)
+    }
+
+    this._response.setFilePath(filePath)
+  }
+
   /** @returns {import("./authorization/ability.js").default | undefined} - Current ability for request scope. */
   currentAbility() {
     return this.getConfiguration().getCurrentAbility()

@@ -153,3 +153,4 @@
 - Revert sqlite web driver packaged wasm default and restore configurable `locateFile(file)` support, with default fallback to `https://sql.js.org/dist/<file>`.
 - Add a `sqljs-wasm-route` plugin helper that serves `sql.js` dist assets from a Velocious backend route, plus `sqlJsLocateFileFromBackend(...)` helper for sqlite-web `locateFile` callbacks.
 - Extend route resolver hooks to allow optional `controllerPath`/`viewPath` overrides so plugin-style libraries can resolve controllers outside app route directories.
+- Add `Controller#sendFile(path, {contentType, status})` with streamed HTTP output so controllers can send files (for example wasm assets) without loading full files into memory first.

@@ -1,4 +1,3 @@
-import fs from "node:fs/promises"
 import path from "node:path"
 
 import Controller from "../controller.js"
@@ -30,11 +29,9 @@ export default class SqlJsWasmRouteController extends Controller {
     }
 
     const assetPath = path.join(sqlJsDistDirectory, sqlJsAssetFileName)
-    const assetBody = await fs.readFile(assetPath)
 
     this.response().setHeader("Cache-Control", "public, max-age=3600")
-    this.response().setHeader("Content-Type", this.contentType(sqlJsAssetFileName))
-    this.response().setBody(assetBody)
+    this.sendFile(assetPath, {contentType: this.contentType(sqlJsAssetFileName)})
   }
 
   /**
