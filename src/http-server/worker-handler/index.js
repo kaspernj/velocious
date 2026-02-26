@@ -116,7 +116,7 @@ export default class VelociousHttpServerWorker {
    * @param {object} data - Data payload.
    * @param {string} data.command - Command.
    * @param {number} [data.clientCount] - Client count.
-   * @param {string} [data.output] - Output.
+   * @param {string | Uint8Array} [data.output] - Output.
    * @param {string} [data.channel] - Channel name.
    * @param {any} [data.payload] - Payload data.
    * @returns {void} - No return value.

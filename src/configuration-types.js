@@ -196,7 +196,9 @@
  * @typedef {object} RouteResolverHookResult
  * @property {string} action - Dasherized action name (for example `frontend-index`).
  * @property {string} controller - Controller path (for example `accounts`).
+ * @property {string} [controllerPath] - Optional absolute/relative controller file path override.
  * @property {Record<string, any>} [params] - Extra params to merge for controller/action.
+ * @property {string} [viewPath] - Optional view path override used by controller render lookups.
  */
 
 /**

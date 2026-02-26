@@ -344,6 +344,35 @@ export default new Configuration({
 })
 ```
 
+If you want to serve `sql.js` assets directly from your running Velocious backend, install the built-in sql.js asset route plugin and point `locateFile` to it:
+
+```js
+import installSqlJsWasmRoute, {sqlJsLocateFileFromBackend} from "velocious/build/src/plugins/sqljs-wasm-route.js"
+import SqliteDriver from "velocious/build/src/database/drivers/sqlite/index.web.js"
+
+const configuration = new Configuration({
+  // ...
+  database: {
+    development: {
+      default: {
+        driver: SqliteDriver,
+        type: "sqlite",
+        name: "app-db",
+        locateFile: sqlJsLocateFileFromBackend({
+          backendBaseUrl: "http://127.0.0.1:4501",
+          routePrefix: "/velocious/sqljs"
+        })
+      }
+    }
+  }
+})
+
+installSqlJsWasmRoute({
+  configuration,
+  routePrefix: "/velocious/sqljs"
+})
+```
+
 Frontend-model command transport preserves `Date` and `undefined` by encoding them as marker objects in JSON and decoding them on the other side:
 - `Date` -> `{__velocious_type: "date", value: "<ISO string>"}`
 - `undefined` -> `{__velocious_type: "undefined"}`
@@ -374,6 +403,8 @@ Hook return value:
 - `null` to skip
 - `{controller, action}` to resolve the request
 - Optional `params` object to merge into request params
+- Optional `controllerPath` string to resolve a controller file outside the app route directory
+- Optional `viewPath` string override for view rendering lookups
 
 
 ```js

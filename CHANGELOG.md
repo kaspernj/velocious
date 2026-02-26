@@ -151,3 +151,5 @@
 - Add frontend-model query `search(path, column, operator, value)` support (`eq`/`notEq`/`gt`/`gteq`/`lt`/`lteq`) and apply `searches` payload filters in built-in `frontendIndex`.
 - Add frontend-model query `where({attribute: value})` chaining support and apply `where` payload filters in built-in `frontendIndex`, enabling server-side filtering for `toArray()` flows.
 - Revert sqlite web driver packaged wasm default and restore configurable `locateFile(file)` support, with default fallback to `https://sql.js.org/dist/<file>`.
+- Add a `sqljs-wasm-route` plugin helper that serves `sql.js` dist assets from a Velocious backend route, plus `sqlJsLocateFileFromBackend(...)` helper for sqlite-web `locateFile` callbacks.
+- Extend route resolver hooks to allow optional `controllerPath`/`viewPath` overrides so plugin-style libraries can resolve controllers outside app route directories.

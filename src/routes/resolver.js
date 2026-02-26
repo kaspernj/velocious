@@ -58,12 +58,19 @@ export default class VelociousRoutesResolver {
     let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
 
     if (routeResolverHookMatch) {
+      const routeHookControllerPath = typeof routeResolverHookMatch.controllerPath === "string"
+        ? routeResolverHookMatch.controllerPath
+        : undefined
+      const routeHookViewPath = typeof routeResolverHookMatch.viewPath === "string"
+        ? routeResolverHookMatch.viewPath
+        : undefined
+
       controller = routeResolverHookMatch.controller
       action = normalizeActionName(routeResolverHookMatch.action)
       this.params.controller = controller
       this.params.action = routeResolverHookMatch.action
-      controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
-      viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
+      controllerPath = routeHookControllerPath || `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+      viewPath = routeHookViewPath || `${this.configuration.getDirectory()}/src/routes/${controller}`
     } else if (!matchResult) {
         const __filename = fileURLToPath(import.meta.url)
         const __dirname = dirname(__filename)
@@ -204,6 +211,14 @@ export default class VelociousRoutesResolver {
 
       if (hookResult.params && typeof hookResult.params !== "object") {
         throw new Error(`Expected route resolver hook params to be an object, got: ${hookResult.params}`)
+      }
+
+      if (hookResult.controllerPath !== undefined && typeof hookResult.controllerPath !== "string") {
+        throw new Error(`Expected route resolver hook controllerPath to be a string when provided, got: ${hookResult.controllerPath}`)
+      }
+
+      if (hookResult.viewPath !== undefined && typeof hookResult.viewPath !== "string") {
+        throw new Error(`Expected route resolver hook viewPath to be a string when provided, got: ${hookResult.viewPath}`)
       }
 
       if (hookResult.params) {

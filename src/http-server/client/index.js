@@ -268,6 +268,12 @@ export default class VeoliciousHttpServerClient {
     const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
     const httpVersion = request.httpVersion()
     const shouldCloseConnection = this.shouldCloseConnection(request)
+    const bodyIsString = typeof body === "string"
+    const bodyIsBinary = body instanceof Uint8Array
+
+    if (!bodyIsString && !bodyIsBinary) {
+      throw new Error(`Expected response body to be a string or Uint8Array, got ${typeof body}`)
+    }
 
     this.logger.debug("sendResponse", {clientCount: this.clientCount, connectionHeader, httpVersion})
 
@@ -277,7 +283,7 @@ export default class VeoliciousHttpServerClient {
       response.setHeader("Connection", "Keep-Alive")
     }
 
-    const contentLength = new TextEncoder().encode(body).length
+    const contentLength = bodyIsString ? new TextEncoder().encode(body).length : body.byteLength
 
     response.setHeader("Content-Length", contentLength)
     response.setHeader("Date", date.toUTCString())
