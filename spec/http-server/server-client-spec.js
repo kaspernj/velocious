@@ -39,8 +39,11 @@ class FakeSocket extends EventEmitter {
     this.emit("close")
   }
 
-  /** @returns {void} - No return value. */
-  destroy() {
+  /**
+   * @param {Error} _error - Error.
+   * @returns {void} - No return value.
+   */
+  destroy(_error) { // eslint-disable-line no-unused-vars
     this.destroyCalls += 1
     this.writableEnded = true
     this.writable = false
