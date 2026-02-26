@@ -3,6 +3,19 @@
 import EventEmitter from "../utils/event-emitter.js"
 import Logger from "../logger.js"
 
+/**
+ * @param {Buffer} chunk - Incoming socket data.
+ * @returns {object} - Chunk debug metadata.
+ */
+function summarizeSocketChunk(chunk) {
+  const preview = chunk.toString("latin1", 0, Math.min(chunk.length, 160)).replaceAll("\r", "\\r").replaceAll("\n", "\\n")
+
+  return {
+    length: chunk.length,
+    preview
+  }
+}
+
 export default class ServerClient {
   events = new EventEmitter()
 
@@ -25,10 +38,19 @@ export default class ServerClient {
     socket.on("end", this.onSocketEnd)
     socket.on("error", this.onSocketError)
     socket.on("close", this.onSocketClose)
+    socket.on("timeout", this.onSocketTimeout)
+    socket.on("drain", this.onSocketDrain)
+    socket.on("finish", this.onSocketFinish)
   }
 
   /** @returns {void} - No return value.  */
   listen() {
+    this.logger.debug(() => ["Socket listen", {
+      clientCount: this.clientCount,
+      remoteAddress: this.socket.remoteAddress,
+      remoteFamily: this.socket.remoteFamily,
+      remotePort: this.socket.remotePort
+    }])
     this.socket.on("data", this.onSocketData)
   }
 
@@ -51,6 +73,7 @@ export default class ServerClient {
    */
   onSocketData = (chunk) => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount}: ${chunk}`)
+    this.logger.debug(() => ["Socket data received", {clientCount: this.clientCount, ...summarizeSocketChunk(chunk)}])
 
     if (!this.worker) throw new Error("No worker")
 
@@ -72,6 +95,22 @@ export default class ServerClient {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount} close`)
     this.emitClose()
   }
+
+  /** @returns {void} - No return value. */
+  onSocketTimeout = () => {
+    this.logger.debug(() => ["Socket timeout", {clientCount: this.clientCount}])
+  }
+
+  /** @returns {void} - No return value. */
+  onSocketDrain = () => {
+    this.logger.debug(() => ["Socket drain", {clientCount: this.clientCount}])
+  }
+
+  /** @returns {void} - No return value. */
+  onSocketFinish = () => {
+    this.logger.debug(() => ["Socket finish", {clientCount: this.clientCount}])
+  }
+
 
   /**
    * @param {Error} error - Socket error.

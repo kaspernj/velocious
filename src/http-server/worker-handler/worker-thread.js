@@ -8,11 +8,22 @@ import Logger from "../../logger.js"
 import toImportSpecifier from "../../utils/to-import-specifier.js"
 import WebsocketEvents from "../websocket-events.js"
 
+/**
+ * @param {Buffer | Uint8Array | string} chunk - Client input payload.
+ * @returns {{length: number, preview: string}} - Chunk summary for logging.
+ */
+function summarizeClientWriteChunk(chunk) {
+  const normalizedChunk = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk)
+  const preview = normalizedChunk.toString("latin1", 0, Math.min(normalizedChunk.length, 160)).replaceAll("\r", "\\r").replaceAll("\n", "\\n")
+
+  return {length: normalizedChunk.length, preview}
+}
+
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
    * @param {object} args - Options object.
    * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
-   * @param {{directory: string, environment: string, workerCount: number}} args.workerData - Worker configuration details.
+   * @param {{debug: boolean, directory: string, environment: string, workerCount: number}} args.workerData - Worker configuration details.
    */
   constructor({parentPort, workerData}) {
     if (!parentPort) throw new Error("parentPort is required")
@@ -43,7 +54,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize() {
-    const {directory, environment} = this.workerData
+    const {debug, directory, environment} = this.workerData
     const configurationPath = `${directory}/src/config/configuration.js`
     const configurationImport = await import(toImportSpecifier(configurationPath))
 
@@ -52,8 +63,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     if (!this.configuration) throw new Error(`Configuration couldn't be loaded from: ${configurationPath}`)
 
+    this.configuration.debug = debug === true
     this.configuration.setEnvironment(environment)
     this.configuration.setCurrent()
+    await this.logger.debug(() => ["Worker thread configuration loaded", {debug: this.configuration.debug, workerCount: this.workerCount}])
     this.websocketEvents = new WebsocketEvents({parentPort: this.parentPort, workerCount: this.workerCount})
     this.configuration.setWebsocketEvents(this.websocketEvents)
 
@@ -67,7 +80,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
    * @param {object} data - Data payload.
    * @param {string} data.command - Command.
-   * @param {string} [data.chunk] - Chunk.
+   * @param {Buffer | Uint8Array | string} [data.chunk] - Chunk.
    * @param {string} [data.remoteAddress] - Remote address.
    * @param {number} [data.clientCount] - Client count.
    * @param {string} [data.channel] - Channel name.
@@ -102,9 +115,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       await this.logger.debugLowLevel("Looking up client")
 
       const {chunk, clientCount} = data
+      if (!chunk) throw new Error("No chunk given")
       const client = digg(this.clients, clientCount)
 
-      await this.logger.debugLowLevel(`Sending to client ${clientCount}`)
+      await this.logger.debug(() => ["Sending clientWrite to parser", {clientCount, ...summarizeClientWriteChunk(chunk)}])
 
       client.onWrite(chunk)
     } else if (command == "websocketEvent") {

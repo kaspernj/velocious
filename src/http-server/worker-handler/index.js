@@ -5,6 +5,34 @@ import {Worker} from "worker_threads"
 import ensureError from "../../utils/ensure-error.js"
 import websocketEventsHost from "../websocket-events-host.js"
 
+/**
+ * @param {object} data - Worker message payload.
+ * @param {string} data.command - Command name.
+ * @param {number} [data.clientCount] - Client count.
+ * @param {string | Uint8Array} [data.output] - Output chunk.
+ * @returns {object} - Log-safe message details.
+ */
+function summarizeWorkerMessage(data) {
+  const {output, ...rest} = data
+
+  if (output === undefined) {
+    return rest
+  }
+
+  const outputType = typeof output
+  const outputLength = typeof output === "string"
+    ? output.length
+    : (output instanceof Uint8Array ? output.byteLength : undefined)
+
+  return {
+    ...rest,
+    output: {
+      length: outputLength,
+      type: outputType
+    }
+  }
+}
+
 export default class VelociousHttpServerWorker {
   /**
    * @param {object} args - Options object.
@@ -125,7 +153,7 @@ export default class VelociousHttpServerWorker {
    * @returns {void} - No return value.
    */
   onWorkerMessage = (data) => {
-    this.logger.debug(`Worker message`, data)
+    this.logger.debug("Worker message", summarizeWorkerMessage(data))
 
     const {command} = data
 
@@ -137,7 +165,7 @@ export default class VelociousHttpServerWorker {
 
       this.onStartCallback = null
     } else if (command == "clientOutput") {
-      this.logger.debug("CLIENT OUTPUT", data)
+      this.logger.debug("CLIENT OUTPUT", summarizeWorkerMessage(data))
 
       const {clientCount, output} = data
       const client = this.clients[clientCount]
@@ -148,7 +176,18 @@ export default class VelociousHttpServerWorker {
       }
 
       if (output !== null) {
-        void client.send(output)
+        void client.send(output).then(() => {
+          this.logger.debug(() => ["Client output delivered", {
+            clientCount,
+            outputLength: typeof output === "string" ? output.length : output.byteLength,
+            workerCount: this.workerCount
+          }])
+        }).catch((error) => {
+          this.logger.error(() => ["Failed to deliver client output", {
+            clientCount,
+            workerCount: this.workerCount
+          }, error])
+        })
       }
     } else if (command == "clientClose") {
       const {clientCount} = data

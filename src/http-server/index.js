@@ -138,7 +138,12 @@ export default class VelociousHttpServer {
   onConnection = (socket) => {
     const clientCount = this.clientCount
 
-    this.logger.debug(`New client ${clientCount}`)
+    this.logger.debug(() => ["New client", {
+      clientCount,
+      remoteAddress: socket.remoteAddress,
+      remoteFamily: socket.remoteFamily,
+      remotePort: socket.remotePort
+    }])
     this.clientCount++
 
     try {
