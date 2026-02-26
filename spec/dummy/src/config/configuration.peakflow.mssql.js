@@ -9,6 +9,7 @@ import fs from "fs/promises"
 import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
 import MssqlDriver from "../../../../src/database/drivers/mssql/index.js"
 import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js"
+import installSqlJsWasmRoute from "../../../../src/plugins/sqljs-wasm-route.js"
 import path from "path"
 import requireContext from "require-context"
 import Task from "../models/task.js"
@@ -91,7 +92,7 @@ function resolveTaskFrontendModelAbility({configuration, params, request, respon
   })
 }
 
-export default new Configuration({
+const configuration = new Configuration({
   abilityResolver: resolveTaskFrontendModelAbility,
   backendProjects,
   database: {
@@ -164,3 +165,7 @@ export default new Configuration({
     if (channel === "test") return TestWebsocketChannel
   }
 })
+
+installSqlJsWasmRoute({configuration})
+
+export default configuration
