@@ -150,4 +150,4 @@
 - Add `FrontendModelBase.count()` / query `count()` for generated frontend models, returning the current index-query result size for model-first dashboard metrics.
 - Add frontend-model query `search(path, column, operator, value)` support (`eq`/`notEq`/`gt`/`gteq`/`lt`/`lteq`) and apply `searches` payload filters in built-in `frontendIndex`.
 - Add frontend-model query `where({attribute: value})` chaining support and apply `where` payload filters in built-in `frontendIndex`, enabling server-side filtering for `toArray()` flows.
-- Bundle `sql.js` wasm inside Velocious for sqlite web driver defaults (`./sql/sql-wasm.wasm`) to avoid hardcoded CDN wasm fetches.
+- Revert sqlite web driver packaged wasm default and restore configurable `locateFile(file)` support, with default fallback to `https://sql.js.org/dist/<file>`.
