@@ -12,8 +12,9 @@
   "scripts": {
     "all-checks": "npm run typecheck && npm run lint && npm run test",
     "build": "node scripts/clean-build.js && npm run compile",
-    "compile": "tsc -b && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",
+    "compile": "tsc -b && npm run copy:ejs && npm run copy:templates && npm run copy:sqljs-wasm && node scripts/ensure-bin-executable.js",
     "copy:ejs": "cpy \"src/routes/**/*.ejs\" build/src/routes",
+    "copy:sqljs-wasm": "cpy \"src/database/drivers/sqlite/sql/*.wasm\" build/src/database/drivers/sqlite/sql",
     "copy:templates": "cpy \"src/templates/**/*.js\" build/src/templates",
     "lint": "eslint",
     "release:patch": "node scripts/release-patch.js",

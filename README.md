@@ -325,6 +325,8 @@ Available transport options:
 - `credentials`
 - `request` (custom request handler)
 
+For sqlite web databases, Velocious now loads `sql.js` wasm from the package itself by default (no hardcoded CDN URL).
+
 Frontend-model command transport preserves `Date` and `undefined` by encoding them as marker objects in JSON and decoding them on the other side:
 - `Date` -> `{__velocious_type: "date", value: "<ISO string>"}`
 - `undefined` -> `{__velocious_type: "undefined"}`

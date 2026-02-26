@@ -14,6 +14,13 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   /** @type {BetterLocalStorage | undefined} */
   betterLocalStorage = undefined
 
+  /**
+   * @returns {(file: string) => string} - locateFile callback for sql.js.
+   */
+  sqlJsLocateFile() {
+    return (file) => new URL(`./sql/${file}`, import.meta.url).toString()
+  }
+
   async connect() {
     this.args = this.getArgs()
 
@@ -24,10 +31,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
         await this.betterLocalStorage.delete(this.localStorageName())
       }
 
-      const SQL = await initSqlJs({
-        // Required to load the wasm binary asynchronously. Of course, you can host it wherever you want you can omit locateFile completely when running in Node.
-        locateFile: (file) => `https://sql.js.org/dist/${file}`
-      })
+      const SQL = await initSqlJs({locateFile: this.sqlJsLocateFile()})
 
       const databaseContent = await this.betterLocalStorage.get(this.localStorageName())
       const connectionSqlJs = new ConnectionSqlJs(this, new SQL.Database(databaseContent))
