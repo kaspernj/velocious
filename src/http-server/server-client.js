@@ -100,7 +100,31 @@ export default class ServerClient {
         return
       }
 
-      this.socket.write(data, () => resolve())
+      let done = false
+
+      const finish = () => {
+        if (done) return
+
+        done = true
+        this.socket.off("error", onWriteError)
+        resolve()
+      }
+      const onWriteError = (error) => {
+        const errorCode = /** @type {{code?: string}} */ (error).code
+
+        this.logger.warn(() => [`Socket ${this.clientCount} write error`, errorCode || error.message])
+        finish()
+      }
+
+      this.socket.once("error", onWriteError)
+      this.socket.write(data, (error) => {
+        if (error) {
+          onWriteError(error)
+          return
+        }
+
+        finish()
+      })
     })
   }
 
