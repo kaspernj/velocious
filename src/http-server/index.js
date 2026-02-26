@@ -127,7 +127,6 @@ export default class VelociousHttpServer {
    * @returns {void} - No return value.
    */
   onServerError = (error) => {
-    console.error(`Velocious HTTP server socket error on ${this.host}:${this.port}:`, error)
     this.logger.error(`Velocious HTTP server socket error on ${this.host}:${this.port}`, error)
   }
 
@@ -160,7 +159,6 @@ export default class VelociousHttpServer {
       workerHandler.addSocketConnection(client)
       this.clients[clientCount] = client
     } catch (error) {
-      console.error(`Failed to initialize client ${clientCount} on new connection`, error)
       this.logger.error(`Failed to initialize client ${clientCount} on new connection`, error)
       socket.destroy()
     }
@@ -179,7 +177,7 @@ export default class VelociousHttpServer {
     const newClientsLength = Object.keys(this.clients).length
 
     if (newClientsLength != (oldClientsLength - 1)) {
-      console.error(`Expected client to have been removed but length didn't change from ${oldClientsLength} to ${oldClientsLength - 1}`)
+      this.logger.error(`Expected client to have been removed but length didn't change from ${oldClientsLength} to ${oldClientsLength - 1}`)
     }
   }
 

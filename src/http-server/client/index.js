@@ -267,7 +267,6 @@ export default class VeoliciousHttpServerClient {
   requestDone = () => {
     this.logger.debug(() => ["requestDone", {clientCount: this.clientCount, queueLength: this.requestRunners.length}])
     void this.sendDoneRequests().catch((error) => {
-      console.error(`Velocious client ${this.clientCount} failed in sendDoneRequests`, error)
       this.logger.warn("Failed while sending done requests", error)
       this.events.emit("close")
     })
@@ -288,7 +287,7 @@ export default class VeoliciousHttpServerClient {
         try {
           await this.sendResponse(requestRunner)
         } catch (error) {
-          console.error(`Velocious client ${this.clientCount} failed while sending response`, error)
+          this.logger.error(() => [`Velocious client ${this.clientCount} failed while sending response`, error])
           throw error
         }
         if (this.currentRequest === request && this.state === "initial") this.currentRequest = undefined
@@ -399,7 +398,7 @@ export default class VeoliciousHttpServerClient {
       }
       this.logger.debug(() => ["sendFileOutput done", {clientCount: this.clientCount, chunkCount, totalBytes}])
     } catch (error) {
-      console.error(`Velocious client ${this.clientCount} failed while streaming file output: ${filePath}`, error)
+      this.logger.error(() => [`Velocious client ${this.clientCount} failed while streaming file output: ${filePath}`, error])
       throw error
     }
   }
