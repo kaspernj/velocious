@@ -3,12 +3,15 @@
 import fs from "fs"
 import path from "path"
 import {tmpdir} from "os"
+import Logger from "../../../logger.js"
 import MemoryUploadedFile from "../uploaded-file/memory-uploaded-file.js"
 import TemporaryUploadedFile from "../uploaded-file/temporary-uploaded-file.js"
 
 const MAX_IN_MEMORY_FILE_SIZE = 2 * 1024 * 1024
 
 export default class FormDataPart {
+  logger = new Logger(this, {debug: false})
+
   /** @type {Record<string, import("./header.js").default>} */
   headers = {}
 
@@ -30,7 +33,7 @@ export default class FormDataPart {
         this.name = match[1]
         this.filename = match[2]
       } else {
-        console.error(`Couldn't match name from content-disposition: ${header.value}`)
+        this.logger.error(() => [`Couldn't match name from content-disposition`, {headerValue: header.value}])
       }
     } else if (name == "content-length") {
       this.contentLength = parseInt(header.value)

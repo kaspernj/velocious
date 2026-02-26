@@ -15,6 +15,18 @@ function validAssetFileName(assetFileName) {
     && !assetFileName.includes("..")
 }
 
+/**
+ * @param {string} assetFileName - Requested sql.js asset file name.
+ * @returns {string} - Normalized sql.js asset file name.
+ */
+function normalizeSqlJsAssetFileName(assetFileName) {
+  if (assetFileName === "sql-wasm-browser.wasm") {
+    return "sql-wasm.wasm"
+  }
+
+  return assetFileName
+}
+
 /** Serves sql.js assets from the backend for sqlite-web locateFile callbacks. */
 export default class SqlJsWasmRouteController extends Controller {
   /** @returns {Promise<void>} - Resolves when complete. */
@@ -29,7 +41,8 @@ export default class SqlJsWasmRouteController extends Controller {
       throw new Error(`Expected sql.js dist directory path to be a string, got: ${String(sqlJsDistDirectory)}`)
     }
 
-    const assetPath = path.join(sqlJsDistDirectory, sqlJsAssetFileName)
+    const normalizedSqlJsAssetFileName = normalizeSqlJsAssetFileName(sqlJsAssetFileName)
+    const assetPath = path.join(sqlJsDistDirectory, normalizedSqlJsAssetFileName)
 
     try {
       await fs.access(assetPath)

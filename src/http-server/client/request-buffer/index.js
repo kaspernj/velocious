@@ -134,7 +134,7 @@ export default class RequestBuffer {
 
           break
         default:
-          console.error(`Unknown state for request buffer: ${this.state}`)
+          this.logger.error(() => [`Unknown state for request buffer`, {state: this.state}])
       }
 
       if (this.completed) {

@@ -11,6 +11,16 @@ import Request from "./request.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketSession from "./websocket-session.js"
 
+/**
+ * @param {Buffer} data - Incoming request data.
+ * @returns {{length: number, preview: string}} - Request data summary.
+ */
+function summarizeRequestData(data) {
+  const preview = data.toString("latin1", 0, Math.min(data.length, 160)).replaceAll("\r", "\\r").replaceAll("\n", "\\n")
+
+  return {length: data.length, preview}
+}
+
 export default class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
@@ -96,6 +106,13 @@ export default class VeoliciousHttpServerClient {
     this.logger.debug("executeCurrentRequest")
 
     if (!this.currentRequest) throw new Error("No current request")
+    this.logger.debug(() => ["executeCurrentRequest request", {
+      clientCount: this.clientCount,
+      httpMethod: this.currentRequest.httpMethod(),
+      httpVersion: this.currentRequest.httpVersion(),
+      path: this.currentRequest.path(),
+      queueLength: this.requestRunners.length
+    }])
 
     if (this._isWebsocketUpgrade(this.currentRequest)) {
       this._upgradeToWebsocket()
@@ -121,6 +138,12 @@ export default class VeoliciousHttpServerClient {
    * @returns {void} - No return value.
    */
   onWrite(data) {
+    this.logger.debug(() => ["onWrite start", {
+      clientCount: this.clientCount,
+      state: this.state,
+      ...summarizeRequestData(data)
+    }])
+
     if (this.websocketSession) {
       this.websocketSession.onData(data)
       return
@@ -132,6 +155,7 @@ export default class VeoliciousHttpServerClient {
 
       while (remaining && remaining.length > 0) {
         if (this.state == "initial") {
+          this.logger.debug(() => ["onWrite creating request parser", {clientCount: this.clientCount, remainingLength: remaining.length}])
           this.currentRequest = new Request({client: this, configuration: this.configuration})
           this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
           this.state = "requestStarted"
@@ -142,15 +166,26 @@ export default class VeoliciousHttpServerClient {
         if (!this.currentRequest) throw new Error("No current request")
 
         remaining = this.currentRequest.feed(remaining)
+        this.logger.debug(() => ["onWrite fed parser", {
+          clientCount: this.clientCount,
+          hasRemaining: Boolean(remaining?.length),
+          remainingLength: remaining?.length || 0,
+          parserCompleted: this.currentRequest?.getRequestParser().hasCompleted
+        }])
 
         if (remaining && remaining.length > 0) {
           const requestParser = this.currentRequest.getRequestParser()
 
-          if (!requestParser.hasCompleted) break
+          if (!requestParser.hasCompleted) {
+            this.logger.debug(() => ["onWrite waiting for more data", {clientCount: this.clientCount, remainingLength: remaining.length}])
+            break
+          }
 
           this.state = "initial"
+          this.logger.debug(() => ["onWrite parser completed with remaining bytes", {clientCount: this.clientCount, remainingLength: remaining.length}])
         }
       }
+      this.logger.debug(() => ["onWrite end", {clientCount: this.clientCount, state: this.state, queueLength: this.requestRunners.length}])
     } catch (error) {
       this.handleBadRequest(ensureError(error))
     }
@@ -230,6 +265,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   requestDone = () => {
+    this.logger.debug(() => ["requestDone", {clientCount: this.clientCount, queueLength: this.requestRunners.length}])
     void this.sendDoneRequests().catch((error) => {
       this.logger.warn("Failed while sending done requests", error)
       this.events.emit("close")
@@ -247,7 +283,13 @@ export default class VeoliciousHttpServerClient {
         const shouldCloseConnection = this.shouldCloseConnection(request)
 
         this.requestRunners.shift()
-        await this.sendResponse(requestRunner)
+        this.logger.debug(() => ["sendDoneRequests shifted queue", {clientCount: this.clientCount, queueLength: this.requestRunners.length}])
+        try {
+          await this.sendResponse(requestRunner)
+        } catch (error) {
+          this.logger.error(() => [`Velocious client ${this.clientCount} failed while sending response`, error])
+          throw error
+        }
         if (this.currentRequest === request && this.state === "initial") this.currentRequest = undefined
         this.logger.debug(() => ["sendDoneRequests", {clientCount: this.clientCount, connectionHeader, httpVersion}])
 
@@ -283,6 +325,13 @@ export default class VeoliciousHttpServerClient {
     }
 
     this.logger.debug("sendResponse", {clientCount: this.clientCount, connectionHeader, httpVersion})
+    this.logger.debug(() => ["sendResponse payload", {
+      clientCount: this.clientCount,
+      hasFilePath,
+      filePath,
+      bodyIsBinary,
+      bodyIsString
+    }])
 
     if (shouldCloseConnection) {
       response.setHeader("Connection", "Close")
@@ -316,11 +365,13 @@ export default class VeoliciousHttpServerClient {
     headers += "\r\n"
 
     this.events.emit("output", headers)
+    this.logger.debug(() => ["sendResponse headers emitted", {clientCount: this.clientCount, headersLength: headers.length}])
 
     if (hasFilePath) {
       await this.sendFileOutput(filePath)
     } else {
       this.events.emit("output", body)
+      this.logger.debug(() => ["sendResponse body emitted", {clientCount: this.clientCount, bodyLength: bodyIsString ? body.length : body.byteLength}])
     }
 
     if ("getRequestParser" in request) {
@@ -334,8 +385,21 @@ export default class VeoliciousHttpServerClient {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async sendFileOutput(filePath) {
-    for await (const chunk of createReadStream(filePath)) {
-      this.events.emit("output", chunk)
+    this.logger.debug(() => ["sendFileOutput start", {clientCount: this.clientCount, filePath}])
+    let totalBytes = 0
+    let chunkCount = 0
+
+    try {
+      for await (const chunk of createReadStream(filePath)) {
+        chunkCount += 1
+        totalBytes += chunk.length
+        this.logger.debug(() => ["sendFileOutput chunk", {clientCount: this.clientCount, chunkCount, chunkLength: chunk.length, totalBytes}])
+        this.events.emit("output", chunk)
+      }
+      this.logger.debug(() => ["sendFileOutput done", {clientCount: this.clientCount, chunkCount, totalBytes}])
+    } catch (error) {
+      this.logger.error(() => [`Velocious client ${this.clientCount} failed while streaming file output: ${filePath}`, error])
+      throw error
     }
   }
 

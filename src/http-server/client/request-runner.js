@@ -67,6 +67,20 @@ function requestErrorLogMessage(logDetails) {
   return `Error while running request: ${logDetails.errorSummary}\nCleaned backtrace:\n${logDetails.cleanedBacktrace}`
 }
 
+/**
+ * @param {Response} response - Response object.
+ * @returns {string} - Response body type for logging.
+ */
+function responseBodyTypeForLog(response) {
+  if (response.getFilePath()) return "file"
+
+  try {
+    return typeof response.getBody()
+  } catch {
+    return "unset"
+  }
+}
+
 export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
@@ -95,6 +109,13 @@ export default class VelociousHttpServerClientRequestRunner {
     if (!request) throw new Error("No request?")
 
     try {
+      await this.logger.debug(() => ["Run request lifecycle", {
+        httpMethod: request.httpMethod(),
+        httpVersion: request.httpVersion(),
+        origin: request.origin(),
+        path: request.path(),
+        remoteAddress: request.remoteAddress()
+      }])
       // Before we checked if the sec-fetch-mode was "cors", but it seems the sec-fetch-mode isn't always present
       await this.logger.debug(() => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
 
@@ -102,11 +123,20 @@ export default class VelociousHttpServerClientRequestRunner {
 
       if (cors) {
         await cors({request, response})
+        await this.logger.debug(() => ["CORS handler done", {
+          httpMethod: request.httpMethod(),
+          path: request.path(),
+          responseStatusCode: response.getStatusCode()
+        }])
       }
 
       if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
         response.setStatus(200)
         response.setBody("")
+        await this.logger.debug(() => ["Handled preflight OPTIONS request", {
+          path: request.path(),
+          responseStatusCode: response.getStatusCode()
+        }])
       } else {
         await this.logger.debug("Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
@@ -158,6 +188,13 @@ export default class VelociousHttpServerClientRequestRunner {
           resolvePromise = routesResolver.resolve()
           // Keep Promise.race here to allow dynamic timeout updates.
           await Promise.race([resolvePromise, timeoutPromise])
+          await this.logger.debug(() => ["Routes resolver done", {
+            httpMethod: request.httpMethod(),
+            path: request.path(),
+            responseStatusCode: response.getStatusCode(),
+            hasFilePath: Boolean(response.getFilePath()),
+            bodyType: responseBodyTypeForLog(response)
+          }])
         } catch (error) {
           if (timedOut && resolvePromise) {
             void resolvePromise.catch((resolveError) => {
@@ -194,6 +231,11 @@ export default class VelociousHttpServerClientRequestRunner {
       response.setErrorBody(error)
     }
 
+    await this.logger.debug(() => ["Request runner done", {
+      httpMethod: request.httpMethod(),
+      path: request.path(),
+      responseStatusCode: response.getStatusCode()
+    }])
     this.state = "done"
     this.events.emit("done", this)
   }

@@ -40,6 +40,7 @@ export default class VelociousHttpServer {
     this.netServer = new Net.Server()
     this.netServer.on("close", this.onClose)
     this.netServer.on("connection", this.onConnection)
+    this.netServer.on("error", this.onServerError)
     await this._netServerListen()
   }
 
@@ -122,27 +123,45 @@ export default class VelociousHttpServer {
   }
 
   /**
+   * @param {Error} error - Server socket error.
+   * @returns {void} - No return value.
+   */
+  onServerError = (error) => {
+    this.logger.error(`Velocious HTTP server socket error on ${this.host}:${this.port}`, error)
+  }
+
+  /**
    * @param {import("net").Socket} socket - Socket instance.
    * @returns {void} - No return value.
    */
   onConnection = (socket) => {
     const clientCount = this.clientCount
 
-    this.logger.debug(`New client ${clientCount}`)
+    this.logger.debug(() => ["New client", {
+      clientCount,
+      remoteAddress: socket.remoteAddress,
+      remoteFamily: socket.remoteFamily,
+      remotePort: socket.remotePort
+    }])
     this.clientCount++
 
-    const workerHandler = this.workerHandlerToUse()
-    const client = new ServerClient({
-      clientCount,
-      configuration: this.configuration,
-      socket
-    })
+    try {
+      const workerHandler = this.workerHandlerToUse()
+      const client = new ServerClient({
+        clientCount,
+        configuration: this.configuration,
+        socket
+      })
 
-    client.events.on("close", this.onClientClose)
+      client.events.on("close", this.onClientClose)
 
-    this.logger.debug(`Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
-    workerHandler.addSocketConnection(client)
-    this.clients[clientCount] = client
+      this.logger.debug(`Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
+      workerHandler.addSocketConnection(client)
+      this.clients[clientCount] = client
+    } catch (error) {
+      this.logger.error(`Failed to initialize client ${clientCount} on new connection`, error)
+      socket.destroy()
+    }
   }
 
   /**
@@ -158,7 +177,7 @@ export default class VelociousHttpServer {
     const newClientsLength = Object.keys(this.clients).length
 
     if (newClientsLength != (oldClientsLength - 1)) {
-      console.error(`Expected client to have been removed but length didn't change from ${oldClientsLength} to ${oldClientsLength - 1}`)
+      this.logger.error(`Expected client to have been removed but length didn't change from ${oldClientsLength} to ${oldClientsLength - 1}`)
     }
   }
 
