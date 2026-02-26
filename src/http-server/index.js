@@ -40,6 +40,7 @@ export default class VelociousHttpServer {
     this.netServer = new Net.Server()
     this.netServer.on("close", this.onClose)
     this.netServer.on("connection", this.onConnection)
+    this.netServer.on("error", this.onServerError)
     await this._netServerListen()
   }
 
@@ -122,6 +123,15 @@ export default class VelociousHttpServer {
   }
 
   /**
+   * @param {Error} error - Server socket error.
+   * @returns {void} - No return value.
+   */
+  onServerError = (error) => {
+    console.error(`Velocious HTTP server socket error on ${this.host}:${this.port}:`, error)
+    this.logger.error(`Velocious HTTP server socket error on ${this.host}:${this.port}`, error)
+  }
+
+  /**
    * @param {import("net").Socket} socket - Socket instance.
    * @returns {void} - No return value.
    */
@@ -131,18 +141,24 @@ export default class VelociousHttpServer {
     this.logger.debug(`New client ${clientCount}`)
     this.clientCount++
 
-    const workerHandler = this.workerHandlerToUse()
-    const client = new ServerClient({
-      clientCount,
-      configuration: this.configuration,
-      socket
-    })
+    try {
+      const workerHandler = this.workerHandlerToUse()
+      const client = new ServerClient({
+        clientCount,
+        configuration: this.configuration,
+        socket
+      })
 
-    client.events.on("close", this.onClientClose)
+      client.events.on("close", this.onClientClose)
 
-    this.logger.debug(`Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
-    workerHandler.addSocketConnection(client)
-    this.clients[clientCount] = client
+      this.logger.debug(`Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
+      workerHandler.addSocketConnection(client)
+      this.clients[clientCount] = client
+    } catch (error) {
+      console.error(`Failed to initialize client ${clientCount} on new connection`, error)
+      this.logger.error(`Failed to initialize client ${clientCount} on new connection`, error)
+      socket.destroy()
+    }
   }
 
   /**

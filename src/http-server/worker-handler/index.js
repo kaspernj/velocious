@@ -73,6 +73,8 @@ export default class VelociousHttpServerWorker {
    * @param {any} error - Error instance.
    */
   onWorkerError = (error) => {
+    console.error(`Velocious worker ${this.workerCount} error:`, error)
+    this.logger.error(`Velocious worker ${this.workerCount} error`, error)
     void this._closeAllClients()
     throw ensureError(error) // Throws original error with backtrace and everything into the console
   }
@@ -85,6 +87,7 @@ export default class VelociousHttpServerWorker {
     this._hasExited = true
 
     if (code !== 0 && !this._stopping) {
+      console.error(`Velocious worker ${this.workerCount} exited unexpectedly with code ${code}`)
       void this._closeAllClients()
       throw new Error(`Client worker stopped with exit code ${code}`)
     } else {
@@ -137,14 +140,26 @@ export default class VelociousHttpServerWorker {
       this.logger.debug("CLIENT OUTPUT", data)
 
       const {clientCount, output} = data
+      const client = this.clients[clientCount]
+
+      if (!client) {
+        console.error(`Velocious worker ${this.workerCount} produced output for missing client ${clientCount}`, data)
+        return
+      }
 
       if (output !== null) {
-        this.clients[clientCount]?.send(output)
+        void client.send(output)
       }
     } else if (command == "clientClose") {
       const {clientCount} = data
+      const client = this.clients[clientCount]
 
-      this.clients[clientCount]?.end()
+      if (!client) {
+        console.error(`Velocious worker ${this.workerCount} requested close for missing client ${clientCount}`, data)
+        return
+      }
+
+      void client.end()
       delete this.clients[clientCount]
     } else if (command == "shutdownComplete") {
       this._stopResolve?.()
