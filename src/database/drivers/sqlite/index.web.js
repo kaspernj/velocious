@@ -18,7 +18,13 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
    * @returns {(file: string) => string} - locateFile callback for sql.js.
    */
   sqlJsLocateFile() {
-    return (file) => new URL(`./sql/${file}`, import.meta.url).toString()
+    const locateFile = this.getArgs().locateFile
+
+    if (typeof locateFile === "function") {
+      return locateFile
+    }
+
+    return (file) => `https://sql.js.org/dist/${file}`
   }
 
   async connect() {
