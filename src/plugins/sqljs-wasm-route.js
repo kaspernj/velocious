@@ -1,11 +1,10 @@
 import {createRequire} from "node:module"
 import path from "node:path"
-import {fileURLToPath} from "node:url"
+import SqlJsWasmRouteController from "./sqljs-wasm-route-controller.js"
 
 const require = createRequire(import.meta.url)
 const sqlJsEntryPath = require.resolve("sql.js")
 const sqlJsDistDirectory = path.dirname(sqlJsEntryPath)
-const sqlJsWasmControllerPath = fileURLToPath(new URL("./sqljs-wasm-route-controller.js", import.meta.url))
 
 /**
  * @typedef {object} InstallSqlJsWasmRouteArgs
@@ -47,21 +46,11 @@ export default function installSqlJsWasmRoute(args) {
 
   const normalizedRoutePrefix = normalizeRoutePrefix(routePrefix)
 
-  configuration.addRouteResolverHook(({currentPath}) => {
-    if (!currentPath.startsWith(`${normalizedRoutePrefix}/`)) return null
-
-    const assetFileName = decodeURIComponent(currentPath.slice(normalizedRoutePrefix.length + 1))
-
-    return {
-      action: "show",
-      controller: "velociousSqlJsWasmRoute",
-      controllerPath: sqlJsWasmControllerPath,
-      params: {
-        sqlJsAssetFileName: assetFileName,
-        sqlJsDistDirectory
-      },
-      viewPath: path.dirname(sqlJsWasmControllerPath)
-    }
+  configuration.routes((routes) => {
+    routes.get(`${normalizedRoutePrefix}/:sqlJsAssetFileName`, {
+      params: {sqlJsDistDirectory},
+      to: [SqlJsWasmRouteController, "show"]
+    })
   })
 }
 

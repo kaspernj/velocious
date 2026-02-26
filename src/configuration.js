@@ -10,6 +10,7 @@ import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import frontendModelCommandRouteHook from "./routes/hooks/frontend-model-command-route-hook.js"
+import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
@@ -534,13 +535,24 @@ export default class VelociousConfiguration {
   }
 
   /** @returns {import("./routes/index.js").default | undefined} - The routes.  */
-  getRoutes() { return this.routes }
+  getRoutes() { return this._routes }
 
   /**
    * @param {import("./routes/index.js").default} newRoutes - New routes.
    * @returns {void} - No return value.
    */
-  setRoutes(newRoutes) { this.routes = newRoutes }
+  setRoutes(newRoutes) { this._routes = newRoutes }
+
+  /**
+   * Adds plugin/library routes using a lightweight route DSL backed by route resolver hooks.
+   * @param {(routes: import("./routes/plugin-routes.js").default) => void} callback - Routes callback.
+   * @returns {void} - No return value.
+   */
+  routes(callback) {
+    const pluginRoutes = new PluginRoutes({configuration: this})
+
+    callback(pluginRoutes)
+  }
 
   /**
    * @param {function(string, Record<string, any> | undefined) : string} callback - Translator callback.

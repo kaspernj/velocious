@@ -402,9 +402,27 @@ Hook return value:
 
 - `null` to skip
 - `{controller, action}` to resolve the request
+- Optional `controllerClass` to resolve without importing a controller path
 - Optional `params` object to merge into request params
 - Optional `controllerPath` string to resolve a controller file outside the app route directory
 - Optional `viewPath` string override for view rendering lookups
+
+## Plugin routes helper
+
+For plugin-style integrations, you can register routes with a simple DSL:
+
+```js
+configuration.routes((routes) => {
+  routes.get("/velocious/sqljs/:sqlJsAssetFileName", {
+    to: [SqlJsController, "downloadSqlJs"]
+  })
+})
+```
+
+Supported route helpers:
+
+- `routes.get(path, {to: [ControllerClass, "action"], params?})`
+- `routes.post(path, {to: [ControllerClass, "action"], params?})`
 
 
 ```js
