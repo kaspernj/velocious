@@ -31,17 +31,6 @@ export default class SqlJsWasmRouteController extends Controller {
     const assetPath = path.join(sqlJsDistDirectory, sqlJsAssetFileName)
 
     this.response().setHeader("Cache-Control", "public, max-age=3600")
-    this.sendFile(assetPath, {contentType: this.contentType(sqlJsAssetFileName)})
-  }
-
-  /**
-   * @param {string} assetFileName - Asset file name.
-   * @returns {string} - Content type header value.
-   */
-  contentType(assetFileName) {
-    if (assetFileName.endsWith(".wasm")) return "application/wasm"
-    if (assetFileName.endsWith(".js")) return "text/javascript; charset=UTF-8"
-
-    return "application/octet-stream"
+    this.sendFile(assetPath)
   }
 }

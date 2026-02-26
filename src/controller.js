@@ -6,6 +6,7 @@ import * as inflection from "inflection"
 import Logger from "./logger.js"
 import Cookie from "./http-server/cookie.js"
 import ParamsToObject from "./http-server/client/params-to-object.js"
+import path from "node:path"
 import restArgsError from "./utils/rest-args-error.js"
 import querystring from "querystring"
 
@@ -247,8 +248,10 @@ export default class VelociousController {
       throw new Error(`Expected file path to be a non-empty string, got: ${String(filePath)}`)
     }
 
-    if (contentType) {
-      this._response.setHeader("Content-Type", contentType)
+    const detectedContentType = contentType || this.sendFileContentType(filePath)
+
+    if (detectedContentType) {
+      this._response.setHeader("Content-Type", detectedContentType)
     }
 
     if (status) {
@@ -256,6 +259,27 @@ export default class VelociousController {
     }
 
     this._response.setFilePath(filePath)
+  }
+
+  /**
+   * @param {string} filePath - File path.
+   * @returns {string} - Content type value.
+   */
+  sendFileContentType(filePath) {
+    const extension = path.extname(filePath).toLowerCase()
+
+    if (extension === ".wasm") return "application/wasm"
+    if (extension === ".js") return "text/javascript; charset=UTF-8"
+    if (extension === ".json") return "application/json; charset=UTF-8"
+    if (extension === ".css") return "text/css; charset=UTF-8"
+    if (extension === ".html") return "text/html; charset=UTF-8"
+    if (extension === ".txt") return "text/plain; charset=UTF-8"
+    if (extension === ".svg") return "image/svg+xml"
+    if (extension === ".png") return "image/png"
+    if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg"
+    if (extension === ".gif") return "image/gif"
+
+    return "application/octet-stream"
   }
 
   /** @returns {import("./authorization/ability.js").default | undefined} - Current ability for request scope. */
