@@ -6,6 +6,7 @@ import * as inflection from "inflection"
 import Logger from "./logger.js"
 import Cookie from "./http-server/cookie.js"
 import ParamsToObject from "./http-server/client/params-to-object.js"
+import path from "node:path"
 import restArgsError from "./utils/rest-args-error.js"
 import querystring from "querystring"
 
@@ -228,6 +229,57 @@ export default class VelociousController {
   /** @returns {void} - No return value.  */
   renderText() {
     throw new Error("renderText stub")
+  }
+
+  /**
+   * Streams a file response from disk without loading the full file into controller memory.
+   * @param {string} filePath - File path.
+   * @param {object} [args] - Options object.
+   * @param {string} [args.contentType] - Content type.
+   * @param {number | string} [args.status] - Status.
+   * @returns {void} - No return value.
+   */
+  sendFile(filePath, args = {}) {
+    const {contentType, status, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    if (typeof filePath !== "string" || filePath.length < 1) {
+      throw new Error(`Expected file path to be a non-empty string, got: ${String(filePath)}`)
+    }
+
+    const detectedContentType = contentType || this.sendFileContentType(filePath)
+
+    if (detectedContentType) {
+      this._response.setHeader("Content-Type", detectedContentType)
+    }
+
+    if (status) {
+      this._response.setStatus(status)
+    }
+
+    this._response.setFilePath(filePath)
+  }
+
+  /**
+   * @param {string} filePath - File path.
+   * @returns {string} - Content type value.
+   */
+  sendFileContentType(filePath) {
+    const extension = path.extname(filePath).toLowerCase()
+
+    if (extension === ".wasm") return "application/wasm"
+    if (extension === ".js") return "text/javascript; charset=UTF-8"
+    if (extension === ".json") return "application/json; charset=UTF-8"
+    if (extension === ".css") return "text/css; charset=UTF-8"
+    if (extension === ".html") return "text/html; charset=UTF-8"
+    if (extension === ".txt") return "text/plain; charset=UTF-8"
+    if (extension === ".svg") return "image/svg+xml"
+    if (extension === ".png") return "image/png"
+    if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg"
+    if (extension === ".gif") return "image/gif"
+
+    return "application/octet-stream"
   }
 
   /** @returns {import("./authorization/ability.js").default | undefined} - Current ability for request scope. */

@@ -1,8 +1,11 @@
 // @ts-check
 
 export default class VelociousHttpServerClientResponse {
-  /** @type {string | null} */
+  /** @type {string | Uint8Array | null} */
   body = null
+
+  /** @type {string | null} */
+  filePath = null
 
   /** @type {Record<string, string[]>} */
   headers = {}
@@ -40,7 +43,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @returns {string | null} - The body.
+   * @returns {string | Uint8Array | null} - The body.
    */
   getBody() {
     if (this.body !== undefined) {
@@ -65,11 +68,28 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * @param {string} value - Value to use.
+   * @param {string | Uint8Array} value - Value to use.
    * @returns {void} - No return value.
    */
   setBody(value) {
+    this.filePath = null
     this.body = value
+  }
+
+  /**
+   * @returns {string | null} - File path.
+   */
+  getFilePath() {
+    return this.filePath
+  }
+
+  /**
+   * @param {string} path - File path.
+   * @returns {void} - No return value.
+   */
+  setFilePath(path) {
+    this.filePath = path
+    this.body = null
   }
 
   /**

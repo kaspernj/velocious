@@ -60,7 +60,7 @@ export default class ServerClient {
   }
 
   /**
-   * @param {string} data - Data payload.
+   * @param {string | Uint8Array} data - Data payload.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async send(data) {

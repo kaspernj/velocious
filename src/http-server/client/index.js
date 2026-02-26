@@ -1,6 +1,8 @@
 // @ts-check
 
 import crypto from "crypto"
+import fs from "node:fs/promises"
+import {createReadStream} from "node:fs"
 import {digg} from "diggerize"
 import EventEmitter from "../../utils/event-emitter.js"
 import ensureError from "../../utils/ensure-error.js"
@@ -228,10 +230,13 @@ export default class VeoliciousHttpServerClient {
   }
 
   requestDone = () => {
-    this.sendDoneRequests()
+    void this.sendDoneRequests().catch((error) => {
+      this.logger.warn("Failed while sending done requests", error)
+      this.events.emit("close")
+    })
   }
 
-  sendDoneRequests() {
+  async sendDoneRequests() {
     while (true) {
       const requestRunner = this.requestRunners[0]
       const request = requestRunner?.getRequest()
@@ -242,7 +247,7 @@ export default class VeoliciousHttpServerClient {
         const shouldCloseConnection = this.shouldCloseConnection(request)
 
         this.requestRunners.shift()
-        this.sendResponse(requestRunner)
+        await this.sendResponse(requestRunner)
         if (this.currentRequest === request && this.state === "initial") this.currentRequest = undefined
         this.logger.debug(() => ["sendDoneRequests", {clientCount: this.clientCount, connectionHeader, httpVersion}])
 
@@ -258,16 +263,24 @@ export default class VeoliciousHttpServerClient {
 
   /**
    * @param {RequestRunner} requestRunner - Request runner.
-   * @returns {void} - No return value.
+   * @returns {Promise<void>} - Resolves when complete.
    */
-  sendResponse(requestRunner) {
+  async sendResponse(requestRunner) {
     const response = digg(requestRunner, "response")
     const request = requestRunner.getRequest()
-    const body = response.getBody()
+    const filePath = response.getFilePath()
     const date = new Date()
     const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
     const httpVersion = request.httpVersion()
     const shouldCloseConnection = this.shouldCloseConnection(request)
+    const hasFilePath = typeof filePath === "string" && filePath.length > 0
+    const body = hasFilePath ? null : response.getBody()
+    const bodyIsString = typeof body === "string"
+    const bodyIsBinary = body instanceof Uint8Array
+
+    if (!hasFilePath && !bodyIsString && !bodyIsBinary) {
+      throw new Error(`Expected response body to be a string or Uint8Array, got ${typeof body}`)
+    }
 
     this.logger.debug("sendResponse", {clientCount: this.clientCount, connectionHeader, httpVersion})
 
@@ -277,7 +290,14 @@ export default class VeoliciousHttpServerClient {
       response.setHeader("Connection", "Keep-Alive")
     }
 
-    const contentLength = new TextEncoder().encode(body).length
+    let contentLength
+
+    if (hasFilePath) {
+      const stats = await fs.stat(filePath)
+      contentLength = stats.size
+    } else {
+      contentLength = bodyIsString ? new TextEncoder().encode(body).length : body.byteLength
+    }
 
     response.setHeader("Content-Length", contentLength)
     response.setHeader("Date", date.toUTCString())
@@ -296,11 +316,26 @@ export default class VeoliciousHttpServerClient {
     headers += "\r\n"
 
     this.events.emit("output", headers)
-    this.events.emit("output", body)
+
+    if (hasFilePath) {
+      await this.sendFileOutput(filePath)
+    } else {
+      this.events.emit("output", body)
+    }
 
     if ("getRequestParser" in request) {
       const httpRequest = /** @type {import("./request.js").default} */ (request)
       httpRequest.getRequestParser().destroy()
+    }
+  }
+
+  /**
+   * @param {string} filePath - File path.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async sendFileOutput(filePath) {
+    for await (const chunk of createReadStream(filePath)) {
+      this.events.emit("output", chunk)
     }
   }
 

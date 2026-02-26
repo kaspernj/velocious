@@ -43,14 +43,16 @@ export default class VelociousRoutesResolver {
   }
 
   async resolve() {
+    this.routeHookControllerClass = undefined
     let controllerPath
-    let currentRoute = this.configuration.routes.rootRoute
+    const configurationRoutes = this.configuration.getRoutes()
+    const currentRoute = configurationRoutes?.rootRoute
     const rawPath = this.request.path()
     const currentPath = rawPath.split("?")[0]
     let viewPath
 
     const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath)
-    const matchResult = routeResolverHookMatch ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
+    const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
     const actionParam = this.params.action
     const controllerParam = this.params.controller
     const actionValue = typeof actionParam == "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
@@ -58,12 +60,25 @@ export default class VelociousRoutesResolver {
     let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
 
     if (routeResolverHookMatch) {
+      const routeHookControllerClass = routeResolverHookMatch.controllerClass
+      let routeHookControllerPath
+      let routeHookViewPath
+
+      if (typeof routeResolverHookMatch.controllerPath === "string") {
+        routeHookControllerPath = routeResolverHookMatch.controllerPath
+      }
+
+      if (typeof routeResolverHookMatch.viewPath === "string") {
+        routeHookViewPath = routeResolverHookMatch.viewPath
+      }
+
       controller = routeResolverHookMatch.controller
       action = normalizeActionName(routeResolverHookMatch.action)
       this.params.controller = controller
       this.params.action = routeResolverHookMatch.action
-      controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
-      viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
+      controllerPath = routeHookControllerPath || `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+      viewPath = routeHookViewPath || `${this.configuration.getDirectory()}/src/routes/${controller}`
+      this.routeHookControllerClass = routeHookControllerClass
     } else if (!matchResult) {
         const __filename = fileURLToPath(import.meta.url)
         const __dirname = dirname(__filename)
@@ -85,8 +100,7 @@ export default class VelociousRoutesResolver {
       throw new Error(`Matched the route but didn't know what to do with it: ${rawPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
     }
 
-    const controllerClassImport = await import(toImportSpecifier(controllerPath))
-    const controllerClass = controllerClassImport.default
+    const controllerClass = this.routeHookControllerClass || (await import(toImportSpecifier(controllerPath))).default
     const controllerInstance = new controllerClass({
       action,
       configuration: this.configuration,
@@ -204,6 +218,18 @@ export default class VelociousRoutesResolver {
 
       if (hookResult.params && typeof hookResult.params !== "object") {
         throw new Error(`Expected route resolver hook params to be an object, got: ${hookResult.params}`)
+      }
+
+      if (hookResult.controllerClass !== undefined && typeof hookResult.controllerClass !== "function") {
+        throw new Error(`Expected route resolver hook controllerClass to be a class/function when provided, got: ${hookResult.controllerClass}`)
+      }
+
+      if (hookResult.controllerPath !== undefined && typeof hookResult.controllerPath !== "string") {
+        throw new Error(`Expected route resolver hook controllerPath to be a string when provided, got: ${hookResult.controllerPath}`)
+      }
+
+      if (hookResult.viewPath !== undefined && typeof hookResult.viewPath !== "string") {
+        throw new Error(`Expected route resolver hook viewPath to be a string when provided, got: ${hookResult.viewPath}`)
       }
 
       if (hookResult.params) {
