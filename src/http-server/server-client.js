@@ -112,7 +112,8 @@ export default class ServerClient {
       const onWriteError = (error) => {
         const errorCode = /** @type {{code?: string}} */ (error).code
 
-        this.logger.warn(() => [`Socket ${this.clientCount} write error`, errorCode || error.message])
+        console.error(`Socket ${this.clientCount} write error`, error)
+        this.logger.error(() => [`Socket ${this.clientCount} write error`, errorCode || error.message])
         finish()
       }
 
