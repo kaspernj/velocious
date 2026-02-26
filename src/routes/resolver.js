@@ -61,12 +61,16 @@ export default class VelociousRoutesResolver {
 
     if (routeResolverHookMatch) {
       const routeHookControllerClass = routeResolverHookMatch.controllerClass
-      const routeHookControllerPath = typeof routeResolverHookMatch.controllerPath === "string"
-        ? routeResolverHookMatch.controllerPath
-        : undefined
-      const routeHookViewPath = typeof routeResolverHookMatch.viewPath === "string"
-        ? routeResolverHookMatch.viewPath
-        : undefined
+      let routeHookControllerPath
+      let routeHookViewPath
+
+      if (typeof routeResolverHookMatch.controllerPath === "string") {
+        routeHookControllerPath = routeResolverHookMatch.controllerPath
+      }
+
+      if (typeof routeResolverHookMatch.viewPath === "string") {
+        routeHookViewPath = routeResolverHookMatch.viewPath
+      }
 
       controller = routeResolverHookMatch.controller
       action = normalizeActionName(routeResolverHookMatch.action)

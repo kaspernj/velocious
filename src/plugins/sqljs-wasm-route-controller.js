@@ -1,3 +1,4 @@
+import fs from "node:fs/promises"
 import path from "node:path"
 
 import Controller from "../controller.js"
@@ -29,6 +30,19 @@ export default class SqlJsWasmRouteController extends Controller {
     }
 
     const assetPath = path.join(sqlJsDistDirectory, sqlJsAssetFileName)
+
+    try {
+      await fs.access(assetPath)
+    } catch (error) {
+      const ensuredError = /** @type {{code?: string}} */ (error)
+
+      if (ensuredError.code === "ENOENT") {
+        await this.render({json: {errorMessage: "Not found", status: "error"}, status: "not-found"})
+        return
+      }
+
+      throw error
+    }
 
     this.response().setHeader("Cache-Control", "public, max-age=3600")
     this.sendFile(assetPath)

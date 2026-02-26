@@ -113,7 +113,12 @@ export default class PluginRoutes {
 
         if (!key) return null
 
-        params[key] = decodeURIComponent(currentSegment)
+        try {
+          params[key] = decodeURIComponent(currentSegment)
+        } catch {
+          return null
+        }
+
         continue
       }
 
