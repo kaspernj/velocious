@@ -116,18 +116,23 @@ describe("Background jobs - queue", () => {
 
     expect(forkedExists).toBeFalse()
 
+    let forkedResult = null
+
     await timeout({timeout: 6000}, async () => {
       while (true) {
         try {
-          await fs.readFile(forkedPath, "utf8")
-          break
+          const contents = await fs.readFile(forkedPath, "utf8")
+          const parsed = JSON.parse(contents)
+
+          if (parsed && parsed.value === "forked") {
+            forkedResult = parsed
+            break
+          }
         } catch {
           await wait(0.05)
         }
       }
     })
-
-    const forkedResult = JSON.parse(await fs.readFile(forkedPath, "utf8"))
 
     expect(forkedResult).toEqual({value: "forked"})
 

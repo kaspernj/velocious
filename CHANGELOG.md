@@ -155,3 +155,4 @@
 - Extend route resolver hooks to allow optional `controllerPath`/`viewPath` overrides so plugin-style libraries can resolve controllers outside app route directories.
 - Add `Controller#sendFile(path, {contentType, status})` with streamed HTTP output so controllers can send files (for example wasm assets) without loading full files into memory first.
 - Add `configuration.routes((routes) => ...)` plugin-route DSL with `routes.get`/`routes.post` and `to: [ControllerClass, action]` for simple plugin endpoint registration.
+- Stabilize `Background jobs - queue` forked-job timing spec by waiting for a valid parsed JSON payload instead of only waiting for file existence, preventing intermittent `Unexpected end of JSON input` failures.
