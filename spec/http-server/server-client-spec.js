@@ -10,6 +10,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 class FakeSocket extends EventEmitter {
   remoteAddress = "127.0.0.1"
   destroyed = false
+  destroyCalls = 0
   emitWriteError = false
   writable = true
   writableEnded = false
@@ -32,6 +33,15 @@ class FakeSocket extends EventEmitter {
 
   /** @returns {void} - No return value. */
   end() {
+    this.writableEnded = true
+    this.writable = false
+    this.destroyed = true
+    this.emit("close")
+  }
+
+  /** @returns {void} - No return value. */
+  destroy() {
+    this.destroyCalls += 1
     this.writableEnded = true
     this.writable = false
     this.destroyed = true
@@ -65,6 +75,7 @@ describe("HttpServer - server client", () => {
     socket.emit("end")
 
     expect(closeEvents).toEqual(1)
+    expect(socket.destroyCalls).toEqual(1)
     await client.send("after-error")
   })
 
@@ -85,5 +96,27 @@ describe("HttpServer - server client", () => {
 
     socket.emitWriteError = true
     await client.send("should-not-hang")
+  })
+
+  it("resolves end immediately for already closed sockets", async () => {
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {console: false, file: false}
+    })
+    const socket = new FakeSocket()
+    const client = new ServerClient({clientCount: 3, configuration, socket})
+
+    socket.destroyed = true
+    socket.writable = false
+    socket.writableEnded = true
+
+    await client.end()
   })
 })

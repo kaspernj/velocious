@@ -35,6 +35,11 @@ export default class ServerClient {
   /** @returns {Promise<void>} - Resolves when complete.  */
   end() {
     return new Promise((resolve) => {
+      if (this.socket.destroyed || this.socket.writableEnded || this.socket.writable === false) {
+        resolve(null)
+        return
+      }
+
       this.socket.once("close", () => resolve(null))
       this.socket.end()
     })
@@ -75,8 +80,13 @@ export default class ServerClient {
   onSocketError = (error) => {
     const errorCode = /** @type {{code?: string}} */ (error).code
 
-    this.logger.warn(() => [`Socket ${this.clientCount} error`, errorCode || error.message])
+    console.error(`Socket ${this.clientCount} error`, error)
+    this.logger.error(() => [`Socket ${this.clientCount} error`, errorCode || error.message])
     this.emitClose()
+
+    if (!this.socket.destroyed) {
+      this.socket.destroy(error)
+    }
   }
 
   /** @returns {void} - No return value. */
