@@ -20,8 +20,11 @@ export default class ServerClient {
     this.socket = socket
     this.clientCount = clientCount
     this.remoteAddress = socket.remoteAddress
+    this.closeEmitted = false
 
     socket.on("end", this.onSocketEnd)
+    socket.on("error", this.onSocketError)
+    socket.on("close", this.onSocketClose)
   }
 
   /** @returns {void} - No return value.  */
@@ -56,6 +59,31 @@ export default class ServerClient {
   /** @returns {void} - No return value.  */
   onSocketEnd = () => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount} end`)
+    this.emitClose()
+  }
+
+  /** @returns {void} - No return value. */
+  onSocketClose = () => {
+    this.logger.debugLowLevel(() => `Socket ${this.clientCount} close`)
+    this.emitClose()
+  }
+
+  /**
+   * @param {Error} error - Socket error.
+   * @returns {void} - No return value.
+   */
+  onSocketError = (error) => {
+    const errorCode = /** @type {{code?: string}} */ (error).code
+
+    this.logger.warn(() => [`Socket ${this.clientCount} error`, errorCode || error.message])
+    this.emitClose()
+  }
+
+  /** @returns {void} - No return value. */
+  emitClose() {
+    if (this.closeEmitted) return
+
+    this.closeEmitted = true
     this.events.emit("close", this)
   }
 
