@@ -782,6 +782,16 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {string | string[]} sort - Sort definition(s), for example `"createdAt"` or `"-createdAt"`.
+   * @returns {FrontendModelQuery<T>} - Query builder with sort definitions.
+   */
+  static sort(sort) {
+    return this.query().sort(sort)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @returns {FrontendModelQuery<T>} - Query builder.
    */
   static query() {

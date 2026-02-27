@@ -196,6 +196,7 @@ class MockFrontendModelQuery {
     this.modelClass = modelClass
     this.conditions = {}
     this.joinsArgs = []
+    this.orderSqls = []
     this.preloads = []
     this.whereSqls = []
     this.modelClass.lastQuery = this
@@ -230,6 +231,15 @@ class MockFrontendModelQuery {
    */
   joins(_joinObject) {
     this.joinsArgs.push(_joinObject)
+    return this
+  }
+
+  /**
+   * @param {string} orderSql
+   * @returns {this}
+   */
+  order(orderSql) {
+    this.orderSqls.push(orderSql)
     return this
   }
 
@@ -378,6 +388,23 @@ describe("Controller frontend model actions", () => {
           comments: true
         }
       }
+    ])
+  })
+
+  it("applies sort params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        sort: ["-createdAt", "id asc"]
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.orderSqls).toEqual([
+      "\"mock_frontend_models\".\"created_at\" DESC",
+      "\"mock_frontend_models\".\"id\" ASC"
     ])
   })
 

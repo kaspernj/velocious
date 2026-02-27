@@ -157,6 +157,47 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 }
 
 /**
+ * @param {unknown} sort - Sort payload.
+ * @returns {string[]} - Normalized sort definitions.
+ */
+function normalizeSort(sort) {
+  if (!sort) return []
+
+  if (typeof sort === "string") {
+    const trimmed = sort.trim()
+
+    if (trimmed.length < 1) {
+      throw new Error("sort value must be a non-empty string")
+    }
+
+    return [trimmed]
+  }
+
+  if (!Array.isArray(sort)) {
+    throw new Error(`Invalid sort type: ${typeof sort}`)
+  }
+
+  /** @type {string[]} */
+  const normalized = []
+
+  for (const sortEntry of sort) {
+    if (typeof sortEntry !== "string") {
+      throw new Error(`Invalid sort entry type: ${typeof sortEntry}`)
+    }
+
+    const trimmed = sortEntry.trim()
+
+    if (trimmed.length < 1) {
+      throw new Error("sort values must be non-empty strings")
+    }
+
+    normalized.push(trimmed)
+  }
+
+  return normalized
+}
+
+/**
  * @param {Record<string, any>} conditions - findBy conditions.
  * @returns {string} - Serialized conditions for error messages.
  */
@@ -196,6 +237,7 @@ export default class FrontendModelQuery {
     this._where = {}
     this._searches = []
     this._select = {}
+    this._sort = []
   }
 
   /**
@@ -291,6 +333,16 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {string | string[]} sort - Sort definition(s), for example `"createdAt"` or `"-createdAt"`.
+   * @returns {this} - Query with appended sort definitions.
+   */
+  sort(sort) {
+    this._sort.push(...normalizeSort(sort))
+
+    return this
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload preload hash when present.
    */
   preloadPayload() {
@@ -328,6 +380,17 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload sort array when present.
+   */
+  sortPayload() {
+    if (this._sort.length === 0) return {}
+
+    return {
+      sort: [...this._sort]
+    }
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload where hash when present.
    */
   wherePayload() {
@@ -346,6 +409,7 @@ export default class FrontendModelQuery {
       ...this.preloadPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(),
+      ...this.sortPayload(),
       ...this.wherePayload()
     })
 
@@ -397,6 +461,7 @@ export default class FrontendModelQuery {
       ...this.preloadPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(Object.keys(mergedWhere)),
+      ...this.sortPayload(),
       where: mergedWhere
     })
 

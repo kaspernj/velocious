@@ -229,6 +229,47 @@ function normalizeFrontendModelWhere(where) {
 }
 
 /**
+ * @param {unknown} sort - Sort payload.
+ * @returns {string[]} - Normalized sort definitions.
+ */
+function normalizeFrontendModelSort(sort) {
+  if (!sort) return []
+
+  if (typeof sort === "string") {
+    const trimmed = sort.trim()
+
+    if (trimmed.length < 1) {
+      throw new Error("Invalid sort value: expected non-empty string")
+    }
+
+    return [trimmed]
+  }
+
+  if (!Array.isArray(sort)) {
+    throw new Error(`Invalid sort type: ${typeof sort}`)
+  }
+
+  /** @type {string[]} */
+  const normalized = []
+
+  for (const sortEntry of sort) {
+    if (typeof sortEntry !== "string") {
+      throw new Error(`Invalid sort entry type: ${typeof sortEntry}`)
+    }
+
+    const trimmed = sortEntry.trim()
+
+    if (trimmed.length < 1) {
+      throw new Error("Invalid sort value: expected non-empty string")
+    }
+
+    normalized.push(trimmed)
+  }
+
+  return normalized
+}
+
+/**
  * @param {string[]} path - Relationship path.
  * @returns {Record<string, any>} - Join object.
  */
@@ -542,6 +583,12 @@ export default class FrontendModelController extends Controller {
       this.applyFrontendModelSearch({query, search})
     }
 
+    const sorts = this.frontendModelSort()
+
+    for (const sort of sorts) {
+      this.applyFrontendModelSort({query, sort})
+    }
+
     return await query.toArray()
   }
 
@@ -571,6 +618,11 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelWhere() {
     return normalizeFrontendModelWhere(this.frontendModelParams().where)
+  }
+
+  /** @returns {string[]} - Frontend sort definitions. */
+  frontendModelSort() {
+    return normalizeFrontendModelSort(this.frontendModelParams().sort)
   }
 
   /**
@@ -708,6 +760,59 @@ export default class FrontendModelController extends Controller {
         query.where(`${columnSql} = ${query.driver.quote(value)}`)
       }
     }
+  }
+
+  /**
+   * @param {object} args - Sort args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {string} args.sort - Sort definition.
+   * @returns {void}
+   */
+  applyFrontendModelSort({query, sort}) {
+    const modelClass = this.frontendModelClass()
+    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
+    let sortAttributeName = sort
+    let direction = "ASC"
+
+    if (sort.startsWith("-")) {
+      sortAttributeName = sort.slice(1)
+      direction = "DESC"
+    } else {
+      const sortParts = sort.split(/\s+/).filter(Boolean)
+
+      if (sortParts.length > 2) {
+        throw new Error(`Invalid sort definition: ${sort}`)
+      }
+
+      if (sortParts.length >= 1) {
+        sortAttributeName = sortParts[0]
+      }
+
+      if (sortParts.length === 2) {
+        const parsedDirection = sortParts[1].toUpperCase()
+
+        if (parsedDirection !== "ASC" && parsedDirection !== "DESC") {
+          throw new Error(`Invalid sort direction: ${sortParts[1]}`)
+        }
+
+        direction = parsedDirection
+      }
+    }
+
+    if (sortAttributeName.length < 1) {
+      throw new Error(`Invalid sort definition: ${sort}`)
+    }
+
+    const columnName = attributeNameToColumnNameMap[sortAttributeName]
+
+    if (!columnName) {
+      throw new Error(`Unknown sort column "${sortAttributeName}" for ${modelClass.name}`)
+    }
+
+    const rootTableReference = query.getTableReferenceForJoin()
+    const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+
+    query.order(`${columnSql} ${direction}`)
   }
 
   /**
