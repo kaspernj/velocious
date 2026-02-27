@@ -145,9 +145,24 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
 
   it("filters on deep nested relationship attributes with multiple where tuples", async () => {
     const cutoff = new Date("2025-01-01T00:00:00.000Z")
-    const matchingUser = await User.create({createdAt: new Date("2025-02-01T00:00:00.000Z"), reference: "creator-match"})
-    const oldUser = await User.create({createdAt: new Date("2024-02-01T00:00:00.000Z"), reference: "creator-old"})
-    const otherUser = await User.create({createdAt: new Date("2025-02-01T00:00:00.000Z"), reference: "other-user"})
+    const matchingUser = await User.create({
+      createdAt: new Date("2025-02-01T00:00:00.000Z"),
+      email: "creator-match@example.com",
+      encryptedPassword: "secret",
+      reference: "creator-match"
+    })
+    const oldUser = await User.create({
+      createdAt: new Date("2024-02-01T00:00:00.000Z"),
+      email: "creator-old@example.com",
+      encryptedPassword: "secret",
+      reference: "creator-old"
+    })
+    const otherUser = await User.create({
+      createdAt: new Date("2025-02-01T00:00:00.000Z"),
+      email: "other-user@example.com",
+      encryptedPassword: "secret",
+      reference: "other-user"
+    })
     const projectMatch = await Project.create({
       creatingUserReference: matchingUser.reference(),
       nameEn: "Nested Tuple Match",
