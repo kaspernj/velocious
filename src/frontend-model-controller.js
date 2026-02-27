@@ -974,22 +974,62 @@ export default class FrontendModelController extends Controller {
       path: sort.path
     })
     const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
-
-    if (sort.path.length > 0) {
-      query.joins(buildFrontendModelJoinObjectFromPath(sort.path))
-    }
+    const translatedAttributesMap = targetModelClass.getTranslationsMap()
+    const translatedAttributeNames = Object.keys(translatedAttributesMap)
+    const isTranslatedSortAttribute = translatedAttributeNames.includes(sort.column)
 
     const columnName = attributeNameToColumnNameMap[sort.column]
+    const direction = sort.direction.toUpperCase()
+
+    if (isTranslatedSortAttribute) {
+      const translationModelClass = targetModelClass.getTranslationClass()
+      const translationAttributeNameToColumnNameMap = translationModelClass.getAttributeNameToColumnNameMap()
+      const translationColumnName = translationAttributeNameToColumnNameMap[sort.column]
+      const translationPath = sort.path.concat(["translations"])
+
+      if (!translationColumnName) {
+        throw new Error(`Unknown translated sort column "${sort.column}" for ${targetModelClass.name}`)
+      }
+
+      this.ensureFrontendModelSortJoinPath({path: translationPath, query})
+
+      const translationTableReference = query.getTableReferenceForJoin(...translationPath)
+      const translationColumnSql = `${query.driver.quoteTable(translationTableReference)}.${query.driver.quoteColumn(translationColumnName)}`
+
+      query.order(`${translationColumnSql} ${direction}`)
+
+      return
+    }
 
     if (!columnName) {
       throw new Error(`Unknown sort column "${sort.column}" for ${targetModelClass.name}`)
     }
 
+    this.ensureFrontendModelSortJoinPath({path: sort.path, query})
+
     const tableReference = query.getTableReferenceForJoin(...sort.path)
     const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
-    const direction = sort.direction.toUpperCase()
 
     query.order(`${columnSql} ${direction}`)
+  }
+
+  /**
+   * Ensures a sort join path has been joined on query.
+   * @param {object} args - Join args.
+   * @param {string[]} args.path - Relationship join path.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  ensureFrontendModelSortJoinPath({path, query}) {
+    if (path.length < 1) {
+      return
+    }
+
+    try {
+      query.getTableReferenceForJoin(...path)
+    } catch {
+      query.joins(buildFrontendModelJoinObjectFromPath(path))
+    }
   }
 
   /**
