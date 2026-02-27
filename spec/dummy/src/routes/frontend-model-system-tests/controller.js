@@ -3,6 +3,119 @@ import Controller from "../../../../../src/controller.js"
 /** Dummy backend endpoint used by browser frontend-model integration specs. */
 export default class FrontendModelSystemTestsController extends Controller {
   /**
+   * @param {unknown} sort - Sort payload from params.
+   * @returns {Array<{column: string, direction: "asc" | "desc", path: string[]}>} - Normalized sort entries.
+   */
+  normalizedSort(sort) {
+    if (!sort) return []
+
+    if (typeof sort === "string") {
+      const parsedSort = this.normalizedSortString(sort)
+
+      return parsedSort ? [parsedSort] : []
+    }
+
+    if (Array.isArray(sort)) {
+      const normalized = []
+
+      for (const sortEntry of sort) {
+        if (!sortEntry || typeof sortEntry !== "object" || Array.isArray(sortEntry)) continue
+
+        const descriptor = /** @type {Record<string, unknown>} */ (sortEntry)
+        const column = typeof descriptor.column === "string" ? descriptor.column.trim() : ""
+        const direction = descriptor.direction === "desc" ? "desc" : "asc"
+        const path = Array.isArray(descriptor.path) ? descriptor.path.filter((entry) => typeof entry === "string") : []
+
+        if (column.length < 1) continue
+
+        normalized.push({
+          column,
+          direction,
+          path
+        })
+      }
+
+      return normalized
+    }
+
+    return []
+  }
+
+  /**
+   * @param {string} sort - Sort payload string.
+   * @returns {{column: string, direction: "asc" | "desc", path: string[]} | null} - Normalized single sort.
+   */
+  normalizedSortString(sort) {
+    const trimmedSort = sort.trim()
+
+    if (trimmedSort.length < 1) return null
+
+    if (trimmedSort.startsWith("-")) {
+      const column = trimmedSort.slice(1).trim()
+
+      if (column.length < 1) return null
+
+      return {
+        column,
+        direction: "desc",
+        path: []
+      }
+    }
+
+    const sortParts = trimmedSort.split(/\s+/).filter(Boolean)
+
+    if (sortParts.length < 1 || sortParts.length > 2) return null
+
+    const column = sortParts[0]
+    const directionValue = sortParts[1]?.toLowerCase()
+    const direction = directionValue === "desc" ? "desc" : "asc"
+
+    return {
+      column,
+      direction,
+      path: []
+    }
+  }
+
+  /**
+   * @param {unknown[]} models - Models to sort.
+   * @param {unknown} sort - Sort payload from params.
+   * @returns {unknown[]} - Sorted models.
+   */
+  applySort(models, sort) {
+    const normalizedSort = this.normalizedSort(sort)
+
+    if (normalizedSort.length < 1) return models
+    const sortedModels = [...models]
+
+    sortedModels.sort((leftModel, rightModel) => {
+      if (!leftModel || typeof leftModel !== "object") return 0
+      if (!rightModel || typeof rightModel !== "object") return 0
+
+      for (const sortEntry of normalizedSort) {
+        if (sortEntry.path.length > 0) continue
+
+        const leftValue = /** @type {Record<string, unknown>} */ (leftModel)[sortEntry.column]
+        const rightValue = /** @type {Record<string, unknown>} */ (rightModel)[sortEntry.column]
+
+        if (leftValue === rightValue) continue
+        if (leftValue === undefined || leftValue === null) return 1
+        if (rightValue === undefined || rightValue === null) return -1
+
+        if (leftValue > rightValue) {
+          return sortEntry.direction === "desc" ? -1 : 1
+        }
+
+        return sortEntry.direction === "desc" ? 1 : -1
+      }
+
+      return 0
+    })
+
+    return sortedModels
+  }
+
+  /**
    * @param {unknown} actualValue - Actual value.
    * @param {unknown} expectedValue - Expected value.
    * @returns {boolean} - Whether values match with frontend-model semantics.
@@ -157,6 +270,7 @@ export default class FrontendModelSystemTestsController extends Controller {
   async frontendIndex() {
     const preload = this.params().preload
     const select = this.params().select
+    const sort = this.params().sort
     const where = /** @type {Record<string, any> | undefined} */ (this.params().where)
     const preloadingTasks = preload && typeof preload === "object" && "tasks" in preload
     const preloadPayload = this.preloadModelPayload()
@@ -183,7 +297,7 @@ export default class FrontendModelSystemTestsController extends Controller {
       tags: ["a"]
     }, ["HttpFrontendModel", "BrowserFrontendModel"], select)
     const secondDefaultModel = this.applySelect({
-      createdAt: "2026-02-18T08:00:00.000Z",
+      createdAt: "2026-02-19T08:00:00.000Z",
       email: "john@example.com",
       id: "2",
       metadata: {
@@ -196,10 +310,11 @@ export default class FrontendModelSystemTestsController extends Controller {
       preloadingTasks ? selectedPreloadProject : firstDefaultModel,
       secondDefaultModel
     ].filter((model) => this.matchesWhere(model, where))
+    const sortedModels = this.applySort(models, sort)
 
     await this.render({
       json: {
-        models,
+        models: sortedModels,
         status: "success"
       }
     })

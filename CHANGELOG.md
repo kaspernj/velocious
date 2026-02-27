@@ -158,3 +158,5 @@
 - Add `Controller#sendFile(path, {contentType, status})` with streamed HTTP output so controllers can send files (for example wasm assets) without loading full files into memory first.
 - Add `configuration.routes((routes) => ...)` plugin-route DSL with `routes.get`/`routes.post` and `to: [ControllerClass, action]` for simple plugin endpoint registration.
 - Stabilize `Background jobs - queue` forked-job timing spec by waiting for a valid parsed JSON payload instead of only waiting for file existence, preventing intermittent `Unexpected end of JSON input` failures.
+- Fix dummy frontend-model system-test route sorting to honor descriptor-style `sort` payloads (`[{column, direction, path}]`) used by frontend-model queries.
+- Always resolve dummy Task frontend-model abilities for `/api/frontend-models/tasks/*` commands so integration specs with relationship-path sorting run with an ability context.
