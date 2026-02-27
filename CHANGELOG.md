@@ -161,3 +161,4 @@
 - Fix dummy frontend-model system-test route sorting to honor descriptor-style `sort` payloads (`[{column, direction, path}]`) used by frontend-model queries.
 - Always resolve dummy Task frontend-model abilities for `/api/frontend-models/tasks/*` commands so integration specs with relationship-path sorting run with an ability context.
 - Apply the dummy Task frontend-model ability resolver fix across all tracked peakflow test configs (`mariadb`/`sqlite`/`pgsql`/`mssql`) so CI environments load it regardless of selected test database.
+- Add nested relationship tuple-operator support to database `where(...)` hashes (including `like`), enabling queries such as `Event.where({translations: [["name", "like", "%foo%"]]})` and deep chains like `Task.where({project: {account: [["name", "like", "%bar%"], ["createdAt", "gteq", someDate]]}})`.

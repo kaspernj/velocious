@@ -8,6 +8,7 @@ import WhereBase from "./where-base.js"
  */
 
 const NO_MATCH = Symbol("no-match")
+const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like"])
 
 export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase {
   /**
@@ -72,6 +73,175 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    */
   _getRelationship(modelClass, relationshipName) {
     return modelClass.getRelationshipsMap()[relationshipName]
+  }
+
+  /**
+   * @param {unknown} tupleValue - Candidate tuple.
+   * @returns {boolean} - Whether this is a relationship where tuple.
+   */
+  _isRelationshipWhereOperatorTuple(tupleValue) {
+    if (!Array.isArray(tupleValue) || tupleValue.length < 3) {
+      return false
+    }
+
+    return typeof tupleValue[0] === "string" &&
+      typeof tupleValue[1] === "string" &&
+      relationshipWhereOperators.has(tupleValue[1])
+  }
+
+  /**
+   * @param {unknown} value - Candidate relationship where value.
+   * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} - Normalized tuples.
+   */
+  _normalizeRelationshipWhereOperatorTuples(value) {
+    if (!Array.isArray(value)) {
+      throw new Error(`Invalid relationship where tuple container type: ${typeof value}`)
+    }
+
+    /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} */
+    const normalized = []
+    const addCondition = (conditionValue) => {
+      if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
+        normalized.push([
+          conditionValue[0],
+          /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (conditionValue[1]),
+          conditionValue[2]
+        ])
+
+        if (conditionValue.length > 3) {
+          for (let index = 3; index < conditionValue.length; index += 1) {
+            addCondition(conditionValue[index])
+          }
+        }
+
+        return
+      }
+
+      if (!Array.isArray(conditionValue)) {
+        throw new Error("Relationship where conditions must be tuples")
+      }
+
+      conditionValue.forEach((nestedConditionValue) => {
+        addCondition(nestedConditionValue)
+      })
+    }
+
+    addCondition(value)
+
+    if (normalized.length < 1) {
+      throw new Error("Relationship where tuple container cannot be empty")
+    }
+
+    return normalized
+  }
+
+  /**
+   * @param {unknown} value - Candidate relationship where value.
+   * @returns {boolean} - Whether value can be normalized to relationship tuples.
+   */
+  _isRelationshipWhereOperatorTupleContainer(value) {
+    try {
+      this._normalizeRelationshipWhereOperatorTuples(value)
+
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * @param {object} args - Relationship where options.
+   * @param {typeof import("../record/index.js").default} args.modelClass - Relationship model class.
+   * @param {string} args.tableName - Relationship table reference name.
+   * @param {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} args.tuples - Operator tuples.
+   * @returns {string} - SQL where fragment.
+   */
+  _whereSQLFromRelationshipWhereOperatorTuples({modelClass, tableName, tuples}) {
+    const options = this.getOptions()
+    let sql = ""
+    let index = 0
+
+    tuples.forEach(([attributeName, operator, whereValue]) => {
+      if (index > 0) sql += " AND "
+
+      const columnName = this._resolveColumnName(modelClass, attributeName)
+
+      if (!columnName) throw new Error(`Unknown attribute "${attributeName}" for ${modelClass.name}`)
+
+      const normalizedValue = this._normalizeSqliteBooleanValue({
+        columnName,
+        modelClass,
+        value: whereValue
+      })
+      const typedValue = this._normalizeValueForColumnType({
+        columnName,
+        modelClass,
+        value: normalizedValue
+      })
+
+      if (typedValue === NO_MATCH) {
+        sql += "1=0"
+        index += 1
+        return
+      }
+
+      const columnSql = `${options.quoteTableName(tableName)}.${options.quoteColumnName(columnName)}`
+
+      if (operator === "eq") {
+        if (Array.isArray(typedValue)) {
+          if (typedValue.length < 1) {
+            sql += "1=0"
+          } else {
+            sql += `${columnSql} IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
+          }
+        } else if (typedValue === null) {
+          sql += `${columnSql} IS NULL`
+        } else {
+          sql += `${columnSql} = ${options.quote(typedValue)}`
+        }
+
+        index += 1
+        return
+      }
+
+      if (operator === "notEq") {
+        if (Array.isArray(typedValue)) {
+          if (typedValue.length < 1) {
+            sql += "1=1"
+          } else {
+            sql += `${columnSql} NOT IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
+          }
+        } else if (typedValue === null) {
+          sql += `${columnSql} IS NOT NULL`
+        } else {
+          sql += `${columnSql} != ${options.quote(typedValue)}`
+        }
+
+        index += 1
+        return
+      }
+
+      if (Array.isArray(typedValue)) {
+        throw new Error(`Operator "${operator}" does not support array values for ${modelClass.name}.${attributeName}`)
+      }
+
+      if (typedValue === null) {
+        throw new Error(`Operator "${operator}" does not support null values for ${modelClass.name}.${attributeName}`)
+      }
+
+      const operatorMap = {
+        gt: ">",
+        gteq: ">=",
+        like: "LIKE",
+        lt: "<",
+        lteq: "<="
+      }
+
+      sql += `${columnSql} ${operatorMap[operator]} ${options.quote(typedValue)}`
+      index += 1
+    })
+
+    return sql
   }
 
   /**
@@ -158,13 +328,25 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     for (const whereKey in hash) {
       const whereValue = hash[whereKey]
+      const relationship = this._getRelationship(modelClass, whereKey)
 
-      if (Array.isArray(whereValue) && whereValue.length === 0) {
+      if (relationship && this._isRelationshipWhereOperatorTupleContainer(whereValue)) {
+        if (index > 0) sql += " AND "
+
+        const targetModelClass = relationship.getTargetModelClass()
+        const nestedPath = path.concat([whereKey])
+        const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
+        const tuples = this._normalizeRelationshipWhereOperatorTuples(whereValue)
+
+        sql += this._whereSQLFromRelationshipWhereOperatorTuples({
+          modelClass: targetModelClass,
+          tableName: nestedTableName,
+          tuples
+        })
+      } else if (Array.isArray(whereValue) && whereValue.length === 0) {
         if (index > 0) sql += " AND "
         sql += "1=0"
       } else if (isPlainObject(whereValue)) {
-        const relationship = this._getRelationship(modelClass, whereKey)
-
         if (!relationship) {
           throw new Error(`Unknown relationship "${whereKey}" for ${modelClass.name}`)
         }

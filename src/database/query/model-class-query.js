@@ -605,10 +605,9 @@ function splitWhereHash({hash, modelClass}) {
   for (const key in hash) {
     const value = hash[key]
     const isNested = isPlainObject(value)
+    const relationship = getRelationshipByName(modelClass, key)
 
     if (isNested) {
-      const relationship = getRelationshipByName(modelClass, key)
-
       if (relationship) {
         const targetModelClass = relationship.getTargetModelClass()
         const nestedResult = splitWhereHash({hash: value, modelClass: targetModelClass})
@@ -628,6 +627,8 @@ function splitWhereHash({hash, modelClass}) {
       } else {
         fallbackHash[key] = value
       }
+    } else if (relationship && hasRelationshipWhereOperatorTuples(value)) {
+      resolvedHash[key] = normalizeRelationshipWhereOperatorTuples(value)
     } else {
       const columnName = resolveColumnName(modelClass, key)
 
@@ -654,18 +655,98 @@ function buildJoinObjectFromWhereHash({hash, modelClass}) {
 
   for (const key in hash) {
     const value = hash[key]
-
-    if (!isPlainObject(value)) continue
-
     const relationship = getRelationshipByName(modelClass, key)
 
     if (!relationship) continue
 
-    const targetModelClass = relationship.getTargetModelClass()
-    const nestedJoinObject = buildJoinObjectFromWhereHash({hash: value, modelClass: targetModelClass})
+    if (isPlainObject(value)) {
+      const targetModelClass = relationship.getTargetModelClass()
+      const nestedJoinObject = buildJoinObjectFromWhereHash({hash: value, modelClass: targetModelClass})
 
-    joinObject[key] = Object.keys(nestedJoinObject).length > 0 ? nestedJoinObject : true
+      joinObject[key] = Object.keys(nestedJoinObject).length > 0 ? nestedJoinObject : true
+      continue
+    }
+
+    if (hasRelationshipWhereOperatorTuples(value)) {
+      joinObject[key] = true
+    }
   }
 
   return joinObject
+}
+
+const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like"])
+
+/**
+ * @param {unknown} tupleValue - Candidate tuple.
+ * @returns {boolean} - Whether this is a relationship where tuple.
+ */
+function isRelationshipWhereOperatorTuple(tupleValue) {
+  if (!Array.isArray(tupleValue) || tupleValue.length < 3) {
+    return false
+  }
+
+  return typeof tupleValue[0] === "string" &&
+    typeof tupleValue[1] === "string" &&
+    relationshipWhereOperators.has(tupleValue[1])
+}
+
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} - Normalized tuples.
+ */
+function normalizeRelationshipWhereOperatorTuples(value) {
+  if (!Array.isArray(value)) {
+    throw new Error(`Invalid relationship where tuple container type: ${typeof value}`)
+  }
+
+  /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} */
+  const normalized = []
+  const addCondition = (conditionValue) => {
+    if (isRelationshipWhereOperatorTuple(conditionValue)) {
+      normalized.push([
+        conditionValue[0],
+        /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (conditionValue[1]),
+        conditionValue[2]
+      ])
+
+      if (conditionValue.length > 3) {
+        for (let index = 3; index < conditionValue.length; index += 1) {
+          addCondition(conditionValue[index])
+        }
+      }
+
+      return
+    }
+
+    if (!Array.isArray(conditionValue)) {
+      throw new Error("Relationship where conditions must be tuples")
+    }
+
+    conditionValue.forEach((nestedConditionValue) => {
+      addCondition(nestedConditionValue)
+    })
+  }
+
+  addCondition(value)
+
+  if (normalized.length < 1) {
+    throw new Error("Relationship where tuple container cannot be empty")
+  }
+
+  return normalized
+}
+
+/**
+ * @param {unknown} value - Candidate relationship where value.
+ * @returns {boolean} - Whether value can be normalized to relationship tuples.
+ */
+function hasRelationshipWhereOperatorTuples(value) {
+  try {
+    normalizeRelationshipWhereOperatorTuples(value)
+
+    return true
+  } catch {
+    return false
+  }
 }
