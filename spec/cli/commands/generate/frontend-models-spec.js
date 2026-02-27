@@ -72,6 +72,50 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("setEmail(newValue) { return this.setAttribute(\"email\", newValue) }")
   })
 
+  it("generates typed attribute typedefs from attribute metadata", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            Call: {
+              abilities: {
+                find: "read",
+                index: "read"
+              },
+              attributes: {
+                id: {type: "uuid", notNull: true},
+                startedAt: {type: "datetime", null: true},
+                durationSeconds: {dataType: "integer"},
+                metadata: {sqlType: "json", nullable: true},
+                active: {getType: () => "boolean", getNull: () => false},
+                endedAt: {getType: () => "timestamp without time zone", getNull: () => true}
+              },
+              path: "/calls"
+            }
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("@property {string} id - Attribute value.")
+    expect(callContents).toContain("@property {Date | null} startedAt - Attribute value.")
+    expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
+    expect(callContents).toContain("@property {Record<string, any> | null} metadata - Attribute value.")
+    expect(callContents).toContain("@property {boolean} active - Attribute value.")
+    expect(callContents).toContain("@property {Date | null} endedAt - Attribute value.")
+  })
+
   it("fails when no backend projects are configured", async () => {
     const cli = new Cli({
       configuration: buildConfiguration(),

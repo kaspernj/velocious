@@ -1,5 +1,6 @@
 # Changelog
 
+- Infer generated frontend-model attribute JSDoc types from resource attribute metadata/column descriptors (including nullability) instead of always emitting `any`.
 - Add a CanCan-style authorization library with request-scoped abilities, resource-defined `abilities()` rules, and `Model.accessible()` query filtering.
 - Add `g:frontend-models` generation from `backendProjects` resource config to create `src/frontend-models/*.js` classes.
 - Add a frontend model runtime base with first-iteration `find`, `update`, `destroy`, and attribute helpers.

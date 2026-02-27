@@ -145,8 +145,19 @@
  */
 
 /**
+ * @typedef {object} FrontendModelAttributeConfiguration
+ * @property {string} [type] - Column type name.
+ * @property {string} [columnType] - Alias for column type name.
+ * @property {string} [sqlType] - Alias for column type name.
+ * @property {string} [dataType] - Alias for column type name.
+ * @property {boolean} [null] - Whether value can be null.
+ * @property {boolean} [nullable] - Alias for nullability.
+ * @property {boolean} [notNull] - Inverse nullability flag.
+ */
+
+/**
  * @typedef {object} FrontendModelResourceConfiguration
- * @property {string[] | Record<string, any>} attributes - Attributes to expose on the frontend model.
+ * @property {string[] | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
  * @property {FrontendModelResourceAbilitiesConfiguration} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`).
  * @property {Record<string, string>} [commands] - Command names keyed by action (`index`, `find`, `update`, `destroy`).
  * @property {Record<string, FrontendModelRelationshipConfiguration>} [relationships] - Relationship helpers to generate for frontend model files.

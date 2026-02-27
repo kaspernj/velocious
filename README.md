@@ -284,6 +284,8 @@ Generate classes:
 npx velocious g:frontend-models
 ```
 
+When `resources.*.attributes` is an object, the generator can infer JSDoc typedefs from attribute metadata (`type`/`columnType`/`sqlType`/`dataType` and `null`/`nullable`/`notNull`) or column-like objects (`getType()`/`getNull()`). If metadata is absent, the generated attribute type falls back to `any`.
+
 This creates `src/frontend-models/user.js` (and one file per configured resource). Generated classes support:
 
 - `await User.find(5)`
