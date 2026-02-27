@@ -151,8 +151,6 @@
  * @property {string} [sqlType] - Alias for column type name.
  * @property {string} [dataType] - Alias for column type name.
  * @property {boolean} [null] - Whether value can be null.
- * @property {boolean} [nullable] - Alias for nullability.
- * @property {boolean} [notNull] - Inverse nullability flag.
  */
 
 /**

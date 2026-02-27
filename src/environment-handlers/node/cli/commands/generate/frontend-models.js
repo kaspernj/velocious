@@ -333,7 +333,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const attributeConfig = attributes[attributeName]
 
       return {
-        jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig, attributeName}),
+        jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig}),
         name: attributeName
       }
     })
@@ -342,13 +342,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   /**
    * @param {object} args - Arguments.
    * @param {any} args.attributeConfig - Attribute configuration value.
-   * @param {string} args.attributeName - Attribute name.
    * @returns {string} - JSDoc type.
    */
-  jsDocTypeForFrontendAttribute({attributeConfig, attributeName}) {
+  jsDocTypeForFrontendAttribute({attributeConfig}) {
     const jsDocType = this.jsDocTypeForFrontendAttributeBaseType(attributeConfig)
 
-    if (!this.frontendAttributeCanBeNull({attributeConfig, attributeName})) {
+    if (!this.frontendAttributeCanBeNull(attributeConfig)) {
       return jsDocType
     }
 
@@ -382,55 +381,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * @param {object} args - Arguments.
-   * @param {any} args.attributeConfig - Attribute configuration value.
-   * @param {string} args.attributeName - Attribute name.
+   * @param {any} attributeConfig - Attribute configuration value.
    * @returns {boolean} - Whether the attribute allows null values.
    */
-  frontendAttributeCanBeNull({attributeConfig, attributeName}) {
+  frontendAttributeCanBeNull(attributeConfig) {
     if (!attributeConfig || typeof attributeConfig !== "object") {
       return false
     }
 
-    const nullabilityConfigKeys = []
-
-    if (typeof attributeConfig.getNull == "function") {
-      nullabilityConfigKeys.push("getNull")
-    }
-
-    if ("null" in attributeConfig) {
-      nullabilityConfigKeys.push("null")
-    }
-
-    if ("nullable" in attributeConfig) {
-      nullabilityConfigKeys.push("nullable")
-    }
-
-    if ("notNull" in attributeConfig) {
-      nullabilityConfigKeys.push("notNull")
-    }
-
-    if (nullabilityConfigKeys.length > 1) {
-      throw new Error(`Attribute '${attributeName}' has conflicting nullability config: ${nullabilityConfigKeys.join(", ")}`)
-    }
-
-    if (typeof attributeConfig.getNull == "function") {
-      return attributeConfig.getNull()
-    }
-
-    if ("null" in attributeConfig) {
-      return attributeConfig.null
-    }
-
-    if ("nullable" in attributeConfig) {
-      return attributeConfig.nullable
-    }
-
-    if ("notNull" in attributeConfig) {
-      return !attributeConfig.notNull
-    }
-
-    return false
+    return attributeConfig.null === true
   }
 
   /**

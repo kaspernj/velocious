@@ -86,12 +86,12 @@ describe("Cli - generate - frontend-models", () => {
                 index: "read"
               },
               attributes: {
-                id: {type: "uuid", notNull: true},
+                id: {type: "uuid"},
                 startedAt: {type: "datetime", null: true},
                 durationSeconds: {dataType: "integer"},
-                metadata: {sqlType: "json", nullable: true},
-                active: {getType: () => "boolean", getNull: () => false},
-                endedAt: {getType: () => "timestamp without time zone", getNull: () => true}
+                metadata: {sqlType: "json", null: true},
+                active: {type: "boolean"},
+                endedAt: {type: "timestamp without time zone", null: true}
               },
               path: "/calls"
             }
@@ -188,7 +188,7 @@ describe("Cli - generate - frontend-models", () => {
     }).toThrow(/no frontend model resource exists for that target/)
   })
 
-  it("fails when an attribute has conflicting nullability config keys", async () => {
+  it("treats null as the nullability source for typed attribute typedefs", async () => {
     const cli = new Cli({
       configuration: buildConfiguration({
         backendProjectsList: [{
@@ -199,13 +199,7 @@ describe("Cli - generate - frontend-models", () => {
                 find: "read",
                 index: "read"
               },
-              attributes: {
-                id: {
-                  null: true,
-                  notNull: false,
-                  type: "uuid"
-                }
-              },
+              attributes: {id: {type: "uuid", null: true}},
               path: "/calls"
             }
           }
@@ -217,9 +211,11 @@ describe("Cli - generate - frontend-models", () => {
       testing: true
     })
 
-    await expect(async () => {
-      await cli.execute()
-    }).toThrow(/conflicting nullability config/)
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("@property {string | null} id - Attribute value.")
   })
 
   it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {
