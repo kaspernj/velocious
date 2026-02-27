@@ -1,6 +1,6 @@
 # Changelog
 
-- Add frontend-model query `sort(...)` support end-to-end (query payload, `FrontendModelBase.sort`, and backend frontend-model controller order application), and cover sorting through dummy-app HTTP/browser integration specs.
+- Add frontend-model query `sort(...)` support end-to-end (query payload, `FrontendModelBase.sort`, and backend frontend-model controller order application), including relationship-path sort definitions (for example `Task.sort({project: {creatingUser: ["reference", "desc"]}})`), and cover sorting through dummy-app integration specs.
 - Infer generated frontend-model attribute JSDoc types from resource attribute metadata/column descriptors (including nullability) instead of always emitting `any`.
 - Add a CanCan-style authorization library with request-scoped abilities, resource-defined `abilities()` rules, and `Model.accessible()` query filtering.
 - Add `g:frontend-models` generation from `backendProjects` resource config to create `src/frontend-models/*.js` classes.

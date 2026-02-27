@@ -157,44 +157,211 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 }
 
 /**
+ * @typedef {object} FrontendModelSort
+ * @property {string} column - Attribute name to sort by.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @param {unknown} direction - Direction value.
+ * @returns {"asc" | "desc"} - Normalized direction.
+ */
+function normalizeSortDirection(direction) {
+  if (typeof direction !== "string") {
+    throw new Error(`Invalid sort direction type: ${typeof direction}`)
+  }
+
+  const normalizedDirection = direction.trim().toLowerCase()
+
+  if (normalizedDirection !== "asc" && normalizedDirection !== "desc") {
+    throw new Error(`Invalid sort direction: ${direction}`)
+  }
+
+  return normalizedDirection
+}
+
+/**
+ * @param {unknown} value - Candidate tuple.
+ * @returns {value is [string, string]} - Whether value is a sort tuple.
+ */
+function sortTuple(value) {
+  if (!Array.isArray(value)) return false
+  if (value.length !== 2) return false
+  if (typeof value[0] !== "string") return false
+  if (typeof value[1] !== "string") return false
+  if (value[0].trim().length < 1) return false
+
+  const direction = value[1].trim().toLowerCase()
+
+  return direction === "asc" || direction === "desc"
+}
+
+/**
+ * @param {string} sortValue - Sort string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelSort} - Normalized sort descriptor.
+ */
+function parseSortString(sortValue, path = []) {
+  const trimmed = sortValue.trim()
+
+  if (trimmed.length < 1) {
+    throw new Error("sort value must be a non-empty string")
+  }
+
+  if (trimmed.startsWith("-")) {
+    const column = trimmed.slice(1).trim()
+
+    if (column.length < 1) {
+      throw new Error(`Invalid sort definition: ${sortValue}`)
+    }
+
+    return {
+      column,
+      direction: "desc",
+      path: [...path]
+    }
+  }
+
+  const sortParts = trimmed.split(/\s+/).filter(Boolean)
+
+  if (sortParts.length > 2) {
+    throw new Error(`Invalid sort definition: ${sortValue}`)
+  }
+
+  const column = sortParts[0]
+
+  if (column.length < 1) {
+    throw new Error(`Invalid sort definition: ${sortValue}`)
+  }
+
+  const direction = sortParts.length === 2
+    ? normalizeSortDirection(sortParts[1])
+    : "asc"
+
+  return {
+    column,
+    direction,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {[string, string]} sortValue - Sort tuple.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelSort} - Normalized sort descriptor.
+ */
+function parseSortTuple(sortValue, path = []) {
+  const [columnValue, directionValue] = sortValue
+  const column = columnValue.trim()
+
+  if (column.length < 1) {
+    throw new Error("sort tuple column must be a non-empty string")
+  }
+
+  return {
+    column,
+    direction: normalizeSortDirection(directionValue),
+    path: [...path]
+  }
+}
+
+/**
+ * @param {Record<string, any>} sortValue - Nested sort object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelSort[]} - Normalized sort descriptors.
+ */
+function normalizeSortObject(sortValue, path) {
+  /** @type {FrontendModelSort[]} */
+  const normalizedSorts = []
+
+  for (const [sortKey, sortEntry] of Object.entries(sortValue)) {
+    if (typeof sortEntry === "string") {
+      normalizedSorts.push({
+        column: sortKey,
+        direction: normalizeSortDirection(sortEntry),
+        path: [...path]
+      })
+      continue
+    }
+
+    if (sortTuple(sortEntry)) {
+      normalizedSorts.push(parseSortTuple(sortEntry, [...path, sortKey]))
+      continue
+    }
+
+    if (Array.isArray(sortEntry)) {
+      if (sortEntry.length < 1) {
+        throw new Error(`Invalid sort definition for "${sortKey}": empty array`)
+      }
+
+      for (const nestedSortEntry of sortEntry) {
+        if (!sortTuple(nestedSortEntry)) {
+          throw new Error(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
+        }
+
+        normalizedSorts.push(parseSortTuple(nestedSortEntry, [...path, sortKey]))
+      }
+      continue
+    }
+
+    if (isPlainObject(sortEntry)) {
+      normalizedSorts.push(...normalizeSortObject(sortEntry, [...path, sortKey]))
+      continue
+    }
+
+    throw new Error(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
+  }
+
+  return normalizedSorts
+}
+
+/**
  * @param {unknown} sort - Sort payload.
- * @returns {string[]} - Normalized sort definitions.
+ * @returns {FrontendModelSort[]} - Normalized sort definitions.
  */
 function normalizeSort(sort) {
   if (!sort) return []
 
   if (typeof sort === "string") {
-    const trimmed = sort.trim()
-
-    if (trimmed.length < 1) {
-      throw new Error("sort value must be a non-empty string")
-    }
-
-    return [trimmed]
+    return [parseSortString(sort)]
   }
 
-  if (!Array.isArray(sort)) {
-    throw new Error(`Invalid sort type: ${typeof sort}`)
+  if (sortTuple(sort)) {
+    return [parseSortTuple(sort)]
   }
 
-  /** @type {string[]} */
-  const normalized = []
+  if (isPlainObject(sort)) {
+    return normalizeSortObject(sort, [])
+  }
 
-  for (const sortEntry of sort) {
-    if (typeof sortEntry !== "string") {
+  if (Array.isArray(sort)) {
+    /** @type {FrontendModelSort[]} */
+    const normalized = []
+
+    for (const sortEntry of sort) {
+      if (typeof sortEntry === "string") {
+        normalized.push(parseSortString(sortEntry))
+        continue
+      }
+
+      if (sortTuple(sortEntry)) {
+        normalized.push(parseSortTuple(sortEntry))
+        continue
+      }
+
+      if (isPlainObject(sortEntry)) {
+        normalized.push(...normalizeSortObject(sortEntry, []))
+        continue
+      }
+
       throw new Error(`Invalid sort entry type: ${typeof sortEntry}`)
     }
 
-    const trimmed = sortEntry.trim()
-
-    if (trimmed.length < 1) {
-      throw new Error("sort values must be non-empty strings")
-    }
-
-    normalized.push(trimmed)
+    return normalized
   }
 
-  return normalized
+  throw new Error(`Invalid sort type: ${typeof sort}`)
 }
 
 /**
@@ -333,7 +500,7 @@ export default class FrontendModelQuery {
   }
 
   /**
-   * @param {string | string[]} sort - Sort definition(s), for example `"createdAt"` or `"-createdAt"`.
+   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, any> | Array<Record<string, any>>} sort - Sort definition(s).
    * @returns {this} - Query with appended sort definitions.
    */
   sort(sort) {
@@ -386,7 +553,11 @@ export default class FrontendModelQuery {
     if (this._sort.length === 0) return {}
 
     return {
-      sort: [...this._sort]
+      sort: this._sort.map((sortEntry) => ({
+        column: sortEntry.column,
+        direction: sortEntry.direction,
+        path: [...sortEntry.path]
+      }))
     }
   }
 

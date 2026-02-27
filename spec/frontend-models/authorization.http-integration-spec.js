@@ -6,6 +6,7 @@ import FrontendModelBase from "../../src/frontend-models/base.js"
 import Project from "../dummy/src/models/project.js"
 import TaskModel from "../dummy/src/models/task.js"
 import Task from "../dummy/src/frontend-models/task.js"
+import User from "../dummy/src/models/user.js"
 
 /**
  * @param {"destroy" | "read" | "update" | undefined} deniedAbilityAction - Ability action to deny.
@@ -59,6 +60,25 @@ async function createTask(name) {
 
   return /** @type {TaskModel} */ (await TaskModel.create({
     name,
+    projectId: project.id()
+  }))
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {string} args.projectName - Project name.
+ * @param {string} args.taskName - Task name.
+ * @param {string} [args.creatingUserReference] - Optional project owner reference.
+ * @returns {Promise<TaskModel>} - Created task model.
+ */
+async function createTaskWithProject({projectName, taskName, creatingUserReference}) {
+  const project = await Project.create({
+    creatingUserReference,
+    name: projectName
+  })
+
+  return /** @type {TaskModel} */ (await TaskModel.create({
+    name: taskName,
     projectId: project.id()
   }))
 }
@@ -145,6 +165,63 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
           resetFrontendModelTransport()
         }
       })
+    })
+  })
+
+  it("sorts frontend-model records by one-level relationship path", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await createTaskWithProject({projectName: "Alpha project", taskName: "Alpha task"})
+        await createTaskWithProject({projectName: "Zulu project", taskName: "Zulu task"})
+
+        const tasks = await Task
+          .sort({project: ["name", "desc"]})
+          .toArray()
+
+        expect(tasks.map((task) => task.name())).toEqual(["Zulu task", "Alpha task"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("sorts frontend-model records by nested relationship path", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await User.create({
+          email: "alpha-owner@example.com",
+          encryptedPassword: "secret",
+          reference: "owner-alpha"
+        })
+        await User.create({
+          email: "zulu-owner@example.com",
+          encryptedPassword: "secret",
+          reference: "owner-zulu"
+        })
+
+        await createTaskWithProject({
+          creatingUserReference: "owner-alpha",
+          projectName: "Project A",
+          taskName: "Alpha owner task"
+        })
+        await createTaskWithProject({
+          creatingUserReference: "owner-zulu",
+          projectName: "Project Z",
+          taskName: "Zulu owner task"
+        })
+
+        const tasks = await Task
+          .sort({project: {creatingUser: ["reference", "desc"]}})
+          .toArray()
+
+        expect(tasks.map((task) => task.name())).toEqual(["Zulu owner task", "Alpha owner task"])
+      } finally {
+        resetFrontendModelTransport()
+      }
     })
   })
 })
