@@ -1,6 +1,7 @@
 import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
+import User from "../../dummy/src/models/user.js"
 
 describe("Database - query - model class query", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("counts distinct records", async () => {
@@ -120,6 +121,77 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
       .sort()
 
     expect(names).toEqual(["Deep Bool Match Task"])
+  })
+
+  it("filters on nested relationship attributes with where operator tuples", async () => {
+    const projectMatch = await Project.create({
+      nameEn: "Needle Project",
+      nameDe: "Anderes Projekt"
+    })
+    const projectMiss = await Project.create({
+      nameEn: "Haystack Project",
+      nameDe: "Nicht passend"
+    })
+
+    await Task.create({name: "Tuple Match Task", project: projectMatch})
+    await Task.create({name: "Tuple Miss Task", project: projectMiss})
+
+    const names = (await Task.where({project: {translations: [["name", "like", "%Needle%"]]}}).toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Tuple Match Task"])
+  })
+
+  it("filters on deep nested relationship attributes with multiple where tuples", async () => {
+    const cutoff = new Date("2025-01-01T00:00:00.000Z")
+    const matchingUser = await User.create({
+      createdAt: new Date("2025-02-01T00:00:00.000Z"),
+      email: "creator-match@example.com",
+      encryptedPassword: "secret",
+      reference: "creator-match"
+    })
+    const oldUser = await User.create({
+      createdAt: new Date("2024-02-01T00:00:00.000Z"),
+      email: "creator-old@example.com",
+      encryptedPassword: "secret",
+      reference: "creator-old"
+    })
+    const otherUser = await User.create({
+      createdAt: new Date("2025-02-01T00:00:00.000Z"),
+      email: "other-user@example.com",
+      encryptedPassword: "secret",
+      reference: "other-user"
+    })
+    const projectMatch = await Project.create({
+      creatingUserReference: matchingUser.reference(),
+      nameEn: "Nested Tuple Match",
+      nameDe: "Verschachteltes Tupel Treffer"
+    })
+    const projectOld = await Project.create({
+      creatingUserReference: oldUser.reference(),
+      nameEn: "Nested Tuple Miss Old",
+      nameDe: "Verschachteltes Tupel Alt"
+    })
+    const projectOther = await Project.create({
+      creatingUserReference: otherUser.reference(),
+      nameEn: "Nested Tuple Miss Other",
+      nameDe: "Verschachteltes Tupel Andere"
+    })
+
+    await Task.create({name: "Nested Tuple Match Task", project: projectMatch})
+    await Task.create({name: "Nested Tuple Old Task", project: projectOld})
+    await Task.create({name: "Nested Tuple Other Task", project: projectOther})
+
+    const names = (await Task.where({
+      project: {
+        creatingUser: [["reference", "like", "creator-%", ["createdAt", "gteq", cutoff]]]
+      }
+    }).toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Nested Tuple Match Task"])
   })
 
   it("forwards unknown keys to the base where hash", async () => {
