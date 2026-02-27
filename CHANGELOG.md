@@ -1,5 +1,6 @@
 # Changelog
 
+- Add frontend-model query `sort(...)` support end-to-end (query payload, `FrontendModelBase.sort`, and backend frontend-model controller order application), including relationship-path sort definitions (for example `Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}})`), and cover sorting through dummy-app integration specs.
 - Infer generated frontend-model attribute JSDoc types from resource attribute metadata/column descriptors (including nullability) instead of always emitting `any`.
 - Add a CanCan-style authorization library with request-scoped abilities, resource-defined `abilities()` rules, and `Model.accessible()` query filtering.
 - Add `g:frontend-models` generation from `backendProjects` resource config to create `src/frontend-models/*.js` classes.
@@ -157,3 +158,6 @@
 - Add `Controller#sendFile(path, {contentType, status})` with streamed HTTP output so controllers can send files (for example wasm assets) without loading full files into memory first.
 - Add `configuration.routes((routes) => ...)` plugin-route DSL with `routes.get`/`routes.post` and `to: [ControllerClass, action]` for simple plugin endpoint registration.
 - Stabilize `Background jobs - queue` forked-job timing spec by waiting for a valid parsed JSON payload instead of only waiting for file existence, preventing intermittent `Unexpected end of JSON input` failures.
+- Fix dummy frontend-model system-test route sorting to honor descriptor-style `sort` payloads (`[{column, direction, path}]`) used by frontend-model queries.
+- Always resolve dummy Task frontend-model abilities for `/api/frontend-models/tasks/*` commands so integration specs with relationship-path sorting run with an ability context.
+- Apply the dummy Task frontend-model ability resolver fix across all tracked peakflow test configs (`mariadb`/`sqlite`/`pgsql`/`mssql`) so CI environments load it regardless of selected test database.

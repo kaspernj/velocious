@@ -162,6 +162,181 @@ function normalizeFrontendModelSelect(select) {
  */
 
 /**
+ * @typedef {object} FrontendModelSort
+ * @property {string} column - Attribute name to sort by.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @param {unknown} direction - Direction candidate.
+ * @returns {"asc" | "desc"} - Normalized direction.
+ */
+function normalizeFrontendModelSortDirection(direction) {
+  if (typeof direction !== "string") {
+    throw new Error(`Invalid sort direction type: ${typeof direction}`)
+  }
+
+  const normalizedDirection = direction.trim().toLowerCase()
+
+  if (normalizedDirection !== "asc" && normalizedDirection !== "desc") {
+    throw new Error(`Invalid sort direction: ${direction}`)
+  }
+
+  return normalizedDirection
+}
+
+/**
+ * @param {unknown} value - Candidate tuple.
+ * @returns {value is [string, string]} - Whether candidate is a sort tuple.
+ */
+function frontendModelSortTuple(value) {
+  if (!Array.isArray(value)) return false
+  if (value.length !== 2) return false
+  if (typeof value[0] !== "string") return false
+  if (typeof value[1] !== "string") return false
+  if (value[0].trim().length < 1) return false
+
+  const direction = value[1].trim().toLowerCase()
+
+  return direction === "asc" || direction === "desc"
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, direction: string, path: string[]}} - Whether candidate is an explicit sort descriptor object.
+ */
+function frontendModelSortDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("direction" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (typeof value.direction !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {string} sortValue - Sort string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelSort} - Normalized sort descriptor.
+ */
+function frontendModelSortFromString(sortValue, path = []) {
+  const trimmed = sortValue.trim()
+
+  if (trimmed.length < 1) {
+    throw new Error("Invalid sort value: expected non-empty string")
+  }
+
+  if (trimmed.startsWith("-")) {
+    const column = trimmed.slice(1).trim()
+
+    if (column.length < 1) {
+      throw new Error(`Invalid sort definition: ${sortValue}`)
+    }
+
+    return {
+      column,
+      direction: "desc",
+      path: [...path]
+    }
+  }
+
+  const sortParts = trimmed.split(/\s+/).filter(Boolean)
+
+  if (sortParts.length > 2) {
+    throw new Error(`Invalid sort definition: ${sortValue}`)
+  }
+
+  const column = sortParts[0]
+
+  if (column.length < 1) {
+    throw new Error(`Invalid sort definition: ${sortValue}`)
+  }
+
+  const direction = sortParts.length === 2
+    ? normalizeFrontendModelSortDirection(sortParts[1])
+    : "asc"
+
+  return {
+    column,
+    direction,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {[string, string]} sortValue - Sort tuple.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelSort} - Normalized sort descriptor.
+ */
+function frontendModelSortFromTuple(sortValue, path = []) {
+  const [columnValue, directionValue] = sortValue
+  const column = columnValue.trim()
+
+  if (column.length < 1) {
+    throw new Error("sort tuple column must be a non-empty string")
+  }
+
+  return {
+    column,
+    direction: normalizeFrontendModelSortDirection(directionValue),
+    path: [...path]
+  }
+}
+
+/**
+ * @param {Record<string, any>} sortValue - Nested sort object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelSort[]} - Normalized sort descriptors.
+ */
+function normalizeFrontendModelSortObject(sortValue, path) {
+  /** @type {FrontendModelSort[]} */
+  const normalizedSorts = []
+
+  for (const [sortKey, sortEntry] of Object.entries(sortValue)) {
+    if (typeof sortEntry === "string") {
+      normalizedSorts.push({
+        column: sortKey,
+        direction: normalizeFrontendModelSortDirection(sortEntry),
+        path: [...path]
+      })
+      continue
+    }
+
+    if (frontendModelSortTuple(sortEntry)) {
+      normalizedSorts.push(frontendModelSortFromTuple(sortEntry, [...path, sortKey]))
+      continue
+    }
+
+    if (Array.isArray(sortEntry)) {
+      if (sortEntry.length < 1) {
+        throw new Error(`Invalid sort definition for "${sortKey}": empty array`)
+      }
+
+      for (const nestedSortEntry of sortEntry) {
+        if (!frontendModelSortTuple(nestedSortEntry)) {
+          throw new Error(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
+        }
+
+        normalizedSorts.push(frontendModelSortFromTuple(nestedSortEntry, [...path, sortKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(sortEntry)) {
+      normalizedSorts.push(...normalizeFrontendModelSortObject(sortEntry, [...path, sortKey]))
+      continue
+    }
+
+    throw new Error(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
+  }
+
+  return normalizedSorts
+}
+
+/**
  * @param {unknown} searches - Search payload.
  * @returns {FrontendModelSearch[]} - Normalized searches.
  */
@@ -226,6 +401,71 @@ function normalizeFrontendModelWhere(where) {
   }
 
   return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(where)))
+}
+
+/**
+ * @param {unknown} sort - Sort payload.
+ * @returns {FrontendModelSort[]} - Normalized sort definitions.
+ */
+function normalizeFrontendModelSort(sort) {
+  if (!sort) return []
+
+  if (typeof sort === "string") {
+    return [frontendModelSortFromString(sort)]
+  }
+
+  if (frontendModelSortTuple(sort)) {
+    return [frontendModelSortFromTuple(sort)]
+  }
+
+  if (frontendModelSortDescriptor(sort)) {
+    return [{
+      column: sort.column.trim(),
+      direction: normalizeFrontendModelSortDirection(sort.direction),
+      path: [...sort.path]
+    }]
+  }
+
+  if (isPlainObject(sort)) {
+    return normalizeFrontendModelSortObject(sort, [])
+  }
+
+  if (Array.isArray(sort)) {
+    /** @type {FrontendModelSort[]} */
+    const normalized = []
+
+    for (const sortEntry of sort) {
+      if (typeof sortEntry === "string") {
+        normalized.push(frontendModelSortFromString(sortEntry))
+        continue
+      }
+
+      if (frontendModelSortTuple(sortEntry)) {
+        normalized.push(frontendModelSortFromTuple(sortEntry))
+        continue
+      }
+
+      if (frontendModelSortDescriptor(sortEntry)) {
+        normalized.push({
+          column: sortEntry.column.trim(),
+          direction: normalizeFrontendModelSortDirection(sortEntry.direction),
+          path: [...sortEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(sortEntry)) {
+        normalized.push(...normalizeFrontendModelSortObject(sortEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid sort entry type: ${typeof sortEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid sort type: ${typeof sort}`)
 }
 
 /**
@@ -542,6 +782,12 @@ export default class FrontendModelController extends Controller {
       this.applyFrontendModelSearch({query, search})
     }
 
+    const sorts = this.frontendModelSort()
+
+    for (const sort of sorts) {
+      this.applyFrontendModelSort({query, sort})
+    }
+
     return await query.toArray()
   }
 
@@ -571,6 +817,11 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelWhere() {
     return normalizeFrontendModelWhere(this.frontendModelParams().where)
+  }
+
+  /** @returns {FrontendModelSort[]} - Frontend sort definitions. */
+  frontendModelSort() {
+    return normalizeFrontendModelSort(this.frontendModelParams().sort)
   }
 
   /**
@@ -708,6 +959,37 @@ export default class FrontendModelController extends Controller {
         query.where(`${columnSql} = ${query.driver.quote(value)}`)
       }
     }
+  }
+
+  /**
+   * @param {object} args - Sort args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelSort} args.sort - Sort definition.
+   * @returns {void}
+   */
+  applyFrontendModelSort({query, sort}) {
+    const modelClass = this.frontendModelClass()
+    const targetModelClass = this.frontendModelSearchTargetModelClass({
+      modelClass,
+      path: sort.path
+    })
+    const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
+
+    if (sort.path.length > 0) {
+      query.joins(buildFrontendModelJoinObjectFromPath(sort.path))
+    }
+
+    const columnName = attributeNameToColumnNameMap[sort.column]
+
+    if (!columnName) {
+      throw new Error(`Unknown sort column "${sort.column}" for ${targetModelClass.name}`)
+    }
+
+    const tableReference = query.getTableReferenceForJoin(...sort.path)
+    const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
+    const direction = sort.direction.toUpperCase()
+
+    query.order(`${columnSql} ${direction}`)
   }
 
   /**
