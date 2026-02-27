@@ -224,4 +224,42 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
       }
     })
   })
+
+  it("sorts frontend-model records with multiple nested sort tuples", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await User.create({
+          email: "alpha-owner-2@example.com",
+          encryptedPassword: "secret",
+          reference: "owner-alpha-2"
+        })
+        await User.create({
+          email: "zulu-owner-2@example.com",
+          encryptedPassword: "secret",
+          reference: "owner-zulu-2"
+        })
+
+        await createTaskWithProject({
+          creatingUserReference: "owner-alpha-2",
+          projectName: "Project A2",
+          taskName: "Alpha owner task 2"
+        })
+        await createTaskWithProject({
+          creatingUserReference: "owner-zulu-2",
+          projectName: "Project Z2",
+          taskName: "Zulu owner task 2"
+        })
+
+        const tasks = await Task
+          .sort({project: {creatingUser: [["reference", "desc"], ["createdAt", "asc"]]}})
+          .toArray()
+
+        expect(tasks.map((task) => task.name())).toEqual(["Zulu owner task 2", "Alpha owner task 2"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
 })
