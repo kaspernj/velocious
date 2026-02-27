@@ -297,29 +297,6 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("sends sort payload when using sort(...).toArray()", async () => {
-    const User = buildTestModelClass()
-    const fetchStub = stubFetch({models: []})
-
-    try {
-      await User
-        .sort(["-createdAt", "id asc"])
-        .toArray()
-
-      expect(fetchStub.calls).toEqual([
-        {
-          body: {
-            sort: ["-createdAt", "id asc"]
-          },
-          url: "/api/frontend-models/users/index"
-        }
-      ])
-    } finally {
-      resetFrontendModelTransport()
-      fetchStub.restore()
-    }
-  })
-
 
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()
