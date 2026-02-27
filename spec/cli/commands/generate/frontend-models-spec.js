@@ -188,6 +188,40 @@ describe("Cli - generate - frontend-models", () => {
     }).toThrow(/no frontend model resource exists for that target/)
   })
 
+  it("fails when an attribute has conflicting nullability config keys", async () => {
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            Call: {
+              abilities: {
+                find: "read",
+                index: "read"
+              },
+              attributes: {
+                id: {
+                  null: true,
+                  notNull: false,
+                  type: "uuid"
+                }
+              },
+              path: "/calls"
+            }
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => {
+      await cli.execute()
+    }).toThrow(/conflicting nullability config/)
+  })
+
   it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {
     const outputDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-output")
     await fs.rm(outputDirectory, {force: true, recursive: true})
