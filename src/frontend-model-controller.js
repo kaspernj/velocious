@@ -168,6 +168,8 @@ function normalizeFrontendModelSelect(select) {
  * @property {string[]} path - Relationship path from root model.
  */
 
+const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
+
 /**
  * @param {unknown} direction - Direction candidate.
  * @returns {"asc" | "desc"} - Normalized direction.
@@ -871,7 +873,7 @@ export default class FrontendModelController extends Controller {
     }
 
     if (search.path.length > 0) {
-      query.joins(buildFrontendModelJoinObjectFromPath(search.path))
+      this.ensureFrontendModelJoinPath({path: search.path, query})
     }
 
     const tableReference = query.getTableReferenceForJoin(...search.path)
@@ -1021,15 +1023,27 @@ export default class FrontendModelController extends Controller {
    * @returns {void}
    */
   ensureFrontendModelSortJoinPath({path, query}) {
-    if (path.length < 1) {
-      return
-    }
+    this.ensureFrontendModelJoinPath({path, query})
+  }
 
-    try {
-      query.getTableReferenceForJoin(...path)
-    } catch {
-      query.joins(buildFrontendModelJoinObjectFromPath(path))
-    }
+  /**
+   * Ensures a relationship path has exactly one SQL join.
+   * @param {object} args - Join args.
+   * @param {string[]} args.path - Relationship join path.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  ensureFrontendModelJoinPath({path, query}) {
+    if (path.length < 1) return
+
+    const joinedPaths = query[frontendModelJoinedPathsSymbol] || new Set()
+    const pathKey = path.join(".")
+
+    if (joinedPaths.has(pathKey)) return
+
+    query.joins(buildFrontendModelJoinObjectFromPath(path))
+    joinedPaths.add(pathKey)
+    query[frontendModelJoinedPathsSymbol] = joinedPaths
   }
 
   /**
