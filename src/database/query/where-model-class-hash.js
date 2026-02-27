@@ -178,14 +178,24 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
         modelClass,
         value: normalizedValue
       })
+      const columnType = modelClass.getColumnTypeByName(columnName)
+      const driverType = this.getQuery().driver.getType()
 
       if (typedValue === NO_MATCH) {
-        sql += "1=0"
+        if (operator === "notEq") {
+          sql += "1=1"
+        } else {
+          sql += "1=0"
+        }
         index += 1
         return
       }
 
-      const columnSql = `${options.quoteTableName(tableName)}.${options.quoteColumnName(columnName)}`
+      let columnSql = `${options.quoteTableName(tableName)}.${options.quoteColumnName(columnName)}`
+
+      if (driverType == "mssql" && typeof whereValue === "string" && columnType?.toLowerCase() == "text") {
+        columnSql = `CAST(${columnSql} AS NVARCHAR(MAX))`
+      }
 
       if (operator === "eq") {
         if (Array.isArray(typedValue)) {
