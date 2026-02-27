@@ -177,7 +177,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {string} - Generated file content.
    */
   buildModelFileContent({className, importPath, modelConfig}) {
-    const attributes = this.attributeNamesForModel(modelConfig)
+    const attributes = this.attributeDefinitionsForModel(modelConfig)
     const relationships = this.relationshipsForModel(modelConfig)
     const attributesTypeName = `${className}Attributes`
     const commands = {
@@ -211,8 +211,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "\n"
     fileContent += "/**\n"
     fileContent += ` * @typedef {object} ${attributesTypeName}\n`
-    for (const attributeName of attributes) {
-      fileContent += ` * @property {any} ${attributeName} - Attribute value.\n`
+    for (const attribute of attributes) {
+      fileContent += ` * @property {${attribute.jsDocType}} ${attribute.name} - Attribute value.\n`
     }
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
@@ -222,7 +222,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "   */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
-    fileContent += `      attributes: ${JSON.stringify(attributes)},\n`
+    fileContent += `      attributes: ${JSON.stringify(attributes.map((attribute) => attribute.name))},\n`
     fileContent += `      commands: ${JSON.stringify(commands)},\n`
     fileContent += `      path: ${JSON.stringify(modelConfig.path)},\n`
     fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey || "id")}\n`
@@ -256,22 +256,22 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  }\n"
     }
 
-    for (const attributeName of attributes) {
-      const camelizedAttribute = inflection.camelize(attributeName, true)
-      const camelizedAttributeUpper = inflection.camelize(attributeName)
+    for (const attribute of attributes) {
+      const camelizedAttribute = inflection.camelize(attribute.name, true)
+      const camelizedAttributeUpper = inflection.camelize(attribute.name)
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attributeName)}]} - Attribute value.\n`
+      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value.\n`
       fileContent += "   */\n"
-      fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attributeName)}) }\n`
+      fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attribute.name)}) }\n`
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += `   * @param {${attributesTypeName}[${JSON.stringify(attributeName)}]} newValue - New attribute value.\n`
-      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attributeName)}]} - Assigned value.\n`
+      fileContent += `   * @param {${attributesTypeName}[${JSON.stringify(attribute.name)}]} newValue - New attribute value.\n`
+      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Assigned value.\n`
       fileContent += "   */\n"
-      fileContent += `  set${camelizedAttributeUpper}(newValue) { return this.setAttribute(${JSON.stringify(attributeName)}, newValue) }\n`
+      fileContent += `  set${camelizedAttributeUpper}(newValue) { return this.setAttribute(${JSON.stringify(attribute.name)}, newValue) }\n`
     }
 
     for (const relationship of relationships) {
@@ -313,20 +313,105 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * @param {Record<string, any>} modelConfig - Model configuration.
-   * @returns {string[]} - Attribute names.
+   * @returns {Array<{jsDocType: string, name: string}>} - Attribute definitions.
    */
-  attributeNamesForModel(modelConfig) {
+  attributeDefinitionsForModel(modelConfig) {
     const attributes = modelConfig.attributes
 
     if (Array.isArray(attributes)) {
-      return attributes
+      return attributes.map((attributeName) => ({
+        jsDocType: "any",
+        name: attributeName
+      }))
     }
 
     if (!attributes || typeof attributes !== "object") {
       throw new Error(`Expected 'attributes' as array or object but got: ${attributes}`)
     }
 
-    return Object.keys(attributes)
+    return Object.keys(attributes).map((attributeName) => {
+      const attributeConfig = attributes[attributeName]
+
+      return {
+        jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig}),
+        name: attributeName
+      }
+    })
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {any} args.attributeConfig - Attribute configuration value.
+   * @returns {string} - JSDoc type.
+   */
+  jsDocTypeForFrontendAttribute({attributeConfig}) {
+    const jsDocType = this.jsDocTypeForFrontendAttributeBaseType(attributeConfig)
+
+    if (!this.frontendAttributeCanBeNull(attributeConfig)) {
+      return jsDocType
+    }
+
+    return `${jsDocType} | null`
+  }
+
+  /**
+   * @param {any} attributeConfig - Attribute configuration value.
+   * @returns {string} - Non-nullable JSDoc type.
+   */
+  jsDocTypeForFrontendAttributeBaseType(attributeConfig) {
+    if (!attributeConfig || typeof attributeConfig !== "object") {
+      return "any"
+    }
+
+    const type = this.frontendAttributeTypeValue(attributeConfig)
+
+    if (type == "boolean") {
+      return "boolean"
+    } else if (type == "json") {
+      return "Record<string, any>"
+    } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
+      return "string"
+    } else if (["bit", "bigint", "float", "int", "integer", "smallint", "tinyint"].includes(type)) {
+      return "number"
+    } else if (["date", "datetime", "timestamp without time zone"].includes(type)) {
+      return "Date"
+    } else {
+      return "any"
+    }
+  }
+
+  /**
+   * @param {any} attributeConfig - Attribute configuration value.
+   * @returns {boolean} - Whether the attribute allows null values.
+   */
+  frontendAttributeCanBeNull(attributeConfig) {
+    if (!attributeConfig || typeof attributeConfig !== "object") {
+      return false
+    }
+
+    return attributeConfig.null === true
+  }
+
+  /**
+   * @param {any} attributeConfig - Attribute configuration value.
+   * @returns {string | null} - Normalized column type.
+   */
+  frontendAttributeTypeValue(attributeConfig) {
+    if (!attributeConfig || typeof attributeConfig !== "object") {
+      return null
+    }
+
+    if (typeof attributeConfig.getType == "function") {
+      return String(attributeConfig.getType())
+    }
+
+    const typeValue = attributeConfig.type || attributeConfig.columnType || attributeConfig.sqlType || attributeConfig.dataType
+
+    if (typeof typeValue !== "string") {
+      return null
+    }
+
+    return typeValue
   }
 
   /**
