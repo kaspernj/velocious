@@ -79,9 +79,6 @@ class TaskFrontendModelAbilityResource extends BaseResource {
  * @returns {Ability | undefined}
  */
 function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
-  const deniedAction = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
-  if (!deniedAction) return
-
   const requestPath = request.path().split("?")[0]
   const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
 
