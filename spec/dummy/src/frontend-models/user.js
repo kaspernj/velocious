@@ -9,13 +9,21 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
 /** Frontend model for User. */
 export default class User extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
-      attributes: ["email","id","name"],
-      commands: {"destroy":"destroy","find":"find","index":"index","update":"update"},
-      path: "/api/frontend-models/users",
+      attributes: [
+        "email",
+        "id",
+        "name",
+      ],
+      commands: {
+        destroy: "destroy",
+        find: "find",
+        index: "index",
+        update: "update",
+      },
       primaryKey: "id"
     }
   }
