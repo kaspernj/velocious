@@ -50,7 +50,7 @@ describe("Cli - generate - frontend-models", () => {
     const userContents = await fs.readFile(userPath, "utf8")
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
-    expect(taskContents).not.toContain("path:")
+    expect(taskContents).toContain("      path: \"/api/frontend-models/tasks\",\n")
     expect(taskContents).toContain("attributes: [\n")
     expect(taskContents).toContain("      \"id\",\n")
     expect(taskContents).toContain("      \"identifier\",\n")
