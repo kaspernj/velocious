@@ -214,9 +214,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /**\n"
-    fileContent += "   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.\n"
-    fileContent += "   */\n"
+    fileContent += "  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     fileContent += this.formattedArrayProperty({
@@ -235,9 +233,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     if (relationships.length > 0) {
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions. */\n"
       fileContent += "  static relationshipDefinitions() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -247,9 +243,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  }\n"
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */\n"
       fileContent += "  static relationshipModelClasses() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -265,9 +259,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const camelizedAttributeUpper = inflection.camelize(attribute.name)
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value.\n`
-      fileContent += "   */\n"
+      fileContent += `  /** @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value. */\n`
       fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attribute.name)}) }\n`
 
       fileContent += "\n"
@@ -284,21 +276,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       if (relationship.type == "hasMany") {
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} - Relationship helper.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} - Relationship helper. */\n`
         fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)})) }\n`
 
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models. */\n`
         fileContent += `  ${relationship.relationshipName}Loaded() { return /** @type {Array<import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
       } else {
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model. */\n`
         fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
 
         fileContent += "\n"
