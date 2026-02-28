@@ -1127,7 +1127,7 @@ export default class FrontendModelBase {
     }
 
     if (!resourcePath) {
-      return await new Promise((resolve, reject) => {
+      const batchResponse = await new Promise((resolve, reject) => {
         pendingSharedFrontendModelRequests.push({
           commandType,
           modelClass: this,
@@ -1139,6 +1139,15 @@ export default class FrontendModelBase {
 
         scheduleSharedFrontendModelRequestFlush()
       })
+
+      const decodedBatchResponse = /** @type {Record<string, any>} */ (batchResponse)
+
+      this.throwOnErrorFrontendModelResponse({
+        commandType,
+        response: decodedBatchResponse
+      })
+
+      return decodedBatchResponse
     }
 
     const response = await fetch(url, {
