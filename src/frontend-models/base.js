@@ -3,21 +3,26 @@
 import FrontendModelQuery from "./query.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
-/** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
+/** @typedef {{commands?: Record<string, string>, modelName?: string, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
 /**
  * @typedef {object} FrontendModelTransportConfig
- * @property {string} [baseUrl] - Optional base URL prefixed before resource paths.
+ * @property {string} [baseUrl] - Optional base URL prefixed before frontend model API endpoint.
  * @property {(() => string | undefined | null)} [baseUrlResolver] - Optional resolver used per request for dynamic base URL.
- * @property {string} [pathPrefix] - Optional path prefix inserted between base URL and resource path.
+ * @property {string} [pathPrefix] - Optional path prefix inserted between base URL and `/velocious/api`.
  * @property {(() => string | undefined | null)} [pathPrefixResolver] - Optional resolver used per request for dynamic path prefix.
  * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
- * @property {((args: {commandName: string, commandType: "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
+ * @property {((args: {commandName: string, commandType: "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, modelName: string, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler for single-command mode.
  */
 
 /** @type {FrontendModelTransportConfig} */
 const frontendModelTransportConfig = {}
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
+const FRONTEND_MODEL_API_PATH = "/velocious/api"
+/** @type {Array<{commandType: "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, modelName: string, payload: Record<string, any>, reject: (error: unknown) => void, resolve: (response: Record<string, any>) => void}>} */
+let pendingFrontendModelCommands = []
+/** @type {Promise<void> | null} */
+let frontendModelBatchFlushPromise = null
 
 /** Error raised when reading an attribute that was not selected in query payloads. */
 export class AttributeNotSelectedError extends Error {
@@ -218,11 +223,9 @@ function normalizePathPrefix(value) {
 }
 
 /**
- * @param {string} resourcePath - Resource path (expected absolute path).
- * @param {string} commandName - Command name.
- * @returns {string} - Combined command URL.
+ * @returns {string} - Frontend model API URL.
  */
-function frontendModelCommandUrl(resourcePath, commandName) {
+function frontendModelCommandUrl() {
   const resolvedBaseUrl = frontendModelTransportConfig.baseUrlResolver
     ? frontendModelTransportConfig.baseUrlResolver()
     : frontendModelTransportConfig.baseUrl
@@ -231,9 +234,90 @@ function frontendModelCommandUrl(resourcePath, commandName) {
     ? frontendModelTransportConfig.pathPrefixResolver()
     : frontendModelTransportConfig.pathPrefix
   const pathPrefix = normalizePathPrefix(resolvedPathPrefix)
-  const normalizedResourcePath = resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`
 
-  return `${baseUrl}${pathPrefix}${normalizedResourcePath}/${commandName}`
+  return `${baseUrl}${pathPrefix}${FRONTEND_MODEL_API_PATH}`
+}
+
+/**
+ * @returns {Promise<void>} - Resolves when pending frontend model commands are flushed.
+ */
+async function flushPendingFrontendModelCommands() {
+  const batchEntries = pendingFrontendModelCommands
+
+  pendingFrontendModelCommands = []
+
+  if (batchEntries.length < 1) return
+
+  const requestPayload = batchEntries.map((entry) => ({
+    commandType: entry.commandType,
+    modelName: entry.modelName,
+    payload: entry.payload
+  }))
+  const url = frontendModelCommandUrl()
+  const response = await fetch(url, {
+    body: JSON.stringify({requests: requestPayload}),
+    credentials: frontendModelTransportConfig.credentials,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    method: "POST"
+  })
+
+  if (!response.ok) {
+    const error = new Error(`Request failed (${response.status}) for frontend model batch API`)
+
+    for (const entry of batchEntries) {
+      entry.reject(error)
+    }
+
+    return
+  }
+
+  const responseText = await response.text()
+  const json = responseText.length > 0 ? JSON.parse(responseText) : {}
+  const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
+  const responseEntries = Array.isArray(decodedResponse.responses) ? decodedResponse.responses : []
+
+  if (responseEntries.length !== batchEntries.length) {
+    const error = new Error(`Expected ${batchEntries.length} frontend model responses but got ${responseEntries.length}`)
+
+    for (const entry of batchEntries) {
+      entry.reject(error)
+    }
+
+    return
+  }
+
+  responseEntries.forEach((responseEntry, index) => {
+    const batchEntry = batchEntries[index]
+
+    try {
+      batchEntry.modelClass.throwOnErrorFrontendModelResponse({
+        commandType: batchEntry.commandType,
+        response: responseEntry
+      })
+      batchEntry.resolve(responseEntry)
+    } catch (error) {
+      batchEntry.reject(error)
+    }
+  })
+}
+
+/**
+ * @returns {Promise<void>} - Resolves when queued frontend model commands are flushed.
+ */
+async function scheduleFrontendModelBatchFlush() {
+  if (frontendModelBatchFlushPromise) return frontendModelBatchFlushPromise
+
+  frontendModelBatchFlushPromise = Promise.resolve()
+    .then(async () => {
+      await flushPendingFrontendModelCommands()
+    })
+    .finally(() => {
+      frontendModelBatchFlushPromise = null
+    })
+
+  return frontendModelBatchFlushPromise
 }
 
 /**
@@ -571,6 +655,18 @@ export default class FrontendModelBase {
     const commands = this.resourceConfig().commands || {}
 
     return commands[commandType] || commandType
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @returns {string} - Backend model name used by frontend model API requests.
+   */
+  static modelNameForRequest() {
+    const modelName = this.resourceConfig().modelName
+
+    if (typeof modelName === "string" && modelName.length > 0) return modelName
+
+    return this.name
   }
 
   /**
@@ -1011,14 +1107,16 @@ export default class FrontendModelBase {
    */
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
-    const url = frontendModelCommandUrl(this.resourcePath(), commandName)
+    const url = frontendModelCommandUrl()
     const serializedPayload = /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(payload))
 
     if (frontendModelTransportConfig.request) {
+      const modelName = this.modelNameForRequest()
       const customResponse = await frontendModelTransportConfig.request({
         commandName,
         commandType,
         modelClass: this,
+        modelName,
         payload: serializedPayload,
         url
       })
@@ -1033,29 +1131,20 @@ export default class FrontendModelBase {
       return decodedResponse
     }
 
-    const response = await fetch(url, {
-      body: JSON.stringify(serializedPayload),
-      credentials: frontendModelTransportConfig.credentials,
-      headers: {
-        "Content-Type": "application/json"
-      },
-      method: "POST"
+    return await new Promise((resolve, reject) => {
+      pendingFrontendModelCommands.push({
+        commandType,
+        modelClass: this,
+        modelName: this.modelNameForRequest(),
+        payload: serializedPayload,
+        reject,
+        resolve
+      })
+
+      scheduleFrontendModelBatchFlush().catch((error) => {
+        reject(error)
+      })
     })
-
-    if (!response.ok) {
-      throw new Error(`Request failed (${response.status}) for ${this.name}#${commandType}`)
-    }
-
-    const responseText = await response.text()
-    const json = responseText.length > 0 ? JSON.parse(responseText) : {}
-    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
-
-    this.throwOnErrorFrontendModelResponse({
-      commandType,
-      response: decodedResponse
-    })
-
-    return decodedResponse
   }
 
   /**

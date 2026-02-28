@@ -16,6 +16,7 @@ class BrowserFrontendModel extends FrontendModelBase {
         find: "frontend-find",
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -45,6 +46,7 @@ class BrowserPreloadComment extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -65,6 +67,7 @@ class BrowserPreloadTask extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -106,6 +109,7 @@ class BrowserPreloadProject extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }

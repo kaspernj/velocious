@@ -80,7 +80,7 @@ class TaskFrontendModelAbilityResource extends BaseResource {
  */
 function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
   const requestPath = request.path().split("?")[0]
-  const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
+  const isTaskFrontendModelCommand = requestPath === "/velocious/api" && params.modelName === "Task"
 
   if (!isTaskFrontendModelCommand) return
 

@@ -519,13 +519,27 @@ export default class FrontendModelController extends Controller {
   frontendModelResourceConfiguration() {
     const params = this.frontendModelParams()
     const controllerName = typeof params.controller === "string" ? params.controller : undefined
+    const modelName = typeof params.modelName === "string" ? params.modelName : undefined
+    const normalizedModelName = typeof modelName === "string" ? modelName.trim() : ""
 
-    if (!controllerName || controllerName.length < 1) return null
+    if ((!controllerName || controllerName.length < 1) && normalizedModelName.length < 1) return null
 
     const backendProjects = this.getConfiguration().getBackendProjects()
 
     for (const backendProject of backendProjects) {
       const resources = backendProject.frontendModels || backendProject.resources || {}
+
+      if (normalizedModelName.length > 0) {
+        const modelResourceConfiguration = resources[normalizedModelName]
+
+        if (modelResourceConfiguration) {
+          return {
+            backendProject,
+            modelName: normalizedModelName,
+            resourceConfiguration: modelResourceConfiguration
+          }
+        }
+      }
 
       for (const modelName in resources) {
         const resourceConfiguration = resources[modelName]
@@ -1475,6 +1489,128 @@ export default class FrontendModelController extends Controller {
     await this.render({
       json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
         status: "success"
+      }))
+    })
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {"frontendIndex" | "frontendFind" | "frontendUpdate" | "frontendDestroy"} args.actionName - Frontend action method name.
+   * @param {Record<string, any>} args.requestParams - Request params for the action.
+   * @returns {Promise<Record<string, any>>} Captured JSON response.
+   */
+  async runFrontendActionAndCaptureResponse({actionName, requestParams}) {
+    const originalParams = this._params
+    const originalFrontendModelParams = this._frontendModelParams
+    const originalRender = this.render.bind(this)
+    /** @type {Record<string, any> | undefined} */
+    let capturedJson
+
+    this._params = {
+      ...requestParams
+    }
+    this._frontendModelParams = undefined
+    this.render = async ({json}) => {
+      capturedJson = /** @type {Record<string, any>} */ (json || {})
+    }
+
+    try {
+      await this[actionName]()
+    } finally {
+      this._params = originalParams
+      this._frontendModelParams = originalFrontendModelParams
+      this.render = originalRender
+    }
+
+    return capturedJson || /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+      errorMessage: "No response body was rendered.",
+      status: "error"
+    }))
+  }
+
+  /**
+   * @param {Record<string, any>} requestEntry - Single frontend command request.
+   * @returns {Promise<Record<string, any>>} Response payload for the request.
+   */
+  async frontendApiSingleRequest(requestEntry) {
+    const commandType = requestEntry.commandType
+    const modelName = requestEntry.modelName
+    const payload = requestEntry.payload
+
+    if (typeof commandType !== "string" || commandType.length < 1) {
+      return /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+        errorMessage: "Expected request.commandType.",
+        status: "error"
+      }))
+    }
+
+    if (typeof modelName !== "string" || modelName.length < 1) {
+      return /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+        errorMessage: "Expected request.modelName.",
+        status: "error"
+      }))
+    }
+
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+        errorMessage: "Expected request.payload as object.",
+        status: "error"
+      }))
+    }
+
+    const actionName = ({
+      destroy: "frontendDestroy",
+      find: "frontendFind",
+      index: "frontendIndex",
+      update: "frontendUpdate"
+    })[commandType]
+
+    if (!actionName) {
+      return /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+        errorMessage: `Unsupported commandType '${commandType}'.`,
+        status: "error"
+      }))
+    }
+
+    return await this.runFrontendActionAndCaptureResponse({
+      actionName,
+      requestParams: {
+        ...payload,
+        modelName
+      }
+    })
+  }
+
+  /** @returns {Promise<void>} Unified endpoint for frontend model command API with optional batching. */
+  async frontendApi() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = this.frontendModelParams()
+    const requests = Array.isArray(params.requests) ? params.requests : [params]
+    const responses = await Promise.all(requests.map(async (requestEntry) => {
+      if (!requestEntry || typeof requestEntry !== "object" || Array.isArray(requestEntry)) {
+        return /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+          errorMessage: "Expected request object.",
+          status: "error"
+        }))
+      }
+
+      return await this.frontendApiSingleRequest(/** @type {Record<string, any>} */ (requestEntry))
+    }))
+
+    if (!Array.isArray(params.requests)) {
+      await this.render({
+        json: responses[0]
+      })
+      return
+    }
+
+    await this.render({
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+        responses
       }))
     })
   }
