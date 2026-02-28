@@ -186,6 +186,73 @@ function resetFrontendModelTransport() {
 }
 
 describe("Frontend models - base", () => {
+  it("uses the shared frontend-model API and batches requests when resource path is not configured", async () => {
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    /** Shared API user model without explicit resource path. */
+    class SharedApiUser extends FrontendModelBase {
+      /**
+       * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+       */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          commands: {
+            index: "index"
+          },
+          primaryKey: "id"
+        }
+      }
+    }
+
+    globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+      const bodyString = typeof options?.body === "string" ? options.body : "{}"
+      const body = JSON.parse(bodyString)
+
+      calls.push({
+        body,
+        url: `${url}`
+      })
+
+      const responses = (body.requests || []).map((requestEntry) => ({
+        requestId: requestEntry.requestId,
+        response: {
+          models: [{id: "1", name: "One"}],
+          status: "success"
+        }
+      }))
+
+      return {
+        ok: true,
+        status: 200,
+        /** @returns {Promise<string>} */
+        text: async () => JSON.stringify({responses, status: "success"}),
+        /** @returns {Promise<Record<string, any>>} */
+        json: async () => ({responses, status: "success"})
+      }
+    })
+
+    try {
+      const [firstResult, secondResult] = await Promise.all([
+        SharedApiUser.toArray(),
+        SharedApiUser.toArray()
+      ])
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].url).toEqual("/velocious/api")
+      expect(calls[0].body.requests).toHaveLength(2)
+      expect(calls[0].body.requests[0].model).toEqual("SharedApiUser")
+      expect(calls[0].body.requests[1].model).toEqual("SharedApiUser")
+      expect(firstResult).toHaveLength(1)
+      expect(secondResult).toHaveLength(1)
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("loads model collection with toArray", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})

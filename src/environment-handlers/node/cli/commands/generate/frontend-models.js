@@ -214,7 +214,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource config. */\n"
+    fileContent += "  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     fileContent += this.formattedArrayProperty({
@@ -227,8 +227,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       propertyName: "commands",
       values: commands
     })
-    const defaultResourcePath = `/${inflection.dasherize(inflection.pluralize(inflection.underscore(className)))}`
-    fileContent += `      path: ${JSON.stringify(modelConfig.path || defaultResourcePath)},\n`
     fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey || "id")}\n`
     fileContent += "    }\n"
     fileContent += "  }\n"

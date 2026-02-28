@@ -1,15 +1,27 @@
 // @ts-check
 
 import * as inflection from "inflection"
+import FrontendModelController from "../../frontend-model-controller.js"
+
+const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
 
 /**
  * @param {object} args - Hook args.
  * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
  * @param {string} args.currentPath - Request path without query.
- * @returns {{action: string, controller: string} | null} - Route override or null.
+ * @returns {import("../../configuration-types.js").RouteResolverHookResult | null} - Route override or null.
  */
 export default function frontendModelCommandRouteHook({configuration, currentPath}) {
   const normalizedCurrentPath = normalizePath(currentPath)
+
+  if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
+    return {
+      action: "frontend-api",
+      controller: "velocious/api",
+      controllerClass: FrontendModelController
+    }
+  }
+
   const backendProjects = configuration.getBackendProjects?.() || []
 
   for (const backendProject of backendProjects) {

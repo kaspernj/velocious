@@ -16,8 +16,13 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
 
 /** @type {FrontendModelTransportConfig} */
 const frontendModelTransportConfig = {}
+const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
+/** @type {Array<{commandType: "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
+let pendingSharedFrontendModelRequests = []
+let sharedFrontendModelRequestId = 0
+let sharedFrontendModelFlushScheduled = false
 
 /** Error raised when reading an attribute that was not selected in query payloads. */
 export class AttributeNotSelectedError extends Error {
@@ -234,6 +239,90 @@ function frontendModelCommandUrl(resourcePath, commandName) {
   const normalizedResourcePath = resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`
 
   return `${baseUrl}${pathPrefix}${normalizedResourcePath}/${commandName}`
+}
+
+/**
+ * @returns {string} - Shared frontend-model API URL.
+ */
+function frontendModelApiUrl() {
+  const resolvedBaseUrl = frontendModelTransportConfig.baseUrlResolver
+    ? frontendModelTransportConfig.baseUrlResolver()
+    : frontendModelTransportConfig.baseUrl
+  const baseUrl = normalizeBaseUrl(resolvedBaseUrl)
+  const resolvedPathPrefix = frontendModelTransportConfig.pathPrefixResolver
+    ? frontendModelTransportConfig.pathPrefixResolver()
+    : frontendModelTransportConfig.pathPrefix
+  const pathPrefix = normalizePathPrefix(resolvedPathPrefix)
+
+  return `${baseUrl}${pathPrefix}${SHARED_FRONTEND_MODEL_API_PATH}`
+}
+
+/**
+ * @returns {Promise<void>} - Resolves after pending shared frontend-model requests flush.
+ */
+async function flushPendingSharedFrontendModelRequests() {
+  sharedFrontendModelFlushScheduled = false
+
+  if (pendingSharedFrontendModelRequests.length < 1) return
+
+  const batchedRequests = pendingSharedFrontendModelRequests
+  pendingSharedFrontendModelRequests = []
+
+  const url = frontendModelApiUrl()
+  const requestPayload = {
+    requests: batchedRequests.map((request) => ({
+      commandType: request.commandType,
+      model: request.modelClass.name,
+      payload: request.payload,
+      requestId: request.requestId
+    }))
+  }
+
+  try {
+    const response = await fetch(url, {
+      body: JSON.stringify(serializeFrontendModelTransportValue(requestPayload)),
+      credentials: frontendModelTransportConfig.credentials,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    })
+
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status}) for shared frontend model API`)
+    }
+
+    const responseText = await response.text()
+    const json = responseText.length > 0 ? JSON.parse(responseText) : {}
+    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
+    const responses = Array.isArray(decodedResponse.responses) ? decodedResponse.responses : []
+    const responsesById = new Map(responses.map((entry) => [entry.requestId, entry.response]))
+
+    for (const request of batchedRequests) {
+      const responsePayload = responsesById.get(request.requestId)
+
+      if (!responsePayload || typeof responsePayload !== "object") {
+        request.reject(new Error(`Missing batched response for ${request.modelClass.name}#${request.commandType}`))
+        continue
+      }
+
+      request.resolve(/** @type {Record<string, any>} */ (responsePayload))
+    }
+  } catch (error) {
+    for (const request of batchedRequests) {
+      request.reject(error)
+    }
+  }
+}
+
+/** @returns {void} */
+function scheduleSharedFrontendModelRequestFlush() {
+  if (sharedFrontendModelFlushScheduled) return
+
+  sharedFrontendModelFlushScheduled = true
+  queueMicrotask(() => {
+    void flushPendingSharedFrontendModelRequests()
+  })
 }
 
 /**
@@ -1011,8 +1100,12 @@ export default class FrontendModelBase {
    */
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
-    const url = frontendModelCommandUrl(this.resourcePath(), commandName)
     const serializedPayload = /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(payload))
+    const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
+    const resourcePath = typeof resourceConfig.path === "string" && resourceConfig.path.length > 0 ? this.resourcePath() : null
+    const url = resourcePath
+      ? frontendModelCommandUrl(resourcePath, commandName)
+      : frontendModelApiUrl()
 
     if (frontendModelTransportConfig.request) {
       const customResponse = await frontendModelTransportConfig.request({
@@ -1031,6 +1124,21 @@ export default class FrontendModelBase {
       })
 
       return decodedResponse
+    }
+
+    if (!resourcePath) {
+      return await new Promise((resolve, reject) => {
+        pendingSharedFrontendModelRequests.push({
+          commandType,
+          modelClass: this,
+          payload: serializedPayload,
+          reject,
+          requestId: `${++sharedFrontendModelRequestId}`,
+          resolve
+        })
+
+        scheduleSharedFrontendModelRequestFlush()
+      })
     }
 
     const response = await fetch(url, {
