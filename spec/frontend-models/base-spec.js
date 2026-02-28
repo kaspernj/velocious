@@ -149,9 +149,17 @@ function stubFetch(responseBody) {
 
   globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
     const bodyString = typeof options?.body === "string" ? options.body : "{}"
+    const parsedBody = JSON.parse(bodyString)
+    const batchRequests = Array.isArray(parsedBody.requests) ? parsedBody.requests : null
+    const normalizedBody = batchRequests && batchRequests.length === 1 && typeof batchRequests[0] === "object"
+      ? batchRequests[0].payload
+      : parsedBody
+    const responsePayload = batchRequests
+      ? {responses: batchRequests.map(() => responseBody)}
+      : responseBody
 
     calls.push({
-      body: JSON.parse(bodyString),
+      body: normalizedBody,
       url: `${url}`
     })
 
@@ -159,9 +167,9 @@ function stubFetch(responseBody) {
       ok: true,
       status: 200,
       /** @returns {Promise<string>} */
-      text: async () => JSON.stringify(responseBody),
+      text: async () => JSON.stringify(responsePayload),
       /** @returns {Promise<Record<string, any>>} */
-      json: async () => responseBody
+      json: async () => responsePayload
     }
   })
 
@@ -196,7 +204,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "/api/frontend-models/users/index"
+          url: "/velocious/api"
         }
       ])
       expect(users.length).toEqual(1)
@@ -223,7 +231,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "/api/frontend-models/users/index"
+          url: "/velocious/api"
         }
       ])
       expect(usersCount).toEqual(2)
@@ -256,7 +264,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/velocious/api"
         }
       ])
     } finally {
@@ -287,7 +295,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/velocious/api"
         }
       ])
       expect(usersCount).toEqual(2)
@@ -308,7 +316,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {id: 5},
-          url: "/api/frontend-models/users/find"
+          url: "/velocious/api"
         }
       ])
       expect(user.id()).toEqual(5)
@@ -394,7 +402,7 @@ describe("Frontend models - base", () => {
               when: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"}
             }
           },
-          url: "/api/frontend-models/users/find"
+          url: "/velocious/api"
         }
       ])
       expect(response.nested.hugeCounter).toEqual(9007199254740993n)
@@ -429,7 +437,7 @@ describe("Frontend models - base", () => {
               metadata: {region: "eu"}
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/velocious/api"
         }
       ])
       expect(user?.id()).toEqual(2)
@@ -489,7 +497,7 @@ describe("Frontend models - base", () => {
               email: "john@example.com"
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/velocious/api"
         }
       ])
       expect(user?.id()).toEqual(5)
@@ -521,11 +529,11 @@ describe("Frontend models - base", () => {
               User: ["id", "email"]
             }
           },
-          url: "/api/frontend-models/users/find"
+          url: "/velocious/api"
         },
         {
           body: {id: 5},
-          url: "/api/frontend-models/users/destroy"
+          url: "/velocious/api"
         }
       ])
     } finally {
@@ -574,7 +582,7 @@ describe("Frontend models - base", () => {
               }
             }
           },
-          url: "/api/frontend-models/projects/index"
+          url: "/velocious/api"
         }
       ])
       expect(tasks[0].constructor.name).toEqual("Task")
@@ -613,7 +621,7 @@ describe("Frontend models - base", () => {
               Task: ["updatedAt"]
             }
           },
-          url: "/api/frontend-models/projects/index"
+          url: "/velocious/api"
         }
       ])
     } finally {
@@ -736,7 +744,7 @@ describe("Frontend models - base", () => {
             attributes: {email: "john@example.com", id: 5, name: "John Changed"},
             id: 5
           },
-          url: "/api/frontend-models/users/update"
+          url: "/velocious/api"
         }
       ])
       expect(user.name()).toEqual("Johnny")
@@ -758,7 +766,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {id: 7},
-          url: "/api/frontend-models/users/destroy"
+          url: "/velocious/api"
         }
       ])
     } finally {
@@ -781,7 +789,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "http://127.0.0.1:4501/api/frontend-models/users/index"
+          url: "http://127.0.0.1:4501/velocious/api"
         }
       ])
     } finally {
@@ -805,7 +813,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "http://127.0.0.1:4501/backend-api/api/frontend-models/users/index"
+          url: "http://127.0.0.1:4501/backend-api/velocious/api"
         }
       ])
     } finally {
@@ -829,7 +837,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "http://localhost:4500/v1/api/frontend-models/users/index"
+          url: "http://localhost:4500/v1/velocious/api"
         }
       ])
     } finally {
@@ -866,7 +874,7 @@ describe("Frontend models - base", () => {
       expect(calls[0].commandType).toEqual("find")
       expect(calls[0].modelClass).toEqual(User)
       expect(calls[0].payload.id).toEqual(9)
-      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
+      expect(calls[0].url).toEqual("/velocious/api")
       expect(user.readAttribute("createdAt") instanceof Date).toEqual(true)
       expect(user.readAttribute("createdAt").toISOString()).toEqual(responseDateString)
       expect(user.readAttribute("maybeMissing")).toEqual(undefined)
@@ -995,7 +1003,7 @@ describe("Frontend models - base", () => {
       expect(calls[0].payload.negativeInfinity).toEqual({__velocious_type: "number", value: "-Infinity"})
       expect(calls[0].payload.notANumber).toEqual({__velocious_type: "number", value: "NaN"})
       expect(calls[0].payload.positiveInfinity).toEqual({__velocious_type: "number", value: "Infinity"})
-      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
+      expect(calls[0].url).toEqual("/velocious/api")
     } finally {
       resetFrontendModelTransport()
     }

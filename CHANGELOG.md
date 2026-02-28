@@ -163,3 +163,9 @@
 - Apply the dummy Task frontend-model ability resolver fix across all tracked peakflow test configs (`mariadb`/`sqlite`/`pgsql`/`mssql`) so CI environments load it regardless of selected test database.
 - Add nested relationship tuple-operator support to database `where(...)` hashes (including `like`), enabling queries such as `Event.where({translations: [["name", "like", "%foo%"]]})` and deep chains like `Task.where({project: {account: [["name", "like", "%bar%"], ["createdAt", "gteq", someDate]]}})`.
 - Fix frontend-model relationship-path sorting joins by tracking joined paths per query, ensuring sort/search `ORDER BY` columns always have matching SQL joins without duplicate join clauses.
+- Add unified frontend-model transport endpoint routing at `/velocious/api` (with route-hook/controller support) and batch command processing so multiple frontend model commands can share one HTTP request.
+- Update `FrontendModelBase` transport to target `/velocious/api` and queue same-tick commands into batched fetch payloads while preserving custom request transport support.
+- Add `resourceConfig().modelName` override support so frontend model classes can map to a different backend resource/model name when using the unified API endpoint.
+- Make frontend-model generator stop emitting `path` in generated `resourceConfig()` output.
+- Extend frontend-model generator attribute handling so array `attributes` infer JSDoc types/nullability from backend model columns when model metadata is available, while keeping object-form attribute overrides.
+- Extend frontend-model generator relationship handling to support array-form and inferred relationship metadata from backend model associations, while keeping object-form relationship overrides.
