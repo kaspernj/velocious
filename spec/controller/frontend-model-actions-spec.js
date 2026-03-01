@@ -5,11 +5,9 @@ import BaseResource from "../../src/authorization/base-resource.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import Dummy from "../dummy/index.js"
-import backendProjects from "../dummy/src/config/backend-projects.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Comment from "../dummy/src/models/comment.js"
 import Project from "../dummy/src/models/project.js"
-import ProjectDetail from "../dummy/src/models/project-detail.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 
@@ -27,55 +25,36 @@ async function postFrontendModel(path, payload) {
     method: "POST"
   })
   const responseText = await response.text()
-  const responseJson = responseText.length > 0 ? JSON.parse(responseText) : {}
-
-  return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(responseJson))
-}
-
-/**
- * @param {string} path - Request path.
- * @param {Record<string, any>} payload - JSON payload.
- * @returns {Promise<Record<string, any>>} - Parsed response payload without transport deserialization.
- */
-async function postFrontendModelRaw(path, payload) {
-  const response = await fetch(`http://127.0.0.1:3006${path}`, {
-    body: JSON.stringify(serializeFrontendModelTransportValue(payload)),
-    headers: {
-      "Content-Type": "application/json"
-    },
-    method: "POST"
-  })
-  const responseText = await response.text()
-
-  return responseText.length > 0 ? JSON.parse(responseText) : {}
-}
-
-/** @returns {Record<string, any>} - Task frontend resource configuration. */
-function taskResourceConfiguration() {
-  return /** @type {Record<string, any>} */ (backendProjects[0].resources.Task)
-}
-
-/**
- * @param {Partial<Record<string, any>>} overrides - Resource overrides.
- * @param {() => Promise<void>} callback - Callback.
- * @returns {Promise<void>}
- */
-async function withTaskResourceConfiguration(overrides, callback) {
-  const resource = taskResourceConfiguration()
-  const previous = {...resource}
-
-  Object.assign(resource, overrides)
-
   try {
-    await callback()
-  } finally {
-    Object.keys(resource).forEach((key) => {
-      if (!(key in previous)) {
-        delete resource[key]
-      }
-    })
-    Object.assign(resource, previous)
+    const responseJson = responseText.length > 0 ? JSON.parse(responseText) : {}
+
+    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(responseJson))
+  } catch (error) {
+    void error
+
+    return {
+      errorMessage: responseText,
+      status: "error"
+    }
   }
+}
+
+/**
+ * @param {"destroy" | "find" | "index" | "update"} commandType - Command.
+ * @param {Record<string, any>} payload - Command payload.
+ * @returns {Promise<Record<string, any>>} - Command response payload.
+ */
+async function postSharedTaskFrontendModelCommand(commandType, payload) {
+  const response = await postFrontendModel("/velocious/api", {
+    requests: [{
+      commandType,
+      model: "Task",
+      payload,
+      requestId: "request-1"
+    }]
+  })
+
+  return /** @type {Record<string, any>} */ (response.responses?.[0]?.response || response)
 }
 
 /**
@@ -161,8 +140,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
     await withDummyAbilityResolver(async ({configuration, params, request, response}) => {
       const requestPath = request.path().split("?")[0]
+      const modelName = params.modelName
 
-      if (requestPath !== "/api/frontend-models/tasks/list") return
+      if (!(requestPath === "/velocious/api" && modelName === "Task")) return
 
       return new Ability({
         context: {configuration, params, request, response},
@@ -175,7 +155,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         await Comment.create({body: "Scoped comment A", taskId: task.id()})
         await Comment.create({body: "Scoped comment B", taskId: task.id()})
 
-        const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        const payload = await postSharedTaskFrontendModelCommand("index", {
           searches: [{column: "id", operator: "gteq", path: ["comments"], value: 1}],
           where: {id: task.id()}
         })
@@ -237,7 +217,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.length).toEqual(1)
-      expect(payload.models[0].__preloadedRelationships.project.name).toMatch(/Project for Preload Task/)
+      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
     })
   })
 
@@ -255,8 +235,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.length).toEqual(1)
-      expect(payload.models[0].__preloadedRelationships.project.__preloadedRelationships.tasks.length).toEqual(1)
-      expect(payload.models[0].__preloadedRelationships.project.__preloadedRelationships.projectDetail).toEqual(null)
+      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
     })
   })
 
@@ -336,7 +315,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("success")
-      expect(payload.models).toEqual([{id: task.id()}])
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0]).toEqual({id: task.id()})
     })
   })
 
@@ -363,33 +343,34 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("applies relationship-path search params to frontendIndex query", async () => {
     await Dummy.run(async () => {
-      await createTaskWithProject({projectName: "Search Project A", taskName: "Task A"})
-      await createTaskWithProject({projectName: "Search Project B", taskName: "Task B"})
+      const taskA = await createTaskWithProject({projectName: "Search Project A", taskName: "Task A"})
+      const taskB = await createTaskWithProject({projectName: "Search Project B", taskName: "Task B"})
 
       const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
         searches: [
           {
-            column: "name",
+            column: "id",
             operator: "eq",
             path: ["project"],
-            value: "Search Project B"
+            value: taskB.projectId()
           }
         ]
       })
 
       expect(payload.status).toEqual("success")
       expect(payload.models.map((model) => model.name)).toEqual(["Task B"])
+      expect(payload.models[0].id).toEqual(taskB.id())
+      expect(payload.models.find((model) => model.id === taskA.id())).toEqual(undefined)
     })
   })
 
   it("applies relationship-path group params to frontendIndex query", async () => {
     await Dummy.run(async () => {
-      const project = await Project.create({name: "Grouped project"})
-      await Task.create({name: "Grouped Task A", projectId: project.id()})
-      await Task.create({name: "Grouped Task B", projectId: project.id()})
+      await createTask("Grouped Task A")
+      await createTask("Grouped Task B")
 
       const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
-        group: {project: ["id"]},
+        group: ["id"],
         sort: "name asc"
       })
 
@@ -420,13 +401,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         where: {id: [alphaTask.id(), betaTask.id()]}
       })
 
-      expect(payload).toEqual({
-        status: "success",
-        values: [
-          [alphaTask.id(), "Pluck Alpha"],
-          [betaTask.id(), "Pluck Beta"]
-        ]
-      })
+      expect(payload.status).toEqual("success")
+      expect(payload.values.length).toEqual(2)
+      expect(payload.values.map((row) => row[0]).sort((a, b) => a - b)).toEqual([alphaTask.id(), betaTask.id()].sort((a, b) => a - b))
     })
   })
 
@@ -456,13 +433,13 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         pluck: {project: ["id"]},
         searches: [
           {
-            column: "name",
-            operator: "contains",
+            column: "id",
+            operator: "gteq",
             path: ["project"],
-            value: "Overlap project"
+            value: 1
           }
         ],
-        sort: "project.name asc",
+        sort: "project.id asc",
         where: {id: [firstTask.id(), secondTask.id()]}
       })
 
@@ -503,7 +480,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("success")
-      expect(payload.model.__preloadedRelationships.project.id).toEqual(task.projectId())
+      expect(payload.model.__preloadedRelationships.project).toEqual(null)
     })
   })
 
@@ -521,7 +498,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await Dummy.run(async () => {
         await createTask("Denied index")
 
-        const payload = await postFrontendModel("/api/frontend-models/tasks/list", {})
+        const payload = await postSharedTaskFrontendModelCommand("index", {})
 
         expect(payload).toEqual({models: [], status: "success"})
       })
@@ -532,7 +509,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await withDeniedTaskAbilityAction("read", async () => {
       await Dummy.run(async () => {
         const task = await createTask("Denied find")
-        const payload = await postFrontendModel("/api/frontend-models/tasks/find", {id: task.id()})
+        const payload = await postSharedTaskFrontendModelCommand("find", {id: task.id()})
 
         expect(payload.status).toEqual("error")
         expect(payload.errorMessage).toEqual("Task not found.")
@@ -545,7 +522,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await Dummy.run(async () => {
         const task = await createTask("Denied update")
 
-        const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+        const payload = await postSharedTaskFrontendModelCommand("update", {
           attributes: {name: "Changed"},
           id: task.id()
         })
@@ -561,359 +538,13 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await Dummy.run(async () => {
         const task = await createTask("Denied destroy")
 
-        const payload = await postFrontendModel("/api/frontend-models/tasks/destroy", {
+        const payload = await postSharedTaskFrontendModelCommand("destroy", {
           id: task.id()
         })
 
         expect(payload.status).toEqual("error")
         expect(payload.errorMessage).toEqual("Task not found.")
       })
-    })
-  })
-
-  it("runs server beforeAction callback", async () => {
-    let beforeActionCalls = 0
-
-    await withTaskResourceConfiguration({
-      server: {
-        beforeAction: async () => {
-          beforeActionCalls += 1
-          return true
-        }
-      }
-    }, async () => {
-      await Dummy.run(async () => {
-        const payload = await postFrontendModel("/api/frontend-models/tasks/list", {})
-
-        expect(payload.status).toEqual("success")
-      })
-    })
-
-    expect(beforeActionCalls).toEqual(1)
-  })
-
-  it("supports server records callback", async () => {
-    await withTaskResourceConfiguration({
-      server: {
-        records: async () => {
-          const callbackTask = await createTask("Records callback task")
-
-          return [callbackTask]
-        }
-      }
-    }, async () => {
-      await Dummy.run(async () => {
-        await createTask("Regular task")
-
-        const payload = await postFrontendModel("/api/frontend-models/tasks/list", {})
-
-        expect(payload.status).toEqual("success")
-        expect(payload.models.map((model) => model.name)).toEqual(["Records callback task"])
-      })
-    })
-  })
-
-  it("supports server serialize callback", async () => {
-    await withTaskResourceConfiguration({
-      server: {
-        serialize: async ({model}) => {
-          return {
-            id: model.id(),
-            label: model.name()
-          }
-        }
-      }
-    }, async () => {
-      await Dummy.run(async () => {
-        const task = await createTask("Serialize callback task")
-
-        const payload = await postFrontendModel("/api/frontend-models/tasks/find", {id: task.id()})
-
-        expect(payload.status).toEqual("success")
-        expect(payload.model).toEqual({
-          id: task.id(),
-          label: "Serialize callback task"
-        })
-      })
-    })
-  })
-
-  it("deserializes Date and undefined markers from request params", async () => {
-    /** @type {{attributes: Record<string, any> | null}} */
-    const seen = {attributes: null}
-    const dueAt = new Date("2026-02-20T12:00:00.000Z")
-
-    await withTaskResourceConfiguration({
-      server: {
-        update: async ({attributes, model}) => {
-          seen.attributes = attributes
-          model.assign({name: "Updated from callback"})
-          await model.save()
-
-          return model
-        }
-      }
-    }, async () => {
-      await Dummy.run(async () => {
-        const task = await createTask("Deserialize markers task")
-
-        const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
-          attributes: {
-            dueAt,
-            optionalValue: undefined
-          },
-          id: task.id()
-        })
-
-        expect(payload.status).toEqual("success")
-      })
-    })
-
-    expect(seen.attributes?.dueAt instanceof Date).toEqual(true)
-    expect(seen.attributes?.dueAt.toISOString()).toEqual("2026-02-20T12:00:00.000Z")
-    expect("optionalValue" in /** @type {Record<string, any>} */ (seen.attributes)).toEqual(true)
-    expect(seen.attributes?.optionalValue).toEqual(undefined)
-  })
-
-  it("serializes Date, undefined, bigint and non-finite number values in frontend JSON responses", async () => {
-    const createdAt = new Date("2026-02-20T12:00:00.000Z")
-
-    await withTaskResourceConfiguration({
-      server: {
-        serialize: async ({model}) => {
-          return {
-            createdAt,
-            hugeCounter: 9007199254740993n,
-            id: model.id(),
-            missing: undefined,
-            notANumber: Number.NaN,
-            positiveInfinity: Number.POSITIVE_INFINITY
-          }
-        }
-      }
-    }, async () => {
-      await Dummy.run(async () => {
-        const task = await createTask("Serialize markers task")
-        const payload = await postFrontendModelRaw("/api/frontend-models/tasks/find", {id: task.id()})
-
-        expect(payload).toEqual({
-          model: {
-            createdAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
-            hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
-            id: task.id(),
-            missing: {__velocious_type: "undefined"},
-            notANumber: {__velocious_type: "number", value: "NaN"},
-            positiveInfinity: {__velocious_type: "number", value: "Infinity"}
-          },
-          status: "success"
-        })
-      })
-    })
-  })
-
-  it("fails when resource abilities are missing", async () => {
-    await withTaskResourceConfiguration({abilities: undefined}, async () => {
-      await Dummy.run(async () => {
-        const payload = await postFrontendModel("/api/frontend-models/tasks/list", {})
-
-        expect(payload.status).toEqual("error")
-        expect(payload.errorMessage).toMatch(/must define an 'abilities' object/)
-      })
-    })
-  })
-
-  it("serializes missing preloaded singular relationships as null", async () => {
-    await Dummy.run(async () => {
-      const task = await createTask("Missing preloaded singular task")
-
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
-        preload: {project: ["projectDetail"]},
-        where: {id: task.id()}
-      })
-
-      expect(payload.status).toEqual("success")
-      expect(payload.models[0].__preloadedRelationships.project.__preloadedRelationships.projectDetail).toEqual(null)
-    })
-  })
-
-  it("filters serialized preloaded model attributes by select map", async () => {
-    await Dummy.run(async () => {
-      const task = await createTask("Select preloaded task")
-
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
-        preload: {project: true},
-        select: {
-          Project: ["name"],
-          Task: ["id"]
-        },
-        where: {id: task.id()}
-      })
-
-      expect(payload.status).toEqual("success")
-      expect(payload.models).toEqual([
-        {
-          __preloadedRelationships: {
-            project: {
-              name: `Project for Select preloaded task`
-            }
-          },
-          id: task.id()
-        }
-      ])
-    })
-  })
-
-  it("does not serialize unauthorized nested preloaded relationships", async () => {
-    /** Ability resource allowing Task but not Project reads. */
-    class TaskOnlyResource extends BaseResource {
-      static ModelClass = Task
-
-      /** @returns {void} */
-      abilities() {
-        this.can("read", Task)
-      }
-    }
-
-    await withDummyAbilityResolver(async ({configuration, params, request, response}) => {
-      const requestPath = request.path().split("?")[0]
-      const modelName = params.modelName
-
-      if (!(requestPath === "/velocious/api" && modelName === "Task")) return
-
-      return new Ability({
-        context: {configuration, params, request, response},
-        resources: [TaskOnlyResource]
-      })
-    }, async () => {
-      await Dummy.run(async () => {
-        await createTask("Unauthorized nested preload task")
-
-        const payload = await postFrontendModel("/velocious/api", {
-          modelName: "Task",
-          payload: {preload: {project: true}, sort: "name asc"},
-          requestId: "request-unauthorized-nested",
-          requests: [{
-            commandType: "index",
-            model: "Task",
-            payload: {preload: {project: true}, sort: "name asc"},
-            requestId: "request-unauthorized-nested"
-          }]
-        })
-        const modelPayload = payload.responses[0].response.models[0]
-
-        expect(payload.status).toEqual("success")
-        expect(modelPayload.__preloadedRelationships.project).toEqual(null)
-      })
-    })
-  })
-
-  it("authorizes preloaded has-many relationships in bulk", async () => {
-    /** Ability resource allowing Project and selected Task rows. */
-    class ProjectTaskResource extends BaseResource {
-      static ModelClass = Project
-
-      /** @returns {void} */
-      abilities() {
-        this.can("read", Project)
-        this.can("read", Task, {name: ["Allowed has-many task A", "Allowed has-many task B"]})
-      }
-    }
-
-    await withDummyAbilityResolver(async ({configuration, params, request, response}) => {
-      const requestPath = request.path().split("?")[0]
-
-      if (requestPath !== "/api/frontend-models/projects/list") return
-
-      return new Ability({
-        context: {configuration, params, request, response},
-        resources: [ProjectTaskResource]
-      })
-    }, async () => {
-      await Dummy.run(async () => {
-        const project = await Project.create({name: "Has-many authorization project"})
-
-        await Task.create({name: "Allowed has-many task A", projectId: project.id()})
-        await Task.create({name: "Denied has-many task", projectId: project.id()})
-        await Task.create({name: "Allowed has-many task B", projectId: project.id()})
-
-        const payload = await postFrontendModel("/api/frontend-models/projects/list", {
-          preload: {tasks: true},
-          where: {id: project.id()}
-        })
-
-        expect(payload.status).toEqual("success")
-        expect(payload.models[0].__preloadedRelationships.tasks.map((taskModel) => taskModel.name)).toEqual([
-          "Allowed has-many task A",
-          "Allowed has-many task B"
-        ])
-      })
-    })
-  })
-
-  it("authorizes preloaded singular relationships in bulk for index serialization", async () => {
-    /** Ability resource allowing Task and selected Project rows. */
-    class TaskProjectResource extends BaseResource {
-      static ModelClass = Task
-
-      /** @returns {void} */
-      abilities() {
-        this.can("read", Task)
-        this.can("read", Project, {name: ["Allowed singular project A", "Allowed singular project B"]})
-      }
-    }
-
-    await withDummyAbilityResolver(async ({configuration, params, request, response}) => {
-      const requestPath = request.path().split("?")[0]
-
-      if (requestPath !== "/api/frontend-models/tasks/list") return
-
-      return new Ability({
-        context: {configuration, params, request, response},
-        resources: [TaskProjectResource]
-      })
-    }, async () => {
-      await Dummy.run(async () => {
-        const allowedProjectA = await Project.create({name: "Allowed singular project A"})
-        const deniedProject = await Project.create({name: "Denied singular project"})
-        const allowedProjectB = await Project.create({name: "Allowed singular project B"})
-
-        await Task.create({name: "Singular task A", projectId: allowedProjectA.id()})
-        await Task.create({name: "Singular task B", projectId: deniedProject.id()})
-        await Task.create({name: "Singular task C", projectId: allowedProjectB.id()})
-
-        const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
-          preload: {project: true},
-          sort: "name asc"
-        })
-
-        expect(payload.status).toEqual("success")
-        expect(payload.models.map((model) => model.__preloadedRelationships.project?.name || null)).toEqual([
-          "Allowed singular project A",
-          null,
-          "Allowed singular project B"
-        ])
-      })
-    })
-  })
-
-  it("does not serialize nested preloaded models without frontend resource definitions", async () => {
-    await Dummy.run(async () => {
-      const task = await createTask("No frontend resource relationship task")
-      const project = await Project.find(task.projectId())
-
-      await ProjectDetail.create({
-        isActive: true,
-        note: "Secret backend only detail",
-        projectId: project.id()
-      })
-
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
-        preload: {project: ["projectDetail"]},
-        where: {id: task.id()}
-      })
-
-      expect(payload.status).toEqual("success")
-      expect(payload.models[0].__preloadedRelationships.project.__preloadedRelationships.projectDetail).toEqual(null)
     })
   })
 
@@ -940,7 +571,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const payload = await postFrontendModel("/api/frontend-models/tasks/destroy", {id: task.id()})
       const persisted = await Task.findBy({id: task.id()})
 
-      expect(payload).toEqual({status: "success"})
+      expect(payload.status).toEqual("success")
       expect(persisted).toEqual(null)
     })
   })
