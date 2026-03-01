@@ -532,10 +532,10 @@ function normalizeFrontendModelPagination({limit, offset, page, perPage}) {
 
 /**
  * @param {unknown} distinct - Distinct payload.
- * @returns {boolean} - Normalized distinct flag.
+ * @returns {boolean | null} - Normalized distinct flag when provided.
  */
 function normalizeFrontendModelDistinct(distinct) {
-  if (distinct == null) return false
+  if (distinct == null) return null
 
   if (typeof distinct !== "boolean") {
     throw new Error(`Invalid distinct: expected boolean`)
@@ -1008,7 +1008,10 @@ export default class FrontendModelController extends Controller {
     const distinct = this.frontendModelDistinct()
 
     this.applyFrontendModelPagination({pagination, query})
-    query.distinct(distinct)
+
+    if (distinct !== null) {
+      query.distinct(distinct)
+    }
 
     if (where) {
       this.applyFrontendModelWhere({query, where})
@@ -1089,7 +1092,7 @@ export default class FrontendModelController extends Controller {
     })
   }
 
-  /** @returns {boolean} - Frontend distinct flag. */
+  /** @returns {boolean | null} - Frontend distinct flag when provided. */
   frontendModelDistinct() {
     return normalizeFrontendModelDistinct(this.frontendModelParams().distinct)
   }

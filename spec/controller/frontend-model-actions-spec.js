@@ -113,6 +113,7 @@ class MockFrontendModel {
   ]
   static lastQuery = null
   static relationshipsMap = {}
+  static accessibleForDistinctValue = null
 
   /**
    * @returns {Record<string, string>}
@@ -153,7 +154,13 @@ class MockFrontendModel {
    * @returns {MockFrontendModelQuery}
    */
   static accessibleFor() {
-    return new MockFrontendModelQuery(this)
+    const query = new MockFrontendModelQuery(this)
+
+    if (this.accessibleForDistinctValue !== null) {
+      query.distinct(this.accessibleForDistinctValue)
+    }
+
+    return query
   }
 
   /**
@@ -412,6 +419,20 @@ function buildAbilityDeniedModelClass(deniedAbilityAction) {
 class FrontendController extends FrontendModelController {}
 
 describe("Controller frontend model actions", () => {
+  it("does not override scoped distinct when distinct param is omitted", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    MockFrontendModel.accessibleForDistinctValue = true
+    const controller = buildController()
+
+    try {
+      await controller.frontendIndex()
+
+      expect(MockFrontendModel.lastQuery?.distinctValue).toEqual(true)
+    } finally {
+      MockFrontendModel.accessibleForDistinctValue = null
+    }
+  })
+
   it("returns models from frontendIndex", async () => {
     MockFrontendModel.data = [
       {id: "1", name: "One"},
