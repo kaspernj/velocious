@@ -1,8 +1,11 @@
 // @ts-check
 
+import Ability from "../../src/authorization/ability.js"
+import BaseResource from "../../src/authorization/base-resource.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import Dummy from "../dummy/index.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Comment from "../dummy/src/models/comment.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
@@ -53,6 +56,23 @@ async function postSharedTaskFrontendModelCommand(commandType, payload) {
   })
 
   return /** @type {Record<string, any>} */ (response.responses?.[0]?.response || response)
+}
+
+/**
+ * @param {import("../../src/configuration-types.js").AbilityResolverType | undefined} resolver - Temporary resolver.
+ * @param {() => Promise<void>} callback - Callback.
+ * @returns {Promise<void>}
+ */
+async function withDummyAbilityResolver(resolver, callback) {
+  const previousResolver = dummyConfiguration.getAbilityResolver()
+
+  dummyConfiguration.setAbilityResolver(resolver)
+
+  try {
+    await callback()
+  } finally {
+    dummyConfiguration.setAbilityResolver(previousResolver)
+  }
 }
 
 /**
@@ -108,6 +128,47 @@ async function createTaskWithProject({projectName, taskName, creatingUserReferen
 }
 
 describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+  it("does not override scoped distinct when distinct param is omitted", async () => {
+    /** Ability resource adding a distinct scope for Task reads. */
+    class TaskDistinctScopeResource extends BaseResource {
+      static ModelClass = Task
+
+      /** @returns {void} */
+      abilities() {
+        this.can("read", Task, (query) => query.distinct(true))
+      }
+    }
+
+    await withDummyAbilityResolver(async ({configuration, params, request, response}) => {
+      const requestPath = request.path().split("?")[0]
+      const modelName = params.modelName
+
+      if (!(requestPath === "/velocious/api" && modelName === "Task")) return
+
+      return new Ability({
+        context: {configuration, params, request, response},
+        resources: [TaskDistinctScopeResource]
+      })
+    }, async () => {
+      await Dummy.run(async () => {
+        const task = await createTask(`Distinct scoped ${Date.now()}`)
+
+        await Comment.create({body: "Scoped comment A", taskId: task.id()})
+        await Comment.create({body: "Scoped comment B", taskId: task.id()})
+
+        const payload = await postSharedTaskFrontendModelCommand("index", {
+          searches: [{column: "id", operator: "gteq", path: ["comments"], value: 1}],
+          where: {id: task.id()}
+        })
+
+        const occurrences = payload.models.filter((model) => model.id === task.id()).length
+
+        expect(payload.status).toEqual("success")
+        expect(occurrences).toEqual(1)
+      })
+    })
+  })
+
   it("returns models from frontendIndex", async () => {
     await Dummy.run(async () => {
       await createTask("Index Alpha")
