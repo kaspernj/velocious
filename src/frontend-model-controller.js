@@ -174,6 +174,14 @@ function normalizeFrontendModelSelect(select) {
  * @property {string[]} path - Relationship path from root model.
  */
 
+/**
+ * @typedef {object} FrontendModelPagination
+ * @property {number | null} limit - Maximum number of records.
+ * @property {number | null} offset - Number of records to skip.
+ * @property {number | null} page - 1-based page number.
+ * @property {number | null} perPage - Page size.
+ */
+
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 
@@ -483,6 +491,43 @@ function normalizeFrontendModelWhere(where) {
   }
 
   return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(where)))
+}
+
+/**
+ * @param {unknown} value - Candidate integer.
+ * @param {string} name - Param name for errors.
+ * @param {number} min - Minimum allowed value.
+ * @returns {number | null} - Normalized integer.
+ */
+function normalizeFrontendModelIntegerParam(value, name, min) {
+  if (value == null) return null
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`Invalid ${name}: expected integer number`)
+  }
+
+  if (value < min) {
+    throw new Error(`Invalid ${name}: expected value >= ${min}`)
+  }
+
+  return value
+}
+
+/**
+ * @param {object} args - Pagination args.
+ * @param {unknown} args.limit - Limit payload.
+ * @param {unknown} args.offset - Offset payload.
+ * @param {unknown} args.page - Page payload.
+ * @param {unknown} args.perPage - Per-page payload.
+ * @returns {FrontendModelPagination} - Normalized pagination data.
+ */
+function normalizeFrontendModelPagination({limit, offset, page, perPage}) {
+  return {
+    limit: normalizeFrontendModelIntegerParam(limit, "limit", 0),
+    offset: normalizeFrontendModelIntegerParam(offset, "offset", 0),
+    page: normalizeFrontendModelIntegerParam(page, "page", 1),
+    perPage: normalizeFrontendModelIntegerParam(perPage, "perPage", 1)
+  }
 }
 
 /**
@@ -945,6 +990,9 @@ export default class FrontendModelController extends Controller {
     }
 
     const where = this.frontendModelWhere()
+    const pagination = this.frontendModelPagination()
+
+    this.applyFrontendModelPagination({pagination, query})
 
     if (where) {
       this.applyFrontendModelWhere({query, where})
@@ -1011,6 +1059,18 @@ export default class FrontendModelController extends Controller {
   /** @returns {FrontendModelGroup[]} - Frontend group definitions. */
   frontendModelGroup() {
     return normalizeFrontendModelGroup(this.frontendModelParams().group)
+  }
+
+  /** @returns {FrontendModelPagination} - Frontend pagination params. */
+  frontendModelPagination() {
+    const params = this.frontendModelParams()
+
+    return normalizeFrontendModelPagination({
+      limit: params.limit,
+      offset: params.offset,
+      page: params.page,
+      perPage: params.perPage
+    })
   }
 
   /**
@@ -1110,6 +1170,30 @@ export default class FrontendModelController extends Controller {
     }
 
     query.where(`${columnSql} ${sqlOperator} ${query.driver.quote(search.value)}`)
+  }
+
+  /**
+   * @param {object} args - Pagination args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelPagination} args.pagination - Pagination values.
+   * @returns {void}
+   */
+  applyFrontendModelPagination({query, pagination}) {
+    if (pagination.limit !== null) {
+      query.limit(pagination.limit)
+    }
+
+    if (pagination.offset !== null) {
+      query.offset(pagination.offset)
+    }
+
+    if (pagination.perPage !== null) {
+      query.perPage(pagination.perPage)
+    }
+
+    if (pagination.page !== null) {
+      query.page(pagination.page)
+    }
   }
 
   /**

@@ -3,6 +3,53 @@ import Controller from "../../../../../src/controller.js"
 /** Dummy backend endpoint used by browser frontend-model integration specs. */
 export default class FrontendModelSystemTestsController extends Controller {
   /**
+   * @param {unknown} value - Candidate integer.
+   * @param {number} minimumValue - Minimum value.
+   * @returns {number | null} - Normalized integer or null.
+   */
+  normalizeIntegerParam(value, minimumValue) {
+    if (value == null) return null
+    if (typeof value !== "number" || !Number.isInteger(value)) return null
+    if (value < minimumValue) return null
+
+    return value
+  }
+
+  /**
+   * @param {unknown[]} models - Models to paginate.
+   * @param {unknown} limit - Limit payload.
+   * @param {unknown} offset - Offset payload.
+   * @param {unknown} page - Page payload.
+   * @param {unknown} perPage - Per-page payload.
+   * @returns {unknown[]} - Paginated models.
+   */
+  applyPagination(models, limit, offset, page, perPage) {
+    let normalizedLimit = this.normalizeIntegerParam(limit, 0)
+    let normalizedOffset = this.normalizeIntegerParam(offset, 0)
+    const normalizedPage = this.normalizeIntegerParam(page, 1)
+    const normalizedPerPage = this.normalizeIntegerParam(perPage, 1)
+
+    if (normalizedPage !== null) {
+      const pageSize = normalizedPerPage || 30
+
+      normalizedLimit = pageSize
+      normalizedOffset = (normalizedPage - 1) * pageSize
+    }
+
+    let paginatedModels = [...models]
+
+    if (normalizedOffset !== null) {
+      paginatedModels = paginatedModels.slice(normalizedOffset)
+    }
+
+    if (normalizedLimit !== null) {
+      paginatedModels = paginatedModels.slice(0, normalizedLimit)
+    }
+
+    return paginatedModels
+  }
+
+  /**
    * @param {unknown} sort - Sort payload from params.
    * @returns {Array<{column: string, direction: "asc" | "desc", path: string[]}>} - Normalized sort entries.
    */
@@ -269,6 +316,10 @@ export default class FrontendModelSystemTestsController extends Controller {
   /** @returns {Promise<void>} - Resolves when complete. */
   async frontendIndex() {
     const preload = this.params().preload
+    const limit = this.params().limit
+    const offset = this.params().offset
+    const page = this.params().page
+    const perPage = this.params().perPage
     const select = this.params().select
     const sort = this.params().sort
     const where = /** @type {Record<string, any> | undefined} */ (this.params().where)
@@ -311,10 +362,11 @@ export default class FrontendModelSystemTestsController extends Controller {
       secondDefaultModel
     ].filter((model) => this.matchesWhere(model, where))
     const sortedModels = this.applySort(models, sort)
+    const paginatedModels = this.applyPagination(sortedModels, limit, offset, page, perPage)
 
     await this.render({
       json: {
-        models: sortedModels,
+        models: paginatedModels,
         status: "success"
       }
     })

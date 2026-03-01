@@ -197,6 +197,10 @@ class MockFrontendModelQuery {
     this.conditions = {}
     this.groupSqls = []
     this.joinsArgs = []
+    this.limitValue = null
+    this.offsetValue = null
+    this.pageValue = null
+    this.perPageValue = null
     this.preloads = []
     this.whereSqls = []
     this.modelClass.lastQuery = this
@@ -244,6 +248,53 @@ class MockFrontendModelQuery {
   }
 
   /**
+   * @param {number} limitValue
+   * @returns {this}
+   */
+  limit(limitValue) {
+    this.limitValue = limitValue
+    return this
+  }
+
+  /**
+   * @param {number} offsetValue
+   * @returns {this}
+   */
+  offset(offsetValue) {
+    this.offsetValue = offsetValue
+    return this
+  }
+
+  /**
+   * @param {number} perPageValue
+   * @returns {this}
+   */
+  perPage(perPageValue) {
+    this.perPageValue = perPageValue
+
+    if (this.pageValue !== null) {
+      this.limitValue = perPageValue
+      this.offsetValue = (this.pageValue - 1) * perPageValue
+    }
+
+    return this
+  }
+
+  /**
+   * @param {number} pageValue
+   * @returns {this}
+   */
+  page(pageValue) {
+    this.pageValue = pageValue
+    const pageSize = this.perPageValue || 30
+
+    this.limitValue = pageSize
+    this.offsetValue = (pageValue - 1) * pageSize
+
+    return this
+  }
+
+  /**
    * @param {...string} path
    * @returns {string}
    */
@@ -264,7 +315,16 @@ class MockFrontendModelQuery {
 
   /** @returns {Promise<MockFrontendModel[]>} */
   async toArray() {
-    const records = this.modelClass.data.filter((record) => this.matches(record))
+    let records = this.modelClass.data.filter((record) => this.matches(record))
+
+    if (this.offsetValue !== null) {
+      records = records.slice(this.offsetValue)
+    }
+
+    if (this.limitValue !== null) {
+      records = records.slice(0, this.limitValue)
+    }
+
     return records.map((record) => new this.modelClass(record))
   }
 
@@ -429,6 +489,42 @@ describe("Controller frontend model actions", () => {
         }
       }
     ])
+  })
+
+  it("applies limit, offset, perPage, and page params to frontendIndex query", async () => {
+    MockFrontendModel.data = [
+      {id: "1", name: "One"},
+      {id: "2", name: "Two"}
+    ]
+
+    const controller = buildController({
+      params: {
+        limit: 10,
+        offset: 5,
+        page: 2,
+        perPage: 25
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.limitValue).toEqual(25)
+    expect(MockFrontendModel.lastQuery?.offsetValue).toEqual(25)
+    expect(MockFrontendModel.lastQuery?.perPageValue).toEqual(25)
+    expect(MockFrontendModel.lastQuery?.pageValue).toEqual(2)
+  })
+
+  it("rejects non-numeric pagination params on frontendIndex", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      params: {
+        limit: "1; DROP TABLE accounts"
+      }
+    })
+
+    await expect(async () => {
+      await controller.frontendIndex()
+    }).toThrow(/Invalid limit/)
   })
 
   it("merges nested preload entries from array shorthand", async () => {

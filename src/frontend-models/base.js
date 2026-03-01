@@ -849,6 +849,46 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {number} value - Maximum number of records.
+   * @returns {import("./query.js").default<T>} - Query with limit.
+   */
+  static limit(value) {
+    return this.query().limit(value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {number} value - Number of records to skip.
+   * @returns {import("./query.js").default<T>} - Query with offset.
+   */
+  static offset(value) {
+    return this.query().offset(value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {number} pageNumber - 1-based page number.
+   * @returns {import("./query.js").default<T>} - Query with page.
+   */
+  static page(pageNumber) {
+    return this.query().page(pageNumber)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {number} value - Number of records per page.
+   * @returns {import("./query.js").default<T>} - Query with page size.
+   */
+  static perPage(value) {
+    return this.query().perPage(value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @returns {Promise<number>} - Number of loaded model instances.
    */
   static async count() {
