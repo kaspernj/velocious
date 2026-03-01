@@ -881,6 +881,16 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, any> | Array<Record<string, any>>} order - Order definition(s).
+   * @returns {FrontendModelQuery<T>} - Query builder with order definitions.
+   */
+  static order(order) {
+    return this.query().order(order)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @param {string | string[] | Record<string, any> | Array<Record<string, any>>} group - Group definition(s).
    * @returns {FrontendModelQuery<T>} - Query builder with group definitions.
    */

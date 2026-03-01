@@ -246,6 +246,24 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("order(...).toArray() orders records through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const models = await BrowserFrontendModel
+        .order("-createdAt")
+        .toArray()
+
+      expect(models.map((model) => model.id())).toEqual(["2", "1"])
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findBy matches numeric id conditions against string ids over real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return

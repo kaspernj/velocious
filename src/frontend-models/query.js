@@ -644,6 +644,14 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, any> | Array<Record<string, any>>} order - Order definition(s).
+   * @returns {this} - Query with appended sort definitions.
+   */
+  order(order) {
+    return this.sort(order)
+  }
+
+  /**
    * @param {string | string[] | Record<string, any> | Array<Record<string, any>>} group - Group definition(s).
    * @returns {this} - Query with appended group definitions.
    */
