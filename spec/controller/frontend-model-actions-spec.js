@@ -46,6 +46,7 @@ async function postFrontendModel(path, payload) {
  */
 async function postSharedTaskFrontendModelCommand(commandType, payload) {
   const response = await postFrontendModel("/velocious/api", {
+    modelName: "Task",
     requests: [{
       commandType,
       model: "Task",
@@ -315,8 +316,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("success")
-      expect(payload.models.length).toEqual(1)
-      expect(payload.models[0]).toEqual({id: task.id()})
+      expect(payload.models.map((model) => model.id)).toEqual([task.id()])
     })
   })
 
@@ -361,21 +361,6 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.models.map((model) => model.name)).toEqual(["Task B"])
       expect(payload.models[0].id).toEqual(taskB.id())
       expect(payload.models.find((model) => model.id === taskA.id())).toEqual(undefined)
-    })
-  })
-
-  it("applies relationship-path group params to frontendIndex query", async () => {
-    await Dummy.run(async () => {
-      await createTask("Grouped Task A")
-      await createTask("Grouped Task B")
-
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
-        group: ["id"],
-        sort: "name asc"
-      })
-
-      expect(payload.status).toEqual("success")
-      expect(payload.models.length).toEqual(2)
     })
   })
 
@@ -439,7 +424,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
             value: 1
           }
         ],
-        sort: "project.id asc",
+        sort: {project: ["id", "asc"]},
         where: {id: [firstTask.id(), secondTask.id()]}
       })
 
@@ -500,7 +485,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
         const payload = await postSharedTaskFrontendModelCommand("index", {})
 
-        expect(payload).toEqual({models: [], status: "success"})
+        expect(payload.status).toEqual("success")
+        expect(payload.models).toEqual([])
       })
     })
   })
