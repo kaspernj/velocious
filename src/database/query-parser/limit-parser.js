@@ -31,12 +31,6 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
       sql += " "
     }
 
-    if (pretty) {
-      sql += "\n  "
-    } else {
-      sql += " "
-    }
-
     if (isMssql) {
       if (query._orders.length === 0) {
         sql += "ORDER BY (SELECT NULL) "
@@ -48,7 +42,13 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
         sql += ` FETCH NEXT ${options.quote(limit)} ROWS ONLY`
       }
     } else {
-      sql += "LIMIT "
+      sql += "LIMIT"
+
+      if (pretty) {
+        sql += "\n  "
+      } else {
+        sql += " "
+      }
 
       if (hasLimit) {
         sql += options.quote(limit)
