@@ -1239,7 +1239,38 @@ export default class FrontendModelController extends Controller {
       this.applyFrontendModelSort({query, sort})
     }
 
+    if (query._distinct && query.driver.getType() === "mssql") {
+      return this.frontendModelMssqlDistinctByPrimaryKeyQuery({query})
+    }
+
     return query
+  }
+
+  /**
+   * MSSQL cannot apply DISTINCT over non-comparable text columns in table.* selects.
+   * This rewrites distinct frontend-model queries to select root records by distinct PK subquery.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query with distinct and filters.
+   * @returns {import("./database/query/model-class-query.js").default} - MSSQL-safe distinct query.
+   */
+  frontendModelMssqlDistinctByPrimaryKeyQuery({query}) {
+    const modelClass = this.frontendModelClass()
+    const primaryKey = modelClass.primaryKey()
+    const rootTableSql = query.driver.quoteTable(modelClass.tableName())
+    const primaryKeySql = `${rootTableSql}.${query.driver.quoteColumn(primaryKey)}`
+    const distinctIdsQuery = query.clone()
+
+    distinctIdsQuery._preload = {}
+    distinctIdsQuery._selects = []
+    distinctIdsQuery.select(primaryKeySql)
+    distinctIdsQuery.distinct(true)
+
+    const distinctRootQuery = modelClass._newQuery()
+
+    distinctRootQuery.where(`${primaryKeySql} IN (${distinctIdsQuery.toSql()})`)
+    distinctRootQuery._preload = {...query._preload}
+
+    return distinctRootQuery
   }
 
   /**
