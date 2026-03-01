@@ -199,6 +199,10 @@ export default class VelociousAuthorizationAbility {
       const finalQuery = resultQuery || scopedQuery
       const selectedPkSql = `${quotedBaseTable}.${quotedPk}`
 
+      if (finalQuery._distinct) {
+        query.distinct(true)
+      }
+
       finalQuery.select(selectedPkSql)
 
       sqlParts.push(`${quotedBaseTable}.${quotedPk} IN (${finalQuery.toSql()})`)
