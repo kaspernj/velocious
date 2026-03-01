@@ -531,6 +531,20 @@ function normalizeFrontendModelPagination({limit, offset, page, perPage}) {
 }
 
 /**
+ * @param {unknown} distinct - Distinct payload.
+ * @returns {boolean | null} - Normalized distinct flag when provided.
+ */
+function normalizeFrontendModelDistinct(distinct) {
+  if (distinct == null) return null
+
+  if (typeof distinct !== "boolean") {
+    throw new Error(`Invalid distinct: expected boolean`)
+  }
+
+  return distinct
+}
+
+/**
  * @param {unknown} sort - Sort payload.
  * @returns {FrontendModelSort[]} - Normalized sort definitions.
  */
@@ -991,8 +1005,13 @@ export default class FrontendModelController extends Controller {
 
     const where = this.frontendModelWhere()
     const pagination = this.frontendModelPagination()
+    const distinct = this.frontendModelDistinct()
 
     this.applyFrontendModelPagination({pagination, query})
+
+    if (distinct !== null) {
+      query.distinct(distinct)
+    }
 
     if (where) {
       this.applyFrontendModelWhere({query, where})
@@ -1071,6 +1090,11 @@ export default class FrontendModelController extends Controller {
       page: params.page,
       perPage: params.perPage
     })
+  }
+
+  /** @returns {boolean | null} - Frontend distinct flag when provided. */
+  frontendModelDistinct() {
+    return normalizeFrontendModelDistinct(this.frontendModelParams().distinct)
   }
 
   /**

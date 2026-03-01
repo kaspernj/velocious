@@ -113,6 +113,7 @@ class MockFrontendModel {
   ]
   static lastQuery = null
   static relationshipsMap = {}
+  static accessibleForDistinctValue = null
 
   /**
    * @returns {Record<string, string>}
@@ -153,7 +154,13 @@ class MockFrontendModel {
    * @returns {MockFrontendModelQuery}
    */
   static accessibleFor() {
-    return new MockFrontendModelQuery(this)
+    const query = new MockFrontendModelQuery(this)
+
+    if (this.accessibleForDistinctValue !== null) {
+      query.distinct(this.accessibleForDistinctValue)
+    }
+
+    return query
   }
 
   /**
@@ -197,6 +204,7 @@ class MockFrontendModelQuery {
     this.conditions = {}
     this.groupSqls = []
     this.joinsArgs = []
+    this.distinctValue = false
     this.limitValue = null
     this.offsetValue = null
     this.pageValue = null
@@ -235,6 +243,15 @@ class MockFrontendModelQuery {
    */
   group(groupSql) {
     this.groupSqls.push(groupSql)
+    return this
+  }
+
+  /**
+   * @param {boolean} distinctValue
+   * @returns {this}
+   */
+  distinct(distinctValue = true) {
+    this.distinctValue = distinctValue
     return this
   }
 
@@ -402,6 +419,20 @@ function buildAbilityDeniedModelClass(deniedAbilityAction) {
 class FrontendController extends FrontendModelController {}
 
 describe("Controller frontend model actions", () => {
+  it("does not override scoped distinct when distinct param is omitted", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    MockFrontendModel.accessibleForDistinctValue = true
+    const controller = buildController()
+
+    try {
+      await controller.frontendIndex()
+
+      expect(MockFrontendModel.lastQuery?.distinctValue).toEqual(true)
+    } finally {
+      MockFrontendModel.accessibleForDistinctValue = null
+    }
+  })
+
   it("returns models from frontendIndex", async () => {
     MockFrontendModel.data = [
       {id: "1", name: "One"},
@@ -512,6 +543,32 @@ describe("Controller frontend model actions", () => {
     expect(MockFrontendModel.lastQuery?.offsetValue).toEqual(25)
     expect(MockFrontendModel.lastQuery?.perPageValue).toEqual(25)
     expect(MockFrontendModel.lastQuery?.pageValue).toEqual(2)
+  })
+
+  it("applies distinct params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      params: {
+        distinct: true
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.distinctValue).toEqual(true)
+  })
+
+  it("rejects non-boolean distinct params on frontendIndex", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      params: {
+        distinct: "1 OR 1=1"
+      }
+    })
+
+    await expect(async () => {
+      await controller.frontendIndex()
+    }).toThrow(/Invalid distinct/)
   })
 
   it("rejects non-numeric pagination params on frontendIndex", async () => {

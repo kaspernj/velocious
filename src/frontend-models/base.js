@@ -941,6 +941,16 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {boolean} [value] - Whether to request distinct rows.
+   * @returns {FrontendModelQuery<T>} - Query builder with distinct flag.
+   */
+  static distinct(value = true) {
+    return this.query().distinct(value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @returns {FrontendModelQuery<T>} - Query builder.
    */
   static query() {

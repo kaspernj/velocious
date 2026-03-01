@@ -168,3 +168,4 @@
 - Regenerate dummy frontend models so single-tag JSDoc blocks (including relationship `@returns` definitions) are emitted on one line.
 - Add frontend-model query `group(...)` support with safe attribute/path normalization (including nested relationship grouping like `{project: {account: ["id"]}}`) and reject SQL-like raw string fragments.
 - Add frontend-model `order(...)` as an alias for query sorting so frontend model query naming aligns with backend model `order(...)` usage.
+- Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.

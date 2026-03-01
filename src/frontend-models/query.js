@@ -558,6 +558,7 @@ export default class FrontendModelQuery {
     this._select = {}
     this._sort = []
     this._group = []
+    this._distinct = false
     this._limit = null
     this._offset = null
     this._page = null
@@ -685,6 +686,20 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {boolean} [value] - Whether to request distinct rows.
+   * @returns {this} - Query with distinct flag.
+   */
+  distinct(value = true) {
+    if (typeof value !== "boolean") {
+      throw new Error(`distinct must be a boolean, got: ${typeof value}`)
+    }
+
+    this._distinct = value
+
+    return this
+  }
+
+  /**
    * @param {number} value - Maximum number of records.
    * @returns {this} - Query with limit.
    */
@@ -802,6 +817,17 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload distinct flag when enabled.
+   */
+  distinctPayload() {
+    if (!this._distinct) return {}
+
+    return {
+      distinct: true
+    }
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload where hash when present.
    */
   wherePayload() {
@@ -836,6 +862,7 @@ export default class FrontendModelQuery {
       ...this.searchPayload(),
       ...this.selectPayload(),
       ...this.groupPayload(),
+      ...this.distinctPayload(),
       ...this.sortPayload(),
       ...this.wherePayload(),
       ...this.paginationPayload()
@@ -890,6 +917,7 @@ export default class FrontendModelQuery {
       ...this.searchPayload(),
       ...this.selectPayload(Object.keys(mergedWhere)),
       ...this.groupPayload(),
+      ...this.distinctPayload(),
       ...this.sortPayload(),
       ...this.paginationPayload(),
       where: mergedWhere
