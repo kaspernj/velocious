@@ -197,6 +197,7 @@ class MockFrontendModelQuery {
     this.conditions = {}
     this.groupSqls = []
     this.joinsArgs = []
+    this.distinctValue = false
     this.limitValue = null
     this.offsetValue = null
     this.pageValue = null
@@ -235,6 +236,15 @@ class MockFrontendModelQuery {
    */
   group(groupSql) {
     this.groupSqls.push(groupSql)
+    return this
+  }
+
+  /**
+   * @param {boolean} distinctValue
+   * @returns {this}
+   */
+  distinct(distinctValue = true) {
+    this.distinctValue = distinctValue
     return this
   }
 
@@ -512,6 +522,32 @@ describe("Controller frontend model actions", () => {
     expect(MockFrontendModel.lastQuery?.offsetValue).toEqual(25)
     expect(MockFrontendModel.lastQuery?.perPageValue).toEqual(25)
     expect(MockFrontendModel.lastQuery?.pageValue).toEqual(2)
+  })
+
+  it("applies distinct params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      params: {
+        distinct: true
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.distinctValue).toEqual(true)
+  })
+
+  it("rejects non-boolean distinct params on frontendIndex", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      params: {
+        distinct: "1 OR 1=1"
+      }
+    })
+
+    await expect(async () => {
+      await controller.frontendIndex()
+    }).toThrow(/Invalid distinct/)
   })
 
   it("rejects non-numeric pagination params on frontendIndex", async () => {

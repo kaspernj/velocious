@@ -3,6 +3,7 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
+import Comment from "../dummy/src/models/comment.js"
 import Project from "../dummy/src/models/project.js"
 import TaskModel from "../dummy/src/models/task.js"
 import Task from "../dummy/src/frontend-models/task.js"
@@ -284,6 +285,46 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
           .toArray()
 
         expect(tasks.map((task) => task.name())).toEqual(["Zulu owner task 2", "Alpha owner task 2"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("deduplicates frontend-model rows with distinct() across has-many sort joins", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const task = await createTask("Distinct task")
+
+        await Comment.create({body: "Comment A", taskId: task.id()})
+        await Comment.create({body: "Comment B", taskId: task.id()})
+
+        const withoutDistinct = await Task
+          .sort({comments: ["body", "asc"]})
+          .toArray()
+        const withDistinct = await Task
+          .sort({comments: ["body", "asc"]})
+          .distinct()
+          .toArray()
+
+        expect(withoutDistinct.map((record) => record.id())).toEqual([task.id(), task.id()])
+        expect(withDistinct.map((record) => record.id())).toEqual([task.id()])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("rejects non-boolean distinct() values", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await expect(async () => {
+          await Task.distinct("1 OR 1=1").toArray()
+        }).toThrow(/distinct must be a boolean/)
       } finally {
         resetFrontendModelTransport()
       }
