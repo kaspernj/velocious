@@ -6,6 +6,7 @@ This repo uses an automated “definition of done” for changes. Before declari
 
 ## Testing guidance
 Prefer using the dummy app for tests instead of fake classes or stubbing.
+For frontend-model runtime/query behavior, prefer `spec/frontend-models/base.http-integration-spec.js` and `spec/frontend-models/base.browser-spec.js` over unit-style coverage in `spec/frontend-models/base-spec.js`.
 Prefer functional tests over raw SQL assertions because SQL varies by database. Only assert SQL when validating a query parser, and normalize it to avoid quoting differences.
 Document newly discovered behavior, constraints, edge cases, and integration caveats in the `docs/` folder as part of normal development flow.
 After changing base model generator logic, run `npx velocious g:base-models` from `spec/dummy` so the generated base models stay in sync.

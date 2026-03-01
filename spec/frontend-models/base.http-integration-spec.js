@@ -232,6 +232,22 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("order(...).toArray() orders records through real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const models = await HttpFrontendModel
+          .order("-createdAt")
+          .toArray()
+
+        expect(models.map((model) => model.id())).toEqual(["2", "1"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("findBy matches numeric id conditions against string ids over real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

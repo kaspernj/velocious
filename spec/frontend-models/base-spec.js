@@ -364,35 +364,6 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("sends sort payload when using order(...).toArray()", async () => {
-    const User = buildTestModelClass()
-    const fetchStub = stubFetch({models: []})
-
-    try {
-      await User
-        .order("-createdAt")
-        .toArray()
-
-      expect(fetchStub.calls).toEqual([
-        {
-          body: {
-            sort: [
-              {
-                column: "createdAt",
-                direction: "desc",
-                path: []
-              }
-            ]
-          },
-          url: "/api/frontend-models/users/index"
-        }
-      ])
-    } finally {
-      resetFrontendModelTransport()
-      fetchStub.restore()
-    }
-  })
-
   it("sends group payload when using group(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
