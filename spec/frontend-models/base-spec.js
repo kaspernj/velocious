@@ -404,6 +404,57 @@ describe("Frontend models - base", () => {
     }).toThrow(/Invalid group column/)
   })
 
+  it("sends pluck payload when using pluck(...)", async () => {
+    const {Task} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({status: "success", values: ["project-1"]})
+
+    try {
+      const values = await Task.pluck({project: ["id"]})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            pluck: [
+              {
+                column: "id",
+                path: ["project"]
+              }
+            ]
+          },
+          url: "/api/frontend-models/tasks/index"
+        }
+      ])
+      expect(values).toEqual(["project-1"])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("rejects unsafe string pluck definitions", async () => {
+    const User = buildTestModelClass()
+
+    await expect(async () => {
+      await User.pluck("id; DROP TABLE accounts")
+    }).toThrow(/Invalid pluck column/)
+  })
+
+  it("rejects unknown pluck relationships", async () => {
+    const User = buildTestModelClass()
+
+    await expect(async () => {
+      await User.pluck({project: ["id"]})
+    }).toThrow(/Unknown pluck relationship/)
+  })
+
+  it("rejects unknown pluck columns", async () => {
+    const {Task} = buildPreloadTestModelClasses()
+
+    await expect(async () => {
+      await Task.pluck("unknownColumn")
+    }).toThrow(/Unknown pluck column/)
+  })
+
 
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()

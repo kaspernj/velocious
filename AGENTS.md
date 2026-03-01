@@ -21,6 +21,7 @@ Use spaces inside named imports (e.g. `import {foo, bar} from "..."`).
 Do not override methods on runtime instances to change behavior; add explicit hooks/flags in the owning class instead.
 For multi-step method chains, put the receiver on its own line and place each chained call on its own following line.
 In generated code, keep single-tag JSDoc blocks on one line when they fit (e.g. `/** @returns {Type} - Description. */`).
+Do not silence JSDoc/TypeScript errors with broad casts like `/** @type {Record<string, any>} */ (...)`; fix the underlying typedefs/contracts instead.
 
 ## Verification commands
 

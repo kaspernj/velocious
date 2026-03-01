@@ -175,6 +175,12 @@ function normalizeFrontendModelSelect(select) {
  */
 
 /**
+ * @typedef {object} FrontendModelPluck
+ * @property {string} column - Attribute name to pluck.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
  * @typedef {object} FrontendModelPagination
  * @property {number | null} limit - Maximum number of records.
  * @property {number | null} offset - Number of records to skip.
@@ -664,6 +670,133 @@ function normalizeFrontendModelGroup(group) {
 }
 
 /**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit pluck descriptor object.
+ */
+function frontendModelPluckDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {string} pluckValue - Pluck string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelPluck} - Normalized pluck descriptor.
+ */
+function frontendModelPluckFromString(pluckValue, path = []) {
+  const trimmed = pluckValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid pluck column: ${pluckValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {Record<string, any>} pluckValue - Nested pluck object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelPluck[]} - Normalized pluck descriptors.
+ */
+function normalizeFrontendModelPluckObject(pluckValue, path) {
+  /** @type {FrontendModelPluck[]} */
+  const normalizedPlucks = []
+
+  for (const [pluckKey, pluckEntry] of Object.entries(pluckValue)) {
+    if (typeof pluckEntry === "string") {
+      normalizedPlucks.push(frontendModelPluckFromString(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    if (Array.isArray(pluckEntry)) {
+      if (pluckEntry.length < 1) {
+        throw new Error(`Invalid pluck definition for "${pluckKey}": empty array`)
+      }
+
+      for (const nestedPluckEntry of pluckEntry) {
+        if (typeof nestedPluckEntry !== "string") {
+          throw new Error(`Invalid pluck definition for "${pluckKey}": expected string columns`)
+        }
+
+        normalizedPlucks.push(frontendModelPluckFromString(nestedPluckEntry, [...path, pluckKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(pluckEntry)) {
+      normalizedPlucks.push(...normalizeFrontendModelPluckObject(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    throw new Error(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
+  }
+
+  return normalizedPlucks
+}
+
+/**
+ * @param {unknown} pluck - Pluck payload.
+ * @returns {FrontendModelPluck[]} - Normalized pluck definitions.
+ */
+function normalizeFrontendModelPluck(pluck) {
+  if (!pluck) return []
+
+  if (typeof pluck === "string") {
+    return [frontendModelPluckFromString(pluck)]
+  }
+
+  if (frontendModelPluckDescriptor(pluck)) {
+    return [{
+      column: frontendModelPluckFromString(pluck.column).column,
+      path: [...pluck.path]
+    }]
+  }
+
+  if (isPlainObject(pluck)) {
+    return normalizeFrontendModelPluckObject(pluck, [])
+  }
+
+  if (Array.isArray(pluck)) {
+    /** @type {FrontendModelPluck[]} */
+    const normalized = []
+
+    for (const pluckEntry of pluck) {
+      if (typeof pluckEntry === "string") {
+        normalized.push(frontendModelPluckFromString(pluckEntry))
+        continue
+      }
+
+      if (frontendModelPluckDescriptor(pluckEntry)) {
+        normalized.push({
+          column: frontendModelPluckFromString(pluckEntry.column).column,
+          path: [...pluckEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(pluckEntry)) {
+        normalized.push(...normalizeFrontendModelPluckObject(pluckEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid pluck entry type: ${typeof pluckEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid pluck type: ${typeof pluck}`)
+}
+
+/**
  * @param {string[]} path - Relationship path.
  * @returns {Record<string, any>} - Join object.
  */
@@ -996,50 +1129,7 @@ export default class FrontendModelController extends Controller {
       return await this.frontendModelFilterAuthorizedModels({action: "index", models})
     }
 
-    let query = this.frontendModelAuthorizedQuery("index")
-    const preload = this.frontendModelPreload()
-
-    if (preload) {
-      query = query.preload(preload)
-    }
-
-    const where = this.frontendModelWhere()
-    const pagination = this.frontendModelPagination()
-    const distinct = this.frontendModelDistinct()
-
-    this.applyFrontendModelPagination({pagination, query})
-
-    if (distinct !== null) {
-      query.distinct(distinct)
-    }
-
-    if (where) {
-      this.applyFrontendModelWhere({query, where})
-    }
-
-    const searches = this.frontendModelSearches()
-
-    for (const search of searches) {
-      this.applyFrontendModelSearch({query, search})
-    }
-
-    const groups = this.frontendModelGroup()
-
-    if (groups.length > 0) {
-      this.applyFrontendModelRootGroupColumns({query})
-    }
-
-    for (const group of groups) {
-      this.applyFrontendModelGroup({group, query})
-    }
-
-    const sorts = this.frontendModelSort()
-
-    for (const sort of sorts) {
-      this.applyFrontendModelSort({query, sort})
-    }
-
-    return await query.toArray()
+    return await this.frontendModelIndexQuery().toArray()
   }
 
   /**
@@ -1095,6 +1185,147 @@ export default class FrontendModelController extends Controller {
   /** @returns {boolean | null} - Frontend distinct flag when provided. */
   frontendModelDistinct() {
     return normalizeFrontendModelDistinct(this.frontendModelParams().distinct)
+  }
+
+  /** @returns {FrontendModelPluck[]} - Frontend pluck definitions. */
+  frontendModelPluck() {
+    return normalizeFrontendModelPluck(this.frontendModelParams().pluck)
+  }
+
+  /**
+   * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
+   */
+  frontendModelIndexQuery() {
+    let query = this.frontendModelAuthorizedQuery("index")
+    const preload = this.frontendModelPreload()
+
+    if (preload) {
+      query = query.preload(preload)
+    }
+
+    const where = this.frontendModelWhere()
+    const pagination = this.frontendModelPagination()
+    const distinct = this.frontendModelDistinct()
+
+    this.applyFrontendModelPagination({pagination, query})
+
+    if (distinct !== null) {
+      query.distinct(distinct)
+    }
+
+    if (where) {
+      this.applyFrontendModelWhere({query, where})
+    }
+
+    const searches = this.frontendModelSearches()
+
+    for (const search of searches) {
+      this.applyFrontendModelSearch({query, search})
+    }
+
+    const groups = this.frontendModelGroup()
+
+    if (groups.length > 0) {
+      this.applyFrontendModelRootGroupColumns({query})
+    }
+
+    for (const group of groups) {
+      this.applyFrontendModelGroup({group, query})
+    }
+
+    const sorts = this.frontendModelSort()
+
+    for (const sort of sorts) {
+      this.applyFrontendModelSort({query, sort})
+    }
+
+    if (query._distinct && query.driver.getType() === "mssql") {
+      return this.frontendModelMssqlDistinctByPrimaryKeyQuery({query})
+    }
+
+    return query
+  }
+
+  /**
+   * MSSQL cannot apply DISTINCT over non-comparable text columns in table.* selects.
+   * This rewrites distinct frontend-model queries to select root records by distinct PK subquery.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query with distinct and filters.
+   * @returns {import("./database/query/model-class-query.js").default} - MSSQL-safe distinct query.
+   */
+  frontendModelMssqlDistinctByPrimaryKeyQuery({query}) {
+    const modelClass = this.frontendModelClass()
+    const primaryKey = modelClass.primaryKey()
+    const rootTableSql = query.driver.quoteTable(modelClass.tableName())
+    const primaryKeySql = `${rootTableSql}.${query.driver.quoteColumn(primaryKey)}`
+    const distinctIdsQuery = query.clone()
+
+    distinctIdsQuery._preload = {}
+    distinctIdsQuery._selects = []
+    distinctIdsQuery.select(primaryKeySql)
+    distinctIdsQuery.distinct(true)
+
+    const distinctRootQuery = modelClass._newQuery()
+
+    distinctRootQuery.where(`${primaryKeySql} IN (${distinctIdsQuery.toSql()})`)
+    distinctRootQuery._preload = {...query._preload}
+
+    return distinctRootQuery
+  }
+
+  /**
+   * @param {object} args - Pluck args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
+   * @returns {Promise<any[]>} - Plucked values.
+   */
+  async frontendModelPluckValues({query, pluck}) {
+    if (pluck.length < 1) {
+      throw new Error("No columns given to pluck")
+    }
+
+    const modelClass = this.frontendModelClass()
+    const pluckQuery = query.clone()
+    const aliases = []
+    const joinedPaths = query[frontendModelJoinedPathsSymbol]
+
+    pluckQuery._preload = {}
+    pluckQuery._selects = []
+    pluckQuery[frontendModelJoinedPathsSymbol] = joinedPaths ? new Set(joinedPaths) : new Set()
+
+    for (const [pluckIndex, pluckEntry] of pluck.entries()) {
+      const targetModelClass = this.frontendModelSearchTargetModelClass({
+        modelClass,
+        path: pluckEntry.path
+      })
+      const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
+      const columnName = attributeNameToColumnNameMap[pluckEntry.column]
+
+      if (!columnName) {
+        throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+      }
+
+      if (pluckEntry.path.length > 0) {
+        this.ensureFrontendModelJoinPath({path: pluckEntry.path, query: pluckQuery})
+      }
+
+      const tableReference = pluckQuery.getTableReferenceForJoin(...pluckEntry.path)
+      const columnSql = `${pluckQuery.driver.quoteTable(tableReference)}.${pluckQuery.driver.quoteColumn(columnName)}`
+      const alias = `frontend_model_pluck_${pluckIndex}`
+
+      pluckQuery.select(`${columnSql} AS ${pluckQuery.driver.quoteColumn(alias)}`)
+      aliases.push(alias)
+    }
+
+    const rows = await pluckQuery.results()
+
+    if (aliases.length === 1) {
+      const [alias] = aliases
+
+      return rows.map((row) => row[alias])
+    }
+
+    return rows.map((row) => aliases.map((alias) => row[alias]))
   }
 
   /**
@@ -1668,8 +1899,26 @@ export default class FrontendModelController extends Controller {
     }
 
     if (action === "index") {
-      const models = await this.frontendModelRecords()
+      const pluck = this.frontendModelPluck()
       const serverConfiguration = this.frontendModelServerConfiguration()
+
+      if (pluck.length > 0) {
+        if (serverConfiguration?.records) {
+          throw new Error("pluck is not supported when server.records callback is configured")
+        }
+
+        const values = await this.frontendModelPluckValues({
+          pluck,
+          query: this.frontendModelIndexQuery()
+        })
+
+        return {
+          status: "success",
+          values
+        }
+      }
+
+      const models = await this.frontendModelRecords()
       const serializedModels = serverConfiguration?.serialize
         ? await Promise.all(models.map(async (model) => {
           return await serverConfiguration.serialize({
