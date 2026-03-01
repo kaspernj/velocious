@@ -447,6 +447,30 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("reuses existing joined paths when pluck path overlaps search and sort joins", async () => {
+    await Dummy.run(async () => {
+      const firstTask = await createTaskWithProject({projectName: "Overlap project A", taskName: "Overlap task A"})
+      const secondTask = await createTaskWithProject({projectName: "Overlap project B", taskName: "Overlap task B"})
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        pluck: {project: ["id"]},
+        searches: [
+          {
+            column: "name",
+            operator: "contains",
+            path: ["project"],
+            value: "Overlap project"
+          }
+        ],
+        sort: "project.name asc",
+        where: {id: [firstTask.id(), secondTask.id()]}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.values.length).toEqual(2)
+    })
+  })
+
   it("rejects unsafe string pluck params", async () => {
     await Dummy.run(async () => {
       const payload = await postFrontendModel("/api/frontend-models/tasks/list", {

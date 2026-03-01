@@ -1256,9 +1256,11 @@ export default class FrontendModelController extends Controller {
     const modelClass = this.frontendModelClass()
     const pluckQuery = query.clone()
     const aliases = []
+    const joinedPaths = query[frontendModelJoinedPathsSymbol]
 
     pluckQuery._preload = {}
     pluckQuery._selects = []
+    pluckQuery[frontendModelJoinedPathsSymbol] = joinedPaths ? new Set(joinedPaths) : new Set()
 
     for (const [pluckIndex, pluckEntry] of pluck.entries()) {
       const targetModelClass = this.frontendModelSearchTargetModelClass({
