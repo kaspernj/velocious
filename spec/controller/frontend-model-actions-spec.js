@@ -195,6 +195,7 @@ class MockFrontendModelQuery {
   constructor(modelClass) {
     this.modelClass = modelClass
     this.conditions = {}
+    this.groupSqls = []
     this.joinsArgs = []
     this.preloads = []
     this.whereSqls = []
@@ -221,6 +222,15 @@ class MockFrontendModelQuery {
    */
   preload(preload) {
     this.preloads.push(preload)
+    return this
+  }
+
+  /**
+   * @param {string} groupSql
+   * @returns {this}
+   */
+  group(groupSql) {
+    this.groupSqls.push(groupSql)
     return this
   }
 
@@ -572,6 +582,92 @@ describe("Controller frontend model actions", () => {
       "\"accountUsers__account\".\"created_at\" >= \"2026-02-24T10:00:00.000Z\""
     ])
     MockFrontendModel.relationshipsMap = {}
+  })
+
+  it("applies relationship-path group params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    class MockAccountModel {
+      /**
+       * @returns {Record<string, string>}
+       */
+      static getAttributeNameToColumnNameMap() {
+        return {
+          id: "id"
+        }
+      }
+
+      /**
+       * @returns {Record<string, any>}
+       */
+      static getRelationshipsMap() {
+        return {}
+      }
+    }
+
+    class MockProjectModel {
+      /**
+       * @returns {Record<string, string>}
+       */
+      static getAttributeNameToColumnNameMap() {
+        return {}
+      }
+
+      /**
+       * @returns {Record<string, any>}
+       */
+      static getRelationshipsMap() {
+        return {
+          account: {
+            getTargetModelClass: () => MockAccountModel
+          }
+        }
+      }
+    }
+
+    MockFrontendModel.relationshipsMap = {
+      project: {
+        getTargetModelClass: () => MockProjectModel
+      }
+    }
+
+    const controller = buildController({
+      params: {
+        group: {
+          project: {
+            account: ["id"]
+          }
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.joinsArgs).toEqual([
+      {
+        project: {
+          account: {}
+        }
+      }
+    ])
+    expect(MockFrontendModel.lastQuery?.groupSqls).toEqual([
+      "\"project__account\".\"id\""
+    ])
+    MockFrontendModel.relationshipsMap = {}
+  })
+
+  it("rejects unsafe string group params", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        group: "id; DROP TABLE accounts"
+      }
+    })
+
+    await expect(async () => {
+      await controller.frontendIndex()
+    }).toThrow(/Invalid group column/)
   })
 
   it("returns one model from frontendFind", async () => {

@@ -164,3 +164,4 @@
 - Add nested relationship tuple-operator support to database `where(...)` hashes (including `like`), enabling queries such as `Event.where({translations: [["name", "like", "%foo%"]]})` and deep chains like `Task.where({project: {account: [["name", "like", "%bar%"], ["createdAt", "gteq", someDate]]}})`.
 - Fix frontend-model relationship-path sorting joins by tracking joined paths per query, ensuring sort/search `ORDER BY` columns always have matching SQL joins without duplicate join clauses.
 - Regenerate dummy frontend models so single-tag JSDoc blocks (including relationship `@returns` definitions) are emitted on one line.
+- Add frontend-model query `group(...)` support with safe attribute/path normalization (including nested relationship grouping like `{project: {account: ["id"]}}`) and reject SQL-like raw string fragments.

@@ -164,6 +164,12 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
  */
 
 /**
+ * @typedef {object} FrontendModelGroup
+ * @property {string} column - Attribute name to group by.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
  * @param {unknown} direction - Direction value.
  * @returns {"asc" | "desc"} - Normalized direction.
  */
@@ -365,6 +371,133 @@ function normalizeSort(sort) {
 }
 
 /**
+ * @param {string} groupValue - Group string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelGroup} - Normalized group descriptor.
+ */
+function parseGroupString(groupValue, path = []) {
+  const trimmed = groupValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid group column: ${groupValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit group descriptor object.
+ */
+function groupDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {Record<string, any>} groupValue - Nested group object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelGroup[]} - Normalized group descriptors.
+ */
+function normalizeGroupObject(groupValue, path) {
+  /** @type {FrontendModelGroup[]} */
+  const normalizedGroups = []
+
+  for (const [groupKey, groupEntry] of Object.entries(groupValue)) {
+    if (typeof groupEntry === "string") {
+      normalizedGroups.push(parseGroupString(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    if (Array.isArray(groupEntry)) {
+      if (groupEntry.length < 1) {
+        throw new Error(`Invalid group definition for "${groupKey}": empty array`)
+      }
+
+      for (const nestedGroupEntry of groupEntry) {
+        if (typeof nestedGroupEntry !== "string") {
+          throw new Error(`Invalid group definition for "${groupKey}": expected string columns`)
+        }
+
+        normalizedGroups.push(parseGroupString(nestedGroupEntry, [...path, groupKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(groupEntry)) {
+      normalizedGroups.push(...normalizeGroupObject(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    throw new Error(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
+  }
+
+  return normalizedGroups
+}
+
+/**
+ * @param {unknown} group - Group payload.
+ * @returns {FrontendModelGroup[]} - Normalized group definitions.
+ */
+function normalizeGroup(group) {
+  if (!group) return []
+
+  if (typeof group === "string") {
+    return [parseGroupString(group)]
+  }
+
+  if (groupDescriptor(group)) {
+    return [{
+      column: parseGroupString(group.column).column,
+      path: [...group.path]
+    }]
+  }
+
+  if (isPlainObject(group)) {
+    return normalizeGroupObject(group, [])
+  }
+
+  if (Array.isArray(group)) {
+    /** @type {FrontendModelGroup[]} */
+    const normalized = []
+
+    for (const groupEntry of group) {
+      if (typeof groupEntry === "string") {
+        normalized.push(parseGroupString(groupEntry))
+        continue
+      }
+
+      if (groupDescriptor(groupEntry)) {
+        normalized.push({
+          column: parseGroupString(groupEntry.column).column,
+          path: [...groupEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(groupEntry)) {
+        normalized.push(...normalizeGroupObject(groupEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid group entry type: ${typeof groupEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid group type: ${typeof group}`)
+}
+
+/**
  * @param {Record<string, any>} conditions - findBy conditions.
  * @returns {string} - Serialized conditions for error messages.
  */
@@ -405,6 +538,7 @@ export default class FrontendModelQuery {
     this._searches = []
     this._select = {}
     this._sort = []
+    this._group = []
   }
 
   /**
@@ -510,6 +644,16 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {string | string[] | Record<string, any> | Array<Record<string, any>>} group - Group definition(s).
+   * @returns {this} - Query with appended group definitions.
+   */
+  group(group) {
+    this._group.push(...normalizeGroup(group))
+
+    return this
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload preload hash when present.
    */
   preloadPayload() {
@@ -562,6 +706,20 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload group array when present.
+   */
+  groupPayload() {
+    if (this._group.length === 0) return {}
+
+    return {
+      group: this._group.map((groupEntry) => ({
+        column: groupEntry.column,
+        path: [...groupEntry.path]
+      }))
+    }
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload where hash when present.
    */
   wherePayload() {
@@ -580,6 +738,7 @@ export default class FrontendModelQuery {
       ...this.preloadPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(),
+      ...this.groupPayload(),
       ...this.sortPayload(),
       ...this.wherePayload()
     })
@@ -632,6 +791,7 @@ export default class FrontendModelQuery {
       ...this.preloadPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(Object.keys(mergedWhere)),
+      ...this.groupPayload(),
       ...this.sortPayload(),
       where: mergedWhere
     })

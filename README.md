@@ -295,6 +295,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await Task.sort("-createdAt").toArray()`
 - `await Task.sort({project: {creatingUser: ["reference", "desc"]}}).toArray()`
 - `await Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}}).toArray()`
+- `await Task.group({project: {account: ["id"]}}).toArray()`
 - `await User.preload({projects: ["tasks"]}).toArray()`
 - `await Project`
   `.preload(["tasks"])`
@@ -304,6 +305,8 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await user.destroy()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `project.tasks().loaded()`, and `project.tasks().build({...})`
+
+Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
 
