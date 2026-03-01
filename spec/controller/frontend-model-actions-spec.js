@@ -182,7 +182,13 @@ class MockFrontendModel {
     const ModelClass = /** @type {typeof MockFrontendModel} */ (this.constructor)
 
     if (!this._attributes.id) {
-      this._attributes.id = `${ModelClass.data.length + 1}`
+      let nextId = ModelClass.data.length + 1
+
+      while (ModelClass.data.some((record) => `${record.id}` === `${nextId}`)) {
+        nextId += 1
+      }
+
+      this._attributes.id = `${nextId}`
     }
 
     const index = ModelClass.data.findIndex((record) => `${record.id}` === `${this._attributes.id}`)
@@ -196,7 +202,8 @@ class MockFrontendModel {
 
   /** @returns {Promise<void>} */
   async destroy() {
-    MockFrontendModel.data = MockFrontendModel.data.filter((record) => `${record.id}` !== `${this._attributes.id}`)
+    const ModelClass = /** @type {typeof MockFrontendModel} */ (this.constructor)
+    ModelClass.data = ModelClass.data.filter((record) => `${record.id}` !== `${this._attributes.id}`)
   }
 }
 
