@@ -168,7 +168,14 @@ function normalizeFrontendModelSelect(select) {
  * @property {string[]} path - Relationship path from root model.
  */
 
+/**
+ * @typedef {object} FrontendModelGroup
+ * @property {string} column - Attribute name to group by.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
+const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -213,6 +220,19 @@ function frontendModelSortDescriptor(value) {
   if (!("column" in value) || !("direction" in value) || !("path" in value)) return false
   if (typeof value.column !== "string") return false
   if (typeof value.direction !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit group descriptor object.
+ */
+function frontendModelGroupDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
   if (!Array.isArray(value.path)) return false
 
   return value.path.every((pathEntry) => typeof pathEntry === "string")
@@ -288,6 +308,24 @@ function frontendModelSortFromTuple(sortValue, path = []) {
 }
 
 /**
+ * @param {string} groupValue - Group string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelGroup} - Normalized group descriptor.
+ */
+function frontendModelGroupFromString(groupValue, path = []) {
+  const trimmed = groupValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid group column: ${groupValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
  * @param {Record<string, any>} sortValue - Nested sort object.
  * @param {string[]} path - Relationship path.
  * @returns {FrontendModelSort[]} - Normalized sort descriptors.
@@ -336,6 +374,48 @@ function normalizeFrontendModelSortObject(sortValue, path) {
   }
 
   return normalizedSorts
+}
+
+/**
+ * @param {Record<string, any>} groupValue - Nested group object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelGroup[]} - Normalized group descriptors.
+ */
+function normalizeFrontendModelGroupObject(groupValue, path) {
+  /** @type {FrontendModelGroup[]} */
+  const normalizedGroups = []
+
+  for (const [groupKey, groupEntry] of Object.entries(groupValue)) {
+    if (typeof groupEntry === "string") {
+      normalizedGroups.push(frontendModelGroupFromString(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    if (Array.isArray(groupEntry)) {
+      if (groupEntry.length < 1) {
+        throw new Error(`Invalid group definition for "${groupKey}": empty array`)
+      }
+
+      for (const nestedGroupEntry of groupEntry) {
+        if (typeof nestedGroupEntry !== "string") {
+          throw new Error(`Invalid group definition for "${groupKey}": expected string columns`)
+        }
+
+        normalizedGroups.push(frontendModelGroupFromString(nestedGroupEntry, [...path, groupKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(groupEntry)) {
+      normalizedGroups.push(...normalizeFrontendModelGroupObject(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    throw new Error(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
+  }
+
+  return normalizedGroups
 }
 
 /**
@@ -468,6 +548,60 @@ function normalizeFrontendModelSort(sort) {
   }
 
   throw new Error(`Invalid sort type: ${typeof sort}`)
+}
+
+/**
+ * @param {unknown} group - Group payload.
+ * @returns {FrontendModelGroup[]} - Normalized group definitions.
+ */
+function normalizeFrontendModelGroup(group) {
+  if (!group) return []
+
+  if (typeof group === "string") {
+    return [frontendModelGroupFromString(group)]
+  }
+
+  if (frontendModelGroupDescriptor(group)) {
+    return [{
+      column: frontendModelGroupFromString(group.column).column,
+      path: [...group.path]
+    }]
+  }
+
+  if (isPlainObject(group)) {
+    return normalizeFrontendModelGroupObject(group, [])
+  }
+
+  if (Array.isArray(group)) {
+    /** @type {FrontendModelGroup[]} */
+    const normalized = []
+
+    for (const groupEntry of group) {
+      if (typeof groupEntry === "string") {
+        normalized.push(frontendModelGroupFromString(groupEntry))
+        continue
+      }
+
+      if (frontendModelGroupDescriptor(groupEntry)) {
+        normalized.push({
+          column: frontendModelGroupFromString(groupEntry.column).column,
+          path: [...groupEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(groupEntry)) {
+        normalized.push(...normalizeFrontendModelGroupObject(groupEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid group entry type: ${typeof groupEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid group type: ${typeof group}`)
 }
 
 /**
@@ -822,6 +956,16 @@ export default class FrontendModelController extends Controller {
       this.applyFrontendModelSearch({query, search})
     }
 
+    const groups = this.frontendModelGroup()
+
+    if (groups.length > 0) {
+      this.applyFrontendModelRootGroupColumns({query})
+    }
+
+    for (const group of groups) {
+      this.applyFrontendModelGroup({group, query})
+    }
+
     const sorts = this.frontendModelSort()
 
     for (const sort of sorts) {
@@ -862,6 +1006,11 @@ export default class FrontendModelController extends Controller {
   /** @returns {FrontendModelSort[]} - Frontend sort definitions. */
   frontendModelSort() {
     return normalizeFrontendModelSort(this.frontendModelParams().sort)
+  }
+
+  /** @returns {FrontendModelGroup[]} - Frontend group definitions. */
+  frontendModelGroup() {
+    return normalizeFrontendModelGroup(this.frontendModelParams().group)
   }
 
   /**
@@ -999,6 +1148,68 @@ export default class FrontendModelController extends Controller {
         query.where(`${columnSql} = ${query.driver.quote(value)}`)
       }
     }
+  }
+
+  /**
+   * @param {object} args - Group args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelGroup} args.group - Group definition.
+   * @returns {void}
+   */
+  applyFrontendModelGroup({query, group}) {
+    const modelClass = this.frontendModelClass()
+    const targetModelClass = this.frontendModelSearchTargetModelClass({
+      modelClass,
+      path: group.path
+    })
+    const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
+    const columnName = attributeNameToColumnNameMap[group.column]
+
+    if (!columnName) {
+      throw new Error(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
+    }
+
+    this.ensureFrontendModelJoinPath({path: group.path, query})
+
+    const tableReference = query.getTableReferenceForJoin(...group.path)
+    const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
+
+    this.ensureFrontendModelGroupColumn({columnSql, query})
+  }
+
+  /**
+   * Adds root-model columns to GROUP BY so strict SQL engines accept default root-table selects.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelRootGroupColumns({query}) {
+    const modelClass = this.frontendModelClass()
+    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
+    const rootTableReference = query.getTableReferenceForJoin()
+
+    for (const columnName of Object.values(attributeNameToColumnNameMap)) {
+      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+
+      this.ensureFrontendModelGroupColumn({columnSql, query})
+    }
+  }
+
+  /**
+   * Ensures a group-by SQL column is only appended once.
+   * @param {object} args - Args.
+   * @param {string} args.columnSql - Fully-qualified column SQL.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  ensureFrontendModelGroupColumn({columnSql, query}) {
+    const groupedColumns = query[frontendModelGroupedColumnsSymbol] || new Set()
+
+    if (groupedColumns.has(columnSql)) return
+
+    query.group(columnSql)
+    groupedColumns.add(columnSql)
+    query[frontendModelGroupedColumnsSymbol] = groupedColumns
   }
 
   /**

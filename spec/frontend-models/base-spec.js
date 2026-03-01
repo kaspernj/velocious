@@ -364,6 +364,46 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends group payload when using group(...).toArray()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .group({
+          project: {
+            account: ["id"]
+          }
+        })
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            group: [
+              {
+                column: "id",
+                path: ["project", "account"]
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("rejects unsafe string group definitions", async () => {
+    const User = buildTestModelClass()
+
+    await expect(async () => {
+      await User.group("id; DROP TABLE accounts").toArray()
+    }).toThrow(/Invalid group column/)
+  })
+
 
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()
