@@ -141,7 +141,13 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
     await withDummyAbilityResolver(async ({configuration, params, request, response}) => {
       const requestPath = request.path().split("?")[0]
-      const modelName = params.modelName
+      let modelName
+
+      if (typeof params.modelName === "string") {
+        modelName = params.modelName
+      } else if (Array.isArray(params.requests) && typeof params.requests[0]?.model === "string") {
+        modelName = params.requests[0].model
+      }
 
       if (!(requestPath === "/velocious/api" && modelName === "Task")) return
 
