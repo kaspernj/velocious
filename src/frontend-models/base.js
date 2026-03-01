@@ -3,7 +3,13 @@
 import FrontendModelQuery from "./query.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
-/** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
+/**
+ * @typedef {object} FrontendModelResourceConfig
+ * @property {string[] | Record<string, any>} [attributes] - Frontend model attributes.
+ * @property {Record<string, string>} [commands] - Frontend command mapping.
+ * @property {string} [path] - Frontend resource path.
+ * @property {string} [primaryKey] - Frontend primary key attribute.
+ */
 /**
  * @typedef {object} FrontendModelTransportConfig
  * @property {string} [baseUrl] - Optional base URL prefixed before resource paths.
@@ -1181,7 +1187,7 @@ export default class FrontendModelBase {
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
     const serializedPayload = /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(payload))
-    const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
+    const resourceConfig = this.resourceConfig()
     const resourcePath = typeof resourceConfig.path === "string" && resourceConfig.path.length > 0 ? this.resourcePath() : null
     const url = resourcePath
       ? frontendModelCommandUrl(resourcePath, commandName)
@@ -1293,7 +1299,7 @@ export default class FrontendModelBase {
    * @returns {Set<string>} - Configured frontend model attribute names.
    */
   static configuredFrontendModelAttributeNames() {
-    const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
+    const resourceConfig = this.resourceConfig()
     const attributes = resourceConfig.attributes
 
     if (Array.isArray(attributes)) {

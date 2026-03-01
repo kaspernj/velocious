@@ -635,8 +635,7 @@ function normalizePluck(pluck) {
  * @returns {Set<string>} - Resource attribute names.
  */
 function frontendModelResourceAttributes(modelClass) {
-  const resourceConfig = /** @type {Record<string, any>} */ (modelClass.resourceConfig())
-  const attributes = resourceConfig.attributes
+  const attributes = modelClass.resourceConfig().attributes
 
   if (Array.isArray(attributes)) {
     return new Set(attributes)
