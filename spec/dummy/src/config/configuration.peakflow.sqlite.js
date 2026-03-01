@@ -82,8 +82,11 @@ class TaskFrontendModelAbilityResource extends BaseResource {
 function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
   const requestPath = request.path().split("?")[0]
   const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
+  const isSharedFrontendModelApi = requestPath === "/velocious/api"
+  const frontendModelRequests = Array.isArray(params.requests) ? params.requests : [params]
+  const includesTaskSharedRequest = frontendModelRequests.some((requestEntry) => requestEntry?.model === "Task")
 
-  if (!isTaskFrontendModelCommand) return
+  if (!isTaskFrontendModelCommand && !(isSharedFrontendModelApi && includesTaskSharedRequest)) return
 
   return new Ability({
     context: {configuration, params, request, response},

@@ -9,13 +9,21 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
 /** Frontend model for BrowserFrontendModel. */
 export default class BrowserFrontendModel extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
-      attributes: ["id","email","createdAt"],
-      commands: {"destroy":"destroy","find":"frontend-find","index":"frontend-index","update":"update"},
-      path: "/frontend-model-system-tests",
+      attributes: [
+        "id",
+        "email",
+        "createdAt",
+      ],
+      commands: {
+        destroy: "destroy",
+        find: "frontend-find",
+        index: "frontend-index",
+        update: "update",
+      },
       primaryKey: "id"
     }
   }

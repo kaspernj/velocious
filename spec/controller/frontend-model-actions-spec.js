@@ -353,6 +353,46 @@ describe("Controller frontend model actions", () => {
     })
   })
 
+  it("handles shared frontend-model API batch requests by model name", async () => {
+    MockFrontendModel.data = [
+      {id: "1", name: "One"},
+      {id: "2", name: "Two"}
+    ]
+
+    const controller = buildController({
+      params: {
+        requests: [
+          {
+            commandType: "index",
+            model: "MockFrontendModel",
+            payload: {},
+            requestId: "request-1"
+          }
+        ]
+      }
+    })
+
+    await controller.frontendApi()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      responses: [
+        {
+          requestId: "request-1",
+          response: {
+            models: [
+              {id: "1", name: "One"},
+              {id: "2", name: "Two"}
+            ],
+            status: "success"
+          }
+        }
+      ],
+      status: "success"
+    })
+  })
+
   it("applies preload params to frontendIndex query", async () => {
     MockFrontendModel.data = [{id: "1", name: "One"}]
 

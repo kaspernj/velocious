@@ -10,13 +10,21 @@ import Project from "./project.js"
 /** Frontend model for Task. */
 export default class Task extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
-      attributes: ["id","identifier","name"],
-      commands: {"destroy":"destroy","find":"find","index":"list","update":"update"},
-      path: "/api/frontend-models/tasks",
+      attributes: [
+        "id",
+        "identifier",
+        "name",
+      ],
+      commands: {
+        destroy: "destroy",
+        find: "find",
+        index: "list",
+        update: "update",
+      },
       primaryKey: "id"
     }
   }

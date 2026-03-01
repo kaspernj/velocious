@@ -19,6 +19,7 @@ Name specs that should run in browser tests with the `.browser-spec.js` suffix s
 Use spaces inside named imports (e.g. `import {foo, bar} from "..."`).
 Do not override methods on runtime instances to change behavior; add explicit hooks/flags in the owning class instead.
 For multi-step method chains, put the receiver on its own line and place each chained call on its own following line.
+In generated code, keep single-tag JSDoc blocks on one line when they fit (e.g. `/** @returns {Type} - Description. */`).
 
 ## Verification commands
 

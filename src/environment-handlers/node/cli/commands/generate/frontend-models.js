@@ -180,15 +180,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const attributes = this.attributeDefinitionsForModel(modelConfig)
     const relationships = this.relationshipsForModel(modelConfig)
     const attributesTypeName = `${className}Attributes`
+    const attributeNames = attributes.map((attribute) => attribute.name)
     const commands = {
       destroy: modelConfig.commands?.destroy || "destroy",
       find: modelConfig.commands?.find || "find",
       index: modelConfig.commands?.index || "index",
       update: modelConfig.commands?.update || "update"
-    }
-
-    if (!modelConfig.path) {
-      throw new Error(`Model '${className}' is missing required 'path' config`)
     }
 
     let fileContent = ""
@@ -217,23 +214,26 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /**\n"
-    fileContent += "   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource config.\n"
-    fileContent += "   */\n"
+    fileContent += "  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
-    fileContent += `      attributes: ${JSON.stringify(attributes.map((attribute) => attribute.name))},\n`
-    fileContent += `      commands: ${JSON.stringify(commands)},\n`
-    fileContent += `      path: ${JSON.stringify(modelConfig.path)},\n`
+    fileContent += this.formattedArrayProperty({
+      indent: "      ",
+      propertyName: "attributes",
+      values: attributeNames
+    })
+    fileContent += this.formattedObjectProperty({
+      indent: "      ",
+      propertyName: "commands",
+      values: commands
+    })
     fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey || "id")}\n`
     fileContent += "    }\n"
     fileContent += "  }\n"
 
     if (relationships.length > 0) {
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions. */\n"
       fileContent += "  static relationshipDefinitions() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -243,9 +243,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  }\n"
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */\n"
       fileContent += "  static relationshipModelClasses() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -261,9 +259,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const camelizedAttributeUpper = inflection.camelize(attribute.name)
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value.\n`
-      fileContent += "   */\n"
+      fileContent += `  /** @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value. */\n`
       fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attribute.name)}) }\n`
 
       fileContent += "\n"
@@ -280,21 +276,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       if (relationship.type == "hasMany") {
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} - Relationship helper.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} - Relationship helper. */\n`
         fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)})) }\n`
 
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models. */\n`
         fileContent += `  ${relationship.relationshipName}Loaded() { return /** @type {Array<import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
       } else {
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model. */\n`
         fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
 
         fileContent += "\n"
@@ -309,6 +299,44 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "}\n"
 
     return fileContent
+  }
+
+  /**
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Base indentation.
+   * @param {string} args.propertyName - Object property name.
+   * @param {string[]} args.values - String values.
+   * @returns {string} - Formatted multiline array property.
+   */
+  formattedArrayProperty({indent, propertyName, values}) {
+    let output = `${indent}${propertyName}: [\n`
+
+    for (const value of values) {
+      output += `${indent}  ${JSON.stringify(value)},\n`
+    }
+
+    output += `${indent}],\n`
+
+    return output
+  }
+
+  /**
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Base indentation.
+   * @param {string} args.propertyName - Object property name.
+   * @param {Record<string, string>} args.values - Object key-values.
+   * @returns {string} - Formatted multiline object property.
+   */
+  formattedObjectProperty({indent, propertyName, values}) {
+    let output = `${indent}${propertyName}: {\n`
+
+    for (const objectKey of Object.keys(values)) {
+      output += `${indent}  ${objectKey}: ${JSON.stringify(values[objectKey])},\n`
+    }
+
+    output += `${indent}},\n`
+
+    return output
   }
 
   /**
