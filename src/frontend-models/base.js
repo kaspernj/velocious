@@ -898,6 +898,16 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {...(string | string[] | Record<string, any> | Array<Record<string, any>>)} columns - Pluck definition(s).
+   * @returns {Promise<any[]>} - Plucked values.
+   */
+  static async pluck(...columns) {
+    return await this.query().pluck(...columns)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
    * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.

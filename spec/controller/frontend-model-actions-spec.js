@@ -204,6 +204,7 @@ class MockFrontendModelQuery {
     this.conditions = {}
     this.groupSqls = []
     this.joinsArgs = []
+    this.selectSqls = []
     this.distinctValue = false
     this.limitValue = null
     this.offsetValue = null
@@ -261,6 +262,15 @@ class MockFrontendModelQuery {
    */
   joins(_joinObject) {
     this.joinsArgs.push(_joinObject)
+    return this
+  }
+
+  /**
+   * @param {string} selectSql
+   * @returns {this}
+   */
+  select(selectSql) {
+    this.selectSqls.push(selectSql)
     return this
   }
 
@@ -343,6 +353,49 @@ class MockFrontendModelQuery {
     }
 
     return records.map((record) => new this.modelClass(record))
+  }
+
+  /**
+   * @returns {Promise<Record<string, any>[]>}
+   */
+  async results() {
+    const records = this.modelClass.data.filter((record) => this.matches(record))
+
+    return records.map((record) => {
+      /** @type {Record<string, any>} */
+      const row = {}
+
+      for (const selectSql of this.selectSqls) {
+        const alias = selectSql.match(/AS\s+"([^"]+)"/i)?.[1]
+        const column = selectSql.match(/\."([^"]+)"(?:\s+AS|$)/i)?.[1]
+
+        if (!alias || !column) continue
+        row[alias] = record[column]
+      }
+
+      return row
+    })
+  }
+
+  /**
+   * @returns {MockFrontendModelQuery}
+   */
+  clone() {
+    const query = new MockFrontendModelQuery(this.modelClass)
+
+    query.conditions = {...this.conditions}
+    query.groupSqls = [...this.groupSqls]
+    query.joinsArgs = [...this.joinsArgs]
+    query.selectSqls = [...this.selectSqls]
+    query.distinctValue = this.distinctValue
+    query.limitValue = this.limitValue
+    query.offsetValue = this.offsetValue
+    query.pageValue = this.pageValue
+    query.perPageValue = this.perPageValue
+    query.preloads = [...this.preloads]
+    query.whereSqls = [...this.whereSqls]
+
+    return query
   }
 
   /**
@@ -824,6 +877,112 @@ describe("Controller frontend model actions", () => {
     await expect(async () => {
       await controller.frontendIndex()
     }).toThrow(/Invalid group column/)
+  })
+
+  it("returns plucked values from frontendIndex", async () => {
+    MockFrontendModel.data = [
+      {id: "1", name: "One"},
+      {id: "2", name: "Two"}
+    ]
+    const controller = buildController({
+      params: {
+        pluck: ["id", "name"]
+      }
+    })
+
+    await controller.frontendIndex()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      status: "success",
+      values: [["1", "One"], ["2", "Two"]]
+    })
+  })
+
+  it("applies relationship-path pluck params to frontendIndex query", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    class MockAccountModel {
+      /**
+       * @returns {Record<string, string>}
+       */
+      static getAttributeNameToColumnNameMap() {
+        return {
+          id: "id"
+        }
+      }
+
+      /**
+       * @returns {Record<string, any>}
+       */
+      static getRelationshipsMap() {
+        return {}
+      }
+    }
+
+    class MockProjectModel {
+      /**
+       * @returns {Record<string, string>}
+       */
+      static getAttributeNameToColumnNameMap() {
+        return {}
+      }
+
+      /**
+       * @returns {Record<string, any>}
+       */
+      static getRelationshipsMap() {
+        return {
+          account: {
+            getTargetModelClass: () => MockAccountModel
+          }
+        }
+      }
+    }
+
+    MockFrontendModel.relationshipsMap = {
+      project: {
+        getTargetModelClass: () => MockProjectModel
+      }
+    }
+
+    const controller = buildController({
+      params: {
+        pluck: {
+          project: {
+            account: ["id"]
+          }
+        }
+      }
+    })
+
+    await controller.frontendIndex()
+
+    expect(MockFrontendModel.lastQuery?.joinsArgs).toEqual([
+      {
+        project: {
+          account: {}
+        }
+      }
+    ])
+    expect(MockFrontendModel.lastQuery?.selectSqls).toEqual([
+      "\"project__account\".\"id\" AS \"frontend_model_pluck_0\""
+    ])
+    MockFrontendModel.relationshipsMap = {}
+  })
+
+  it("rejects unsafe string pluck params", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      params: {
+        pluck: "id; DROP TABLE accounts"
+      }
+    })
+
+    await expect(async () => {
+      await controller.frontendIndex()
+    }).toThrow(/Invalid pluck column/)
   })
 
   it("returns one model from frontendFind", async () => {

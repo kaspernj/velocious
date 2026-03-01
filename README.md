@@ -300,6 +300,8 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}}).toArray()`
 - `await Task.group({project: {account: ["id"]}}).toArray()`
 - `await Task.sort({comments: ["body", "asc"]}).distinct().toArray()`
+- `await Task.pluck("id")`
+- `await Task.pluck({project: ["id"]})`
 - `await User.preload({projects: ["tasks"]}).toArray()`
 - `await Project`
   `.preload(["tasks"])`
@@ -312,6 +314,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 Frontend-model `distinct(...)` only accepts booleans (`true` by default) and is applied server-side through the backend query API.
+Frontend-model `pluck(...)` validates attribute/path descriptors against configured model metadata and does not accept SQL fragments.
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
 

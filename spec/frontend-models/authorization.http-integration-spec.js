@@ -338,4 +338,31 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
       }
     })
   })
+
+  it("plucks frontend-model attributes through real HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const firstTask = await createTask("Pluck task A")
+        const secondTask = await createTask("Pluck task B")
+
+        const taskIds = await Task
+          .where({id: [firstTask.id(), secondTask.id()]})
+          .order("name")
+          .pluck("id")
+        const taskNames = await Task
+          .where({id: [firstTask.id(), secondTask.id()]})
+          .order("name")
+          .pluck("name")
+
+        expect(taskIds.length).toEqual(2)
+        expect(taskIds.includes(firstTask.id())).toEqual(true)
+        expect(taskIds.includes(secondTask.id())).toEqual(true)
+        expect(taskNames).toEqual(["Pluck task A", "Pluck task B"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
 })

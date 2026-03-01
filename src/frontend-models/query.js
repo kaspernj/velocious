@@ -170,6 +170,12 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
  */
 
 /**
+ * @typedef {object} FrontendModelPluck
+ * @property {string} column - Attribute name to pluck.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
  * @param {unknown} direction - Direction value.
  * @returns {"asc" | "desc"} - Normalized direction.
  */
@@ -495,6 +501,206 @@ function normalizeGroup(group) {
   }
 
   throw new Error(`Invalid group type: ${typeof group}`)
+}
+
+/**
+ * @param {string} pluckValue - Pluck string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelPluck} - Normalized pluck descriptor.
+ */
+function parsePluckString(pluckValue, path = []) {
+  const trimmed = pluckValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid pluck column: ${pluckValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit pluck descriptor object.
+ */
+function pluckDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {Record<string, any>} pluckValue - Nested pluck object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelPluck[]} - Normalized pluck descriptors.
+ */
+function normalizePluckObject(pluckValue, path) {
+  /** @type {FrontendModelPluck[]} */
+  const normalizedPlucks = []
+
+  for (const [pluckKey, pluckEntry] of Object.entries(pluckValue)) {
+    if (typeof pluckEntry === "string") {
+      normalizedPlucks.push(parsePluckString(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    if (Array.isArray(pluckEntry)) {
+      if (pluckEntry.length < 1) {
+        throw new Error(`Invalid pluck definition for "${pluckKey}": empty array`)
+      }
+
+      for (const nestedPluckEntry of pluckEntry) {
+        if (typeof nestedPluckEntry !== "string") {
+          throw new Error(`Invalid pluck definition for "${pluckKey}": expected string columns`)
+        }
+
+        normalizedPlucks.push(parsePluckString(nestedPluckEntry, [...path, pluckKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(pluckEntry)) {
+      normalizedPlucks.push(...normalizePluckObject(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    throw new Error(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
+  }
+
+  return normalizedPlucks
+}
+
+/**
+ * @param {unknown} pluck - Pluck payload.
+ * @returns {FrontendModelPluck[]} - Normalized pluck definitions.
+ */
+function normalizePluck(pluck) {
+  if (!pluck) return []
+
+  if (typeof pluck === "string") {
+    return [parsePluckString(pluck)]
+  }
+
+  if (pluckDescriptor(pluck)) {
+    return [{
+      column: parsePluckString(pluck.column).column,
+      path: [...pluck.path]
+    }]
+  }
+
+  if (isPlainObject(pluck)) {
+    return normalizePluckObject(pluck, [])
+  }
+
+  if (Array.isArray(pluck)) {
+    /** @type {FrontendModelPluck[]} */
+    const normalized = []
+
+    for (const pluckEntry of pluck) {
+      if (typeof pluckEntry === "string") {
+        normalized.push(parsePluckString(pluckEntry))
+        continue
+      }
+
+      if (pluckDescriptor(pluckEntry)) {
+        normalized.push({
+          column: parsePluckString(pluckEntry.column).column,
+          path: [...pluckEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(pluckEntry)) {
+        normalized.push(...normalizePluckObject(pluckEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid pluck entry type: ${typeof pluckEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid pluck type: ${typeof pluck}`)
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Model class.
+ * @returns {Set<string>} - Resource attribute names.
+ */
+function frontendModelResourceAttributes(modelClass) {
+  const resourceConfig = /** @type {Record<string, any>} */ (modelClass.resourceConfig())
+  const attributes = resourceConfig.attributes
+
+  if (Array.isArray(attributes)) {
+    return new Set(attributes)
+  }
+
+  if (isPlainObject(attributes)) {
+    return new Set(Object.keys(attributes))
+  }
+
+  return new Set()
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Root model class.
+ * @param {string[]} path - Relationship path.
+ * @returns {typeof import("./base.js").default} - Target model class for path.
+ */
+function frontendModelPluckTargetModelClass(modelClass, path) {
+  let targetModelClass = modelClass
+
+  for (const relationshipName of path) {
+    const relationshipDefinitions = typeof targetModelClass.relationshipDefinitions === "function"
+      ? targetModelClass.relationshipDefinitions()
+      : {}
+    const relationshipModelClasses = typeof targetModelClass.relationshipModelClasses === "function"
+      ? targetModelClass.relationshipModelClasses()
+      : {}
+    const relationshipDefinition = relationshipDefinitions[relationshipName]
+    const relationshipTargetModelClass = relationshipModelClasses[relationshipName]
+
+    if (!relationshipDefinition) {
+      throw new Error(`Unknown pluck relationship "${relationshipName}" for ${targetModelClass.name}`)
+    }
+
+    if (!relationshipTargetModelClass) {
+      throw new Error(`No relationship model class configured for ${targetModelClass.name}#${relationshipName}`)
+    }
+
+    targetModelClass = relationshipTargetModelClass
+  }
+
+  return targetModelClass
+}
+
+/**
+ * @param {object} args - Pluck validation args.
+ * @param {typeof import("./base.js").default} args.modelClass - Root model class.
+ * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
+ * @returns {FrontendModelPluck[]} - Validated pluck descriptors.
+ */
+function validatePluckDefinitions({modelClass, pluck}) {
+  return pluck.map((pluckEntry) => {
+    const targetModelClass = frontendModelPluckTargetModelClass(modelClass, pluckEntry.path)
+    const targetAttributes = frontendModelResourceAttributes(targetModelClass)
+
+    if (!targetAttributes.has(pluckEntry.column)) {
+      throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+    }
+
+    return {
+      column: pluckEntry.column,
+      path: [...pluckEntry.path]
+    }
+  })
 }
 
 /**
@@ -884,6 +1090,41 @@ export default class FrontendModelQuery {
     const models = await this.toArray()
 
     return models.length
+  }
+
+  /**
+   * @param {...(string | string[] | Record<string, any> | Array<Record<string, any>>)} columns - Pluck definition(s).
+   * @returns {Promise<any[]>} - Plucked values.
+   */
+  async pluck(...columns) {
+    if (columns.length < 1) {
+      throw new Error("No columns given to pluck")
+    }
+
+    const normalizedPluck = normalizePluck(columns.length === 1 ? columns[0] : columns)
+    const validatedPluck = validatePluckDefinitions({
+      modelClass: this.modelClass,
+      pluck: normalizedPluck
+    })
+    const response = await this.modelClass.executeCommand("index", {
+      ...this.searchPayload(),
+      ...this.groupPayload(),
+      ...this.distinctPayload(),
+      ...this.sortPayload(),
+      ...this.wherePayload(),
+      ...this.paginationPayload(),
+      pluck: validatedPluck
+    })
+
+    if (!response || typeof response !== "object") {
+      throw new Error(`Expected object response but got: ${response}`)
+    }
+
+    if (!Array.isArray(response.values)) {
+      return []
+    }
+
+    return response.values
   }
 
   /**
