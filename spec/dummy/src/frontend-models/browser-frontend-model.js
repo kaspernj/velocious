@@ -8,9 +8,7 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /** Frontend model for BrowserFrontendModel. */
 export default class BrowserFrontendModel extends FrontendModelBase {
-  /**
-   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.
-   */
+  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: [
@@ -28,9 +26,7 @@ export default class BrowserFrontendModel extends FrontendModelBase {
     }
   }
 
-  /**
-   * @returns {BrowserFrontendModelAttributes["id"]} - Attribute value.
-   */
+  /** @returns {BrowserFrontendModelAttributes["id"]} - Attribute value. */
   id() { return this.readAttribute("id") }
 
   /**
@@ -39,9 +35,7 @@ export default class BrowserFrontendModel extends FrontendModelBase {
    */
   setId(newValue) { return this.setAttribute("id", newValue) }
 
-  /**
-   * @returns {BrowserFrontendModelAttributes["email"]} - Attribute value.
-   */
+  /** @returns {BrowserFrontendModelAttributes["email"]} - Attribute value. */
   email() { return this.readAttribute("email") }
 
   /**
@@ -50,9 +44,7 @@ export default class BrowserFrontendModel extends FrontendModelBase {
    */
   setEmail(newValue) { return this.setAttribute("email", newValue) }
 
-  /**
-   * @returns {BrowserFrontendModelAttributes["createdAt"]} - Attribute value.
-   */
+  /** @returns {BrowserFrontendModelAttributes["createdAt"]} - Attribute value. */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
