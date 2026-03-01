@@ -1,11 +1,8 @@
 // @ts-check
 
-import Ability from "../../src/authorization/ability.js"
-import BaseResource from "../../src/authorization/base-resource.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import Dummy from "../dummy/index.js"
-import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Comment from "../dummy/src/models/comment.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
@@ -59,23 +56,6 @@ async function postSharedTaskFrontendModelCommand(commandType, payload) {
 }
 
 /**
- * @param {import("../../src/configuration-types.js").AbilityResolverType | undefined} resolver - Temporary resolver.
- * @param {() => Promise<void>} callback - Callback.
- * @returns {Promise<void>}
- */
-async function withDummyAbilityResolver(resolver, callback) {
-  const previousResolver = dummyConfiguration.getAbilityResolver()
-
-  dummyConfiguration.setAbilityResolver(resolver)
-
-  try {
-    await callback()
-  } finally {
-    dummyConfiguration.setAbilityResolver(previousResolver)
-  }
-}
-
-/**
  * @param {"destroy" | "read" | "update" | undefined} deniedAbilityAction - Ability action to deny.
  * @param {() => Promise<void>} callback - Callback.
  * @returns {Promise<void>}
@@ -91,6 +71,25 @@ async function withDeniedTaskAbilityAction(deniedAbilityAction, callback) {
       delete process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
     } else {
       process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION = previousDeniedAction
+    }
+  }
+}
+
+/**
+ * @param {() => Promise<void>} callback - Callback.
+ * @returns {Promise<void>}
+ */
+async function withTaskReadDistinctAbilityScope(callback) {
+  const previousDistinctScope = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE
+
+  try {
+    process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE = "1"
+    await callback()
+  } finally {
+    if (previousDistinctScope === undefined) {
+      delete process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE
+    } else {
+      process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE = previousDistinctScope
     }
   }
 }
@@ -129,33 +128,7 @@ async function createTaskWithProject({projectName, taskName, creatingUserReferen
 
 describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("does not override scoped distinct when distinct param is omitted", async () => {
-    /** Ability resource adding a distinct scope for Task reads. */
-    class TaskDistinctScopeResource extends BaseResource {
-      static ModelClass = Task
-
-      /** @returns {void} */
-      abilities() {
-        this.can("read", Task, (query) => query.distinct(true))
-      }
-    }
-
-    await withDummyAbilityResolver(async ({configuration, params, request, response}) => {
-      const requestPath = request.path().split("?")[0]
-      let modelName
-
-      if (typeof params.modelName === "string") {
-        modelName = params.modelName
-      } else if (Array.isArray(params.requests) && typeof params.requests[0]?.model === "string") {
-        modelName = params.requests[0].model
-      }
-
-      if (!(requestPath === "/velocious/api" && modelName === "Task")) return
-
-      return new Ability({
-        context: {configuration, params, request, response},
-        resources: [TaskDistinctScopeResource]
-      })
-    }, async () => {
+    await withTaskReadDistinctAbilityScope(async () => {
       await Dummy.run(async () => {
         const task = await createTask(`Distinct scoped ${Date.now()}`)
 
