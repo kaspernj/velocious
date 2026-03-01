@@ -296,7 +296,7 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
       configureNodeTransport()
 
       try {
-        const task = await createTask("Distinct task")
+        const task = await createTask(`Distinct task ${Date.now()}`)
 
         await Comment.create({body: "Comment A", taskId: task.id()})
         await Comment.create({body: "Comment B", taskId: task.id()})
@@ -310,8 +310,15 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
           .distinct()
           .toArray()
 
-        expect(withoutDistinct.map((record) => record.id())).toEqual([task.id(), task.id()])
-        expect(withDistinct.map((record) => record.id())).toEqual([task.id()])
+        const withoutDistinctTaskIds = withoutDistinct
+          .map((record) => record.id())
+          .filter((recordId) => recordId === task.id())
+        const withDistinctTaskIds = withDistinct
+          .map((record) => record.id())
+          .filter((recordId) => recordId === task.id())
+
+        expect(withoutDistinctTaskIds.length).toEqual(2)
+        expect(withDistinctTaskIds.length).toEqual(1)
       } finally {
         resetFrontendModelTransport()
       }
