@@ -322,17 +322,21 @@ export default class Expect extends BaseExpect {
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
-    if (this._not) throw new Error("not stub")
-
     if (typeof this._object == "string") {
-      if (!this._object.includes(String(valueToContain))) {
-        const objectPrint = minifiedStringify(this._object)
-        const valuePrint = typeof valueToContain == "string"
-          ? minifiedStringify(valueToContain)
-          : formatValue(valueToContain)
+      const matches = this._object.includes(String(valueToContain))
+      const objectPrint = minifiedStringify(this._object)
+      const valuePrint = typeof valueToContain == "string"
+        ? minifiedStringify(valueToContain)
+        : formatValue(valueToContain)
 
+      if (this._not) {
+        if (matches) {
+          throw new Error(`${objectPrint} was unexpected to contain ${valuePrint}`)
+        }
+      } else if (!matches) {
         throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
       }
+
       return
     }
 
@@ -340,12 +344,17 @@ export default class Expect extends BaseExpect {
       throw new Error(`Expected array or string but got ${typeof this._object}`)
     }
 
-    if (!this._object.includes(valueToContain)) {
-      const objectPrint = formatValue(this._object)
-      const valuePrint = typeof valueToContain == "string"
-        ? minifiedStringify(valueToContain)
-        : formatValue(valueToContain)
+    const matches = this._object.includes(valueToContain)
+    const objectPrint = formatValue(this._object)
+    const valuePrint = typeof valueToContain == "string"
+      ? minifiedStringify(valueToContain)
+      : formatValue(valueToContain)
 
+    if (this._not) {
+      if (matches) {
+        throw new Error(`${objectPrint} was unexpected to contain ${valuePrint}`)
+      }
+    } else if (!matches) {
       throw new Error(`${objectPrint} doesn't contain ${valuePrint}`)
     }
   }
