@@ -291,7 +291,7 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
     })
   })
 
-  it("deduplicates frontend-model rows with distinct() across has-many sort joins", async () => {
+  it("deduplicates frontend-model rows with distinct() across has-many joins", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()
 
@@ -302,11 +302,11 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
         await Comment.create({body: "Comment B", taskId: task.id()})
 
         const withoutDistinct = await Task
-          .sort({comments: ["body", "asc"]})
+          .search(["comments"], "id", "gteq", 1)
           .toArray()
         const withDistinct = await Task
           .select({Task: ["id"]})
-          .sort({comments: ["body", "asc"]})
+          .search(["comments"], "id", "gteq", 1)
           .distinct()
           .toArray()
 
