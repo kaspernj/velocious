@@ -175,6 +175,7 @@ function normalizeFrontendModelSelect(select) {
  */
 
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
+const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -957,6 +958,10 @@ export default class FrontendModelController extends Controller {
 
     const groups = this.frontendModelGroup()
 
+    if (groups.length > 0) {
+      this.applyFrontendModelRootGroupColumns({query})
+    }
+
     for (const group of groups) {
       this.applyFrontendModelGroup({group, query})
     }
@@ -1169,7 +1174,42 @@ export default class FrontendModelController extends Controller {
     const tableReference = query.getTableReferenceForJoin(...group.path)
     const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
 
+    this.ensureFrontendModelGroupColumn({columnSql, query})
+  }
+
+  /**
+   * Adds root-model columns to GROUP BY so strict SQL engines accept default root-table selects.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelRootGroupColumns({query}) {
+    const modelClass = this.frontendModelClass()
+    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
+    const rootTableReference = query.getTableReferenceForJoin()
+
+    for (const columnName of Object.values(attributeNameToColumnNameMap)) {
+      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+
+      this.ensureFrontendModelGroupColumn({columnSql, query})
+    }
+  }
+
+  /**
+   * Ensures a group-by SQL column is only appended once.
+   * @param {object} args - Args.
+   * @param {string} args.columnSql - Fully-qualified column SQL.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  ensureFrontendModelGroupColumn({columnSql, query}) {
+    const groupedColumns = query[frontendModelGroupedColumnsSymbol] || new Set()
+
+    if (groupedColumns.has(columnSql)) return
+
     query.group(columnSql)
+    groupedColumns.add(columnSql)
+    query[frontendModelGroupedColumnsSymbol] = groupedColumns
   }
 
   /**

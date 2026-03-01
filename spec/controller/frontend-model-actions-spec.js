@@ -651,6 +651,9 @@ describe("Controller frontend model actions", () => {
       }
     ])
     expect(MockFrontendModel.lastQuery?.groupSqls).toEqual([
+      "\"mock_frontend_models\".\"created_at\"",
+      "\"mock_frontend_models\".\"id\"",
+      "\"mock_frontend_models\".\"name\"",
       "\"project__account\".\"id\""
     ])
     MockFrontendModel.relationshipsMap = {}
