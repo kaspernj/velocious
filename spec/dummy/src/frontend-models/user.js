@@ -8,9 +8,7 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /** Frontend model for User. */
 export default class User extends FrontendModelBase {
-  /**
-   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.
-   */
+  /** @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: [
@@ -19,6 +17,7 @@ export default class User extends FrontendModelBase {
         "name",
       ],
       commands: {
+        create: "create",
         destroy: "destroy",
         find: "find",
         index: "index",
@@ -28,9 +27,7 @@ export default class User extends FrontendModelBase {
     }
   }
 
-  /**
-   * @returns {UserAttributes["email"]} - Attribute value.
-   */
+  /** @returns {UserAttributes["email"]} - Attribute value. */
   email() { return this.readAttribute("email") }
 
   /**
@@ -39,9 +36,7 @@ export default class User extends FrontendModelBase {
    */
   setEmail(newValue) { return this.setAttribute("email", newValue) }
 
-  /**
-   * @returns {UserAttributes["id"]} - Attribute value.
-   */
+  /** @returns {UserAttributes["id"]} - Attribute value. */
   id() { return this.readAttribute("id") }
 
   /**
@@ -50,9 +45,7 @@ export default class User extends FrontendModelBase {
    */
   setId(newValue) { return this.setAttribute("id", newValue) }
 
-  /**
-   * @returns {UserAttributes["name"]} - Attribute value.
-   */
+  /** @returns {UserAttributes["name"]} - Attribute value. */
   name() { return this.readAttribute("name") }
 
   /**

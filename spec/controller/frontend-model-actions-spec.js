@@ -73,6 +73,7 @@ function buildController(args = {}) {
   const frontendModelResourceConfiguration = {
     attributes: ["id", "name"],
     abilities: {
+      create: "create",
       destroy: "destroy",
       find: "read",
       index: "read",
@@ -178,7 +179,19 @@ class MockFrontendModel {
 
   /** @returns {Promise<void>} */
   async save() {
-    // no-op
+    const ModelClass = /** @type {typeof MockFrontendModel} */ (this.constructor)
+
+    if (!this._attributes.id) {
+      this._attributes.id = `${ModelClass.data.length + 1}`
+    }
+
+    const index = ModelClass.data.findIndex((record) => `${record.id}` === `${this._attributes.id}`)
+
+    if (index >= 0) {
+      ModelClass.data[index] = {...this._attributes}
+    } else {
+      ModelClass.data.push({...this._attributes})
+    }
   }
 
   /** @returns {Promise<void>} */
@@ -385,6 +398,42 @@ describe("Controller frontend model actions", () => {
               {id: "1", name: "One"},
               {id: "2", name: "Two"}
             ],
+            status: "success"
+          }
+        }
+      ],
+      status: "success"
+    })
+  })
+
+  it("handles shared frontend-model API create requests by model name", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+
+    const controller = buildController({
+      params: {
+        requests: [
+          {
+            commandType: "create",
+            model: "MockFrontendModel",
+            payload: {
+              attributes: {name: "Created"}
+            },
+            requestId: "request-1"
+          }
+        ]
+      }
+    })
+
+    await controller.frontendApi()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload).toEqual({
+      responses: [
+        {
+          requestId: "request-1",
+          response: {
+            model: {id: "2", name: "Created"},
             status: "success"
           }
         }
@@ -688,7 +737,7 @@ describe("Controller frontend model actions", () => {
       params: {attributes: {name: "Changed"}, id: "2"},
       resources: {
         AbilityDeniedFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          abilities: {create: "create", destroy: "destroy", find: "read", index: "read", update: "update"},
           attributes: ["id", "name"],
           path: "/frontend-models",
           primaryKey: "id"
@@ -714,7 +763,7 @@ describe("Controller frontend model actions", () => {
       params: {id: "2"},
       resources: {
         AbilityDeniedFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
+          abilities: {create: "create", destroy: "destroy", find: "read", index: "read", update: "update"},
           attributes: ["id", "name"],
           path: "/frontend-models",
           primaryKey: "id"
@@ -730,6 +779,54 @@ describe("Controller frontend model actions", () => {
     expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
     expect(AbilityDeniedFrontendModel.data).toEqual([{id: "2", name: "Two"}])
     expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["destroy"])
+  })
+
+  it("returns not found from frontendCreate when create ability scope denies access", async () => {
+    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("create")
+    AbilityDeniedFrontendModel.data = [{id: "2", name: "Two"}]
+    const controller = buildController({
+      modelClasses: {AbilityDeniedFrontendModel},
+      params: {attributes: {name: "Created"}},
+      resources: {
+        AbilityDeniedFrontendModel: {
+          abilities: {create: "create", destroy: "destroy", find: "read", index: "read", update: "update"},
+          attributes: ["id", "name"],
+          path: "/frontend-models",
+          primaryKey: "id"
+        }
+      }
+    })
+
+    await controller.frontendCreate()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload.status).toEqual("error")
+    expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
+    expect(AbilityDeniedFrontendModel.data).toEqual([{id: "2", name: "Two"}])
+    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["create"])
+  })
+
+  it("creates and serializes model from frontendCreate", async () => {
+    MockFrontendModel.data = [{id: "1", name: "One"}]
+    const controller = buildController({
+      params: {attributes: {name: "Created"}},
+      resourceConfiguration: {
+        abilities: {create: "create", destroy: "destroy", find: "read", index: "read", update: "update"}
+      }
+    })
+
+    await controller.frontendCreate()
+
+    const payload = JSON.parse(controller.response().body)
+
+    expect(payload.status).toEqual("success")
+    expect(payload.model.name).toEqual("Created")
+    expect(payload.model.id).toEqual("2")
+    expect(MockFrontendModel.data).toEqual([
+      {id: "1", name: "One"},
+      {id: "2", name: "Created"}
+    ])
   })
 
   it("runs server beforeAction callback", async () => {

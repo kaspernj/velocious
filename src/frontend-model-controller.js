@@ -693,7 +693,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
    * @returns {import("./database/query/model-class-query.js").default<any>} - Authorized query for the action.
    */
   frontendModelAuthorizedQuery(action) {
@@ -714,7 +714,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {object} args - Arguments.
-   * @param {"index" | "find" | "update" | "destroy"} args.action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy"} args.action - Frontend action.
    * @param {import("./database/record/index.js").default[]} args.models - Candidate models.
    * @returns {Promise<import("./database/record/index.js").default[]>} - Authorized models.
    */
@@ -730,7 +730,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
    * @returns {Promise<boolean>} - Whether action should continue.
    */
   async runFrontendModelBeforeAction(action) {
@@ -783,6 +783,49 @@ export default class FrontendModelController extends Controller {
     }
 
     return await query.findBy({[primaryKey]: id})
+  }
+
+  /**
+   * @param {Record<string, any>} attributes - Create attributes.
+   * @returns {Promise<import("./database/record/index.js").default | null>} - Created model when authorized.
+   */
+  async frontendModelCreateRecord(attributes) {
+    const modelClass = this.frontendModelClass()
+    const serverConfiguration = this.frontendModelServerConfiguration()
+    const params = this.frontendModelParams()
+    /** @type {import("./database/record/index.js").default} */
+    let model
+
+    if (serverConfiguration?.create) {
+      const callbackModel = await serverConfiguration.create({
+        action: "create",
+        attributes,
+        controller: this,
+        modelClass,
+        params
+      })
+
+      if (!callbackModel) {
+        throw new Error("Expected server.create to return a model.")
+      }
+
+      model = callbackModel
+    } else {
+      model = new modelClass(attributes)
+      await model.save()
+    }
+
+    const authorizedModels = await this.frontendModelFilterAuthorizedModels({action: "create", models: [model]})
+
+    if (authorizedModels.length > 0) {
+      return authorizedModels[0]
+    }
+
+    if (!serverConfiguration?.create) {
+      await model.destroy()
+    }
+
+    return null
   }
 
   /**
@@ -1340,7 +1383,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
    * @returns {Promise<Record<string, any> | null>} - Response payload.
    */
   async frontendModelCommandPayload(action) {
@@ -1388,6 +1431,36 @@ export default class FrontendModelController extends Controller {
       const serializedModel = serverConfiguration?.serialize
         ? await serverConfiguration.serialize({
           action: "find",
+          controller: this,
+          model,
+          modelClass,
+          params
+        })
+        : await this.serializeFrontendModel(model)
+
+      return {
+        model: serializedModel,
+        status: "success"
+      }
+    }
+
+    if (action === "create") {
+      const attributes = params.attributes
+
+      if (!attributes || typeof attributes !== "object") {
+        return this.frontendModelErrorPayload("Expected model attributes.")
+      }
+
+      const model = await this.frontendModelCreateRecord(attributes)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const serverConfiguration = this.frontendModelServerConfiguration()
+      const serializedModel = serverConfiguration?.serialize
+        ? await serverConfiguration.serialize({
+          action: "create",
           controller: this,
           model,
           modelClass,
@@ -1497,7 +1570,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      if (!["index", "find", "update", "destroy"].includes(commandType)) {
+      if (!["index", "find", "create", "update", "destroy"].includes(commandType)) {
         responses.push({
           requestId,
           response: this.frontendModelErrorPayload("Expected request commandType.")
@@ -1573,6 +1646,21 @@ export default class FrontendModelController extends Controller {
     }
 
     const responsePayload = await this.frontendModelCommandPayload("update")
+    if (!responsePayload) return
+
+    await this.render({
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
+    })
+  }
+
+  /** @returns {Promise<void>} - Member create action for frontend model resources. */
+  async frontendCreate() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const responsePayload = await this.frontendModelCommandPayload("create")
     if (!responsePayload) return
 
     await this.render({

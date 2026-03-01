@@ -9,9 +9,7 @@ import Project from "./project.js"
  */
 /** Frontend model for Task. */
 export default class Task extends FrontendModelBase {
-  /**
-   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.
-   */
+  /** @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: [
@@ -20,6 +18,7 @@ export default class Task extends FrontendModelBase {
         "name",
       ],
       commands: {
+        create: "create",
         destroy: "destroy",
         find: "find",
         index: "list",
@@ -29,27 +28,21 @@ export default class Task extends FrontendModelBase {
     }
   }
 
-  /**
-   * @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationship definitions.
-   */
+  /** @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationship definitions. */
   static relationshipDefinitions() {
     return {
       project: {type: "belongsTo"},
     }
   }
 
-  /**
-   * @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes.
-   */
+  /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */
   static relationshipModelClasses() {
     return {
       project: Project,
     }
   }
 
-  /**
-   * @returns {TaskAttributes["id"]} - Attribute value.
-   */
+  /** @returns {TaskAttributes["id"]} - Attribute value. */
   id() { return this.readAttribute("id") }
 
   /**
@@ -58,9 +51,7 @@ export default class Task extends FrontendModelBase {
    */
   setId(newValue) { return this.setAttribute("id", newValue) }
 
-  /**
-   * @returns {TaskAttributes["identifier"]} - Attribute value.
-   */
+  /** @returns {TaskAttributes["identifier"]} - Attribute value. */
   identifier() { return this.readAttribute("identifier") }
 
   /**
@@ -69,9 +60,7 @@ export default class Task extends FrontendModelBase {
    */
   setIdentifier(newValue) { return this.setAttribute("identifier", newValue) }
 
-  /**
-   * @returns {TaskAttributes["name"]} - Attribute value.
-   */
+  /** @returns {TaskAttributes["name"]} - Attribute value. */
   name() { return this.readAttribute("name") }
 
   /**
@@ -80,9 +69,7 @@ export default class Task extends FrontendModelBase {
    */
   setName(newValue) { return this.setAttribute("name", newValue) }
 
-  /**
-   * @returns {import("./project.js").default | null} - Loaded related model.
-   */
+  /** @returns {import("./project.js").default | null} - Loaded related model. */
   project() { return /** @type {import("./project.js").default | null} */ (this.getRelationshipByName("project").loaded()) }
 
   /**
@@ -90,4 +77,10 @@ export default class Task extends FrontendModelBase {
    * @returns {import("./project.js").default} - Built related model.
    */
   buildProject(attributes = {}) { return /** @type {import("./project.js").default} */ (this.getRelationshipByName("project").build(attributes)) }
+
+  /** @returns {Promise<import("./project.js").default | null>} - Loaded related model. */
+  async loadProject() { return /** @type {Promise<import("./project.js").default | null>} */ (this.loadRelationship("project")) }
+
+  /** @param {import("./project.js").default | null} model - Related model. @returns {import("./project.js").default | null} - Assigned related model. */
+  setProject(model) { return /** @type {import("./project.js").default | null} */ (this.setRelationship("project", model)) }
 }

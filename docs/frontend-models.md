@@ -13,7 +13,20 @@
 ## Lookup API
 - `findBy(conditions)` returns the first matching model or `null`.
 - `findByOrFail(conditions)` throws when no matching record exists.
+- `findOrInitializeBy(conditions)` returns existing model or a new unsaved model.
+- `findOrCreateBy(conditions, callback)` returns existing model or creates a new model.
 - Date condition values are normalized through JSON serialization to align request and local matching semantics.
+
+## Query parity helpers
+- `all()` returns a query builder (parity with backend `all()`).
+- `order(...)` is available as alias parity with backend `order(...)` (and forwards to frontend sort payloads).
+- `first()` and `last()` are available on frontend query/model classes.
+
+## Record parity helpers
+- `save()` is available for create/update flows (`create` when new record, `update` when persisted).
+- `create(attributes)` is available on frontend model classes.
+- `isNewRecord()`, `isPersisted()`, `changes()`, and `isChanged()` are available on frontend model instances.
+- Relationship parity helpers are available via `loadRelationship(name)` / `setRelationship(name, value)` and generated `loadXxx` / `setXxx` methods where applicable.
 
 ## Condition validation rules
 - Reject `undefined` condition values.
