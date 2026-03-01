@@ -294,6 +294,8 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await User.toArray()`
 - `await Task.sort("-createdAt").toArray()`
 - `await Task.order("-createdAt").toArray()`
+- `await Task.limit(10).offset(20).toArray()`
+- `await Task.page(2).perPage(25).toArray()`
 - `await Task.sort({project: {creatingUser: ["reference", "desc"]}}).toArray()`
 - `await Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}}).toArray()`
 - `await Task.group({project: {account: ["id"]}}).toArray()`

@@ -248,6 +248,42 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("limit(...).offset(...).toArray() paginates records through real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const models = await HttpFrontendModel
+          .order("createdAt")
+          .offset(1)
+          .limit(1)
+          .toArray()
+
+        expect(models.map((model) => model.id())).toEqual(["2"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("page(...).perPage(...).toArray() paginates records through real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const models = await HttpFrontendModel
+          .order("createdAt")
+          .page(2)
+          .perPage(1)
+          .toArray()
+
+        expect(models.map((model) => model.id())).toEqual(["2"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("findBy matches numeric id conditions against string ids over real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

@@ -225,6 +225,33 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
     })
   })
 
+  it("paginates frontend-model records with limit/offset and page/perPage", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await createTask("Alpha task")
+        await createTask("Bravo task")
+
+        const limitOffsetTasks = await Task
+          .order("name")
+          .offset(1)
+          .limit(1)
+          .toArray()
+        const pageTasks = await Task
+          .order("name")
+          .page(2)
+          .perPage(1)
+          .toArray()
+
+        expect(limitOffsetTasks.map((task) => task.name())).toEqual(["Bravo task"])
+        expect(pageTasks.map((task) => task.name())).toEqual(["Bravo task"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("sorts frontend-model records with multiple nested sort tuples", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

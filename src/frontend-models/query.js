@@ -522,6 +522,25 @@ function normalizeFindConditions(conditions) {
 }
 
 /**
+ * @param {unknown} value - Candidate integer value.
+ * @param {string} argumentName - Argument name for errors.
+ * @param {object} options - Validation options.
+ * @param {number} options.min - Minimum allowed value.
+ * @returns {number} - Normalized integer value.
+ */
+function normalizeIntegerArgument(value, argumentName, {min}) {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`${argumentName} must be an integer number`)
+  }
+
+  if (value < min) {
+    throw new Error(`${argumentName} must be greater than or equal to ${min}`)
+  }
+
+  return value
+}
+
+/**
  * Query wrapper for frontend model commands.
  * @template {typeof import("./base.js").default} T
  */
@@ -539,6 +558,10 @@ export default class FrontendModelQuery {
     this._select = {}
     this._sort = []
     this._group = []
+    this._limit = null
+    this._offset = null
+    this._page = null
+    this._perPage = null
   }
 
   /**
@@ -662,6 +685,57 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {number} value - Maximum number of records.
+   * @returns {this} - Query with limit.
+   */
+  limit(value) {
+    this._limit = normalizeIntegerArgument(value, "limit", {min: 0})
+    this._page = null
+
+    return this
+  }
+
+  /**
+   * @param {number} value - Number of records to skip.
+   * @returns {this} - Query with offset.
+   */
+  offset(value) {
+    this._offset = normalizeIntegerArgument(value, "offset", {min: 0})
+    this._page = null
+
+    return this
+  }
+
+  /**
+   * @param {number} pageNumber - 1-based page number.
+   * @returns {this} - Query with page applied.
+   */
+  page(pageNumber) {
+    this._page = normalizeIntegerArgument(pageNumber, "page", {min: 1})
+    const pageSize = this._perPage || 30
+
+    this._limit = pageSize
+    this._offset = (this._page - 1) * pageSize
+
+    return this
+  }
+
+  /**
+   * @param {number} perPage - Page size.
+   * @returns {this} - Query with per-page applied.
+   */
+  perPage(perPage) {
+    this._perPage = normalizeIntegerArgument(perPage, "perPage", {min: 1})
+
+    if (this._page !== null) {
+      this._limit = this._perPage
+      this._offset = (this._page - 1) * this._perPage
+    }
+
+    return this
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload preload hash when present.
    */
   preloadPayload() {
@@ -739,6 +813,21 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload pagination params when present.
+   */
+  paginationPayload() {
+    /** @type {Record<string, any>} */
+    const payload = {}
+
+    if (this._limit !== null) payload.limit = this._limit
+    if (this._offset !== null) payload.offset = this._offset
+    if (this._page !== null) payload.page = this._page
+    if (this._perPage !== null) payload.perPage = this._perPage
+
+    return payload
+  }
+
+  /**
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async toArray() {
@@ -748,7 +837,8 @@ export default class FrontendModelQuery {
       ...this.selectPayload(),
       ...this.groupPayload(),
       ...this.sortPayload(),
-      ...this.wherePayload()
+      ...this.wherePayload(),
+      ...this.paginationPayload()
     })
 
     if (!response || typeof response !== "object") {
@@ -801,6 +891,7 @@ export default class FrontendModelQuery {
       ...this.selectPayload(Object.keys(mergedWhere)),
       ...this.groupPayload(),
       ...this.sortPayload(),
+      ...this.paginationPayload(),
       where: mergedWhere
     })
 
