@@ -1416,10 +1416,6 @@ export default class FrontendModelController extends Controller {
     const modelClass = this.frontendModelClass()
     const id = params.id
 
-    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
-      return this.frontendModelErrorPayload("Expected model id.")
-    }
-
     if (action === "find") {
       const model = await this.frontendModelFindRecord("find", id)
 
@@ -1472,6 +1468,10 @@ export default class FrontendModelController extends Controller {
         model: serializedModel,
         status: "success"
       }
+    }
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      return this.frontendModelErrorPayload("Expected model id.")
     }
 
     if (action === "update") {
