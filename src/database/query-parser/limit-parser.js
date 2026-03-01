@@ -16,23 +16,20 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
     const driver = query.driver
     const options = this.query.getOptions()
     let sql = ""
+    const limit = query._limit
+    const offset = query._offset
+    const databaseType = driver.getType()
+    const isMssql = databaseType == "mssql"
+    const hasLimit = limit !== null
+    const hasOffset = offset !== null
 
-    if (query._limit === null) return sql
+    if (!hasLimit && !hasOffset) return sql
 
     if (pretty) {
       sql += "\n\n"
     } else {
       sql += " "
     }
-
-    const isMssql = driver.getType() == "mssql"
-
-    if (!isMssql) {
-      sql += "LIMIT"
-    }
-
-    const limit = query._limit
-    const offset = query._offset
 
     if (pretty) {
       sql += "\n  "
@@ -45,11 +42,25 @@ export default class VelocuiousDatabaseQueryParserLimitParser {
         sql += "ORDER BY (SELECT NULL) "
       }
 
-      sql += `OFFSET ${options.quote(offset === null ? 0 : offset)} ROWS FETCH NEXT ${options.quote(limit)} ROWS ONLY`
-    } else {
-      sql += options.quote(limit)
+      sql += `OFFSET ${options.quote(offset === null ? 0 : offset)} ROWS`
 
-      if (offset !== null) {
+      if (hasLimit) {
+        sql += ` FETCH NEXT ${options.quote(limit)} ROWS ONLY`
+      }
+    } else {
+      sql += "LIMIT "
+
+      if (hasLimit) {
+        sql += options.quote(limit)
+      } else if (databaseType == "pgsql") {
+        sql += "ALL"
+      } else if (databaseType == "sqlite") {
+        sql += "-1"
+      } else {
+        sql += "18446744073709551615"
+      }
+
+      if (hasOffset) {
         if (pretty) {
           sql += "\n  "
         } else {
