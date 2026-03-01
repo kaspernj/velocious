@@ -305,6 +305,7 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
           .sort({comments: ["body", "asc"]})
           .toArray()
         const withDistinct = await Task
+          .select({Task: ["id"]})
           .sort({comments: ["body", "asc"]})
           .distinct()
           .toArray()
