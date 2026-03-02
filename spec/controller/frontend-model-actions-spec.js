@@ -588,6 +588,19 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("treats plain-object values on root where columns as values", async () => {
+    await Dummy.run(async () => {
+      await createTask("Object where value")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: {raw: 1}}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models).toEqual([])
+    })
+  })
+
   it("supports relationship-path search through project creating user", async () => {
     await Dummy.run(async () => {
       await User.create({

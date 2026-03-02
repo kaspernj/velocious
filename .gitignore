@@ -11,3 +11,4 @@ spec/dummy/src/config/configuration.sqlite.js
 spec/support/mysql.json
 log
 spec/dummy/log
+tmp/

@@ -1521,6 +1521,33 @@ export default class FrontendModelController extends Controller {
     const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
 
     for (const [attributeName, value] of Object.entries(where)) {
+      const columnName = attributeNameToColumnNameMap[attributeName]
+
+      if (columnName) {
+        this.ensureFrontendModelJoinPath({path, query})
+
+        const tableReference = query.getTableReferenceForJoin(...path)
+        const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
+
+        if (Array.isArray(value)) {
+          if (value.length === 0) {
+            query.where("1=0")
+          } else {
+            query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(entry)).join(", ")})`)
+          }
+
+          continue
+        }
+
+        if (value == null) {
+          query.where(`${columnSql} IS NULL`)
+        } else {
+          query.where(`${columnSql} = ${query.driver.quote(value)}`)
+        }
+
+        continue
+      }
+
       if (isPlainObject(value)) {
         const relationship = modelClass.getRelationshipsMap()[attributeName]
 
@@ -1546,32 +1573,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      const columnName = attributeNameToColumnNameMap[attributeName]
-
-      if (!columnName) {
-        throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
-      }
-
-      this.ensureFrontendModelJoinPath({path, query})
-
-      const tableReference = query.getTableReferenceForJoin(...path)
-      const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
-
-      if (Array.isArray(value)) {
-        if (value.length === 0) {
-          query.where("1=0")
-        } else {
-          query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(entry)).join(", ")})`)
-        }
-
-        continue
-      }
-
-      if (value == null) {
-        query.where(`${columnSql} IS NULL`)
-      } else {
-        query.where(`${columnSql} = ${query.driver.quote(value)}`)
-      }
+      throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
     }
   }
 
