@@ -171,3 +171,4 @@
 - Add frontend-model `order(...)` as an alias for query sorting so frontend model query naming aligns with backend model `order(...)` usage.
 - Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.
 - Add frontend-model query `pluck(...)` support with safe attribute/path normalization and backend metadata validation for relationship-aware plucks.
+- Replace non-literal dynamic import in frontend-model route hook with a static controller import so Expo/Metro builds do not fail on `import(variable)` usage.
