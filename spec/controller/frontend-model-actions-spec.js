@@ -8,6 +8,8 @@ import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 
+const FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE = "Request failed."
+
 /**
  * @param {string} path - Request path.
  * @param {Record<string, any>} payload - JSON payload.
@@ -183,6 +185,46 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.responses[0].requestId).toEqual("request-1")
       expect(payload.responses[0].response.status).toEqual("success")
       expect(payload.responses[0].response.models.map((model) => model.name)).toEqual(["Batch Alpha", "Batch Beta"])
+    })
+  })
+
+  it("returns client-safe errors from shared frontend-model API when command execution fails", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/velocious/api", {
+        requests: [
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {distinct: "1 OR 1=1"},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.responses.length).toEqual(1)
+      expect(payload.responses[0].response.status).toEqual("error")
+      expect(payload.responses[0].response.errorMessage).toMatch(/Invalid distinct/)
+    })
+  })
+
+  it("returns generic client-safe errors from shared frontend-model API for unexpected failures", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/velocious/api", {
+        requests: [
+          {
+            commandType: "index",
+            model: "UnknownModel",
+            payload: {},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.responses.length).toEqual(1)
+      expect(payload.responses[0].response.status).toEqual("error")
+      expect(payload.responses[0].response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 

@@ -3,6 +3,7 @@
 import Controller from "./controller.js"
 import * as inflection from "inflection"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+import VelociousError from "./velocious-error.js"
 
 /**
  * @param {unknown} value - Candidate value.
@@ -48,14 +49,14 @@ function normalizeFrontendModelPreload(preload) {
         continue
       }
 
-      throw new Error(`Invalid preload entry type: ${typeof entry}`)
+      throw frontendModelValidationError(`Invalid preload entry type: ${typeof entry}`)
     }
 
     return normalized
   }
 
   if (!isPlainObject(preload)) {
-    throw new Error(`Invalid preload type: ${typeof preload}`)
+    throw frontendModelValidationError(`Invalid preload type: ${typeof preload}`)
   }
 
   /** @type {import("./database/query/index.js").NestedPreloadRecord} */
@@ -74,7 +75,7 @@ function normalizeFrontendModelPreload(preload) {
       continue
     }
 
-    throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+    throw frontendModelValidationError(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
   }
 
   return normalized
@@ -102,7 +103,7 @@ function mergeNormalizedPreload(target, source) {
     }
 
     if (!isPlainObject(relationshipPreload)) {
-      throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+      throw frontendModelValidationError(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
     }
 
     if (isPlainObject(existingValue)) {
@@ -134,7 +135,7 @@ function mergeNormalizedJoins(target, source) {
     }
 
     if (!isPlainObject(relationshipJoin)) {
-      throw new Error(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+      throw frontendModelValidationError(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
     }
 
     if (isPlainObject(existingValue)) {
@@ -159,7 +160,7 @@ function normalizeFrontendModelJoins(joins) {
 
     for (const joinEntry of joins) {
       if (!isPlainObject(joinEntry)) {
-        throw new Error(`Invalid joins entry type: ${typeof joinEntry}`)
+        throw frontendModelValidationError(`Invalid joins entry type: ${typeof joinEntry}`)
       }
 
       const nested = normalizeFrontendModelJoins(joinEntry)
@@ -173,7 +174,7 @@ function normalizeFrontendModelJoins(joins) {
   }
 
   if (!isPlainObject(joins)) {
-    throw new Error(`Invalid joins type: ${typeof joins}`)
+    throw frontendModelValidationError(`Invalid joins type: ${typeof joins}`)
   }
 
   /** @type {Record<string, any>} */
@@ -190,7 +191,7 @@ function normalizeFrontendModelJoins(joins) {
       continue
     }
 
-    throw new Error(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+    throw frontendModelValidationError(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
   }
 
   return normalized
@@ -204,7 +205,7 @@ function normalizeFrontendModelSelect(select) {
   if (!select) return null
 
   if (!isPlainObject(select)) {
-    throw new Error(`Invalid select type: ${typeof select}`)
+    throw frontendModelValidationError(`Invalid select type: ${typeof select}`)
   }
 
   /** @type {Record<string, string[]>} */
@@ -217,12 +218,12 @@ function normalizeFrontendModelSelect(select) {
     }
 
     if (!Array.isArray(selectValue)) {
-      throw new Error(`Invalid select value for ${modelName}: ${typeof selectValue}`)
+      throw frontendModelValidationError(`Invalid select value for ${modelName}: ${typeof selectValue}`)
     }
 
     for (const attributeName of selectValue) {
       if (typeof attributeName !== "string") {
-        throw new Error(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
+        throw frontendModelValidationError(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
       }
     }
 
@@ -270,6 +271,27 @@ function normalizeFrontendModelSelect(select) {
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
+const frontendModelClientSafeErrorMessage = "Request failed."
+
+/**
+ * @param {string} message - Validation error message.
+ * @returns {VelociousError} - Client-safe validation error.
+ */
+function frontendModelValidationError(message) {
+  return VelociousError.safe(message, {code: "frontend-model-validation"})
+}
+
+/**
+ * @param {unknown} error - Caught error.
+ * @returns {string} - Message safe to return to API clients.
+ */
+function frontendModelClientMessageForError(error) {
+  if (error instanceof VelociousError && error.safeToExpose) {
+    return error.message
+  }
+
+  return frontendModelClientSafeErrorMessage
+}
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -277,13 +299,13 @@ const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
  */
 function normalizeFrontendModelSortDirection(direction) {
   if (typeof direction !== "string") {
-    throw new Error(`Invalid sort direction type: ${typeof direction}`)
+    throw frontendModelValidationError(`Invalid sort direction type: ${typeof direction}`)
   }
 
   const normalizedDirection = direction.trim().toLowerCase()
 
   if (normalizedDirection !== "asc" && normalizedDirection !== "desc") {
-    throw new Error(`Invalid sort direction: ${direction}`)
+    throw frontendModelValidationError(`Invalid sort direction: ${direction}`)
   }
 
   return normalizedDirection
@@ -341,14 +363,14 @@ function frontendModelSortFromString(sortValue, path = []) {
   const trimmed = sortValue.trim()
 
   if (trimmed.length < 1) {
-    throw new Error("Invalid sort value: expected non-empty string")
+    throw frontendModelValidationError("Invalid sort value: expected non-empty string")
   }
 
   if (trimmed.startsWith("-")) {
     const column = trimmed.slice(1).trim()
 
     if (column.length < 1) {
-      throw new Error(`Invalid sort definition: ${sortValue}`)
+      throw frontendModelValidationError(`Invalid sort definition: ${sortValue}`)
     }
 
     return {
@@ -361,13 +383,13 @@ function frontendModelSortFromString(sortValue, path = []) {
   const sortParts = trimmed.split(/\s+/).filter(Boolean)
 
   if (sortParts.length > 2) {
-    throw new Error(`Invalid sort definition: ${sortValue}`)
+    throw frontendModelValidationError(`Invalid sort definition: ${sortValue}`)
   }
 
   const column = sortParts[0]
 
   if (column.length < 1) {
-    throw new Error(`Invalid sort definition: ${sortValue}`)
+    throw frontendModelValidationError(`Invalid sort definition: ${sortValue}`)
   }
 
   const direction = sortParts.length === 2
@@ -410,7 +432,7 @@ function frontendModelGroupFromString(groupValue, path = []) {
   const trimmed = groupValue.trim()
 
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
-    throw new Error(`Invalid group column: ${groupValue}`)
+    throw frontendModelValidationError(`Invalid group column: ${groupValue}`)
   }
 
   return {
@@ -445,12 +467,12 @@ function normalizeFrontendModelSortObject(sortValue, path) {
 
     if (Array.isArray(sortEntry)) {
       if (sortEntry.length < 1) {
-        throw new Error(`Invalid sort definition for "${sortKey}": empty array`)
+        throw frontendModelValidationError(`Invalid sort definition for "${sortKey}": empty array`)
       }
 
       for (const nestedSortEntry of sortEntry) {
         if (!frontendModelSortTuple(nestedSortEntry)) {
-          throw new Error(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
+          throw frontendModelValidationError(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
         }
 
         normalizedSorts.push(frontendModelSortFromTuple(nestedSortEntry, [...path, sortKey]))
@@ -464,7 +486,7 @@ function normalizeFrontendModelSortObject(sortValue, path) {
       continue
     }
 
-    throw new Error(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
+    throw frontendModelValidationError(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
   }
 
   return normalizedSorts
@@ -487,12 +509,12 @@ function normalizeFrontendModelGroupObject(groupValue, path) {
 
     if (Array.isArray(groupEntry)) {
       if (groupEntry.length < 1) {
-        throw new Error(`Invalid group definition for "${groupKey}": empty array`)
+        throw frontendModelValidationError(`Invalid group definition for "${groupKey}": empty array`)
       }
 
       for (const nestedGroupEntry of groupEntry) {
         if (typeof nestedGroupEntry !== "string") {
-          throw new Error(`Invalid group definition for "${groupKey}": expected string columns`)
+          throw frontendModelValidationError(`Invalid group definition for "${groupKey}": expected string columns`)
         }
 
         normalizedGroups.push(frontendModelGroupFromString(nestedGroupEntry, [...path, groupKey]))
@@ -506,7 +528,7 @@ function normalizeFrontendModelGroupObject(groupValue, path) {
       continue
     }
 
-    throw new Error(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
+    throw frontendModelValidationError(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
   }
 
   return normalizedGroups
@@ -520,7 +542,7 @@ function normalizeFrontendModelSearches(searches) {
   if (!searches) return []
 
   if (!Array.isArray(searches)) {
-    throw new Error(`Invalid searches type: ${typeof searches}`)
+    throw frontendModelValidationError(`Invalid searches type: ${typeof searches}`)
   }
 
   /** @type {FrontendModelSearch[]} */
@@ -529,7 +551,7 @@ function normalizeFrontendModelSearches(searches) {
 
   for (const search of searches) {
     if (!isPlainObject(search)) {
-      throw new Error(`Invalid search entry type: ${typeof search}`)
+      throw frontendModelValidationError(`Invalid search entry type: ${typeof search}`)
     }
 
     const path = search.path
@@ -537,21 +559,21 @@ function normalizeFrontendModelSearches(searches) {
     const operator = search.operator
 
     if (!Array.isArray(path)) {
-      throw new Error("Invalid search path: expected an array")
+      throw frontendModelValidationError("Invalid search path: expected an array")
     }
 
     for (const pathEntry of path) {
       if (typeof pathEntry !== "string" || pathEntry.length < 1) {
-        throw new Error("Invalid search path entry: expected non-empty string")
+        throw frontendModelValidationError("Invalid search path entry: expected non-empty string")
       }
     }
 
     if (typeof column !== "string" || column.length < 1) {
-      throw new Error("Invalid search column: expected non-empty string")
+      throw frontendModelValidationError("Invalid search column: expected non-empty string")
     }
 
     if (typeof operator !== "string" || !supportedOperators.has(operator)) {
-      throw new Error(`Invalid search operator: ${operator}`)
+      throw frontendModelValidationError(`Invalid search operator: ${operator}`)
     }
 
     normalized.push({
@@ -573,7 +595,7 @@ function normalizeFrontendModelWhere(where) {
   if (!where) return null
 
   if (!isPlainObject(where)) {
-    throw new Error(`Invalid where type: ${typeof where}`)
+    throw frontendModelValidationError(`Invalid where type: ${typeof where}`)
   }
 
   return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(where)))
@@ -589,11 +611,11 @@ function normalizeFrontendModelIntegerParam(value, name, min) {
   if (value == null) return null
 
   if (typeof value !== "number" || !Number.isInteger(value)) {
-    throw new Error(`Invalid ${name}: expected integer number`)
+    throw frontendModelValidationError(`Invalid ${name}: expected integer number`)
   }
 
   if (value < min) {
-    throw new Error(`Invalid ${name}: expected value >= ${min}`)
+    throw frontendModelValidationError(`Invalid ${name}: expected value >= ${min}`)
   }
 
   return value
@@ -624,7 +646,7 @@ function normalizeFrontendModelDistinct(distinct) {
   if (distinct == null) return null
 
   if (typeof distinct !== "boolean") {
-    throw new Error(`Invalid distinct: expected boolean`)
+    throw frontendModelValidationError(`Invalid distinct: expected boolean`)
   }
 
   return distinct
@@ -686,13 +708,13 @@ function normalizeFrontendModelSort(sort) {
         continue
       }
 
-      throw new Error(`Invalid sort entry type: ${typeof sortEntry}`)
+      throw frontendModelValidationError(`Invalid sort entry type: ${typeof sortEntry}`)
     }
 
     return normalized
   }
 
-  throw new Error(`Invalid sort type: ${typeof sort}`)
+  throw frontendModelValidationError(`Invalid sort type: ${typeof sort}`)
 }
 
 /**
@@ -740,13 +762,13 @@ function normalizeFrontendModelGroup(group) {
         continue
       }
 
-      throw new Error(`Invalid group entry type: ${typeof groupEntry}`)
+      throw frontendModelValidationError(`Invalid group entry type: ${typeof groupEntry}`)
     }
 
     return normalized
   }
 
-  throw new Error(`Invalid group type: ${typeof group}`)
+  throw frontendModelValidationError(`Invalid group type: ${typeof group}`)
 }
 
 /**
@@ -771,7 +793,7 @@ function frontendModelPluckFromString(pluckValue, path = []) {
   const trimmed = pluckValue.trim()
 
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
-    throw new Error(`Invalid pluck column: ${pluckValue}`)
+    throw frontendModelValidationError(`Invalid pluck column: ${pluckValue}`)
   }
 
   return {
@@ -797,12 +819,12 @@ function normalizeFrontendModelPluckObject(pluckValue, path) {
 
     if (Array.isArray(pluckEntry)) {
       if (pluckEntry.length < 1) {
-        throw new Error(`Invalid pluck definition for "${pluckKey}": empty array`)
+        throw frontendModelValidationError(`Invalid pluck definition for "${pluckKey}": empty array`)
       }
 
       for (const nestedPluckEntry of pluckEntry) {
         if (typeof nestedPluckEntry !== "string") {
-          throw new Error(`Invalid pluck definition for "${pluckKey}": expected string columns`)
+          throw frontendModelValidationError(`Invalid pluck definition for "${pluckKey}": expected string columns`)
         }
 
         normalizedPlucks.push(frontendModelPluckFromString(nestedPluckEntry, [...path, pluckKey]))
@@ -816,7 +838,7 @@ function normalizeFrontendModelPluckObject(pluckValue, path) {
       continue
     }
 
-    throw new Error(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
+    throw frontendModelValidationError(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
   }
 
   return normalizedPlucks
@@ -867,13 +889,13 @@ function normalizeFrontendModelPluck(pluck) {
         continue
       }
 
-      throw new Error(`Invalid pluck entry type: ${typeof pluckEntry}`)
+      throw frontendModelValidationError(`Invalid pluck entry type: ${typeof pluckEntry}`)
     }
 
     return normalized
   }
 
-  throw new Error(`Invalid pluck type: ${typeof pluck}`)
+  throw frontendModelValidationError(`Invalid pluck type: ${typeof pluck}`)
 }
 
 /**
@@ -2148,18 +2170,20 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<void>} - Resolves when error has been rendered.
    */
   async frontendModelRenderError(errorMessage) {
+    await this.logger.error(`Frontend model request failed: ${errorMessage}`)
+
     const renderError = /** @type {((errorMessage: string) => Promise<void>) | undefined} */ (
       /** @type {any} */ (this).renderError
     )
 
     if (typeof renderError === "function") {
-      await renderError.call(this, errorMessage)
+      await renderError.call(this, frontendModelClientSafeErrorMessage)
       return
     }
 
     await this.render({
       json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
-        errorMessage,
+        errorMessage: frontendModelClientSafeErrorMessage,
         status: "error"
       }))
     })
@@ -2173,6 +2197,68 @@ export default class FrontendModelController extends Controller {
     return {
       errorMessage,
       status: "error"
+    }
+  }
+
+  /**
+   * @returns {Record<string, any>} - Client-safe error payload.
+   */
+  frontendModelClientSafeErrorPayload() {
+    return this.frontendModelErrorPayload(frontendModelClientSafeErrorMessage)
+  }
+
+  /**
+   * @param {object} args - Error log args.
+   * @param {string} args.action - Endpoint/action label.
+   * @param {unknown} args.error - Caught error.
+   * @param {"index" | "find" | "create" | "update" | "destroy"} [args.commandType] - Frontend-model command type.
+   * @param {string | undefined} [args.model] - Request model name when available.
+   * @param {string | undefined} [args.requestId] - Batch request id when available.
+   * @returns {Promise<void>} - Resolves after logging.
+   */
+  async frontendModelLogEndpointError({action, error, commandType, model, requestId}) {
+    let resolvedModel = model
+
+    if (!resolvedModel) {
+      try {
+        resolvedModel = this.frontendModelParams().model
+      } catch {
+        resolvedModel = undefined
+      }
+    }
+
+    const errorMessage = error instanceof Error
+      ? `${error.message}\n${error.stack || ""}`
+      : String(error)
+
+    await this.logger.error(() => ["Frontend model endpoint request failed", {
+      action,
+      commandType,
+      error: errorMessage,
+      model: resolvedModel,
+      requestId
+    }])
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
+   * @returns {Promise<void>} - Resolves when response has been rendered.
+   */
+  async frontendModelRenderCommandResponse(action) {
+    try {
+      const responsePayload = await this.frontendModelCommandPayload(action)
+      if (!responsePayload) return
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
+      })
+    } catch (error) {
+      await this.frontendModelLogEndpointError({action, commandType: action, error})
+      const errorMessage = frontendModelClientMessageForError(error)
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelErrorPayload(errorMessage)))
+      })
     }
   }
 
@@ -2405,9 +2491,18 @@ export default class FrontendModelController extends Controller {
           response: responsePayload || this.frontendModelErrorPayload("Action halted by beforeAction.")
         })
       } catch (error) {
+        await this.frontendModelLogEndpointError({
+          action: "frontendApi",
+          commandType,
+          error,
+          model,
+          requestId
+        })
+        const errorMessage = frontendModelClientMessageForError(error)
+
         responses.push({
           requestId,
-          response: this.frontendModelErrorPayload(error instanceof Error ? error.message : String(error))
+          response: this.frontendModelErrorPayload(errorMessage)
         })
       }
     }
@@ -2427,12 +2522,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("index")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("index")
   }
 
   /** @returns {Promise<void>} - Member find action for frontend model resources. */
@@ -2442,12 +2532,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("find")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("find")
   }
 
   /** @returns {Promise<void>} - Member update action for frontend model resources. */
@@ -2457,12 +2542,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("update")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("update")
   }
 
   /** @returns {Promise<void>} - Member create action for frontend model resources. */
@@ -2472,12 +2552,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("create")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("create")
   }
 
   /** @returns {Promise<void>} - Member destroy action for frontend model resources. */
@@ -2487,11 +2562,6 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("destroy")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("destroy")
   }
 }

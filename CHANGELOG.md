@@ -181,3 +181,5 @@
 - Avoid eagerly importing `FrontendModelController` in the frontend-model route hook; return a `controllerPath` override for `/velocious/api` so browser-test bundling no longer pulls Node-only controller dependencies (`ejs`, `crypto`, `node:path`, etc.) into the browser graph.
 - Add frontend-model query/base support for `first()` and `last()` with deterministic primary-key ordering and limit semantics.
 - Add frontend-model integration coverage for `first()`/`last()` over Node and browser transports, and remove the completed `first()`/`last()` item from `TODO.md`.
+
+- Add `VelociousError` with `safeToExpose` support and use it for frontend-model validation failures so safe `Invalid ...` messages are returned to clients while unexpected errors stay generic and fully logged server-side.
