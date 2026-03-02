@@ -157,6 +157,86 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 }
 
 /**
+ * @param {Record<string, any>} targetJoins - Existing join record.
+ * @param {Record<string, any>} incomingJoins - Incoming join record.
+ * @returns {void}
+ */
+function mergeJoinRecord(targetJoins, incomingJoins) {
+  for (const [relationshipName, incomingValue] of Object.entries(incomingJoins)) {
+    const existingValue = targetJoins[relationshipName]
+
+    if (incomingValue === true) {
+      if (existingValue === undefined) {
+        targetJoins[relationshipName] = true
+      }
+      continue
+    }
+
+    if (!isPlainObject(incomingValue)) {
+      throw new Error(`Invalid join value for ${relationshipName}: ${typeof incomingValue}`)
+    }
+
+    if (isPlainObject(existingValue)) {
+      mergeJoinRecord(existingValue, incomingValue)
+      continue
+    }
+
+    if (existingValue === true) {
+      targetJoins[relationshipName] = normalizeJoins(incomingValue)
+      continue
+    }
+
+    targetJoins[relationshipName] = normalizeJoins(incomingValue)
+  }
+}
+
+/**
+ * @param {unknown} joins - Join payload.
+ * @returns {Record<string, any>} - Normalized relationship descriptor joins.
+ */
+function normalizeJoins(joins) {
+  if (!joins) return {}
+
+  if (Array.isArray(joins)) {
+    /** @type {Record<string, any>} */
+    const normalized = {}
+
+    for (const joinEntry of joins) {
+      if (!isPlainObject(joinEntry)) {
+        throw new Error(`Invalid joins entry type: ${typeof joinEntry}`)
+      }
+
+      mergeJoinRecord(normalized, normalizeJoins(joinEntry))
+    }
+
+    return normalized
+  }
+
+  if (!isPlainObject(joins)) {
+    throw new Error(`Invalid joins type: ${typeof joins}`)
+  }
+
+  /** @type {Record<string, any>} */
+  const normalized = {}
+
+  for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
+    if (relationshipJoin === true) {
+      normalized[relationshipName] = true
+      continue
+    }
+
+    if (isPlainObject(relationshipJoin)) {
+      normalized[relationshipName] = normalizeJoins(relationshipJoin)
+      continue
+    }
+
+    throw new Error(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+  }
+
+  return normalized
+}
+
+/**
  * @typedef {object} FrontendModelSort
  * @property {string} column - Attribute name to sort by.
  * @property {"asc" | "desc"} direction - Sort direction.
@@ -767,6 +847,7 @@ export default class FrontendModelQuery {
   constructor({modelClass, preload = {}}) {
     this.modelClass = modelClass
     this._preload = normalizePreload(preload)
+    this._joins = {}
     this._where = {}
     this._searches = []
     this._select = {}
@@ -831,6 +912,16 @@ export default class FrontendModelQuery {
    */
   select(select) {
     mergeSelectRecord(this._select, normalizeSelect(select))
+
+    return this
+  }
+
+  /**
+   * @param {Record<string, any> | Array<Record<string, any>>} joins - Relationship descriptor joins.
+   * @returns {this} - Query with merged joins.
+   */
+  joins(joins) {
+    mergeJoinRecord(this._joins, normalizeJoins(joins))
 
     return this
   }
@@ -973,6 +1064,7 @@ export default class FrontendModelQuery {
       preload: normalizePreload(this._preload)
     }))
 
+    newQuery._joins = normalizeJoins(this._joins)
     newQuery._where = normalizeFindConditions(this._where)
     newQuery._searches = this._searches.map((search) => ({
       column: search.column,
@@ -1033,6 +1125,17 @@ export default class FrontendModelQuery {
         path: [...search.path],
         value: search.value
       }))
+    }
+  }
+
+  /**
+   * @returns {Record<string, any>} - Payload joins hash when present.
+   */
+  joinsPayload() {
+    if (Object.keys(this._joins).length === 0) return {}
+
+    return {
+      joins: normalizeJoins(this._joins)
     }
   }
 
@@ -1108,6 +1211,7 @@ export default class FrontendModelQuery {
   async toArray() {
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
+      ...this.joinsPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(),
       ...this.groupPayload(),
@@ -1198,6 +1302,7 @@ export default class FrontendModelQuery {
       pluck: normalizedPluck
     })
     const response = await this.modelClass.executeCommand("index", {
+      ...this.joinsPayload(),
       ...this.searchPayload(),
       ...this.groupPayload(),
       ...this.distinctPayload(),
@@ -1246,6 +1351,7 @@ export default class FrontendModelQuery {
 
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
+      ...this.joinsPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(Object.keys(mergedWhere)),
       ...this.groupPayload(),

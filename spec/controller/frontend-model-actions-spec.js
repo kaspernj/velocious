@@ -343,6 +343,42 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("applies joins params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Join filter task")
+
+      await Comment.create({body: "Join comment A", taskId: task.id()})
+      await Comment.create({body: "Join comment B", taskId: task.id()})
+
+      const payloadWithoutJoins = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: task.id()}
+      })
+      const payloadWithJoins = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: {comments: true},
+        where: {id: task.id()}
+      })
+
+      const withoutJoinsCount = payloadWithoutJoins.models.filter((model) => model.id === task.id()).length
+      const withJoinsCount = payloadWithJoins.models.filter((model) => model.id === task.id()).length
+
+      expect(payloadWithoutJoins.status).toEqual("success")
+      expect(payloadWithJoins.status).toEqual("success")
+      expect(withoutJoinsCount).toEqual(1)
+      expect(withJoinsCount).toEqual(2)
+    })
+  })
+
+  it("rejects raw string joins params", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: "LEFT JOIN comments ON comments.task_id = tasks.id"
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Invalid joins type/)
+    })
+  })
+
   it("rejects unsafe string group params", async () => {
     await Dummy.run(async () => {
       const payload = await postFrontendModel("/api/frontend-models/tasks/list", {

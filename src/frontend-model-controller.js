@@ -118,6 +118,85 @@ function mergeNormalizedPreload(target, source) {
 }
 
 /**
+ * @param {Record<string, any>} target - Target joins object.
+ * @param {Record<string, any>} source - Source joins object.
+ * @returns {void} - Mutates target with merged nested joins tree.
+ */
+function mergeNormalizedJoins(target, source) {
+  for (const [relationshipName, relationshipJoin] of Object.entries(source)) {
+    const existingValue = target[relationshipName]
+
+    if (relationshipJoin === true) {
+      if (existingValue === undefined) {
+        target[relationshipName] = true
+      }
+      continue
+    }
+
+    if (!isPlainObject(relationshipJoin)) {
+      throw new Error(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+    }
+
+    if (isPlainObject(existingValue)) {
+      mergeNormalizedJoins(existingValue, relationshipJoin)
+      continue
+    }
+
+    target[relationshipName] = relationshipJoin
+  }
+}
+
+/**
+ * @param {unknown} joins - Joins payload.
+ * @returns {Record<string, any> | null} - Normalized relationship-object joins.
+ */
+function normalizeFrontendModelJoins(joins) {
+  if (!joins) return null
+
+  if (Array.isArray(joins)) {
+    /** @type {Record<string, any>} */
+    const normalized = {}
+
+    for (const joinEntry of joins) {
+      if (!isPlainObject(joinEntry)) {
+        throw new Error(`Invalid joins entry type: ${typeof joinEntry}`)
+      }
+
+      const nested = normalizeFrontendModelJoins(joinEntry)
+
+      if (nested) {
+        mergeNormalizedJoins(normalized, nested)
+      }
+    }
+
+    return normalized
+  }
+
+  if (!isPlainObject(joins)) {
+    throw new Error(`Invalid joins type: ${typeof joins}`)
+  }
+
+  /** @type {Record<string, any>} */
+  const normalized = {}
+
+  for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
+    if (relationshipJoin === true) {
+      normalized[relationshipName] = true
+      continue
+    }
+
+    if (isPlainObject(relationshipJoin)) {
+      normalized[relationshipName] = normalizeFrontendModelJoins(relationshipJoin) || {}
+      continue
+    }
+
+    throw new Error(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+  }
+
+  return normalized
+}
+
+/**
  * @param {unknown} select - Select payload.
  * @returns {Record<string, string[]> | null} - Normalized model-name keyed select record.
  */
@@ -1204,6 +1283,11 @@ export default class FrontendModelController extends Controller {
     return normalizeFrontendModelWhere(this.frontendModelParams().where)
   }
 
+  /** @returns {Record<string, any> | null} - Frontend joins descriptors. */
+  frontendModelJoins() {
+    return normalizeFrontendModelJoins(this.frontendModelParams().joins)
+  }
+
   /** @returns {FrontendModelSort[]} - Frontend sort definitions. */
   frontendModelSort() {
     return normalizeFrontendModelSort(this.frontendModelParams().sort)
@@ -1247,6 +1331,7 @@ export default class FrontendModelController extends Controller {
       query = query.preload(preload)
     }
 
+    const joins = this.frontendModelJoins()
     const where = this.frontendModelWhere()
     const pagination = this.frontendModelPagination()
     const distinct = this.frontendModelDistinct()
@@ -1259,6 +1344,10 @@ export default class FrontendModelController extends Controller {
 
     if (where) {
       this.applyFrontendModelWhere({query, where})
+    }
+
+    if (joins) {
+      this.applyFrontendModelJoins({joins, query})
     }
 
     const searches = this.frontendModelSearches()
@@ -1508,6 +1597,58 @@ export default class FrontendModelController extends Controller {
       query,
       where
     })
+  }
+
+  /**
+   * @param {object} args - Joins args.
+   * @param {Record<string, any>} args.joins - Relationship-object joins.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelJoins({joins, query}) {
+    this.applyFrontendModelJoinsForPath({
+      joins,
+      modelClass: this.frontendModelClass(),
+      path: [],
+      query
+    })
+  }
+
+  /**
+   * @param {object} args - Joins args.
+   * @param {Record<string, any>} args.joins - Joins for current path.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class for current path.
+   * @param {string[]} args.path - Relationship path.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelJoinsForPath({joins, modelClass, path, query}) {
+    for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
+      const relationship = modelClass.getRelationshipsMap()[relationshipName]
+
+      if (!relationship) {
+        throw new Error(`Unknown join relationship "${relationshipName}" for ${modelClass.name}`)
+      }
+
+      const targetModelClass = relationship.getTargetModelClass()
+
+      if (!targetModelClass) {
+        throw new Error(`No target model class for join relationship "${relationshipName}" on ${modelClass.name}`)
+      }
+
+      const relationshipPath = [...path, relationshipName]
+
+      this.ensureFrontendModelJoinPath({path: relationshipPath, query})
+
+      if (relationshipJoin === true) continue
+
+      this.applyFrontendModelJoinsForPath({
+        joins: relationshipJoin,
+        modelClass: targetModelClass,
+        path: relationshipPath,
+        query
+      })
+    }
   }
 
   /**
