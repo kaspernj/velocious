@@ -1,7 +1,21 @@
 version: 2
 updates:
 - package-ecosystem: npm
-  directory: "/"
+  directory: "/app"
+  schedule:
+    interval: weekly
+    time: "01:00"
+    timezone: Europe/Berlin
+  open-pull-requests-limit: 99
+- package-ecosystem: npm
+  directory: "/backend"
+  schedule:
+    interval: weekly
+    time: "01:00"
+    timezone: Europe/Berlin
+  open-pull-requests-limit: 99
+- package-ecosystem: npm
+  directory: "/system-tests"
   schedule:
     interval: weekly
     time: "01:00"
