@@ -1156,6 +1156,15 @@ export default class FrontendModelQuery {
    * @returns {Promise<InstanceType<T> | null>} - Last model matching query.
    */
   async last() {
+    // When pagination is already applied, fetch that scoped window and return its last item.
+    if (this._offset !== null || this._page !== null || this._perPage !== null) {
+      const models = await this.toArray()
+
+      if (models.length < 1) return null
+
+      return models[models.length - 1]
+    }
+
     const query = this.clone()
 
     if (query._sort.length < 1) {
@@ -1275,26 +1284,6 @@ export default class FrontendModelQuery {
     }
 
     return model
-  }
-
-  /**
-   * @returns {Promise<InstanceType<T> | null>} - First model or null.
-   */
-  async first() {
-    const models = await this.toArray()
-
-    return models[0] || null
-  }
-
-  /**
-   * @returns {Promise<InstanceType<T> | null>} - Last model or null.
-   */
-  async last() {
-    const models = await this.toArray()
-
-    if (models.length < 1) return null
-
-    return models[models.length - 1]
   }
 
   /**
