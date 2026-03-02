@@ -1533,7 +1533,7 @@ export default class FrontendModelController extends Controller {
           if (value.length === 0) {
             query.where("1=0")
           } else {
-            query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(entry)).join(", ")})`)
+            query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(this.normalizeFrontendModelWhereColumnValue(entry))).join(", ")})`)
           }
 
           continue
@@ -1542,7 +1542,7 @@ export default class FrontendModelController extends Controller {
         if (value == null) {
           query.where(`${columnSql} IS NULL`)
         } else {
-          query.where(`${columnSql} = ${query.driver.quote(value)}`)
+          query.where(`${columnSql} = ${query.driver.quote(this.normalizeFrontendModelWhereColumnValue(value))}`)
         }
 
         continue
@@ -1575,6 +1575,18 @@ export default class FrontendModelController extends Controller {
 
       throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
     }
+  }
+
+  /**
+   * @param {unknown} value - Where value.
+   * @returns {unknown} - SQL-safe where value.
+   */
+  normalizeFrontendModelWhereColumnValue(value) {
+    if (isPlainObject(value)) {
+      return JSON.stringify(value)
+    }
+
+    return value
   }
 
   /**
