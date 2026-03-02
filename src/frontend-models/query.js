@@ -1342,8 +1342,7 @@ export default class FrontendModelQuery {
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
    */
   async findBy(conditions) {
-    this.modelClass.assertFindByConditions(conditions)
-    const normalizedConditions = normalizeFindConditions(conditions)
+    const normalizedConditions = this.validatedStructuredConditions(conditions)
     const mergedWhere = {
       ...this._where,
       ...normalizedConditions
@@ -1397,11 +1396,12 @@ export default class FrontendModelQuery {
    * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
    */
   async findOrInitializeBy(conditions) {
+    const normalizedConditions = this.validatedStructuredConditions(conditions)
     const model = await this.findBy(conditions)
 
     if (model) return model
 
-    return /** @type {InstanceType<T>} */ (new this.modelClass(conditions))
+    return /** @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
   }
 
   /**
@@ -1410,11 +1410,12 @@ export default class FrontendModelQuery {
    * @returns {Promise<InstanceType<T>>} - Existing or newly created model.
    */
   async findOrCreateBy(conditions, callback) {
+    const normalizedConditions = this.validatedStructuredConditions(conditions)
     const model = await this.findBy(conditions)
 
     if (model) return model
 
-    const newModel = /** @type {InstanceType<T>} */ (new this.modelClass(conditions))
+    const newModel = /** @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
 
     if (callback) {
       await callback(newModel)
@@ -1423,5 +1424,15 @@ export default class FrontendModelQuery {
     await newModel.save()
 
     return newModel
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Candidate structured conditions.
+   * @returns {Record<string, any>} - Validated and normalized conditions.
+   */
+  validatedStructuredConditions(conditions) {
+    this.modelClass.assertFindByConditions(conditions)
+
+    return normalizeFindConditions(conditions)
   }
 }

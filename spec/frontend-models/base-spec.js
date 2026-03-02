@@ -1220,6 +1220,18 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("validates structured conditions for findOrInitializeBy/findOrCreateBy", async () => {
+    const User = buildTestModelClass()
+
+    await expect(async () => {
+      await User.findOrInitializeBy({email: undefined})
+    }).toThrow(/findBy does not support undefined condition values/)
+
+    await expect(async () => {
+      await User.findOrCreateBy({email: "new@example.com", metadata: /bad-regex/})
+    }).toThrow(/findBy does not support non-plain object condition values/)
+  })
+
   it("destroys a model", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({success: true})
