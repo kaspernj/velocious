@@ -368,6 +368,33 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("supports nested joins params without duplicating parent joins", async () => {
+    await Dummy.run(async () => {
+      await User.create({
+        email: "nested-join-owner@example.com",
+        encryptedPassword: "secret",
+        reference: "nested-join-owner"
+      })
+      const task = await createTaskWithProject({
+        creatingUserReference: "nested-join-owner",
+        projectName: "Nested join project",
+        taskName: "Nested join task"
+      })
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: {
+          project: {
+            creatingUser: true
+          }
+        },
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.id)).toEqual([task.id()])
+    })
+  })
+
   it("rejects raw string joins params", async () => {
     await Dummy.run(async () => {
       const payload = await postFrontendModel("/api/frontend-models/tasks/list", {

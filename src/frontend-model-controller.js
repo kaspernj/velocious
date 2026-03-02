@@ -1606,23 +1606,39 @@ export default class FrontendModelController extends Controller {
    * @returns {void}
    */
   applyFrontendModelJoins({joins, query}) {
+    const joinPathKeys = new Set()
+
     this.applyFrontendModelJoinsForPath({
       joins,
+      joinPathKeys,
       modelClass: this.frontendModelClass(),
       path: [],
       query
     })
+
+    query.joins(joins)
+
+    const joinedPaths = query[frontendModelJoinedPathsSymbol] || new Set()
+
+    for (const joinPathKey of joinPathKeys) {
+      joinedPaths.add(joinPathKey)
+    }
+
+    query[frontendModelJoinedPathsSymbol] = joinedPaths
   }
 
   /**
    * @param {object} args - Joins args.
    * @param {Record<string, any>} args.joins - Joins for current path.
+   * @param {Set<string>} args.joinPathKeys - Joined path keys.
    * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class for current path.
    * @param {string[]} args.path - Relationship path.
    * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
    * @returns {void}
    */
-  applyFrontendModelJoinsForPath({joins, modelClass, path, query}) {
+  applyFrontendModelJoinsForPath({joins, joinPathKeys, modelClass, path, query}) {
+    void query
+
     for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
       const relationship = modelClass.getRelationshipsMap()[relationshipName]
 
@@ -1637,13 +1653,13 @@ export default class FrontendModelController extends Controller {
       }
 
       const relationshipPath = [...path, relationshipName]
-
-      this.ensureFrontendModelJoinPath({path: relationshipPath, query})
+      joinPathKeys.add(relationshipPath.join("."))
 
       if (relationshipJoin === true) continue
 
       this.applyFrontendModelJoinsForPath({
         joins: relationshipJoin,
+        joinPathKeys,
         modelClass: targetModelClass,
         path: relationshipPath,
         query
