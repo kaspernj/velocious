@@ -1,7 +1,6 @@
 // @ts-check
 
 import * as inflection from "inflection"
-import FrontendModelController from "../../frontend-model-controller.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
 
@@ -18,7 +17,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      controllerClass: FrontendModelController
+      controllerPath: "../frontend-model-controller.js"
     }
   }
 
