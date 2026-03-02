@@ -61,27 +61,27 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 function frontendModelActionForCommand({commandName, modelName, resourceConfiguration}) {
   const commands = {
     create: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands?.create || "create",
+      commandName: resourceConfiguration.commands?.create ?? "create",
       commandType: "create",
       modelName
     }),
     destroy: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands?.destroy || "destroy",
+      commandName: resourceConfiguration.commands?.destroy ?? "destroy",
       commandType: "destroy",
       modelName
     }),
     find: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands?.find || "find",
+      commandName: resourceConfiguration.commands?.find ?? "find",
       commandType: "find",
       modelName
     }),
     index: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands?.index || "index",
+      commandName: resourceConfiguration.commands?.index ?? "index",
       commandType: "index",
       modelName
     }),
     update: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands?.update || "update",
+      commandName: resourceConfiguration.commands?.update ?? "update",
       commandType: "update",
       modelName
     })

@@ -763,7 +763,7 @@ export default class FrontendModelBase {
    */
   static commandName(commandType) {
     const commands = this.resourceConfig().commands || {}
-    const commandName = commands[commandType] || commandType
+    const commandName = commands[commandType] ?? commandType
 
     return validateFrontendModelResourceCommandName({
       commandName,

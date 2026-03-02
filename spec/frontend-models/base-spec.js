@@ -340,6 +340,25 @@ describe("Frontend models - base", () => {
     }).toThrow(/Invalid frontend model command/)
   })
 
+  it("rejects empty command overrides in resourceConfig", async () => {
+    /** Model with empty command override. */
+    class EmptyCommandUser extends FrontendModelBase {
+      /** @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}} */
+      static resourceConfig() {
+        return {
+          attributes: ["id"],
+          commands: {index: ""},
+          path: "/api/frontend-models/users",
+          primaryKey: "id"
+        }
+      }
+    }
+
+    await expect(async () => {
+      await EmptyCommandUser.toArray()
+    }).toThrow(/Invalid frontend model command/)
+  })
+
   it("sends relationship-path where payload when using where(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
