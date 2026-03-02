@@ -170,3 +170,5 @@
 - Add frontend-model `order(...)` as an alias for query sorting so frontend model query naming aligns with backend model `order(...)` usage.
 - Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.
 - Add frontend-model query `pluck(...)` support with safe attribute/path normalization and backend metadata validation for relationship-aware plucks.
+- Add frontend-model query/base support for `first()` and `last()` with deterministic primary-key ordering and limit semantics.
+- Add frontend-model integration coverage for `first()`/`last()` over Node and browser transports, and remove the completed `first()`/`last()` item from `TODO.md`.

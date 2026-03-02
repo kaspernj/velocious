@@ -300,6 +300,66 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends deterministic primary-key ordering when using first()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})
+
+    try {
+      const user = await User.first()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            limit: 1,
+            sort: [
+              {
+                column: "id",
+                direction: "asc",
+                path: []
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("reverses explicit ordering when using last()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})
+
+    try {
+      const user = await User
+        .sort("-id")
+        .last()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            limit: 1,
+            sort: [
+              {
+                column: "id",
+                direction: "asc",
+                path: []
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("sends searches payload when using search(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})

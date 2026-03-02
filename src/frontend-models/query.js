@@ -746,6 +746,14 @@ function normalizeIntegerArgument(value, argumentName, {min}) {
 }
 
 /**
+ * @param {"asc" | "desc"} direction - Current sort direction.
+ * @returns {"asc" | "desc"} - Reversed direction.
+ */
+function reverseSortDirection(direction) {
+  return direction === "asc" ? "desc" : "asc"
+}
+
+/**
  * Query wrapper for frontend model commands.
  * @template {typeof import("./base.js").default} T
  */
@@ -956,6 +964,41 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {FrontendModelQuery<T>} - Cloned query instance.
+   */
+  clone() {
+    const newQuery = /** @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
+      modelClass: this.modelClass,
+      preload: normalizePreload(this._preload)
+    }))
+
+    newQuery._where = normalizeFindConditions(this._where)
+    newQuery._searches = this._searches.map((search) => ({
+      column: search.column,
+      operator: search.operator,
+      path: [...search.path],
+      value: search.value
+    }))
+    newQuery._select = normalizeSelect(this._select)
+    newQuery._sort = this._sort.map((sortEntry) => ({
+      column: sortEntry.column,
+      direction: sortEntry.direction,
+      path: [...sortEntry.path]
+    }))
+    newQuery._group = this._group.map((groupEntry) => ({
+      column: groupEntry.column,
+      path: [...groupEntry.path]
+    }))
+    newQuery._distinct = this._distinct
+    newQuery._limit = this._limit
+    newQuery._offset = this._offset
+    newQuery._page = this._page
+    newQuery._perPage = this._perPage
+
+    return newQuery
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload preload hash when present.
    */
   preloadPayload() {
@@ -1089,6 +1132,45 @@ export default class FrontendModelQuery {
     const models = await this.toArray()
 
     return models.length
+  }
+
+  /**
+   * @returns {Promise<InstanceType<T> | null>} - First model matching query.
+   */
+  async first() {
+    const query = this.clone()
+
+    if (query._sort.length < 1) {
+      query.sort([[this.modelClass.primaryKey(), "asc"]])
+    }
+
+    query.limit(1)
+
+    const models = await query.toArray()
+
+    return models[0] || null
+  }
+
+  /**
+   * @returns {Promise<InstanceType<T> | null>} - Last model matching query.
+   */
+  async last() {
+    const query = this.clone()
+
+    if (query._sort.length < 1) {
+      query.sort([[this.modelClass.primaryKey(), "desc"]])
+    } else {
+      query._sort = query._sort.map((sortEntry) => ({
+        ...sortEntry,
+        direction: reverseSortDirection(sortEntry.direction)
+      }))
+    }
+
+    query.limit(1)
+
+    const models = await query.toArray()
+
+    return models[0] || null
   }
 
   /**

@@ -264,6 +264,42 @@ describe("Frontend models - base browser integration", () => {
     }
   })
 
+  it("first()/last() apply deterministic ordering over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const firstModel = await BrowserFrontendModel.first()
+      const lastModel = await BrowserFrontendModel.last()
+
+      expect(firstModel?.id()).toEqual("1")
+      expect(lastModel?.id()).toEqual("2")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("last() reverses explicit sort order over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel
+        .sort("-createdAt")
+        .last()
+
+      expect(model?.id()).toEqual("1")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("limit(...).offset(...).toArray() paginates records through real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return

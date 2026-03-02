@@ -845,6 +845,24 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @returns {Promise<InstanceType<T> | null>} - First loaded model instance.
+   */
+  static async first() {
+    return await this.query().first()
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @returns {Promise<InstanceType<T> | null>} - Last loaded model instance.
+   */
+  static async last() {
+    return await this.query().last()
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @param {Record<string, any>} conditions - Root-model where conditions.
    * @returns {import("./query.js").default<T>} - Query with where conditions.
    */
