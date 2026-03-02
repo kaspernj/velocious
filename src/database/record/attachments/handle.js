@@ -4,19 +4,22 @@ import RecordAttachmentDownload from "./download.js"
 import {recordAttachmentsStoreForModel} from "./store.js"
 
 /**
- * @param {Record<string, any>} row - Raw row.
+ * @param {object} args - Options.
+ * @param {Record<string, any>} args.row - Raw row.
+ * @param {Buffer} args.content - Attachment bytes.
+ * @param {string | null} args.url - Attachment URL.
  * @returns {RecordAttachmentDownload} - Download payload.
  */
-function downloadFromRow(row) {
-  const contentBase64 = typeof row.content_base64 === "string" ? row.content_base64 : ""
+function downloadFromRow({content, row, url}) {
   const byteSize = Number(row.byte_size)
 
   return new RecordAttachmentDownload({
-    byteSize: Number.isFinite(byteSize) ? byteSize : Buffer.from(contentBase64, "base64").length,
-    content: Buffer.from(contentBase64, "base64"),
+    byteSize: Number.isFinite(byteSize) ? byteSize : content.length,
+    content,
     contentType: row.content_type ? String(row.content_type) : null,
     filename: row.filename ? String(row.filename) : "attachment.bin",
-    id: String(row.id)
+    id: String(row.id),
+    url
   })
 }
 
@@ -55,7 +58,19 @@ export default class RecordAttachmentHandle {
    * @returns {void} - Queues attachment write for next save.
    */
   queueAttach(input) {
-    if (this.type === "hasMany" && isArray(input)) {
+    if (this.type === "hasOne") {
+      if (isArray(input)) {
+        const lastInput = input[input.length - 1]
+
+        this.pendingInputs = typeof lastInput === "undefined" ? [] : [lastInput]
+      } else {
+        this.pendingInputs = [input]
+      }
+
+      return
+    }
+
+    if (isArray(input)) {
       for (const inputEntry of input) {
         this.pendingInputs.push(inputEntry)
       }
@@ -107,7 +122,12 @@ export default class RecordAttachmentHandle {
 
     if (!row) return null
 
-    return downloadFromRow(row)
+    const [content, url] = await Promise.all([
+      store.readAttachmentRow({model: this.model, name: this.name, row}),
+      store.attachmentRowUrl({model: this.model, name: this.name, row})
+    ])
+
+    return downloadFromRow({content, row, url})
   }
 
   /**
@@ -118,7 +138,33 @@ export default class RecordAttachmentHandle {
 
     const store = recordAttachmentsStoreForModel(this.model)
     const rows = await store.findMany({model: this.model, name: this.name})
+    /** @type {RecordAttachmentDownload[]} */
+    const downloads = []
 
-    return rows.map((row) => downloadFromRow(row))
+    for (const row of rows) {
+      const [content, url] = await Promise.all([
+        store.readAttachmentRow({model: this.model, name: this.name, row}),
+        store.attachmentRowUrl({model: this.model, name: this.name, row})
+      ])
+
+      downloads.push(downloadFromRow({content, row, url}))
+    }
+
+    return downloads
+  }
+
+  /**
+   * @param {string} [id] - Optional attachment id for has-many attachments.
+   * @returns {Promise<string | null>} - Resolvable attachment URL.
+   */
+  async url(id) {
+    if (!this.model.isPersisted()) return null
+
+    const store = recordAttachmentsStoreForModel(this.model)
+    const row = await store.findOne({id, model: this.model, name: this.name})
+
+    if (!row) return null
+
+    return await store.attachmentRowUrl({model: this.model, name: this.name, row})
   }
 }

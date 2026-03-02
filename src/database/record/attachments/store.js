@@ -2,12 +2,15 @@
 
 import {randomUUID} from "crypto"
 import TableData from "../../table-data/index.js"
+import FilesystemAttachmentStorageDriver from "./storage-drivers/filesystem.js"
+import NativeAttachmentStorageDriver from "./storage-drivers/native.js"
 import normalizeRecordAttachmentInput from "./normalize-input.js"
+import S3AttachmentStorageDriver from "./storage-drivers/s3.js"
 
 const ATTACHMENTS_TABLE = "velocious_attachments"
 
-/** @type {Map<string, RecordAttachmentsStore>} */
-const storesByDatabaseIdentifier = new Map()
+/** @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */
+const storesByConfiguration = new WeakMap()
 
 /**
  * @param {import("../index.js").default} model - Model instance.
@@ -22,13 +25,21 @@ function storeKeyForModel(model) {
  * @returns {RecordAttachmentsStore} - Store instance.
  */
 export function recordAttachmentsStoreForModel(model) {
+  const configuration = model._getConfiguration()
+  let storesByDatabaseIdentifier = storesByConfiguration.get(configuration)
+
+  if (!storesByDatabaseIdentifier) {
+    storesByDatabaseIdentifier = new Map()
+    storesByConfiguration.set(configuration, storesByDatabaseIdentifier)
+  }
+
   const key = storeKeyForModel(model)
   let store = storesByDatabaseIdentifier.get(key)
 
   if (store) return store
 
   store = new RecordAttachmentsStore({
-    configuration: model._getConfiguration(),
+    configuration,
     databaseIdentifier: model.getModelClass().getDatabaseIdentifier()
   })
 
@@ -50,6 +61,10 @@ export default class RecordAttachmentsStore {
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
     this._readyPromise = null
+    this._driverColumnsAvailable = false
+    this._contentBase64Nullable = true
+    /** @type {Map<string, Record<string, any>>} */
+    this._attachmentDriversByName = new Map()
   }
 
   /**
@@ -63,7 +78,10 @@ export default class RecordAttachmentsStore {
 
     this._readyPromise = (async () => {
       await this._withDb(async (db) => {
-        if (await db.tableExists(ATTACHMENTS_TABLE)) return
+        if (await db.tableExists(ATTACHMENTS_TABLE)) {
+          await this.ensureAttachmentStoreSchema({db})
+          return
+        }
 
         const table = new TableData(ATTACHMENTS_TABLE, {ifNotExists: true})
 
@@ -75,11 +93,15 @@ export default class RecordAttachmentsStore {
         table.string("filename", {null: false})
         table.string("content_type", {null: true})
         table.bigint("byte_size", {null: false})
-        table.text("content_base64", {null: false})
+        table.string("driver", {null: true})
+        table.string("storage_key", {null: true})
+        table.text("content_base64", {null: true})
         table.bigint("created_at_ms", {null: false})
         table.bigint("updated_at_ms", {null: false})
 
         await db.createTable(table)
+        this._driverColumnsAvailable = true
+        this._contentBase64Nullable = true
       })
     })()
 
@@ -100,14 +122,41 @@ export default class RecordAttachmentsStore {
    */
   async attach({input, model, name, replace}) {
     await this.ensureReady()
+    const attachmentsConfiguration = this.configuration.getAttachmentsConfiguration?.() || {}
+    const allowPathInput = attachmentsConfiguration.allowPathInput === true
+    const allowedPathPrefixes = Array.isArray(attachmentsConfiguration.allowedPathPrefixes)
+      ? attachmentsConfiguration.allowedPathPrefixes
+      : undefined
 
-    const normalizedInput = await normalizeRecordAttachmentInput(input)
+    const normalizedInput = await normalizeRecordAttachmentInput(input, {
+      allowPathInput,
+      allowedPathPrefixes
+    })
+    const attachmentDriverName = this._attachmentDriverNameFor({model, name})
+    const attachmentDriver = this.attachmentDriverByName(attachmentDriverName)
     const now = Date.now()
     const recordType = model.getModelClass().name
     const recordId = String(model.id())
+    const attachmentId = randomUUID()
+    const {storageKey} = await attachmentDriver.write({
+      attachmentId,
+      input: normalizedInput,
+      model,
+      name
+    })
 
     await this._withDb(async (db) => {
       if (replace) {
+        const existingRows = await db
+          .newQuery()
+          .from(ATTACHMENTS_TABLE)
+          .where({name, record_id: recordId, record_type: recordType})
+          .results()
+
+        for (const existingRow of existingRows) {
+          await this.deleteAttachmentRowStorage({model, name, row: existingRow})
+        }
+
         await db.delete({
           conditions: {name, record_id: recordId, record_type: recordType},
           tableName: ATTACHMENTS_TABLE
@@ -115,23 +164,120 @@ export default class RecordAttachmentsStore {
       }
 
       const position = replace ? 0 : await this._nextPosition({db, name, recordId, recordType})
+      /** @type {Record<string, any>} */
+      const insertData = {
+        byte_size: normalizedInput.byteSize,
+        content_base64: this._contentBase64Nullable ? null : normalizedInput.contentBase64,
+        content_type: normalizedInput.contentType,
+        created_at_ms: now,
+        filename: normalizedInput.filename,
+        id: attachmentId,
+        name,
+        position,
+        record_id: recordId,
+        record_type: recordType,
+        updated_at_ms: now
+      }
+
+      if (this._driverColumnsAvailable) {
+        insertData.driver = attachmentDriverName
+        insertData.storage_key = storageKey
+      }
 
       await db.insert({
-        data: {
-          byte_size: normalizedInput.byteSize,
-          content_base64: normalizedInput.contentBase64,
-          content_type: normalizedInput.contentType,
-          created_at_ms: now,
-          filename: normalizedInput.filename,
-          id: randomUUID(),
-          name,
-          position,
-          record_id: recordId,
-          record_type: recordType,
-          updated_at_ms: now
-        },
+        data: insertData,
         tableName: ATTACHMENTS_TABLE
       })
+    })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("../../../database/drivers/base.js").default} args.db - DB connection.
+   * @returns {Promise<void>} - Resolves when schema columns are ensured.
+   */
+  async ensureAttachmentStoreSchema({db}) {
+    const table = await db.getTableByNameOrFail(ATTACHMENTS_TABLE)
+    const columns = await table.getColumns()
+    const hasDriverColumn = columns.some((column) => column.getName() === "driver")
+    const hasStorageKeyColumn = columns.some((column) => column.getName() === "storage_key")
+    const contentBase64Column = columns.find((column) => column.getName() === "content_base64")
+    const alterTable = new TableData(ATTACHMENTS_TABLE)
+    let shouldAlter = false
+
+    if (!hasDriverColumn) {
+      alterTable.string("driver", {null: true})
+      shouldAlter = true
+    }
+
+    if (!hasStorageKeyColumn) {
+      alterTable.string("storage_key", {null: true})
+      shouldAlter = true
+    }
+
+    if (shouldAlter) {
+      const alterTableSQLs = await db.alterTableSQLs(alterTable)
+
+      for (const sql of alterTableSQLs) {
+        await db.query(sql)
+      }
+    }
+
+    this._driverColumnsAvailable = true
+    this._contentBase64Nullable = contentBase64Column ? contentBase64Column.getNull() : true
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @param {Record<string, any>} args.row - Attachment row.
+   * @returns {Promise<Buffer>} - Attachment bytes.
+   */
+  async readAttachmentRow({model, name, row}) {
+    if (typeof row.content_base64 === "string" && row.content_base64.length > 0) {
+      return Buffer.from(row.content_base64, "base64")
+    }
+
+    const storageKey = typeof row.storage_key === "string" && row.storage_key.length > 0 ? row.storage_key : null
+
+    if (!storageKey) {
+      throw new Error(`Attachment row ${String(row.id)} is missing storage key`)
+    }
+
+    const attachmentDriver = this.attachmentDriverForRow(row)
+
+    return await attachmentDriver.read({
+      model,
+      name,
+      row,
+      storageKey
+    })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @param {Record<string, any>} args.row - Attachment row.
+   * @returns {Promise<string | null>} - Attachment URL.
+   */
+  async attachmentRowUrl({model, name, row}) {
+    const attachmentDriver = this.attachmentDriverForRow(row)
+
+    if (typeof attachmentDriver.url !== "function") return null
+
+    const storageKey = typeof row.storage_key === "string" && row.storage_key.length > 0
+      ? row.storage_key
+      : (typeof row.id === "string" ? row.id : "")
+
+    if (!storageKey) return null
+
+    return await attachmentDriver.url({
+      model,
+      name,
+      row,
+      storageKey
     })
   }
 
@@ -187,6 +333,119 @@ export default class RecordAttachmentsStore {
 
       return await query.results()
     })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @param {Record<string, any>} args.row - Attachment row.
+   * @returns {Promise<void>} - Resolves when row storage has been deleted.
+   */
+  async deleteAttachmentRowStorage({model, name, row}) {
+    const storageKey = typeof row.storage_key === "string" && row.storage_key.length > 0 ? row.storage_key : null
+
+    if (!storageKey) return
+
+    const attachmentDriver = this.attachmentDriverForRow(row)
+
+    if (typeof attachmentDriver.delete !== "function") return
+
+    await attachmentDriver.delete({
+      model,
+      name,
+      row,
+      storageKey
+    })
+  }
+
+  /**
+   * @param {string} driverName - Driver name.
+   * @returns {Record<string, any>} - Attachment storage driver instance.
+   */
+  attachmentDriverByName(driverName) {
+    if (this._attachmentDriversByName.has(driverName)) {
+      return /** @type {Record<string, any>} */ (this._attachmentDriversByName.get(driverName))
+    }
+
+    const attachmentConfiguration = this.configuration.getAttachmentsConfiguration?.() || {}
+    const configuredDriver = attachmentConfiguration.drivers?.[driverName] || {}
+    /** @type {Record<string, any>} */
+    let attachmentDriver
+
+    if (configuredDriver.instance && typeof configuredDriver.instance === "object") {
+      attachmentDriver = configuredDriver.instance
+    } else if (typeof configuredDriver.driverClass === "function") {
+      attachmentDriver = new configuredDriver.driverClass({
+        configuration: this.configuration,
+        name: driverName,
+        options: configuredDriver
+      })
+    } else if (typeof configuredDriver.create === "function") {
+      attachmentDriver = configuredDriver.create({
+        configuration: this.configuration,
+        name: driverName,
+        options: configuredDriver
+      })
+    } else if (driverName === "filesystem") {
+      attachmentDriver = new FilesystemAttachmentStorageDriver({
+        configuration: this.configuration,
+        options: configuredDriver
+      })
+    } else if (driverName === "native") {
+      attachmentDriver = new NativeAttachmentStorageDriver({
+        name: driverName,
+        options: configuredDriver
+      })
+    } else if (driverName === "s3") {
+      attachmentDriver = new S3AttachmentStorageDriver({options: configuredDriver})
+    } else {
+      throw new Error(`Unknown attachment storage driver: ${driverName}`)
+    }
+
+    if (!attachmentDriver || typeof attachmentDriver.write !== "function" || typeof attachmentDriver.read !== "function") {
+      throw new Error(`Attachment storage driver "${driverName}" must implement write/read`)
+    }
+
+    this._attachmentDriversByName.set(driverName, attachmentDriver)
+
+    return attachmentDriver
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @returns {string} - Attachment driver name.
+   */
+  _attachmentDriverNameFor({model, name}) {
+    const attachmentDefinition = model.getModelClass().getAttachmentByName(name)
+    const configuredDriverName = attachmentDefinition.driver
+
+    if (typeof configuredDriverName === "string" && configuredDriverName.length > 0) {
+      return configuredDriverName
+    }
+
+    const attachmentsConfiguration = this.configuration.getAttachmentsConfiguration?.() || {}
+    const defaultDriver = attachmentsConfiguration.defaultDriver
+
+    if (typeof defaultDriver === "string" && defaultDriver.length > 0) {
+      return defaultDriver
+    }
+
+    return "filesystem"
+  }
+
+  /**
+   * @param {Record<string, any>} row - Attachment row.
+   * @returns {Record<string, any>} - Attachment storage driver instance.
+   */
+  attachmentDriverForRow(row) {
+    const driverName = typeof row.driver === "string" && row.driver.length > 0
+      ? row.driver
+      : "filesystem"
+
+    return this.attachmentDriverByName(driverName)
   }
 
   /**

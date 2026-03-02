@@ -41,6 +41,26 @@ function isArrayBufferLike(value) {
 }
 
 /**
+ * @param {string} filePath - File path.
+ * @param {string[]} allowedPathPrefixes - Allowed path prefixes.
+ * @returns {boolean} - Whether path is allowed.
+ */
+function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
+  const resolvedPath = path.resolve(filePath)
+
+  return allowedPathPrefixes.some((allowedPrefix) => {
+    const resolvedPrefix = path.resolve(allowedPrefix)
+    const relativePath = path.relative(resolvedPrefix, resolvedPath)
+
+    if (!relativePath) return true
+    if (relativePath.startsWith("..")) return false
+    if (path.isAbsolute(relativePath)) return false
+
+    return true
+  })
+}
+
+/**
  * @param {Uint8Array | Buffer | ArrayBuffer | string} value - Value.
  * @returns {Buffer} - Buffer value.
  */
@@ -74,6 +94,7 @@ async function uploadedFileBuffer(uploadedFile) {
 /**
  * @typedef {object} NormalizedAttachmentInput
  * @property {number} byteSize - File size in bytes.
+ * @property {Buffer} contentBuffer - Raw content bytes.
  * @property {string} contentBase64 - Base64 encoded content.
  * @property {string | null} contentType - Content type.
  * @property {string} filename - Filename.
@@ -82,6 +103,8 @@ async function uploadedFileBuffer(uploadedFile) {
 /**
  * @param {unknown} input - Attachment input.
  * @param {object} [args] - Options.
+ * @param {boolean} [args.allowPathInput] - Whether `{path: ...}` input is allowed.
+ * @param {string[]} [args.allowedPathPrefixes] - Optional allowlist for path input.
  * @param {string} [args.defaultFilename] - Optional default filename.
  * @returns {Promise<NormalizedAttachmentInput>} - Normalized attachment input.
  */
@@ -99,7 +122,18 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     filename = input.filename()
     contentType = input.contentType() || null
   } else if (isPlainObject(input) && typeof input.path === "string" && input.path.length > 0) {
+    if (args.allowPathInput !== true) {
+      throw new Error("Attachment path input is disabled")
+    }
+
     const filePath = path.resolve(input.path)
+    const allowedPathPrefixes = Array.isArray(args.allowedPathPrefixes)
+      ? args.allowedPathPrefixes.filter((entry) => typeof entry === "string" && entry.length > 0)
+      : []
+
+    if (allowedPathPrefixes.length > 0 && !pathWithinAllowedPrefixes(filePath, allowedPathPrefixes)) {
+      throw new Error("Attachment path is outside allowed directories")
+    }
 
     buffer = await fs.readFile(filePath)
     filename = typeof input.filename === "string" && input.filename.length > 0 ? input.filename : path.basename(filePath)
@@ -133,6 +167,7 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
 
   return {
     byteSize: buffer.length,
+    contentBuffer: buffer,
     contentBase64: buffer.toString("base64"),
     contentType,
     filename: normalizedFilename

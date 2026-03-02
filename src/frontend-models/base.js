@@ -4,7 +4,7 @@ import FrontendModelQuery from "./query.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
-/** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download"} FrontendModelCommandType */
+/** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
 /**
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
@@ -210,13 +210,15 @@ export class FrontendModelAttachmentDownload {
    * @param {string | null} args.contentType - Content type.
    * @param {number} args.byteSize - File size in bytes.
    * @param {Uint8Array} args.content - File content bytes.
+   * @param {string | null} [args.url] - Resolvable attachment URL.
    */
-  constructor({byteSize, content, contentType, filename, id}) {
+  constructor({byteSize, content, contentType, filename, id, url = null}) {
     this.idValue = id
     this.filenameValue = filename
     this.contentTypeValue = contentType
     this.byteSizeValue = byteSize
     this.contentValue = content
+    this.urlValue = url
   }
 
   /** @returns {number} - File size in bytes. */
@@ -229,6 +231,8 @@ export class FrontendModelAttachmentDownload {
   filename() { return this.filenameValue }
   /** @returns {string} - Attachment id. */
   id() { return this.idValue }
+  /** @returns {string | null} - Resolvable attachment URL. */
+  url() { return this.urlValue }
 }
 
 /**
@@ -327,18 +331,13 @@ async function normalizeFrontendAttachmentInput(input) {
 
     if (typeof input.filename === "string" && input.filename.length > 0) merged.filename = input.filename
     if (typeof input.contentType === "string" && input.contentType.length > 0) merged.contentType = input.contentType
-    if (typeof input.path === "string" && input.path.length > 0) merged.path = input.path
 
     return merged
   }
 
   if (frontendAttachmentValueIsPlainObject(input)) {
     if (typeof input.path === "string" && input.path.length > 0) {
-      return {
-        contentType: typeof input.contentType === "string" && input.contentType.length > 0 ? input.contentType : null,
-        filename: typeof input.filename === "string" && input.filename.length > 0 ? input.filename : undefined,
-        path: input.path
-      }
+      throw new Error("Attachment path input is not supported in frontend models")
     }
 
     if (typeof input.contentBase64 === "string") {
@@ -437,8 +436,50 @@ export class FrontendModelAttachmentHandle {
       content,
       contentType: typeof attachmentPayload.contentType === "string" && attachmentPayload.contentType.length > 0 ? attachmentPayload.contentType : null,
       filename: typeof attachmentPayload.filename === "string" && attachmentPayload.filename.length > 0 ? attachmentPayload.filename : "attachment.bin",
-      id: typeof attachmentPayload.id === "string" ? attachmentPayload.id : ""
+      id: typeof attachmentPayload.id === "string" ? attachmentPayload.id : "",
+      url: typeof attachmentPayload.url === "string" && attachmentPayload.url.length > 0 ? attachmentPayload.url : null
     })
+  }
+
+  /**
+   * @param {string} [attachmentId] - Optional attachment id for has-many attachments.
+   * @returns {Promise<string | null>} - Resolvable attachment URL.
+   */
+  async url(attachmentId) {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    /** @type {Record<string, any>} */
+    const payload = {
+      attachmentName: this.attachmentName,
+      id: this.model.primaryKeyValue()
+    }
+
+    if (attachmentId) {
+      payload.attachmentId = attachmentId
+    }
+
+    const response = await ModelClass.executeCommand("url", payload)
+
+    if (typeof response.url === "string" && response.url.length > 0) {
+      return response.url
+    }
+
+    return null
+  }
+
+  /**
+   * @returns {string} - Download URL for this attachment on the configured backend.
+   */
+  downloadUrl() {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const commandName = ModelClass.commandName("download")
+    const resourcePath = ModelClass.resourcePath()
+    const commandUrl = frontendModelCommandUrl(resourcePath, commandName)
+    const params = new URLSearchParams({
+      attachmentName: this.attachmentName,
+      id: String(this.model.primaryKeyValue())
+    })
+
+    return `${commandUrl}?${params.toString()}`
   }
 }
 

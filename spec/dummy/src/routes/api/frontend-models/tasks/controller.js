@@ -13,6 +13,11 @@ export default class ApiFrontendModelsTasksController extends FrontendModelContr
   }
 
   /** @returns {Promise<void>} */
+  async url() {
+    await this.frontendUrl()
+  }
+
+  /** @returns {Promise<void>} */
   async list() {
     await this.frontendIndex()
   }

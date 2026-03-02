@@ -39,7 +39,7 @@ async function postFrontendModel(path, payload) {
 }
 
 /**
- * @param {"destroy" | "find" | "index" | "update" | "attach" | "download"} commandType - Command.
+ * @param {"destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
  * @param {Record<string, any>} payload - Command payload.
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
@@ -677,6 +677,50 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(downloadPayload.status).toEqual("success")
       expect(downloadPayload.attachment.filename).toEqual("endpoint.doc")
       expect(Buffer.from(downloadPayload.attachment.contentBase64, "base64").toString()).toEqual("endpoint-content")
+      expect(typeof downloadPayload.attachment.url).toEqual("string")
+      expect(downloadPayload.attachment.url.startsWith("file://")).toEqual(true)
+    })
+  })
+
+  it("returns attachment URL through frontend-model URL endpoint", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Attachment URL endpoint")
+
+      await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          contentBase64: Buffer.from("url-endpoint-content").toString("base64"),
+          filename: "url-endpoint.doc"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+
+      const urlPayload = await postFrontendModel("/api/frontend-models/tasks/url", {
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+
+      expect(urlPayload.status).toEqual("success")
+      expect(typeof urlPayload.url).toEqual("string")
+      expect(urlPayload.url.startsWith("file://")).toEqual(true)
+    })
+  })
+
+  it("rejects path attachment input from frontend endpoints by default", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Path input blocked")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          filename: "file.txt",
+          path: "/etc/passwd"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 

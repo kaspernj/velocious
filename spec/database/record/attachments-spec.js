@@ -50,4 +50,36 @@ describe("Record - attachments", {tags: ["dummy"]}, () => {
     expect(downloadedAttachments.map((attachment) => attachment.filename())).toEqual(["a.txt", "b.txt"])
     expect(downloadedAttachments.map((attachment) => attachment.content().toString())).toEqual(["A", "B"])
   })
+
+  it("returns a resolvable URL for attachments", async () => {
+    const project = await Project.create({name: "Attachment project"})
+    const task = await Task.create({name: "Attachment task", projectId: project.id()})
+
+    await task.descriptionFile().attach({
+      content: "url-content",
+      filename: "url.txt"
+    })
+
+    const attachmentUrl = await task.descriptionFile().url()
+    const downloadedAttachment = await task.descriptionFile().download()
+
+    expect(typeof attachmentUrl).toEqual("string")
+    expect(attachmentUrl.startsWith("file://")).toEqual(true)
+    expect(downloadedAttachment.url()).toEqual(attachmentUrl)
+  })
+
+  it("keeps only the latest queued has-one attachment before save", async () => {
+    const project = await Project.create({name: "Attachment project"})
+    const task = await Task.create({name: "Attachment task", projectId: project.id()})
+
+    task.setDescriptionFile({content: "first", filename: "first.txt"})
+    task.setDescriptionFile({content: "second", filename: "second.txt"})
+
+    await task.save()
+
+    const downloadedAttachment = await task.descriptionFile().download()
+
+    expect(downloadedAttachment.filename()).toEqual("second.txt")
+    expect(downloadedAttachment.content().toString()).toEqual("second")
+  })
 })

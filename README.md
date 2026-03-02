@@ -335,14 +335,49 @@ For backend models, you can declare attachment helpers directly:
 ```js
 Task.hasManyAttachments("files")
 Task.hasOneAttachment("descriptionFile")
+Task.hasOneAttachment("archivedPdf", {driver: "s3"})
 ```
 
 Then use them from backend records:
 
 ```js
 await task.descriptionFile().attach({path: "/path/to/file.doc"})
+const descriptionFileUrl = await task.descriptionFile().url()
 await task.update({
   descriptionFile: {path: "/path/to/file.doc", filename: "my-doc.doc"}
+})
+```
+
+Configure attachment storage drivers in `Configuration`:
+
+```js
+export default new Configuration({
+  attachments: {
+    defaultDriver: "filesystem",
+    drivers: {
+      filesystem: {
+        directory: "/tmp/velocious-attachments"
+      },
+      native: {
+        write: async ({attachmentId, contentBase64, filename}) => {
+          // Persist using your native file API and return a storage key
+          return {storageKey: `${attachmentId}-${filename}`}
+        },
+        read: async ({storageKey}) => {
+          // Return Buffer, Uint8Array, ArrayBuffer or base64 string
+          return await readNativeFile(storageKey)
+        },
+        url: async ({storageKey}) => {
+          return `file://${storageKey}`
+        }
+      },
+      s3: {
+        bucket: "my-bucket",
+        region: "eu-west-1",
+        signedUrlExpiresIn: 3600
+      }
+    }
+  }
 })
 ```
 
@@ -351,6 +386,7 @@ For frontend models, configure `resourceConfig().attachments` and use:
 ```js
 await frontendTask.update({descriptionFile: file})
 const descriptionFile = await frontendTask.descriptionFile().download()
+const descriptionFileUrl = await frontendTask.descriptionFile().url()
 await frontendTask.attach(file)
 ```
 

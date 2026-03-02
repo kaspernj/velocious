@@ -1101,7 +1101,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {string} - Ability action configured for the frontend action.
    */
   frontendModelAbilityAction(action) {
@@ -1119,7 +1119,7 @@ export default class FrontendModelController extends Controller {
 
     const abilityKey = action === "attach"
       ? "update"
-      : (action === "download" ? "find" : action)
+      : ((action === "download" || action === "url") ? "find" : action)
     const abilityAction = abilities[abilityKey]
 
     if (typeof abilityAction !== "string" || abilityAction.length < 1) {
@@ -1130,7 +1130,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {import("./database/query/model-class-query.js").default<any>} - Authorized query for the action.
    */
   frontendModelAuthorizedQuery(action) {
@@ -1151,7 +1151,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {object} args - Arguments.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download"} args.action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} args.action - Frontend action.
    * @param {import("./database/record/index.js").default[]} args.models - Candidate models.
    * @returns {Promise<import("./database/record/index.js").default[]>} - Authorized models.
    */
@@ -1167,7 +1167,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {Promise<boolean>} - Whether action should continue.
    */
   async runFrontendModelBeforeAction(action) {
@@ -1178,7 +1178,7 @@ export default class FrontendModelController extends Controller {
     const modelClass = this.frontendModelClass()
     const beforeAction = action === "attach"
       ? "update"
-      : (action === "download" ? "find" : action)
+      : ((action === "download" || action === "url") ? "find" : action)
     const result = await serverConfiguration.beforeAction({
       action: beforeAction,
       controller: this,
@@ -1190,7 +1190,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"find" | "update" | "destroy" | "attach" | "download"} action - Frontend action.
+   * @param {"find" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @param {string | number} id - Record id.
    * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
    */
@@ -1202,7 +1202,7 @@ export default class FrontendModelController extends Controller {
     if (serverConfiguration?.find) {
       const findAction = action === "attach"
         ? "update"
-        : (action === "download" ? "find" : action)
+        : ((action === "download" || action === "url") ? "find" : action)
       const model = await serverConfiguration.find({
         action: findAction,
         controller: this,
@@ -2226,7 +2226,7 @@ export default class FrontendModelController extends Controller {
    * @param {object} args - Error log args.
    * @param {string} args.action - Endpoint/action label.
    * @param {unknown} args.error - Caught error.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download"} [args.commandType] - Frontend-model command type.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} [args.commandType] - Frontend-model command type.
    * @param {string | undefined} [args.model] - Request model name when available.
    * @param {string | undefined} [args.requestId] - Batch request id when available.
    * @returns {Promise<void>} - Resolves after logging.
@@ -2256,7 +2256,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {Promise<void>} - Resolves when response has been rendered.
    */
   async frontendModelRenderCommandResponse(action) {
@@ -2278,7 +2278,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {Promise<Record<string, any> | null>} - Response payload.
    */
   async frontendModelCommandPayload(action) {
@@ -2416,9 +2416,36 @@ export default class FrontendModelController extends Controller {
           contentBase64: downloadedAttachment.content().toString("base64"),
           contentType: downloadedAttachment.contentType(),
           filename: downloadedAttachment.filename(),
-          id: downloadedAttachment.id()
+          id: downloadedAttachment.id(),
+          url: downloadedAttachment.url()
         },
         status: "success"
+      }
+    }
+
+    if (action === "url") {
+      const attachmentName = params.attachmentName
+      const attachmentId = typeof params.attachmentId === "string" ? params.attachmentId : undefined
+
+      if (typeof attachmentName !== "string" || attachmentName.length < 1) {
+        return this.frontendModelErrorPayload("Expected attachmentName.")
+      }
+
+      const model = await this.frontendModelFindRecord("url", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const url = await model.getAttachmentByName(attachmentName).url(attachmentId)
+
+      if (!url) {
+        return this.frontendModelErrorPayload("Attachment URL not available.")
+      }
+
+      return {
+        status: "success",
+        url
       }
     }
 
@@ -2542,7 +2569,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      if (!["index", "find", "create", "update", "destroy", "attach", "download"].includes(commandType)) {
+      if (!["index", "find", "create", "update", "destroy", "attach", "download", "url"].includes(commandType)) {
         responses.push({
           requestId,
           response: this.frontendModelErrorPayload("Expected request commandType.")
@@ -2637,6 +2664,16 @@ export default class FrontendModelController extends Controller {
     }
 
     await this.frontendModelRenderCommandResponse("download")
+  }
+
+  /** @returns {Promise<void>} - Member URL action for frontend model resources. */
+  async frontendUrl() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    await this.frontendModelRenderCommandResponse("url")
   }
 
   /** @returns {Promise<void>} - Member create action for frontend model resources. */

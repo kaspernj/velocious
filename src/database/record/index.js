@@ -101,11 +101,11 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Record<string, {type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
+   * @returns {Record<string, {driver?: string, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
    */
   static getAttachmentsMap() {
     if (!this._attachmentsMap) {
-      /** @type {Record<string, {type: "hasOne" | "hasMany"}>} */
+      /** @type {Record<string, {driver?: string, type: "hasOne" | "hasMany"}>} */
       this._attachmentsMap = {}
     }
 
@@ -344,7 +344,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Record<string, {type: "hasOne" | "hasMany"}>} - Attachment definitions.
+   * @returns {Record<string, {driver?: string, type: "hasOne" | "hasMany"}>} - Attachment definitions.
    */
   static getAttachments() {
     return this.getAttachmentsMap()
@@ -352,7 +352,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} attachmentName - Attachment name.
-   * @returns {{type: "hasOne" | "hasMany"}} - Attachment definition.
+   * @returns {{driver?: string, type: "hasOne" | "hasMany"}} - Attachment definition.
    */
   static getAttachmentByName(attachmentName) {
     const definition = this.getAttachmentsMap()[attachmentName]
@@ -495,14 +495,15 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} attachmentName - Attachment name.
    * @param {object} args - Attachment args.
+   * @param {string} [args.driver] - Attachment driver name.
    * @param {"hasOne" | "hasMany"} args.type - Attachment type.
    * @returns {void} - No return value.
    */
-  static _defineAttachment(attachmentName, {type}) {
+  static _defineAttachment(attachmentName, {driver, type}) {
     if (!attachmentName || typeof attachmentName !== "string") throw new Error(`Invalid attachment name: ${attachmentName}`)
     if (attachmentName in this.getAttachmentsMap()) throw new Error(`Attachment ${attachmentName} already exists`)
 
-    this.getAttachmentsMap()[attachmentName] = {type}
+    this.getAttachmentsMap()[attachmentName] = {driver, type}
 
     this.prototype[attachmentName] = function() {
       return this.getAttachmentByName(attachmentName)
@@ -517,19 +518,21 @@ class VelociousDatabaseRecord {
   /**
    * Adds a single attachment helper to the model.
    * @param {string} attachmentName - Attachment name.
+   * @param {{driver?: string}} [args] - Attachment options.
    * @returns {void} - No return value.
    */
-  static hasOneAttachment(attachmentName) {
-    this._defineAttachment(attachmentName, {type: "hasOne"})
+  static hasOneAttachment(attachmentName, args = {}) {
+    this._defineAttachment(attachmentName, {driver: args.driver, type: "hasOne"})
   }
 
   /**
    * Adds a collection attachment helper to the model.
    * @param {string} attachmentName - Attachment name.
+   * @param {{driver?: string}} [args] - Attachment options.
    * @returns {void} - No return value.
    */
-  static hasManyAttachments(attachmentName) {
-    this._defineAttachment(attachmentName, {type: "hasMany"})
+  static hasManyAttachments(attachmentName, args = {}) {
+    this._defineAttachment(attachmentName, {driver: args.driver, type: "hasMany"})
   }
 
   /**

@@ -11,13 +11,15 @@ export default class RecordAttachmentDownload {
    * @param {string | null} args.contentType - Content type.
    * @param {number} args.byteSize - File size in bytes.
    * @param {Buffer} args.content - File content.
+   * @param {string | null} [args.url] - Resolvable URL.
    */
-  constructor({byteSize, content, contentType, filename, id}) {
+  constructor({byteSize, content, contentType, filename, id, url = null}) {
     this.idValue = id
     this.filenameValue = filename
     this.contentTypeValue = contentType
     this.byteSizeValue = byteSize
     this.contentValue = content
+    this.urlValue = url
   }
 
   /** @returns {number} - File size in bytes. */
@@ -30,4 +32,6 @@ export default class RecordAttachmentDownload {
   filename() { return this.filenameValue }
   /** @returns {string} - Attachment id. */
   id() { return this.idValue }
+  /** @returns {string | null} - Resolvable attachment URL. */
+  url() { return this.urlValue }
 }

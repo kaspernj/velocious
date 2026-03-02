@@ -24,7 +24,7 @@ CREATE TABLE `uuid_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id
 
 CREATE TABLE `uuid_items` (`id` UUID PRIMARY KEY NOT NULL, `title` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE `velocious_attachments` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` VARCHAR(255) NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `content_base64` TEXT NOT NULL, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL);
+CREATE TABLE "velocious_attachments" (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` VARCHAR(255) NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `content_base64` TEXT NOT NULL, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255));
 
 CREATE UNIQUE INDEX `index_on_authentication_tokens_token` ON `authentication_tokens` (`user_token`);
 

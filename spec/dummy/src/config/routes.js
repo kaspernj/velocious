@@ -11,6 +11,7 @@ routes.draw((route) => {
       route.namespace("tasks", (route) => {
         route.post("attach")
         route.post("download")
+        route.post("url")
         route.post("list")
         route.post("find")
         route.post("update")
