@@ -183,3 +183,4 @@
 - Add frontend-model integration coverage for `first()`/`last()` over Node and browser transports, and remove the completed `first()`/`last()` item from `TODO.md`.
 
 - Add `VelociousError` with `safeToExpose` support and use it for frontend-model validation failures so safe `Invalid ...` messages are returned to clients while unexpected errors stay generic and fully logged server-side.
+- Add explicit allowlist validation for frontend-model `resourceConfig().path` and `resourceConfig().commands` (safe URL segments only) and enforce it in frontend command URLs plus backend autoroute resolution.

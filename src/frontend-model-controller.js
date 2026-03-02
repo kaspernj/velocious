@@ -2,6 +2,7 @@
 
 import Controller from "./controller.js"
 import * as inflection from "inflection"
+import {validateFrontendModelResourcePath} from "./frontend-models/resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import VelociousError from "./velocious-error.js"
 
@@ -1050,7 +1051,12 @@ export default class FrontendModelController extends Controller {
    * @returns {string} - Normalized resource path.
    */
   frontendModelResourcePath(modelName, resourceConfiguration) {
-    if (resourceConfiguration.path) return `/${resourceConfiguration.path.replace(/^\/+/, "")}`
+    if (resourceConfiguration.path) {
+      return validateFrontendModelResourcePath({
+        modelName,
+        resourcePath: `/${resourceConfiguration.path.replace(/^\/+/, "")}`
+      })
+    }
 
     return `/${inflection.dasherize(inflection.pluralize(modelName))}`
   }

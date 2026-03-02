@@ -302,6 +302,44 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("rejects unsafe resource path segments in resourceConfig", async () => {
+    /** Model with unsafe resource path. */
+    class UnsafePathUser extends FrontendModelBase {
+      /** @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}} */
+      static resourceConfig() {
+        return {
+          attributes: ["id"],
+          commands: {index: "index"},
+          path: "/api/frontend-models/users;drop",
+          primaryKey: "id"
+        }
+      }
+    }
+
+    await expect(async () => {
+      await UnsafePathUser.toArray()
+    }).toThrow(/Invalid frontend model resource path/)
+  })
+
+  it("rejects unsafe command segments in resourceConfig", async () => {
+    /** Model with unsafe command name. */
+    class UnsafeCommandUser extends FrontendModelBase {
+      /** @returns {{attributes: string[], commands: {index: string}, path: string, primaryKey: string}} */
+      static resourceConfig() {
+        return {
+          attributes: ["id"],
+          commands: {index: "index?raw=1"},
+          path: "/api/frontend-models/users",
+          primaryKey: "id"
+        }
+      }
+    }
+
+    await expect(async () => {
+      await UnsafeCommandUser.toArray()
+    }).toThrow(/Invalid frontend model command/)
+  })
+
   it("sends relationship-path where payload when using where(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})

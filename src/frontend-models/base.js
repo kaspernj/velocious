@@ -1,6 +1,7 @@
 // @ts-check
 
 import FrontendModelQuery from "./query.js"
+import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
 /** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
@@ -749,7 +750,10 @@ export default class FrontendModelBase {
 
     if (!path) throw new Error(`Missing resource path for ${this.name}`)
 
-    return path
+    return validateFrontendModelResourcePath({
+      modelName: this.name,
+      resourcePath: path
+    })
   }
 
   /**
@@ -759,8 +763,13 @@ export default class FrontendModelBase {
    */
   static commandName(commandType) {
     const commands = this.resourceConfig().commands || {}
+    const commandName = commands[commandType] || commandType
 
-    return commands[commandType] || commandType
+    return validateFrontendModelResourceCommandName({
+      commandName,
+      commandType,
+      modelName: this.name
+    })
   }
 
   /**
