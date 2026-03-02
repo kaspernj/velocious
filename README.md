@@ -351,10 +351,16 @@ Task.hasOneAttachment("mobileCache", {driver: new NativeDriver()})
 Then use them from backend records:
 
 ```js
-await task.descriptionFile().attach({path: "/path/to/file.doc"})
+await task.descriptionFile().attach({
+  content: "my file content",
+  filename: "file.doc"
+})
 const descriptionFileUrl = await task.descriptionFile().url()
 await task.update({
-  descriptionFile: {path: "/path/to/file.doc", filename: "my-doc.doc"}
+  descriptionFile: {
+    contentBase64: Buffer.from("my file content").toString("base64"),
+    filename: "my-doc.doc"
+  }
 })
 ```
 
@@ -364,6 +370,11 @@ Configure attachment storage drivers in `Configuration`:
 export default new Configuration({
   attachments: {
     defaultDriver: "filesystem",
+    // Path-based attachment input is disabled by default.
+    // Enable explicitly only when backend-side file ingestion is needed.
+    allowPathInput: false,
+    // Optional allowlist when allowPathInput is true.
+    allowedPathPrefixes: ["/var/app/uploads"],
     drivers: {
       filesystem: {
         directory: "/tmp/velocious-attachments"
@@ -391,6 +402,20 @@ export default new Configuration({
 })
 ```
 
+If you want backend-side path ingestion, enable it explicitly:
+
+```js
+new Configuration({
+  attachments: {
+    allowPathInput: true,
+    allowedPathPrefixes: ["/var/app/uploads"]
+  }
+})
+```
+
+Then `{path: "..."}`
+inputs are only accepted when the file resolves inside one of the allowed prefixes.
+
 For frontend models, configure `resourceConfig().attachments` and use:
 
 ```js
@@ -399,6 +424,9 @@ const descriptionFile = await frontendTask.descriptionFile().download()
 const descriptionFileUrl = await frontendTask.descriptionFile().url()
 await frontendTask.attach(file)
 ```
+
+Frontend model attachment input does not support `{path: ...}`.
+Use `File`/`Blob`/bytes/`contentBase64` payloads instead.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 

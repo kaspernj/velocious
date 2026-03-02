@@ -33,6 +33,15 @@
 - `isNewRecord()`, `isPersisted()`, `changes()`, and `isChanged()` are available on frontend model instances.
 - Relationship parity helpers are available via `loadRelationship(name)` / `setRelationship(name, value)` and generated `loadXxx` / `setXxx` methods where applicable.
 
+## Attachment support
+- Frontend models can define `resourceConfig().attachments` and use generated attachment handles:
+  - `await model.attachmentName().attach(fileLikeOrBase64Payload)`
+  - `const attachment = await model.attachmentName().download()`
+  - `const attachmentUrl = await model.attachmentName().url()`
+- Backend attachment command mapping supports `attach`, `download`, and `url` command names in resource `commands`.
+- Frontend attachment input supports `File`/`Blob` (`arrayBuffer()`), bytes, and `{contentBase64, filename?, contentType?}` payloads.
+- Frontend attachment input does not support `{path: ...}`.
+
 ## Condition validation rules
 - Reject `undefined` condition values.
 - Reject non-plain object condition values (for example `RegExp`, `Map`, `Set`, functions, symbols) to avoid weakened/ambiguous filters.
