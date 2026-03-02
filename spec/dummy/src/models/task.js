@@ -7,6 +7,8 @@ Task.belongsTo("project")
 Task.hasMany("interactions", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Task.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Task.hasMany("comments")
+Task.hasManyAttachments("files")
+Task.hasOneAttachment("descriptionFile")
 Task.validates("name", {presence: true, uniqueness: true})
 
 export default Task

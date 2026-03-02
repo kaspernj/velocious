@@ -39,7 +39,7 @@ async function postFrontendModel(path, payload) {
 }
 
 /**
- * @param {"destroy" | "find" | "index" | "update"} commandType - Command.
+ * @param {"destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
  * @param {Record<string, any>} payload - Command payload.
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
@@ -631,6 +631,96 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.status).toEqual("success")
       expect(payload.model.name).toEqual("Updated task")
       expect(persisted.name()).toEqual("Updated task")
+    })
+  })
+
+  it("updates models from frontendUpdate with has-one attachment payload", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Update attachment")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+        attributes: {
+          descriptionFile: {
+            contentBase64: Buffer.from("attachment-content").toString("base64"),
+            filename: "my-doc.doc"
+          }
+        },
+        id: task.id()
+      })
+
+      const downloadedAttachment = await task.descriptionFile().download()
+
+      expect(payload.status).toEqual("success")
+      expect(downloadedAttachment.filename()).toEqual("my-doc.doc")
+      expect(downloadedAttachment.content().toString()).toEqual("attachment-content")
+    })
+  })
+
+  it("attaches and downloads files through frontend-model attachment endpoints", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Attach endpoint")
+      const attachPayload = await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          contentBase64: Buffer.from("endpoint-content").toString("base64"),
+          filename: "endpoint.doc"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+      const downloadPayload = await postFrontendModel("/api/frontend-models/tasks/download", {
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+
+      expect(attachPayload.status).toEqual("success")
+      expect(attachPayload.model.id).toEqual(task.id())
+      expect(downloadPayload.status).toEqual("success")
+      expect(downloadPayload.attachment.filename).toEqual("endpoint.doc")
+      expect(Buffer.from(downloadPayload.attachment.contentBase64, "base64").toString()).toEqual("endpoint-content")
+      expect(typeof downloadPayload.attachment.url).toEqual("string")
+      expect(downloadPayload.attachment.url.startsWith("file://")).toEqual(true)
+    })
+  })
+
+  it("returns attachment URL through frontend-model URL endpoint", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Attachment URL endpoint")
+
+      await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          contentBase64: Buffer.from("url-endpoint-content").toString("base64"),
+          filename: "url-endpoint.doc"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+
+      const urlPayload = await postFrontendModel("/api/frontend-models/tasks/url", {
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+
+      expect(urlPayload.status).toEqual("success")
+      expect(typeof urlPayload.url).toEqual("string")
+      expect(urlPayload.url.startsWith("file://")).toEqual(true)
+    })
+  })
+
+  it("rejects path attachment input from frontend endpoints by default", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Path input blocked")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          filename: "file.txt",
+          path: "/etc/passwd"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 

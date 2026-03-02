@@ -56,13 +56,23 @@ export default async function frontendModelCommandRouteHook({configuration, curr
  * @param {string} args.commandName - Command path segment.
  * @param {string} args.modelName - Model class name.
  * @param {import("../../configuration-types.js").FrontendModelResourceConfiguration} args.resourceConfiguration - Resource configuration.
- * @returns {"destroy" | "find" | "index" | "create" | "update" | null} - Frontend action for command.
+ * @returns {"destroy" | "find" | "index" | "create" | "update" | "attach" | "download" | "url" | null} - Frontend action for command.
  */
 function frontendModelActionForCommand({commandName, modelName, resourceConfiguration}) {
   const commands = {
+    attach: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.attach ?? "attach",
+      commandType: "attach",
+      modelName
+    }),
     create: validateFrontendModelResourceCommandName({
       commandName: resourceConfiguration.commands?.create ?? "create",
       commandType: "create",
+      modelName
+    }),
+    download: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.download ?? "download",
+      commandType: "download",
       modelName
     }),
     destroy: validateFrontendModelResourceCommandName({
@@ -84,14 +94,22 @@ function frontendModelActionForCommand({commandName, modelName, resourceConfigur
       commandName: resourceConfiguration.commands?.update ?? "update",
       commandType: "update",
       modelName
+    }),
+    url: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.url ?? "url",
+      commandType: "url",
+      modelName
     })
   }
 
+  if (commandName === commands.attach) return "attach"
   if (commandName === commands.create) return "create"
+  if (commandName === commands.download) return "download"
   if (commandName === commands.destroy) return "destroy"
   if (commandName === commands.find) return "find"
   if (commandName === commands.index) return "index"
   if (commandName === commands.update) return "update"
+  if (commandName === commands.url) return "url"
 
   return null
 }

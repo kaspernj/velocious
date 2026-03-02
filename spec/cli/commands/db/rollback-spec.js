@@ -110,7 +110,8 @@ describe("Cli - Commands - db:rollback", () => {
           "tasks",
           "users",
           "uuid_interactions",
-          "uuid_items"
+          "uuid_items",
+          "velocious_attachments"
         ]
       )
 
@@ -147,7 +148,8 @@ describe("Cli - Commands - db:rollback", () => {
           "tasks",
           "users",
           "uuid_interactions",
-          "uuid_items"
+          "uuid_items",
+          "velocious_attachments"
         ]
       )
 
@@ -190,7 +192,8 @@ describe("Cli - Commands - db:rollback", () => {
           "tasks",
           "users",
           "uuid_interactions",
-          "uuid_items"
+          "uuid_items",
+          "velocious_attachments"
         ]
       )
 
@@ -228,7 +231,8 @@ describe("Cli - Commands - db:rollback", () => {
           "tasks",
           "users",
           "uuid_interactions",
-          "uuid_items"
+          "uuid_items",
+          "velocious_attachments"
         ]
       )
 

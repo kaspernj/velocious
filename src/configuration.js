@@ -33,12 +33,13 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
     this._abilityResources = abilityResources || []
     this._backgroundJobs = backgroundJobs
+    this._attachments = attachments || {}
     this._backendProjects = backendProjects || []
     this.cors = cors
     this._cookieSecret = cookieSecret
@@ -189,6 +190,9 @@ export default class VelociousConfiguration {
 
   /** @returns {import("./configuration-types.js").AbilityResolverType | undefined} - Ability resolver. */
   getAbilityResolver() { return this._abilityResolver }
+
+  /** @returns {import("./configuration-types.js").AttachmentsConfiguration} - Attachments configuration. */
+  getAttachmentsConfiguration() { return this._attachments || {} }
 
   /** @returns {import("./configuration-types.js").RouteResolverHookType[]} - Route resolver hooks. */
   getRouteResolverHooks() { return this._routeResolverHooks }

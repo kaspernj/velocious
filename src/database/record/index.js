@@ -14,6 +14,7 @@ import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
 import HasManyRelationship from "./relationships/has-many.js"
 import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
+import RecordAttachmentHandle from "./attachments/handle.js"
 import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
 import restArgsError from "../../utils/rest-args-error.js"
@@ -21,6 +22,10 @@ import singularizeModelName from "../../utils/singularize-model-name.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 import UUID from "pure-uuid"
+
+/**
+ * @typedef {new (...args: any[]) => Record<string, any>} AttachmentDriverConstructor
+ */
 
 class ValidationError extends Error {
   /**
@@ -99,6 +104,18 @@ class VelociousDatabaseRecord {
     return this._validatorTypes
   }
 
+  /**
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
+   */
+  static getAttachmentsMap() {
+    if (!this._attachmentsMap) {
+      /** @type {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} */
+      this._attachmentsMap = {}
+    }
+
+    return this._attachmentsMap
+  }
+
   /** @type {Record<string, any>} */
   _attributes = {}
 
@@ -113,6 +130,8 @@ class VelociousDatabaseRecord {
 
   /** @type {Record<string, import("./instance-relationships/base.js").default>} */
   _instanceRelationships = {}
+  /** @type {Record<string, RecordAttachmentHandle>} */
+  _attachments = {}
 
   /** @type {string | undefined} */
   __tableName = undefined
@@ -329,6 +348,25 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
+   */
+  static getAttachments() {
+    return this.getAttachmentsMap()
+  }
+
+  /**
+   * @param {string} attachmentName - Attachment name.
+   * @returns {{driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}} - Attachment definition.
+   */
+  static getAttachmentByName(attachmentName) {
+    const definition = this.getAttachmentsMap()[attachmentName]
+
+    if (!definition) throw new Error(`No attachment in ${this.name} called "${attachmentName}" in list: ${Object.keys(this.getAttachmentsMap()).join(", ")}`)
+
+    return definition
+  }
+
+  /**
    * @param {string} relationshipName - Relationship name.
    * @returns {import("./instance-relationships/base.js").default} - The relationship by name.
    */
@@ -352,6 +390,24 @@ class VelociousDatabaseRecord {
     }
 
     return this._instanceRelationships[relationshipName]
+  }
+
+  /**
+   * @param {string} attachmentName - Attachment name.
+   * @returns {RecordAttachmentHandle} - Attachment handle.
+   */
+  getAttachmentByName(attachmentName) {
+    if (!(attachmentName in this._attachments)) {
+      const attachmentDefinition = this.getModelClass().getAttachmentByName(attachmentName)
+
+      this._attachments[attachmentName] = new RecordAttachmentHandle({
+        model: this,
+        name: attachmentName,
+        type: attachmentDefinition.type
+      })
+    }
+
+    return this._attachments[attachmentName]
   }
 
   /**
@@ -438,6 +494,49 @@ class VelociousDatabaseRecord {
     const {scope, relationshipOptions} = this._normalizeRelationshipArgs(scopeOrOptions, options)
 
     return this._defineRelationship(relationshipName, Object.assign({type: "hasOne", scope}, relationshipOptions))
+  }
+
+  /**
+   * @param {string} attachmentName - Attachment name.
+   * @param {object} args - Attachment args.
+   * @param {string | AttachmentDriverConstructor | Record<string, any>} [args.driver] - Attachment driver name, class, or instance.
+   * @param {"hasOne" | "hasMany"} args.type - Attachment type.
+   * @returns {void} - No return value.
+   */
+  static _defineAttachment(attachmentName, {driver, type}) {
+    if (!attachmentName || typeof attachmentName !== "string") throw new Error(`Invalid attachment name: ${attachmentName}`)
+    if (attachmentName in this.getAttachmentsMap()) throw new Error(`Attachment ${attachmentName} already exists`)
+
+    this.getAttachmentsMap()[attachmentName] = {driver, type}
+
+    this.prototype[attachmentName] = function() {
+      return this.getAttachmentByName(attachmentName)
+    }
+
+    this.prototype[`set${inflection.camelize(attachmentName)}`] = function(newValue) {
+      this.getAttachmentByName(attachmentName).queueAttach(newValue)
+      return newValue
+    }
+  }
+
+  /**
+   * Adds a single attachment helper to the model.
+   * @param {string} attachmentName - Attachment name.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
+   * @returns {void} - No return value.
+   */
+  static hasOneAttachment(attachmentName, args = {}) {
+    this._defineAttachment(attachmentName, {driver: args.driver, type: "hasOne"})
+  }
+
+  /**
+   * Adds a collection attachment helper to the model.
+   * @param {string} attachmentName - Attachment name.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
+   * @returns {void} - No return value.
+   */
+  static hasManyAttachments(attachmentName, args = {}) {
+    this._defineAttachment(attachmentName, {driver: args.driver, type: "hasMany"})
   }
 
   /**
@@ -1113,6 +1212,7 @@ class VelociousDatabaseRecord {
         }
 
         await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
+        await this._autoSaveAttachments()
       })
     })
 
@@ -1244,6 +1344,19 @@ class VelociousDatabaseRecord {
       if (isNewRecord) {
         instanceRelationship.setPreloaded(true)
       }
+    }
+  }
+
+  /**
+   * @returns {Promise<void>} - Resolves when pending attachments have been saved.
+   */
+  async _autoSaveAttachments() {
+    for (const attachmentName in this._attachments) {
+      const attachment = this._attachments[attachmentName]
+
+      if (!attachment.hasPendingAttachments()) continue
+
+      await attachment.flushPendingAttachments()
     }
   }
 
