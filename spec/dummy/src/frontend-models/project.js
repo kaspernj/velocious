@@ -8,7 +8,7 @@ import Task from "./task.js"
  */
 /** Frontend model for Project. */
 export default class Project extends FrontendModelBase {
-  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
+  /** @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: [
@@ -16,6 +16,7 @@ export default class Project extends FrontendModelBase {
         "name",
       ],
       commands: {
+        create: "create",
         destroy: "destroy",
         find: "find",
         index: "index",
@@ -62,4 +63,7 @@ export default class Project extends FrontendModelBase {
 
   /** @returns {Array<import("./task.js").default>} - Loaded related models. */
   tasksLoaded() { return /** @type {Array<import("./task.js").default>} */ (this.getRelationshipByName("tasks").loaded()) }
+
+  /** @returns {Promise<Array<import("./task.js").default>>} - Loaded related models. */
+  async loadTasks() { return /** @type {Promise<Array<import("./task.js").default>>} */ (this.loadRelationship("tasks")) }
 }

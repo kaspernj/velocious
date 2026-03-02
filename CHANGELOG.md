@@ -165,10 +165,15 @@
 - Apply the dummy Task frontend-model ability resolver fix across all tracked peakflow test configs (`mariadb`/`sqlite`/`pgsql`/`mssql`) so CI environments load it regardless of selected test database.
 - Add nested relationship tuple-operator support to database `where(...)` hashes (including `like`), enabling queries such as `Event.where({translations: [["name", "like", "%foo%"]]})` and deep chains like `Task.where({project: {account: [["name", "like", "%bar%"], ["createdAt", "gteq", someDate]]}})`.
 - Fix frontend-model relationship-path sorting joins by tracking joined paths per query, ensuring sort/search `ORDER BY` columns always have matching SQL joins without duplicate join clauses.
+- Add frontend-model parity APIs (`all`, `order`, `first`, `last`, `findOrInitializeBy`, `findOrCreateBy`, `create`, `save`, record state helpers) and add built-in frontend-model `create` command/action support with resource-ability scoping (including shared `/velocious/api` batches and autoroutes).
 - Regenerate dummy frontend models so single-tag JSDoc blocks (including relationship `@returns` definitions) are emitted on one line.
 - Add frontend-model query `group(...)` support with safe attribute/path normalization (including nested relationship grouping like `{project: {account: ["id"]}}`) and reject SQL-like raw string fragments.
 - Add frontend-model `order(...)` as an alias for query sorting so frontend model query naming aligns with backend model `order(...)` usage.
 - Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.
 - Add frontend-model query `pluck(...)` support with safe attribute/path normalization and backend metadata validation for relationship-aware plucks.
+- Replace non-literal dynamic import in frontend-model route hook with a static controller import so Expo/Metro builds do not fail on `import(variable)` usage.
+- Restore frontend-model parity APIs after merge resolution (`first`/`last`, `findOrInitializeBy`/`findOrCreateBy`, `isNewRecord`/`isPersisted`, relationship parity helpers, create/save flows) and re-add query helpers so `FrontendModelBase` and `FrontendModelQuery` stay API-compatible.
+- Validate missing ids for `find`/`update`/`destroy` frontend-model actions while keeping `create` id-free, so missing-id find requests return `Expected model id.` instead of an incorrect not-found response.
+- Avoid eagerly importing `FrontendModelController` in the frontend-model route hook; return a `controllerPath` override for `/velocious/api` so browser-test bundling no longer pulls Node-only controller dependencies (`ejs`, `crypto`, `node:path`, etc.) into the browser graph.
 - Add frontend-model query/base support for `first()` and `last()` with deterministic primary-key ordering and limit semantics.
 - Add frontend-model integration coverage for `first()`/`last()` over Node and browser transports, and remove the completed `first()`/`last()` item from `TODO.md`.

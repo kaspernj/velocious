@@ -14,13 +14,10 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   const normalizedCurrentPath = normalizePath(currentPath)
 
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
-    const frontendModelControllerSpecifier = ["..", "..", "frontend-model-controller.js"].join("/")
-    const frontendModelControllerModule = await import(frontendModelControllerSpecifier)
-
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      controllerClass: frontendModelControllerModule.default
+      controllerPath: "../frontend-model-controller.js"
     }
   }
 
@@ -57,16 +54,18 @@ export default async function frontendModelCommandRouteHook({configuration, curr
  * @param {object} args - Arguments.
  * @param {string} args.commandName - Command path segment.
  * @param {import("../../configuration-types.js").FrontendModelResourceConfiguration} args.resourceConfiguration - Resource configuration.
- * @returns {"destroy" | "find" | "index" | "update" | null} - Frontend action for command.
+ * @returns {"destroy" | "find" | "index" | "create" | "update" | null} - Frontend action for command.
  */
 function frontendModelActionForCommand({commandName, resourceConfiguration}) {
   const commands = {
+    create: resourceConfiguration.commands?.create || "create",
     destroy: resourceConfiguration.commands?.destroy || "destroy",
     find: resourceConfiguration.commands?.find || "find",
     index: resourceConfiguration.commands?.index || "index",
     update: resourceConfiguration.commands?.update || "update"
   }
 
+  if (commandName === commands.create) return "create"
   if (commandName === commands.destroy) return "destroy"
   if (commandName === commands.find) return "find"
   if (commandName === commands.index) return "index"

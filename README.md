@@ -268,7 +268,7 @@ export default new Configuration({
           relationships: {
             projects: {type: "hasMany", model: "Project"}
           },
-          commands: {find: "find", update: "update", destroy: "destroy"},
+          commands: {find: "find", create: "create", update: "update", destroy: "destroy"},
           path: "/api/frontend-models/users",
           primaryKey: "id"
         }
@@ -292,6 +292,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await User.findBy({email: "john@example.com"})`
 - `await User.findByOrFail({email: "john@example.com"})`
 - `await User.toArray()`
+- `await User.create({name: "John"})`
 - `await Task.sort("-createdAt").toArray()`
 - `await Task.order("-createdAt").toArray()`
 - `await Task.limit(10).offset(20).toArray()`
@@ -308,7 +309,9 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
   `.select({Project: ["id", "createdAt"], Task: ["updatedAt"]})`
   `.toArray()`
 - `await user.update({...})`
+- `await user.save()` (persists new records and updates existing records)
 - `await user.destroy()`
+- State helpers like `user.isNewRecord()`, `user.isPersisted()`, `user.isChanged()`, and `user.changes()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `project.tasks().loaded()`, and `project.tasks().build({...})`
 
@@ -320,7 +323,7 @@ When backend payloads include `__preloadedRelationships`, nested frontend-model 
 
 When queries include `select(...)`, backend frontend-model actions only serialize selected attributes for each model class. Reading a non-selected attribute on a frontend model raises `AttributeNotSelectedError`.
 
-You do not need to manually define `frontend-index` / `frontend-find` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
+You do not need to manually define `frontend-index` / `frontend-find` / `frontend-create` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 
