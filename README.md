@@ -298,6 +298,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await Task.limit(10).offset(20).toArray()`
 - `await Task.page(2).perPage(25).toArray()`
 - `await Task.where({project: {creatingUser: {reference: "owner-b"}}}).toArray()`
+- `await Task.joins({project: {creatingUser: true}}).where({project: {creatingUser: {reference: "owner-b"}}}).toArray()`
 - `await Task.sort({project: {creatingUser: ["reference", "desc"]}}).toArray()`
 - `await Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}}).toArray()`
 - `await Task.group({project: {account: ["id"]}}).toArray()`
@@ -318,6 +319,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
+Frontend-model `joins(...)` supports relationship-object descriptors only (for example `Task.joins({project: {creatingUser: true}})`) and rejects raw SQL join strings.
 Frontend-model `distinct(...)` only accepts booleans (`true` by default) and is applied server-side through the backend query API.
 Frontend-model `pluck(...)` validates attribute/path descriptors against configured model metadata and does not accept SQL fragments.
 
