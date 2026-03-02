@@ -1,6 +1,7 @@
 // @ts-check
 
 import * as inflection from "inflection"
+import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
 
@@ -37,7 +38,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
       const commandName = normalizedCurrentPath.slice(expectedPrefix.length)
       if (commandName.includes("/")) continue
 
-      const action = frontendModelActionForCommand({commandName, resourceConfiguration})
+      const action = frontendModelActionForCommand({commandName, modelName, resourceConfiguration})
       if (!action) continue
 
       return {
@@ -53,16 +54,37 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 /**
  * @param {object} args - Arguments.
  * @param {string} args.commandName - Command path segment.
+ * @param {string} args.modelName - Model class name.
  * @param {import("../../configuration-types.js").FrontendModelResourceConfiguration} args.resourceConfiguration - Resource configuration.
  * @returns {"destroy" | "find" | "index" | "create" | "update" | null} - Frontend action for command.
  */
-function frontendModelActionForCommand({commandName, resourceConfiguration}) {
+function frontendModelActionForCommand({commandName, modelName, resourceConfiguration}) {
   const commands = {
-    create: resourceConfiguration.commands?.create || "create",
-    destroy: resourceConfiguration.commands?.destroy || "destroy",
-    find: resourceConfiguration.commands?.find || "find",
-    index: resourceConfiguration.commands?.index || "index",
-    update: resourceConfiguration.commands?.update || "update"
+    create: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.create ?? "create",
+      commandType: "create",
+      modelName
+    }),
+    destroy: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.destroy ?? "destroy",
+      commandType: "destroy",
+      modelName
+    }),
+    find: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.find ?? "find",
+      commandType: "find",
+      modelName
+    }),
+    index: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.index ?? "index",
+      commandType: "index",
+      modelName
+    }),
+    update: validateFrontendModelResourceCommandName({
+      commandName: resourceConfiguration.commands?.update ?? "update",
+      commandType: "update",
+      modelName
+    })
   }
 
   if (commandName === commands.create) return "create"
@@ -80,7 +102,12 @@ function frontendModelActionForCommand({commandName, resourceConfiguration}) {
  * @returns {string} - Normalized frontend model resource path.
  */
 function frontendModelResourcePath(modelName, resourceConfiguration) {
-  if (resourceConfiguration.path) return `/${resourceConfiguration.path.replace(/^\/+/, "")}`
+  if (resourceConfiguration.path) {
+    return validateFrontendModelResourcePath({
+      modelName,
+      resourcePath: `/${resourceConfiguration.path.replace(/^\/+/, "")}`
+    })
+  }
 
   return `/${inflection.dasherize(inflection.pluralize(modelName))}`
 }
