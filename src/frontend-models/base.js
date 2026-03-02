@@ -4,7 +4,13 @@ import FrontendModelQuery from "./query.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
-/** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
+/** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download"} FrontendModelCommandType */
+/**
+ * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
+ */
+/**
+ * @typedef {{commands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, path?: string, primaryKey?: string}} FrontendModelResourceConfig
+ */
 /**
  * @typedef {object} FrontendModelTransportConfig
  * @property {string} [baseUrl] - Optional base URL prefixed before resource paths.
@@ -12,7 +18,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @property {string} [pathPrefix] - Optional path prefix inserted between base URL and resource path.
  * @property {(() => string | undefined | null)} [pathPrefixResolver] - Optional resolver used per request for dynamic path prefix.
  * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
- * @property {((args: {commandName: string, commandType: "create" | "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
+ * @property {((args: {commandName: string, commandType: FrontendModelCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -20,7 +26,7 @@ const frontendModelTransportConfig = {}
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
-/** @type {Array<{commandType: "create" | "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
+/** @type {Array<{commandType: FrontendModelCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
@@ -191,6 +197,249 @@ export class FrontendModelHasManyRelationship {
  */
 function relationshipTypeIsCollection(relationshipType) {
   return relationshipType == "hasMany"
+}
+
+/**
+ * Downloaded frontend-model attachment payload wrapper.
+ */
+export class FrontendModelAttachmentDownload {
+  /**
+   * @param {object} args - Options.
+   * @param {string} args.id - Attachment id.
+   * @param {string} args.filename - Filename.
+   * @param {string | null} args.contentType - Content type.
+   * @param {number} args.byteSize - File size in bytes.
+   * @param {Uint8Array} args.content - File content bytes.
+   */
+  constructor({byteSize, content, contentType, filename, id}) {
+    this.idValue = id
+    this.filenameValue = filename
+    this.contentTypeValue = contentType
+    this.byteSizeValue = byteSize
+    this.contentValue = content
+  }
+
+  /** @returns {number} - File size in bytes. */
+  byteSize() { return this.byteSizeValue }
+  /** @returns {Uint8Array} - File content bytes. */
+  content() { return this.contentValue }
+  /** @returns {string | null} - Content type. */
+  contentType() { return this.contentTypeValue }
+  /** @returns {string} - Filename. */
+  filename() { return this.filenameValue }
+  /** @returns {string} - Attachment id. */
+  id() { return this.idValue }
+}
+
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {boolean} - Whether value looks like byte data.
+ */
+function frontendAttachmentValueIsBytes(value) {
+  return value instanceof Uint8Array || value instanceof ArrayBuffer || (typeof Buffer !== "undefined" && Buffer.isBuffer(value))
+}
+
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {value is {arrayBuffer: () => Promise<ArrayBuffer>}} - Whether candidate supports arrayBuffer().
+ */
+function frontendAttachmentValueSupportsArrayBuffer(value) {
+  return Boolean(value && typeof value === "object" && typeof /** @type {any} */ (value).arrayBuffer === "function")
+}
+
+/**
+ * @param {Uint8Array | Buffer | ArrayBuffer} value - Byte-like value.
+ * @returns {Uint8Array} - Uint8Array bytes.
+ */
+function frontendAttachmentNormalizeBytes(value) {
+  if (value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(/** @type {any} */ (value))) {
+    return new Uint8Array(/** @type {Buffer} */ (value))
+  }
+
+  throw new Error("Unsupported attachment bytes value")
+}
+
+/**
+ * @param {Uint8Array} bytes - Bytes.
+ * @returns {string} - Base64 value.
+ */
+function frontendAttachmentBytesToBase64(bytes) {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes).toString("base64")
+  }
+
+  let binary = ""
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+
+  if (typeof btoa !== "function") throw new Error("Missing base64 encoder")
+
+  return btoa(binary)
+}
+
+/**
+ * @param {string} value - Base64 value.
+ * @returns {Uint8Array} - Decoded bytes.
+ */
+function frontendAttachmentBase64ToBytes(value) {
+  if (typeof Buffer !== "undefined") {
+    return new Uint8Array(Buffer.from(value, "base64"))
+  }
+
+  if (typeof atob !== "function") throw new Error("Missing base64 decoder")
+
+  const binary = atob(value)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  return bytes
+}
+
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {value is Record<string, any>} - Whether value is plain object.
+ */
+function frontendAttachmentValueIsPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+
+  const prototype = Object.getPrototypeOf(value)
+
+  return prototype === Object.prototype || prototype === null
+}
+
+/**
+ * @param {unknown} input - Attachment input.
+ * @returns {Promise<Record<string, any>>} - Transport-safe attachment payload.
+ */
+async function normalizeFrontendAttachmentInput(input) {
+  if (frontendAttachmentValueIsPlainObject(input) && "file" in input) {
+    const normalizedFile = await normalizeFrontendAttachmentInput(input.file)
+    const merged = {
+      ...normalizedFile
+    }
+
+    if (typeof input.filename === "string" && input.filename.length > 0) merged.filename = input.filename
+    if (typeof input.contentType === "string" && input.contentType.length > 0) merged.contentType = input.contentType
+    if (typeof input.path === "string" && input.path.length > 0) merged.path = input.path
+
+    return merged
+  }
+
+  if (frontendAttachmentValueIsPlainObject(input)) {
+    if (typeof input.path === "string" && input.path.length > 0) {
+      return {
+        contentType: typeof input.contentType === "string" && input.contentType.length > 0 ? input.contentType : null,
+        filename: typeof input.filename === "string" && input.filename.length > 0 ? input.filename : undefined,
+        path: input.path
+      }
+    }
+
+    if (typeof input.contentBase64 === "string") {
+      return {
+        contentBase64: input.contentBase64,
+        contentType: typeof input.contentType === "string" && input.contentType.length > 0 ? input.contentType : null,
+        filename: typeof input.filename === "string" && input.filename.length > 0 ? input.filename : undefined
+      }
+    }
+  }
+
+  if (frontendAttachmentValueSupportsArrayBuffer(input)) {
+    const bytes = new Uint8Array(await input.arrayBuffer())
+
+    return {
+      contentBase64: frontendAttachmentBytesToBase64(bytes),
+      contentType: typeof /** @type {any} */ (input).type === "string" && /** @type {any} */ (input).type.length > 0
+        ? /** @type {any} */ (input).type
+        : null,
+      filename: typeof /** @type {any} */ (input).name === "string" && /** @type {any} */ (input).name.length > 0
+        ? /** @type {any} */ (input).name
+        : "attachment.bin"
+    }
+  }
+
+  if (frontendAttachmentValueIsBytes(input)) {
+    const bytes = frontendAttachmentNormalizeBytes(/** @type {Uint8Array | Buffer | ArrayBuffer} */ (input))
+
+    return {
+      contentBase64: frontendAttachmentBytesToBase64(bytes),
+      contentType: null,
+      filename: "attachment.bin"
+    }
+  }
+
+  throw new Error("Unsupported frontend attachment input")
+}
+
+/**
+ * Frontend-model attachment helper for one attachment name.
+ */
+export class FrontendModelAttachmentHandle {
+  /**
+   * @param {object} args - Options.
+   * @param {FrontendModelBase} args.model - Model instance.
+   * @param {string} args.attachmentName - Attachment name.
+   */
+  constructor({attachmentName, model}) {
+    this.model = model
+    this.attachmentName = attachmentName
+  }
+
+  /**
+   * @param {unknown} input - Attachment input.
+   * @returns {Promise<void>} - Resolves when attached.
+   */
+  async attach(input) {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const normalizedInput = await normalizeFrontendAttachmentInput(input)
+    const response = await ModelClass.executeCommand("attach", {
+      attachment: normalizedInput,
+      attachmentName: this.attachmentName,
+      id: this.model.primaryKeyValue()
+    })
+
+    this.model.assignAttributes(ModelClass.attributesFromResponse(response))
+  }
+
+  /**
+   * @param {string} [attachmentId] - Optional attachment id for has-many attachments.
+   * @returns {Promise<FrontendModelAttachmentDownload | null>} - Downloaded attachment payload.
+   */
+  async download(attachmentId) {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    /** @type {Record<string, any>} */
+    const payload = {
+      attachmentName: this.attachmentName,
+      id: this.model.primaryKeyValue()
+    }
+
+    if (attachmentId) {
+      payload.attachmentId = attachmentId
+    }
+
+    const response = await ModelClass.executeCommand("download", payload)
+    const attachmentPayload = response.attachment
+
+    if (!attachmentPayload || typeof attachmentPayload !== "object") return null
+
+    const contentBase64 = typeof attachmentPayload.contentBase64 === "string" ? attachmentPayload.contentBase64 : ""
+    const content = frontendAttachmentBase64ToBytes(contentBase64)
+    const byteSize = Number(attachmentPayload.byteSize)
+
+    return new FrontendModelAttachmentDownload({
+      byteSize: Number.isFinite(byteSize) ? byteSize : content.length,
+      content,
+      contentType: typeof attachmentPayload.contentType === "string" && attachmentPayload.contentType.length > 0 ? attachmentPayload.contentType : null,
+      filename: typeof attachmentPayload.filename === "string" && attachmentPayload.filename.length > 0 ? attachmentPayload.filename : "attachment.bin",
+      id: typeof attachmentPayload.id === "string" ? attachmentPayload.id : ""
+    })
+  }
 }
 
 /**
@@ -496,12 +745,36 @@ export default class FrontendModelBase {
    * @param {Record<string, any>} [attributes] - Initial attributes.
    */
   constructor(attributes = {}) {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+
+    ModelClass.ensureGeneratedAttachmentMethods()
     this._attributes = {}
     this._relationships = {}
+    this._attachments = {}
     this._selectedAttributes = null
     this._isNewRecord = true
     this._persistedAttributes = {}
     this.assignAttributes(attributes)
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @returns {void} - Ensures attachment helper methods exist on the prototype.
+   */
+  static ensureGeneratedAttachmentMethods() {
+    if (this._generatedAttachmentMethods) return
+
+    const attachments = this.attachmentDefinitions()
+
+    for (const attachmentName of Object.keys(attachments)) {
+      if (!(attachmentName in this.prototype)) {
+        this.prototype[attachmentName] = function() {
+          return this.getAttachmentByName(attachmentName)
+        }
+      }
+    }
+
+    this._generatedAttachmentMethods = true
   }
 
   /**
@@ -527,6 +800,23 @@ export default class FrontendModelBase {
    */
   static relationshipDefinitions() {
     return {}
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @returns {Record<string, FrontendModelAttachmentDefinition>} - Attachment definitions keyed by attachment name.
+   */
+  static attachmentDefinitions() {
+    return this.resourceConfig().attachments || {}
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {string} attachmentName - Attachment name.
+   * @returns {FrontendModelAttachmentDefinition | null} - Attachment definition.
+   */
+  static attachmentDefinition(attachmentName) {
+    return this.attachmentDefinitions()[attachmentName] || null
   }
 
   /**
@@ -628,6 +918,28 @@ export default class FrontendModelBase {
     }
 
     return this._relationships[relationshipName]
+  }
+
+  /**
+   * @param {string} attachmentName - Attachment name.
+   * @returns {FrontendModelAttachmentHandle} - Attachment helper.
+   */
+  getAttachmentByName(attachmentName) {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const attachmentDefinition = ModelClass.attachmentDefinition(attachmentName)
+
+    if (!attachmentDefinition) {
+      throw new Error(`Unknown attachment: ${ModelClass.name}#${attachmentName}`)
+    }
+
+    if (!this._attachments[attachmentName]) {
+      this._attachments[attachmentName] = new FrontendModelAttachmentHandle({
+        attachmentName,
+        model: this
+      })
+    }
+
+    return this._attachments[attachmentName]
   }
 
   /**
@@ -758,7 +1070,7 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @param {"create" | "find" | "index" | "update" | "destroy"} commandType - Command type.
+   * @param {FrontendModelCommandType} commandType - Command type.
    * @returns {string} - Resolved command name.
    */
   static commandName(commandType) {
@@ -1332,19 +1644,72 @@ export default class FrontendModelBase {
    */
   async update(newAttributes = {}) {
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const attachmentDefinitions = ModelClass.attachmentDefinitions()
+    /** @type {Record<string, any>} */
+    const regularAttributes = {}
+    /** @type {Array<{attachmentName: string, value: unknown}>} */
+    const pendingAttachments = []
 
-    this.assignAttributes(newAttributes)
+    for (const [attributeName, attributeValue] of Object.entries(newAttributes)) {
+      if (attachmentDefinitions[attributeName]) {
+        if (attributeValue !== undefined && attributeValue !== null) {
+          pendingAttachments.push({attachmentName: attributeName, value: attributeValue})
+        }
+      } else {
+        regularAttributes[attributeName] = attributeValue
+      }
+    }
 
-    const response = await ModelClass.executeCommand("update", {
-      attributes: this.attributes(),
-      id: this.primaryKeyValue()
-    })
+    if (Object.keys(regularAttributes).length > 0) {
+      this.assignAttributes(regularAttributes)
 
-    this.assignAttributes(ModelClass.attributesFromResponse(response))
-    this.setIsNewRecord(false)
-    this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
+      const response = await ModelClass.executeCommand("update", {
+        attributes: this.attributes(),
+        id: this.primaryKeyValue()
+      })
+
+      this.assignAttributes(ModelClass.attributesFromResponse(response))
+      this.setIsNewRecord(false)
+      this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
+    }
+
+    for (const pendingAttachment of pendingAttachments) {
+      await this.getAttachmentByName(pendingAttachment.attachmentName).attach(pendingAttachment.value)
+    }
 
     return this
+  }
+
+  /**
+   * @param {unknown} attachmentInput - Attachment input or named attachment payload.
+   * @returns {Promise<void>} - Resolves when attached.
+   */
+  async attach(attachmentInput) {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const attachmentDefinitions = ModelClass.attachmentDefinitions()
+    const attachmentNames = Object.keys(attachmentDefinitions)
+    let attachmentName = attachmentNames[0]
+    let actualAttachmentInput = attachmentInput
+
+    if (frontendAttachmentValueIsPlainObject(attachmentInput)) {
+      if ("file" in attachmentInput && attachmentDefinitions.file) {
+        attachmentName = "file"
+      }
+
+      for (const candidateName of attachmentNames) {
+        if (candidateName in attachmentInput) {
+          attachmentName = candidateName
+          actualAttachmentInput = attachmentInput[candidateName]
+          break
+        }
+      }
+    }
+
+    if (!attachmentName) {
+      throw new Error(`No attachment definitions on ${ModelClass.name}`)
+    }
+
+    await this.getAttachmentByName(attachmentName).attach(actualAttachmentInput)
   }
 
   /**
@@ -1384,7 +1749,7 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @param {"create" | "find" | "index" | "update" | "destroy"} commandType - Command type.
+   * @param {FrontendModelCommandType} commandType - Command type.
    * @param {Record<string, any>} payload - Command payload.
    * @returns {Promise<Record<string, any>>} - Parsed JSON response.
    */
@@ -1468,7 +1833,7 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {object} args - Arguments.
-   * @param {"create" | "find" | "index" | "update" | "destroy"} args.commandType - Command type.
+   * @param {FrontendModelCommandType} args.commandType - Command type.
    * @param {Record<string, any>} args.response - Decoded response.
    * @returns {void}
    */

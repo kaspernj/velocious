@@ -179,6 +179,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   buildModelFileContent({className, importPath, modelConfig}) {
     const attributes = this.attributeDefinitionsForModel(modelConfig)
     const relationships = this.relationshipsForModel(modelConfig)
+    const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
+      ? modelConfig.attachments
+      : {}
     const attributesTypeName = `${className}Attributes`
     const attributeNames = attributes.map((attribute) => attribute.name)
     const commands = {
@@ -218,6 +221,17 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "  /** @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
+    if (Object.keys(attachments).length > 0) {
+      fileContent += "      attachments: {\n"
+      for (const [attachmentName, attachmentConfig] of Object.entries(attachments)) {
+        const attachmentType = attachmentConfig && typeof attachmentConfig === "object" && attachmentConfig.type === "hasMany"
+          ? "hasMany"
+          : "hasOne"
+
+        fileContent += `        ${attachmentName}: {type: ${JSON.stringify(attachmentType)}},\n`
+      }
+      fileContent += "      },\n"
+    }
     fileContent += this.formattedArrayProperty({
       indent: "      ",
       propertyName: "attributes",

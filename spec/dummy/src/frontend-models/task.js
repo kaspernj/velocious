@@ -9,9 +9,13 @@ import Project from "./project.js"
  */
 /** Frontend model for Task. */
 export default class Task extends FrontendModelBase {
-  /** @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
+  /** @returns {{attachments: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
+      attachments: {
+        descriptionFile: {type: "hasOne"},
+        files: {type: "hasMany"},
+      },
       attributes: [
         "id",
         "identifier",

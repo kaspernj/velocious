@@ -3,6 +3,16 @@ import FrontendModelController from "../../../../../../../src/frontend-model-con
 /** Dummy frontend-model controller for Task resource command endpoints. */
 export default class ApiFrontendModelsTasksController extends FrontendModelController {
   /** @returns {Promise<void>} */
+  async attach() {
+    await this.frontendAttach()
+  }
+
+  /** @returns {Promise<void>} */
+  async download() {
+    await this.frontendDownload()
+  }
+
+  /** @returns {Promise<void>} */
   async list() {
     await this.frontendIndex()
   }

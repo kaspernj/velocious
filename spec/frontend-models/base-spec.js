@@ -46,6 +46,38 @@ function buildTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with attachments.
+ */
+function buildAttachmentTestModelClass() {
+  /** Test frontend model with attachment definitions. */
+  class Task extends FrontendModelBase {
+    /**
+     * @returns {{attachments: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], commands: {attach: string, download: string, update: string}, path: string, primaryKey: string}}
+     */
+    static resourceConfig() {
+      return {
+        attachments: {
+          descriptionFile: {type: "hasOne"}
+        },
+        attributes: ["id", "name"],
+        commands: {
+          attach: "attach",
+          download: "download",
+          update: "update"
+        },
+        path: "/api/frontend-models/tasks",
+        primaryKey: "id"
+      }
+    }
+
+    /** @returns {any} */
+    id() { return this.readAttribute("id") }
+  }
+
+  return Task
+}
+
+/**
  * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
  */
 function buildPreloadTestModelClasses() {
@@ -1185,6 +1217,72 @@ describe("Frontend models - base", () => {
       ])
       expect(user.name()).toEqual("Johnny")
       expect(user.readAttribute("email")).toEqual("johnny@example.com")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("updates attachments using update attachment attributes", async () => {
+    const Task = buildAttachmentTestModelClass()
+    const fetchStub = stubFetch({model: {id: 10, name: "Task"}})
+    const task = new Task({id: 10, name: "Task"})
+
+    try {
+      await task.update({
+        descriptionFile: {
+          contentBase64: "YQ==",
+          filename: "a.txt"
+        }
+      })
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attachment: {
+              contentBase64: "YQ==",
+              contentType: null,
+              filename: "a.txt"
+            },
+            attachmentName: "descriptionFile",
+            id: 10
+          },
+          url: "/api/frontend-models/tasks/attach"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("downloads attachments through attachment helpers", async () => {
+    const Task = buildAttachmentTestModelClass()
+    const fetchStub = stubFetch({
+      attachment: {
+        byteSize: 1,
+        contentBase64: "YQ==",
+        contentType: "text/plain",
+        filename: "a.txt",
+        id: "attachment-1"
+      }
+    })
+    const task = new Task({id: 11, name: "Task"})
+
+    try {
+      const downloadedAttachment = await task.descriptionFile().download()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attachmentName: "descriptionFile",
+            id: 11
+          },
+          url: "/api/frontend-models/tasks/download"
+        }
+      ])
+      expect(downloadedAttachment.filename()).toEqual("a.txt")
+      expect(Array.from(downloadedAttachment.content())).toEqual([97])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

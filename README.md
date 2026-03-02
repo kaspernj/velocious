@@ -316,6 +316,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - State helpers like `user.isNewRecord()`, `user.isPersisted()`, `user.isChanged()`, and `user.changes()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `project.tasks().loaded()`, and `project.tasks().build({...})`
+- Attachment helpers (when `attachments` are configured), for example `await task.descriptionFile().attach(file)`, `await task.descriptionFile().download()`, and `await task.update({descriptionFile: file})`
 
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
@@ -328,6 +329,30 @@ When backend payloads include `__preloadedRelationships`, nested frontend-model 
 When queries include `select(...)`, backend frontend-model actions only serialize selected attributes for each model class. Reading a non-selected attribute on a frontend model raises `AttributeNotSelectedError`.
 
 You do not need to manually define `frontend-index` / `frontend-find` / `frontend-create` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
+
+For backend models, you can declare attachment helpers directly:
+
+```js
+Task.hasManyAttachments("files")
+Task.hasOneAttachment("descriptionFile")
+```
+
+Then use them from backend records:
+
+```js
+await task.descriptionFile().attach({path: "/path/to/file.doc"})
+await task.update({
+  descriptionFile: {path: "/path/to/file.doc", filename: "my-doc.doc"}
+})
+```
+
+For frontend models, configure `resourceConfig().attachments` and use:
+
+```js
+await frontendTask.update({descriptionFile: file})
+const descriptionFile = await frontendTask.descriptionFile().download()
+await frontendTask.attach(file)
+```
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 
