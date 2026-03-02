@@ -6,7 +6,7 @@
 - Keep request execution centralized in Velocious instead of per-project endpoint overrides.
 
 ## Frontend vs backend model API differences
-- Frontend models expose a narrower query surface (mainly `find`, `findBy`, `findByOrFail`, `toArray`, `where`, `sort`, `order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`) and do not expose the full backend query API (`joins`, `findOrCreateBy`, etc.).
+- Frontend models expose a narrower query surface (mainly `find`, `findBy`, `findByOrFail`, `toArray`, `where`, `joins`, `sort`, `order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`) and do not expose the full backend query API (`findOrCreateBy`, raw SQL joins, etc.).
 - Frontend model commands are resource-mapped; `toArray()` calls the configured `index` command, which may map to a backend command name like `list` instead of literal `index`.
 - Frontend models are HTTP/resource-transport based; backend models run against direct database model/query APIs.
 
@@ -39,6 +39,7 @@
 - `null` conditions should only match explicit `null`, not missing/undefined attributes.
 - Nested object/array condition values are matched by value, not object identity.
 - Frontend-model `where(...)` supports nested relationship descriptors (for example `{project: {creatingUser: {reference: "owner-b"}}}`) and should stay descriptor-only (no raw SQL fragments).
+- Frontend-model `joins(...)` supports relationship-object descriptors only (for example `{project: {creatingUser: true}}`) and rejects raw SQL join strings.
 
 ## Matching behavior
 - Local re-checking of returned models is kept for safety when backend handlers may return broader sets.

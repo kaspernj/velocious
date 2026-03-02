@@ -547,6 +547,41 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends joins payload when using joins(...).toArray()", async () => {
+    const {Task} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await Task
+        .joins({project: {tasks: true}})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            joins: {
+              project: {
+                tasks: true
+              }
+            }
+          },
+          url: "/api/frontend-models/tasks/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("rejects raw string joins definitions", async () => {
+    const User = buildTestModelClass()
+
+    await expect(async () => {
+      await User.joins("LEFT JOIN accounts ON accounts.id = users.account_id").toArray()
+    }).toThrow(/Invalid joins type/)
+  })
+
   it("rejects unsafe string group definitions", async () => {
     const User = buildTestModelClass()
 

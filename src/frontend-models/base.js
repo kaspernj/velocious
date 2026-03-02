@@ -961,6 +961,16 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {Record<string, any> | Array<Record<string, any>>} joins - Relationship descriptor joins.
+   * @returns {import("./query.js").default<T>} - Query with joins.
+   */
+  static joins(joins) {
+    return this.query().joins(joins)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @param {number} value - Maximum number of records.
    * @returns {import("./query.js").default<T>} - Query with limit.
    */
