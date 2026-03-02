@@ -302,6 +302,29 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends relationship-path where payload when using where(...).toArray()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .where({project: {creatingUser: {reference: "creator-1"}}})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            where: {project: {creatingUser: {reference: "creator-1"}}}
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("sends deterministic primary-key ordering when using first()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})

@@ -1,5 +1,6 @@
 # Changelog
 
+- Add frontend-model nested relationship `where(...)` support via structured relationship-path descriptors (for example `{project: {creatingUser: {reference: "owner-b"}}}`), with backend relationship-join application and integration coverage.
 - Add frontend-model query `limit(...)`, `offset(...)`, and `page(...).perPage(...)` support with integer-only payload validation (rejecting string SQL fragments), backend application in `frontendIndex`, and dummy-app integration coverage.
 - Document frontend vs backend model API differences in docs, including query-surface scope, resource-mapped command behavior for `toArray()`, and transport/runtime differences.
 - Add frontend-model query `sort(...)` support end-to-end (query payload, `FrontendModelBase.sort`, and backend frontend-model controller order application), including relationship-path sort definitions (for example `Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}})`), and cover sorting through dummy-app integration specs.

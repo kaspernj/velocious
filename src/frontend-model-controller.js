@@ -1501,18 +1501,61 @@ export default class FrontendModelController extends Controller {
    * @returns {void}
    */
   applyFrontendModelWhere({query, where}) {
-    const modelClass = this.frontendModelClass()
+    this.applyFrontendModelWhereForPath({
+      modelClass: this.frontendModelClass(),
+      path: [],
+      query,
+      where
+    })
+  }
+
+  /**
+   * @param {object} args - Where args.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class for current where scope.
+   * @param {string[]} args.path - Relationship path from root.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {Record<string, any>} args.where - Where conditions for current scope.
+   * @returns {void}
+   */
+  applyFrontendModelWhereForPath({modelClass, path, query, where}) {
     const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
-    const rootTableReference = query.getTableReferenceForJoin()
 
     for (const [attributeName, value] of Object.entries(where)) {
+      if (isPlainObject(value)) {
+        const relationship = modelClass.getRelationshipsMap()[attributeName]
+
+        if (!relationship) {
+          throw new Error(`Unknown where relationship "${attributeName}" for ${modelClass.name}`)
+        }
+
+        const targetModelClass = relationship.getTargetModelClass()
+
+        if (!targetModelClass) {
+          throw new Error(`No target model class for where relationship "${attributeName}" on ${modelClass.name}`)
+        }
+
+        const relationshipPath = [...path, attributeName]
+
+        this.applyFrontendModelWhereForPath({
+          modelClass: targetModelClass,
+          path: relationshipPath,
+          query,
+          where: value
+        })
+
+        continue
+      }
+
       const columnName = attributeNameToColumnNameMap[attributeName]
 
       if (!columnName) {
         throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
       }
 
-      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+      this.ensureFrontendModelJoinPath({path, query})
+
+      const tableReference = query.getTableReferenceForJoin(...path)
+      const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
 
       if (Array.isArray(value)) {
         if (value.length === 0) {
