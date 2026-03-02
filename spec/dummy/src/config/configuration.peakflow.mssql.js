@@ -59,7 +59,14 @@ class TaskFrontendModelAbilityResource extends BaseResource {
 
   /** @returns {void} */
   abilities() {
-    this.can(["destroy", "read", "update"], Task)
+    const applyReadDistinctScope = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE === "1"
+
+    if (applyReadDistinctScope) {
+      this.can(["destroy", "update"], Task)
+      this.can("read", Task, (query) => query.distinct(true))
+    } else {
+      this.can(["destroy", "read", "update"], Task)
+    }
 
     const deniedAction = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
 

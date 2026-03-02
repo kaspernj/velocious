@@ -168,7 +168,28 @@ function normalizeFrontendModelSelect(select) {
  * @property {string[]} path - Relationship path from root model.
  */
 
+/**
+ * @typedef {object} FrontendModelGroup
+ * @property {string} column - Attribute name to group by.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @typedef {object} FrontendModelPluck
+ * @property {string} column - Attribute name to pluck.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @typedef {object} FrontendModelPagination
+ * @property {number | null} limit - Maximum number of records.
+ * @property {number | null} offset - Number of records to skip.
+ * @property {number | null} page - 1-based page number.
+ * @property {number | null} perPage - Page size.
+ */
+
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
+const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -213,6 +234,19 @@ function frontendModelSortDescriptor(value) {
   if (!("column" in value) || !("direction" in value) || !("path" in value)) return false
   if (typeof value.column !== "string") return false
   if (typeof value.direction !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit group descriptor object.
+ */
+function frontendModelGroupDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
   if (!Array.isArray(value.path)) return false
 
   return value.path.every((pathEntry) => typeof pathEntry === "string")
@@ -288,6 +322,24 @@ function frontendModelSortFromTuple(sortValue, path = []) {
 }
 
 /**
+ * @param {string} groupValue - Group string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelGroup} - Normalized group descriptor.
+ */
+function frontendModelGroupFromString(groupValue, path = []) {
+  const trimmed = groupValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid group column: ${groupValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
  * @param {Record<string, any>} sortValue - Nested sort object.
  * @param {string[]} path - Relationship path.
  * @returns {FrontendModelSort[]} - Normalized sort descriptors.
@@ -336,6 +388,48 @@ function normalizeFrontendModelSortObject(sortValue, path) {
   }
 
   return normalizedSorts
+}
+
+/**
+ * @param {Record<string, any>} groupValue - Nested group object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelGroup[]} - Normalized group descriptors.
+ */
+function normalizeFrontendModelGroupObject(groupValue, path) {
+  /** @type {FrontendModelGroup[]} */
+  const normalizedGroups = []
+
+  for (const [groupKey, groupEntry] of Object.entries(groupValue)) {
+    if (typeof groupEntry === "string") {
+      normalizedGroups.push(frontendModelGroupFromString(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    if (Array.isArray(groupEntry)) {
+      if (groupEntry.length < 1) {
+        throw new Error(`Invalid group definition for "${groupKey}": empty array`)
+      }
+
+      for (const nestedGroupEntry of groupEntry) {
+        if (typeof nestedGroupEntry !== "string") {
+          throw new Error(`Invalid group definition for "${groupKey}": expected string columns`)
+        }
+
+        normalizedGroups.push(frontendModelGroupFromString(nestedGroupEntry, [...path, groupKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(groupEntry)) {
+      normalizedGroups.push(...normalizeFrontendModelGroupObject(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    throw new Error(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
+  }
+
+  return normalizedGroups
 }
 
 /**
@@ -406,6 +500,57 @@ function normalizeFrontendModelWhere(where) {
 }
 
 /**
+ * @param {unknown} value - Candidate integer.
+ * @param {string} name - Param name for errors.
+ * @param {number} min - Minimum allowed value.
+ * @returns {number | null} - Normalized integer.
+ */
+function normalizeFrontendModelIntegerParam(value, name, min) {
+  if (value == null) return null
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`Invalid ${name}: expected integer number`)
+  }
+
+  if (value < min) {
+    throw new Error(`Invalid ${name}: expected value >= ${min}`)
+  }
+
+  return value
+}
+
+/**
+ * @param {object} args - Pagination args.
+ * @param {unknown} args.limit - Limit payload.
+ * @param {unknown} args.offset - Offset payload.
+ * @param {unknown} args.page - Page payload.
+ * @param {unknown} args.perPage - Per-page payload.
+ * @returns {FrontendModelPagination} - Normalized pagination data.
+ */
+function normalizeFrontendModelPagination({limit, offset, page, perPage}) {
+  return {
+    limit: normalizeFrontendModelIntegerParam(limit, "limit", 0),
+    offset: normalizeFrontendModelIntegerParam(offset, "offset", 0),
+    page: normalizeFrontendModelIntegerParam(page, "page", 1),
+    perPage: normalizeFrontendModelIntegerParam(perPage, "perPage", 1)
+  }
+}
+
+/**
+ * @param {unknown} distinct - Distinct payload.
+ * @returns {boolean | null} - Normalized distinct flag when provided.
+ */
+function normalizeFrontendModelDistinct(distinct) {
+  if (distinct == null) return null
+
+  if (typeof distinct !== "boolean") {
+    throw new Error(`Invalid distinct: expected boolean`)
+  }
+
+  return distinct
+}
+
+/**
  * @param {unknown} sort - Sort payload.
  * @returns {FrontendModelSort[]} - Normalized sort definitions.
  */
@@ -468,6 +613,187 @@ function normalizeFrontendModelSort(sort) {
   }
 
   throw new Error(`Invalid sort type: ${typeof sort}`)
+}
+
+/**
+ * @param {unknown} group - Group payload.
+ * @returns {FrontendModelGroup[]} - Normalized group definitions.
+ */
+function normalizeFrontendModelGroup(group) {
+  if (!group) return []
+
+  if (typeof group === "string") {
+    return [frontendModelGroupFromString(group)]
+  }
+
+  if (frontendModelGroupDescriptor(group)) {
+    return [{
+      column: frontendModelGroupFromString(group.column).column,
+      path: [...group.path]
+    }]
+  }
+
+  if (isPlainObject(group)) {
+    return normalizeFrontendModelGroupObject(group, [])
+  }
+
+  if (Array.isArray(group)) {
+    /** @type {FrontendModelGroup[]} */
+    const normalized = []
+
+    for (const groupEntry of group) {
+      if (typeof groupEntry === "string") {
+        normalized.push(frontendModelGroupFromString(groupEntry))
+        continue
+      }
+
+      if (frontendModelGroupDescriptor(groupEntry)) {
+        normalized.push({
+          column: frontendModelGroupFromString(groupEntry.column).column,
+          path: [...groupEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(groupEntry)) {
+        normalized.push(...normalizeFrontendModelGroupObject(groupEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid group entry type: ${typeof groupEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid group type: ${typeof group}`)
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit pluck descriptor object.
+ */
+function frontendModelPluckDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {string} pluckValue - Pluck string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelPluck} - Normalized pluck descriptor.
+ */
+function frontendModelPluckFromString(pluckValue, path = []) {
+  const trimmed = pluckValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid pluck column: ${pluckValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {Record<string, any>} pluckValue - Nested pluck object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelPluck[]} - Normalized pluck descriptors.
+ */
+function normalizeFrontendModelPluckObject(pluckValue, path) {
+  /** @type {FrontendModelPluck[]} */
+  const normalizedPlucks = []
+
+  for (const [pluckKey, pluckEntry] of Object.entries(pluckValue)) {
+    if (typeof pluckEntry === "string") {
+      normalizedPlucks.push(frontendModelPluckFromString(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    if (Array.isArray(pluckEntry)) {
+      if (pluckEntry.length < 1) {
+        throw new Error(`Invalid pluck definition for "${pluckKey}": empty array`)
+      }
+
+      for (const nestedPluckEntry of pluckEntry) {
+        if (typeof nestedPluckEntry !== "string") {
+          throw new Error(`Invalid pluck definition for "${pluckKey}": expected string columns`)
+        }
+
+        normalizedPlucks.push(frontendModelPluckFromString(nestedPluckEntry, [...path, pluckKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(pluckEntry)) {
+      normalizedPlucks.push(...normalizeFrontendModelPluckObject(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    throw new Error(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
+  }
+
+  return normalizedPlucks
+}
+
+/**
+ * @param {unknown} pluck - Pluck payload.
+ * @returns {FrontendModelPluck[]} - Normalized pluck definitions.
+ */
+function normalizeFrontendModelPluck(pluck) {
+  if (!pluck) return []
+
+  if (typeof pluck === "string") {
+    return [frontendModelPluckFromString(pluck)]
+  }
+
+  if (frontendModelPluckDescriptor(pluck)) {
+    return [{
+      column: frontendModelPluckFromString(pluck.column).column,
+      path: [...pluck.path]
+    }]
+  }
+
+  if (isPlainObject(pluck)) {
+    return normalizeFrontendModelPluckObject(pluck, [])
+  }
+
+  if (Array.isArray(pluck)) {
+    /** @type {FrontendModelPluck[]} */
+    const normalized = []
+
+    for (const pluckEntry of pluck) {
+      if (typeof pluckEntry === "string") {
+        normalized.push(frontendModelPluckFromString(pluckEntry))
+        continue
+      }
+
+      if (frontendModelPluckDescriptor(pluckEntry)) {
+        normalized.push({
+          column: frontendModelPluckFromString(pluckEntry.column).column,
+          path: [...pluckEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(pluckEntry)) {
+        normalized.push(...normalizeFrontendModelPluckObject(pluckEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid pluck entry type: ${typeof pluckEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid pluck type: ${typeof pluck}`)
 }
 
 /**
@@ -846,32 +1172,7 @@ export default class FrontendModelController extends Controller {
       return await this.frontendModelFilterAuthorizedModels({action: "index", models})
     }
 
-    let query = this.frontendModelAuthorizedQuery("index")
-    const preload = this.frontendModelPreload()
-
-    if (preload) {
-      query = query.preload(preload)
-    }
-
-    const where = this.frontendModelWhere()
-
-    if (where) {
-      this.applyFrontendModelWhere({query, where})
-    }
-
-    const searches = this.frontendModelSearches()
-
-    for (const search of searches) {
-      this.applyFrontendModelSearch({query, search})
-    }
-
-    const sorts = this.frontendModelSort()
-
-    for (const sort of sorts) {
-      this.applyFrontendModelSort({query, sort})
-    }
-
-    return await query.toArray()
+    return await this.frontendModelIndexQuery().toArray()
   }
 
   /**
@@ -905,6 +1206,169 @@ export default class FrontendModelController extends Controller {
   /** @returns {FrontendModelSort[]} - Frontend sort definitions. */
   frontendModelSort() {
     return normalizeFrontendModelSort(this.frontendModelParams().sort)
+  }
+
+  /** @returns {FrontendModelGroup[]} - Frontend group definitions. */
+  frontendModelGroup() {
+    return normalizeFrontendModelGroup(this.frontendModelParams().group)
+  }
+
+  /** @returns {FrontendModelPagination} - Frontend pagination params. */
+  frontendModelPagination() {
+    const params = this.frontendModelParams()
+
+    return normalizeFrontendModelPagination({
+      limit: params.limit,
+      offset: params.offset,
+      page: params.page,
+      perPage: params.perPage
+    })
+  }
+
+  /** @returns {boolean | null} - Frontend distinct flag when provided. */
+  frontendModelDistinct() {
+    return normalizeFrontendModelDistinct(this.frontendModelParams().distinct)
+  }
+
+  /** @returns {FrontendModelPluck[]} - Frontend pluck definitions. */
+  frontendModelPluck() {
+    return normalizeFrontendModelPluck(this.frontendModelParams().pluck)
+  }
+
+  /**
+   * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
+   */
+  frontendModelIndexQuery() {
+    let query = this.frontendModelAuthorizedQuery("index")
+    const preload = this.frontendModelPreload()
+
+    if (preload) {
+      query = query.preload(preload)
+    }
+
+    const where = this.frontendModelWhere()
+    const pagination = this.frontendModelPagination()
+    const distinct = this.frontendModelDistinct()
+
+    this.applyFrontendModelPagination({pagination, query})
+
+    if (distinct !== null) {
+      query.distinct(distinct)
+    }
+
+    if (where) {
+      this.applyFrontendModelWhere({query, where})
+    }
+
+    const searches = this.frontendModelSearches()
+
+    for (const search of searches) {
+      this.applyFrontendModelSearch({query, search})
+    }
+
+    const groups = this.frontendModelGroup()
+
+    if (groups.length > 0) {
+      this.applyFrontendModelRootGroupColumns({query})
+    }
+
+    for (const group of groups) {
+      this.applyFrontendModelGroup({group, query})
+    }
+
+    const sorts = this.frontendModelSort()
+
+    for (const sort of sorts) {
+      this.applyFrontendModelSort({query, sort})
+    }
+
+    if (query._distinct && query.driver.getType() === "mssql") {
+      return this.frontendModelMssqlDistinctByPrimaryKeyQuery({query})
+    }
+
+    return query
+  }
+
+  /**
+   * MSSQL cannot apply DISTINCT over non-comparable text columns in table.* selects.
+   * This rewrites distinct frontend-model queries to select root records by distinct PK subquery.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query with distinct and filters.
+   * @returns {import("./database/query/model-class-query.js").default} - MSSQL-safe distinct query.
+   */
+  frontendModelMssqlDistinctByPrimaryKeyQuery({query}) {
+    const modelClass = this.frontendModelClass()
+    const primaryKey = modelClass.primaryKey()
+    const rootTableSql = query.driver.quoteTable(modelClass.tableName())
+    const primaryKeySql = `${rootTableSql}.${query.driver.quoteColumn(primaryKey)}`
+    const distinctIdsQuery = query.clone()
+
+    distinctIdsQuery._preload = {}
+    distinctIdsQuery._selects = []
+    distinctIdsQuery.select(primaryKeySql)
+    distinctIdsQuery.distinct(true)
+
+    const distinctRootQuery = modelClass._newQuery()
+
+    distinctRootQuery.where(`${primaryKeySql} IN (${distinctIdsQuery.toSql()})`)
+    distinctRootQuery._preload = {...query._preload}
+
+    return distinctRootQuery
+  }
+
+  /**
+   * @param {object} args - Pluck args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
+   * @returns {Promise<any[]>} - Plucked values.
+   */
+  async frontendModelPluckValues({query, pluck}) {
+    if (pluck.length < 1) {
+      throw new Error("No columns given to pluck")
+    }
+
+    const modelClass = this.frontendModelClass()
+    const pluckQuery = query.clone()
+    const aliases = []
+    const joinedPaths = query[frontendModelJoinedPathsSymbol]
+
+    pluckQuery._preload = {}
+    pluckQuery._selects = []
+    pluckQuery[frontendModelJoinedPathsSymbol] = joinedPaths ? new Set(joinedPaths) : new Set()
+
+    for (const [pluckIndex, pluckEntry] of pluck.entries()) {
+      const targetModelClass = this.frontendModelSearchTargetModelClass({
+        modelClass,
+        path: pluckEntry.path
+      })
+      const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
+      const columnName = attributeNameToColumnNameMap[pluckEntry.column]
+
+      if (!columnName) {
+        throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+      }
+
+      if (pluckEntry.path.length > 0) {
+        this.ensureFrontendModelJoinPath({path: pluckEntry.path, query: pluckQuery})
+      }
+
+      const tableReference = pluckQuery.getTableReferenceForJoin(...pluckEntry.path)
+      const columnSql = `${pluckQuery.driver.quoteTable(tableReference)}.${pluckQuery.driver.quoteColumn(columnName)}`
+      const alias = `frontend_model_pluck_${pluckIndex}`
+
+      pluckQuery.select(`${columnSql} AS ${pluckQuery.driver.quoteColumn(alias)}`)
+      aliases.push(alias)
+    }
+
+    const rows = await pluckQuery.results()
+
+    if (aliases.length === 1) {
+      const [alias] = aliases
+
+      return rows.map((row) => row[alias])
+    }
+
+    return rows.map((row) => aliases.map((alias) => row[alias]))
   }
 
   /**
@@ -1007,6 +1471,30 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @param {object} args - Pagination args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelPagination} args.pagination - Pagination values.
+   * @returns {void}
+   */
+  applyFrontendModelPagination({query, pagination}) {
+    if (pagination.limit !== null) {
+      query.limit(pagination.limit)
+    }
+
+    if (pagination.offset !== null) {
+      query.offset(pagination.offset)
+    }
+
+    if (pagination.perPage !== null) {
+      query.perPage(pagination.perPage)
+    }
+
+    if (pagination.page !== null) {
+      query.page(pagination.page)
+    }
+  }
+
+  /**
    * @param {object} args - Where args.
    * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
    * @param {Record<string, any>} args.where - Root-model where conditions.
@@ -1042,6 +1530,68 @@ export default class FrontendModelController extends Controller {
         query.where(`${columnSql} = ${query.driver.quote(value)}`)
       }
     }
+  }
+
+  /**
+   * @param {object} args - Group args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelGroup} args.group - Group definition.
+   * @returns {void}
+   */
+  applyFrontendModelGroup({query, group}) {
+    const modelClass = this.frontendModelClass()
+    const targetModelClass = this.frontendModelSearchTargetModelClass({
+      modelClass,
+      path: group.path
+    })
+    const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
+    const columnName = attributeNameToColumnNameMap[group.column]
+
+    if (!columnName) {
+      throw new Error(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
+    }
+
+    this.ensureFrontendModelJoinPath({path: group.path, query})
+
+    const tableReference = query.getTableReferenceForJoin(...group.path)
+    const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
+
+    this.ensureFrontendModelGroupColumn({columnSql, query})
+  }
+
+  /**
+   * Adds root-model columns to GROUP BY so strict SQL engines accept default root-table selects.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelRootGroupColumns({query}) {
+    const modelClass = this.frontendModelClass()
+    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
+    const rootTableReference = query.getTableReferenceForJoin()
+
+    for (const columnName of Object.values(attributeNameToColumnNameMap)) {
+      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+
+      this.ensureFrontendModelGroupColumn({columnSql, query})
+    }
+  }
+
+  /**
+   * Ensures a group-by SQL column is only appended once.
+   * @param {object} args - Args.
+   * @param {string} args.columnSql - Fully-qualified column SQL.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  ensureFrontendModelGroupColumn({columnSql, query}) {
+    const groupedColumns = query[frontendModelGroupedColumnsSymbol] || new Set()
+
+    if (groupedColumns.has(columnSql)) return
+
+    query.group(columnSql)
+    groupedColumns.add(columnSql)
+    query[frontendModelGroupedColumnsSymbol] = groupedColumns
   }
 
   /**
@@ -1392,8 +1942,26 @@ export default class FrontendModelController extends Controller {
     }
 
     if (action === "index") {
-      const models = await this.frontendModelRecords()
+      const pluck = this.frontendModelPluck()
       const serverConfiguration = this.frontendModelServerConfiguration()
+
+      if (pluck.length > 0) {
+        if (serverConfiguration?.records) {
+          throw new Error("pluck is not supported when server.records callback is configured")
+        }
+
+        const values = await this.frontendModelPluckValues({
+          pluck,
+          query: this.frontendModelIndexQuery()
+        })
+
+        return {
+          status: "success",
+          values
+        }
+      }
+
+      const models = await this.frontendModelRecords()
       const serializedModels = serverConfiguration?.serialize
         ? await Promise.all(models.map(async (model) => {
           return await serverConfiguration.serialize({

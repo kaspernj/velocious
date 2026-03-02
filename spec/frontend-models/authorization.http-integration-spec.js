@@ -3,6 +3,7 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
+import Comment from "../dummy/src/models/comment.js"
 import Project from "../dummy/src/models/project.js"
 import TaskModel from "../dummy/src/models/task.js"
 import Task from "../dummy/src/frontend-models/task.js"
@@ -225,6 +226,33 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
     })
   })
 
+  it("paginates frontend-model records with limit/offset and page/perPage", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await createTask("Alpha task")
+        await createTask("Bravo task")
+
+        const limitOffsetTasks = await Task
+          .order("name")
+          .offset(1)
+          .limit(1)
+          .toArray()
+        const pageTasks = await Task
+          .order("name")
+          .page(2)
+          .perPage(1)
+          .toArray()
+
+        expect(limitOffsetTasks.map((task) => task.name())).toEqual(["Bravo task"])
+        expect(pageTasks.map((task) => task.name())).toEqual(["Bravo task"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("sorts frontend-model records with multiple nested sort tuples", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()
@@ -257,6 +285,81 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
           .toArray()
 
         expect(tasks.map((task) => task.name())).toEqual(["Zulu owner task 2", "Alpha owner task 2"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("deduplicates frontend-model rows with distinct() across has-many joins", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const task = await createTask(`Distinct task ${Date.now()}`)
+
+        await Comment.create({body: "Comment A", taskId: task.id()})
+        await Comment.create({body: "Comment B", taskId: task.id()})
+
+        const withoutDistinct = await Task
+          .search(["comments"], "id", "gteq", 1)
+          .toArray()
+        const withDistinct = await Task
+          .select({Task: ["id"]})
+          .search(["comments"], "id", "gteq", 1)
+          .distinct()
+          .toArray()
+
+        const withoutDistinctTaskIds = withoutDistinct
+          .map((record) => record.id())
+          .filter((recordId) => recordId === task.id())
+        const withDistinctTaskIds = withDistinct
+          .map((record) => record.id())
+          .filter((recordId) => recordId === task.id())
+
+        expect(withoutDistinctTaskIds.length).toEqual(2)
+        expect(withDistinctTaskIds.length).toEqual(1)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("rejects non-boolean distinct() values", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await expect(async () => {
+          await Task.distinct("1 OR 1=1").toArray()
+        }).toThrow(/distinct must be a boolean/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("plucks frontend-model attributes through real HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const firstTask = await createTask("Pluck task A")
+        const secondTask = await createTask("Pluck task B")
+
+        const taskIds = await Task
+          .where({id: [firstTask.id(), secondTask.id()]})
+          .order("name")
+          .pluck("id")
+        const taskNames = await Task
+          .where({id: [firstTask.id(), secondTask.id()]})
+          .order("name")
+          .pluck("name")
+
+        expect(taskIds.length).toEqual(2)
+        expect(taskIds.includes(firstTask.id())).toEqual(true)
+        expect(taskIds.includes(secondTask.id())).toEqual(true)
+        expect(taskNames).toEqual(["Pluck task A", "Pluck task B"])
       } finally {
         resetFrontendModelTransport()
       }

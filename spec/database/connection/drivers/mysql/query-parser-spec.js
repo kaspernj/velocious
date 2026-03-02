@@ -50,4 +50,16 @@ describe("database - connection - drivers - mysql - query parser", () => {
 
     expect(sql).toEqual("SELECT DISTINCT tasks.id FROM tasks")
   })
+
+  it("generates sql with offset without explicit limit", () => {
+    const handler = new DatabaseHandler()
+    const query = new DatabaseQuery({driver: mysqlDriver, handler})
+      .select("tasks.id")
+      .from("tasks")
+      .offset(20)
+
+    const sql = new MysqlQueryParser({query}).toSql()
+
+    expect(sql).toEqual("SELECT tasks.id FROM tasks LIMIT 18446744073709551615 OFFSET 20")
+  })
 })

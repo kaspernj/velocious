@@ -5,6 +5,11 @@
 - Transport should be configured once via `FrontendModelBase.configureTransport(...)` (or wrapper APIs built on top of it).
 - Keep request execution centralized in Velocious instead of per-project endpoint overrides.
 
+## Frontend vs backend model API differences
+- Frontend models expose a narrower query surface (mainly `find`, `findBy`, `findByOrFail`, `toArray`, `where`, `sort`, `order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`) and do not expose the full backend query API (`joins`, `findOrCreateBy`, etc.).
+- Frontend model commands are resource-mapped; `toArray()` calls the configured `index` command, which may map to a backend command name like `list` instead of literal `index`.
+- Frontend models are HTTP/resource-transport based; backend models run against direct database model/query APIs.
+
 ## Commands and URL mapping
 - Generated model commands must preserve backend resource command mappings.
 - If backend `commands.index` is custom (not literally `index`), generated frontend models must call the mapped command URL.

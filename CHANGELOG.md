@@ -1,5 +1,7 @@
 # Changelog
 
+- Add frontend-model query `limit(...)`, `offset(...)`, and `page(...).perPage(...)` support with integer-only payload validation (rejecting string SQL fragments), backend application in `frontendIndex`, and dummy-app integration coverage.
+- Document frontend vs backend model API differences in docs, including query-surface scope, resource-mapped command behavior for `toArray()`, and transport/runtime differences.
 - Add frontend-model query `sort(...)` support end-to-end (query payload, `FrontendModelBase.sort`, and backend frontend-model controller order application), including relationship-path sort definitions (for example `Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}})`), and cover sorting through dummy-app integration specs.
 - Infer generated frontend-model attribute JSDoc types from resource attribute metadata/column descriptors (including nullability) instead of always emitting `any`.
 - Add a CanCan-style authorization library with request-scoped abilities, resource-defined `abilities()` rules, and `Model.accessible()` query filtering.
@@ -165,3 +167,7 @@
 - Fix frontend-model relationship-path sorting joins by tracking joined paths per query, ensuring sort/search `ORDER BY` columns always have matching SQL joins without duplicate join clauses.
 - Add frontend-model parity APIs (`all`, `order`, `first`, `last`, `findOrInitializeBy`, `findOrCreateBy`, `create`, `save`, record state helpers) and add built-in frontend-model `create` command/action support with resource-ability scoping (including shared `/velocious/api` batches and autoroutes).
 - Regenerate dummy frontend models so single-tag JSDoc blocks (including relationship `@returns` definitions) are emitted on one line.
+- Add frontend-model query `group(...)` support with safe attribute/path normalization (including nested relationship grouping like `{project: {account: ["id"]}}`) and reject SQL-like raw string fragments.
+- Add frontend-model `order(...)` as an alias for query sorting so frontend model query naming aligns with backend model `order(...)` usage.
+- Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.
+- Add frontend-model query `pluck(...)` support with safe attribute/path normalization and backend metadata validation for relationship-aware plucks.

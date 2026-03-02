@@ -3,7 +3,13 @@
 import FrontendModelQuery from "./query.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
-/** @typedef {{commands?: Record<string, string>, path?: string, primaryKey?: string}} FrontendModelResourceConfig */
+/**
+ * @typedef {object} FrontendModelResourceConfig
+ * @property {string[] | Record<string, any>} [attributes] - Frontend model attributes.
+ * @property {Record<string, string>} [commands] - Frontend command mapping.
+ * @property {string} [path] - Frontend resource path.
+ * @property {string} [primaryKey] - Frontend primary key attribute.
+ */
 /**
  * @typedef {object} FrontendModelTransportConfig
  * @property {string} [baseUrl] - Optional base URL prefixed before resource paths.
@@ -11,7 +17,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @property {string} [pathPrefix] - Optional path prefix inserted between base URL and resource path.
  * @property {(() => string | undefined | null)} [pathPrefixResolver] - Optional resolver used per request for dynamic path prefix.
  * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
- * @property {((args: {commandName: string, commandType: "create" | "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
+ * @property {((args: {commandName: string, commandType: "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -19,7 +25,7 @@ const frontendModelTransportConfig = {}
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
-/** @type {Array<{commandType: "create" | "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
+/** @type {Array<{commandType: "find" | "index" | "update" | "destroy", modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
@@ -220,14 +226,6 @@ function normalizePathPrefix(value) {
   const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
 
   return withLeadingSlash.replace(/\/+$/, "")
-}
-
-/**
- * @param {Record<string, any>} value - Attributes hash.
- * @returns {Record<string, any>} - Cloned attributes hash.
- */
-function cloneFrontendModelAttributes(value) {
-  return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(serializeFrontendModelTransportValue(value)))
 }
 
 /**
@@ -498,8 +496,6 @@ export default class FrontendModelBase {
     this._attributes = {}
     this._relationships = {}
     this._selectedAttributes = null
-    this._isNewRecord = true
-    this._persistedAttributes = {}
     this.assignAttributes(attributes)
   }
 
@@ -558,58 +554,6 @@ export default class FrontendModelBase {
   }
 
   /**
-   * @returns {boolean} - Whether this model has not yet been persisted.
-   */
-  isNewRecord() {
-    return this._isNewRecord
-  }
-
-  /**
-   * @returns {boolean} - Whether this model has been persisted.
-   */
-  isPersisted() {
-    return !this.isNewRecord()
-  }
-
-  /**
-   * @param {boolean} newIsNewRecord - New persisted-state flag.
-   * @returns {void}
-   */
-  setIsNewRecord(newIsNewRecord) {
-    this._isNewRecord = newIsNewRecord
-  }
-
-  /**
-   * @returns {Record<string, any[]>} - Changed attributes as `[oldValue, newValue]`.
-   */
-  changes() {
-    /** @type {Record<string, any[]>} */
-    const changedAttributes = {}
-    const attributeNames = new Set([
-      ...Object.keys(this._persistedAttributes),
-      ...Object.keys(this._attributes)
-    ])
-
-    for (const attributeName of attributeNames) {
-      const previousValue = this._persistedAttributes[attributeName]
-      const currentValue = this._attributes[attributeName]
-
-      if (serializeFrontendModelTransportValue(previousValue) !== serializeFrontendModelTransportValue(currentValue)) {
-        changedAttributes[attributeName] = [previousValue, currentValue]
-      }
-    }
-
-    return changedAttributes
-  }
-
-  /**
-   * @returns {boolean} - Whether any tracked attribute has changed.
-   */
-  isChanged() {
-    return Object.keys(this.changes()).length > 0
-  }
-
-  /**
    * @param {string} relationshipName - Relationship name.
    * @returns {FrontendModelHasManyRelationship<any, any> | FrontendModelSingularRelationship<any, any>} - Relationship state object.
    */
@@ -627,45 +571,6 @@ export default class FrontendModelBase {
     }
 
     return this._relationships[relationshipName]
-  }
-
-  /**
-   * @param {string} relationshipName - Relationship name.
-   * @returns {Promise<any>} - Loaded relationship value.
-   */
-  async loadRelationship(relationshipName) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
-    const id = this.primaryKeyValue()
-    const reloadedModel = await ModelClass
-      .preload([relationshipName])
-      .find(id)
-    const loadedValue = reloadedModel.getRelationshipByName(relationshipName).loaded()
-
-    this.getRelationshipByName(relationshipName).setLoaded(loadedValue)
-
-    return loadedValue
-  }
-
-  /**
-   * @param {string} relationshipName - Relationship name.
-   * @param {any} relationshipValue - Relationship value.
-   * @returns {any} - Assigned relationship value.
-   */
-  setRelationship(relationshipName, relationshipValue) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
-    const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
-
-    if (!relationshipDefinition) {
-      throw new Error(`Unknown relationship: ${ModelClass.name}#${relationshipName}`)
-    }
-
-    if (relationshipTypeIsCollection(relationshipDefinition.type)) {
-      throw new Error(`Cannot set has-many relationship with setRelationship(): ${ModelClass.name}#${relationshipName}`)
-    }
-
-    this.getRelationshipByName(relationshipName).setLoaded(relationshipValue)
-
-    return relationshipValue
   }
 
   /**
@@ -754,7 +659,7 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @param {"create" | "find" | "index" | "update" | "destroy"} commandType - Command type.
+   * @param {"find" | "index" | "update" | "destroy"} commandType - Command type.
    * @returns {string} - Resolved command name.
    */
   static commandName(commandType) {
@@ -894,8 +799,6 @@ export default class FrontendModelBase {
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
 
     this.applyPreloadedRelationships(model, preloadedRelationships)
-    model.setIsNewRecord(false)
-    model._persistedAttributes = cloneFrontendModelAttributes(model.attributes())
 
     return model
   }
@@ -942,15 +845,6 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
-   * @returns {FrontendModelQuery<T>} - Query builder.
-   */
-  static all() {
-    return this.query()
-  }
-
-  /**
-   * @template {typeof FrontendModelBase} T
-   * @this {T}
    * @param {Record<string, any>} conditions - Root-model where conditions.
    * @returns {import("./query.js").default<T>} - Query with where conditions.
    */
@@ -961,10 +855,60 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
+   * @param {number} value - Maximum number of records.
+   * @returns {import("./query.js").default<T>} - Query with limit.
+   */
+  static limit(value) {
+    return this.query().limit(value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {number} value - Number of records to skip.
+   * @returns {import("./query.js").default<T>} - Query with offset.
+   */
+  static offset(value) {
+    return this.query().offset(value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {number} pageNumber - 1-based page number.
+   * @returns {import("./query.js").default<T>} - Query with page.
+   */
+  static page(pageNumber) {
+    return this.query().page(pageNumber)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {number} value - Number of records per page.
+   * @returns {import("./query.js").default<T>} - Query with page size.
+   */
+  static perPage(value) {
+    return this.query().perPage(value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
    * @returns {Promise<number>} - Number of loaded model instances.
    */
   static async count() {
     return await this.query().count()
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {...(string | string[] | Record<string, any> | Array<Record<string, any>>)} columns - Pluck definition(s).
+   * @returns {Promise<any[]>} - Plucked values.
+   */
+  static async pluck(...columns) {
+    return await this.query().pluck(...columns)
   }
 
   /**
@@ -993,11 +937,31 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
-   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, any> | Array<Record<string, any>>} sort - Sort definition(s).
-   * @returns {FrontendModelQuery<T>} - Query builder with sort definitions.
+   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, any> | Array<Record<string, any>>} order - Order definition(s).
+   * @returns {FrontendModelQuery<T>} - Query builder with order definitions.
    */
-  static order(sort) {
-    return this.query().order(sort)
+  static order(order) {
+    return this.query().order(order)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {string | string[] | Record<string, any> | Array<Record<string, any>>} group - Group definition(s).
+   * @returns {FrontendModelQuery<T>} - Query builder with group definitions.
+   */
+  static group(group) {
+    return this.query().group(group)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {boolean} [value] - Whether to request distinct rows.
+   * @returns {FrontendModelQuery<T>} - Query builder with distinct flag.
+   */
+  static distinct(value = true) {
+    return this.query().distinct(value)
   }
 
   /**
@@ -1027,59 +991,6 @@ export default class FrontendModelBase {
    */
   static select(select) {
     return /** @type {FrontendModelQuery<T>} */ (this.query().select(select))
-  }
-
-  /**
-   * @template {typeof FrontendModelBase} T
-   * @this {T}
-   * @returns {Promise<InstanceType<T> | null>} - First model or null.
-   */
-  static async first() {
-    return await this.query().first()
-  }
-
-  /**
-   * @template {typeof FrontendModelBase} T
-   * @this {T}
-   * @returns {Promise<InstanceType<T> | null>} - Last model or null.
-   */
-  static async last() {
-    return await this.query().last()
-  }
-
-  /**
-   * @template {typeof FrontendModelBase} T
-   * @this {T}
-   * @param {Record<string, any>} conditions - Attribute match conditions.
-   * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
-   */
-  static async findOrInitializeBy(conditions) {
-    return await this.query().findOrInitializeBy(conditions)
-  }
-
-  /**
-   * @template {typeof FrontendModelBase} T
-   * @this {T}
-   * @param {Record<string, any>} conditions - Attribute match conditions.
-   * @param {(model: InstanceType<T>) => Promise<void> | void} [callback] - Optional callback before save when created.
-   * @returns {Promise<InstanceType<T>>} - Existing or newly created model.
-   */
-  static async findOrCreateBy(conditions, callback) {
-    return await this.query().findOrCreateBy(conditions, callback)
-  }
-
-  /**
-   * @template {typeof FrontendModelBase} T
-   * @this {T}
-   * @param {Record<string, any>} [attributes] - Initial attributes.
-   * @returns {Promise<InstanceType<T>>} - Persisted model.
-   */
-  static async create(attributes = {}) {
-    const model = /** @type {InstanceType<T>} */ (new this(attributes))
-
-    await model.save()
-
-    return model
   }
 
   /**
@@ -1252,32 +1163,6 @@ export default class FrontendModelBase {
     })
 
     this.assignAttributes(ModelClass.attributesFromResponse(response))
-    this.setIsNewRecord(false)
-    this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
-
-    return this
-  }
-
-  /**
-   * @returns {Promise<this>} - Saved model.
-   */
-  async save() {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
-    const commandType = this.isNewRecord() ? "create" : "update"
-    /** @type {Record<string, any>} */
-    const payload = {
-      attributes: this.attributes()
-    }
-
-    if (!this.isNewRecord()) {
-      payload.id = this.primaryKeyValue()
-    }
-
-    const response = await ModelClass.executeCommand(commandType, payload)
-
-    this.assignAttributes(ModelClass.attributesFromResponse(response))
-    this.setIsNewRecord(false)
-    this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
 
     return this
   }
@@ -1295,14 +1180,14 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @param {"create" | "find" | "index" | "update" | "destroy"} commandType - Command type.
+   * @param {"find" | "index" | "update" | "destroy"} commandType - Command type.
    * @param {Record<string, any>} payload - Command payload.
    * @returns {Promise<Record<string, any>>} - Parsed JSON response.
    */
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
     const serializedPayload = /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(payload))
-    const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
+    const resourceConfig = this.resourceConfig()
     const resourcePath = typeof resourceConfig.path === "string" && resourceConfig.path.length > 0 ? this.resourcePath() : null
     const url = resourcePath
       ? frontendModelCommandUrl(resourcePath, commandName)
@@ -1379,7 +1264,7 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {object} args - Arguments.
-   * @param {"create" | "find" | "index" | "update" | "destroy"} args.commandType - Command type.
+   * @param {"find" | "index" | "update" | "destroy"} args.commandType - Command type.
    * @param {Record<string, any>} args.response - Decoded response.
    * @returns {void}
    */
@@ -1414,7 +1299,7 @@ export default class FrontendModelBase {
    * @returns {Set<string>} - Configured frontend model attribute names.
    */
   static configuredFrontendModelAttributeNames() {
-    const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
+    const resourceConfig = this.resourceConfig()
     const attributes = resourceConfig.attributes
 
     if (Array.isArray(attributes)) {
