@@ -635,7 +635,8 @@ function normalizePluck(pluck) {
  * @returns {Set<string>} - Resource attribute names.
  */
 function frontendModelResourceAttributes(modelClass) {
-  const attributes = modelClass.resourceConfig().attributes
+  const resourceConfig = /** @type {Record<string, any>} */ (modelClass.resourceConfig())
+  const attributes = resourceConfig.attributes
 
   if (Array.isArray(attributes)) {
     return new Set(attributes)
@@ -1192,5 +1193,58 @@ export default class FrontendModelQuery {
     }
 
     return model
+  }
+
+  /**
+   * @returns {Promise<InstanceType<T> | null>} - First model or null.
+   */
+  async first() {
+    const models = await this.toArray()
+
+    return models[0] || null
+  }
+
+  /**
+   * @returns {Promise<InstanceType<T> | null>} - Last model or null.
+   */
+  async last() {
+    const models = await this.toArray()
+
+    if (models.length < 1) return null
+
+    return models[models.length - 1]
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Conditions.
+   * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
+   */
+  async findOrInitializeBy(conditions) {
+    const model = await this.findBy(conditions)
+
+    if (model) return model
+
+    return /** @type {InstanceType<T>} */ (new this.modelClass(conditions))
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Conditions.
+   * @param {(model: InstanceType<T>) => Promise<void> | void} [callback] - Optional callback before save.
+   * @returns {Promise<InstanceType<T>>} - Existing or newly created model.
+   */
+  async findOrCreateBy(conditions, callback) {
+    const model = await this.findBy(conditions)
+
+    if (model) return model
+
+    const newModel = /** @type {InstanceType<T>} */ (new this.modelClass(conditions))
+
+    if (callback) {
+      await callback(newModel)
+    }
+
+    await newModel.save()
+
+    return newModel
   }
 }

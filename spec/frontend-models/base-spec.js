@@ -12,14 +12,16 @@ function buildTestModelClass() {
   /** Test model implementation for frontend model base specs. */
   class User extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {destroy: string, find: string, update: string}, path: string, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
         attributes: ["id", "name", "email"],
         commands: {
+          create: "create",
           destroy: "destroy",
           find: "find",
+          index: "index",
           update: "update"
         },
         path: "/api/frontend-models/users",
@@ -294,6 +296,56 @@ describe("Frontend models - base", () => {
         }
       ])
       expect(usersCount).toEqual(2)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("supports order alias by forwarding to sort payload", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .order("name desc")
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            sort: [
+              {
+                column: "name",
+                direction: "desc",
+                path: []
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("supports first and last query helpers", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [
+        {id: 1, name: "One"},
+        {id: 2, name: "Two"}
+      ]
+    })
+
+    try {
+      const firstUser = await User.first()
+      const lastUser = await User.last()
+
+      expect(firstUser?.id()).toEqual(1)
+      expect(lastUser?.id()).toEqual(2)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
@@ -837,6 +889,49 @@ describe("Frontend models - base", () => {
     expect(loadedTasks[0]).toEqual(builtTask)
   })
 
+  it("supports loading and setting relationships from parity helpers", async () => {
+    const {Project, Task} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({
+      model: {
+        id: "1",
+        name: "One",
+        __preloadedRelationships: {
+          tasks: [
+            {id: "11", name: "Task 1"}
+          ]
+        }
+      }
+    })
+    const project = new Project({id: "1", name: "One"})
+    const task = new Task({id: "11", name: "Task 1"})
+
+    try {
+      const loadedTasks = await project.loadRelationship("tasks")
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            id: "1",
+            preload: {
+              tasks: true
+            }
+          },
+          url: "/api/frontend-models/projects/find"
+        }
+      ])
+      expect(Array.isArray(loadedTasks)).toEqual(true)
+      expect(loadedTasks[0].readAttribute("id")).toEqual("11")
+
+      const assignedProject = task.setRelationship("project", project)
+
+      expect(assignedProject).toEqual(project)
+      expect(task.getRelationshipByName("project").loaded()).toEqual(project)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("clears cached preloaded relationships when attributes change", () => {
     const {Task} = buildPreloadTestModelClasses()
     const task = Task.instantiateFromResponse({
@@ -899,6 +994,92 @@ describe("Frontend models - base", () => {
       ])
       expect(user.name()).toEqual("Johnny")
       expect(user.readAttribute("email")).toEqual("johnny@example.com")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("saves a new model with create command and tracks persisted state", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 7, name: "Created"}})
+    const user = new User({email: "john@example.com", name: "Draft"})
+
+    try {
+      expect(user.isNewRecord()).toEqual(true)
+      expect(user.isPersisted()).toEqual(false)
+
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "john@example.com", name: "Draft"}
+          },
+          url: "/api/frontend-models/users/create"
+        }
+      ])
+      expect(user.isNewRecord()).toEqual(false)
+      expect(user.isPersisted()).toEqual(true)
+      expect(user.id()).toEqual(7)
+      expect(user.isChanged()).toEqual(false)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("tracks changes and supports findOrInitializeBy/findOrCreateBy", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [],
+      model: {email: "new@example.com", id: 9, name: "Created"}
+    })
+
+    try {
+      const initializedUser = await User.findOrInitializeBy({email: "new@example.com"})
+
+      expect(initializedUser.isNewRecord()).toEqual(true)
+      expect(initializedUser.isPersisted()).toEqual(false)
+      expect(initializedUser.changes()).toEqual({
+        email: [undefined, "new@example.com"]
+      })
+
+      const createdUser = await User.findOrCreateBy({email: "new@example.com"}, (model) => {
+        model.setName("Local Name")
+      })
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            where: {
+              email: "new@example.com"
+            }
+          },
+          url: "/api/frontend-models/users/index"
+        },
+        {
+          body: {
+            where: {
+              email: "new@example.com"
+            }
+          },
+          url: "/api/frontend-models/users/index"
+        },
+        {
+          body: {
+            attributes: {
+              email: "new@example.com",
+              name: "Local Name"
+            }
+          },
+          url: "/api/frontend-models/users/create"
+        }
+      ])
+      expect(createdUser.isPersisted()).toEqual(true)
+      expect(createdUser.id()).toEqual(9)
+      expect(createdUser.name()).toEqual("Created")
+      expect(createdUser.changes()).toEqual({})
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

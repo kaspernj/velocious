@@ -8,7 +8,7 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /** Frontend model for BrowserFrontendModel. */
 export default class BrowserFrontendModel extends FrontendModelBase {
-  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
+  /** @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: [
@@ -17,6 +17,7 @@ export default class BrowserFrontendModel extends FrontendModelBase {
         "createdAt",
       ],
       commands: {
+        create: "create",
         destroy: "destroy",
         find: "frontend-find",
         index: "frontend-index",

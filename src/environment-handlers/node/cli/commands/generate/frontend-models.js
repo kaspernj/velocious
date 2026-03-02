@@ -182,6 +182,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const attributesTypeName = `${className}Attributes`
     const attributeNames = attributes.map((attribute) => attribute.name)
     const commands = {
+      create: modelConfig.commands?.create || "create",
       destroy: modelConfig.commands?.destroy || "destroy",
       find: modelConfig.commands?.find || "find",
       index: modelConfig.commands?.index || "index",
@@ -214,7 +215,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
+    fileContent += "  /** @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     fileContent += this.formattedArrayProperty({
@@ -282,6 +283,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         fileContent += "\n"
         fileContent += `  /** @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models. */\n`
         fileContent += `  ${relationship.relationshipName}Loaded() { return /** @type {Array<import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
+
+        fileContent += "\n"
+        fileContent += `  /** @returns {Promise<Array<import(${JSON.stringify(targetImportPath)}).default>>} - Loaded related models. */\n`
+        fileContent += `  async load${relationshipNameCamelized}() { return /** @type {Promise<Array<import(${JSON.stringify(targetImportPath)}).default>>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
       } else {
         fileContent += "\n"
         fileContent += `  /** @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model. */\n`
@@ -293,6 +298,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default} - Built related model.\n`
         fileContent += "   */\n"
         fileContent += `  build${relationshipNameCamelized}(attributes = {}) { return /** @type {import(${JSON.stringify(targetImportPath)}).default} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).build(attributes)) }\n`
+
+        fileContent += "\n"
+        fileContent += `  /** @returns {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} - Loaded related model. */\n`
+        fileContent += `  async load${relationshipNameCamelized}() { return /** @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
+
+        fileContent += "\n"
+        fileContent += `  /** @param {import(${JSON.stringify(targetImportPath)}).default | null} model - Related model. @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Assigned related model. */\n`
+        fileContent += `  set${relationshipNameCamelized}(model) { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.setRelationship(${JSON.stringify(relationship.relationshipName)}, model)) }\n`
       }
     }
 
