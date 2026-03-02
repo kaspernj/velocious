@@ -172,3 +172,5 @@
 - Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.
 - Add frontend-model query `pluck(...)` support with safe attribute/path normalization and backend metadata validation for relationship-aware plucks.
 - Replace non-literal dynamic import in frontend-model route hook with a static controller import so Expo/Metro builds do not fail on `import(variable)` usage.
+- Restore frontend-model parity APIs after merge resolution (`first`/`last`, `findOrInitializeBy`/`findOrCreateBy`, `isNewRecord`/`isPersisted`, relationship parity helpers, create/save flows) and re-add query helpers so `FrontendModelBase` and `FrontendModelQuery` stay API-compatible.
+- Validate missing ids for `find`/`update`/`destroy` frontend-model actions while keeping `create` id-free, so missing-id find requests return `Expected model id.` instead of an incorrect not-found response.

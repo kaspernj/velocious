@@ -1984,30 +1984,6 @@ export default class FrontendModelController extends Controller {
     const modelClass = this.frontendModelClass()
     const id = params.id
 
-    if (action === "find") {
-      const model = await this.frontendModelFindRecord("find", id)
-
-      if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
-      }
-
-      const serverConfiguration = this.frontendModelServerConfiguration()
-      const serializedModel = serverConfiguration?.serialize
-        ? await serverConfiguration.serialize({
-          action: "find",
-          controller: this,
-          model,
-          modelClass,
-          params
-        })
-        : await this.serializeFrontendModel(model)
-
-      return {
-        model: serializedModel,
-        status: "success"
-      }
-    }
-
     if (action === "create") {
       const attributes = params.attributes
 
@@ -2040,6 +2016,30 @@ export default class FrontendModelController extends Controller {
 
     if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
       return this.frontendModelErrorPayload("Expected model id.")
+    }
+
+    if (action === "find") {
+      const model = await this.frontendModelFindRecord("find", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const serverConfiguration = this.frontendModelServerConfiguration()
+      const serializedModel = serverConfiguration?.serialize
+        ? await serverConfiguration.serialize({
+          action: "find",
+          controller: this,
+          model,
+          modelClass,
+          params
+        })
+        : await this.serializeFrontendModel(model)
+
+      return {
+        model: serializedModel,
+        status: "success"
+      }
     }
 
     if (action === "update") {
