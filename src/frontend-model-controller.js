@@ -190,6 +190,7 @@ function normalizeFrontendModelSelect(select) {
 
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
+const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -1533,7 +1534,13 @@ export default class FrontendModelController extends Controller {
           if (value.length === 0) {
             query.where("1=0")
           } else {
-            query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(this.normalizeFrontendModelWhereColumnValue(entry))).join(", ")})`)
+            const normalizedValues = value.map((entry) => this.normalizeFrontendModelWhereColumnValue({columnName, modelClass, value: entry}))
+
+            if (normalizedValues.includes(frontendModelWhereNoMatchSymbol)) {
+              query.where("1=0")
+            } else {
+              query.where(`${columnSql} IN (${normalizedValues.map((entry) => query.driver.quote(entry)).join(", ")})`)
+            }
           }
 
           continue
@@ -1542,7 +1549,13 @@ export default class FrontendModelController extends Controller {
         if (value == null) {
           query.where(`${columnSql} IS NULL`)
         } else {
-          query.where(`${columnSql} = ${query.driver.quote(this.normalizeFrontendModelWhereColumnValue(value))}`)
+          const normalizedValue = this.normalizeFrontendModelWhereColumnValue({columnName, modelClass, value})
+
+          if (normalizedValue === frontendModelWhereNoMatchSymbol) {
+            query.where("1=0")
+          } else {
+            query.where(`${columnSql} = ${query.driver.quote(normalizedValue)}`)
+          }
         }
 
         continue
@@ -1578,11 +1591,28 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {unknown} value - Where value.
-   * @returns {unknown} - SQL-safe where value.
+   * @param {object} args - Args.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.columnName - Column name.
+   * @param {unknown} args.value - Where value.
+   * @returns {unknown | symbol} - SQL-safe where value.
    */
-  normalizeFrontendModelWhereColumnValue(value) {
+  normalizeFrontendModelWhereColumnValue({columnName, modelClass, value}) {
     if (isPlainObject(value)) {
+      const columnType = modelClass.getColumnTypeByName(columnName)
+
+      if (typeof columnType !== "string") {
+        return frontendModelWhereNoMatchSymbol
+      }
+
+      const normalizedType = columnType.toLowerCase()
+      const objectValueTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
+      const supportsObjectValues = normalizedType.includes("text") || objectValueTypes.has(normalizedType)
+
+      if (!supportsObjectValues) {
+        return frontendModelWhereNoMatchSymbol
+      }
+
       return JSON.stringify(value)
     }
 
