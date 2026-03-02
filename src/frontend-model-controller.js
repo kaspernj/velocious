@@ -190,6 +190,7 @@ function normalizeFrontendModelSelect(select) {
 
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
+const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -1501,35 +1502,121 @@ export default class FrontendModelController extends Controller {
    * @returns {void}
    */
   applyFrontendModelWhere({query, where}) {
-    const modelClass = this.frontendModelClass()
+    this.applyFrontendModelWhereForPath({
+      modelClass: this.frontendModelClass(),
+      path: [],
+      query,
+      where
+    })
+  }
+
+  /**
+   * @param {object} args - Where args.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class for current where scope.
+   * @param {string[]} args.path - Relationship path from root.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {Record<string, any>} args.where - Where conditions for current scope.
+   * @returns {void}
+   */
+  applyFrontendModelWhereForPath({modelClass, path, query, where}) {
     const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
-    const rootTableReference = query.getTableReferenceForJoin()
 
     for (const [attributeName, value] of Object.entries(where)) {
       const columnName = attributeNameToColumnNameMap[attributeName]
 
-      if (!columnName) {
-        throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
-      }
+      if (columnName) {
+        this.ensureFrontendModelJoinPath({path, query})
 
-      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+        const tableReference = query.getTableReferenceForJoin(...path)
+        const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
 
-      if (Array.isArray(value)) {
-        if (value.length === 0) {
-          query.where("1=0")
+        if (Array.isArray(value)) {
+          if (value.length === 0) {
+            query.where("1=0")
+          } else {
+            const normalizedValues = value.map((entry) => this.normalizeFrontendModelWhereColumnValue({columnName, modelClass, value: entry}))
+
+            if (normalizedValues.includes(frontendModelWhereNoMatchSymbol)) {
+              query.where("1=0")
+            } else {
+              query.where(`${columnSql} IN (${normalizedValues.map((entry) => query.driver.quote(entry)).join(", ")})`)
+            }
+          }
+
+          continue
+        }
+
+        if (value == null) {
+          query.where(`${columnSql} IS NULL`)
         } else {
-          query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(entry)).join(", ")})`)
+          const normalizedValue = this.normalizeFrontendModelWhereColumnValue({columnName, modelClass, value})
+
+          if (normalizedValue === frontendModelWhereNoMatchSymbol) {
+            query.where("1=0")
+          } else {
+            query.where(`${columnSql} = ${query.driver.quote(normalizedValue)}`)
+          }
         }
 
         continue
       }
 
-      if (value == null) {
-        query.where(`${columnSql} IS NULL`)
-      } else {
-        query.where(`${columnSql} = ${query.driver.quote(value)}`)
+      if (isPlainObject(value)) {
+        const relationship = modelClass.getRelationshipsMap()[attributeName]
+
+        if (!relationship) {
+          throw new Error(`Unknown where relationship "${attributeName}" for ${modelClass.name}`)
+        }
+
+        const targetModelClass = relationship.getTargetModelClass()
+
+        if (!targetModelClass) {
+          throw new Error(`No target model class for where relationship "${attributeName}" on ${modelClass.name}`)
+        }
+
+        const relationshipPath = [...path, attributeName]
+
+        this.applyFrontendModelWhereForPath({
+          modelClass: targetModelClass,
+          path: relationshipPath,
+          query,
+          where: value
+        })
+
+        continue
       }
+
+      throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
     }
+  }
+
+  /**
+   * @param {object} args - Args.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.columnName - Column name.
+   * @param {unknown} args.value - Where value.
+   * @returns {unknown | symbol} - SQL-safe where value.
+   */
+  normalizeFrontendModelWhereColumnValue({columnName, modelClass, value}) {
+    if (isPlainObject(value)) {
+      const columnType = modelClass.getColumnTypeByName(columnName)
+
+      if (typeof columnType !== "string") {
+        return frontendModelWhereNoMatchSymbol
+      }
+
+      const normalizedType = columnType.toLowerCase()
+      const objectValueTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
+      const supportsObjectValues = normalizedType.includes("text") || objectValueTypes.has(normalizedType)
+
+      if (!supportsObjectValues) {
+        return frontendModelWhereNoMatchSymbol
+      }
+
+      return JSON.stringify(value)
+    }
+
+    return value
   }
 
   /**

@@ -38,6 +38,7 @@
 - Reject non-plain object condition values (for example `RegExp`, `Map`, `Set`, functions, symbols) to avoid weakened/ambiguous filters.
 - `null` conditions should only match explicit `null`, not missing/undefined attributes.
 - Nested object/array condition values are matched by value, not object identity.
+- Frontend-model `where(...)` supports nested relationship descriptors (for example `{project: {creatingUser: {reference: "owner-b"}}}`) and should stay descriptor-only (no raw SQL fragments).
 
 ## Matching behavior
 - Local re-checking of returned models is kept for safety when backend handlers may return broader sets.

@@ -550,6 +550,57 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("applies relationship-path where params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      await User.create({
+        email: "where-owner-a@example.com",
+        encryptedPassword: "secret",
+        reference: "where-owner-a"
+      })
+      await User.create({
+        email: "where-owner-b@example.com",
+        encryptedPassword: "secret",
+        reference: "where-owner-b"
+      })
+      await createTaskWithProject({
+        creatingUserReference: "where-owner-a",
+        projectName: "Where Owner Project A",
+        taskName: "Where Owner Task A"
+      })
+      await createTaskWithProject({
+        creatingUserReference: "where-owner-b",
+        projectName: "Where Owner Project B",
+        taskName: "Where Owner Task B"
+      })
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {
+          project: {
+            creatingUser: {
+              reference: "where-owner-b"
+            }
+          }
+        }
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Where Owner Task B"])
+    })
+  })
+
+  it("treats plain-object values on root where columns as values", async () => {
+    await Dummy.run(async () => {
+      await createTask("Object where value")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: {raw: 1}}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models).toEqual([])
+    })
+  })
+
   it("supports relationship-path search through project creating user", async () => {
     await Dummy.run(async () => {
       await User.create({
