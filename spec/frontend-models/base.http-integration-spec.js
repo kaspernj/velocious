@@ -248,6 +248,38 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("first()/last() apply deterministic ordering over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const firstModel = await HttpFrontendModel.first()
+        const lastModel = await HttpFrontendModel.last()
+
+        expect(firstModel?.id()).toEqual("1")
+        expect(lastModel?.id()).toEqual("2")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("last() reverses explicit sort order over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const model = await HttpFrontendModel
+          .sort("-createdAt")
+          .last()
+
+        expect(model?.id()).toEqual("1")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("limit(...).offset(...).toArray() paginates records through real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

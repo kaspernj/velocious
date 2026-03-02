@@ -302,6 +302,35 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends deterministic primary-key ordering when using first()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})
+
+    try {
+      const user = await User.first()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            limit: 1,
+            sort: [
+              {
+                column: "id",
+                direction: "asc",
+                path: []
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("supports order alias by forwarding to sort payload", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
@@ -331,21 +360,68 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("supports first and last query helpers", async () => {
+  it("reverses explicit ordering when using last()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})
+
+    try {
+      const user = await User
+        .sort("-id")
+        .last()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            limit: 1,
+            sort: [
+              {
+                column: "id",
+                direction: "asc",
+                path: []
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("keeps pagination scope when using last()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
       models: [
-        {id: 1, name: "One"},
-        {id: 2, name: "Two"}
+        {email: "jane@example.com", id: 6, name: "Jane"},
+        {email: "john@example.com", id: 7, name: "John"}
       ]
     })
 
     try {
-      const firstUser = await User.first()
-      const lastUser = await User.last()
+      const user = await User
+        .sort("id asc")
+        .offset(1)
+        .last()
 
-      expect(firstUser?.id()).toEqual(1)
-      expect(lastUser?.id()).toEqual(2)
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            offset: 1,
+            sort: [
+              {
+                column: "id",
+                direction: "asc",
+                path: []
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+      expect(user?.id()).toEqual(7)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
