@@ -9,6 +9,8 @@ import S3AttachmentStorageDriver from "./storage-drivers/s3.js"
 
 const ATTACHMENTS_TABLE = "velocious_attachments"
 
+/** @typedef {new (...args: any[]) => Record<string, any>} AttachmentDriverConstructor */
+
 /** @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */
 const storesByConfiguration = new WeakMap()
 
@@ -65,6 +67,8 @@ export default class RecordAttachmentsStore {
     this._contentBase64Nullable = true
     /** @type {Map<string, Record<string, any>>} */
     this._attachmentDriversByName = new Map()
+    /** @type {Map<AttachmentDriverConstructor | Record<string, any>, Record<string, any>>} */
+    this._attachmentDriversByReference = new Map()
   }
 
   /**
@@ -132,8 +136,8 @@ export default class RecordAttachmentsStore {
       allowPathInput,
       allowedPathPrefixes
     })
+    const attachmentDriver = this.resolveAttachmentDriver({model, name})
     const attachmentDriverName = this._attachmentDriverNameFor({model, name})
-    const attachmentDriver = this.attachmentDriverByName(attachmentDriverName)
     const now = Date.now()
     const recordType = model.getModelClass().name
     const recordId = String(model.id())
@@ -245,7 +249,7 @@ export default class RecordAttachmentsStore {
       throw new Error(`Attachment row ${String(row.id)} is missing storage key`)
     }
 
-    const attachmentDriver = this.attachmentDriverForRow(row)
+    const attachmentDriver = this.resolveAttachmentDriver({model, name, row})
 
     return await attachmentDriver.read({
       model,
@@ -263,7 +267,7 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<string | null>} - Attachment URL.
    */
   async attachmentRowUrl({model, name, row}) {
-    const attachmentDriver = this.attachmentDriverForRow(row)
+    const attachmentDriver = this.resolveAttachmentDriver({model, name, row})
 
     if (typeof attachmentDriver.url !== "function") return null
 
@@ -347,7 +351,7 @@ export default class RecordAttachmentsStore {
 
     if (!storageKey) return
 
-    const attachmentDriver = this.attachmentDriverForRow(row)
+    const attachmentDriver = this.resolveAttachmentDriver({model, name, row})
 
     if (typeof attachmentDriver.delete !== "function") return
 
@@ -414,16 +418,68 @@ export default class RecordAttachmentsStore {
 
   /**
    * @param {object} args - Options.
+   * @param {AttachmentDriverConstructor | Record<string, any>} args.driverReference - Driver class or instance.
+   * @param {string} args.attachmentName - Attachment name.
+   * @param {typeof import("../index.js").default} args.modelClass - Model class.
+   * @returns {Record<string, any>} - Attachment driver instance.
+   */
+  attachmentDriverByReference({attachmentName, driverReference, modelClass}) {
+    if (this._attachmentDriversByReference.has(driverReference)) {
+      return /** @type {Record<string, any>} */ (this._attachmentDriversByReference.get(driverReference))
+    }
+
+    /** @type {Record<string, any>} */
+    let attachmentDriver
+
+    if (typeof driverReference === "function") {
+      const DriverClass = /** @type {AttachmentDriverConstructor} */ (driverReference)
+
+      attachmentDriver = new DriverClass({
+        attachmentName,
+        configuration: this.configuration,
+        modelClass
+      })
+    } else if (driverReference && typeof driverReference === "object") {
+      attachmentDriver = driverReference
+    } else {
+      throw new Error(`Invalid attachment driver reference for ${modelClass.name}#${attachmentName}`)
+    }
+
+    if (typeof attachmentDriver.write !== "function" || typeof attachmentDriver.read !== "function") {
+      throw new Error(`Attachment driver for ${modelClass.name}#${attachmentName} must implement write/read`)
+    }
+
+    this._attachmentDriversByReference.set(driverReference, attachmentDriver)
+
+    return attachmentDriver
+  }
+
+  /**
+   * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
    * @returns {string} - Attachment driver name.
    */
   _attachmentDriverNameFor({model, name}) {
     const attachmentDefinition = model.getModelClass().getAttachmentByName(name)
-    const configuredDriverName = attachmentDefinition.driver
+    const configuredDriver = attachmentDefinition.driver
 
-    if (typeof configuredDriverName === "string" && configuredDriverName.length > 0) {
-      return configuredDriverName
+    if (typeof configuredDriver === "string" && configuredDriver.length > 0) {
+      return configuredDriver
+    }
+
+    if (typeof configuredDriver === "function") {
+      return configuredDriver.name || "custom"
+    }
+
+    if (configuredDriver && typeof configuredDriver === "object") {
+      const constructorName = configuredDriver.constructor?.name
+
+      if (typeof constructorName === "string" && constructorName.length > 0 && constructorName !== "Object") {
+        return constructorName
+      }
+
+      return "custom"
     }
 
     const attachmentsConfiguration = this.configuration.getAttachmentsConfiguration?.() || {}
@@ -437,15 +493,29 @@ export default class RecordAttachmentsStore {
   }
 
   /**
-   * @param {Record<string, any>} row - Attachment row.
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @param {Record<string, any>} [args.row] - Attachment row.
    * @returns {Record<string, any>} - Attachment storage driver instance.
    */
-  attachmentDriverForRow(row) {
-    const driverName = typeof row.driver === "string" && row.driver.length > 0
-      ? row.driver
-      : "filesystem"
+  resolveAttachmentDriver({model, name, row}) {
+    const attachmentDefinition = model.getModelClass().getAttachmentByName(name)
+    const configuredDriver = attachmentDefinition.driver
 
-    return this.attachmentDriverByName(driverName)
+    if (typeof configuredDriver === "function" || (configuredDriver && typeof configuredDriver === "object")) {
+      return this.attachmentDriverByReference({
+        attachmentName: name,
+        driverReference: configuredDriver,
+        modelClass: model.getModelClass()
+      })
+    }
+
+    const fallbackDriverName = typeof row?.driver === "string" && row.driver.length > 0
+      ? row.driver
+      : this._attachmentDriverNameFor({model, name})
+
+    return this.attachmentDriverByName(fallbackDriverName)
   }
 
   /**

@@ -186,3 +186,4 @@
 - Add explicit allowlist validation for frontend-model `resourceConfig().path` and `resourceConfig().commands` (safe URL segments only) and enforce it in frontend command URLs plus backend autoroute resolution.
 - Add built-in model/frontend-model attachment support with `hasOneAttachment`/`hasManyAttachments`, attachment-aware frontend-model `attach`/`download` commands, and backend/frontend update flows that accept attachment payloads.
 - Add pluggable attachment storage drivers (`filesystem`, `native`, `s3`) with per-attachment driver selection, driver-backed persistence reads/writes, and attachment `url()` support on backend/frontend attachment helpers (including frontend-model `url` command responses).
+- Allow model attachment definitions to pass storage drivers as direct class/instance references (for example `Task.hasOneAttachment("mobileCache", {driver: NativeDriver})`) to avoid forced dynamic imports in Expo-incompatible dependency paths.

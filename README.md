@@ -338,6 +338,16 @@ Task.hasOneAttachment("descriptionFile")
 Task.hasOneAttachment("archivedPdf", {driver: "s3"})
 ```
 
+You can also pass a driver class or instance directly on the attachment:
+
+```js
+import NativeDriver from "./storage/native-driver.js"
+
+Task.hasOneAttachment("mobileCache", {driver: NativeDriver})
+// or:
+Task.hasOneAttachment("mobileCache", {driver: new NativeDriver()})
+```
+
 Then use them from backend records:
 
 ```js

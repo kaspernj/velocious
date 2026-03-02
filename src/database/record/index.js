@@ -23,6 +23,10 @@ import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 import UUID from "pure-uuid"
 
+/**
+ * @typedef {new (...args: any[]) => Record<string, any>} AttachmentDriverConstructor
+ */
+
 class ValidationError extends Error {
   /**
    * @returns {VelociousDatabaseRecord} - The model.
@@ -101,11 +105,11 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Record<string, {driver?: string, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
    */
   static getAttachmentsMap() {
     if (!this._attachmentsMap) {
-      /** @type {Record<string, {driver?: string, type: "hasOne" | "hasMany"}>} */
+      /** @type {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} */
       this._attachmentsMap = {}
     }
 
@@ -344,7 +348,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Record<string, {driver?: string, type: "hasOne" | "hasMany"}>} - Attachment definitions.
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
    */
   static getAttachments() {
     return this.getAttachmentsMap()
@@ -352,7 +356,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} attachmentName - Attachment name.
-   * @returns {{driver?: string, type: "hasOne" | "hasMany"}} - Attachment definition.
+   * @returns {{driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}} - Attachment definition.
    */
   static getAttachmentByName(attachmentName) {
     const definition = this.getAttachmentsMap()[attachmentName]
@@ -495,7 +499,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} attachmentName - Attachment name.
    * @param {object} args - Attachment args.
-   * @param {string} [args.driver] - Attachment driver name.
+   * @param {string | AttachmentDriverConstructor | Record<string, any>} [args.driver] - Attachment driver name, class, or instance.
    * @param {"hasOne" | "hasMany"} args.type - Attachment type.
    * @returns {void} - No return value.
    */
@@ -518,7 +522,7 @@ class VelociousDatabaseRecord {
   /**
    * Adds a single attachment helper to the model.
    * @param {string} attachmentName - Attachment name.
-   * @param {{driver?: string}} [args] - Attachment options.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
    * @returns {void} - No return value.
    */
   static hasOneAttachment(attachmentName, args = {}) {
@@ -528,7 +532,7 @@ class VelociousDatabaseRecord {
   /**
    * Adds a collection attachment helper to the model.
    * @param {string} attachmentName - Attachment name.
-   * @param {{driver?: string}} [args] - Attachment options.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
    * @returns {void} - No return value.
    */
   static hasManyAttachments(attachmentName, args = {}) {

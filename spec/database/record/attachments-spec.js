@@ -2,6 +2,45 @@ import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - attachments", {tags: ["dummy"]}, () => {
+  class InlineMemoryAttachmentDriver {
+    constructor() {
+      /** @type {Map<string, Buffer>} */
+      this.contents = new Map()
+    }
+
+    /**
+     * @param {object} args - Options.
+     * @param {string} args.attachmentId - Attachment id.
+     * @param {{contentBuffer: Buffer}} args.input - Normalized input.
+     * @returns {Promise<{storageKey: string}>} - Storage key.
+     */
+    async write({attachmentId, input}) {
+      const storageKey = `${attachmentId}-memory`
+
+      this.contents.set(storageKey, input.contentBuffer)
+
+      return {storageKey}
+    }
+
+    /**
+     * @param {object} args - Options.
+     * @param {string} args.storageKey - Storage key.
+     * @returns {Promise<Buffer>} - Stored content.
+     */
+    async read({storageKey}) {
+      return this.contents.get(storageKey) || Buffer.from("")
+    }
+
+    /**
+     * @param {object} args - Options.
+     * @param {string} args.storageKey - Storage key.
+     * @returns {Promise<string>} - URL.
+     */
+    async url({storageKey}) {
+      return `memory://${storageKey}`
+    }
+  }
+
   it("attaches and downloads has-one attachments", async () => {
     const project = await Project.create({name: "Attachment project"})
     const task = await Task.create({name: "Attachment task", projectId: project.id()})
@@ -81,5 +120,30 @@ describe("Record - attachments", {tags: ["dummy"]}, () => {
 
     expect(downloadedAttachment.filename()).toEqual("second.txt")
     expect(downloadedAttachment.content().toString()).toEqual("second")
+  })
+
+  it("supports attachment driver classes directly on model definitions", async () => {
+    const originalDriver = Task.getAttachmentByName("descriptionFile").driver
+
+    Task.getAttachmentByName("descriptionFile").driver = InlineMemoryAttachmentDriver
+
+    try {
+      const project = await Project.create({name: "Attachment project"})
+      const task = await Task.create({name: "Attachment task", projectId: project.id()})
+
+      await task.descriptionFile().attach({
+        content: "driver-content",
+        filename: "driver.txt"
+      })
+
+      const downloadedAttachment = await task.descriptionFile().download()
+      const attachmentUrl = await task.descriptionFile().url()
+
+      expect(downloadedAttachment.content().toString()).toEqual("driver-content")
+      expect(downloadedAttachment.url()).toMatch(/^memory:\/\//)
+      expect(attachmentUrl).toMatch(/^memory:\/\//)
+    } finally {
+      Task.getAttachmentByName("descriptionFile").driver = originalDriver
+    }
   })
 })
