@@ -270,6 +270,7 @@ function normalizeFrontendModelSelect(select) {
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
+const frontendModelClientSafeErrorMessage = "Request failed."
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -2148,18 +2149,20 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<void>} - Resolves when error has been rendered.
    */
   async frontendModelRenderError(errorMessage) {
+    await this.logger.error(`Frontend model request failed: ${errorMessage}`)
+
     const renderError = /** @type {((errorMessage: string) => Promise<void>) | undefined} */ (
       /** @type {any} */ (this).renderError
     )
 
     if (typeof renderError === "function") {
-      await renderError.call(this, errorMessage)
+      await renderError.call(this, frontendModelClientSafeErrorMessage)
       return
     }
 
     await this.render({
       json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
-        errorMessage,
+        errorMessage: frontendModelClientSafeErrorMessage,
         status: "error"
       }))
     })
@@ -2173,6 +2176,66 @@ export default class FrontendModelController extends Controller {
     return {
       errorMessage,
       status: "error"
+    }
+  }
+
+  /**
+   * @returns {Record<string, any>} - Client-safe error payload.
+   */
+  frontendModelClientSafeErrorPayload() {
+    return this.frontendModelErrorPayload(frontendModelClientSafeErrorMessage)
+  }
+
+  /**
+   * @param {object} args - Error log args.
+   * @param {string} args.action - Endpoint/action label.
+   * @param {unknown} args.error - Caught error.
+   * @param {"index" | "find" | "create" | "update" | "destroy"} [args.commandType] - Frontend-model command type.
+   * @param {string | undefined} [args.model] - Request model name when available.
+   * @param {string | undefined} [args.requestId] - Batch request id when available.
+   * @returns {Promise<void>} - Resolves after logging.
+   */
+  async frontendModelLogEndpointError({action, error, commandType, model, requestId}) {
+    let resolvedModel = model
+
+    if (!resolvedModel) {
+      try {
+        resolvedModel = this.frontendModelParams().model
+      } catch {
+        resolvedModel = undefined
+      }
+    }
+
+    const errorMessage = error instanceof Error
+      ? `${error.message}\n${error.stack || ""}`
+      : String(error)
+
+    await this.logger.error(() => ["Frontend model endpoint request failed", {
+      action,
+      commandType,
+      error: errorMessage,
+      model: resolvedModel,
+      requestId
+    }])
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
+   * @returns {Promise<void>} - Resolves when response has been rendered.
+   */
+  async frontendModelRenderCommandResponse(action) {
+    try {
+      const responsePayload = await this.frontendModelCommandPayload(action)
+      if (!responsePayload) return
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
+      })
+    } catch (error) {
+      await this.frontendModelLogEndpointError({action, commandType: action, error})
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelClientSafeErrorPayload()))
+      })
     }
   }
 
@@ -2405,9 +2468,17 @@ export default class FrontendModelController extends Controller {
           response: responsePayload || this.frontendModelErrorPayload("Action halted by beforeAction.")
         })
       } catch (error) {
+        await this.frontendModelLogEndpointError({
+          action: "frontendApi",
+          commandType,
+          error,
+          model,
+          requestId
+        })
+
         responses.push({
           requestId,
-          response: this.frontendModelErrorPayload(error instanceof Error ? error.message : String(error))
+          response: this.frontendModelClientSafeErrorPayload()
         })
       }
     }
@@ -2427,12 +2498,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("index")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("index")
   }
 
   /** @returns {Promise<void>} - Member find action for frontend model resources. */
@@ -2442,12 +2508,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("find")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("find")
   }
 
   /** @returns {Promise<void>} - Member update action for frontend model resources. */
@@ -2457,12 +2518,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("update")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("update")
   }
 
   /** @returns {Promise<void>} - Member create action for frontend model resources. */
@@ -2472,12 +2528,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("create")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("create")
   }
 
   /** @returns {Promise<void>} - Member destroy action for frontend model resources. */
@@ -2487,11 +2538,6 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    const responsePayload = await this.frontendModelCommandPayload("destroy")
-    if (!responsePayload) return
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
-    })
+    await this.frontendModelRenderCommandResponse("destroy")
   }
 }

@@ -8,6 +8,8 @@ import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 
+const FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE = "Request failed."
+
 /**
  * @param {string} path - Request path.
  * @param {Record<string, any>} payload - JSON payload.
@@ -186,6 +188,26 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("returns client-safe errors from shared frontend-model API when command execution fails", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/velocious/api", {
+        requests: [
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {distinct: "1 OR 1=1"},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.responses.length).toEqual(1)
+      expect(payload.responses[0].response.status).toEqual("error")
+      expect(payload.responses[0].response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+    })
+  })
+
   it("applies preload params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Preload Task")
@@ -270,7 +292,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("error")
-      expect(payload.errorMessage).toMatch(/Invalid distinct/)
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 
@@ -281,7 +303,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("error")
-      expect(payload.errorMessage).toMatch(/Invalid limit/)
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 
@@ -402,7 +424,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("error")
-      expect(payload.errorMessage).toMatch(/Invalid joins type/)
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 
@@ -413,7 +435,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("error")
-      expect(payload.errorMessage).toMatch(/Invalid group column/)
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 
@@ -482,7 +504,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("error")
-      expect(payload.errorMessage).toMatch(/Invalid pluck column/)
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 
