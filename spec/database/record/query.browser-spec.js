@@ -130,6 +130,34 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(tasks[0].project().name()).toEqual("Join Project 2")
   })
 
+  it("treats select arrays as root-model attributes with joins", async () => {
+    const project1 = await Project.create({name: "Select Project 1"})
+    const project2 = await Project.create({name: "Select Project 2"})
+    const task1 = await Task.create({name: "Select Task 1", project: project1})
+
+    await Task.create({name: "Select Task 2", project: project2})
+
+    const tasks = await Task
+      .joins({project: true})
+      .where({tasks: {id: task1.id()}})
+      .select(["id", "createdAt"])
+      .toArray()
+
+    expect(tasks.length).toEqual(1)
+    expect(tasks[0].id()).toEqual(task1.id())
+    expect(tasks[0].createdAt()).not.toBeUndefined()
+  })
+
+  it("qualifies shorthand select columns with the latest root from reference", () => {
+    const query = Task
+      .all()
+      .from("tasks AS tasks_alias")
+      .select("id")
+    const sql = query.toSql()
+
+    expect(sql).toContain(`${query.driver.quoteTable("tasks_alias")}.${query.driver.quoteColumn("id")}`)
+  })
+
   it("counts the records", async () => {
     const taskIDs = []
     const project = await Project.create()

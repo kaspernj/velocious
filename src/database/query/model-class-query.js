@@ -12,6 +12,40 @@ import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
 
 /**
+ * @param {string} value - Potentially quoted SQL identifier.
+ * @returns {string} - Unquoted identifier.
+ */
+function unquoteSqlIdentifier(value) {
+  const trimmed = value.trim()
+
+  if (trimmed.length >= 2 && ((trimmed.startsWith("`") && trimmed.endsWith("`")) || (trimmed.startsWith("\"") && trimmed.endsWith("\"")))) {
+    return trimmed.slice(1, -1)
+  }
+
+  if (trimmed.length >= 2 && trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed.slice(1, -1)
+  }
+
+  return trimmed
+}
+
+/**
+ * @param {string} fromPlain - FROM clause source.
+ * @returns {string | null} - Parsed table reference or null when unsupported.
+ */
+function parseFromPlainTableReference(fromPlain) {
+  const trimmed = fromPlain.trim()
+
+  if (trimmed.length < 1) return null
+
+  const aliasMatch = trimmed.match(/(?:^|\s)(?:AS\s+)?([`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?|\[[a-zA-Z_][a-zA-Z0-9_]*\])\s*$/i)
+
+  if (!aliasMatch || !aliasMatch[1]) return null
+
+  return unquoteSqlIdentifier(aliasMatch[1])
+}
+
+/**
  * @param {import("./index.js").NestedPreloadRecord | string | string[]} preload - Preload data in shorthand or nested form.
  * @returns {import("./index.js").NestedPreloadRecord} - Normalized preload record.
  */
@@ -163,6 +197,56 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     }
 
     return countResult
+  }
+
+  /**
+   * @param {import("./index.js").SelectArgumentType} select - Select.
+   * @returns {this} - The select.
+   */
+  select(select) {
+    if (Array.isArray(select)) {
+      for (const selectEntry of select) {
+        this.select(selectEntry)
+      }
+
+      return this
+    }
+
+    if (typeof select === "string") {
+      const trimmedSelect = select.trim()
+
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmedSelect)) {
+        const modelClass = this.getModelClass()
+        const attributeMap = modelClass.getAttributeNameToColumnNameMap()
+        const columnName = attributeMap[trimmedSelect] || trimmedSelect
+        const tableReference = this.rootTableReference()
+        const qualifiedColumn = `${this.driver.quoteTable(tableReference)}.${this.driver.quoteColumn(columnName)}`
+
+        return super.select(qualifiedColumn)
+      }
+    }
+
+    return super.select(select)
+  }
+
+  /**
+   * @returns {string} - Root table reference for query select qualification.
+   */
+  rootTableReference() {
+    const froms = this.getFroms()
+    const lastFrom = froms[froms.length - 1]
+
+    if (lastFrom && typeof /** @type {any} */ (lastFrom).tableName === "string") {
+      return /** @type {any} */ (lastFrom).tableName
+    }
+
+    if (lastFrom && typeof /** @type {any} */ (lastFrom).plain === "string") {
+      const parsedReference = parseFromPlainTableReference(/** @type {any} */ (lastFrom).plain)
+
+      if (parsedReference) return parsedReference
+    }
+
+    return this.getTableReferenceForJoin()
   }
 
   /** @returns {MC} - The model class.  */

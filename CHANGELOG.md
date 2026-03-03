@@ -187,3 +187,5 @@
 - Add built-in model/frontend-model attachment support with `hasOneAttachment`/`hasManyAttachments`, attachment-aware frontend-model `attach`/`download` commands, and backend/frontend update flows that accept attachment payloads.
 - Add pluggable attachment storage drivers (`filesystem`, `native`, `s3`) with per-attachment driver selection, driver-backed persistence reads/writes, and attachment `url()` support on backend/frontend attachment helpers (including frontend-model `url` command responses).
 - Allow model attachment definitions to pass storage drivers as direct class/instance references (for example `Task.hasOneAttachment("mobileCache", {driver: NativeDriver})`) to avoid forced dynamic imports in Expo-incompatible dependency paths.
+
+- Support root-model select shorthand arrays/strings (`Model.select(["id", "createdAt"])`) across frontend queries, frontend-model controller payloads, and backend model queries so selections stay scoped to the primary model even with joins.

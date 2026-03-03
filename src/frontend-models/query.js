@@ -109,10 +109,29 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
 
 /**
  * @param {unknown} select - Select payload.
+ * @param {string | null} [rootModelName] - Optional root model name for shorthand select payloads.
  * @returns {Record<string, string[]>} - Normalized model-name keyed select record.
  */
-function normalizeSelect(select) {
+function normalizeSelect(select, rootModelName = null) {
   if (!select) return {}
+
+  if (typeof select === "string") {
+    if (!rootModelName) throw new Error("Invalid select shorthand without root model name")
+
+    return {[rootModelName]: [select]}
+  }
+
+  if (Array.isArray(select)) {
+    if (!rootModelName) throw new Error("Invalid select shorthand without root model name")
+
+    for (const attributeName of select) {
+      if (typeof attributeName !== "string") {
+        throw new Error(`Invalid select attribute for ${rootModelName}: ${typeof attributeName}`)
+      }
+    }
+
+    return {[rootModelName]: Array.from(new Set(select))}
+  }
 
   if (!isPlainObject(select)) {
     throw new Error(`Invalid select type: ${typeof select}`)
@@ -907,11 +926,11 @@ export default class FrontendModelQuery {
   }
 
   /**
-   * @param {Record<string, string[] | string>} select - Model-aware attribute select map.
+   * @param {Record<string, string[] | string> | string | string[]} select - Model-aware attribute select map or root-model shorthand.
    * @returns {this} - Query with merged selected attributes.
    */
   select(select) {
-    mergeSelectRecord(this._select, normalizeSelect(select))
+    mergeSelectRecord(this._select, normalizeSelect(select, this.modelClass.name))
 
     return this
   }

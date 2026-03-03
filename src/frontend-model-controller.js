@@ -200,10 +200,33 @@ function normalizeFrontendModelJoins(joins) {
 
 /**
  * @param {unknown} select - Select payload.
+ * @param {string | null} [rootModelName] - Optional root model name for shorthand payloads.
  * @returns {Record<string, string[]> | null} - Normalized model-name keyed select record.
  */
-function normalizeFrontendModelSelect(select) {
+function normalizeFrontendModelSelect(select, rootModelName = null) {
   if (!select) return null
+
+  if (typeof select === "string") {
+    if (!rootModelName) {
+      throw frontendModelValidationError("Invalid select shorthand without root model name")
+    }
+
+    return {[rootModelName]: [select]}
+  }
+
+  if (Array.isArray(select)) {
+    if (!rootModelName) {
+      throw frontendModelValidationError("Invalid select shorthand without root model name")
+    }
+
+    for (const attributeName of select) {
+      if (typeof attributeName !== "string") {
+        throw frontendModelValidationError(`Invalid select attribute for ${rootModelName}: ${typeof attributeName}`)
+      }
+    }
+
+    return {[rootModelName]: Array.from(new Set(select))}
+  }
 
   if (!isPlainObject(select)) {
     throw frontendModelValidationError(`Invalid select type: ${typeof select}`)
@@ -1303,7 +1326,7 @@ export default class FrontendModelController extends Controller {
    * @returns {Record<string, string[]> | null} - Frontend select data.
    */
   frontendModelSelect() {
-    return normalizeFrontendModelSelect(this.frontendModelParams().select)
+    return normalizeFrontendModelSelect(this.frontendModelParams().select, this.frontendModelClass().name)
   }
 
   /**
