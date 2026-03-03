@@ -551,15 +551,17 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
+        const baselineModel = await HttpFrontendModel.findBy({id: "2"})
         const models = await HttpFrontendModel
           .select(["id", "createdAt"])
           .where({id: "2"})
           .toArray()
         const firstModel = models[0]
 
+        expect(baselineModel?.id()).toEqual("2")
         expect(models.length).toEqual(1)
         expect(firstModel.id()).toEqual("2")
-        expect(typeof firstModel.createdAt()).toEqual("string")
+        expect(firstModel.createdAt()).toEqual(baselineModel?.createdAt())
         expect(() => firstModel.email()).toThrow(/HttpFrontendModel#email was not selected/)
       } finally {
         resetFrontendModelTransport()
