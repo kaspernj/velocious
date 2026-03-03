@@ -344,6 +344,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
   it("treats select array shorthand as root-model attributes", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Select Array Task")
+      const baselinePayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: task.id()}
+      })
 
       const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
         joins: {project: true},
@@ -351,8 +354,18 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         where: {id: task.id()}
       })
 
+      expect(baselinePayload.status).toEqual("success")
+      expect(baselinePayload.models.length).toEqual(1)
       expect(payload.status).toEqual("success")
       expect(payload.models.map((model) => model.id)).toEqual([task.id()])
+      const baselineCreatedAt = baselinePayload.models[0].createdAt instanceof Date
+        ? baselinePayload.models[0].createdAt.toISOString()
+        : baselinePayload.models[0].createdAt
+      const selectedCreatedAt = payload.models[0].createdAt instanceof Date
+        ? payload.models[0].createdAt.toISOString()
+        : payload.models[0].createdAt
+
+      expect(selectedCreatedAt).toEqual(baselineCreatedAt)
       expect(payload.models[0].name).toEqual(undefined)
     })
   })
