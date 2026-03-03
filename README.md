@@ -896,6 +896,10 @@ const specificTask = await Task.where({
   id: 1,
   project: {nameEn: "Alpha"}
 }).toArray()
+
+const tasksWithRecentCreators = await Task.where({
+  project: {creatingUser: [["createdAt", ">=", new Date("2026-01-01T00:00:00.000Z")]]}
+}).toArray()
 ```
 
 ### Raw where clauses

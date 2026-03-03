@@ -540,7 +540,7 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("sends searches payload when using search(...).toArray()", async () => {
+  it("normalizes symbolic search operators when using search(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
 
@@ -548,7 +548,7 @@ describe("Frontend models - base", () => {
       const oneDayAgo = new Date("2026-02-24T10:00:00.000Z")
 
       await User
-        .search([], "createdAt", "gteq", oneDayAgo)
+        .search([], "createdAt", ">=", oneDayAgo)
         .toArray()
 
       expect(fetchStub.calls).toEqual([
