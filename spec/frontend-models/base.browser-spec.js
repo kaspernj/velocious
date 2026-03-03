@@ -597,4 +597,27 @@ describe("Frontend models - base browser integration", () => {
       resetFrontendModelTransport()
     }
   })
+
+  it("supports select array shorthand as root-model attributes over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const models = await BrowserFrontendModel
+        .select(["id", "createdAt"])
+        .where({id: "2"})
+        .toArray()
+      const firstModel = models[0]
+
+      expect(models.length).toEqual(1)
+      expect(firstModel.id()).toEqual("2")
+      expect(typeof firstModel.createdAt()).toEqual("string")
+      expect(() => firstModel.email()).toThrow(/BrowserFrontendModel#email was not selected/)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
 })
