@@ -1055,6 +1055,35 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("treats select array shorthand as root-model attributes", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await Project
+        .joins({tasks: true})
+        .select(["id", "createdAt"])
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            joins: {
+              tasks: true
+            },
+            select: {
+              Project: ["id", "createdAt"]
+            }
+          },
+          url: "/api/frontend-models/projects/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("raises AttributeNotSelectedError for non-selected attributes", async () => {
     const {Project} = buildPreloadTestModelClasses()
     const fetchStub = stubFetch({

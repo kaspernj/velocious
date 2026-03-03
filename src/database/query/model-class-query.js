@@ -165,6 +165,36 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return countResult
   }
 
+  /**
+   * @param {import("./index.js").SelectArgumentType} select - Select.
+   * @returns {this} - The select.
+   */
+  select(select) {
+    if (Array.isArray(select)) {
+      for (const selectEntry of select) {
+        this.select(selectEntry)
+      }
+
+      return this
+    }
+
+    if (typeof select === "string") {
+      const trimmedSelect = select.trim()
+
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmedSelect)) {
+        const modelClass = this.getModelClass()
+        const attributeMap = modelClass.getAttributeNameToColumnNameMap()
+        const columnName = attributeMap[trimmedSelect] || trimmedSelect
+        const tableName = modelClass.tableName()
+        const qualifiedColumn = `${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(columnName)}`
+
+        return super.select(qualifiedColumn)
+      }
+    }
+
+    return super.select(select)
+  }
+
   /** @returns {MC} - The model class.  */
   getModelClass() {
     if (!this.modelClass) throw new Error("modelClass not set")

@@ -341,6 +341,22 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("treats select array shorthand as root-model attributes", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Select Array Task")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: {project: true},
+        select: ["id", "createdAt"],
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.id)).toEqual([task.id()])
+      expect(payload.models[0].name).toEqual(undefined)
+    })
+  })
+
   it("applies search params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       await createTask("Search Alpha")
