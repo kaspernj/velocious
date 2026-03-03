@@ -148,6 +148,16 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(tasks[0].createdAt()).not.toBeUndefined()
   })
 
+  it("qualifies shorthand select columns with the latest root from reference", () => {
+    const query = Task
+      .all()
+      .from("tasks AS tasks_alias")
+      .select("id")
+    const sql = query.toSql()
+
+    expect(sql).toContain(`${query.driver.quoteTable("tasks_alias")}.${query.driver.quoteColumn("id")}`)
+  })
+
   it("counts the records", async () => {
     const taskIDs = []
     const project = await Project.create()
