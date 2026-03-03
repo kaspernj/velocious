@@ -266,6 +266,27 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
  */
 
 /**
+ * @param {string} operator - Raw search operator.
+ * @returns {FrontendModelSearch["operator"]} - Normalized search operator.
+ */
+function normalizeFrontendModelSearchOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+  const normalizedOperator = operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
+
+  if (!supportedOperators.has(normalizedOperator)) {
+    throw frontendModelValidationError(`Invalid search operator: ${operator}`)
+  }
+
+  return /** @type {FrontendModelSearch["operator"]} */ (normalizedOperator)
+}
+
+/**
  * @typedef {object} FrontendModelSort
  * @property {string} column - Attribute name to sort by.
  * @property {"asc" | "desc"} direction - Sort direction.
@@ -571,7 +592,6 @@ function normalizeFrontendModelSearches(searches) {
 
   /** @type {FrontendModelSearch[]} */
   const normalized = []
-  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
 
   for (const search of searches) {
     if (!isPlainObject(search)) {
@@ -596,13 +616,13 @@ function normalizeFrontendModelSearches(searches) {
       throw frontendModelValidationError("Invalid search column: expected non-empty string")
     }
 
-    if (typeof operator !== "string" || !supportedOperators.has(operator)) {
+    if (typeof operator !== "string") {
       throw frontendModelValidationError(`Invalid search operator: ${operator}`)
     }
 
     normalized.push({
       column,
-      operator: /** @type {FrontendModelSearch["operator"]} */ (operator),
+      operator: normalizeFrontendModelSearchOperator(operator),
       path: [...path],
       value: search.value
     })

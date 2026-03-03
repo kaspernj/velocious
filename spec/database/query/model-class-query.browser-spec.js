@@ -194,6 +194,45 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(names).toEqual(["Nested Tuple Match Task"])
   })
 
+  it("supports symbolic relationship where tuple operators", async () => {
+    const cutoff = new Date("2025-01-01T00:00:00.000Z")
+    const matchingUser = await User.create({
+      createdAt: new Date("2025-02-01T00:00:00.000Z"),
+      email: "symbolic-creator-match@example.com",
+      encryptedPassword: "secret",
+      reference: "symbolic-creator-match"
+    })
+    const oldUser = await User.create({
+      createdAt: new Date("2024-02-01T00:00:00.000Z"),
+      email: "symbolic-creator-old@example.com",
+      encryptedPassword: "secret",
+      reference: "symbolic-creator-old"
+    })
+    const projectMatch = await Project.create({
+      creatingUserReference: matchingUser.reference(),
+      nameEn: "Symbolic Tuple Match",
+      nameDe: "Symbolisches Tupel Treffer"
+    })
+    const projectOld = await Project.create({
+      creatingUserReference: oldUser.reference(),
+      nameEn: "Symbolic Tuple Miss Old",
+      nameDe: "Symbolisches Tupel Alt"
+    })
+
+    await Task.create({name: "Symbolic Tuple Match Task", project: projectMatch})
+    await Task.create({name: "Symbolic Tuple Old Task", project: projectOld})
+
+    const names = (await Task.where({
+      project: {
+        creatingUser: [["reference", "like", "symbolic-creator-%", ["createdAt", ">=", cutoff]]]
+      }
+    }).toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Symbolic Tuple Match Task"])
+  })
+
   it("forwards unknown keys to the base where hash", async () => {
     const project = await Project.create({nameEn: "Fallback Project", nameDe: "Fallback Projekt"})
     await Task.create({name: "Fallback Task", project})

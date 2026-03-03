@@ -8,7 +8,24 @@ import WhereBase from "./where-base.js"
  */
 
 const NO_MATCH = Symbol("no-match")
-const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like"])
+const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like", ">", ">=", "<", "<="])
+
+/**
+ * @param {string} operator - Raw relationship where operator.
+ * @returns {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} - Normalized operator.
+ */
+function normalizeRelationshipWhereOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+
+  return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
+    operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  )
+}
 
 export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase {
   /**
@@ -102,9 +119,11 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     const normalized = []
     const addCondition = (conditionValue) => {
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
+        const normalizedOperator = normalizeRelationshipWhereOperator(conditionValue[1])
+
         normalized.push([
           conditionValue[0],
-          /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (conditionValue[1]),
+          normalizedOperator,
           conditionValue[2]
         ])
 

@@ -1,5 +1,6 @@
 # Changelog
 
+- Allow symbolic search operators (`>`, `<`, `>=`, `<=`) as aliases for `gt`, `lt`, `gteq`, and `lteq` across frontend-model `search(...)` payloads and backend relationship tuple filters.
 - Add frontend-model nested relationship `where(...)` support via structured relationship-path descriptors (for example `{project: {creatingUser: {reference: "owner-b"}}}`), with backend relationship-join application and integration coverage.
 - Normalize plain-object frontend-model `where(...)` column values to JSON strings only for text/JSON-like columns and treat object values on non-text columns as no-match (`1=0`) to avoid invalid SQL/cast errors across MySQL/MariaDB/PG.
 - Add frontend-model `joins(...)` support using relationship-object descriptors only (for example `{project: {creatingUser: true}}`), reject raw SQL join strings, and apply explicit joins in built-in `frontendIndex`.

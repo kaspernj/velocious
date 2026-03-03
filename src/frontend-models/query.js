@@ -176,6 +176,27 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 }
 
 /**
+ * @param {string} operator - Raw search operator.
+ * @returns {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} - Normalized operator.
+ */
+function normalizeSearchOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+  const normalizedOperator = operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
+
+  if (!supportedOperators.has(normalizedOperator)) {
+    throw new Error(`search operator must be one of: eq, notEq, gt, gteq, lt, lteq, >, >=, <, <= (got: ${operator})`)
+  }
+
+  return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} */ (normalizedOperator)
+}
+
+/**
  * @param {Record<string, any>} targetJoins - Existing join record.
  * @param {Record<string, any>} incomingJoins - Incoming join record.
  * @returns {void}
@@ -948,7 +969,7 @@ export default class FrontendModelQuery {
   /**
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
-   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | ">" | ">=" | "<" | "<="} operator - Search operator.
    * @param {any} value - Search value.
    * @returns {this} - Query with appended search.
    */
@@ -971,9 +992,11 @@ export default class FrontendModelQuery {
       throw new Error("search operator must be a non-empty string")
     }
 
+    const normalizedOperator = normalizeSearchOperator(operator)
+
     this._searches.push({
       column,
-      operator,
+      operator: normalizedOperator,
       path: [...path],
       value
     })

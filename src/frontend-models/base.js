@@ -1394,7 +1394,7 @@ export default class FrontendModelBase {
    * @this {T}
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
-   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | ">" | ">=" | "<" | "<="} operator - Search operator.
    * @param {any} value - Search value.
    * @returns {FrontendModelQuery<T>} - Query builder with search filter.
    */
