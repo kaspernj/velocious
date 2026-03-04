@@ -42,10 +42,14 @@ async function nodePath() {
  * @returns {string} - Basename-like filename.
  */
 function baseName(value) {
-  const normalized = value.replaceAll("\\", "/")
+  const withoutTrailingSeparators = value.replace(/[\\/]+$/, "")
+
+  if (!withoutTrailingSeparators) return ""
+
+  const normalized = withoutTrailingSeparators.replaceAll("\\", "/")
   const parts = normalized.split("/")
 
-  return parts[parts.length - 1] || value
+  return parts[parts.length - 1] || ""
 }
 
 /**
@@ -213,13 +217,15 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     throw new Error("Unsupported attachment input")
   }
 
-  const normalizedFilename = typeof filename === "string" && filename.length > 0 ? baseName(filename) : defaultFilename
+  const normalizedFilename = typeof filename === "string" && filename.length > 0
+    ? baseName(filename)
+    : ""
 
   return {
     byteSize: buffer.length,
     contentBuffer: buffer,
     contentBase64: buffer.toString("base64"),
     contentType,
-    filename: normalizedFilename
+    filename: normalizedFilename || defaultFilename
   }
 }
