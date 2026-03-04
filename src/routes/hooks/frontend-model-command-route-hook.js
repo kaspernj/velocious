@@ -4,40 +4,7 @@ import * as inflection from "inflection"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
-/** @type {typeof import("../../frontend-model-controller.js").default | null | undefined} */
-let frontendModelControllerClass
-
-/**
- * @param {Error} error - Import error.
- * @returns {string | undefined} - Missing module specifier from an ERR_MODULE_NOT_FOUND message.
- */
-function missingModuleSpecifierFromError(error) {
-  const firstLine = error.message.split("\n")[0] || ""
-  const match = firstLine.match(/^Cannot find (?:module|package) ['"](.+?)['"] imported from /)
-
-  return match?.[1]
-}
-
-/**
- * @param {object} args - Arguments.
- * @param {Error} args.error - Import error.
- * @param {string} args.targetImportPath - Relative module specifier used in dynamic import.
- * @returns {boolean} - True when the target frontend-model-controller module is missing.
- */
-function isMissingFrontendModelControllerModuleError({error, targetImportPath}) {
-  const isModuleNotFoundError = "code" in error && error.code === "ERR_MODULE_NOT_FOUND"
-
-  if (!isModuleNotFoundError) return false
-
-  const missingSpecifier = missingModuleSpecifierFromError(error)
-
-  if (!missingSpecifier) return false
-
-  const targetImportUrl = new URL(targetImportPath, import.meta.url).href
-  const targetImportFilePath = decodeURIComponent(new URL(targetImportUrl).pathname)
-
-  return missingSpecifier === targetImportUrl || missingSpecifier === targetImportFilePath
-}
+const FRONTEND_MODEL_CONTROLLER_PATH = new URL("../../frontend-model-controller.js", import.meta.url).href
 
 /**
  * @param {object} args - Hook args.
@@ -47,13 +14,12 @@ function isMissingFrontendModelControllerModuleError({error, targetImportPath}) 
  */
 export default async function frontendModelCommandRouteHook({configuration, currentPath}) {
   const normalizedCurrentPath = normalizePath(currentPath)
-  const resolvedFrontendModelControllerClass = await resolveFrontendModelControllerClass()
 
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
     }
   }
 
@@ -79,8 +45,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 
       return {
         action: `frontend-${action}`,
-        controller,
-        ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
+        controller
       }
     }
   }
@@ -179,28 +144,4 @@ function normalizePath(path) {
   }
 
   return withLeadingSlash
-}
-
-/**
- * @returns {Promise<typeof import("../../frontend-model-controller.js").default | null>} - Frontend model controller class or null when unavailable.
- */
-async function resolveFrontendModelControllerClass() {
-  if (frontendModelControllerClass !== undefined) return frontendModelControllerClass
-
-  const importPath = ["..", "..", "frontend-model-controller.js"].join("/")
-
-  try {
-    const frontendModelControllerImport = await import(importPath)
-    frontendModelControllerClass = frontendModelControllerImport.default
-
-    return frontendModelControllerClass
-  } catch (error) {
-    const isErrorObject = typeof error === "object" && error
-
-    if (!isErrorObject || !isMissingFrontendModelControllerModuleError({error, targetImportPath: importPath})) throw error
-
-    frontendModelControllerClass = null
-
-    return null
-  }
 }

@@ -136,7 +136,7 @@
 /**
  * @typedef {object} AttachmentsConfiguration
  * @property {string} [defaultDriver] - Default attachment storage driver name.
-  * @property {Record<string, AttachmentDriverConfiguration & Record<string, any>>} [drivers] - Named attachment driver configurations.
+ * @property {Record<string, AttachmentDriverConfiguration & Record<string, any>>} [drivers] - Named attachment driver configurations.
  * @property {boolean} [allowPathInput] - Whether `{path: ...}` attachment input is allowed.
  * @property {string[]} [allowedPathPrefixes] - Optional allowlist of directories for `{path: ...}` input.
  */

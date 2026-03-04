@@ -18,6 +18,7 @@ import CliCommandsDbSchemaDump from "./node/cli/commands/db/schema/dump.js"
 import CliCommandsDbSeed from "./node/cli/commands/db/seed.js"
 import CliCommandsRunner from "./node/cli/commands/runner.js"
 import CliCommandsRunScript from "./node/cli/commands/run-script.js"
+import frontendModelCommandRouteHook from "../routes/hooks/frontend-model-command-route-hook.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
@@ -34,6 +35,18 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
+
+  /**
+   * @param {import("../configuration.js").default} newConfiguration - New configuration.
+   * @returns {void} - No return value.
+   */
+  setConfiguration(newConfiguration) {
+    super.setConfiguration(newConfiguration)
+
+    if (!newConfiguration.getRouteResolverHooks().includes(frontendModelCommandRouteHook)) {
+      newConfiguration.addRouteResolverHook(frontendModelCommandRouteHook)
+    }
+  }
 
   /**
    * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with the commands.

@@ -9,7 +9,6 @@ import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
-import frontendModelCommandRouteHook from "./routes/hooks/frontend-model-command-route-hook.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -63,7 +62,7 @@ export default class VelociousConfiguration {
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
     this._logging = logging
     this._mailerBackend = mailerBackend
-    this._routeResolverHooks = [...(routeResolverHooks || []), frontendModelCommandRouteHook]
+    this._routeResolverHooks = [...(routeResolverHooks || [])]
     this._errorEvents = new EventEmitter()
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
