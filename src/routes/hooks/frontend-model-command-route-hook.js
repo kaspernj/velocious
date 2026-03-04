@@ -4,8 +4,7 @@ import * as inflection from "inflection"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
-/** @type {typeof import("../../frontend-model-controller.js").default | null | undefined} */
-let frontendModelControllerClass
+const FRONTEND_MODEL_CONTROLLER_PATH = ["..", "..", "frontend-model-controller.js"].join("/")
 
 /**
  * @param {object} args - Hook args.
@@ -15,13 +14,12 @@ let frontendModelControllerClass
  */
 export default async function frontendModelCommandRouteHook({configuration, currentPath}) {
   const normalizedCurrentPath = normalizePath(currentPath)
-  const resolvedFrontendModelControllerClass = await resolveFrontendModelControllerClass()
 
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
     }
   }
 
@@ -48,7 +46,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
       return {
         action: `frontend-${action}`,
         controller,
-        ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
+        controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
       }
     }
   }
@@ -147,28 +145,4 @@ function normalizePath(path) {
   }
 
   return withLeadingSlash
-}
-
-/**
- * @returns {Promise<typeof import("../../frontend-model-controller.js").default | null>} - Frontend model controller class or null when unavailable.
- */
-async function resolveFrontendModelControllerClass() {
-  if (frontendModelControllerClass !== undefined) return frontendModelControllerClass
-
-  const importPath = ["..", "..", "frontend-model-controller.js"].join("/")
-
-  try {
-    const frontendModelControllerImport = await import(importPath)
-    frontendModelControllerClass = frontendModelControllerImport.default
-
-    return frontendModelControllerClass
-  } catch (error) {
-    const isModuleNotFoundError = typeof error === "object" && error && "code" in error && error.code === "ERR_MODULE_NOT_FOUND"
-
-    if (!isModuleNotFoundError) throw error
-
-    frontendModelControllerClass = null
-
-    return null
-  }
 }
