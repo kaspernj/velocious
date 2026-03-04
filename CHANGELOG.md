@@ -1,5 +1,6 @@
 # Changelog
 
+- Allow symbolic search operators (`>`, `<`, `>=`, `<=`) as aliases for `gt`, `lt`, `gteq`, and `lteq` across frontend-model `search(...)` payloads and backend relationship tuple filters.
 - Add frontend-model nested relationship `where(...)` support via structured relationship-path descriptors (for example `{project: {creatingUser: {reference: "owner-b"}}}`), with backend relationship-join application and integration coverage.
 - Normalize plain-object frontend-model `where(...)` column values to JSON strings only for text/JSON-like columns and treat object values on non-text columns as no-match (`1=0`) to avoid invalid SQL/cast errors across MySQL/MariaDB/PG.
 - Add frontend-model `joins(...)` support using relationship-object descriptors only (for example `{project: {creatingUser: true}}`), reject raw SQL join strings, and apply explicit joins in built-in `frontendIndex`.
@@ -117,6 +118,7 @@
 - Bump `system-testing` from `1.0.76` to `1.0.77`.
 - Inline browser `EXPO_PUBLIC_SYSTEM_TEST*` env values in the browser test bundle to prevent websocket startup failures when `process` is unavailable in the browser runtime.
 - Resolve built-in controller frontend model actions (`frontendIndex`, `frontendFind`, `frontendUpdate`, `frontendDestroy`) from `backendProjects.resources` configuration so controllers no longer need a `frontendModelClass()` implementation.
+- Resolve backendProjects frontend-model command routes with `controllerClass: FrontendModelController` (instead of route `controllerPath`/local route controllers), so apps no longer need per-resource wrapper controllers under `src/routes/**/frontend-models/**/controller.js`.
 - Add optional `backendProjects.resources.*.server` hooks (`beforeAction`, `records`, `serialize`, `find`, `update`, `destroy`) for backend-side customization without controller action overrides.
 - Move built-in frontend model actions out of the base `Controller` class into a dedicated `FrontendModelController` class so projects opt in explicitly.
 - Require `backendProjects.resources.*.abilities` for frontend model generation and runtime actions, and enforce CanCan-style action scoping via ability-aware queries (`read`, `update`, `destroy`, etc.).
