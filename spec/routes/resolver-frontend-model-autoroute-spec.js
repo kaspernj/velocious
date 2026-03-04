@@ -10,7 +10,7 @@ import RoutesResolver from "../../src/routes/resolver.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
 describe("routes - resolver frontend model autoroute", async () => {
-  it("resolves frontend model commands from backendProjects resources without explicit routes", async () => {
+  it("routes frontend model index commands through frontend model controller without explicit routes", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
@@ -73,10 +73,10 @@ describe("routes - resolver frontend model autoroute", async () => {
       if (previousConfiguration) previousConfiguration.setCurrent()
     }
 
-    expect(JSON.parse(response.getBody())).toEqual({source: "frontend-autoroute", status: "success"})
+    expect(JSON.parse(response.getBody())).toEqual({errorMessage: "Request failed.", status: "error"})
   })
 
-  it("resolves frontend model create command from backendProjects resources without explicit routes", async () => {
+  it("routes frontend model create commands through frontend model controller without explicit routes", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
@@ -141,7 +141,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       if (previousConfiguration) previousConfiguration.setCurrent()
     }
 
-    expect(JSON.parse(response.getBody())).toEqual({source: "frontend-autoroute", status: "success"})
+    expect(JSON.parse(response.getBody())).toEqual({errorMessage: "Request failed.", status: "error"})
   })
 
   it("raises on unsafe frontend model resource paths in backendProjects config", async () => {

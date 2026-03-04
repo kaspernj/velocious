@@ -118,6 +118,7 @@
 - Bump `system-testing` from `1.0.76` to `1.0.77`.
 - Inline browser `EXPO_PUBLIC_SYSTEM_TEST*` env values in the browser test bundle to prevent websocket startup failures when `process` is unavailable in the browser runtime.
 - Resolve built-in controller frontend model actions (`frontendIndex`, `frontendFind`, `frontendUpdate`, `frontendDestroy`) from `backendProjects.resources` configuration so controllers no longer need a `frontendModelClass()` implementation.
+- Resolve backendProjects frontend-model command routes with `controllerClass: FrontendModelController` (instead of route `controllerPath`/local route controllers), so apps no longer need per-resource wrapper controllers under `src/routes/**/frontend-models/**/controller.js`.
 - Add optional `backendProjects.resources.*.server` hooks (`beforeAction`, `records`, `serialize`, `find`, `update`, `destroy`) for backend-side customization without controller action overrides.
 - Move built-in frontend model actions out of the base `Controller` class into a dedicated `FrontendModelController` class so projects opt in explicitly.
 - Require `backendProjects.resources.*.abilities` for frontend model generation and runtime actions, and enforce CanCan-style action scoping via ability-aware queries (`read`, `update`, `destroy`, etc.).
