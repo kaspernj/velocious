@@ -2,9 +2,9 @@
 
 import * as inflection from "inflection"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
+import FrontendModelController from "../../frontend-model-controller.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
-const FRONTEND_MODEL_CONTROLLER_PATH = ["..", "..", "frontend-model-controller.js"].join("/")
 
 /**
  * @param {object} args - Hook args.
@@ -19,7 +19,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
+      controllerClass: FrontendModelController
     }
   }
 
@@ -46,7 +46,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
       return {
         action: `frontend-${action}`,
         controller,
-        controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
+        controllerClass: FrontendModelController
       }
     }
   }
