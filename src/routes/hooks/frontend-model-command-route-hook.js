@@ -1,11 +1,11 @@
 // @ts-check
 
-import fs from "fs/promises"
 import * as inflection from "inflection"
-import FrontendModelController from "../../frontend-model-controller.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
+/** @type {typeof import("../../frontend-model-controller.js").default | null | undefined} */
+let frontendModelControllerClass
 
 /**
  * @param {object} args - Hook args.
@@ -15,12 +15,13 @@ const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
  */
 export default async function frontendModelCommandRouteHook({configuration, currentPath}) {
   const normalizedCurrentPath = normalizePath(currentPath)
+  const resolvedFrontendModelControllerClass = await resolveFrontendModelControllerClass()
 
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      controllerClass: FrontendModelController
+      ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
     }
   }
 
@@ -43,12 +44,11 @@ export default async function frontendModelCommandRouteHook({configuration, curr
       const action = frontendModelActionForCommand({commandName, modelName, resourceConfiguration})
       if (!action) continue
       const controller = normalizedResourcePath.replace(/^\/+/, "")
-      const localControllerExists = await frontendModelLocalControllerExists({configuration, controller})
 
       return {
         action: `frontend-${action}`,
         controller,
-        ...(localControllerExists ? {} : {controllerClass: FrontendModelController})
+        ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
       }
     }
   }
@@ -150,19 +150,25 @@ function normalizePath(path) {
 }
 
 /**
- * @param {object} args - Arguments.
- * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
- * @param {string} args.controller - Controller path without leading slash.
- * @returns {Promise<boolean>} - Whether a local route controller file exists.
+ * @returns {Promise<typeof import("../../frontend-model-controller.js").default | null>} - Frontend model controller class or null when unavailable.
  */
-async function frontendModelLocalControllerExists({configuration, controller}) {
-  const localControllerPath = `${configuration.getDirectory()}/src/routes/${controller}/controller.js`
+async function resolveFrontendModelControllerClass() {
+  if (frontendModelControllerClass !== undefined) return frontendModelControllerClass
+
+  const importPath = ["..", "..", "frontend-model-controller.js"].join("/")
 
   try {
-    await fs.access(localControllerPath)
+    const frontendModelControllerImport = await import(importPath)
+    frontendModelControllerClass = frontendModelControllerImport.default
 
-    return true
-  } catch {
-    return false
+    return frontendModelControllerClass
+  } catch (error) {
+    const isModuleNotFoundError = typeof error === "object" && error && "code" in error && error.code === "ERR_MODULE_NOT_FOUND"
+
+    if (!isModuleNotFoundError) throw error
+
+    frontendModelControllerClass = null
+
+    return null
   }
 }
