@@ -1,5 +1,6 @@
 // @ts-check
 
+import fs from "fs/promises"
 import * as inflection from "inflection"
 import FrontendModelController from "../../frontend-model-controller.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
@@ -41,11 +42,13 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 
       const action = frontendModelActionForCommand({commandName, modelName, resourceConfiguration})
       if (!action) continue
+      const controller = normalizedResourcePath.replace(/^\/+/, "")
+      const localControllerExists = await frontendModelLocalControllerExists({configuration, controller})
 
       return {
         action: `frontend-${action}`,
-        controller: normalizedResourcePath.replace(/^\/+/, ""),
-        controllerClass: FrontendModelController
+        controller,
+        ...(localControllerExists ? {} : {controllerClass: FrontendModelController})
       }
     }
   }
@@ -144,4 +147,22 @@ function normalizePath(path) {
   }
 
   return withLeadingSlash
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+ * @param {string} args.controller - Controller path without leading slash.
+ * @returns {Promise<boolean>} - Whether a local route controller file exists.
+ */
+async function frontendModelLocalControllerExists({configuration, controller}) {
+  const localControllerPath = `${configuration.getDirectory()}/src/routes/${controller}/controller.js`
+
+  try {
+    await fs.access(localControllerPath)
+
+    return true
+  } catch {
+    return false
+  }
 }
