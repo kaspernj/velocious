@@ -101,12 +101,13 @@ export default class VelociousRoutesResolver {
     }
 
     const controllerClass = await this.resolveControllerClass({controllerPath})
+    const controllerRequest = /** @type {import("../http-server/client/request.js").default} */ (this.request)
     const controllerInstance = new controllerClass({
       action,
       configuration: this.configuration,
       controller,
       params: this.params,
-      request: this.request,
+      request: controllerRequest,
       response: this.response,
       viewPath
     })
