@@ -16,9 +16,9 @@ function configurationForBackendProjects(backendProjects) {
 }
 
 describe("routes - frontend model command route hook", () => {
-  const expectedFallbackControllerPath = new URL("../../src/frontend-model-controller.js", import.meta.url).href
+  const expectedControllerPath = new URL("../../src/frontend-model-controller.js", import.meta.url).href
 
-  it("returns frontend model fallback controller path for shared API path", async () => {
+  it("returns frontend model controller path for shared API path", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([]),
       currentPath: "/velocious/api"
@@ -27,11 +27,11 @@ describe("routes - frontend model command route hook", () => {
     expect(routeMatch).toEqual({
       action: "frontend-api",
       controller: "velocious/api",
-      fallbackControllerPath: expectedFallbackControllerPath
+      controllerPath: expectedControllerPath
     })
   })
 
-  it("returns frontend model fallback controller path for backend project frontend-model commands", async () => {
+  it("returns frontend model command action and controller for backend project routes", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
@@ -54,8 +54,7 @@ describe("routes - frontend model command route hook", () => {
 
     expect(routeMatch).toEqual({
       action: "frontend-index",
-      controller: "partners/frontend-models/users",
-      fallbackControllerPath: expectedFallbackControllerPath
+      controller: "partners/frontend-models/users"
     })
   })
 

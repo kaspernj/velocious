@@ -41,19 +41,6 @@ function buildResolver(configuration) {
 }
 
 describe("routes - resolver controller class resolution", () => {
-  it("falls back to route hook fallback controller path when local controller file is missing", async () => {
-    const configuration = buildConfiguration()
-    const resolver = buildResolver(configuration)
-
-    resolver.routeHookFallbackControllerPath = new URL("../../src/frontend-model-controller.js", import.meta.url).href
-
-    const resolvedControllerClass = await resolver.resolveControllerClass({
-      controllerPath: `${os.tmpdir()}/does-not-exist/controller.js`
-    })
-
-    expect(resolvedControllerClass).toBe(FrontendModelController)
-  })
-
   it("falls back to route hook controller class when local controller file is missing", async () => {
     const configuration = buildConfiguration()
     const resolver = buildResolver(configuration)

@@ -4,7 +4,7 @@ import * as inflection from "inflection"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
-const FRONTEND_MODEL_CONTROLLER_FALLBACK_PATH = new URL("../../frontend-model-controller.js", import.meta.url).href
+const FRONTEND_MODEL_CONTROLLER_PATH = new URL("../../frontend-model-controller.js", import.meta.url).href
 
 /**
  * @param {object} args - Hook args.
@@ -19,7 +19,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      fallbackControllerPath: FRONTEND_MODEL_CONTROLLER_FALLBACK_PATH
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
     }
   }
 
@@ -45,8 +45,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 
       return {
         action: `frontend-${action}`,
-        controller,
-        fallbackControllerPath: FRONTEND_MODEL_CONTROLLER_FALLBACK_PATH
+        controller
       }
     }
   }

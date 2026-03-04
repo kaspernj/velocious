@@ -191,3 +191,4 @@
 - Allow model attachment definitions to pass storage drivers as direct class/instance references (for example `Task.hasOneAttachment("mobileCache", {driver: NativeDriver})`) to avoid forced dynamic imports in Expo-incompatible dependency paths.
 
 - Support root-model select shorthand arrays/strings (`Model.select(["id", "createdAt"])`) across frontend queries, frontend-model controller payloads, and backend model queries so selections stay scoped to the primary model even with joins.
+- Keep frontend-model route-hook controller resolution Expo-safe by only overriding `controllerPath` for shared `/velocious/api` requests, while backend-project frontend-model autoroutes continue resolving app route controllers (with existing resolver controller-class fallback behavior).
