@@ -75,6 +75,7 @@ export default class VelociousRoutesResolver {
 
   async resolve() {
     this.routeHookControllerClass = undefined
+    this.routeHookFallbackControllerPath = undefined
     let controllerPath
     const configurationRoutes = this.configuration.getRoutes()
     const currentRoute = configurationRoutes?.rootRoute
@@ -92,6 +93,7 @@ export default class VelociousRoutesResolver {
 
     if (routeResolverHookMatch) {
       const routeHookControllerClass = routeResolverHookMatch.controllerClass
+      const routeHookFallbackControllerPath = routeResolverHookMatch.fallbackControllerPath
       let routeHookControllerPath
       let routeHookViewPath
 
@@ -110,6 +112,7 @@ export default class VelociousRoutesResolver {
       controllerPath = routeHookControllerPath || `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
       viewPath = routeHookViewPath || `${this.configuration.getDirectory()}/src/routes/${controller}`
       this.routeHookControllerClass = routeHookControllerClass
+      this.routeHookFallbackControllerPath = routeHookFallbackControllerPath
     } else if (!matchResult) {
         const __filename = fileURLToPath(import.meta.url)
         const __dirname = dirname(__filename)
@@ -191,7 +194,7 @@ export default class VelociousRoutesResolver {
   async resolveControllerClass({controllerPath}) {
     const controllerImportSpecifier = toImportSpecifier(controllerPath)
 
-    if (!this.routeHookControllerClass) {
+    if (!this.routeHookControllerClass && !this.routeHookFallbackControllerPath) {
       return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
     }
 
@@ -205,6 +208,12 @@ export default class VelociousRoutesResolver {
       })
 
       if (!isMissingControllerFileError) throw ensureError(error)
+
+      if (this.routeHookFallbackControllerPath) {
+        const fallbackImportSpecifier = toImportSpecifier(this.routeHookFallbackControllerPath)
+
+        return /** @type {typeof import("../controller.js").default} */ ((await import(fallbackImportSpecifier)).default)
+      }
 
       return /** @type {typeof import("../controller.js").default} */ (this.routeHookControllerClass)
     }
@@ -281,6 +290,10 @@ export default class VelociousRoutesResolver {
 
       if (hookResult.controllerClass !== undefined && typeof hookResult.controllerClass !== "function") {
         throw new Error(`Expected route resolver hook controllerClass to be a class/function when provided, got: ${hookResult.controllerClass}`)
+      }
+
+      if (hookResult.fallbackControllerPath !== undefined && typeof hookResult.fallbackControllerPath !== "string") {
+        throw new Error(`Expected route resolver hook fallbackControllerPath to be a string when provided, got: ${hookResult.fallbackControllerPath}`)
       }
 
       if (hookResult.controllerPath !== undefined && typeof hookResult.controllerPath !== "string") {

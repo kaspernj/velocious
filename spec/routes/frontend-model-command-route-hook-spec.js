@@ -1,7 +1,6 @@
 // @ts-check
 
 import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model-command-route-hook.js"
-import FrontendModelController from "../../src/frontend-model-controller.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
 /**
@@ -17,7 +16,9 @@ function configurationForBackendProjects(backendProjects) {
 }
 
 describe("routes - frontend model command route hook", () => {
-  it("returns frontend model controller class for shared API path", async () => {
+  const expectedFallbackControllerPath = new URL("../../src/frontend-model-controller.js", import.meta.url).href
+
+  it("returns frontend model fallback controller path for shared API path", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([]),
       currentPath: "/velocious/api"
@@ -26,11 +27,11 @@ describe("routes - frontend model command route hook", () => {
     expect(routeMatch).toEqual({
       action: "frontend-api",
       controller: "velocious/api",
-      controllerClass: FrontendModelController
+      fallbackControllerPath: expectedFallbackControllerPath
     })
   })
 
-  it("returns frontend model controller class for backend project frontend-model commands", async () => {
+  it("returns frontend model fallback controller path for backend project frontend-model commands", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
@@ -54,7 +55,7 @@ describe("routes - frontend model command route hook", () => {
     expect(routeMatch).toEqual({
       action: "frontend-index",
       controller: "partners/frontend-models/users",
-      controllerClass: FrontendModelController
+      fallbackControllerPath: expectedFallbackControllerPath
     })
   })
 
