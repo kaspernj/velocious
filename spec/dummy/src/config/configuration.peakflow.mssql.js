@@ -4,6 +4,7 @@ import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tra
 import backendProjects from "./backend-projects.js"
 import BaseResource from "../../../../src/authorization/base-resource.js"
 import Configuration from "../../../../src/configuration.js"
+import FilesystemAttachmentStorageDriver from "../../../../src/database/record/attachments/storage-drivers/filesystem.js"
 import dummyDirectory from "../../dummy-directory.js"
 import fs from "fs/promises"
 import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
@@ -100,6 +101,14 @@ function resolveTaskFrontendModelAbility({configuration, params, request, respon
 }
 
 const configuration = new Configuration({
+  attachments: {
+    defaultDriver: "filesystem",
+    drivers: {
+      filesystem: {
+        driverClass: FilesystemAttachmentStorageDriver
+      }
+    }
+  },
   abilityResolver: resolveTaskFrontendModelAbility,
   backendProjects,
   database: {

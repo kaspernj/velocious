@@ -29,6 +29,26 @@ import toImportSpecifier from "../utils/to-import-specifier.js"
 
 /** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number}} TimezoneStore */
 
+/**
+ * @param {string} filePath - Input file path.
+ * @param {string[]} allowedPathPrefixes - Allowed path prefixes.
+ * @returns {boolean} - Whether input path is inside an allowed prefix.
+ */
+function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
+  const resolvedPath = path.resolve(filePath)
+
+  return allowedPathPrefixes.some((allowedPrefix) => {
+    const resolvedPrefix = path.resolve(allowedPrefix)
+    const relativePath = path.relative(resolvedPrefix, resolvedPath)
+
+    if (!relativePath) return true
+    if (relativePath.startsWith("..")) return false
+    if (path.isAbsolute(relativePath)) return false
+
+    return true
+  })
+}
+
 export default class VelociousEnvironmentHandlerNode extends Base{
   /** @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
   _timezoneAsyncLocalStorage = NodeAsyncLocalStorage ? new NodeAsyncLocalStorage() : undefined
@@ -46,6 +66,35 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     if (!newConfiguration.getRouteResolverHooks().includes(frontendModelCommandRouteHook)) {
       newConfiguration.addRouteResolverHook(frontendModelCommandRouteHook)
     }
+  }
+
+  /**
+   * @param {string} filePath - File path.
+   * @returns {Promise<Buffer>} - File bytes.
+   */
+  async readAttachmentInputFile(filePath) {
+    return await fs.readFile(filePath)
+  }
+
+  /**
+   * @param {object} args - Args.
+   * @param {string[]} args.allowedPathPrefixes - Allowed path prefixes.
+   * @param {string} args.inputPath - Input path.
+   * @returns {Promise<{buffer: Buffer, filePath: string}>} - Resolved path and bytes.
+   */
+  async resolveAttachmentInputPath({allowedPathPrefixes, inputPath}) {
+    const filePath = path.resolve(inputPath)
+    const prefixes = Array.isArray(allowedPathPrefixes)
+      ? allowedPathPrefixes.filter((entry) => typeof entry === "string" && entry.length > 0)
+      : []
+
+    if (prefixes.length > 0 && !pathWithinAllowedPrefixes(filePath, prefixes)) {
+      throw new Error("Attachment path is outside allowed directories")
+    }
+
+    const buffer = await this.readAttachmentInputFile(filePath)
+
+    return {buffer, filePath}
   }
 
   /**

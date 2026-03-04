@@ -307,6 +307,24 @@ export default class VelociousEnvironmentHandlerBase {
   setConfiguration(newConfiguration) { this.configuration = newConfiguration }
 
   /**
+   * @param {string} _filePath - File path.
+   * @returns {Promise<Buffer>} - File bytes.
+   */
+  async readAttachmentInputFile(_filePath) { // eslint-disable-line no-unused-vars
+    throw new Error("Attachment file reads are not supported in this environment")
+  }
+
+  /**
+   * @param {object} _args - Args.
+   * @param {string[]} _args.allowedPathPrefixes - Allowed path prefixes.
+   * @param {string} _args.inputPath - Input path.
+   * @returns {Promise<{buffer: Buffer, filePath: string}>} - Resolved path and file bytes.
+   */
+  async resolveAttachmentInputPath(_args) { // eslint-disable-line no-unused-vars
+    throw new Error("Attachment path input is not supported in this environment")
+  }
+
+  /**
    * @returns {import("../configuration.js").default} - The configuration.
    */
   getConfiguration() {
