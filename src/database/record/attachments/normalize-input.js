@@ -2,41 +2,6 @@
 
 import UploadedFile from "../../../http-server/client/uploaded-file/uploaded-file.js"
 
-/** @type {Promise<import("node:fs/promises")> | undefined} */
-let fsPromise
-/** @type {Promise<import("node:path")> | undefined} */
-let pathPromise
-
-/**
- * @param {string} specifier - Module specifier.
- * @returns {Promise<any>} - Imported module.
- */
-async function dynamicImport(specifier) {
-  const importer = /** @type {(moduleSpecifier: string) => Promise<any>} */ (
-    new Function("moduleSpecifier", "return import(moduleSpecifier)")
-  )
-
-  return await importer(specifier)
-}
-
-/**
- * @returns {Promise<import("node:fs/promises")>} - Node fs/promises module.
- */
-async function nodeFs() {
-  fsPromise ||= dynamicImport("node:fs/promises")
-
-  return await fsPromise
-}
-
-/**
- * @returns {Promise<import("node:path")>} - Node path module.
- */
-async function nodePath() {
-  pathPromise ||= dynamicImport("node:path")
-
-  return await pathPromise
-}
-
 /**
  * @param {string} value - Path-like value.
  * @returns {string} - Basename-like filename.
@@ -89,27 +54,6 @@ function isArrayBufferLike(value) {
 }
 
 /**
- * @param {string} filePath - File path.
- * @param {string[]} allowedPathPrefixes - Allowed path prefixes.
- * @returns {Promise<boolean>} - Whether path is allowed.
- */
-async function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
-  const path = await nodePath()
-  const resolvedPath = path.resolve(filePath)
-
-  return allowedPathPrefixes.some((allowedPrefix) => {
-    const resolvedPrefix = path.resolve(allowedPrefix)
-    const relativePath = path.relative(resolvedPrefix, resolvedPath)
-
-    if (!relativePath) return true
-    if (relativePath.startsWith("..")) return false
-    if (path.isAbsolute(relativePath)) return false
-
-    return true
-  })
-}
-
-/**
  * @param {Uint8Array | Buffer | ArrayBuffer | string} value - Value.
  * @returns {Buffer} - Buffer value.
  */
@@ -124,9 +68,10 @@ function toBuffer(value) {
 
 /**
  * @param {UploadedFile} uploadedFile - Uploaded file.
+ * @param {import("../../../environment-handlers/base.js").default | undefined} environmentHandler - Environment handler.
  * @returns {Promise<Buffer>} - File content buffer.
  */
-async function uploadedFileBuffer(uploadedFile) {
+async function uploadedFileBuffer(uploadedFile, environmentHandler) {
   const memoryBuffer = /** @type {{getBuffer?: () => Buffer}} */ (uploadedFile).getBuffer?.()
 
   if (Buffer.isBuffer(memoryBuffer)) return memoryBuffer
@@ -134,9 +79,11 @@ async function uploadedFileBuffer(uploadedFile) {
   const tempPath = /** @type {{getPath?: () => string}} */ (uploadedFile).getPath?.()
 
   if (typeof tempPath === "string" && tempPath.length > 0) {
-    const fs = await nodeFs()
+    if (!environmentHandler || typeof environmentHandler.readAttachmentInputFile !== "function") {
+      throw new Error("Attachment temp-path input is unsupported in this environment")
+    }
 
-    return await fs.readFile(tempPath)
+    return await environmentHandler.readAttachmentInputFile(tempPath)
   }
 
   throw new Error("Unsupported uploaded file type")
@@ -157,10 +104,12 @@ async function uploadedFileBuffer(uploadedFile) {
  * @param {boolean} [args.allowPathInput] - Whether `{path: ...}` input is allowed.
  * @param {string[]} [args.allowedPathPrefixes] - Optional allowlist for path input.
  * @param {string} [args.defaultFilename] - Optional default filename.
+ * @param {import("../../../environment-handlers/base.js").default} [args.environmentHandler] - Optional environment handler for Node-only file operations.
  * @returns {Promise<NormalizedAttachmentInput>} - Normalized attachment input.
  */
 export default async function normalizeRecordAttachmentInput(input, args = {}) {
   const defaultFilename = args.defaultFilename || "attachment.bin"
+  const environmentHandler = args.environmentHandler
   /** @type {Buffer} */
   let buffer
   /** @type {string | null} */
@@ -169,7 +118,7 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
   let filename
 
   if (input instanceof UploadedFile) {
-    buffer = await uploadedFileBuffer(input)
+    buffer = await uploadedFileBuffer(input, environmentHandler)
     filename = input.filename()
     contentType = input.contentType() || null
   } else if (isPlainObject(input) && typeof input.path === "string" && input.path.length > 0) {
@@ -177,19 +126,19 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
       throw new Error("Attachment path input is disabled")
     }
 
-    const path = await nodePath()
-    const filePath = path.resolve(input.path)
+    if (!environmentHandler || typeof environmentHandler.resolveAttachmentInputPath !== "function") {
+      throw new Error("Attachment path input is unsupported in this environment")
+    }
+
     const allowedPathPrefixes = Array.isArray(args.allowedPathPrefixes)
       ? args.allowedPathPrefixes.filter((entry) => typeof entry === "string" && entry.length > 0)
       : []
+    const {buffer: fileBuffer, filePath} = await environmentHandler.resolveAttachmentInputPath({
+      allowedPathPrefixes,
+      inputPath: input.path
+    })
 
-    if (allowedPathPrefixes.length > 0 && !await pathWithinAllowedPrefixes(filePath, allowedPathPrefixes)) {
-      throw new Error("Attachment path is outside allowed directories")
-    }
-
-    const fs = await nodeFs()
-
-    buffer = await fs.readFile(filePath)
+    buffer = fileBuffer
     filename = typeof input.filename === "string" && input.filename.length > 0 ? input.filename : baseName(filePath)
     contentType = typeof input.contentType === "string" && input.contentType.length > 0 ? input.contentType : null
   } else if (isPlainObject(input) && typeof input.contentBase64 === "string") {

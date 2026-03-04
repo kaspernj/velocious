@@ -1,6 +1,7 @@
 import "../../../../src/utils/with-tracked-stack-async-hooks.js"
 import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tracked-multi-connection.js"
 import Configuration from "../../../../src/configuration.js"
+import FilesystemAttachmentStorageDriver from "../../../../src/database/record/attachments/storage-drivers/filesystem.js"
 import dummyDirectory from "../../dummy-directory.js"
 import fs from "fs/promises"
 import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
@@ -40,6 +41,14 @@ async function websocketMessageHandlerResolver({request}) {
 }
 
 export default new Configuration({
+  attachments: {
+    defaultDriver: "filesystem",
+    drivers: {
+      filesystem: {
+        driverClass: FilesystemAttachmentStorageDriver
+      }
+    }
+  },
   database: {
     development: {
       default: {

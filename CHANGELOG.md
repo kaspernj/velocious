@@ -195,3 +195,4 @@
 - Register the default frontend-model command route hook through Node environment setup (instead of `Configuration` import-time wiring) so browser bundles avoid backend-only hook imports while Node/server behavior remains unchanged.
 - Make attachment store bundler-safe for Expo/Metro by removing static Node `crypto`/filesystem imports from `RecordAttachmentsStore`; UUID generation now uses `pure-uuid` and the filesystem driver is loaded lazily only when that backend driver is actually used.
 - Make attachment input normalization Expo-safe by lazy-loading Node `fs/promises` and `path` only for Node-only attachment-path branches, preventing Metro eager bundle resolution of Node builtins.
+- Remove attachment-driver dynamic imports from shared code paths: attachment storage now requires explicit configured drivers, while Node-specific file/path attachment operations are handled by `NodeEnvironmentHandler` methods to keep Expo/Metro bundles free of Node-only imports.
