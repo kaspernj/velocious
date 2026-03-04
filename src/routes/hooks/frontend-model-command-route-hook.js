@@ -4,6 +4,8 @@ import * as inflection from "inflection"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "../../frontend-models/resource-config-validation.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
+/** @type {typeof import("../../frontend-model-controller.js").default | null | undefined} */
+let frontendModelControllerClass
 
 /**
  * @param {object} args - Hook args.
@@ -13,12 +15,13 @@ const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
  */
 export default async function frontendModelCommandRouteHook({configuration, currentPath}) {
   const normalizedCurrentPath = normalizePath(currentPath)
+  const resolvedFrontendModelControllerClass = await resolveFrontendModelControllerClass()
 
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      controllerPath: "../frontend-model-controller.js"
+      ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
     }
   }
 
@@ -40,10 +43,12 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 
       const action = frontendModelActionForCommand({commandName, modelName, resourceConfiguration})
       if (!action) continue
+      const controller = normalizedResourcePath.replace(/^\/+/, "")
 
       return {
         action: `frontend-${action}`,
-        controller: normalizedResourcePath.replace(/^\/+/, "")
+        controller,
+        ...(resolvedFrontendModelControllerClass ? {controllerClass: resolvedFrontendModelControllerClass} : {})
       }
     }
   }
@@ -142,4 +147,28 @@ function normalizePath(path) {
   }
 
   return withLeadingSlash
+}
+
+/**
+ * @returns {Promise<typeof import("../../frontend-model-controller.js").default | null>} - Frontend model controller class or null when unavailable.
+ */
+async function resolveFrontendModelControllerClass() {
+  if (frontendModelControllerClass !== undefined) return frontendModelControllerClass
+
+  const importPath = ["..", "..", "frontend-model-controller.js"].join("/")
+
+  try {
+    const frontendModelControllerImport = await import(importPath)
+    frontendModelControllerClass = frontendModelControllerImport.default
+
+    return frontendModelControllerClass
+  } catch (error) {
+    const isModuleNotFoundError = typeof error === "object" && error && "code" in error && error.code === "ERR_MODULE_NOT_FOUND"
+
+    if (!isModuleNotFoundError) throw error
+
+    frontendModelControllerClass = null
+
+    return null
+  }
 }
