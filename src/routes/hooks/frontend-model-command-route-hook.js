@@ -8,6 +8,38 @@ const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
 let frontendModelControllerClass
 
 /**
+ * @param {Error} error - Import error.
+ * @returns {string | undefined} - Missing module specifier from an ERR_MODULE_NOT_FOUND message.
+ */
+function missingModuleSpecifierFromError(error) {
+  const firstLine = error.message.split("\n")[0] || ""
+  const match = firstLine.match(/^Cannot find (?:module|package) ['"](.+?)['"] imported from /)
+
+  return match?.[1]
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {Error} args.error - Import error.
+ * @param {string} args.targetImportPath - Relative module specifier used in dynamic import.
+ * @returns {boolean} - True when the target frontend-model-controller module is missing.
+ */
+function isMissingFrontendModelControllerModuleError({error, targetImportPath}) {
+  const isModuleNotFoundError = "code" in error && error.code === "ERR_MODULE_NOT_FOUND"
+
+  if (!isModuleNotFoundError) return false
+
+  const missingSpecifier = missingModuleSpecifierFromError(error)
+
+  if (!missingSpecifier) return false
+
+  const targetImportUrl = new URL(targetImportPath, import.meta.url).href
+  const targetImportFilePath = decodeURIComponent(new URL(targetImportUrl).pathname)
+
+  return missingSpecifier === targetImportUrl || missingSpecifier === targetImportFilePath
+}
+
+/**
  * @param {object} args - Hook args.
  * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
  * @param {string} args.currentPath - Request path without query.
@@ -163,9 +195,9 @@ async function resolveFrontendModelControllerClass() {
 
     return frontendModelControllerClass
   } catch (error) {
-    const isModuleNotFoundError = typeof error === "object" && error && "code" in error && error.code === "ERR_MODULE_NOT_FOUND"
+    const isErrorObject = typeof error === "object" && error
 
-    if (!isModuleNotFoundError) throw error
+    if (!isErrorObject || !isMissingFrontendModelControllerModuleError({error, targetImportPath: importPath})) throw error
 
     frontendModelControllerClass = null
 
