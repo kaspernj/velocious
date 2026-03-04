@@ -100,7 +100,7 @@ export default class VelociousRoutesResolver {
       throw new Error(`Matched the route but didn't know what to do with it: ${rawPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
     }
 
-    const controllerClass = this.routeHookControllerClass || (await import(toImportSpecifier(controllerPath))).default
+    const controllerClass = await this.resolveControllerClass({controllerPath})
     const controllerInstance = new controllerClass({
       action,
       configuration: this.configuration,
@@ -148,6 +148,28 @@ export default class VelociousRoutesResolver {
       }
 
       throw ensuredError
+    }
+  }
+
+  /**
+   * @param {object} args - Args.
+   * @param {string} args.controllerPath - Controller import path.
+   * @returns {Promise<typeof import("../controller.js").default>} - The resolved controller class.
+   */
+  async resolveControllerClass({controllerPath}) {
+    if (!this.routeHookControllerClass) {
+      return /** @type {typeof import("../controller.js").default} */ ((await import(toImportSpecifier(controllerPath))).default)
+    }
+
+    try {
+      return /** @type {typeof import("../controller.js").default} */ ((await import(toImportSpecifier(controllerPath))).default)
+    } catch (error) {
+      const ensuredError = ensureError(error)
+      const isMissingModuleError = "code" in ensuredError && ensuredError.code === "ERR_MODULE_NOT_FOUND"
+
+      if (!isMissingModuleError) throw ensuredError
+
+      return /** @type {typeof import("../controller.js").default} */ (this.routeHookControllerClass)
     }
   }
 
