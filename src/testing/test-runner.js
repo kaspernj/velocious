@@ -763,6 +763,15 @@ export default class TestRunner {
                 console.error(picocolors.red(`${leftPadding}  Test failed with a ${typeof failedError}: ${String(failedError)}`))
               }
 
+              this._failedTests++
+              this._failedTestDetails.push({
+                fullDescription: this.buildFullDescription(descriptions, testDescription),
+                filePath: testData.filePath,
+                line: testData.line,
+                error: failedError,
+                consoleOutput: stopConsoleCapture()
+              })
+
               await this.emitEvent("testFailed", {
                 configuration: this.getConfiguration(),
                 descriptions,
@@ -774,15 +783,6 @@ export default class TestRunner {
               })
 
               this.printRerunCommand({descriptions, testDescription, testData, leftPadding})
-
-              this._failedTests++
-              this._failedTestDetails.push({
-                fullDescription: this.buildFullDescription(descriptions, testDescription),
-                filePath: testData.filePath,
-                line: testData.line,
-                error: failedError,
-                consoleOutput: stopConsoleCapture()
-              })
             }
 
             break
