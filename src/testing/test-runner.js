@@ -1,7 +1,9 @@
 // @ts-check
 
 import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
+import fs from "node:fs/promises"
 import path from "path"
+import {format} from "node:util"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner.js"
 import RequestClient from "./request-client.js"
@@ -34,6 +36,23 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
   })
 }
 
+/** @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
+
+/** @type {ConsoleMethodName[]} */
+const CAPTURED_CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"]
+
+/**
+ * @param {string} value - Value to sanitize.
+ * @returns {string} - Slug-safe value.
+ */
+function toFileSlug(value) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "failed-test"
+}
+
 /**
  * @typedef {object} TestArgs
  * @property {Application} [application] - Application instance for integration tests.
@@ -55,6 +74,16 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
  * @property {string} [filePath] - Source file path.
  * @property {number} [line] - Source line number.
  * @property {function(TestArgs) : (void|Promise<void>)} function - Test callback to execute.
+ */
+
+/**
+ * @typedef {object} FailedTestDetail
+ * @property {string} fullDescription - Full test description.
+ * @property {string} [filePath] - Source file path.
+ * @property {number} [line] - Source line number.
+ * @property {unknown} error - Failure error.
+ * @property {string} [consoleOutput] - Captured console output while test ran.
+ * @property {string} [consoleLogPath] - Saved console log path.
  */
 
 /**
@@ -418,9 +447,52 @@ export default class TestRunner {
     return this._failedTests
   }
 
-  /** @returns {Array<{fullDescription: string, filePath?: string, line?: number, error: unknown}>} - Failed test details. */
+  /** @returns {FailedTestDetail[]} - Failed test details. */
   getFailedTestDetails() {
     return this._failedTestDetails
+  }
+
+  /**
+   * @param {object} [args] - Options object.
+   * @param {string} [args.assetsPath] - Assets directory path.
+   * @returns {Promise<string[]>} - Written log file paths.
+   */
+  async persistFailedTestConsoleOutputsToAssets({assetsPath = path.join(process.cwd(), "tmp/screenshots")} = {}) {
+    const failedTestDetails = this.getFailedTestDetails()
+    const writtenLogPaths = []
+    let createdDirectory = false
+
+    for (let index = 0; index < failedTestDetails.length; index++) {
+      const failedTestDetail = failedTestDetails[index]
+      const consoleOutput = failedTestDetail.consoleOutput
+
+      if (!consoleOutput) continue
+
+      if (!createdDirectory) {
+        await fs.mkdir(assetsPath, {recursive: true})
+        createdDirectory = true
+      }
+
+      const now = new Date()
+      const timestamp = [
+        String(now.getFullYear()),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+        String(now.getHours()).padStart(2, "0"),
+        String(now.getMinutes()).padStart(2, "0"),
+        String(now.getSeconds()).padStart(2, "0"),
+        String(now.getMilliseconds()).padStart(3, "0")
+      ].join("")
+      const slug = toFileSlug(failedTestDetail.fullDescription)
+      const fileName = `${timestamp}-${String(index + 1).padStart(2, "0")}-${slug}.console.log`
+      const filePath = path.join(assetsPath, fileName)
+
+      await fs.writeFile(filePath, consoleOutput, "utf8")
+      failedTestDetail.consoleLogPath = filePath
+      writtenLogPaths.push(filePath)
+    }
+
+    return writtenLogPaths
   }
 
   /**
@@ -589,6 +661,7 @@ export default class TestRunner {
         }
 
         console.log(`${leftPadding}it ${testDescription}`)
+        const stopConsoleCapture = this.startConsoleCapture()
 
         const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
           ? Math.max(0, Math.floor(testArgs.retry))
@@ -600,46 +673,65 @@ export default class TestRunner {
         let retriesUsed = 0
         let attemptNumber = 1
 
-        while (true) {
-          let shouldRetry = false
-          /** @type {unknown} */
-          let failedError
-          /** @type {unknown} */
-          let lastError
+        try {
+          while (true) {
+            let shouldRetry = false
+            /** @type {unknown} */
+            let failedError
+            /** @type {unknown} */
+            let lastError
 
-          try {
-            await this.runWithDummyIfNeeded(testArgs, async () => {
-              try {
-                clearDeliveries()
-                for (const beforeEachData of newBeforeEaches) {
-                  await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                }
+            try {
+              await this.runWithDummyIfNeeded(testArgs, async () => {
+                try {
+                  clearDeliveries()
+                  for (const beforeEachData of newBeforeEaches) {
+                    await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                  }
 
-                const testPromise = testData.function(testArgs)
+                  const testPromise = testData.function(testArgs)
 
-                if (useTimeout && timeoutMs !== undefined) {
-                  await runWithTimeout(testPromise, timeoutMs, testDescription)
-                } else {
-                  await testPromise
+                  if (useTimeout && timeoutMs !== undefined) {
+                    await runWithTimeout(testPromise, timeoutMs, testDescription)
+                  } else {
+                    await testPromise
+                  }
+                  this._successfulTests++
+                } finally {
+                  for (const afterEachData of newAfterEaches) {
+                    await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                  }
                 }
-                this._successfulTests++
-              } finally {
-                for (const afterEachData of newAfterEaches) {
-                  await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                }
+              })
+            } catch (error) {
+              lastError = error
+              if (retriesUsed < retryCount) {
+                retriesUsed++
+                shouldRetry = true
+                console.warn(picocolors.red(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${error instanceof Error ? error.message : String(error)}`))
+                await this.emitEvent("testRetrying", {
+                  configuration: this.getConfiguration(),
+                  descriptions,
+                  error,
+                  nextAttempt: attemptNumber + 1,
+                  retriesUsed,
+                  retryCount,
+                  testArgs,
+                  testData,
+                  testDescription,
+                  testRunner: this
+                })
+              } else {
+                failedError = error
               }
-            })
-          } catch (error) {
-            lastError = error
-            if (retriesUsed < retryCount) {
-              retriesUsed++
-              shouldRetry = true
-              console.warn(picocolors.red(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${error instanceof Error ? error.message : String(error)}`))
-              await this.emitEvent("testRetrying", {
+            }
+
+            if (attemptNumber > 1) {
+              await this.emitEvent("testRetried", {
                 configuration: this.getConfiguration(),
                 descriptions,
-                error,
-                nextAttempt: attemptNumber + 1,
+                error: lastError,
+                attemptNumber,
                 retriesUsed,
                 retryCount,
                 testArgs,
@@ -647,70 +739,56 @@ export default class TestRunner {
                 testDescription,
                 testRunner: this
               })
-            } else {
-              failedError = error
             }
-          }
 
-          if (attemptNumber > 1) {
-            await this.emitEvent("testRetried", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error: lastError,
-              attemptNumber,
-              retriesUsed,
-              retryCount,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this
-            })
-          }
+            attemptNumber++
 
-          attemptNumber++
+            if (shouldRetry) continue
 
-          if (shouldRetry) continue
+            if (failedError) {
+              if (failedError instanceof Error) {
+                console.error(picocolors.red(`${leftPadding}  Test failed: ${failedError.message}`))
+                addTrackedStackToError(failedError)
 
-          if (failedError) {
-            this._failedTests++
-            this._failedTestDetails.push({
-              fullDescription: this.buildFullDescription(descriptions, testDescription),
-              filePath: testData.filePath,
-              line: testData.line,
-              error: failedError
-            })
+                const backtraceCleaner = new BacktraceCleaner(failedError)
+                const cleanedStack = backtraceCleaner.getCleanedStack()
+                const stackLines = cleanedStack?.split("\n")
 
-            if (failedError instanceof Error) {
-              console.error(picocolors.red(`${leftPadding}  Test failed: ${failedError.message}`))
-              addTrackedStackToError(failedError)
-
-              const backtraceCleaner = new BacktraceCleaner(failedError)
-              const cleanedStack = backtraceCleaner.getCleanedStack()
-              const stackLines = cleanedStack?.split("\n")
-
-              if (stackLines) {
-                for (const stackLine of stackLines) {
-                  console.error(picocolors.red(`${leftPadding}  ${stackLine}`))
+                if (stackLines) {
+                  for (const stackLine of stackLines) {
+                    console.error(picocolors.red(`${leftPadding}  ${stackLine}`))
+                  }
                 }
+              } else {
+                console.error(picocolors.red(`${leftPadding}  Test failed with a ${typeof failedError}: ${String(failedError)}`))
               }
-            } else {
-              console.error(picocolors.red(`${leftPadding}  Test failed with a ${typeof failedError}: ${String(failedError)}`))
+
+              await this.emitEvent("testFailed", {
+                configuration: this.getConfiguration(),
+                descriptions,
+                error: failedError,
+                testArgs,
+                testData,
+                testDescription,
+                testRunner: this
+              })
+
+              this.printRerunCommand({descriptions, testDescription, testData, leftPadding})
+
+              this._failedTests++
+              this._failedTestDetails.push({
+                fullDescription: this.buildFullDescription(descriptions, testDescription),
+                filePath: testData.filePath,
+                line: testData.line,
+                error: failedError,
+                consoleOutput: stopConsoleCapture()
+              })
             }
 
-            await this.emitEvent("testFailed", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error: failedError,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this
-            })
-
-            this.printRerunCommand({descriptions, testDescription, testData, leftPadding})
+            break
           }
-
-          break
+        } finally {
+          stopConsoleCapture()
         }
       }
 
@@ -808,5 +886,45 @@ export default class TestRunner {
     }
 
     return undefined
+  }
+
+  /**
+   * @returns {() => string} - Stops the capture and returns captured text.
+   */
+  startConsoleCapture() {
+    const lines = []
+    /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */
+    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */ (console)
+    /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */
+    const originalConsoleMethods = {
+      debug: consoleObject.debug.bind(console),
+      error: consoleObject.error.bind(console),
+      info: consoleObject.info.bind(console),
+      log: consoleObject.log.bind(console),
+      warn: consoleObject.warn.bind(console)
+    }
+    let stopped = false
+    let outputText = ""
+
+    for (const methodName of CAPTURED_CONSOLE_METHODS) {
+      consoleObject[methodName] = (...args) => {
+        lines.push(`[${new Date().toISOString()}] [${methodName}] ${format(...args)}`)
+        originalConsoleMethods[methodName](...args)
+      }
+    }
+
+    return () => {
+      if (!stopped) {
+        stopped = true
+
+        for (const methodName of CAPTURED_CONSOLE_METHODS) {
+          consoleObject[methodName] = originalConsoleMethods[methodName]
+        }
+
+        outputText = lines.join("\n")
+      }
+
+      return outputText
+    }
   }
 }

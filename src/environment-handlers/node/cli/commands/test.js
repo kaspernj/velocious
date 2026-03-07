@@ -74,6 +74,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     }
 
     if (testRunner.isFailed()) {
+      await testRunner.persistFailedTestConsoleOutputsToAssets()
       const failedTests = testRunner.getFailedTestDetails()
 
       if (failedTests.length > 0) {
@@ -84,6 +85,10 @@ export default class VelociousCliCommandsTest extends BaseCommand {
             ? ` (${failed.filePath}:${failed.line})`
             : ""
           console.error(picocolors.red(`- ${failed.fullDescription}${location}`))
+
+          if (failed.consoleLogPath) {
+            console.error(picocolors.red(`  Console log: ${failed.consoleLogPath}`))
+          }
         }
       }
 

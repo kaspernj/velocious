@@ -1,5 +1,8 @@
 // @ts-check
 
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it, testEvents} from "../../src/testing/test.js"
@@ -263,6 +266,7 @@ describe("TestRunner events", () => {
           filePath: "/tmp/sample-spec.js",
           line: 42,
           function: async () => {
+            console.log("console output from failing test")
             throw new Error("boom")
           }
         }
@@ -283,5 +287,65 @@ describe("TestRunner events", () => {
     expect(failedDetails[0].fullDescription).toBe("fails once")
     expect(failedDetails[0].filePath).toBe("/tmp/sample-spec.js")
     expect(failedDetails[0].line).toBe(42)
+    expect(failedDetails[0].consoleOutput).toContain("console output from failing test")
+  })
+
+  it("persists failed test console output to an assets path", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-test-runner-"))
+    const assetsPath = path.join(tempDirectory, "assets")
+
+    const tests = {
+      args: {},
+      afterEaches: [],
+      afterAlls: [],
+      beforeAlls: [],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "fails once": {
+          args: {},
+          filePath: "/tmp/sample-spec.js",
+          line: 42,
+          function: async () => {
+            console.log("console output written to file")
+            throw new Error("boom")
+          }
+        }
+      }
+    }
+
+    try {
+      await testRunner.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
+      })
+
+      const writtenPaths = await testRunner.persistFailedTestConsoleOutputsToAssets({assetsPath})
+
+      expect(writtenPaths.length).toBe(1)
+
+      const fileContent = await fs.readFile(writtenPaths[0], "utf8")
+      const failedDetails = testRunner.getFailedTestDetails()
+
+      expect(fileContent).toContain("console output written to file")
+      expect(failedDetails[0].consoleLogPath).toBe(writtenPaths[0])
+    } finally {
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
   })
 })
