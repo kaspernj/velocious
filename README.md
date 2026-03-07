@@ -71,9 +71,11 @@ Retry flaky tests by setting a retry count on the test args.
 
 ```js
 describe("Tasks", () => {
-  it("retries a flaky check", {retry: 2}, async () => {})
+it("retries a flaky check", {retry: 2}, async () => {})
 })
 ```
+
+During a failing run, Velocious captures all console output emitted while each test executes. At the end of a failed run, those logs are saved under `tmp/screenshots` next to failure screenshots/browser logs/HTML, and each failed test summary prints the saved console log path.
 
 Listen for retry events if you need to restart services between attempts.
 
