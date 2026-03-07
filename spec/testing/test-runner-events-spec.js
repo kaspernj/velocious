@@ -348,4 +348,68 @@ describe("TestRunner events", () => {
       await fs.rm(tempDirectory, {recursive: true, force: true})
     }
   })
+
+  it("updates failed counters before testFailed listeners run", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environmentHandler,
+      initializeModels: async () => {},
+      environment: "test",
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+    let failedCountInEvent
+    let failedDetailsInEvent
+    const handler = () => {
+      failedCountInEvent = testRunner.getFailedTests()
+      failedDetailsInEvent = testRunner.getFailedTestDetails().length
+      throw new Error("testFailed-listener-error")
+    }
+
+    testEvents.on("testFailed", handler)
+
+    try {
+      /** @type {Error | undefined} */
+      let thrownError
+      const tests = {
+        args: {},
+        afterEaches: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "fails once": {
+            args: {},
+            function: async () => {
+              throw new Error("boom")
+            }
+          }
+        }
+      }
+
+      try {
+        await testRunner.runTests({
+          afterEaches: [],
+          beforeEaches: [],
+          tests,
+          descriptions: [],
+          indentLevel: 0
+        })
+      } catch (error) {
+        thrownError = /** @type {Error} */ (error)
+      }
+
+      expect(thrownError).toBeDefined()
+      expect(thrownError.message).toBe("testFailed-listener-error")
+      expect(failedCountInEvent).toBe(1)
+      expect(failedDetailsInEvent).toBe(1)
+      expect(testRunner.getFailedTests()).toBe(1)
+      expect(testRunner.getFailedTestDetails().length).toBe(1)
+    } finally {
+      testEvents.off("testFailed", handler)
+    }
+  })
 })
