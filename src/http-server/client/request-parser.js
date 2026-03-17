@@ -45,10 +45,26 @@ export default class VelociousHttpServerClientRequestParser {
 
     unorderedParams[formDataPart.getName()] = formDataPart.getValue()
 
-    const paramsToObject = new ParamsToObject(unorderedParams)
-    const newParams = paramsToObject.toObject()
+    try {
+      const paramsToObject = new ParamsToObject(unorderedParams)
+      const newParams = paramsToObject.toObject()
 
-    incorporate(this.params, newParams)
+      incorporate(this.params, newParams)
+    } catch (error) {
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error)
+
+      ensuredError.velociousContext = {
+        ...(ensuredError.velociousContext || {}),
+        requestParsing: {
+          formDataPartName: formDataPart.getName(),
+          httpMethod: this.getHttpMethod(),
+          path: this.getPath(),
+          stage: "form-data-part"
+        }
+      }
+
+      throw ensuredError
+    }
   }
 
   /**
