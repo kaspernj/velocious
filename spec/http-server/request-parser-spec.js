@@ -3,6 +3,7 @@
 import Configuration from "../../src/configuration.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import ParamsToObject from "../../src/http-server/client/params-to-object.js"
 import RequestParser from "../../src/http-server/client/request-parser.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
@@ -47,5 +48,12 @@ describe("HttpServer - request parser", async () => {
     } finally {
       if (previousConfiguration) previousConfiguration.setCurrent()
     }
+  })
+
+  it("includes the malformed nested parameter key in parser errors", async () => {
+    const paramsToObject = new ParamsToObject({"task[]]": "Broken"})
+
+    await expect(() => paramsToObject.toObject())
+      .toThrow('Could not parse nested params key "task[]]" at rest "]"')
   })
 })

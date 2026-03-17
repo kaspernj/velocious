@@ -1,5 +1,28 @@
 // @ts-check
 
+/**
+ * @param {object} args - Args.
+ * @param {string} args.key - Parameter key.
+ * @param {string} args.rest - Remaining unmatched segment.
+ * @returns {Error} - Error with parser context attached.
+ */
+function malformedNestedParamsKeyError(args) {
+  const {key, rest} = args
+  const error = new Error(`Could not parse nested params key "${key}" at rest "${rest}"`)
+  /** @type {Error & {velociousContext?: Record<string, unknown>}} */
+  const typedError = error
+
+  typedError.velociousContext = {
+    nestedParamsKey: {
+      key,
+      rest,
+      stage: "params-to-object"
+    }
+  }
+
+  return error
+}
+
 export default class ParamsToObject {
   /**
    * @param {Record<string, any>} object - Object.
@@ -48,7 +71,7 @@ export default class ParamsToObject {
         result[inputName] = newResult
       }
 
-      this.treatSecond(value, rest, newResult)
+      this.treatSecond(value, rest, newResult, key)
     } else {
       result[key] = value
     }
@@ -58,12 +81,13 @@ export default class ParamsToObject {
    * @param {any} value - Value to use.
    * @param {string} rest - Rest.
    * @param {Record<string, any> | any[]} result - Result.
+   * @param {string} [fullKey] - Original full key.
    * @returns {void} - No return value.
    */
-  treatSecond(value, rest, result) {
+  treatSecond(value, rest, result, fullKey = rest) {
     const secondMatch = rest.match(/^\[(.*?)\]([\s\S]*)$/)
 
-    if (!secondMatch) throw new Error(`Could not parse rest part: ${rest}`)
+    if (!secondMatch) throw malformedNestedParamsKeyError({key: fullKey, rest})
 
     const key = secondMatch[1]
     const newRest = secondMatch[2]
@@ -90,8 +114,7 @@ export default class ParamsToObject {
         result[key] = newResult
       }
 
-      this.treatSecond(value, newRest, newResult)
+      this.treatSecond(value, newRest, newResult, fullKey)
     }
   }
 }
-

@@ -159,11 +159,28 @@ export default class VelociousController {
 
     if (!query) return {}
 
-    /** @type {Record<string, any>} */
-    const unparsedParams = querystring.parse(query)
-    const paramsToObject = new ParamsToObject(unparsedParams)
+    try {
+      /** @type {Record<string, any>} */
+      const unparsedParams = querystring.parse(query)
+      const paramsToObject = new ParamsToObject(unparsedParams)
 
-    return paramsToObject.toObject()
+      return paramsToObject.toObject()
+    } catch (error) {
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error)
+
+      ensuredError.velociousContext = {
+        ...(ensuredError.velociousContext || {}),
+        requestParsing: {
+          httpMethod: this._request.httpMethod(),
+          parameterKeys: Object.keys(querystring.parse(query)),
+          path: this._request.path(),
+          queryPreview: query.length > 300 ? `${query.slice(0, 300)}...` : query,
+          stage: "query-parameters"
+        }
+      }
+
+      throw ensuredError
+    }
   }
 
   /**
