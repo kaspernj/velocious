@@ -1,0 +1,1 @@
+Frontend models now support a single transport `url` option for shared-endpoint configuration, default the shared endpoint to `/frontend-models`, and fall back to the model primary key when resource configs omit `primaryKey`.

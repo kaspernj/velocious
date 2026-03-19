@@ -1,7 +1,26 @@
 // @ts-check
 
 import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model-command-route-hook.js"
+import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+
+class UserFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id"],
+      commands: {
+        find: "frontend-find",
+        index: "frontend-index"
+      },
+      path: "/partners/frontend-models/users"
+    }
+  }
+}
 
 /**
  * @param {import("../../src/configuration-types.js").BackendProjectConfiguration[]} backendProjects - Backend project config.
@@ -21,6 +40,32 @@ describe("routes - frontend model command route hook", () => {
   it("returns frontend model controller path for shared API path", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([]),
+      currentPath: "/frontend-models"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-api",
+      controller: "velocious/api",
+      controllerPath: expectedControllerPath
+    })
+  })
+
+  it("returns frontend model controller path for shared request path alias", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([]),
+      currentPath: "/frontend-models/request"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-api",
+      controller: "velocious/api",
+      controllerPath: expectedControllerPath
+    })
+  })
+
+  it("returns frontend model controller path for legacy shared API path alias", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([]),
       currentPath: "/velocious/api"
     })
 
@@ -36,17 +81,7 @@ describe("routes - frontend model command route hook", () => {
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
         resources: {
-          User: {
-            abilities: {
-              find: "read",
-              index: "read"
-            },
-            commands: {
-              find: "frontend-find",
-              index: "frontend-index"
-            },
-            path: "/partners/frontend-models/users"
-          }
+          User: UserFrontendResource
         }
       }]),
       currentPath: "/partners/frontend-models/users/frontend-index"

@@ -4,24 +4,109 @@ import {describe, expect, it} from "../../../../src/testing/test.js"
 import backendProjects from "../../../dummy/src/config/backend-projects.js"
 import Cli from "../../../../src/cli/index.js"
 import Configuration from "../../../../src/configuration.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
+import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import fs from "fs/promises"
 import path from "node:path"
+
+class CallFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: {
+        id: {type: "uuid"},
+        startedAt: {type: "datetime", null: true},
+        durationSeconds: {dataType: "integer"},
+        metadata: {sqlType: "json", null: true},
+        active: {type: "boolean"},
+        endedAt: {type: "timestamp without time zone", null: true}
+      },
+      path: "/calls"
+    }
+  }
+}
+
+class MissingAbilitiesTaskFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: ["id", "name"],
+      path: "/tasks"
+    }
+  }
+}
+
+class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id", "name"],
+      path: "/tasks",
+      relationships: {
+        project: {
+          model: "Project",
+          type: "belongsTo"
+        }
+      }
+    }
+  }
+}
+
+class NullableIdCallFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: {id: {type: "uuid", null: true}},
+      path: "/calls"
+    }
+  }
+}
+
+class ReferenceUserFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["reference", "email"],
+      path: "/users"
+    }
+  }
+}
+
+class User extends DatabaseRecord {}
+User.setPrimaryKey("reference")
 
 /**
  * @param {object} args - Build args.
  * @param {import("../../../../src/configuration-types.js").BackendProjectConfiguration[]} [args.backendProjectsList] - Backend projects.
+ * @param {function({configuration: Configuration}) : Promise<void>} [args.initializeModels] - Model initializer.
  * @returns {Configuration} - Configuration instance.
  */
-function buildConfiguration({backendProjectsList} = {}) {
+function buildConfiguration({backendProjectsList, initializeModels} = {}) {
   return new Configuration({
     backendProjects: backendProjectsList,
     database: {test: {}},
     directory: dummyDirectory(),
     environment: "test",
     environmentHandler: new EnvironmentHandlerNode(),
-    initializeModels: async () => {},
+    initializeModels: initializeModels || (async () => {}),
     locale: "en",
     localeFallbacks: {en: ["en"]},
     locales: ["en"]
@@ -93,21 +178,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Call: {
-              abilities: {
-                find: "read",
-                index: "read"
-              },
-              attributes: {
-                id: {type: "uuid"},
-                startedAt: {type: "datetime", null: true},
-                durationSeconds: {dataType: "integer"},
-                metadata: {sqlType: "json", null: true},
-                active: {type: "boolean"},
-                endedAt: {type: "timestamp without time zone", null: true}
-              },
-              path: "/calls"
-            }
+            Call: CallFrontendResource
           }
         }]
       }),
@@ -149,10 +220,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Task: {
-              attributes: ["id", "name"],
-              path: "/tasks"
-            }
+            Task: MissingAbilitiesTaskFrontendResource
           }
         }]
       }),
@@ -173,20 +241,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Task: {
-              abilities: {
-                find: "read",
-                index: "read"
-              },
-              attributes: ["id", "name"],
-              path: "/tasks",
-              relationships: {
-                project: {
-                  model: "Project",
-                  type: "belongsTo"
-                }
-              }
-            }
+            Task: MissingRelationshipTargetTaskFrontendResource
           }
         }]
       }),
@@ -207,14 +262,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Call: {
-              abilities: {
-                find: "read",
-                index: "read"
-              },
-              attributes: {id: {type: "uuid", null: true}},
-              path: "/calls"
-            }
+            Call: NullableIdCallFrontendResource
           }
         }]
       }),
@@ -229,6 +277,34 @@ describe("Cli - generate - frontend-models", () => {
     const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
 
     expect(callContents).toContain("@property {string | null} id - Attribute value.")
+  })
+
+  it("generates frontend-model primary keys from backend model classes", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            User: ReferenceUserFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(User)
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
+
+    expect(userContents).toContain("primaryKey: \"reference\"")
   })
 
   it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {

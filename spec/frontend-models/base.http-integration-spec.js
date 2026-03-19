@@ -137,11 +137,8 @@ class HttpPreloadProject extends FrontendModelBase {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: undefined,
-    baseUrlResolver: undefined,
+    url: undefined,
     credentials: undefined,
-    pathPrefix: undefined,
-    pathPrefixResolver: undefined,
     request: undefined
   })
 }
@@ -149,7 +146,7 @@ function resetFrontendModelTransport() {
 /** @returns {void} */
 function configureNodeTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: "http://127.0.0.1:3006"
+    url: "http://127.0.0.1:3006"
   })
 }
 

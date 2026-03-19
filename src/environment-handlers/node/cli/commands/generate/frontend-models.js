@@ -1,6 +1,7 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
+import {frontendModelResourceConfigurationFromDefinition} from "../../../../../frontend-models/resource-definition.js"
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
@@ -8,6 +9,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   async execute() {
     const configuration = this.getConfiguration()
     const backendProjects = configuration.getBackendProjects()
+
+    await configuration.initializeModels()
 
     if (!Array.isArray(backendProjects) || backendProjects.length === 0) {
       throw new Error("No backend projects configured. Configure 'backendProjects' in your configuration first")
@@ -31,10 +34,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
       for (const modelClassName in resources) {
-        const modelConfig = resources[modelClassName]
+        const modelConfig = frontendModelResourceConfigurationFromDefinition(resources[modelClassName])
         const className = inflection.camelize(modelClassName.replaceAll("-", "_"))
         const fileName = `${inflection.dasherize(inflection.underscore(className))}.js`
         const filePath = `${frontendModelsDir}/${fileName}`
+
+        if (!modelConfig) {
+          throw new Error(`Invalid frontend model resource definition for '${className}'`)
+        }
 
         this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig})
 
@@ -47,6 +54,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const fileContent = this.buildModelFileContent({
           className,
           importPath,
+          modelClass: configuration.getModelClasses()[className],
           modelConfig
         })
 
@@ -117,8 +125,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * @param {{frontendModels?: Record<string, any>, resources?: Record<string, any>}} backendProject - Backend project config.
-   * @returns {Record<string, any>} - Resource definitions keyed by model class name.
+   * @param {{frontendModels?: Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>, resources?: Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>}} backendProject - Backend project config.
+   * @returns {Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>} - Resource definitions keyed by model class name.
    */
   resourcesForBackendProject(backendProject) {
     const resources = backendProject.frontendModels || backendProject.resources || {}
@@ -173,10 +181,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {object} args - Method args.
    * @param {string} args.className - Model class name.
    * @param {string} args.importPath - Base class import path.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @returns {string} - Generated file content.
    */
-  buildModelFileContent({className, importPath, modelConfig}) {
+  buildModelFileContent({className, importPath, modelClass, modelConfig}) {
     const attributes = this.attributeDefinitionsForModel(modelConfig)
     const relationships = this.relationshipsForModel(modelConfig)
     const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
@@ -218,7 +227,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
+    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     if (Object.keys(attachments).length > 0) {
@@ -242,7 +251,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       propertyName: "commands",
       values: commands
     })
-    fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey || "id")}\n`
+    if (modelClass && modelClass.primaryKey() !== "id") {
+      fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
+    }
     fileContent += "    }\n"
     fileContent += "  }\n"
 

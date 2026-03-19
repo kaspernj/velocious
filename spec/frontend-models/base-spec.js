@@ -78,6 +78,33 @@ function buildAttachmentTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with custom primary key.
+ */
+function buildCustomPrimaryKeyTestModelClass() {
+  /** Test model implementation with custom primary key. */
+  class User extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {find: string, index: string}, primaryKey: string}} - Resource configuration.
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["reference", "name"],
+        commands: {
+          find: "find",
+          index: "index"
+        },
+        primaryKey: "reference"
+      }
+    }
+
+    /** @returns {any} */
+    reference() { return this.readAttribute("reference") }
+  }
+
+  return User
+}
+
+/**
  * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
  */
 function buildPreloadTestModelClasses() {
@@ -210,11 +237,8 @@ function stubFetch(responseBody) {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: undefined,
-    baseUrlResolver: undefined,
+    url: undefined,
     credentials: undefined,
-    pathPrefix: undefined,
-    pathPrefixResolver: undefined,
     request: undefined
   })
 }
@@ -275,12 +299,75 @@ describe("Frontend models - base", () => {
       ])
 
       expect(calls).toHaveLength(1)
-      expect(calls[0].url).toEqual("/velocious/api")
+      expect(calls[0].url).toEqual("/frontend-models")
       expect(calls[0].body.requests).toHaveLength(2)
       expect(calls[0].body.requests[0].model).toEqual("SharedApiUser")
       expect(calls[0].body.requests[1].model).toEqual("SharedApiUser")
       expect(firstResult).toHaveLength(1)
       expect(secondResult).toHaveLength(1)
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("uses configured frontend-model primary keys", () => {
+    const User = buildCustomPrimaryKeyTestModelClass()
+    const user = new User({name: "Jane", reference: "user-ref-1"})
+
+    expect(User.primaryKey()).toEqual("reference")
+    expect(user.primaryKeyValue()).toEqual("user-ref-1")
+  })
+
+  it("uses configured shared frontend-model API URL when url is configured", async () => {
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    class SharedApiUser extends FrontendModelBase {
+      /** @returns {{attributes: string[], commands: {index: string}}} */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          commands: {
+            index: "index"
+          }
+        }
+      }
+    }
+
+    FrontendModelBase.configureTransport({
+      url: "https://example.test/frontend-models"
+    })
+
+    globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+      const bodyString = typeof options?.body === "string" ? options.body : "{}"
+      const body = JSON.parse(bodyString)
+
+      calls.push({
+        body,
+        url: `${url}`
+      })
+
+      return {
+        ok: true,
+        status: 200,
+        /** @returns {Promise<string>} */
+        text: async () => JSON.stringify({
+          responses: [{
+            requestId: body.requests[0].requestId,
+            response: {models: [{id: "1", name: "One"}], status: "success"}
+          }],
+          status: "success"
+        }),
+      }
+    })
+
+    try {
+      await SharedApiUser.toArray()
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].url).toEqual("https://example.test/frontend-models")
     } finally {
       resetFrontendModelTransport()
       globalThis.fetch = originalFetch
@@ -1482,12 +1569,12 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("prefixes command URL with configured base URL", async () => {
+  it("prefixes legacy direct command URLs with configured transport URL", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      baseUrl: "http://127.0.0.1:4501/"
+      url: "http://127.0.0.1:4501/"
     })
 
     try {
@@ -1505,37 +1592,12 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("adds configured path prefix before resource path", async () => {
+  it("supports dynamic transport URLs", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      baseUrl: "http://127.0.0.1:4501",
-      pathPrefix: "/backend-api"
-    })
-
-    try {
-      await User.toArray()
-
-      expect(fetchStub.calls).toEqual([
-        {
-          body: {},
-          url: "http://127.0.0.1:4501/backend-api/api/frontend-models/users/index"
-        }
-      ])
-    } finally {
-      resetFrontendModelTransport()
-      fetchStub.restore()
-    }
-  })
-
-  it("supports dynamic base URL and path prefix resolvers", async () => {
-    const User = buildTestModelClass()
-    const fetchStub = stubFetch({models: []})
-
-    FrontendModelBase.configureTransport({
-      baseUrlResolver: () => "http://localhost:4500/",
-      pathPrefixResolver: () => "v1"
+      url: () => "http://localhost:4500/v1"
     })
 
     try {

@@ -259,26 +259,40 @@ npx velocious g:model Task
 You can generate lightweight frontend model classes from resource definitions in your configuration.
 
 ```js
+import FrontendModelBaseResource from "velocious/build/src/frontend-model-resource/base-resource.js"
+
+class UserResource extends FrontendModelBaseResource {
+  static resourceConfig() {
+    return {
+      abilities: {
+        create: "create",
+        destroy: "destroy",
+        find: "read",
+        index: "read",
+        update: "update"
+      },
+      attributes: ["id", "name", "email"],
+      relationships: {
+        projects: {type: "hasMany", model: "Project"}
+      }
+    }
+  }
+}
+
 export default new Configuration({
   // ...
   backendProjects: [
     {
       path: "/path/to/backend-project",
       resources: {
-        User: {
-          attributes: ["id", "name", "email"],
-          relationships: {
-            projects: {type: "hasMany", model: "Project"}
-          },
-          commands: {find: "find", create: "create", update: "update", destroy: "destroy"},
-          path: "/api/frontend-models/users",
-          primaryKey: "id"
-        }
+        User: UserResource
       }
     }
   ]
 })
 ```
+
+`resources` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
 
 Generate classes:
 
@@ -436,16 +450,14 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
-  baseUrlResolver: () => "http://127.0.0.1:4501",
-  pathPrefixResolver: () => "",
+  url: "http://127.0.0.1:4501/frontend-models",
   credentials: "include"
 })
 ```
 
 Available transport options:
 
-- `baseUrl` / `baseUrlResolver`
-- `pathPrefix` / `pathPrefixResolver`
+- `url` (can also be a relative path like `"/frontend-models"` on web)
 - `credentials`
 - `request` (custom request handler)
 

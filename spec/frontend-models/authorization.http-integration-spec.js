@@ -34,11 +34,8 @@ async function withDeniedTaskAbilityAction(deniedAbilityAction, callback) {
  */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: undefined,
-    baseUrlResolver: undefined,
     credentials: undefined,
-    pathPrefix: undefined,
-    pathPrefixResolver: undefined,
+    url: undefined,
     request: undefined
   })
 }
@@ -48,7 +45,7 @@ function resetFrontendModelTransport() {
  */
 function configureNodeTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: "http://127.0.0.1:3006"
+    url: "http://127.0.0.1:3006/velocious/api"
   })
 }
 

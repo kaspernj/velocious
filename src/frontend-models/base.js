@@ -13,17 +13,14 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  */
 /**
  * @typedef {object} FrontendModelTransportConfig
- * @property {string} [baseUrl] - Optional base URL prefixed before resource paths.
- * @property {(() => string | undefined | null)} [baseUrlResolver] - Optional resolver used per request for dynamic base URL.
- * @property {string} [pathPrefix] - Optional path prefix inserted between base URL and resource path.
- * @property {(() => string | undefined | null)} [pathPrefixResolver] - Optional resolver used per request for dynamic path prefix.
+ * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. For shared-endpoint models this should be the full shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`). For legacy direct-resource models this can be the backend origin/prefix.
  * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
  * @property {((args: {commandName: string, commandType: FrontendModelCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
  */
 
 /** @type {FrontendModelTransportConfig} */
 const frontendModelTransportConfig = {}
-const SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
+const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 /** @type {Array<{commandType: FrontendModelCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
@@ -484,10 +481,10 @@ export class FrontendModelAttachmentHandle {
 }
 
 /**
- * @param {string | undefined | null} value - Base URL candidate.
- * @returns {string} - Normalized base URL without trailing slash.
+ * @param {string | undefined | null} value - URL candidate.
+ * @returns {string} - Normalized URL without trailing slash.
  */
-function normalizeBaseUrl(value) {
+function normalizeFrontendModelTransportUrl(value) {
   if (typeof value !== "string") return ""
 
   const trimmed = value.trim()
@@ -498,19 +495,14 @@ function normalizeBaseUrl(value) {
 }
 
 /**
- * @param {string | undefined | null} value - Path prefix candidate.
- * @returns {string} - Normalized path prefix with leading slash and no trailing slash.
+ * @returns {string} - Resolved frontend-model transport URL.
  */
-function normalizePathPrefix(value) {
-  if (typeof value !== "string") return ""
+function frontendModelTransportUrl() {
+  const configuredUrl = typeof frontendModelTransportConfig.url === "function"
+    ? frontendModelTransportConfig.url()
+    : frontendModelTransportConfig.url
 
-  const trimmed = value.trim()
-
-  if (!trimmed.length) return ""
-
-  const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
-
-  return withLeadingSlash.replace(/\/+$/, "")
+  return normalizeFrontendModelTransportUrl(configuredUrl)
 }
 
 /**
@@ -527,33 +519,17 @@ function cloneFrontendModelAttributes(value) {
  * @returns {string} - Combined command URL.
  */
 function frontendModelCommandUrl(resourcePath, commandName) {
-  const resolvedBaseUrl = frontendModelTransportConfig.baseUrlResolver
-    ? frontendModelTransportConfig.baseUrlResolver()
-    : frontendModelTransportConfig.baseUrl
-  const baseUrl = normalizeBaseUrl(resolvedBaseUrl)
-  const resolvedPathPrefix = frontendModelTransportConfig.pathPrefixResolver
-    ? frontendModelTransportConfig.pathPrefixResolver()
-    : frontendModelTransportConfig.pathPrefix
-  const pathPrefix = normalizePathPrefix(resolvedPathPrefix)
+  const configuredUrl = frontendModelTransportUrl()
   const normalizedResourcePath = resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`
 
-  return `${baseUrl}${pathPrefix}${normalizedResourcePath}/${commandName}`
+  return `${configuredUrl}${normalizedResourcePath}/${commandName}`
 }
 
 /**
  * @returns {string} - Shared frontend-model API URL.
  */
 function frontendModelApiUrl() {
-  const resolvedBaseUrl = frontendModelTransportConfig.baseUrlResolver
-    ? frontendModelTransportConfig.baseUrlResolver()
-    : frontendModelTransportConfig.baseUrl
-  const baseUrl = normalizeBaseUrl(resolvedBaseUrl)
-  const resolvedPathPrefix = frontendModelTransportConfig.pathPrefixResolver
-    ? frontendModelTransportConfig.pathPrefixResolver()
-    : frontendModelTransportConfig.pathPrefix
-  const pathPrefix = normalizePathPrefix(resolvedPathPrefix)
-
-  return `${baseUrl}${pathPrefix}${SHARED_FRONTEND_MODEL_API_PATH}`
+  return frontendModelTransportUrl() || SHARED_FRONTEND_MODEL_API_PATH
 }
 
 /**
@@ -1134,24 +1110,12 @@ export default class FrontendModelBase {
       return
     }
 
-    if (Object.prototype.hasOwnProperty.call(config, "baseUrl")) {
-      frontendModelTransportConfig.baseUrl = config.baseUrl
-    }
-
-    if (Object.prototype.hasOwnProperty.call(config, "baseUrlResolver")) {
-      frontendModelTransportConfig.baseUrlResolver = config.baseUrlResolver
-    }
-
     if (Object.prototype.hasOwnProperty.call(config, "credentials")) {
       frontendModelTransportConfig.credentials = config.credentials
     }
 
-    if (Object.prototype.hasOwnProperty.call(config, "pathPrefix")) {
-      frontendModelTransportConfig.pathPrefix = config.pathPrefix
-    }
-
-    if (Object.prototype.hasOwnProperty.call(config, "pathPrefixResolver")) {
-      frontendModelTransportConfig.pathPrefixResolver = config.pathPrefixResolver
+    if (Object.prototype.hasOwnProperty.call(config, "url")) {
+      frontendModelTransportConfig.url = config.url
     }
 
     if (Object.prototype.hasOwnProperty.call(config, "request")) {
