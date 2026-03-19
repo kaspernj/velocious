@@ -100,32 +100,42 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
   const legacyCommands = resourceConfiguration.commands
   const collectionCommands = resourceConfiguration.collectionCommands
   const memberCommands = resourceConfiguration.memberCommands
-  const useDefaultCommands = !legacyCommands && !collectionCommands && !memberCommands
+  const usesSplitCommandConfig = collectionCommands !== undefined || memberCommands !== undefined
   /** @type {Record<string, string>} */
-  const normalizedCollectionCommands = {}
+  const normalizedCollectionCommands = usesSplitCommandConfig ? {} : {
+    create: "create",
+    index: "index"
+  }
   /** @type {Record<string, string>} */
-  const normalizedMemberCommands = {}
+  const normalizedMemberCommands = usesSplitCommandConfig ? {} : {
+    attach: "attach",
+    destroy: "destroy",
+    download: "download",
+    find: "find",
+    update: "update",
+    url: "url"
+  }
 
   for (const commandType of /** @type {const} */ (["create", "index"])) {
-    const commandName = useDefaultCommands ? commandType : frontendModelResourceCommandNameFromConfigs({
+    const commandName = frontendModelResourceCommandNameFromConfigs({
       collectionCommands,
       commandType,
       legacyCommands
     })
 
-    if (commandName) {
+    if (commandName !== undefined) {
       normalizedCollectionCommands[commandType] = commandName
     }
   }
 
   for (const commandType of /** @type {const} */ (["attach", "destroy", "download", "find", "update", "url"])) {
-    const commandName = useDefaultCommands ? commandType : frontendModelResourceCommandNameFromConfigs({
+    const commandName = frontendModelResourceCommandNameFromConfigs({
       commandType,
       legacyCommands,
       memberCommands
     })
 
-    if (commandName) {
+    if (commandName !== undefined) {
       normalizedMemberCommands[commandType] = commandName
     }
   }
@@ -208,7 +218,7 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
   }
 
   for (const [action, configuredCommandName] of Object.entries(resourceConfiguration.commands)) {
-    if (!configuredCommandName) continue
+    if (configuredCommandName === undefined) continue
 
     const validatedCommandName = validateFrontendModelResourceCommandName({
       commandName: configuredCommandName,
