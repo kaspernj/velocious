@@ -1,7 +1,26 @@
 // @ts-check
 
 import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model-command-route-hook.js"
+import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+
+class UserFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id"],
+      commands: {
+        find: "frontend-find",
+        index: "frontend-index"
+      },
+      path: "/partners/frontend-models/users"
+    }
+  }
+}
 
 /**
  * @param {import("../../src/configuration-types.js").BackendProjectConfiguration[]} backendProjects - Backend project config.
@@ -62,17 +81,7 @@ describe("routes - frontend model command route hook", () => {
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
         resources: {
-          User: {
-            abilities: {
-              find: "read",
-              index: "read"
-            },
-            commands: {
-              find: "frontend-find",
-              index: "frontend-index"
-            },
-            path: "/partners/frontend-models/users"
-          }
+          User: UserFrontendResource
         }
       }]),
       currentPath: "/partners/frontend-models/users/frontend-index"

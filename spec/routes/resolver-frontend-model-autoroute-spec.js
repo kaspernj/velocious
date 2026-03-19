@@ -4,10 +4,103 @@ import Configuration from "../../src/configuration.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import dummyRoutes from "../dummy/src/config/routes.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 import RoutesResolver from "../../src/routes/resolver.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+
+class ClassBasedFrontendModelResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id"],
+      commands: {
+        find: "frontend-find",
+        index: "frontend-index"
+      },
+      path: "/frontend-models"
+    }
+  }
+}
+
+class CreateFrontendModelResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        create: "create",
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id"],
+      commands: {
+        create: "frontend-create",
+        find: "frontend-find",
+        index: "frontend-index"
+      },
+      path: "/frontend-models"
+    }
+  }
+}
+
+class InvalidPathFrontendModelResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id"],
+      commands: {
+        find: "frontend-find",
+        index: "frontend-index"
+      },
+      path: "/frontend-models;drop"
+    }
+  }
+}
+
+class InvalidCommandFrontendModelResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id"],
+      commands: {
+        find: "frontend-find",
+        index: "frontend-index?raw=1"
+      },
+      path: "/frontend-models"
+    }
+  }
+}
+
+class EmptyCommandFrontendModelResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id"],
+      commands: {
+        find: "frontend-find",
+        index: ""
+      },
+      path: "/frontend-models"
+    }
+  }
+}
 
 describe("routes - resolver frontend model autoroute", async () => {
   it("resolves frontend model commands from backendProjects resources without explicit routes", async () => {
@@ -15,18 +108,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       backendProjects: [{
         path: "/tmp/backend",
         resources: {
-          FrontendModel: {
-            attributes: ["id"],
-            abilities: {
-              find: "read",
-              index: "read"
-            },
-            commands: {
-              find: "frontend-find",
-              index: "frontend-index"
-            },
-            path: "/frontend-models"
-          }
+          FrontendModel: ClassBasedFrontendModelResource
         }
       }],
       database: {test: {}},
@@ -81,20 +163,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       backendProjects: [{
         path: "/tmp/backend",
         resources: {
-          FrontendModel: {
-            attributes: ["id"],
-            abilities: {
-              create: "create",
-              find: "read",
-              index: "read"
-            },
-            commands: {
-              create: "frontend-create",
-              find: "frontend-find",
-              index: "frontend-index"
-            },
-            path: "/frontend-models"
-          }
+          FrontendModel: CreateFrontendModelResource
         }
       }],
       database: {test: {}},
@@ -149,18 +218,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       backendProjects: [{
         path: "/tmp/backend",
         resources: {
-          FrontendModel: {
-            attributes: ["id"],
-            abilities: {
-              find: "read",
-              index: "read"
-            },
-            commands: {
-              find: "frontend-find",
-              index: "frontend-index"
-            },
-            path: "/frontend-models;drop"
-          }
+          FrontendModel: InvalidPathFrontendModelResource
         }
       }],
       database: {test: {}},
@@ -215,18 +273,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       backendProjects: [{
         path: "/tmp/backend",
         resources: {
-          FrontendModel: {
-            attributes: ["id"],
-            abilities: {
-              find: "read",
-              index: "read"
-            },
-            commands: {
-              find: "frontend-find",
-              index: "frontend-index?raw=1"
-            },
-            path: "/frontend-models"
-          }
+          FrontendModel: InvalidCommandFrontendModelResource
         }
       }],
       database: {test: {}},
@@ -281,18 +328,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       backendProjects: [{
         path: "/tmp/backend",
         resources: {
-          FrontendModel: {
-            attributes: ["id"],
-            abilities: {
-              find: "read",
-              index: "read"
-            },
-            commands: {
-              find: "frontend-find",
-              index: ""
-            },
-            path: "/frontend-models"
-          }
+          FrontendModel: EmptyCommandFrontendModelResource
         }
       }],
       database: {test: {}},

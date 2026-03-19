@@ -1,6 +1,7 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
+import {frontendModelResourceConfigurationFromDefinition} from "../../../../../frontend-models/resource-definition.js"
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
@@ -31,10 +32,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
       for (const modelClassName in resources) {
-        const modelConfig = resources[modelClassName]
+        const modelConfig = frontendModelResourceConfigurationFromDefinition(resources[modelClassName])
         const className = inflection.camelize(modelClassName.replaceAll("-", "_"))
         const fileName = `${inflection.dasherize(inflection.underscore(className))}.js`
         const filePath = `${frontendModelsDir}/${fileName}`
+
+        if (!modelConfig) {
+          throw new Error(`Invalid frontend model resource definition for '${className}'`)
+        }
 
         this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig})
 
@@ -117,8 +122,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * @param {{frontendModels?: Record<string, any>, resources?: Record<string, any>}} backendProject - Backend project config.
-   * @returns {Record<string, any>} - Resource definitions keyed by model class name.
+   * @param {{frontendModels?: Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>, resources?: Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>}} backendProject - Backend project config.
+   * @returns {Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>} - Resource definitions keyed by model class name.
    */
   resourcesForBackendProject(backendProject) {
     const resources = backendProject.frontendModels || backendProject.resources || {}

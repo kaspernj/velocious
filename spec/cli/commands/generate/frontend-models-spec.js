@@ -6,8 +6,74 @@ import Cli from "../../../../src/cli/index.js"
 import Configuration from "../../../../src/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
+import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import fs from "fs/promises"
 import path from "node:path"
+
+class CallFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: {
+        id: {type: "uuid"},
+        startedAt: {type: "datetime", null: true},
+        durationSeconds: {dataType: "integer"},
+        metadata: {sqlType: "json", null: true},
+        active: {type: "boolean"},
+        endedAt: {type: "timestamp without time zone", null: true}
+      },
+      path: "/calls"
+    }
+  }
+}
+
+class MissingAbilitiesTaskFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: ["id", "name"],
+      path: "/tasks"
+    }
+  }
+}
+
+class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id", "name"],
+      path: "/tasks",
+      relationships: {
+        project: {
+          model: "Project",
+          type: "belongsTo"
+        }
+      }
+    }
+  }
+}
+
+class NullableIdCallFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: {id: {type: "uuid", null: true}},
+      path: "/calls"
+    }
+  }
+}
 
 /**
  * @param {object} args - Build args.
@@ -93,21 +159,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Call: {
-              abilities: {
-                find: "read",
-                index: "read"
-              },
-              attributes: {
-                id: {type: "uuid"},
-                startedAt: {type: "datetime", null: true},
-                durationSeconds: {dataType: "integer"},
-                metadata: {sqlType: "json", null: true},
-                active: {type: "boolean"},
-                endedAt: {type: "timestamp without time zone", null: true}
-              },
-              path: "/calls"
-            }
+            Call: CallFrontendResource
           }
         }]
       }),
@@ -149,10 +201,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Task: {
-              attributes: ["id", "name"],
-              path: "/tasks"
-            }
+            Task: MissingAbilitiesTaskFrontendResource
           }
         }]
       }),
@@ -173,20 +222,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Task: {
-              abilities: {
-                find: "read",
-                index: "read"
-              },
-              attributes: ["id", "name"],
-              path: "/tasks",
-              relationships: {
-                project: {
-                  model: "Project",
-                  type: "belongsTo"
-                }
-              }
-            }
+            Task: MissingRelationshipTargetTaskFrontendResource
           }
         }]
       }),
@@ -207,14 +243,7 @@ describe("Cli - generate - frontend-models", () => {
         backendProjectsList: [{
           path: "/tmp/backend",
           resources: {
-            Call: {
-              abilities: {
-                find: "read",
-                index: "read"
-              },
-              attributes: {id: {type: "uuid", null: true}},
-              path: "/calls"
-            }
+            Call: NullableIdCallFrontendResource
           }
         }]
       }),

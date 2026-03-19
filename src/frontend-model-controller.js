@@ -1,8 +1,8 @@
 // @ts-check
 
 import Controller from "./controller.js"
-import * as inflection from "inflection"
-import {validateFrontendModelResourcePath} from "./frontend-models/resource-config-validation.js"
+import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath} from "./frontend-models/resource-definition.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import VelociousError from "./velocious-error.js"
 
@@ -996,7 +996,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
+   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
    */
   frontendModelResourceConfiguration() {
     const params = this.frontendModelParams()
@@ -1008,21 +1008,42 @@ export default class FrontendModelController extends Controller {
       const resources = backendProject.frontendModels || backendProject.resources || {}
 
       if (modelName && modelName.length > 0 && resources[modelName]) {
+        const resourceDefinition = resources[modelName]
+        const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+
+        if (!resourceConfiguration || !resourceClass) {
+          throw new Error(`Frontend model resource '${modelName}' must be a FrontendModelBaseResource subclass`)
+        }
+
         return {
           backendProject,
           modelName,
-          resourceConfiguration: resources[modelName]
+          resourceClass,
+          resourceConfiguration
         }
       }
 
       if (!controllerName || controllerName.length < 1) continue
 
       for (const resourceModelName in resources) {
-        const resourceConfiguration = resources[resourceModelName]
+        const resourceDefinition = resources[resourceModelName]
+        const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+
+        if (!resourceConfiguration || !resourceClass) {
+          throw new Error(`Frontend model resource '${resourceModelName}' must be a FrontendModelBaseResource subclass`)
+        }
+
         const resourcePath = this.frontendModelResourcePath(resourceModelName, resourceConfiguration)
 
         if (this.frontendModelResourceMatchesController({controllerName, resourcePath})) {
-          return {backendProject, modelName: resourceModelName, resourceConfiguration}
+          return {
+            backendProject,
+            modelName: resourceModelName,
+            resourceClass,
+            resourceConfiguration
+          }
         }
       }
     }
@@ -1032,7 +1053,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
-   * @returns {{modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
+   * @returns {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
    */
   frontendModelResourceConfigurationForModelClass(modelClass) {
     const frontendModelResource = this.frontendModelResourceConfiguration()
@@ -1040,12 +1061,15 @@ export default class FrontendModelController extends Controller {
     if (!frontendModelResource) return null
 
     const resources = frontendModelResource.backendProject.frontendModels || frontendModelResource.backendProject.resources || {}
-    const resourceConfiguration = resources[modelClass.name]
+    const resourceDefinition = resources[modelClass.name]
+    const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+    const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
-    if (!resourceConfiguration) return null
+    if (!resourceConfiguration || !resourceClass) return null
 
     return {
       modelName: modelClass.name,
+      resourceClass,
       resourceConfiguration
     }
   }
@@ -1074,14 +1098,7 @@ export default class FrontendModelController extends Controller {
    * @returns {string} - Normalized resource path.
    */
   frontendModelResourcePath(modelName, resourceConfiguration) {
-    if (resourceConfiguration.path) {
-      return validateFrontendModelResourcePath({
-        modelName,
-        resourcePath: `/${resourceConfiguration.path.replace(/^\/+/, "")}`
-      })
-    }
-
-    return `/${inflection.dasherize(inflection.pluralize(modelName))}`
+    return frontendModelResourcePath(modelName, resourceConfiguration)
   }
 
   /**
@@ -1100,14 +1117,24 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @returns {import("./configuration-types.js").FrontendModelResourceServerConfiguration | null} - Optional server behavior config for frontend model actions.
+   * @returns {FrontendModelBaseResource} - Backend resource instance for current frontend-model action.
    */
-  frontendModelServerConfiguration() {
+  frontendModelResourceInstance() {
     const frontendModelResource = this.frontendModelResourceConfiguration()
 
-    if (!frontendModelResource) return null
+    if (!frontendModelResource) {
+      throw new Error(`No frontend model resource configuration for controller '${this.frontendModelParams().controller}'`)
+    }
 
-    return frontendModelResource.resourceConfiguration.server || null
+    const resourceArgs = {
+      controller: this,
+      modelClass: this.frontendModelClass(),
+      modelName: frontendModelResource.modelName,
+      params: this.frontendModelParams(),
+      resourceConfiguration: frontendModelResource.resourceConfiguration
+    }
+
+    return new frontendModelResource.resourceClass(resourceArgs)
   }
 
   /**
@@ -1188,20 +1215,7 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<boolean>} - Whether action should continue.
    */
   async runFrontendModelBeforeAction(action) {
-    const serverConfiguration = this.frontendModelServerConfiguration()
-
-    if (!serverConfiguration?.beforeAction) return true
-
-    const modelClass = this.frontendModelClass()
-    const beforeAction = action === "attach"
-      ? "update"
-      : ((action === "download" || action === "url") ? "find" : action)
-    const result = await serverConfiguration.beforeAction({
-      action: beforeAction,
-      controller: this,
-      modelClass,
-      params: this.frontendModelParams()
-    })
+    const result = await this.frontendModelResourceInstance().beforeAction(action)
 
     return result !== false
   }
@@ -1212,37 +1226,13 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
    */
   async frontendModelFindRecord(action, id) {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const primaryKey = this.frontendModelPrimaryKey()
+    const model = await this.frontendModelResourceInstance().find(action, id)
 
-    if (serverConfiguration?.find) {
-      const findAction = action === "attach"
-        ? "update"
-        : ((action === "download" || action === "url") ? "find" : action)
-      const model = await serverConfiguration.find({
-        action: findAction,
-        controller: this,
-        id,
-        modelClass,
-        params: this.frontendModelParams()
-      })
+    if (!model) return null
 
-      if (!model) return null
+    const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
 
-      const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
-
-      return authorizedModels[0] || null
-    }
-
-    let query = this.frontendModelAuthorizedQuery(action)
-    const preload = action === "find" ? this.frontendModelPreload() : null
-
-    if (preload) {
-      query = query.preload(preload)
-    }
-
-    return await query.findBy({[primaryKey]: id})
+    return authorizedModels[0] || null
   }
 
   /**
@@ -1250,30 +1240,8 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<import("./database/record/index.js").default | null>} - Created model when authorized.
    */
   async frontendModelCreateRecord(attributes) {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const params = this.frontendModelParams()
-    /** @type {import("./database/record/index.js").default} */
-    let model
-
-    if (serverConfiguration?.create) {
-      const callbackModel = await serverConfiguration.create({
-        action: "create",
-        attributes,
-        controller: this,
-        modelClass,
-        params
-      })
-
-      if (!callbackModel) {
-        throw new Error("Expected server.create to return a model.")
-      }
-
-      model = callbackModel
-    } else {
-      model = new modelClass(attributes)
-      await model.save()
-    }
+    const resource = this.frontendModelResourceInstance()
+    const model = await resource.create(attributes)
 
     const authorizedModels = await this.frontendModelFilterAuthorizedModels({action: "create", models: [model]})
 
@@ -1281,9 +1249,7 @@ export default class FrontendModelController extends Controller {
       return authorizedModels[0]
     }
 
-    if (!serverConfiguration?.create) {
-      await model.destroy()
-    }
+    await resource.handleUnauthorizedCreatedModel(model)
 
     return null
   }
@@ -1292,21 +1258,9 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<import("./database/record/index.js").default[]>} - Frontend model records.
    */
   async frontendModelRecords() {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
+    const models = await this.frontendModelResourceInstance().records()
 
-    if (serverConfiguration?.records) {
-      const models = await serverConfiguration.records({
-        action: "index",
-        controller: this,
-        modelClass,
-        params: this.frontendModelParams()
-      })
-
-      return await this.frontendModelFilterAuthorizedModels({action: "index", models})
-    }
-
-    return await this.frontendModelIndexQuery().toArray()
+    return await this.frontendModelFilterAuthorizedModels({action: "index", models})
   }
 
   /**
@@ -2303,13 +2257,14 @@ export default class FrontendModelController extends Controller {
       return null
     }
 
+    const resource = this.frontendModelResourceInstance()
+
     if (action === "index") {
       const pluck = this.frontendModelPluck()
-      const serverConfiguration = this.frontendModelServerConfiguration()
 
       if (pluck.length > 0) {
-        if (serverConfiguration?.records) {
-          throw new Error("pluck is not supported when server.records callback is configured")
+        if (!(await resource.supportsPluck("index"))) {
+          throw new Error("pluck is not supported when resource records are customized")
         }
 
         const values = await this.frontendModelPluckValues({
@@ -2324,17 +2279,7 @@ export default class FrontendModelController extends Controller {
       }
 
       const models = await this.frontendModelRecords()
-      const serializedModels = serverConfiguration?.serialize
-        ? await Promise.all(models.map(async (model) => {
-          return await serverConfiguration.serialize({
-            action: "index",
-            controller: this,
-            model,
-            modelClass: this.frontendModelClass(),
-            params: this.frontendModelParams()
-          })
-        }))
-        : await this.serializeFrontendModels(models)
+      const serializedModels = await Promise.all(models.map(async (model) => await resource.serialize(model, "index")))
 
       return {
         models: serializedModels,
@@ -2359,16 +2304,7 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      const serverConfiguration = this.frontendModelServerConfiguration()
-      const serializedModel = serverConfiguration?.serialize
-        ? await serverConfiguration.serialize({
-          action: "create",
-          controller: this,
-          model,
-          modelClass,
-          params
-        })
-        : await this.serializeFrontendModel(model)
+      const serializedModel = await resource.serialize(model, "create")
 
       return {
         model: serializedModel,
@@ -2473,16 +2409,7 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      const serverConfiguration = this.frontendModelServerConfiguration()
-      const serializedModel = serverConfiguration?.serialize
-        ? await serverConfiguration.serialize({
-          action: "find",
-          controller: this,
-          model,
-          modelClass,
-          params
-        })
-        : await this.serializeFrontendModel(model)
+      const serializedModel = await resource.serialize(model, "find")
 
       return {
         model: serializedModel,
@@ -2497,40 +2424,14 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload("Expected model attributes.")
       }
 
-      const serverConfiguration = this.frontendModelServerConfiguration()
       const model = await this.frontendModelFindRecord("update", id)
 
       if (!model) {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      let updatedModel = model
-
-      if (serverConfiguration?.update) {
-        const callbackModel = await serverConfiguration.update({
-          action: "update",
-          attributes,
-          controller: this,
-          model,
-          modelClass,
-          params
-        })
-
-        if (callbackModel) updatedModel = callbackModel
-      } else {
-        model.assign(attributes)
-        await model.save()
-      }
-
-      const serializedModel = serverConfiguration?.serialize
-        ? await serverConfiguration.serialize({
-          action: "update",
-          controller: this,
-          model: updatedModel,
-          modelClass,
-          params
-        })
-        : await this.serializeFrontendModel(updatedModel)
+      const updatedModel = await resource.update(model, attributes)
+      const serializedModel = await resource.serialize(updatedModel, "update")
 
       return {
         model: serializedModel,
@@ -2538,24 +2439,13 @@ export default class FrontendModelController extends Controller {
       }
     }
 
-    const serverConfiguration = this.frontendModelServerConfiguration()
     const model = await this.frontendModelFindRecord("destroy", id)
 
     if (!model) {
       return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
     }
 
-    if (serverConfiguration?.destroy) {
-      await serverConfiguration.destroy({
-        action: "destroy",
-        controller: this,
-        model,
-        modelClass,
-        params
-      })
-    } else {
-      await model.destroy()
-    }
+    await resource.destroy(model)
 
     return {status: "success"}
   }

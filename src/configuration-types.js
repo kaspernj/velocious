@@ -186,6 +186,14 @@
  */
 
 /**
+ * @typedef {typeof import("./frontend-model-resource/base-resource.js").default} FrontendModelResourceClassType
+ */
+
+/**
+ * @typedef {FrontendModelResourceClassType} FrontendModelResourceDefinition
+ */
+
+/**
  * @typedef {object} FrontendModelResourceAbilitiesConfiguration
  * @property {string} [index] - Ability action for frontend index.
  * @property {string} [find] - Ability action for frontend find.
@@ -209,8 +217,8 @@
  * @typedef {object} BackendProjectConfiguration
  * @property {string} path - Path to the backend project.
  * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
- * @property {Record<string, FrontendModelResourceConfiguration>} [frontendModels] - Frontend model definitions keyed by model class name.
- * @property {Record<string, FrontendModelResourceConfiguration>} [resources] - Alias for `frontendModels`.
+ * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Frontend model definitions keyed by model class name.
+ * @property {Record<string, FrontendModelResourceDefinition>} [resources] - Alias for `frontendModels`.
  */
 
 /**
