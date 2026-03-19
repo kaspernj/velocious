@@ -21,6 +21,32 @@ describe("routes - frontend model command route hook", () => {
   it("returns frontend model controller path for shared API path", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([]),
+      currentPath: "/frontend-models"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-api",
+      controller: "velocious/api",
+      controllerPath: expectedControllerPath
+    })
+  })
+
+  it("returns frontend model controller path for shared request path alias", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([]),
+      currentPath: "/frontend-models/request"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-api",
+      controller: "velocious/api",
+      controllerPath: expectedControllerPath
+    })
+  })
+
+  it("returns frontend model controller path for legacy shared API path alias", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([]),
       currentPath: "/velocious/api"
     })
 

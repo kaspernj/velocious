@@ -180,9 +180,9 @@
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
  * @property {Record<string, string>} [commands] - Command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).
  * @property {Record<string, FrontendModelRelationshipConfiguration>} [relationships] - Relationship helpers to generate for frontend model files.
- * @property {string} [path] - HTTP path prefix used by frontend model commands.
- * @property {string} [primaryKey] - Primary key attribute name.
- * @property {FrontendModelResourceServerConfiguration} [server] - Optional backend behavior overrides for built-in frontend actions.
+ * @property {string} [path] - Optional legacy HTTP path prefix used by direct frontend model commands.
+ * @property {string} [primaryKey] - Optional legacy primary key override. Defaults to the model class primary key.
+ * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
  */
 
 /**

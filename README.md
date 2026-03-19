@@ -436,16 +436,14 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
-  baseUrlResolver: () => "http://127.0.0.1:4501",
-  pathPrefixResolver: () => "",
+  url: "http://127.0.0.1:4501/frontend-models",
   credentials: "include"
 })
 ```
 
 Available transport options:
 
-- `baseUrl` / `baseUrlResolver`
-- `pathPrefix` / `pathPrefixResolver`
+- `url` (can also be a relative path like `"/frontend-models"` on web)
 - `credentials`
 - `request` (custom request handler)
 

@@ -1114,13 +1114,7 @@ export default class FrontendModelController extends Controller {
    * @returns {string} - Frontend model primary key.
    */
   frontendModelPrimaryKey() {
-    const frontendModelResource = this.frontendModelResourceConfiguration()
-
-    if (!frontendModelResource) {
-      throw new Error(`No frontend model resource configuration for controller '${this.frontendModelParams().controller}'`)
-    }
-
-    return frontendModelResource.resourceConfiguration.primaryKey || "id"
+    return this.frontendModelClass().primaryKey()
   }
 
   /**
@@ -2061,7 +2055,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      const primaryKey = relatedResource.resourceConfiguration.primaryKey || "id"
+      const primaryKey = relatedModelClass.primaryKey()
       const ids = relatedModels
         .map((model) => model.attributes()[primaryKey])
         .filter((id) => id !== undefined && id !== null)

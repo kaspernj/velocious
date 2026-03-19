@@ -218,7 +218,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config. */\n"
+    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     if (Object.keys(attachments).length > 0) {
@@ -242,7 +242,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       propertyName: "commands",
       values: commands
     })
-    fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey || "id")}\n`
     fileContent += "    }\n"
     fileContent += "  }\n"
 
