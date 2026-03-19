@@ -10,6 +10,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const configuration = this.getConfiguration()
     const backendProjects = configuration.getBackendProjects()
 
+    await configuration.initializeModels()
+
     if (!Array.isArray(backendProjects) || backendProjects.length === 0) {
       throw new Error("No backend projects configured. Configure 'backendProjects' in your configuration first")
     }
@@ -52,6 +54,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const fileContent = this.buildModelFileContent({
           className,
           importPath,
+          modelClass: configuration.getModelClasses()[className],
           modelConfig
         })
 
@@ -178,10 +181,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {object} args - Method args.
    * @param {string} args.className - Model class name.
    * @param {string} args.importPath - Base class import path.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @returns {string} - Generated file content.
    */
-  buildModelFileContent({className, importPath, modelConfig}) {
+  buildModelFileContent({className, importPath, modelClass, modelConfig}) {
     const attributes = this.attributeDefinitionsForModel(modelConfig)
     const relationships = this.relationshipsForModel(modelConfig)
     const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
@@ -247,8 +251,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       propertyName: "commands",
       values: commands
     })
-    if (typeof modelConfig.primaryKey === "string" && modelConfig.primaryKey.length > 0 && modelConfig.primaryKey !== "id") {
-      fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey)},\n`
+    if (modelClass && modelClass.primaryKey() !== "id") {
+      fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
     }
     fileContent += "    }\n"
     fileContent += "  }\n"

@@ -4,6 +4,7 @@ import {describe, expect, it} from "../../../../src/testing/test.js"
 import backendProjects from "../../../dummy/src/config/backend-projects.js"
 import Cli from "../../../../src/cli/index.js"
 import Configuration from "../../../../src/configuration.js"
+import DatabaseRecord from "../../../../src/database/record/index.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
@@ -84,25 +85,28 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["reference", "email"],
-      path: "/users",
-      primaryKey: "reference"
+      path: "/users"
     }
   }
 }
 
+class User extends DatabaseRecord {}
+User.setPrimaryKey("reference")
+
 /**
  * @param {object} args - Build args.
  * @param {import("../../../../src/configuration-types.js").BackendProjectConfiguration[]} [args.backendProjectsList] - Backend projects.
+ * @param {function({configuration: Configuration}) : Promise<void>} [args.initializeModels] - Model initializer.
  * @returns {Configuration} - Configuration instance.
  */
-function buildConfiguration({backendProjectsList} = {}) {
+function buildConfiguration({backendProjectsList, initializeModels} = {}) {
   return new Configuration({
     backendProjects: backendProjectsList,
     database: {test: {}},
     directory: dummyDirectory(),
     environment: "test",
     environmentHandler: new EnvironmentHandlerNode(),
-    initializeModels: async () => {},
+    initializeModels: initializeModels || (async () => {}),
     locale: "en",
     localeFallbacks: {en: ["en"]},
     locales: ["en"]
@@ -275,7 +279,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {string | null} id - Attribute value.")
   })
 
-  it("generates custom frontend-model primary keys when configured", async () => {
+  it("generates frontend-model primary keys from backend model classes", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
     const cli = new Cli({
@@ -285,7 +289,10 @@ describe("Cli - generate - frontend-models", () => {
           resources: {
             User: ReferenceUserFrontendResource
           }
-        }]
+        }],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(User)
+        }
       }),
       directory: dummyDirectory(),
       environmentHandler: new EnvironmentHandlerNode(),

@@ -14,8 +14,6 @@ export default class FrontendModelBaseResource {
   static commands = undefined
   /** @type {string | undefined} */
   static path = undefined
-  /** @type {string | undefined} */
-  static primaryKey = undefined
   /** @type {Record<string, any> | undefined} */
   static relationships = undefined
 
@@ -60,7 +58,6 @@ export default class FrontendModelBaseResource {
     if (this.attachments) config.attachments = this.attachments
     if (this.commands) config.commands = this.commands
     if (this.path) config.path = this.path
-    if (this.primaryKey) config.primaryKey = this.primaryKey
     if (this.relationships) config.relationships = this.relationships
 
     return config
@@ -82,7 +79,7 @@ export default class FrontendModelBaseResource {
   resourceConfiguration() { return this.resourceConfigurationValue }
 
   /** @returns {string} - Primary key. */
-  primaryKey() { return this.resourceConfiguration().primaryKey || this.modelClass().primaryKey() }
+  primaryKey() { return this.modelClass().primaryKey() }
 
   /**
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Ability action.
