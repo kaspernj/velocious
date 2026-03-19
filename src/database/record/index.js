@@ -95,6 +95,16 @@ class VelociousDatabaseRecord {
     return this._validators
   }
 
+  /** @returns {Record<string, Array<(model: VelociousDatabaseRecord) => void | Promise<void>>>} - Lifecycle callbacks keyed by name. */
+  static getLifecycleCallbacksMap() {
+    if (!this._lifecycleCallbacks) {
+      /** @type {Record<string, Array<(model: VelociousDatabaseRecord) => void | Promise<void>>>} */
+      this._lifecycleCallbacks = {}
+    }
+
+    return this._lifecycleCallbacks
+  }
+
   static getValidatorTypesMap() {
     if (!this._validatorTypes) {
       /** @type {Record<string, typeof import("./validators/base.js").default>} */
@@ -149,6 +159,93 @@ class VelociousDatabaseRecord {
    */
   static registerValidatorType(name, validatorClass) {
     this.validatorTypes()[name] = validatorClass
+  }
+
+  /**
+   * @param {"afterCreate" | "afterDestroy" | "afterSave" | "afterUpdate" | "beforeCreate" | "beforeDestroy" | "beforeSave" | "beforeUpdate" | "beforeValidation"} callbackName - Callback type.
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static registerLifecycleCallback(callbackName, callback) {
+    const callbacks = this.getLifecycleCallbacksMap()
+
+    if (!callbacks[callbackName]) {
+      callbacks[callbackName] = []
+    }
+
+    callbacks[callbackName].push(callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static beforeValidation(callback) {
+    this.registerLifecycleCallback("beforeValidation", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static beforeSave(callback) {
+    this.registerLifecycleCallback("beforeSave", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static beforeCreate(callback) {
+    this.registerLifecycleCallback("beforeCreate", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static beforeUpdate(callback) {
+    this.registerLifecycleCallback("beforeUpdate", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static beforeDestroy(callback) {
+    this.registerLifecycleCallback("beforeDestroy", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static afterSave(callback) {
+    this.registerLifecycleCallback("afterSave", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static afterCreate(callback) {
+    this.registerLifecycleCallback("afterCreate", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static afterUpdate(callback) {
+    this.registerLifecycleCallback("afterUpdate", callback)
+  }
+
+  /**
+   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @returns {void}
+   */
+  static afterDestroy(callback) {
+    this.registerLifecycleCallback("afterDestroy", callback)
   }
 
   /**
@@ -590,18 +687,24 @@ class VelociousDatabaseRecord {
       attributeNameToColumnName[camelizedColumnName] = column.getName()
       columnNameToAttributeName[column.getName()] = camelizedColumnName
 
-      this.prototype[camelizedColumnName] = function() {
-        return this.readAttribute(camelizedColumnName)
+      if (!(camelizedColumnName in this.prototype)) {
+        this.prototype[camelizedColumnName] = function() {
+          return this.readAttribute(camelizedColumnName)
+        }
       }
 
-      this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
-        return this._setColumnAttribute(camelizedColumnName, newValue)
+      if (!(`set${camelizedColumnNameBigFirst}` in this.prototype)) {
+        this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
+          return this._setColumnAttribute(camelizedColumnName, newValue)
+        }
       }
 
-      this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
-        let value = this[camelizedColumnName]()
+      if (!(`has${camelizedColumnNameBigFirst}` in this.prototype)) {
+        this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
+          let value = this[camelizedColumnName]()
 
-        return this._hasAttribute(value)
+          return this._hasAttribute(value)
+        }
       }
     }
 
@@ -1194,25 +1297,35 @@ class VelociousDatabaseRecord {
     let result
 
     await this._getConfiguration().ensureConnections(async () => {
+      await this._runLifecycleCallbacks("beforeValidation")
       await this._runValidations()
 
       await this.getModelClass().transaction(async () => {
+        await this._runLifecycleCallbacks("beforeSave")
+
         // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
         const {savedCount} = await this._autoSaveBelongsToRelationships()
 
         if (this.isPersisted()) {
+          await this._runLifecycleCallbacks("beforeUpdate")
+
           // If any has-many-relationships will be saved, then updated-at should still be set on this record.
           const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
 
           if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
             result = await this._updateRecordWithChanges()
           }
+
+          await this._runLifecycleCallbacks("afterUpdate")
         } else {
+          await this._runLifecycleCallbacks("beforeCreate")
           result = await this._createNewRecord()
+          await this._runLifecycleCallbacks("afterCreate")
         }
 
         await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
         await this._autoSaveAttachments()
+        await this._runLifecycleCallbacks("afterSave")
       })
     })
 
@@ -1911,6 +2024,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async destroy() {
+    await this._runLifecycleCallbacks("beforeDestroy")
+
     for (const relationship of this.getModelClass().getRelationships()) {
       if (relationship.getDependent() != "destroy") {
         continue
@@ -1967,6 +2082,25 @@ class VelociousDatabaseRecord {
     })
 
     await this._connection().query(sql)
+    await this._runLifecycleCallbacks("afterDestroy")
+  }
+
+  /**
+   * @param {"afterCreate" | "afterDestroy" | "afterSave" | "afterUpdate" | "beforeCreate" | "beforeDestroy" | "beforeSave" | "beforeUpdate" | "beforeValidation"} callbackName - Callback type.
+   * @returns {Promise<void>}
+   */
+  async _runLifecycleCallbacks(callbackName) {
+    const callbacks = this.getModelClass().getLifecycleCallbacksMap()[callbackName] || []
+
+    for (const callback of callbacks) {
+      await callback(this)
+    }
+
+    const instanceCallback = this[callbackName]
+
+    if (typeof instanceCallback === "function") {
+      await instanceCallback.call(this)
+    }
   }
 
   /** @returns {boolean} - Whether changes.  */

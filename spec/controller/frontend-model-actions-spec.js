@@ -161,6 +161,22 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.map((model) => model.name)).toEqual(["Index Alpha", "Index Beta"])
+      expect(payload.models[0].identifier).toMatch(/^task-/)
+    })
+  })
+
+  it("serializes declared column-backed attributes through model methods", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Boolean normalization task")
+      await task.update({isDone: true})
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0].isDone).toEqual(true)
     })
   })
 

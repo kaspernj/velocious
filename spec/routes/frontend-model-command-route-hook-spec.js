@@ -13,11 +13,26 @@ class UserFrontendResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["id"],
-      commands: {
-        find: "frontend-find",
+      collectionCommands: {
         index: "frontend-index"
       },
+      memberCommands: {
+        find: "frontend-find",
+        update: "update"
+      },
       path: "/partners/frontend-models/users"
+    }
+  }
+}
+
+class ProjectFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id"],
+      collectionCommands: ["index"],
+      memberCommands: ["find"]
     }
   }
 }
@@ -90,6 +105,23 @@ describe("routes - frontend model command route hook", () => {
     expect(routeMatch).toEqual({
       action: "frontend-index",
       controller: "partners/frontend-models/users"
+    })
+  })
+
+  it("infers default path and array command config for backend project routes", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([{
+        path: "/tmp/backend",
+        resources: {
+          Project: ProjectFrontendResource
+        }
+      }]),
+      currentPath: "/projects/index"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-index",
+      controller: "projects"
     })
   })
 

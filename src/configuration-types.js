@@ -176,12 +176,23 @@
 /**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {string[] | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
- * @property {FrontendModelResourceAbilitiesConfiguration} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`).
+ * @property {FrontendModelResourceAbilitiesConfiguration | string[]} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`) or shorthand action list (for example `["create", "read", "update", "destroy"]`).
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
- * @property {Record<string, string>} [commands] - Command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).
+ * @property {Record<string, string> | string[]} [commands] - Legacy command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
+ * @property {Record<string, string> | string[]} [collectionCommands] - Collection command names keyed by action (`index`, `create`) or shorthand command list using default names.
+ * @property {Record<string, string> | string[]} [memberCommands] - Member command names keyed by action (`find`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
  * @property {Record<string, FrontendModelRelationshipConfiguration>} [relationships] - Relationship helpers to generate for frontend model files.
  * @property {string} [path] - Optional legacy HTTP path prefix used by direct frontend model commands.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
+ */
+
+/**
+ * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "commands" | "collectionCommands" | "memberCommands"> & {
+ *   abilities: FrontendModelResourceAbilitiesConfiguration
+ *   commands: Record<string, string>
+ *   collectionCommands: Record<string, string>
+ *   memberCommands: Record<string, string>
+ * }} NormalizedFrontendModelResourceConfiguration
  */
 
 /**

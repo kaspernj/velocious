@@ -193,13 +193,17 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       : {}
     const attributesTypeName = `${className}Attributes`
     const attributeNames = attributes.map((attribute) => attribute.name)
-    const commands = {
-      create: modelConfig.commands?.create || "create",
-      destroy: modelConfig.commands?.destroy || "destroy",
-      find: modelConfig.commands?.find || "find",
-      index: modelConfig.commands?.index || "index",
-      update: modelConfig.commands?.update || "update"
+    const collectionCommands = {
+      create: modelConfig.collectionCommands.create || "create",
+      index: modelConfig.collectionCommands.index || "index"
     }
+    const memberCommands = {
+      destroy: modelConfig.memberCommands.destroy || "destroy",
+      find: modelConfig.memberCommands.find || "find",
+      update: modelConfig.memberCommands.update || "update"
+    }
+    const collectionCommandsAreDefault = collectionCommands.create === "create" && collectionCommands.index === "index"
+    const memberCommandsAreDefault = memberCommands.destroy === "destroy" && memberCommands.find === "find" && memberCommands.update === "update"
 
     let fileContent = ""
 
@@ -227,7 +231,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}}} - Resource config. */\n"
+    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], collectionCommands: {create: string, index: string}, memberCommands: {destroy: string, find: string, update: string}}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     if (Object.keys(attachments).length > 0) {
@@ -246,11 +250,20 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       propertyName: "attributes",
       values: attributeNames
     })
-    fileContent += this.formattedObjectProperty({
-      indent: "      ",
-      propertyName: "commands",
-      values: commands
-    })
+    if (!collectionCommandsAreDefault) {
+      fileContent += this.formattedObjectProperty({
+        indent: "      ",
+        propertyName: "collectionCommands",
+        values: collectionCommands
+      })
+    }
+    if (!memberCommandsAreDefault) {
+      fileContent += this.formattedObjectProperty({
+        indent: "      ",
+        propertyName: "memberCommands",
+        values: memberCommands
+      })
+    }
     if (modelClass && modelClass.primaryKey() !== "id") {
       fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
     }

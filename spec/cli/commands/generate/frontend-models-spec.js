@@ -15,10 +15,6 @@ class CallFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
       attributes: {
         id: {type: "uuid"},
         startedAt: {type: "datetime", null: true},
@@ -46,10 +42,6 @@ class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseRes
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
       attributes: ["id", "name"],
       path: "/tasks",
       relationships: {
@@ -66,10 +58,6 @@ class NullableIdCallFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
       attributes: {id: {type: "uuid", null: true}},
       path: "/calls"
     }
@@ -80,10 +68,6 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
       attributes: ["reference", "email"],
       path: "/users"
     }
@@ -140,9 +124,10 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("      \"id\",\n")
     expect(taskContents).toContain("      \"identifier\",\n")
     expect(taskContents).toContain("      \"name\",\n")
-    expect(taskContents).toContain("      commands: {\n")
+    expect(taskContents).toContain("      collectionCommands: {\n")
     expect(taskContents).toContain("        create: \"create\",\n")
     expect(taskContents).toContain("        index: \"list\",\n")
+    expect(taskContents.includes("      memberCommands: {\n")).toEqual(false)
     expect(taskContents).toContain("@typedef {object} TaskAttributes")
     expect(taskContents).toContain("/** @returns {TaskAttributes[\"identifier\"]} - Attribute value. */")
     expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
@@ -163,9 +148,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(projectContents).toContain("async loadTasks() { return /** @type {Promise<Array<import(\"./task.js\").default>>} */ (this.loadRelationship(\"tasks\")) }")
 
     expect(userContents).toContain("class User extends FrontendModelBase")
-    expect(userContents).toContain("      commands: {\n")
-    expect(userContents).toContain("        create: \"create\",\n")
-    expect(userContents).toContain("        index: \"index\",\n")
+    expect(userContents.includes("      collectionCommands: {\n")).toEqual(false)
+    expect(userContents.includes("      memberCommands: {\n")).toEqual(false)
     expect(userContents).toContain("email() { return this.readAttribute(\"email\") }")
     expect(userContents).toContain("setEmail(newValue) { return this.setAttribute(\"email\", newValue) }")
   })
@@ -214,7 +198,7 @@ describe("Cli - generate - frontend-models", () => {
     }).toThrow(/No backend projects configured/)
   })
 
-  it("fails when a resource is missing abilities config", async () => {
+  it("uses built-in default abilities when abilities config is omitted", async () => {
     const cli = new Cli({
       configuration: buildConfiguration({
         backendProjectsList: [{
@@ -230,9 +214,7 @@ describe("Cli - generate - frontend-models", () => {
       testing: true
     })
 
-    await expect(async () => {
-      await cli.execute()
-    }).toThrow(/missing required 'abilities' config/)
+    await cli.execute()
   })
 
   it("fails when a relationship target has no frontend model resource", async () => {

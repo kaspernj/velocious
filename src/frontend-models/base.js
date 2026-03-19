@@ -9,7 +9,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
- * @typedef {{commands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, path?: string, primaryKey?: string}} FrontendModelResourceConfig
+ * @typedef {{commands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, path?: string, primaryKey?: string}} FrontendModelResourceConfig
  */
 /**
  * @typedef {object} FrontendModelTransportConfig
@@ -1091,8 +1091,11 @@ export default class FrontendModelBase {
    * @returns {string} - Resolved command name.
    */
   static commandName(commandType) {
-    const commands = this.resourceConfig().commands || {}
-    const commandName = commands[commandType] ?? commandType
+    const resourceConfig = this.resourceConfig()
+    const collectionCommands = resourceConfig.collectionCommands || {}
+    const memberCommands = resourceConfig.memberCommands || {}
+    const commands = resourceConfig.commands || {}
+    const commandName = collectionCommands[commandType] ?? memberCommands[commandType] ?? commands[commandType] ?? commandType
 
     return validateFrontendModelResourceCommandName({
       commandName,
@@ -1669,7 +1672,7 @@ export default class FrontendModelBase {
       this.assignAttributes(regularAttributes)
 
       const response = await ModelClass.executeCommand("update", {
-        attributes: this.attributes(),
+        attributes: regularAttributes,
         id: this.primaryKeyValue()
       })
 
