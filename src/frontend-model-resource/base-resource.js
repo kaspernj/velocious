@@ -1,5 +1,7 @@
 // @ts-check
 
+import * as inflection from "inflection"
+
 /**
  * Base class for backend frontend-model resources.
  */
@@ -143,7 +145,7 @@ export default class FrontendModelBaseResource {
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes) {
-    return await this.modelClass().create(attributes)
+    return await this.modelClass().create(filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes))
   }
 
   /**
@@ -160,7 +162,7 @@ export default class FrontendModelBaseResource {
    * @returns {Promise<import("../database/record/index.js").default>} - Updated model.
    */
   async update(model, attributes) {
-    model.assign(attributes)
+    model.assign(filterWritableFrontendModelAttributes(model, attributes))
     await model.save()
 
     return model
@@ -184,6 +186,26 @@ export default class FrontendModelBaseResource {
 
     return await this.typedControllerInstance().serializeFrontendModel(model)
   }
+}
+
+/**
+ * @param {Record<string, any>} receiver - Model instance or prototype.
+ * @param {Record<string, any>} attributes - Incoming frontend-model attributes.
+ * @returns {Record<string, any>} - Writable attributes only.
+ */
+function filterWritableFrontendModelAttributes(receiver, attributes) {
+  /** @type {Record<string, any>} */
+  const writableAttributes = {}
+
+  for (const [attributeName, value] of Object.entries(attributes)) {
+    const setterName = `set${inflection.camelize(attributeName)}`
+
+    if (setterName in receiver) {
+      writableAttributes[attributeName] = value
+    }
+  }
+
+  return writableAttributes
 }
 
 /**

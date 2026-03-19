@@ -1670,9 +1670,12 @@ export default class FrontendModelBase {
 
     if (Object.keys(regularAttributes).length > 0) {
       this.assignAttributes(regularAttributes)
+      const changedAttributes = Object.fromEntries(
+        Object.entries(this.changes()).map(([attributeName, [, currentValue]]) => [attributeName, currentValue])
+      )
 
       const response = await ModelClass.executeCommand("update", {
-        attributes: this.attributes(),
+        attributes: changedAttributes,
         id: this.primaryKeyValue()
       })
 

@@ -679,6 +679,27 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("ignores computed read-only attributes on frontendUpdate", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Update computed attr")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+        attributes: {
+          identifier: "task-overridden",
+          name: "Updated task"
+        },
+        id: task.id()
+      })
+      const persisted = await Task.find(task.id())
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.name).toEqual("Updated task")
+      expect(payload.model.identifier).toEqual(`task-${task.id()}`)
+      expect(persisted.name()).toEqual("Updated task")
+      expect(persisted.identifier()).toEqual(`task-${task.id()}`)
+    })
+  })
+
   it("updates models from frontendUpdate with has-one attachment payload", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Update attachment")

@@ -1317,7 +1317,7 @@ describe("Frontend models - base", () => {
   it("updates a model and refreshes local attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
-    const user = new User({email: "john@example.com", id: 5, name: "John"})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
 
     try {
       await user.update({name: "John Changed"})
@@ -1325,7 +1325,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            attributes: {email: "john@example.com", id: 5, name: "John Changed"},
+            attributes: {name: "John Changed"},
             id: 5
           },
           url: "/api/frontend-models/users/update"
@@ -1342,7 +1342,7 @@ describe("Frontend models - base", () => {
   it("includes previously staged attributes in update payloads", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
-    const user = new User({email: "john@example.com", id: 5, name: "John"})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
 
     try {
       user.setAttribute("email", "staged@example.com")
@@ -1352,7 +1352,30 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            attributes: {email: "staged@example.com", id: 5, name: "John Changed"},
+            attributes: {email: "staged@example.com", name: "John Changed"},
+            id: 5
+          },
+          url: "/api/frontend-models/users/update"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("does not include unchanged read-only response attributes in update payloads", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, membersCount: 2, name: "John"}})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, membersCount: 2, name: "John"})
+
+    try {
+      await user.update({name: "John Changed"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {name: "John Changed"},
             id: 5
           },
           url: "/api/frontend-models/users/update"
