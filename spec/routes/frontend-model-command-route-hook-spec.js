@@ -2,6 +2,7 @@
 
 import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model-command-route-hook.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
+import {frontendModelActionForCommand, frontendModelResourceConfigurationFromDefinition} from "../../src/frontend-models/resource-definition.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
 class UserFrontendResource extends FrontendModelBaseResource {
@@ -13,11 +14,26 @@ class UserFrontendResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["id"],
-      commands: {
-        find: "frontend-find",
+      collectionCommands: {
         index: "frontend-index"
       },
+      memberCommands: {
+        find: "frontend-find",
+        update: "update"
+      },
       path: "/partners/frontend-models/users"
+    }
+  }
+}
+
+class ProjectFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id"],
+      collectionCommands: ["index"],
+      memberCommands: ["find"]
     }
   }
 }
@@ -91,6 +107,60 @@ describe("routes - frontend model command route hook", () => {
       action: "frontend-index",
       controller: "partners/frontend-models/users"
     })
+  })
+
+  it("infers default path and array command config for backend project routes", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([{
+        path: "/tmp/backend",
+        resources: {
+          Project: ProjectFrontendResource
+        }
+      }]),
+      currentPath: "/projects/index"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-index",
+      controller: "projects"
+    })
+  })
+
+  it("keeps explicit object ability subsets read-only", () => {
+    const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(UserFrontendResource)
+
+    expect(resourceConfiguration?.abilities).toEqual({
+      find: "read",
+      index: "read"
+    })
+  })
+
+  it("treats explicit array command subsets as restrictive", () => {
+    expect(frontendModelActionForCommand({
+      commandName: "index",
+      modelName: "Project",
+      resourceDefinition: ProjectFrontendResource
+    })).toEqual("index")
+    expect(frontendModelActionForCommand({
+      commandName: "find",
+      modelName: "Project",
+      resourceDefinition: ProjectFrontendResource
+    })).toEqual("find")
+    expect(frontendModelActionForCommand({
+      commandName: "create",
+      modelName: "Project",
+      resourceDefinition: ProjectFrontendResource
+    })).toEqual(null)
+    expect(frontendModelActionForCommand({
+      commandName: "destroy",
+      modelName: "Project",
+      resourceDefinition: ProjectFrontendResource
+    })).toEqual(null)
+    expect(frontendModelActionForCommand({
+      commandName: "update",
+      modelName: "Project",
+      resourceDefinition: ProjectFrontendResource
+    })).toEqual(null)
   })
 
 })

@@ -11,7 +11,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
         index: "read",
         update: "update"
       },
-      attributes: ["id", "identifier", "name"],
+      attributes: ["id", "identifier", "isDone", "name"],
       commands: {
         destroy: "destroy",
         find: "find",

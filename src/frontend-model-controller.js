@@ -996,7 +996,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
+   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
    */
   frontendModelResourceConfiguration() {
     const params = this.frontendModelParams()
@@ -1053,7 +1053,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
-   * @returns {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
+   * @returns {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
    */
   frontendModelResourceConfigurationForModelClass(modelClass) {
     const frontendModelResource = this.frontendModelResourceConfiguration()
@@ -1376,8 +1376,10 @@ export default class FrontendModelController extends Controller {
 
     const sorts = this.frontendModelSort()
 
-    for (const sort of sorts) {
-      this.applyFrontendModelSort({query, sort})
+    if (sorts.length > 0) {
+      for (const sort of sorts) {
+        this.applyFrontendModelSort({query, sort})
+      }
     }
 
     if (query._distinct && query.driver.getType() === "mssql") {
@@ -1942,25 +1944,77 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {import("./database/record/index.js").default} model - Model instance.
-   * @returns {Record<string, any>} - Serialized attributes filtered by select map.
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {string[] | null} - Default frontend-model attributes declared on the resource.
    */
-  serializeFrontendModelAttributes(model) {
+  frontendModelDefaultAttributesForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfigurationForModelClass(modelClass)
+    const attributes = frontendModelResource?.resourceConfiguration.attributes
+
+    if (!attributes) return null
+    if (Array.isArray(attributes)) return attributes
+    if (typeof attributes === "object") return Object.keys(attributes)
+
+    return null
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Model instance.
+   * @returns {Promise<Record<string, any>>} - Serialized attributes filtered by select map.
+   */
+  async serializeFrontendModelAttributes(model) {
     const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
     const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+    const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass)
     const modelAttributes = model.attributes()
+    const prototypeAttributeMethod = (attributeName) => {
+      let currentPrototype = Object.getPrototypeOf(model)
+
+      while (currentPrototype && currentPrototype !== Object.prototype) {
+        const candidate = Object.getOwnPropertyDescriptor(currentPrototype, attributeName)?.value
+
+        if (typeof candidate === "function") {
+          return {
+            method: candidate,
+            ownerName: currentPrototype.constructor?.name
+          }
+        }
+
+        currentPrototype = Object.getPrototypeOf(currentPrototype)
+      }
+    }
+    const serializedAttributeValue = async (attributeName) => {
+      const attributeMethodLookup = prototypeAttributeMethod(attributeName)
+      const attributeMethod = attributeMethodLookup?.method
+
+      if (typeof attributeMethod === "function") {
+        return await attributeMethod.call(model)
+      }
+
+      return modelAttributes[attributeName]
+    }
 
     if (!selectedAttributes) {
-      return modelAttributes
+      if (!defaultAttributes || defaultAttributes.length < 1) {
+        return modelAttributes
+      }
+
+      const serializedAttributes = {...modelAttributes}
+
+      for (const attributeName of defaultAttributes) {
+        if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+        serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
+      }
+
+      return serializedAttributes
     }
 
     /** @type {Record<string, any>} */
     const serializedAttributes = {}
 
     for (const attributeName of selectedAttributes) {
-      if (attributeName in modelAttributes) {
-        serializedAttributes[attributeName] = modelAttributes[attributeName]
-      }
+      if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+      serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
     }
 
     return serializedAttributes
@@ -2126,19 +2180,25 @@ export default class FrontendModelController extends Controller {
       }
     }
 
-    return models.map((model, modelIndex) => {
-      const serializedAttributes = this.serializeFrontendModelAttributes(model)
+    /** @type {Record<string, any>[]} */
+    const serializedModels = []
+
+    for (const [modelIndex, model] of models.entries()) {
+      const serializedAttributes = await this.serializeFrontendModelAttributes(model)
       const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
 
       if (Object.keys(preloadedRelationships).length < 1) {
-        return serializedAttributes
+        serializedModels.push(serializedAttributes)
+        continue
       }
 
-      return {
+      serializedModels.push({
         ...serializedAttributes,
         __preloadedRelationships: preloadedRelationships
-      }
-    })
+      })
+    }
+
+    return serializedModels
   }
 
   /**

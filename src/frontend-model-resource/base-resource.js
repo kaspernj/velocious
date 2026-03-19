@@ -12,6 +12,10 @@ export default class FrontendModelBaseResource {
   static attachments = undefined
   /** @type {Record<string, string> | undefined} */
   static commands = undefined
+  /** @type {Record<string, string> | string[] | undefined} */
+  static collectionCommands = undefined
+  /** @type {Record<string, string> | string[] | undefined} */
+  static memberCommands = undefined
   /** @type {string | undefined} */
   static path = undefined
   /** @type {Record<string, any> | undefined} */
@@ -51,12 +55,14 @@ export default class FrontendModelBaseResource {
   static resourceConfig() {
     /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
     const config = {
-      abilities: this.abilities || {},
+      abilities: normalizeFrontendModelResourceAbilities(this.abilities),
       attributes: this.attributes || []
     }
 
     if (this.attachments) config.attachments = this.attachments
     if (this.commands) config.commands = this.commands
+    if (this.collectionCommands) config.collectionCommands = this.collectionCommands
+    if (this.memberCommands) config.memberCommands = this.memberCommands
     if (this.path) config.path = this.path
     if (this.relationships) config.relationships = this.relationships
 
@@ -137,10 +143,7 @@ export default class FrontendModelBaseResource {
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes) {
-    const model = new (this.modelClass())(attributes)
-    await model.save()
-
-    return model
+    return await this.modelClass().create(attributes)
   }
 
   /**
@@ -181,4 +184,41 @@ export default class FrontendModelBaseResource {
 
     return await this.typedControllerInstance().serializeFrontendModel(model)
   }
+}
+
+/**
+ * @param {Record<string, string> | string[] | undefined} abilities - Resource abilities config.
+ * @returns {Record<string, string>} - Normalized abilities config.
+ */
+function normalizeFrontendModelResourceAbilities(abilities) {
+  if (!abilities) {
+    return {}
+  }
+
+  if (!Array.isArray(abilities)) {
+    return abilities
+  }
+
+  /** @type {Record<string, string>} */
+  const normalized = {}
+
+  if (abilities.includes("manage")) {
+    normalized.create = "manage"
+    normalized.destroy = "manage"
+    normalized.find = "manage"
+    normalized.index = "manage"
+    normalized.update = "manage"
+
+    return normalized
+  }
+
+  if (abilities.includes("create")) normalized.create = "create"
+  if (abilities.includes("destroy")) normalized.destroy = "destroy"
+  if (abilities.includes("read")) {
+    normalized.find = "read"
+    normalized.index = "read"
+  }
+  if (abilities.includes("update")) normalized.update = "update"
+
+  return normalized
 }

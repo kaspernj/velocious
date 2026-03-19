@@ -27,4 +27,28 @@ describe("Record - destroy", {tags: ["dummy"]}, () => {
     expect(foundTask1).toEqual(undefined)
     expect(foundTask2).toBeDefined()
   })
+
+  it("runs lifecycle callbacks around destroy", async () => {
+    const previousLifecycleCallbacks = Task._lifecycleCallbacks
+    /** @type {string[]} */
+    const events = []
+
+    Task._lifecycleCallbacks = {}
+    Task.beforeDestroy((model) => { events.push(`beforeDestroy:${model.name()}`) })
+    Task.afterDestroy((model) => { events.push(`afterDestroy:${model.name()}`) })
+
+    try {
+      const project = await Project.create()
+      const task = await Task.create({name: "Destroy callback task", project})
+
+      await task.destroy()
+
+      expect(events).toEqual([
+        "beforeDestroy:Destroy callback task",
+        "afterDestroy:Destroy callback task"
+      ])
+    } finally {
+      Task._lifecycleCallbacks = previousLifecycleCallbacks
+    }
+  })
 })

@@ -1,6 +1,19 @@
 import TaskBase from "../model-bases/task.js"
 
 class Task extends TaskBase {
+  /** @returns {string} - Computed frontend-model identifier. */
+  identifier() {
+    return `task-${this.id()}`
+  }
+
+  /** @returns {boolean | null} - Normalized boolean attribute. */
+  isDone() {
+    const value = super.isDone()
+
+    if (value == null) return value
+
+    return value === true || value === 1 || value === "1"
+  }
 }
 
 Task.belongsTo("project")

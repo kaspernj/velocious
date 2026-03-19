@@ -97,6 +97,68 @@ describe("Record - create", {tags: ["dummy"]}, () => {
     expect(task.project()).toEqual(project)
   })
 
+  it("runs lifecycle callbacks around create and update", async () => {
+    const previousLifecycleCallbacks = Task._lifecycleCallbacks
+    /** @type {string[]} */
+    const events = []
+
+    Task._lifecycleCallbacks = {}
+    Task.beforeValidation((model) => { events.push(`beforeValidation:${model.name()}`) })
+    Task.beforeSave((model) => { events.push(`beforeSave:${model.name()}`) })
+    Task.beforeCreate((model) => { events.push(`beforeCreate:${model.name()}`) })
+    Task.afterCreate((model) => { events.push(`afterCreate:${model.name()}`) })
+    Task.beforeUpdate((model) => { events.push(`beforeUpdate:${model.name()}`) })
+    Task.afterUpdate((model) => { events.push(`afterUpdate:${model.name()}`) })
+    Task.afterSave((model) => { events.push(`afterSave:${model.name()}`) })
+
+    try {
+      const project = await Project.create({name: "Callback project"})
+      const task = await Task.create({name: "Callback task", project})
+
+      await task.update({name: "Updated callback task"})
+
+      expect(events).toEqual([
+        "beforeValidation:Callback task",
+        "beforeSave:Callback task",
+        "beforeCreate:Callback task",
+        "afterCreate:Callback task",
+        "afterSave:Callback task",
+        "beforeValidation:Updated callback task",
+        "beforeSave:Updated callback task",
+        "beforeUpdate:Updated callback task",
+        "afterUpdate:Updated callback task",
+        "afterSave:Updated callback task"
+      ])
+    } finally {
+      Task._lifecycleCallbacks = previousLifecycleCallbacks
+    }
+  })
+
+  it("runs instance lifecycle callback methods around create and update", async () => {
+    const project = await Project.create({name: "Instance callback project"})
+    const task = new Task({name: "Instance callback task", project})
+
+    task.beforeValidation = function() {
+      this.assign({name: `${this.name()} validated`})
+    }
+
+    task.beforeCreate = function() {
+      this.assign({name: `${this.name()} created`})
+    }
+
+    await task.save()
+
+    expect(task.name()).toEqual("Instance callback task validated created")
+
+    task.beforeUpdate = function() {
+      this.assign({name: `${this.name()} updated`})
+    }
+
+    await task.update({name: "Renamed task"})
+
+    expect(task.name()).toEqual("Renamed task validated updated")
+  })
+
   it("accepts ISO datetime strings for datetime attributes", async () => {
     const createdAt = "2025-12-26T16:18:50.641Z"
     const createdAtNoMs = "2025-12-26T16:18:50Z"

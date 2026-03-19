@@ -6,8 +6,31 @@ import FrontendModelBase from "../../src/frontend-models/base.js"
 import Comment from "../dummy/src/models/comment.js"
 import Project from "../dummy/src/models/project.js"
 import TaskModel from "../dummy/src/models/task.js"
-import Task from "../dummy/src/frontend-models/task.js"
 import User from "../dummy/src/models/user.js"
+
+/** Frontend model used for authorization HTTP integration tests against dummy backend routes. */
+class Task extends FrontendModelBase {
+  /**
+   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}}} - Resource config.
+   */
+  static resourceConfig() {
+    return {
+      attributes: ["id", "identifier", "isDone", "name"],
+      commands: {
+        destroy: "destroy",
+        find: "find",
+        index: "list",
+        update: "update"
+      }
+    }
+  }
+
+  /** @returns {unknown} */
+  id() { return this.readAttribute("id") }
+
+  /** @returns {unknown} */
+  name() { return this.readAttribute("name") }
+}
 
 /**
  * @param {"destroy" | "read" | "update" | undefined} deniedAbilityAction - Ability action to deny.

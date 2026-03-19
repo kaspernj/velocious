@@ -1339,6 +1339,31 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("includes previously staged attributes in update payloads", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
+    const user = new User({email: "john@example.com", id: 5, name: "John"})
+
+    try {
+      user.setAttribute("email", "staged@example.com")
+
+      await user.update({name: "John Changed"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "staged@example.com", id: 5, name: "John Changed"},
+            id: 5
+          },
+          url: "/api/frontend-models/users/update"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("updates attachments using update attachment attributes", async () => {
     const Task = buildAttachmentTestModelClass()
     const fetchStub = stubFetch({model: {id: 10, name: "Task"}})
