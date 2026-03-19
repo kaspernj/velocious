@@ -1672,7 +1672,7 @@ export default class FrontendModelBase {
       this.assignAttributes(regularAttributes)
 
       const response = await ModelClass.executeCommand("update", {
-        attributes: regularAttributes,
+        attributes: this.attributes(),
         id: this.primaryKeyValue()
       })
 

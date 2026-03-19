@@ -65,14 +65,11 @@ function normalizeFrontendModelResourceAbilities(abilities) {
   }
 
   if (!Array.isArray(abilities)) {
-    return {
-      ...defaultAbilities,
-      ...abilities
-    }
+    return abilities
   }
 
   /** @type {Record<string, string>} */
-  const normalized = {...defaultAbilities}
+  const normalized = {}
 
   if (abilities.includes("manage")) {
     normalized.create = "manage"
@@ -103,20 +100,14 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
   const legacyCommands = resourceConfiguration.commands
   const collectionCommands = resourceConfiguration.collectionCommands
   const memberCommands = resourceConfiguration.memberCommands
+  const useDefaultCommands = !legacyCommands && !collectionCommands && !memberCommands
   /** @type {Record<string, string>} */
-  const normalizedCollectionCommands = {
-    create: "create",
-    index: "index"
-  }
+  const normalizedCollectionCommands = {}
   /** @type {Record<string, string>} */
-  const normalizedMemberCommands = {
-    destroy: "destroy",
-    find: "find",
-    update: "update"
-  }
+  const normalizedMemberCommands = {}
 
   for (const commandType of /** @type {const} */ (["create", "index"])) {
-    const commandName = frontendModelResourceCommandNameFromConfigs({
+    const commandName = useDefaultCommands ? commandType : frontendModelResourceCommandNameFromConfigs({
       collectionCommands,
       commandType,
       legacyCommands
@@ -128,7 +119,7 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
   }
 
   for (const commandType of /** @type {const} */ (["attach", "destroy", "download", "find", "update", "url"])) {
-    const commandName = frontendModelResourceCommandNameFromConfigs({
+    const commandName = useDefaultCommands ? commandType : frontendModelResourceCommandNameFromConfigs({
       commandType,
       legacyCommands,
       memberCommands
@@ -216,57 +207,19 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
     throw new Error(`Invalid frontend model resource definition for ${modelName}`)
   }
 
-  const commands = {
-    attach: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.attach ?? "attach",
-      commandType: "attach",
-      modelName
-    }),
-    create: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.create ?? "create",
-      commandType: "create",
-      modelName
-    }),
-    download: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.download ?? "download",
-      commandType: "download",
-      modelName
-    }),
-    destroy: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.destroy ?? "destroy",
-      commandType: "destroy",
-      modelName
-    }),
-    find: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.find ?? "find",
-      commandType: "find",
-      modelName
-    }),
-    index: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.index ?? "index",
-      commandType: "index",
-      modelName
-    }),
-    update: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.update ?? "update",
-      commandType: "update",
-      modelName
-    }),
-    url: validateFrontendModelResourceCommandName({
-      commandName: resourceConfiguration.commands.url ?? "url",
-      commandType: "url",
+  for (const [action, configuredCommandName] of Object.entries(resourceConfiguration.commands)) {
+    if (!configuredCommandName) continue
+
+    const validatedCommandName = validateFrontendModelResourceCommandName({
+      commandName: configuredCommandName,
+      commandType: /** @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
       modelName
     })
-  }
 
-  if (commandName === commands.attach) return "attach"
-  if (commandName === commands.create) return "create"
-  if (commandName === commands.download) return "download"
-  if (commandName === commands.destroy) return "destroy"
-  if (commandName === commands.find) return "find"
-  if (commandName === commands.index) return "index"
-  if (commandName === commands.update) return "update"
-  if (commandName === commands.url) return "url"
+    if (commandName === validatedCommandName) {
+      return /** @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action)
+    }
+  }
 
   return null
 }
