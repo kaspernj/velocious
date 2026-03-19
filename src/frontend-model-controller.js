@@ -1035,7 +1035,7 @@ export default class FrontendModelController extends Controller {
           throw new Error(`Frontend model resource '${resourceModelName}' must be a FrontendModelBaseResource subclass`)
         }
 
-        const resourcePath = this.frontendModelResourcePath(resourceModelName, resourceConfiguration)
+        const resourcePath = this.frontendModelResourcePath(resourceModelName, resourceDefinition)
 
         if (this.frontendModelResourceMatchesController({controllerName, resourcePath})) {
           return {
@@ -1094,11 +1094,11 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {string} modelName - Model class name.
-   * @param {import("./configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+   * @param {unknown} resourceDefinition - Resource definition.
    * @returns {string} - Normalized resource path.
    */
-  frontendModelResourcePath(modelName, resourceConfiguration) {
-    return frontendModelResourcePath(modelName, resourceConfiguration)
+  frontendModelResourcePath(modelName, resourceDefinition) {
+    return frontendModelResourcePath(modelName, resourceDefinition)
   }
 
   /**
