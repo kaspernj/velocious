@@ -1141,7 +1141,17 @@ export default class FrontendModelController extends Controller {
    * @returns {string} - Frontend model primary key.
    */
   frontendModelPrimaryKey() {
-    return this.frontendModelClass().primaryKey()
+    return this.frontendModelResourceInstance().primaryKey()
+  }
+
+  /**
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {string} - Frontend model primary key for the given class.
+   */
+  frontendModelPrimaryKeyForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfigurationForModelClass(modelClass)
+
+    return frontendModelResource?.resourceConfiguration.primaryKey || modelClass.primaryKey()
   }
 
   /**
@@ -1396,7 +1406,7 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelMssqlDistinctByPrimaryKeyQuery({query}) {
     const modelClass = this.frontendModelClass()
-    const primaryKey = modelClass.primaryKey()
+    const primaryKey = this.frontendModelPrimaryKeyForModelClass(modelClass)
     const rootTableSql = query.driver.quoteTable(modelClass.tableName())
     const primaryKeySql = `${rootTableSql}.${query.driver.quoteColumn(primaryKey)}`
     const distinctIdsQuery = query.clone()
@@ -2009,7 +2019,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      const primaryKey = relatedModelClass.primaryKey()
+      const primaryKey = this.frontendModelPrimaryKeyForModelClass(relatedModelClass)
       const ids = relatedModels
         .map((model) => model.attributes()[primaryKey])
         .filter((id) => id !== undefined && id !== null)

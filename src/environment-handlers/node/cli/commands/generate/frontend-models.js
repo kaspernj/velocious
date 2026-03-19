@@ -247,6 +247,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       propertyName: "commands",
       values: commands
     })
+    if (typeof modelConfig.primaryKey === "string" && modelConfig.primaryKey.length > 0 && modelConfig.primaryKey !== "id") {
+      fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey)},\n`
+    }
     fileContent += "    }\n"
     fileContent += "  }\n"
 

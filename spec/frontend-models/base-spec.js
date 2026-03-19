@@ -78,6 +78,33 @@ function buildAttachmentTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with custom primary key.
+ */
+function buildCustomPrimaryKeyTestModelClass() {
+  /** Test model implementation with custom primary key. */
+  class User extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {find: string, index: string}, primaryKey: string}} - Resource configuration.
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["reference", "name"],
+        commands: {
+          find: "find",
+          index: "index"
+        },
+        primaryKey: "reference"
+      }
+    }
+
+    /** @returns {any} */
+    reference() { return this.readAttribute("reference") }
+  }
+
+  return User
+}
+
+/**
  * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
  */
 function buildPreloadTestModelClasses() {
@@ -282,6 +309,14 @@ describe("Frontend models - base", () => {
       resetFrontendModelTransport()
       globalThis.fetch = originalFetch
     }
+  })
+
+  it("uses configured frontend-model primary keys", () => {
+    const User = buildCustomPrimaryKeyTestModelClass()
+    const user = new User({name: "Jane", reference: "user-ref-1"})
+
+    expect(User.primaryKey()).toEqual("reference")
+    expect(user.primaryKeyValue()).toEqual("user-ref-1")
   })
 
   it("uses configured shared frontend-model API URL when url is configured", async () => {

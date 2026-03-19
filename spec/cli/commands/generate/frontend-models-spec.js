@@ -75,6 +75,21 @@ class NullableIdCallFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class ReferenceUserFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["reference", "email"],
+      path: "/users",
+      primaryKey: "reference"
+    }
+  }
+}
+
 /**
  * @param {object} args - Build args.
  * @param {import("../../../../src/configuration-types.js").BackendProjectConfiguration[]} [args.backendProjectsList] - Backend projects.
@@ -258,6 +273,31 @@ describe("Cli - generate - frontend-models", () => {
     const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
 
     expect(callContents).toContain("@property {string | null} id - Attribute value.")
+  })
+
+  it("generates custom frontend-model primary keys when configured", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            User: ReferenceUserFrontendResource
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
+
+    expect(userContents).toContain("primaryKey: \"reference\"")
   })
 
   it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {

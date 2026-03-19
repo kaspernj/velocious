@@ -82,7 +82,7 @@ export default class FrontendModelBaseResource {
   resourceConfiguration() { return this.resourceConfigurationValue }
 
   /** @returns {string} - Primary key. */
-  primaryKey() { return this.modelClass().primaryKey() }
+  primaryKey() { return this.resourceConfiguration().primaryKey || this.modelClass().primaryKey() }
 
   /**
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Ability action.
