@@ -28,7 +28,7 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
         const currentUser = this.currentUser()
 
         if (currentUser) {
-          this.can("read", User, {id: currentUser.id()})
+          this.can("read", {id: currentUser.id()})
         }
       }
     }
@@ -52,8 +52,8 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
       static ModelClass = User
 
       abilities() {
-        this.can("read", User)
-        this.cannot("read", User, {id: userTwo.id()})
+        this.can("read")
+        this.cannot("read", {id: userTwo.id()})
       }
     }
 
@@ -71,7 +71,7 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
       static ModelClass = User
 
       abilities() {
-        this.can("read", User, {id: userOne.id()})
+        this.can("read", {id: userOne.id()})
       }
     }
 
@@ -110,7 +110,7 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
         const params = this.params()
 
         if (params && params.userId) {
-          this.can("read", User, {id: parseInt(`${params.userId}`, 10)})
+          this.can("read", {id: parseInt(`${params.userId}`, 10)})
         }
       }
     }
@@ -154,7 +154,7 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
       static ModelClass = User
 
       abilities() {
-        this.can("read", User, {id: userOne.id()})
+        this.can("read", {id: userOne.id()})
       }
     }
 
@@ -168,5 +168,21 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
     await expect(async () => {
       await User.accessibleBy(/** @type {any} */ (undefined)).toArray()
     }).toThrow(/accessibleBy\(ability\)/)
+  })
+
+  it("raises when a resource passes the model class to can", async () => {
+    class InvalidUserResource extends BaseResource {
+      static ModelClass = User
+
+      abilities() {
+        this.can("read", User)
+      }
+    }
+
+    const ability = new Ability({resources: [InvalidUserResource]})
+
+    await expect(async () => {
+      await User.accessibleBy(ability).toArray()
+    }).toThrow(/no longer accepts a model class/)
   })
 })
