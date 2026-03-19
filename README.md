@@ -1512,7 +1512,7 @@ class UserResource extends BaseResource {
     const currentUser = this.currentUser()
 
     if (currentUser) {
-      this.can("read", User, {id: currentUser.id()})
+      this.can("read", {id: currentUser.id()})
     }
   }
 }
