@@ -18,6 +18,7 @@
 - `configuration.tenantResolver(...)` can resolve a request-scoped tenant object from request params, websocket subscriptions, or other request metadata.
 - `configuration.tenantDatabaseResolver(...)` can override a configured database identifier per resolved tenant.
 - `configuration.runWithTenant(tenant, callback)` and `Current.tenant()` expose the active tenant for custom model/database routing.
+- Model classes can declare tenant-aware database routing with `ModelClass.switchesTenantDatabase(...)` instead of overriding `getDatabaseIdentifier()` manually.
 - HTTP routes and websocket subscriptions/events run inside the resolved tenant context before abilities and controller/channel code execute.
 
 ## Failure mode
