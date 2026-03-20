@@ -10,6 +10,7 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import fs from "fs/promises"
 import path from "node:path"
+import {buildRequireContext} from "../../../helpers/require-context-test-helper.js"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
 
 class CallFrontendResource extends FrontendModelBaseResource {
@@ -79,30 +80,6 @@ class User extends DatabaseRecord {}
 User.setPrimaryKey("reference")
 
 class Call extends DatabaseRecord {}
-
-/**
- * @param {Record<string, {default?: unknown}>} modules - Modules keyed by require-context path.
- * @returns {{(id: string): {default?: unknown}, keys: () => string[]}} - Webpack-style require context.
- */
-function buildRequireContext(modules) {
-  /**
-   * @param {string} id - Module id.
-   * @returns {{default?: unknown}} - Imported module.
-   */
-  function requireContext(id) {
-    const loadedModule = modules[id]
-
-    if (!loadedModule) {
-      throw new Error(`Missing module in require context: ${id}`)
-    }
-
-    return loadedModule
-  }
-
-  requireContext.keys = () => Object.keys(modules)
-
-  return requireContext
-}
 
 /**
  * @param {object} args - Build args.
