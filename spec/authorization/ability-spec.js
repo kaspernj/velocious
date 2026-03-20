@@ -1,5 +1,6 @@
 import Ability from "../../src/authorization/ability.js"
 import BaseResource from "../../src/authorization/base-resource.js"
+import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import User from "../dummy/src/models/user.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
@@ -144,6 +145,27 @@ describe("Authorization - ability", {tags: ["dummy"]}, () => {
     await expect(async () => {
       await User.accessible().toArray()
     }).toThrow(/No ability in context/)
+  })
+
+  it("supports frontend-model resources as direct ability resources", async () => {
+    const userOne = await createUser("frontend-resource-one@example.com", "fr-one")
+    const userTwo = await createUser("frontend-resource-two@example.com", "fr-two")
+
+    class UserFrontendResource extends FrontendModelBaseResource {
+      static ModelClass = User
+
+      abilities() {
+        this.can("read", {id: parseInt(`${this.params().userId}`, 10)})
+      }
+    }
+
+    const ability = new Ability({
+      context: {params: {userId: userTwo.id()}},
+      resources: [UserFrontendResource]
+    })
+    const foundUsers = await User.accessibleBy(ability).where({id: [userOne.id(), userTwo.id()]}).order("id").toArray()
+
+    expect(foundUsers.map((user) => user.id())).toEqual([userTwo.id()])
   })
 
   it("supports explicit ability with accessibleBy", async () => {

@@ -1,11 +1,32 @@
 // @ts-check
 
+import AuthorizationBaseResource from "../authorization/base-resource.js"
 import * as inflection from "inflection"
+
+/**
+ * @typedef {object} FrontendModelResourceControllerArgs
+ * @property {import("../controller.js").default} controller - Frontend-model controller instance.
+ * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
+ * @property {string} modelName - Model name.
+ * @property {Record<string, any>} params - Request params.
+ * @property {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration.
+ */
+
+/**
+ * @typedef {object} FrontendModelResourceAbilityArgs
+ * @property {import("../authorization/ability.js").default} [ability] - Ability instance when the resource is used directly for authorization.
+ * @property {Record<string, any>} [context] - Ability context.
+ * @property {Record<string, any>} [locals] - Ability locals.
+ * @property {typeof import("../database/record/index.js").default} [modelClass] - Optional backing model class override.
+ * @property {string} [modelName] - Optional model name override.
+ * @property {Record<string, any>} [params] - Optional params override.
+ * @property {import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
+ */
 
 /**
  * Base class for backend frontend-model resources.
  */
-export default class FrontendModelBaseResource {
+export default class FrontendModelBaseResource extends AuthorizationBaseResource {
   /** @type {Record<string, any> | string[] | undefined} */
   static attributes = undefined
   /** @type {Record<string, string> | undefined} */
@@ -24,19 +45,20 @@ export default class FrontendModelBaseResource {
   static relationships = undefined
 
   /**
-   * @param {object} args - Resource args.
-   * @param {import("../controller.js").default} args.controller - Frontend-model controller.
-   * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
-   * @param {string} args.modelName - Model class name.
-   * @param {Record<string, any>} args.params - Request params.
-   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} args.resourceConfiguration - Normalized resource config.
+   * @param {FrontendModelResourceAbilityArgs | FrontendModelResourceControllerArgs} args - Resource args.
    */
-  constructor({controller, modelClass, modelName, params, resourceConfiguration}) {
-    this.controller = controller
-    this.modelClassValue = modelClass
-    this.modelNameValue = modelName
-    this.paramsValue = params
-    this.resourceConfigurationValue = resourceConfiguration
+  constructor(args) {
+    super({
+      ability: "ability" in args ? args.ability : undefined,
+      context: "context" in args ? args.context || {} : {},
+      locals: "locals" in args ? args.locals || {} : {}
+    })
+
+    this.controller = "controller" in args ? args.controller : undefined
+    this.modelClassValue = "modelClass" in args ? args.modelClass : /** @type {typeof import("../database/record/index.js").default | undefined} */ (/** @type {typeof FrontendModelBaseResource} */ (this.constructor).modelClass())
+    this.modelNameValue = "modelName" in args ? args.modelName : this.modelClassValue?.name || ""
+    this.paramsValue = "params" in args ? args.params : undefined
+    this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */ ({abilities: {}, attributes: []})
   }
 
   /**
@@ -75,13 +97,19 @@ export default class FrontendModelBaseResource {
   controllerInstance() { return this.controller }
 
   /** @returns {typeof import("../database/record/index.js").default} - Model class. */
-  modelClass() { return this.modelClassValue }
+  modelClass() {
+    if (!this.modelClassValue) {
+      throw new Error(`${this.constructor.name} requires a model class.`)
+    }
+
+    return this.modelClassValue
+  }
 
   /** @returns {string} - Model name. */
   modelName() { return this.modelNameValue }
 
   /** @returns {Record<string, any>} - Params. */
-  params() { return this.paramsValue }
+  params() { return this.paramsValue || super.params() || {} }
 
   /** @returns {import("../configuration-types.js").FrontendModelResourceConfiguration} - Normalized resource config. */
   resourceConfiguration() { return this.resourceConfigurationValue }

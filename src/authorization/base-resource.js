@@ -7,7 +7,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * @param {object} args - Resource args.
-   * @param {import("./ability.js").default} args.ability - Ability instance.
+   * @param {import("./ability.js").default} [args.ability] - Ability instance.
    * @param {Record<string, any>} [args.context] - Ability context.
    * @param {Record<string, any>} [args.locals] - Ability locals.
    */
@@ -31,7 +31,7 @@ export default class AuthorizationBaseResource {
    */
   can(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "can"})
-    this.ability.can(actions, this.requiredModelClass(), conditions)
+    this.requiredAbility().can(actions, this.requiredModelClass(), conditions)
   }
 
   /**
@@ -41,7 +41,18 @@ export default class AuthorizationBaseResource {
    */
   cannot(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "cannot"})
-    this.ability.cannot(actions, this.requiredModelClass(), conditions)
+    this.requiredAbility().cannot(actions, this.requiredModelClass(), conditions)
+  }
+
+  /**
+   * @returns {import("./ability.js").default} - Ability instance.
+   */
+  requiredAbility() {
+    if (!this.ability) {
+      throw new Error(`${this.constructor.name} requires an ability instance before defining abilities.`)
+    }
+
+    return this.ability
   }
 
   /**
