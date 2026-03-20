@@ -83,11 +83,6 @@ export default class VelociousHttpServerWorker {
   addSocketConnection(client) {
     const clientCount = client.clientCount
 
-    client.socket.on("end", () => {
-      this.logger.debug(`Removing ${clientCount} from clients`)
-      delete this.clients[clientCount]
-    })
-
     if (!this.worker) throw new Error("Worker not initialized")
 
     client.setWorker(this.worker)

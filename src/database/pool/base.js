@@ -134,9 +134,10 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * @template T
    * @abstract
-   * @param {function(import("../drivers/base.js").default) : void} _callback - Callback function.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} _callback - Callback function.
+   * @returns {Promise<T>} - Resolves with the callback result.
    */
   withConnection(_callback) { // eslint-disable-line no-unused-vars
     throw new Error("'withConnection' not implemented")

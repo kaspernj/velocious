@@ -1,7 +1,8 @@
 // @ts-check
 
 /**
- * @typedef {function(Record<string, import("./database/drivers/base.js").default>) : Promise<void>} WithConnectionsCallbackType
+ * @template T
+ * @typedef {function(Record<string, import("./database/drivers/base.js").default>) : Promise<T>} WithConnectionsCallbackType
  */
 
 import {digg} from "diggerize"
@@ -9,6 +10,7 @@ import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
+import {ensureFrontendModelWebsocketPublishersRegistered} from "./frontend-models/websocket-publishers.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -479,6 +481,8 @@ export default class VelociousConfiguration {
       if (this._initializeModels) {
         await this._initializeModels({configuration: this, type: args.type})
       }
+
+      ensureFrontendModelWebsocketPublishersRegistered(this)
     }
   }
 
@@ -717,8 +721,9 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {WithConnectionsCallbackType} callback - Callback function.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @template T
+   * @param {WithConnectionsCallbackType<T>} callback - Callback function.
+   * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnections(callback) {
     /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
@@ -726,11 +731,12 @@ export default class VelociousConfiguration {
 
     const stack = Error().stack
     const actualCallback = async () => {
-      await withTrackedStack(stack, async () => {
+      return await withTrackedStack(stack, async () => {
         return await callback(dbs)
       })
     }
 
+    /** @type {() => Promise<T>} */
     let runRequest = actualCallback
 
     for (const identifier of this.getDatabaseIdentifiers()) {
@@ -740,14 +746,14 @@ export default class VelociousConfiguration {
         return await this.getDatabasePool(identifier).withConnection(async (db) => {
           dbs[identifier] = db
 
-          await actualRunRequest()
+          return await actualRunRequest()
         })
       }
 
       runRequest = nextRunRequest
     }
 
-    await runRequest()
+    return await runRequest()
   }
 
   /** @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key */
@@ -784,8 +790,9 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {WithConnectionsCallbackType} callback - Callback function.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @template T
+   * @param {WithConnectionsCallbackType<T>} callback - Callback function.
+   * @returns {Promise<T>} - Resolves with the callback result.
    */
   async ensureConnections(callback) {
     const dbs = this.getCurrentConnections()
@@ -793,9 +800,9 @@ export default class VelociousConfiguration {
     const hasAllConnections = identifiers.every((identifier) => dbs[identifier])
 
     if (hasAllConnections) {
-      await callback(dbs)
+      return await callback(dbs)
     } else {
-      await this.withConnections(callback)
+      return await this.withConnections(callback)
     }
   }
 

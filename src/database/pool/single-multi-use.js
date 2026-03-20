@@ -22,12 +22,14 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
-   * @param {function(import("../drivers/base.js").default) : void} callback - Callback function.
+   * @template T
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} callback - Callback function.
+   * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnection(callback) {
     const connection = await this.checkout()
 
-    await callback(connection)
+    return await callback(connection)
   }
 
   /**

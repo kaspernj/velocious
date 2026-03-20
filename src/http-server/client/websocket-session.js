@@ -16,6 +16,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   events = new EventEmitter()
   subscriptions = new Set()
   channels = new Set()
+  subscriptionHandlers = new Map()
+  handlerSubscriptions = new Map()
 
   /**
    * @param {object} args - Options object.
@@ -73,7 +75,17 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async sendEvent(channel, payload) {
-    if (!this.hasSubscription(channel)) return
+    const channelHandlers = this.subscriptionHandlers.get(channel)
+    const hasChannelHandlers = Boolean(channelHandlers && channelHandlers.size > 0)
+
+    if (!this.hasSubscription(channel) && !hasChannelHandlers) return
+
+    if (hasChannelHandlers) {
+      await Promise.all(Array.from(channelHandlers).map(async (handler) => {
+        await handler.receivedBroadcast({channel, payload})
+      }))
+      return
+    }
 
     this.sendJson({channel, payload, type: "event"})
   }
@@ -318,11 +330,26 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {{acknowledge?: boolean}} [options] - Subscribe options.
+   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default}} [options] - Subscribe options.
    * @returns {Promise<boolean>} - Whether the subscription was added.
    */
-  async subscribeToChannel(channel, {acknowledge = true} = {}) {
+  async subscribeToChannel(channel, {acknowledge = true, channelHandler} = {}) {
     this.addSubscription(channel)
+
+    if (channelHandler) {
+      if (!this.subscriptionHandlers.has(channel)) {
+        this.subscriptionHandlers.set(channel, new Set())
+      }
+
+      this.subscriptionHandlers.get(channel)?.add(channelHandler)
+
+      if (!this.handlerSubscriptions.has(channelHandler)) {
+        this.handlerSubscriptions.set(channelHandler, new Set())
+      }
+
+      this.handlerSubscriptions.get(channelHandler)?.add(channel)
+    }
+
     if (acknowledge) {
       this.sendJson({channel, type: "subscribed"})
     }
@@ -349,6 +376,20 @@ export default class VelociousHttpServerClientWebsocketSession {
       })
     } catch (error) {
       this.logger.error(() => ["Failed to teardown websocket channel", error])
+    }
+
+    const subscriptions = this.handlerSubscriptions.get(channel)
+
+    if (subscriptions) {
+      for (const subscriptionChannel of subscriptions) {
+        this.subscriptionHandlers.get(subscriptionChannel)?.delete(channel)
+
+        if (this.subscriptionHandlers.get(subscriptionChannel)?.size === 0) {
+          this.subscriptionHandlers.delete(subscriptionChannel)
+        }
+      }
+
+      this.handlerSubscriptions.delete(channel)
     }
   }
 
