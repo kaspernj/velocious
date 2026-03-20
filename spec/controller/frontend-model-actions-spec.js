@@ -679,7 +679,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
-  it("ignores computed read-only attributes on frontendUpdate", async () => {
+  it("rejects computed read-only attributes on frontendUpdate", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Update computed attr")
 
@@ -692,10 +692,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
       const persisted = await Task.find(task.id())
 
-      expect(payload.status).toEqual("success")
-      expect(payload.model.name).toEqual("Updated task")
-      expect(payload.model.identifier).toEqual(`task-${task.id()}`)
-      expect(persisted.name()).toEqual("Updated task")
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(persisted.name()).toEqual("Update computed attr")
       expect(persisted.identifier()).toEqual(`task-${task.id()}`)
     })
   })

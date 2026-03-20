@@ -20,6 +20,7 @@ When adding or changing features, update `README.md` with the relevant usage and
 Name specs that should run in browser tests with the `.browser-spec.js` suffix so the browser test runner includes them.
 Use spaces inside named imports (e.g. `import {foo, bar} from "..."`).
 Do not override methods on runtime instances to change behavior; add explicit hooks/flags in the owning class instead.
+Frontend-model resource `create`/`update` paths must raise on unknown or read-only input attributes instead of silently ignoring them; generated models and wrapper models should treat invalid write payloads as contract errors.
 For multi-step method chains, put the receiver on its own line and place each chained call on its own following line.
 In generated code, keep single-tag JSDoc blocks on one line when they fit (e.g. `/** @returns {Type} - Description. */`).
 Do not silence JSDoc/TypeScript errors with broad casts like `/** @type {Record<string, any>} */ (...)`; fix the underlying typedefs/contracts instead.

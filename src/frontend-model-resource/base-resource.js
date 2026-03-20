@@ -194,15 +194,25 @@ export default class FrontendModelBaseResource {
  * @returns {Record<string, any>} - Writable attributes only.
  */
 function filterWritableFrontendModelAttributes(receiver, attributes) {
+  // Frontend-model writes should fail fast when callers submit read-only or unknown attrs.
+  // Silent drops hide contract mistakes in generated models and app-side wrapper code.
   /** @type {Record<string, any>} */
   const writableAttributes = {}
+  /** @type {string[]} */
+  const invalidAttributes = []
 
   for (const [attributeName, value] of Object.entries(attributes)) {
     const setterName = `set${inflection.camelize(attributeName)}`
 
     if (setterName in receiver) {
       writableAttributes[attributeName] = value
+    } else {
+      invalidAttributes.push(attributeName)
     }
+  }
+
+  if (invalidAttributes.length > 0) {
+    throw new Error(`Invalid frontend model write attributes: ${invalidAttributes.join(", ")}`)
   }
 
   return writableAttributes
