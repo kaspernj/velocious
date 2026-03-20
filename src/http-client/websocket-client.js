@@ -14,7 +14,7 @@ export default class VelociousWebsocketClient {
 
     this.debug = debug
     this.pendingRequests = new Map()
-    this.subscribedChannels = new Set()
+    this.pendingSubscriptions = new Map()
     this.url = url || "ws://127.0.0.1:3006/websocket"
     this.listeners = new Map()
     this.nextID = 1
@@ -99,28 +99,73 @@ export default class VelociousWebsocketClient {
    * @returns {() => void} unsubscribe function
    */
   on(channel, callback) {
-    if (!this.listeners.has(channel)) {
-      this.listeners.set(channel, new Set())
-      this.subscribedChannels.add(channel)
+    return this.subscribe(channel, {}, callback)
+  }
+
+  /**
+   * Subscribe to a channel for server-sent events with optional params.
+   * @param {string} channel - Channel name.
+   * @param {{params?: Record<string, any>}} options - Subscription options.
+   * @param {(payload: any) => void} callback - Callback function.
+   * @returns {(() => void) & {ready: Promise<void>}} - Unsubscribe function with readiness promise.
+   */
+  subscribe(channel, options, callback) {
+    const params = options?.params
+    const subscriptionKey = this._subscriptionKey(channel, params)
+
+    if (!this.listeners.has(subscriptionKey)) {
+      let resolveReady
+      let rejectReady
+      const ready = new Promise((resolve, reject) => {
+        resolveReady = resolve
+        rejectReady = reject
+      })
+
+      this.listeners.set(subscriptionKey, {
+        callbacks: new Set(),
+        channel,
+        params,
+        ready
+      })
+      this.pendingSubscriptions.set(subscriptionKey, {reject: rejectReady, resolve: resolveReady})
 
       void this.connect().then(() => {
-        this._sendMessage({channel, type: "subscribe"})
+        this._sendMessage({channel, params, type: "subscribe"})
       }).catch((error) => this._debug("Subscribe failed", error))
     }
 
-    const channelListeners = this.listeners.get(channel)
+    const listenerEntry = this.listeners.get(subscriptionKey)
 
-    if (!channelListeners) throw new Error("Listeners map not initialized")
+    if (!listenerEntry) throw new Error("Listeners map not initialized")
 
-    channelListeners.add(callback)
+    listenerEntry.callbacks.add(callback)
 
-    return () => {
-      channelListeners.delete(callback)
+    const unsubscribe = () => {
+      listenerEntry.callbacks.delete(callback)
 
-      if (channelListeners.size === 0) {
-        this.listeners.delete(channel)
+      if (listenerEntry.callbacks.size === 0) {
+        this.listeners.delete(subscriptionKey)
       }
     }
+
+    unsubscribe.ready = listenerEntry.ready
+
+    return unsubscribe
+  }
+
+  /**
+   * Subscribe to a channel and wait until the server acknowledges the subscription.
+   * @param {string} channel - Channel name.
+   * @param {{params?: Record<string, any>}} options - Subscription options.
+   * @param {(payload: any) => void} callback - Callback function.
+   * @returns {Promise<(() => void) & {ready: Promise<void>}>} - Ready unsubscribe handle.
+   */
+  async subscribeAndWait(channel, options, callback) {
+    const unsubscribe = this.subscribe(channel, options, callback)
+
+    await unsubscribe.ready
+
+    return unsubscribe
   }
 
   /**
@@ -181,17 +226,27 @@ export default class VelociousWebsocketClient {
       } else {
         this._debug(`No pending request for response id ${id}`)
       }
+    } else if (type === "subscribed") {
+      const subscriptionKey = this._subscriptionKey(message.channel, message.params)
+      const pendingSubscription = this.pendingSubscriptions.get(subscriptionKey)
+
+      if (pendingSubscription) {
+        this.pendingSubscriptions.delete(subscriptionKey)
+        pendingSubscription.resolve()
+      }
     } else if (type === "event") {
       const {channel, payload} = message
-      const callbacks = this.listeners.get(channel)
+      for (const listenerEntry of this.listeners.values()) {
+        if (listenerEntry.channel !== channel) continue
 
-      callbacks?.forEach((callback) => {
-        try {
-          callback(payload)
-        } catch (error) {
-          this._debug("Listener error", error)
-        }
-      })
+        listenerEntry.callbacks.forEach((callback) => {
+          try {
+            callback(payload)
+          } catch (error) {
+            this._debug("Listener error", error)
+          }
+        })
+      }
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)
 
@@ -203,6 +258,16 @@ export default class VelociousWebsocketClient {
   }
 
   /**
+   * @private
+   * @param {string} channel - Channel name.
+   * @param {Record<string, any> | undefined} params - Subscription params.
+   * @returns {string} - Stable subscription key.
+   */
+  _subscriptionKey(channel, params) {
+    return JSON.stringify([channel, params || null])
+  }
+
+  /**
    * Reject all pending requests when the socket closes unexpectedly.
    * @private
    */
@@ -211,7 +276,12 @@ export default class VelociousWebsocketClient {
       reject(new Error(`Websocket closed before response for ${id}`))
     }
 
+    for (const {reject} of this.pendingSubscriptions.values()) {
+      reject(new Error("Websocket closed before subscription acknowledgement"))
+    }
+
     this.pendingRequests.clear()
+    this.pendingSubscriptions.clear()
     this.connectPromise = undefined
   }
 
@@ -264,4 +334,3 @@ class VelociousWebsocketResponse {
     return JSON.parse(this.body)
   }
 }
-

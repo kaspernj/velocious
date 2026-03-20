@@ -1,9 +1,12 @@
 // @ts-check
 
+import * as inflection from "inflection"
 import Controller from "./controller.js"
+import Response from "./http-server/client/response.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
-import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath} from "./frontend-models/resource-definition.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+import RoutesResolver from "./routes/resolver.js"
 import VelociousError from "./velocious-error.js"
 
 /**
@@ -982,6 +985,36 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @template T
+   * @param {Record<string, any>} params - Request-scoped params.
+   * @param {import("./http-server/client/response.js").default} response - Response instance.
+   * @param {() => Promise<T>} callback - Callback executed inside resolved tenant and ability context.
+   * @returns {Promise<T>} - Callback return value.
+   */
+  async withFrontendModelRequestContext(params, response, callback) {
+    const configuration = this.getConfiguration()
+    const tenant = await configuration.resolveTenant({
+      params,
+      request: this.request(),
+      response
+    })
+
+    return await configuration.runWithTenant(tenant, async () => {
+      return await configuration.ensureConnections(async () => {
+        const ability = await configuration.resolveAbility({
+          params,
+          request: this.request(),
+          response
+        })
+
+        return await configuration.runWithAbility(ability, async () => {
+          return await callback()
+        })
+      })
+    })
+  }
+
+  /**
    * @returns {typeof import("./database/record/index.js").default} - Frontend model class for controller resource actions.
    */
   frontendModelClass() {
@@ -1005,7 +1038,7 @@ export default class FrontendModelController extends Controller {
     const backendProjects = this.getConfiguration().getBackendProjects()
 
     for (const backendProject of backendProjects) {
-      const resources = backendProject.frontendModels || backendProject.resources || {}
+      const resources = frontendModelResourcesForBackendProject(backendProject)
 
       if (modelName && modelName.length > 0 && resources[modelName]) {
         const resourceDefinition = resources[modelName]
@@ -1060,7 +1093,7 @@ export default class FrontendModelController extends Controller {
 
     if (!frontendModelResource) return null
 
-    const resources = frontendModelResource.backendProject.frontendModels || frontendModelResource.backendProject.resources || {}
+    const resources = frontendModelResourcesForBackendProject(frontendModelResource.backendProject)
     const resourceDefinition = resources[modelClass.name]
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
     const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
@@ -2524,6 +2557,7 @@ export default class FrontendModelController extends Controller {
 
     for (const requestEntry of requests) {
       const commandType = requestEntry?.commandType
+      const customPath = requestEntry?.customPath
       const model = requestEntry?.model
       const payload = requestEntry?.payload
       const requestId = requestEntry?.requestId
@@ -2536,23 +2570,36 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      if (!["index", "find", "create", "update", "destroy", "attach", "download", "url"].includes(commandType)) {
+      const isBuiltInCommand = ["index", "find", "create", "update", "destroy", "attach", "download", "url"].includes(commandType)
+
+      if (!isBuiltInCommand && (typeof customPath !== "string" || !customPath.startsWith("/"))) {
         responses.push({
           requestId,
-          response: this.frontendModelErrorPayload("Expected request commandType.")
+          response: this.frontendModelErrorPayload("Expected request customPath.")
         })
         continue
       }
 
-      const commandParams = {
-        ...(payload && typeof payload === "object" ? payload : {}),
-        model
-      }
-
       try {
-        const responsePayload = await this.withFrontendModelParams(commandParams, async () => {
-          return await this.frontendModelCommandPayload(commandType)
-        })
+        let responsePayload
+
+        if (isBuiltInCommand) {
+          const commandParams = {
+            ...(payload && typeof payload === "object" ? payload : {}),
+            model
+          }
+
+          responsePayload = await this.withFrontendModelParams(commandParams, async () => {
+            return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
+              return await this.frontendModelCommandPayload(commandType)
+            })
+          })
+        } else {
+          responsePayload = await this.frontendApiCustomCommandPayload({
+            customPath,
+            payload
+          })
+        }
 
         responses.push({
           requestId,
@@ -2581,6 +2628,73 @@ export default class FrontendModelController extends Controller {
         status: "success"
       }))
     })
+  }
+
+  /**
+   * Dispatches a custom frontend-model command through the shared frontend-model API endpoint.
+   * @param {object} args - Arguments.
+   * @param {string} args.customPath - Custom backend route path.
+   * @param {unknown} args.payload - Request payload.
+   * @returns {Promise<Record<string, any>>} - Parsed JSON response payload.
+   */
+  async frontendApiCustomCommandPayload({customPath, payload}) {
+    const configuration = this.getConfiguration()
+    const response = new Response({configuration})
+    const resolver = new RoutesResolver({
+      configuration,
+      request: this.getRequest(),
+      response
+    })
+    resolver.params = {}
+    const routeHookMatch = await resolver.resolveRouteResolverHooks(customPath)
+    const configurationRoutes = configuration.getRoutes()
+    const routeMatch = routeHookMatch || !configurationRoutes?.rootRoute ? undefined : resolver.matchPathWithRoutes(configurationRoutes.rootRoute, customPath)
+
+    if (!routeHookMatch && !routeMatch) {
+      throw new Error(`No custom frontend model route matched '${customPath}'`)
+    }
+
+    const actionParam = routeHookMatch?.action || resolver.params.action
+    const controllerParam = routeHookMatch?.controller || resolver.params.controller
+    const actionValue = typeof actionParam === "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
+    const controllerValue = typeof controllerParam === "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
+
+    if (typeof actionValue !== "string" || actionValue.length < 1 || typeof controllerValue !== "string" || controllerValue.length < 1) {
+      throw new Error(`Custom frontend model route matched '${customPath}' without controller/action params`)
+    }
+
+    const action = inflection.camelize(actionValue.replaceAll("-", "_").replaceAll("/", "_"), true)
+    const controller = controllerValue
+    const controllerPath = routeHookMatch?.controllerPath || `${configuration.getDirectory()}/src/routes/${controller}/controller.js`
+    const viewPath = routeHookMatch?.viewPath || `${configuration.getDirectory()}/src/routes/${controller}`
+    resolver.routeHookControllerClass = routeHookMatch?.controllerClass
+    const controllerClass = await resolver.resolveControllerClass({controllerPath})
+    const controllerParams = {
+      ...((payload && typeof payload === "object") ? payload : {}),
+      ...resolver.params
+    }
+    const controllerInstance = new controllerClass({
+      action,
+      configuration,
+      controller,
+      params: controllerParams,
+      request: /** @type {import("./http-server/client/request.js").default} */ (this.getRequest()),
+      response,
+      viewPath
+    })
+
+    await this.withFrontendModelRequestContext(controllerParams, response, async () => {
+      await controllerInstance._runBeforeCallbacks()
+      await controllerInstance[action]()
+    })
+
+    const responseBody = response.getBody()
+
+    if (typeof responseBody !== "string" || responseBody.length < 1) {
+      return {}
+    }
+
+    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(JSON.parse(responseBody)))
   }
 
   /** @returns {Promise<void>} - Collection action for frontend model resources. */

@@ -33,4 +33,14 @@ describe("HttpServer - worker handler", () => {
     await handler.stop()
     expect(true).toBeTrue()
   })
+
+  it("ignores websocket dispatch when the worker transport is missing", () => {
+    const configuration = {debug: false}
+    const handler = new WorkerHandler({configuration, workerCount: 1})
+
+    handler.worker = {}
+    handler.unregisterFromEventsHost = () => {}
+
+    expect(() => handler.dispatchWebsocketEvent({channel: "frontend-models:Task", payload: {action: "update"}})).not.toThrow()
+  })
 })

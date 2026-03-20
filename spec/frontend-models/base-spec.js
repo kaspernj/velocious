@@ -237,9 +237,11 @@ function stubFetch(responseBody) {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    url: undefined,
     credentials: undefined,
-    request: undefined
+    request: undefined,
+    shared: undefined,
+    url: undefined,
+    websocketClient: undefined
   })
 }
 
@@ -308,6 +310,172 @@ describe("Frontend models - base", () => {
     } finally {
       resetFrontendModelTransport()
       globalThis.fetch = originalFetch
+    }
+  })
+
+  it("batches custom commands through the shared frontend-model API", async () => {
+    const User = buildTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+        const body = JSON.parse(bodyString)
+        const requestId = body.requests?.[0]?.requestId
+
+        calls.push({
+          body,
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId,
+              response: {status: "success", value: "pong"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId,
+              response: {status: "success", value: "pong"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      const response = await User.executeCustomCommand({
+        commandName: "ping",
+        commandType: "ping",
+        memberId: 5,
+        payload: {name: "John"},
+        resourcePath: "/custom-frontend-models/users"
+      })
+
+      expect(calls).toEqual([
+        {
+          body: {
+            requests: [{
+              commandType: "ping",
+              customPath: "/custom-frontend-models/users/5/ping",
+              model: "User",
+              payload: {name: "John"},
+              requestId: calls[0].body.requests[0].requestId
+            }]
+          },
+          url: "/frontend-models"
+        }
+      ])
+      expect(response.status).toEqual("success")
+      expect(response.value).toEqual("pong")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("routes path-based frontend-model commands through the shared frontend-model API when shared transport is enabled", async () => {
+    const User = buildTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      FrontendModelBase.configureTransport({shared: true})
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+        const body = JSON.parse(bodyString)
+        const requestId = body.requests?.[0]?.requestId
+
+        calls.push({
+          body,
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId,
+              response: {models: [{email: "john@example.com", id: 5, name: "John"}], status: "success"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId,
+              response: {models: [{email: "john@example.com", id: 5, name: "John"}], status: "success"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      const users = await User.toArray()
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].url).toEqual("/frontend-models")
+      expect(calls[0].body.requests[0].commandType).toEqual("index")
+      expect(calls[0].body.requests[0].model).toEqual("User")
+      expect(users[0].id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("batches shared frontend-model API requests through a websocket client", async () => {
+    const User = buildTestModelClass()
+    /** @type {Array<{body: Record<string, any>, path: string}>} */
+    const calls = []
+
+    FrontendModelBase.configureTransport({
+      shared: true,
+      url: "https://example.test/frontend-models",
+      websocketClient: {
+        post: async (path, body) => {
+          calls.push({
+            body,
+            path
+          })
+
+          return {
+            json: () => ({
+              responses: (body.requests || []).map((requestEntry) => ({
+                requestId: requestEntry.requestId,
+                response: {models: [{email: "john@example.com", id: "5", name: "John"}], status: "success"}
+              })),
+              status: "success"
+            })
+          }
+        }
+      }
+    })
+
+    try {
+      const [firstResult, secondResult] = await Promise.all([
+        User.toArray(),
+        User.toArray()
+      ])
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].path).toEqual("/frontend-models")
+      expect(calls[0].body.requests).toHaveLength(2)
+      expect(firstResult[0].id()).toEqual("5")
+      expect(secondResult[0].name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
     }
   })
 
@@ -1317,7 +1485,7 @@ describe("Frontend models - base", () => {
   it("updates a model and refreshes local attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
-    const user = new User({email: "john@example.com", id: 5, name: "John"})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
 
     try {
       await user.update({name: "John Changed"})
@@ -1325,7 +1493,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            attributes: {email: "john@example.com", id: 5, name: "John Changed"},
+            attributes: {name: "John Changed"},
             id: 5
           },
           url: "/api/frontend-models/users/update"
@@ -1342,7 +1510,7 @@ describe("Frontend models - base", () => {
   it("includes previously staged attributes in update payloads", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
-    const user = new User({email: "john@example.com", id: 5, name: "John"})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
 
     try {
       user.setAttribute("email", "staged@example.com")
@@ -1352,7 +1520,30 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            attributes: {email: "staged@example.com", id: 5, name: "John Changed"},
+            attributes: {email: "staged@example.com", name: "John Changed"},
+            id: 5
+          },
+          url: "/api/frontend-models/users/update"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("does not include unchanged read-only response attributes in update payloads", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, membersCount: 2, name: "John"}})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, membersCount: 2, name: "John"})
+
+    try {
+      await user.update({name: "John Changed"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {name: "John Changed"},
             id: 5
           },
           url: "/api/frontend-models/users/update"
@@ -1394,6 +1585,74 @@ describe("Frontend models - base", () => {
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
+    }
+  })
+
+  it("falls back to direct HTTP attachment uploads for attachment updates when shared websocket transport is enabled", async () => {
+    const Task = buildAttachmentTestModelClass()
+    const task = new Task({id: 10, name: "Task"})
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const fetchCalls = []
+    /** @type {Array<{path: string, body: Record<string, any>}>} */
+    const websocketCalls = []
+
+    try {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        websocketClient: {
+          post: async (path, body) => {
+            websocketCalls.push({body, path})
+
+            return {
+              json: () => ({responses: [], status: "success"})
+            }
+          }
+        }
+      })
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+
+        fetchCalls.push({
+          body: JSON.parse(bodyString),
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({model: {id: 10, name: "Task"}}),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({model: {id: 10, name: "Task"}})
+        }
+      })
+
+      await task.update({
+        descriptionFile: {
+          contentBase64: "YQ==",
+          filename: "a.txt"
+        }
+      })
+
+      expect(websocketCalls).toEqual([])
+      expect(fetchCalls).toEqual([
+        {
+          body: {
+            attachment: {
+              contentBase64: "YQ==",
+              contentType: null,
+              filename: "a.txt"
+            },
+            attachmentName: "descriptionFile",
+            id: 10
+          },
+          url: "/api/frontend-models/tasks/attach"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
     }
   })
 
@@ -1473,6 +1732,72 @@ describe("Frontend models - base", () => {
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
+    }
+  })
+
+  it("falls back to direct HTTP for attachment uploads when shared websocket transport is enabled", async () => {
+    const Task = buildAttachmentTestModelClass()
+    const task = new Task({id: 10, name: "Task"})
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const fetchCalls = []
+    /** @type {Array<{path: string, body: Record<string, any>}>} */
+    const websocketCalls = []
+
+    try {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        websocketClient: {
+          post: async (path, body) => {
+            websocketCalls.push({body, path})
+
+            return {
+              json: () => ({responses: [], status: "success"})
+            }
+          }
+        }
+      })
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+
+        fetchCalls.push({
+          body: JSON.parse(bodyString),
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({model: {id: 10, name: "Task"}}),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({model: {id: 10, name: "Task"}})
+        }
+      })
+
+      await task.descriptionFile().attach({
+        contentBase64: "YQ==",
+        filename: "a.txt"
+      })
+
+      expect(websocketCalls).toEqual([])
+      expect(fetchCalls).toEqual([
+        {
+          body: {
+            attachment: {
+              contentBase64: "YQ==",
+              contentType: null,
+              filename: "a.txt"
+            },
+            attachmentName: "descriptionFile",
+            id: 10
+          },
+          url: "/api/frontend-models/tasks/attach"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
     }
   })
 

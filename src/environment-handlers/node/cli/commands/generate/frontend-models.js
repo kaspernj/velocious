@@ -1,7 +1,7 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
-import {frontendModelResourceConfigurationFromDefinition} from "../../../../../frontend-models/resource-definition.js"
+import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
@@ -125,17 +125,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * @param {{frontendModels?: Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>, resources?: Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>}} backendProject - Backend project config.
+   * @param {import("../../../../../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
    * @returns {Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>} - Resource definitions keyed by model class name.
    */
   resourcesForBackendProject(backendProject) {
-    const resources = backendProject.frontendModels || backendProject.resources || {}
-
-    if (!resources || typeof resources !== "object") {
-      throw new Error(`Expected backend project resources object but got: ${resources}`)
-    }
-
-    return resources
+    return frontendModelResourcesForBackendProject(backendProject)
   }
 
   /**
@@ -186,7 +180,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {string} - Generated file content.
    */
   buildModelFileContent({className, importPath, modelClass, modelConfig}) {
-    const attributes = this.attributeDefinitionsForModel(modelConfig)
+    const attributes = this.attributeDefinitionsForModel({modelClass, modelConfig})
     const relationships = this.relationshipsForModel(modelConfig)
     const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
       ? modelConfig.attachments
@@ -231,7 +225,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], collectionCommands: {create: string, index: string}, memberCommands: {destroy: string, find: string, update: string}}} - Resource config. */\n"
+    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], collectionCommands?: {create: string, index: string}, memberCommands?: {destroy: string, find: string, update: string}}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     if (Object.keys(attachments).length > 0) {
@@ -391,15 +385,19 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * @param {Record<string, any>} modelConfig - Model configuration.
+   * @param {object} args - Arguments.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
+   * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @returns {Array<{jsDocType: string, name: string}>} - Attribute definitions.
    */
-  attributeDefinitionsForModel(modelConfig) {
+  attributeDefinitionsForModel({modelClass, modelConfig}) {
     const attributes = modelConfig.attributes
 
     if (Array.isArray(attributes)) {
       return attributes.map((attributeName) => ({
-        jsDocType: "any",
+        jsDocType: this.jsDocTypeForFrontendAttribute({
+          attributeConfig: this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
+        }),
         name: attributeName
       }))
     }
@@ -446,13 +444,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     if (type == "boolean") {
       return "boolean"
-    } else if (type == "json") {
+    } else if (type == "json" || type == "jsonb") {
       return "Record<string, any>"
     } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
-    } else if (["bit", "bigint", "float", "int", "integer", "smallint", "tinyint"].includes(type)) {
+    } else if (["bit", "bigint", "decimal", "double", "double precision", "float", "int", "integer", "numeric", "real", "smallint", "tinyint"].includes(type)) {
       return "number"
-    } else if (["date", "datetime", "timestamp without time zone"].includes(type)) {
+    } else if (["date", "datetime", "timestamp", "timestamp without time zone", "timestamptz"].includes(type)) {
       return "Date"
     } else {
       return "any"
@@ -466,6 +464,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   frontendAttributeCanBeNull(attributeConfig) {
     if (!attributeConfig || typeof attributeConfig !== "object") {
       return false
+    }
+
+    if (typeof attributeConfig.getNull == "function") {
+      return attributeConfig.getNull() === true
     }
 
     return attributeConfig.null === true
@@ -491,6 +493,26 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return typeValue
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {string} args.attributeName - Frontend model attribute name.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
+   * @returns {any} - Attribute config inferred from the backend model when available.
+   */
+  frontendAttributeConfigForModelAttribute({attributeName, modelClass}) {
+    if (!modelClass) {
+      return null
+    }
+
+    const columnName = modelClass.getAttributeNameToColumnNameMap()[attributeName]
+
+    if (!columnName) {
+      return null
+    }
+
+    return modelClass.getColumnsHash()[columnName] || null
   }
 
   /**

@@ -816,6 +816,12 @@ class VelociousDatabaseRecord {
    * @returns {string} - The database identifier.
    */
   static getDatabaseIdentifier() {
+    const tenantDatabaseIdentifier = this.getTenantDatabaseIdentifier()
+
+    if (tenantDatabaseIdentifier) {
+      return tenantDatabaseIdentifier
+    }
+
     return this._databaseIdentifier || "default"
   }
 
@@ -825,6 +831,36 @@ class VelociousDatabaseRecord {
    */
   static setDatabaseIdentifier(databaseIdentifier) {
     this._databaseIdentifier = databaseIdentifier
+  }
+
+  /**
+   * Declares a tenant-aware database identifier resolver for this model class.
+   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: unknown}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
+   * @returns {void} - No return value.
+   */
+  static switchesTenantDatabase(databaseIdentifierOrResolver) {
+    this._tenantDatabaseIdentifierResolver = databaseIdentifierOrResolver
+  }
+
+  /**
+   * @param {unknown} [tenant] - Tenant override.
+   * @returns {string | undefined} - Tenant-scoped database identifier when configured.
+   */
+  static getTenantDatabaseIdentifier(tenant = Current.tenant()) {
+    const tenantDatabaseIdentifierResolver = this._tenantDatabaseIdentifierResolver
+
+    if (!tenantDatabaseIdentifierResolver) {
+      return
+    }
+
+    if (typeof tenantDatabaseIdentifierResolver === "function") {
+      return tenantDatabaseIdentifierResolver({
+        modelClass: this,
+        tenant
+      })
+    }
+
+    return tenantDatabaseIdentifierResolver
   }
 
   /**

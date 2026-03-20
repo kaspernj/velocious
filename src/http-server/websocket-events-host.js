@@ -17,12 +17,14 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
-   * @param {object} args - Options object.
-   * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Payload data.
+   * @param {object | string} channelOrArgs - Channel name or options object.
+   * @param {any} [payloadArg] - Payload data when channel is passed separately.
    * @returns {void} - No return value.
    */
-  publish({channel, payload}) {
+  publish(channelOrArgs, payloadArg) {
+    const channel = typeof channelOrArgs === "string" ? channelOrArgs : channelOrArgs.channel
+    const payload = typeof channelOrArgs === "string" ? payloadArg : channelOrArgs.payload
+
     for (const handler of this.handlers) {
       handler.dispatchWebsocketEvent({channel, payload})
     }
@@ -32,4 +34,3 @@ export class VelociousHttpServerWebsocketEventsHost {
 const websocketEventsHost = new VelociousHttpServerWebsocketEventsHost()
 
 export default websocketEventsHost
-

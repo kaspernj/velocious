@@ -5,6 +5,52 @@ import FrontendModelBaseResource from "../frontend-model-resource/base-resource.
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 
 /**
+ * @param {import("../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
+ * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
+ */
+export function frontendModelResourcesForBackendProject(backendProject) {
+  const resources = backendProject.frontendModels || backendProject.resources
+
+  if (resources !== undefined) {
+    if (!resources || typeof resources !== "object") {
+      throw new Error(`Expected backend project resources object but got: ${resources}`)
+    }
+
+    return resources
+  }
+
+  const resourcesRequireContext = backendProject.frontendModelsRequireContext || backendProject.resourcesRequireContext
+
+  if (resourcesRequireContext === undefined) {
+    return {}
+  }
+
+  if (typeof resourcesRequireContext !== "function" || typeof resourcesRequireContext.keys !== "function") {
+    throw new Error("Expected backend project resourcesRequireContext to be a webpack-style require context")
+  }
+
+  /** @type {Record<string, typeof FrontendModelBaseResource>} */
+  const resolvedResources = {}
+
+  for (const resourcePath of resourcesRequireContext.keys()) {
+    const importedModule = resourcesRequireContext(resourcePath)
+    const resourceDefinition = importedModule?.default
+
+    if (!frontendModelResourceDefinitionIsClass(resourceDefinition)) continue
+
+    const modelName = frontendModelModelNameFromResourcePath(resourcePath, resourceDefinition)
+
+    if (resolvedResources[modelName]) {
+      throw new Error(`Duplicate frontend model resource definition for '${modelName}' from '${resourcePath}'`)
+    }
+
+    resolvedResources[modelName] = resourceDefinition
+  }
+
+  return resolvedResources
+}
+
+/**
  * @param {unknown} value - Candidate resource definition.
  * @returns {value is typeof FrontendModelBaseResource} - Whether value is a resource class.
  */
@@ -232,4 +278,36 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
   }
 
   return null
+}
+
+/**
+ * Prefer configured resource paths, then fall back to an `index.js`-aware require-context path heuristic so layouts like `./users/index.js` still resolve to `User`.
+ * @param {string} resourcePath - Require-context resource path.
+ * @param {typeof FrontendModelBaseResource} resourceDefinition - Frontend-model resource class.
+ * @returns {string} - Backing model class name.
+ */
+function frontendModelModelNameFromResourcePath(resourcePath, resourceDefinition) {
+  const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+  const configuredPath = resourceConfiguration?.path
+
+  if (configuredPath) {
+    const configuredSegments = configuredPath.split("/").filter(Boolean)
+    const configuredModelSegment = configuredSegments.at(-1)
+
+    if (configuredModelSegment) {
+      return inflection.camelize(inflection.singularize(configuredModelSegment))
+    }
+  }
+
+  const pathWithoutPrefix = resourcePath.replace(/^\.\//, "")
+  const pathWithoutExtension = pathWithoutPrefix.replace(/\.[^.]+$/, "")
+  const pathSegments = pathWithoutExtension.split("/").filter(Boolean)
+  const lastSegment = pathSegments.at(-1)
+  const modelSegment = lastSegment === "index" ? pathSegments.at(-2) : lastSegment
+
+  if (!modelSegment) {
+    throw new Error(`Could not infer frontend model name from resource path '${resourcePath}'`)
+  }
+
+  return inflection.camelize(inflection.singularize(modelSegment))
 }

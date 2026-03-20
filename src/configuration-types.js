@@ -228,7 +228,9 @@
  * @property {string} path - Path to the backend project.
  * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
  * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Frontend model definitions keyed by model class name.
+ * @property {{(id: string): {default?: unknown}, keys: () => string[]}} [frontendModelsRequireContext] - Webpack-style require context for frontend model resource files.
  * @property {Record<string, FrontendModelResourceDefinition>} [resources] - Alias for `frontendModels`.
+ * @property {{(id: string): {default?: unknown}, keys: () => string[]}} [resourcesRequireContext] - Alias for `frontendModelsRequireContext`.
  */
 
 /**
@@ -264,6 +266,14 @@
  */
 
 /**
+ * @typedef {function({configuration: import("./configuration.js").default, params: Record<string, any>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, response: import("./http-server/client/response.js").default | undefined, subscription?: {channel: string, params?: Record<string, unknown>}}) : unknown | void | Promise<unknown | void>} TenantResolverType
+ */
+
+/**
+ * @typedef {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : DatabaseConfigurationType | Partial<DatabaseConfigurationType> | void} TenantDatabaseResolverType
+ */
+
+/**
  * @typedef {object} ConfigurationArgsType
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
  * @property {string} [cookieSecret] - Secret for encrypting cookies.
@@ -285,6 +295,8 @@
  * @property {string[]} locales - Supported locales.
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
  * @property {StructureSqlConfiguration} [structureSql] - Structure SQL generation configuration.
+ * @property {TenantResolverType} [tenantResolver] - Resolver for creating request-scoped tenant context objects.
+ * @property {TenantDatabaseResolverType} [tenantDatabaseResolver] - Resolver for deriving tenant-specific database config overrides.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.

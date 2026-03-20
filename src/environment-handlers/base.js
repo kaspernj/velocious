@@ -89,6 +89,36 @@ export default class VelociousEnvironmentHandlerBase {
   getCurrentAbility() {
     return this._currentAbility
   }
+
+  /**
+   * @param {unknown} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithTenant(tenant, callback) {
+    this._currentTenant = tenant
+
+    try {
+      return await callback()
+    } finally {
+      this._currentTenant = undefined
+    }
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentTenant(tenant) {
+    this._currentTenant = tenant
+  }
+
+  /**
+   * @returns {unknown} - Current tenant.
+   */
+  getCurrentTenant() {
+    return this._currentTenant
+  }
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.
