@@ -10,6 +10,7 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import fs from "fs/promises"
 import path from "node:path"
+import TableColumn from "../../../../src/database/table-data/table-column.js"
 
 class CallFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
@@ -77,6 +78,32 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
 class User extends DatabaseRecord {}
 User.setPrimaryKey("reference")
 
+class Call extends DatabaseRecord {}
+
+/**
+ * @param {Record<string, {default?: unknown}>} modules - Modules keyed by require-context path.
+ * @returns {{(id: string): {default?: unknown}, keys: () => string[]}} - Webpack-style require context.
+ */
+function buildRequireContext(modules) {
+  /**
+   * @param {string} id - Module id.
+   * @returns {{default?: unknown}} - Imported module.
+   */
+  function requireContext(id) {
+    const loadedModule = modules[id]
+
+    if (!loadedModule) {
+      throw new Error(`Missing module in require context: ${id}`)
+    }
+
+    return loadedModule
+  }
+
+  requireContext.keys = () => Object.keys(modules)
+
+  return requireContext
+}
+
 /**
  * @param {object} args - Build args.
  * @param {import("../../../../src/configuration-types.js").BackendProjectConfiguration[]} [args.backendProjectsList] - Backend projects.
@@ -119,6 +146,8 @@ describe("Cli - generate - frontend-models", () => {
     const userContents = await fs.readFile(userPath, "utf8")
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
+    expect(taskContents).toContain("collectionCommands?: {create: string, index: string}")
+    expect(taskContents).toContain("memberCommands?: {destroy: string, find: string, update: string}")
     expect(taskContents.includes("path:")).toEqual(false)
     expect(taskContents).toContain("attributes: [\n")
     expect(taskContents).toContain("      \"id\",\n")
@@ -184,6 +213,56 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {Date | null} endedAt - Attribute value.")
   })
 
+  it("infers typed attribute typedefs from backend model columns for array attributes", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    Call._initialized = true
+    Call._columns = [
+      new TableColumn("id", {null: false, type: "uuid"}),
+      new TableColumn("started_at", {null: true, type: "datetime"}),
+      new TableColumn("duration_seconds", {null: false, type: "integer"}),
+      new TableColumn("metadata", {null: true, type: "json"}),
+      new TableColumn("active", {null: false, type: "boolean"})
+    ]
+    Call._columnsAsHash = {}
+    Call._columnTypeByName = {}
+    Call._attributeNameToColumnName = {
+      active: "active",
+      durationSeconds: "duration_seconds",
+      id: "id",
+      metadata: "metadata",
+      startedAt: "started_at"
+    }
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resources: {
+            Call: CallFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          Call._configuration = configuration
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("@property {string} id - Attribute value.")
+    expect(callContents).toContain("@property {Date | null} startedAt - Attribute value.")
+    expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
+    expect(callContents).toContain("@property {Record<string, any> | null} metadata - Attribute value.")
+    expect(callContents).toContain("@property {boolean} active - Attribute value.")
+  })
+
   it("fails when no backend projects are configured", async () => {
     const cli = new Cli({
       configuration: buildConfiguration(),
@@ -215,6 +294,32 @@ describe("Cli - generate - frontend-models", () => {
     })
 
     await cli.execute()
+  })
+
+  it("generates frontend models from backend project resource require contexts", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          resourcesRequireContext: buildRequireContext({
+            "./call.js": {default: CallFrontendResource},
+            "./helper.js": {default: {not: "a resource"}}
+          })
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("class Call extends FrontendModelBase")
   })
 
   it("fails when a relationship target has no frontend model resource", async () => {

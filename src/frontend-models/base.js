@@ -3,8 +3,10 @@
 import FrontendModelQuery from "./query.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {frontendModelCustomCommandUrl} from "../utils/frontend-model-custom-command.js"
 
 /** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
+/** @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
 /**
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
@@ -15,7 +17,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. For shared-endpoint models this should be the full shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`). For legacy direct-resource models this can be the backend origin/prefix.
  * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
- * @property {((args: {commandName: string, commandType: FrontendModelCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
+ * @property {((args: {commandName: string, commandType: FrontendModelRequestCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -1774,22 +1776,7 @@ export default class FrontendModelBase {
       : frontendModelApiUrl()
 
     if (frontendModelTransportConfig.request) {
-      const customResponse = await frontendModelTransportConfig.request({
-        commandName,
-        commandType,
-        modelClass: this,
-        payload: serializedPayload,
-        url
-      })
-
-      const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
-
-      this.throwOnErrorFrontendModelResponse({
-        commandType,
-        response: decodedResponse
-      })
-
-      return decodedResponse
+      return await this.performTransportRequest({commandName, commandType, payload: serializedPayload, url})
     }
 
     if (!resourcePath) {
@@ -1843,8 +1830,84 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
+   * @param {object} args - Command arguments.
+   * @param {string} args.commandName - Raw command path segment.
+   * @param {FrontendModelRequestCommandType} args.commandType - Logical command type for error handling.
+   * @param {string | number | null} [args.memberId] - Optional member id for member-scoped commands.
+   * @param {Record<string, any>} args.payload - Request payload.
+   * @param {string} args.resourcePath - Direct resource path.
+   * @returns {Promise<Record<string, any>>} - Decoded response payload.
+   */
+  static async executeCustomCommand({commandName, commandType, memberId = null, payload, resourcePath}) {
+    const serializedPayload = /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(payload))
+    const url = frontendModelCustomCommandUrl({
+      commandName,
+      memberId,
+      modelName: this.name,
+      resourcePath
+    })
+
+    if (frontendModelTransportConfig.request) {
+      return await this.performTransportRequest({commandName, commandType, payload: serializedPayload, url})
+    }
+
+    const response = await fetch(url, {
+      body: JSON.stringify(serializedPayload),
+      credentials: frontendModelTransportConfig.credentials,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    })
+
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status}) for ${this.name}#${commandType}`)
+    }
+
+    const responseText = await response.text()
+    const json = responseText.length > 0 ? JSON.parse(responseText) : {}
+    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
+
+    this.throwOnErrorFrontendModelResponse({
+      commandType,
+      response: decodedResponse
+    })
+
+    return decodedResponse
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {object} args - Request arguments.
+   * @param {string} args.commandName - Transport command name.
+   * @param {FrontendModelRequestCommandType} args.commandType - Logical command type.
+   * @param {Record<string, any>} args.payload - Serialized payload.
+   * @param {string} args.url - Request URL.
+   * @returns {Promise<Record<string, any>>} - Decoded response payload.
+   */
+  static async performTransportRequest({commandName, commandType, payload, url}) {
+    const customResponse = await frontendModelTransportConfig.request({
+      commandName,
+      commandType,
+      modelClass: this,
+      payload,
+      url
+    })
+
+    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
+
+    this.throwOnErrorFrontendModelResponse({
+      commandType,
+      response: decodedResponse
+    })
+
+    return decodedResponse
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
    * @param {object} args - Arguments.
-   * @param {FrontendModelCommandType} args.commandType - Command type.
+   * @param {FrontendModelRequestCommandType} args.commandType - Command type.
    * @param {Record<string, any>} args.response - Decoded response.
    * @returns {void}
    */

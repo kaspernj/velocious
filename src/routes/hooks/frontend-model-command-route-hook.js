@@ -1,6 +1,6 @@
 // @ts-check
 
-import {frontendModelActionForCommand, frontendModelResourcePath} from "../../frontend-models/resource-definition.js"
+import {frontendModelActionForCommand, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "../../frontend-models/resource-definition.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const SHARED_FRONTEND_MODEL_REQUEST_PATH = "/frontend-models/request"
@@ -31,7 +31,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   const backendProjects = configuration.getBackendProjects?.() || []
 
   for (const backendProject of backendProjects) {
-    const resources = backendProject.frontendModels || backendProject.resources || {}
+    const resources = frontendModelResourcesForBackendProject(backendProject)
 
     for (const modelName in resources) {
       const resourceDefinition = resources[modelName]

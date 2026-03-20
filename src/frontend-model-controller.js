@@ -2,7 +2,7 @@
 
 import Controller from "./controller.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
-import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath} from "./frontend-models/resource-definition.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import VelociousError from "./velocious-error.js"
 
@@ -1005,7 +1005,7 @@ export default class FrontendModelController extends Controller {
     const backendProjects = this.getConfiguration().getBackendProjects()
 
     for (const backendProject of backendProjects) {
-      const resources = backendProject.frontendModels || backendProject.resources || {}
+      const resources = frontendModelResourcesForBackendProject(backendProject)
 
       if (modelName && modelName.length > 0 && resources[modelName]) {
         const resourceDefinition = resources[modelName]
@@ -1060,7 +1060,7 @@ export default class FrontendModelController extends Controller {
 
     if (!frontendModelResource) return null
 
-    const resources = frontendModelResource.backendProject.frontendModels || frontendModelResource.backendProject.resources || {}
+    const resources = frontendModelResourcesForBackendProject(frontendModelResource.backendProject)
     const resourceDefinition = resources[modelClass.name]
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
     const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
