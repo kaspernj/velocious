@@ -24,6 +24,28 @@ class CurrentConfigurationNotSetError extends Error {}
 
 export {CurrentConfigurationNotSetError}
 
+/**
+ * @param {import("./configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Base database configuration.
+ * @param {import("./configuration-types.js").DatabaseConfigurationType | Partial<import("./configuration-types.js").DatabaseConfigurationType> | void} overrideConfiguration - Tenant override configuration.
+ * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Merged database configuration.
+ */
+function mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration) {
+  if (!overrideConfiguration) return databaseConfiguration
+
+  return {
+    ...databaseConfiguration,
+    ...overrideConfiguration,
+    record: {
+      ...(databaseConfiguration.record || {}),
+      ...(overrideConfiguration.record || {})
+    },
+    sqlConfig: {
+      ...(databaseConfiguration.sqlConfig || {}),
+      ...(overrideConfiguration.sqlConfig || {})
+    }
+  }
+}
+
 export default class VelociousConfiguration {
   _closeDatabaseConnectionsPromise = null
   /** @returns {VelociousConfiguration} - The current.  */
@@ -34,7 +56,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, structureSql, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -59,6 +81,8 @@ export default class VelociousConfiguration {
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._requestTimeoutMs = requestTimeoutMs
     this._structureSql = structureSql
+    this._tenantDatabaseResolver = tenantDatabaseResolver
+    this._tenantResolver = tenantResolver
     this._websocketEvents = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
@@ -95,6 +119,32 @@ export default class VelociousConfiguration {
     }
 
     return digg(this, "database", this.getEnvironment())
+  }
+
+  /**
+   * @param {string} identifier - Identifier.
+   * @param {unknown} [tenant] - Tenant override.
+   * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Resolved database configuration for the identifier.
+   */
+  resolveDatabaseConfiguration(identifier, tenant = this.getCurrentTenant()) {
+    const databaseConfiguration = this.getDatabaseConfiguration()[identifier]
+
+    if (!databaseConfiguration) {
+      throw new Error(`No such database identifier configured: ${identifier}`)
+    }
+
+    if (tenant === undefined || !this._tenantDatabaseResolver) {
+      return databaseConfiguration
+    }
+
+    const overrideConfiguration = this._tenantDatabaseResolver({
+      configuration: this,
+      databaseConfiguration,
+      identifier,
+      tenant
+    })
+
+    return mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration)
   }
 
   /** @returns {Array<string>} - The database identifiers.  */
@@ -137,9 +187,7 @@ export default class VelociousConfiguration {
    * @returns {import("./configuration-types.js").DatabaseConfigurationType})
    */
   getDatabaseIdentifier(identifier) {
-    if (!this.getDatabaseConfiguration()[identifier]) throw new Error(`No such database identifier configured: ${identifier}`)
-
-    return this.getDatabaseConfiguration()[identifier]
+    return this.resolveDatabaseConfiguration(identifier)
   }
 
   /**
@@ -192,6 +240,12 @@ export default class VelociousConfiguration {
   /** @returns {import("./configuration-types.js").AbilityResolverType | undefined} - Ability resolver. */
   getAbilityResolver() { return this._abilityResolver }
 
+  /** @returns {import("./configuration-types.js").TenantResolverType | undefined} - Tenant resolver. */
+  getTenantResolver() { return this._tenantResolver }
+
+  /** @returns {import("./configuration-types.js").TenantDatabaseResolverType | undefined} - Tenant database resolver. */
+  getTenantDatabaseResolver() { return this._tenantDatabaseResolver }
+
   /** @returns {import("./configuration-types.js").AttachmentsConfiguration} - Attachments configuration. */
   getAttachmentsConfiguration() { return this._attachments || {} }
 
@@ -211,6 +265,18 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   setAbilityResolver(resolver) { this._abilityResolver = resolver }
+
+  /**
+   * @param {import("./configuration-types.js").TenantResolverType | undefined} resolver - Tenant resolver.
+   * @returns {void} - No return value.
+   */
+  setTenantResolver(resolver) { this._tenantResolver = resolver }
+
+  /**
+   * @param {import("./configuration-types.js").TenantDatabaseResolverType | undefined} resolver - Tenant database resolver.
+   * @returns {void} - No return value.
+   */
+  setTenantDatabaseResolver(resolver) { this._tenantDatabaseResolver = resolver }
 
   /**
    * @returns {string} - The environment.
@@ -715,6 +781,44 @@ export default class VelociousConfiguration {
     return this.getEnvironmentHandler().getCurrentAbility()
   }
 
+  /**
+   * @returns {unknown} - Current tenant from context.
+   */
+  getCurrentTenant() {
+    return this.getEnvironmentHandler().getCurrentTenant()
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithTenant(tenant, callback) {
+    return await this.getEnvironmentHandler().runWithTenant(tenant, callback)
+  }
+
+  /**
+   * @param {object} args - Tenant resolver args.
+   * @param {Record<string, any>} args.params - Request params.
+   * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined} args.request - Request object.
+   * @param {import("./http-server/client/response.js").default | undefined} args.response - Response object.
+   * @param {{channel: string, params?: Record<string, unknown>}} [args.subscription] - Subscription metadata.
+   * @returns {Promise<unknown>} - Resolved tenant.
+   */
+  async resolveTenant({params, request, response, subscription}) {
+    const resolver = this.getTenantResolver()
+
+    if (!resolver) return
+
+    return await resolver({
+      configuration: this,
+      params,
+      request,
+      response,
+      subscription
+    })
+  }
+
   /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
   getErrorEvents() {
     return this._errorEvents
@@ -766,7 +870,7 @@ export default class VelociousConfiguration {
         const pool = this.getDatabasePool(identifier)
         const currentConnection = pool.getCurrentContextConnection ? pool.getCurrentContextConnection() : pool.getCurrentConnection()
 
-        if (currentConnection) {
+        if (currentConnection && (!pool.connectionMatchesCurrentConfiguration || pool.connectionMatchesCurrentConfiguration(currentConnection))) {
           dbs[identifier] = currentConnection
         }
       } catch (error) {

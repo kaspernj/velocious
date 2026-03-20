@@ -228,7 +228,8 @@ export default class VelociousHttpServerWorker {
    * @returns {void} - No return value.
    */
   dispatchWebsocketEvent({channel, payload}) {
-    if (!this.worker) return
+    // Test and shutdown paths can leave a registered handler without a live worker-thread transport.
+    if (!this.worker || typeof this.worker.postMessage !== "function") return
 
     this.worker.postMessage({channel, command: "websocketEvent", payload})
   }

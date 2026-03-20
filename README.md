@@ -1554,3 +1554,32 @@ Or require explicit ability passing:
 ```js
 const users = await User.accessibleBy(ability).toArray()
 ```
+
+# Tenant / elevator support
+
+Velocious can resolve a request-scoped tenant and override configured database identifiers per tenant for HTTP routes, websocket subscriptions, and websocket event delivery.
+
+```js
+import Configuration from "velocious/build/src/configuration.js"
+
+export default new Configuration({
+  // ...
+  tenantResolver: async ({params, subscription}) => {
+    const projectSlug = subscription?.params?.project_slug || params.project_slug
+
+    if (!projectSlug) return
+
+    return {
+      databaseIdentifiers: ["auditTenant"],
+      projectSlug
+    }
+  },
+  tenantDatabaseResolver: ({databaseConfiguration, identifier, tenant}) => {
+    if (identifier !== "auditTenant" || !tenant?.projectSlug) return
+
+    return {name: `${databaseConfiguration.name}-${tenant.projectSlug}`}
+  }
+})
+```
+
+Use `configuration.runWithTenant(tenant, callback)` or `Current.tenant()` when custom model/database routing needs to read the active tenant manually.

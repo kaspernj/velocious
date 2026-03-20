@@ -73,6 +73,27 @@ export default class VelociousRoutesResolver {
     this.response = response
   }
 
+  /**
+   * @returns {Record<string, string>} - Flat query params for tenant/ability resolution.
+   */
+  queryParameters() {
+    const query = this.request.path().split("?")[1]
+
+    if (!query) return {}
+
+    /** @type {Record<string, string>} */
+    const params = {}
+    const searchParams = new URLSearchParams(query)
+
+    for (const [key, value] of searchParams.entries()) {
+      if (params[key] === undefined) {
+        params[key] = value
+      }
+    }
+
+    return params
+  }
+
   async resolve() {
     this.routeHookControllerClass = undefined
     let controllerPath
@@ -150,16 +171,24 @@ export default class VelociousRoutesResolver {
     await this._logActionStart({action, controllerClass})
 
     try {
-      await this.configuration.ensureConnections(async () => {
-        const ability = await this.configuration.resolveAbility({
-          params: this.params,
-          request: this.request,
-          response: this.response
-        })
+      const tenant = await this.configuration.resolveTenant({
+        params: {...this.queryParameters(), ...this.params},
+        request: this.request,
+        response: this.response
+      })
 
-        await this.configuration.runWithAbility(ability, async () => {
-          await controllerInstance._runBeforeCallbacks()
-          await controllerInstance[action]()
+      await this.configuration.runWithTenant(tenant, async () => {
+        await this.configuration.ensureConnections(async () => {
+          const ability = await this.configuration.resolveAbility({
+            params: this.params,
+            request: this.request,
+            response: this.response
+          })
+
+          await this.configuration.runWithAbility(ability, async () => {
+            await controllerInstance._runBeforeCallbacks()
+            await controllerInstance[action]()
+          })
         })
       })
     } catch (error) {

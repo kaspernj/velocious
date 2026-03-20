@@ -1,0 +1,1 @@
+Tenant/elevator support now works across HTTP routes, websocket subscriptions, shared batched frontend-model API requests, and per-tenant database overrides. Velocious can resolve a request-scoped tenant, switch database configs per tenant, and avoid reusing pinned connections when nested async contexts switch tenants.

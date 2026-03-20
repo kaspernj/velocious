@@ -28,7 +28,7 @@ import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 
-/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number}} TimezoneStore */
+/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, tenant?: unknown}} TimezoneStore */
 
 /**
  * @param {string} filePath - Input file path.
@@ -139,7 +139,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     return await this._timezoneAsyncLocalStorage.run({
       ability: existingStore?.ability,
-      offsetMinutes
+      offsetMinutes,
+      tenant: existingStore?.tenant
     }, callback)
   }
 
@@ -159,7 +160,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
       this._timezoneAsyncLocalStorage.enterWith({
         ability: existingStore?.ability,
-        offsetMinutes
+        offsetMinutes,
+        tenant: existingStore?.tenant
       })
     }
   }
@@ -194,7 +196,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     return await this._timezoneAsyncLocalStorage.run({
       ability,
-      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration())
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      tenant: existingStore?.tenant
     }, callback)
   }
 
@@ -215,7 +218,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     } else {
       this._timezoneAsyncLocalStorage.enterWith({
         ability,
-        offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration())
+        offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
+        tenant: existingStore?.tenant
       })
     }
   }
@@ -229,6 +233,59 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     }
 
     return this._timezoneAsyncLocalStorage.getStore()?.ability
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithTenant(tenant, callback) {
+    if (!this._timezoneAsyncLocalStorage) {
+      return await super.runWithTenant(tenant, callback)
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    return await this._timezoneAsyncLocalStorage.run({
+      ability: existingStore?.ability,
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      tenant
+    }, callback)
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentTenant(tenant) {
+    if (!this._timezoneAsyncLocalStorage) {
+      super.setCurrentTenant(tenant)
+      return
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    if (existingStore) {
+      existingStore.tenant = tenant
+    } else {
+      this._timezoneAsyncLocalStorage.enterWith({
+        ability: undefined,
+        offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
+        tenant
+      })
+    }
+  }
+
+  /**
+   * @returns {unknown} - Current tenant.
+   */
+  getCurrentTenant() {
+    if (!this._timezoneAsyncLocalStorage) {
+      return super.getCurrentTenant()
+    }
+
+    return this._timezoneAsyncLocalStorage.getStore()?.tenant
   }
 
   /**

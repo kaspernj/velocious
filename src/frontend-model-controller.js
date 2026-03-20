@@ -985,6 +985,36 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @template T
+   * @param {Record<string, any>} params - Request-scoped params.
+   * @param {import("./http-server/client/response.js").default} response - Response instance.
+   * @param {() => Promise<T>} callback - Callback executed inside resolved tenant and ability context.
+   * @returns {Promise<T>} - Callback return value.
+   */
+  async withFrontendModelRequestContext(params, response, callback) {
+    const configuration = this.getConfiguration()
+    const tenant = await configuration.resolveTenant({
+      params,
+      request: this.request(),
+      response
+    })
+
+    return await configuration.runWithTenant(tenant, async () => {
+      return await configuration.ensureConnections(async () => {
+        const ability = await configuration.resolveAbility({
+          params,
+          request: this.request(),
+          response
+        })
+
+        return await configuration.runWithAbility(ability, async () => {
+          return await callback()
+        })
+      })
+    })
+  }
+
+  /**
    * @returns {typeof import("./database/record/index.js").default} - Frontend model class for controller resource actions.
    */
   frontendModelClass() {
@@ -2560,7 +2590,9 @@ export default class FrontendModelController extends Controller {
           }
 
           responsePayload = await this.withFrontendModelParams(commandParams, async () => {
-            return await this.frontendModelCommandPayload(commandType)
+            return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
+              return await this.frontendModelCommandPayload(commandType)
+            })
           })
         } else {
           responsePayload = await this.frontendApiCustomCommandPayload({
@@ -2651,17 +2683,9 @@ export default class FrontendModelController extends Controller {
       viewPath
     })
 
-    await configuration.ensureConnections(async () => {
-      const ability = await configuration.resolveAbility({
-        params: controllerParams,
-        request: this.request(),
-        response
-      })
-
-      await configuration.runWithAbility(ability, async () => {
-        await controllerInstance._runBeforeCallbacks()
-        await controllerInstance[action]()
-      })
+    await this.withFrontendModelRequestContext(controllerParams, response, async () => {
+      await controllerInstance._runBeforeCallbacks()
+      await controllerInstance[action]()
     })
 
     const responseBody = response.getBody()

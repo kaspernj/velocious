@@ -14,6 +14,18 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
   async checkout() {
+    if (this.connection && !this.connectionMatchesCurrentConfiguration(this.connection)) {
+      const previousConnection = this.connection
+
+      this.connection = undefined
+
+      if (typeof previousConnection.close === "function") {
+        await previousConnection.close()
+      } else if (typeof previousConnection.disconnect === "function") {
+        await previousConnection.disconnect()
+      }
+    }
+
     if (!this.connection) {
       this.connection = await this.spawnConnection()
     }
