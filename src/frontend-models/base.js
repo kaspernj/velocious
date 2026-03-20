@@ -3,7 +3,6 @@
 import FrontendModelQuery from "./query.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
-import {frontendModelCustomCommandUrl} from "../utils/frontend-model-custom-command.js"
 
 /** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
 /** @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
@@ -17,7 +16,7 @@ import {frontendModelCustomCommandUrl} from "../utils/frontend-model-custom-comm
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. For shared-endpoint models this should be the full shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`). For legacy direct-resource models this can be the backend origin/prefix.
  * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
- * @property {((args: {commandName: string, commandType: FrontendModelRequestCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
+ * @property {((args: {commandName: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -25,7 +24,7 @@ const frontendModelTransportConfig = {}
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
-/** @type {Array<{commandType: FrontendModelCommandType, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
+/** @type {Array<{commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
@@ -549,6 +548,7 @@ async function flushPendingSharedFrontendModelRequests() {
   const requestPayload = {
     requests: batchedRequests.map((request) => ({
       commandType: request.commandType,
+      customPath: request.customPath,
       model: request.modelClass.name,
       payload: request.payload,
       requestId: request.requestId
@@ -600,6 +600,26 @@ function scheduleSharedFrontendModelRequestFlush() {
   queueMicrotask(() => {
     void flushPendingSharedFrontendModelRequests()
   })
+}
+
+/**
+ * Custom commands still use the shared frontend-model API. This helper only builds the backend route path the server should dispatch after validating the segments.
+ * @param {object} args - Arguments.
+ * @param {string} args.commandName - Command path segment.
+ * @param {string} args.modelName - Frontend model class name.
+ * @param {string | number | null | undefined} [args.memberId] - Optional member id.
+ * @param {string} args.resourcePath - Resource path prefix.
+ * @returns {string} - Custom backend route path.
+ */
+function frontendModelCustomCommandPath({commandName, memberId, modelName, resourcePath}) {
+  const validatedResourcePath = validateFrontendModelResourcePath({modelName, resourcePath})
+  const validatedCommandName = validateFrontendModelResourceCommandName({commandName, commandType: commandName, modelName})
+
+  if (memberId === undefined || memberId === null || memberId === "") {
+    return `${validatedResourcePath}/${validatedCommandName}`
+  }
+
+  return `${validatedResourcePath}/${encodeURIComponent(String(memberId))}/${validatedCommandName}`
 }
 
 /**
@@ -1840,40 +1860,40 @@ export default class FrontendModelBase {
    */
   static async executeCustomCommand({commandName, commandType, memberId = null, payload, resourcePath}) {
     const serializedPayload = /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(payload))
-    const url = frontendModelCustomCommandUrl({
+    const customPath = frontendModelCustomCommandPath({
       commandName,
       memberId,
       modelName: this.name,
       resourcePath
     })
+    const url = frontendModelApiUrl()
 
     if (frontendModelTransportConfig.request) {
-      return await this.performTransportRequest({commandName, commandType, payload: serializedPayload, url})
+      return await this.performTransportRequest({commandName, commandType, customPath, payload: serializedPayload, url})
     }
 
-    const response = await fetch(url, {
-      body: JSON.stringify(serializedPayload),
-      credentials: frontendModelTransportConfig.credentials,
-      headers: {
-        "Content-Type": "application/json"
-      },
-      method: "POST"
+    const batchResponse = await new Promise((resolve, reject) => {
+      pendingSharedFrontendModelRequests.push({
+        commandType,
+        customPath,
+        modelClass: this,
+        payload: serializedPayload,
+        reject,
+        requestId: `${++sharedFrontendModelRequestId}`,
+        resolve
+      })
+
+      scheduleSharedFrontendModelRequestFlush()
     })
 
-    if (!response.ok) {
-      throw new Error(`Request failed (${response.status}) for ${this.name}#${commandType}`)
-    }
-
-    const responseText = await response.text()
-    const json = responseText.length > 0 ? JSON.parse(responseText) : {}
-    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
+    const decodedBatchResponse = /** @type {Record<string, any>} */ (batchResponse)
 
     this.throwOnErrorFrontendModelResponse({
       commandType,
-      response: decodedResponse
+      response: decodedBatchResponse
     })
 
-    return decodedResponse
+    return decodedBatchResponse
   }
 
   /**
@@ -1881,14 +1901,16 @@ export default class FrontendModelBase {
    * @param {object} args - Request arguments.
    * @param {string} args.commandName - Transport command name.
    * @param {FrontendModelRequestCommandType} args.commandType - Logical command type.
+   * @param {string} [args.customPath] - Custom backend route path when bypassing built-in resource commands.
    * @param {Record<string, any>} args.payload - Serialized payload.
    * @param {string} args.url - Request URL.
    * @returns {Promise<Record<string, any>>} - Decoded response payload.
    */
-  static async performTransportRequest({commandName, commandType, payload, url}) {
+  static async performTransportRequest({commandName, commandType, customPath, payload, url}) {
     const customResponse = await frontendModelTransportConfig.request({
       commandName,
       commandType,
+      customPath,
       modelClass: this,
       payload,
       url

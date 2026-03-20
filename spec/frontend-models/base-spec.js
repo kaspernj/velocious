@@ -311,6 +311,75 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("batches custom commands through the shared frontend-model API", async () => {
+    const User = buildTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+        const body = JSON.parse(bodyString)
+        const requestId = body.requests?.[0]?.requestId
+
+        calls.push({
+          body,
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId,
+              response: {status: "success", value: "pong"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId,
+              response: {status: "success", value: "pong"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      const response = await User.executeCustomCommand({
+        commandName: "ping",
+        commandType: "ping",
+        memberId: 5,
+        payload: {name: "John"},
+        resourcePath: "/custom-frontend-models/users"
+      })
+
+      expect(calls).toEqual([
+        {
+          body: {
+            requests: [{
+              commandType: "ping",
+              customPath: "/custom-frontend-models/users/5/ping",
+              model: "User",
+              payload: {name: "John"},
+              requestId: calls[0].body.requests[0].requestId
+            }]
+          },
+          url: "/frontend-models"
+        }
+      ])
+      expect(response.status).toEqual("success")
+      expect(response.value).toEqual("pong")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("uses configured frontend-model primary keys", () => {
     const User = buildCustomPrimaryKeyTestModelClass()
     const user = new User({name: "Jane", reference: "user-ref-1"})

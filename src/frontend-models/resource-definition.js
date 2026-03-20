@@ -38,7 +38,7 @@ export function frontendModelResourcesForBackendProject(backendProject) {
 
     if (!frontendModelResourceDefinitionIsClass(resourceDefinition)) continue
 
-    const modelName = frontendModelModelNameFromResourcePath(resourcePath)
+    const modelName = frontendModelModelNameFromResourcePath(resourcePath, resourceDefinition)
 
     if (resolvedResources[modelName]) {
       throw new Error(`Duplicate frontend model resource definition for '${modelName}' from '${resourcePath}'`)
@@ -281,13 +281,33 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
 }
 
 /**
- * @param {string} resourcePath - Relative resource path from require context.
- * @returns {string} - Derived frontend model class name.
+ * Prefer configured resource paths, then fall back to an `index.js`-aware require-context path heuristic so layouts like `./users/index.js` still resolve to `User`.
+ * @param {string} resourcePath - Require-context resource path.
+ * @param {typeof FrontendModelBaseResource} resourceDefinition - Frontend-model resource class.
+ * @returns {string} - Backing model class name.
  */
-function frontendModelModelNameFromResourcePath(resourcePath) {
-  const pathWithoutExtension = resourcePath.replace(/\.[^.]+$/, "")
-  const pathSegments = pathWithoutExtension.split("/")
-  const fileName = pathSegments[pathSegments.length - 1].replace(/^\.\//, "")
+function frontendModelModelNameFromResourcePath(resourcePath, resourceDefinition) {
+  const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+  const configuredPath = resourceConfiguration?.path
 
-  return inflection.camelize(fileName.replaceAll("-", "_"))
+  if (configuredPath) {
+    const configuredSegments = configuredPath.split("/").filter(Boolean)
+    const configuredModelSegment = configuredSegments.at(-1)
+
+    if (configuredModelSegment) {
+      return inflection.camelize(inflection.singularize(configuredModelSegment))
+    }
+  }
+
+  const pathWithoutPrefix = resourcePath.replace(/^\.\//, "")
+  const pathWithoutExtension = pathWithoutPrefix.replace(/\.[^.]+$/, "")
+  const pathSegments = pathWithoutExtension.split("/").filter(Boolean)
+  const lastSegment = pathSegments.at(-1)
+  const modelSegment = lastSegment === "index" ? pathSegments.at(-2) : lastSegment
+
+  if (!modelSegment) {
+    throw new Error(`Could not infer frontend model name from resource path '${resourcePath}'`)
+  }
+
+  return inflection.camelize(inflection.singularize(modelSegment))
 }
