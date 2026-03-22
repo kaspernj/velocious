@@ -6,6 +6,11 @@ class Task extends TaskBase {
     return `task-${this.id()}`
   }
 
+  /** @returns {Promise<void>} - Appends a marker used by lifecycle callback tests. */
+  async validateSomething() {
+    this.assign({name: `${this.name()} validated-by-method`})
+  }
+
   /** @returns {boolean | null} - Normalized boolean attribute. */
   isDone() {
     const value = super.isDone()

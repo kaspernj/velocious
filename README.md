@@ -574,6 +574,24 @@ Task.validates("name", {presence: true, uniqueness: true})
 export default Task
 ```
 
+## Lifecycle callbacks
+
+Register lifecycle callbacks with either a function or an instance method name. Registrations run in order, so you can stack multiple callbacks on the same lifecycle hook.
+
+```js
+class Task extends Record {
+  async validateSomething() {
+    await doSomethingElse()
+  }
+}
+
+Task.beforeValidation(async (task) => {
+  await doSomething(task)
+})
+
+Task.beforeValidation("validateSomething")
+```
+
 ## Preloading relationships
 
 ```js
