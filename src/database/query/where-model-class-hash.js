@@ -266,7 +266,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     const columnType = modelClass.getColumnTypeByName(columnName)
 
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
 
     const normalize = (entry) => {
@@ -292,7 +292,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   _normalizeValueForColumnType({modelClass, columnName, value}) {
     const columnType = modelClass.getColumnTypeByName(columnName)
 
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
 
     const normalizedType = columnType.toLowerCase()
     const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])

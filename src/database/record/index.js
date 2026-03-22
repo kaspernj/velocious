@@ -954,7 +954,7 @@ class VelociousDatabaseRecord {
    */
   _normalizeSqliteBooleanValue({columnType, value}) {
     if (this.getModelClass().getDatabaseType() != "sqlite") return value
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
     if (value === true) return 1
     if (value === false) return 0
@@ -1278,7 +1278,7 @@ class VelociousDatabaseRecord {
    */
   static _normalizeSqliteBooleanValueForInsert({columnType, value}) {
     if (this.getDatabaseType() != "sqlite") return value
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
     if (value === true) return 1
     if (value === false) return 0
@@ -2239,7 +2239,25 @@ class VelociousDatabaseRecord {
       result = this._normalizeDateValueForRead(result)
     }
 
+    result = this._normalizeSqliteBooleanValueForRead({columnType, value: result})
+
     return result
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string | undefined} args.columnType - Column type.
+   * @param {any} args.value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeSqliteBooleanValueForRead({columnType, value}) {
+    if (this.getModelClass().getDatabaseType() != "sqlite") return value
+    if (!columnType) return value
+    if (columnType.toLowerCase() !== "boolean") return value
+    if (value === 1) return true
+    if (value === 0) return false
+
+    return value
   }
 
   /**
