@@ -2131,9 +2131,13 @@ class VelociousDatabaseRecord {
    */
   async _runLifecycleCallbacks(callbackName) {
     const callbacks = this.getModelClass().getLifecycleCallbacksMap()[callbackName] || []
+    let callbackNameRegisteredAsString = false
 
     for (const callback of callbacks) {
       if (typeof callback == "string") {
+        if (callback == callbackName) {
+          callbackNameRegisteredAsString = true
+        }
         const methodCallback = this[callback]
 
         if (typeof methodCallback != "function") {
@@ -2148,7 +2152,7 @@ class VelociousDatabaseRecord {
 
     const instanceCallback = this[callbackName]
 
-    if (typeof instanceCallback === "function") {
+    if (!callbackNameRegisteredAsString && typeof instanceCallback === "function") {
       await instanceCallback.call(this)
     }
   }
@@ -2253,7 +2257,7 @@ class VelociousDatabaseRecord {
       result = this._normalizeDateValueForRead(result)
     }
 
-    result = this._normalizeSqliteBooleanValueForRead({columnType, value: result})
+    result = this._normalizeBooleanValueForRead({columnType, value: result})
 
     return result
   }
@@ -2264,8 +2268,7 @@ class VelociousDatabaseRecord {
    * @param {any} args.value - Value to normalize.
    * @returns {any} - Normalized value.
    */
-  _normalizeSqliteBooleanValueForRead({columnType, value}) {
-    if (this.getModelClass().getDatabaseType() != "sqlite") return value
+  _normalizeBooleanValueForRead({columnType, value}) {
     if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
     if (value === 1) return true
