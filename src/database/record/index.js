@@ -2131,9 +2131,14 @@ class VelociousDatabaseRecord {
    */
   async _runLifecycleCallbacks(callbackName) {
     const callbacks = this.getModelClass().getLifecycleCallbacksMap()[callbackName] || []
+    let callbackNameRegisteredAsString = false
 
     for (const callback of callbacks) {
       if (typeof callback == "string") {
+        if (callback == callbackName) {
+          callbackNameRegisteredAsString = true
+        }
+
         const methodCallback = this[callback]
 
         if (typeof methodCallback != "function") {
@@ -2148,7 +2153,7 @@ class VelociousDatabaseRecord {
 
     const instanceCallback = this[callbackName]
 
-    if (typeof instanceCallback === "function") {
+    if (!callbackNameRegisteredAsString && typeof instanceCallback === "function") {
       await instanceCallback.call(this)
     }
   }

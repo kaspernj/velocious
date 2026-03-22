@@ -156,6 +156,28 @@ describe("Record - create", {tags: ["dummy"]}, () => {
     }
   })
 
+  it("does not run the same-named lifecycle instance method twice when registered by name", async () => {
+    const previousLifecycleCallbacks = Task._lifecycleCallbacks
+
+    Task._lifecycleCallbacks = {}
+    Task.beforeValidation("beforeValidation")
+
+    try {
+      const project = await Project.create({name: "Single method callback project"})
+      const task = new Task({name: "Single method callback task", project})
+
+      task.beforeValidation = async function() {
+        this.assign({name: `${this.name()} before-validation`})
+      }
+
+      await task.save()
+
+      expect(task.name()).toEqual("Single method callback task before-validation")
+    } finally {
+      Task._lifecycleCallbacks = previousLifecycleCallbacks
+    }
+  })
+
   it("runs instance lifecycle callback methods around create and update", async () => {
     const project = await Project.create({name: "Instance callback project"})
     const task = new Task({name: "Instance callback task", project})
