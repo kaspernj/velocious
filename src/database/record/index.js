@@ -4,6 +4,10 @@
  * @typedef {{type: string, message: string}} ValidationErrorObjectType
  */
 
+/**
+ * @typedef {((model: VelociousDatabaseRecord) => void | Promise<void>) | string} LifecycleCallbackType
+ */
+
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
 import Configuration from "../../configuration.js"
@@ -95,10 +99,10 @@ class VelociousDatabaseRecord {
     return this._validators
   }
 
-  /** @returns {Record<string, Array<(model: VelociousDatabaseRecord) => void | Promise<void>>>} - Lifecycle callbacks keyed by name. */
+  /** @returns {Record<string, LifecycleCallbackType[]>} - Lifecycle callbacks keyed by name. */
   static getLifecycleCallbacksMap() {
     if (!this._lifecycleCallbacks) {
-      /** @type {Record<string, Array<(model: VelociousDatabaseRecord) => void | Promise<void>>>} */
+      /** @type {Record<string, LifecycleCallbackType[]>} */
       this._lifecycleCallbacks = {}
     }
 
@@ -163,7 +167,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {"afterCreate" | "afterDestroy" | "afterSave" | "afterUpdate" | "beforeCreate" | "beforeDestroy" | "beforeSave" | "beforeUpdate" | "beforeValidation"} callbackName - Callback type.
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static registerLifecycleCallback(callbackName, callback) {
@@ -177,7 +181,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeValidation(callback) {
@@ -185,7 +189,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeSave(callback) {
@@ -193,7 +197,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeCreate(callback) {
@@ -201,7 +205,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeUpdate(callback) {
@@ -209,7 +213,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeDestroy(callback) {
@@ -217,7 +221,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterSave(callback) {
@@ -225,7 +229,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterCreate(callback) {
@@ -233,7 +237,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterUpdate(callback) {
@@ -241,7 +245,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(model: VelociousDatabaseRecord) => void | Promise<void>} callback - Callback.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterDestroy(callback) {
@@ -2129,7 +2133,17 @@ class VelociousDatabaseRecord {
     const callbacks = this.getModelClass().getLifecycleCallbacksMap()[callbackName] || []
 
     for (const callback of callbacks) {
-      await callback(this)
+      if (typeof callback == "string") {
+        const methodCallback = this[callback]
+
+        if (typeof methodCallback != "function") {
+          throw new Error(`Lifecycle callback "${callback}" is not a function on ${this.getModelClass().name}`)
+        }
+
+        await methodCallback.call(this)
+      } else {
+        await callback(this)
+      }
     }
 
     const instanceCallback = this[callbackName]
