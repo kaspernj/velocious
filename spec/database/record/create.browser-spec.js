@@ -134,6 +134,28 @@ describe("Record - create", {tags: ["dummy"]}, () => {
     }
   })
 
+  it("runs multiple registered lifecycle callbacks for the same hook, including instance method names", async () => {
+    const previousLifecycleCallbacks = Task._lifecycleCallbacks
+
+    Task._lifecycleCallbacks = {}
+    Task.beforeValidation((model) => {
+      model.assign({name: `${model.name()} first-callback`})
+    })
+    Task.beforeValidation("validateSomething")
+    Task.beforeValidation((model) => {
+      model.assign({name: `${model.name()} third-callback`})
+    })
+
+    try {
+      const project = await Project.create({name: "Multi callback project"})
+      const task = await Task.create({name: "Callback task", project})
+
+      expect(task.name()).toEqual("Callback task first-callback validated-by-method third-callback")
+    } finally {
+      Task._lifecycleCallbacks = previousLifecycleCallbacks
+    }
+  })
+
   it("runs instance lifecycle callback methods around create and update", async () => {
     const project = await Project.create({name: "Instance callback project"})
     const task = new Task({name: "Instance callback task", project})
