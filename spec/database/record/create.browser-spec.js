@@ -177,7 +177,6 @@ describe("Record - create", {tags: ["dummy"]}, () => {
       Task._lifecycleCallbacks = previousLifecycleCallbacks
     }
   })
-
   it("runs instance lifecycle callback methods around create and update", async () => {
     const project = await Project.create({name: "Instance callback project"})
     const task = new Task({name: "Instance callback task", project})

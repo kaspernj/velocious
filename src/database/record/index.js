@@ -2138,7 +2138,6 @@ class VelociousDatabaseRecord {
         if (callback == callbackName) {
           callbackNameRegisteredAsString = true
         }
-
         const methodCallback = this[callback]
 
         if (typeof methodCallback != "function") {
