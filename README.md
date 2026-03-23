@@ -1493,6 +1493,35 @@ await MyJob.performLaterWithOptions({
 })
 ```
 
+## Scheduled jobs
+
+Velocious can enqueue recurring jobs from the `background-jobs-main` process. Configure them with `scheduledBackgroundJobs` using Sidekiq Scheduler-style `every` arrays:
+
+```js
+import BuildCleanupJob from "./src/jobs/build-cleanup-job.js"
+
+export default new Configuration({
+  // ...
+  scheduledBackgroundJobs: {
+    jobs: {
+      buildCleanup: {
+        class: BuildCleanupJob,
+        every: ["1h", {first_in: "10s"}],
+        options: {forked: false}
+      }
+    }
+  }
+})
+```
+
+Supported schedule syntax:
+
+- `every: "5m"`
+- `every: ["1h", {first_in: "30s"}]`
+- `every: ["1 day", {firstIn: "5 minutes"}]`
+
+`background-jobs-main` owns the schedule and enqueues the configured jobs into the normal Velocious background-jobs queue. The HTTP server does not run scheduled jobs itself.
+
 ## Persistence and retries
 
 Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the job is marked as handed off and the worker reports completion or failure back to the main process.
