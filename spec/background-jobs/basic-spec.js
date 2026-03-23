@@ -1,6 +1,7 @@
 // @ts-check
 
 import fs from "fs/promises"
+import net from "net"
 import path from "path"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
@@ -111,5 +112,62 @@ describe("Background jobs", () => {
     dummyConfiguration.setScheduledBackgroundJobsConfig(undefined)
     await worker.stop()
     await main.stop()
+  })
+
+  it("cleans up its listener and scheduled timers when scheduler startup fails", async () => {
+    dummyConfiguration.setCurrent()
+    const reservedServer = net.createServer()
+    await new Promise((resolve, reject) => {
+      reservedServer.once("error", reject)
+      reservedServer.listen(0, "127.0.0.1", () => resolve(undefined))
+    })
+    const reservedAddress = reservedServer.address()
+
+    if (!reservedAddress || typeof reservedAddress !== "object") {
+      throw new Error("Expected reserved server address to be available.")
+    }
+
+    const reservedPort = reservedAddress.port
+    await new Promise((resolve) => reservedServer.close(() => resolve(undefined)))
+
+    dummyConfiguration.setScheduledBackgroundJobsConfig({
+      jobs: {
+        validScheduledTestJob: {
+          class: TestJob,
+          every: ["1 hour", {first_in: "25ms"}],
+          options: {forked: false}
+        },
+        invalidScheduledTestJob: {
+          every: "1m"
+        }
+      }
+    })
+
+    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: reservedPort})
+
+    let error = null
+
+    try {
+      await main.start()
+    } catch (newError) {
+      error = newError
+    }
+
+    expect(error).toBeTruthy()
+
+    expect(main.scheduler?.timeoutIds).toEqual([])
+    expect(main.scheduler?.intervalIds).toEqual([])
+
+    const rebindingServer = net.createServer()
+
+    try {
+      await new Promise((resolve, reject) => {
+        rebindingServer.once("error", reject)
+        rebindingServer.listen(reservedPort, "127.0.0.1", () => resolve(undefined))
+      })
+    } finally {
+      await new Promise((resolve) => rebindingServer.close(() => resolve(undefined)))
+      dummyConfiguration.setScheduledBackgroundJobsConfig(undefined)
+    }
   })
 })

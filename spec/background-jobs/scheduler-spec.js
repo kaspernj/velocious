@@ -10,6 +10,35 @@ describe("Background jobs - scheduler", () => {
     expect(parseScheduledDuration(250, "example.first_in")).toEqual(250)
   })
 
+  it("rejects string every intervals that round down below one millisecond", async () => {
+    const scheduler = new BackgroundJobsScheduler({
+      configuration: {
+        async getScheduledBackgroundJobsConfig() {
+          return {
+            jobs: {
+              scheduledTestJob: {
+                class: TestJob,
+                every: "0.4ms"
+              }
+            }
+          }
+        }
+      },
+      enqueueJob: async () => {}
+    })
+
+    let error = null
+
+    try {
+      await scheduler.start()
+    } catch (newError) {
+      error = newError
+    }
+
+    expect(error).toBeTruthy()
+    expect(error?.message).toEqual("Scheduled background job scheduledTestJob.every must be at least 1 millisecond.")
+  })
+
   it("schedules jobs from sidekiq-style every arrays", async () => {
     const originalSetTimeout = globalThis.setTimeout
     const originalSetInterval = globalThis.setInterval

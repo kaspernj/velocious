@@ -117,6 +117,10 @@ export default class BackgroundJobsScheduler {
     const intervalMs = parseScheduledDuration(everyValue, `${jobKey}.every`)
     const firstInMs = firstInValue !== undefined ? parseScheduledDuration(firstInValue, `${jobKey}.first_in`) : intervalMs
 
+    if (intervalMs < 1) {
+      throw new Error(`Scheduled background job ${jobKey}.every must be at least 1 millisecond.`)
+    }
+
     if (!jobConfiguration.class || typeof jobConfiguration.class.performLaterWithOptions !== "function") {
       throw new Error(`Scheduled background job ${jobKey} must define a job class.`)
     }
