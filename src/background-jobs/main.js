@@ -2,6 +2,7 @@
 
 import net from "net"
 import JsonSocket from "./json-socket.js"
+import BackgroundJobsScheduler from "./scheduler.js"
 import BackgroundJobsStore from "./store.js"
 import Logger from "../logger.js"
 
@@ -52,6 +53,19 @@ export default class BackgroundJobsMain {
     this._orphanTimer = setInterval(() => {
       void this._sweepOrphans()
     }, 60000)
+
+    this.scheduler = new BackgroundJobsScheduler({
+      configuration: this.configuration,
+      enqueueJob: async ({args, jobClass, options}) => {
+        await this.store.enqueue({
+          jobName: jobClass.jobName(),
+          args,
+          options
+        })
+        await this._dispatch()
+      }
+    })
+    await this.scheduler.start()
   }
 
   /**
@@ -64,6 +78,7 @@ export default class BackgroundJobsMain {
 
     if (this._dispatchTimer) clearInterval(this._dispatchTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
+    this.scheduler?.stop()
 
     if (!this.server) return
 

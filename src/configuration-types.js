@@ -127,6 +127,30 @@
  */
 
 /**
+ * @typedef {object} ScheduledBackgroundJobEveryOptions
+ * @property {number | string} [firstIn] - Delay before the first enqueue.
+ * @property {number | string} [first_in] - Sidekiq-style alias for `firstIn`.
+ */
+
+/**
+ * @typedef {object} ScheduledBackgroundJobConfiguration
+ * @property {any[]} [args] - Arguments passed to the job when enqueued.
+ * @property {typeof import("./background-jobs/job.js").default} class - Job class to enqueue.
+ * @property {boolean} [enabled] - Whether the schedule is enabled.
+ * @property {number | string | [number | string, ScheduledBackgroundJobEveryOptions]} every - Repeat interval.
+ * @property {import("./background-jobs/types.js").BackgroundJobOptions} [options] - Job options.
+ */
+
+/**
+ * @typedef {object} ScheduledBackgroundJobsConfiguration
+ * @property {Record<string, ScheduledBackgroundJobConfiguration>} jobs - Scheduled jobs keyed by name.
+ */
+
+/**
+ * @typedef {function({configuration: import("./configuration.js").default}) : ScheduledBackgroundJobsConfiguration | Promise<ScheduledBackgroundJobsConfiguration>} ScheduledBackgroundJobsLoaderType
+ */
+
+/**
  * @typedef {object} AttachmentDriverConfiguration
  * @property {function({configuration: import("./configuration.js").default, name: string, options: Record<string, any>}) : Record<string, any>} [create] - Optional factory for a custom attachment driver instance.
  * @property {new (...args: any[]) => Record<string, any>} [driverClass] - Optional custom attachment driver class.
@@ -288,6 +312,7 @@
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
+ * @property {ScheduledBackgroundJobsConfiguration | ScheduledBackgroundJobsLoaderType} [scheduledBackgroundJobs] - Scheduled background jobs configuration.
  * @property {MailerBackend} [mailerBackend] - Mail delivery backend.
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.
  * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.

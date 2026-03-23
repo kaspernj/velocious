@@ -62,4 +62,54 @@ describe("Background jobs", () => {
     await worker.stop()
     await main.stop()
   })
+
+  it("enqueues scheduled jobs from the background jobs main process", async () => {
+    dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
+
+    const tmpDir = path.join(dummyConfiguration.getDirectory(), "tmp")
+    await fs.mkdir(tmpDir, {recursive: true})
+    const outputPath = path.join(tmpDir, `scheduled-job-${Date.now()}.json`)
+    dummyConfiguration.setScheduledBackgroundJobsConfig({
+      jobs: {
+        scheduledTestJob: {
+          args: ["scheduled", outputPath],
+          class: TestJob,
+          every: ["1 hour", {first_in: "25ms"}],
+          options: {forked: false}
+        }
+      }
+    })
+
+    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    await main.start()
+
+    dummyConfiguration.setBackgroundJobsConfig({
+      host: "127.0.0.1",
+      port: main.getPort()
+    })
+
+    const worker = new BackgroundJobsWorker({configuration: dummyConfiguration})
+    await worker.start()
+
+    await timeout({timeout: 2000}, async () => {
+      while (true) {
+        try {
+          await fs.readFile(outputPath, "utf8")
+          break
+        } catch {
+          await wait(0.05)
+        }
+      }
+    })
+
+    const result = JSON.parse(await fs.readFile(outputPath, "utf8"))
+
+    expect(result).toEqual({message: "scheduled"})
+
+    dummyConfiguration.setScheduledBackgroundJobsConfig(undefined)
+    await worker.stop()
+    await main.stop()
+  })
 })
