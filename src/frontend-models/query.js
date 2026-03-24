@@ -179,7 +179,7 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 
 /**
  * @param {string} operator - Raw search operator.
- * @returns {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} - Normalized operator.
+ * @returns {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} - Normalized operator.
  */
 function normalizeSearchOperator(operator) {
   const operatorAliases = {
