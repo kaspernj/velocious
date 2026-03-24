@@ -1945,12 +1945,8 @@ export default class FrontendModelBase {
     const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
     const resourcePath = typeof resourceConfig.path === "string" && resourceConfig.path.length > 0 ? this.resourcePath() : null
     const containsAttachmentUpload = frontendModelPayloadContainsAttachmentUpload(serializedPayload)
-    const useSharedTransport = (!resourcePath || frontendModelTransportConfig.shared === true) && !containsAttachmentUpload
-    const url = useSharedTransport
-      ? frontendModelApiUrl()
-      : resourcePath
-        ? frontendModelCommandUrl(resourcePath, commandName)
-        : frontendModelApiUrl()
+    const useSharedTransport = !containsAttachmentUpload
+    const url = useSharedTransport ? frontendModelApiUrl() : frontendModelCommandUrl(resourcePath || "", commandName)
 
     if (frontendModelTransportConfig.request) {
       return await this.performTransportRequest({commandName, commandType, payload: serializedPayload, url})

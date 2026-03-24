@@ -219,7 +219,7 @@ function stubFetch(responseBody) {
       ? batchRequests[0].payload
       : parsedBody
     const responsePayload = batchRequests
-      ? {responses: batchRequests.map(() => responseBody)}
+      ? {responses: batchRequests.map((req) => ({requestId: req.requestId, response: responseBody}))}
       : responseBody
 
     calls.push({
@@ -615,7 +615,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(users.length).toEqual(1)
@@ -642,7 +642,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(usersCount).toEqual(2)
@@ -723,7 +723,7 @@ describe("Frontend models - base", () => {
           body: {
             where: {project: {creatingUser: {reference: "creator-1"}}}
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -751,7 +751,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(5)
@@ -781,7 +781,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -811,7 +811,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(5)
@@ -848,7 +848,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(7)
@@ -881,7 +881,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -912,7 +912,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(usersCount).toEqual(2)
@@ -949,7 +949,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -981,7 +981,7 @@ describe("Frontend models - base", () => {
             ],
             where: {id: "2"}
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1013,7 +1013,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1040,7 +1040,7 @@ describe("Frontend models - base", () => {
               }
             }
           },
-          url: "/api/frontend-models/tasks/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1082,7 +1082,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/tasks/index"
+          url: "/frontend-models"
         }
       ])
       expect(values).toEqual(["project-1"])
@@ -1127,7 +1127,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {id: 5},
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(user.id()).toEqual(5)
@@ -1213,7 +1213,7 @@ describe("Frontend models - base", () => {
               when: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"}
             }
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(response.nested.hugeCounter).toEqual(9007199254740993n)
@@ -1248,7 +1248,7 @@ describe("Frontend models - base", () => {
               metadata: {region: "eu"}
             }
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(2)
@@ -1308,7 +1308,7 @@ describe("Frontend models - base", () => {
               email: "john@example.com"
             }
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(5)
@@ -1340,11 +1340,11 @@ describe("Frontend models - base", () => {
               User: ["id", "email"]
             }
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         },
         {
           body: {id: 5},
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1393,7 +1393,7 @@ describe("Frontend models - base", () => {
               }
             }
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(tasks[0].constructor.name).toEqual("Task")
@@ -1432,7 +1432,7 @@ describe("Frontend models - base", () => {
               Task: ["updatedAt"]
             }
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1461,7 +1461,7 @@ describe("Frontend models - base", () => {
               Project: ["id", "createdAt"]
             }
           },
-          url: "/api/frontend-models/projects/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1554,7 +1554,7 @@ describe("Frontend models - base", () => {
               tasks: true
             }
           },
-          url: "/api/frontend-models/projects/find"
+          url: "/frontend-models"
         }
       ])
       expect(Array.isArray(loadedTasks)).toEqual(true)
@@ -1627,7 +1627,7 @@ describe("Frontend models - base", () => {
             attributes: {name: "John Changed"},
             id: 5
           },
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
       expect(user.name()).toEqual("Johnny")
@@ -1654,7 +1654,7 @@ describe("Frontend models - base", () => {
             attributes: {email: "staged@example.com", name: "John Changed"},
             id: 5
           },
-          url: "/api/frontend-models/users/update"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1677,7 +1677,7 @@ describe("Frontend models - base", () => {
             attributes: {name: "John Changed"},
             id: 5
           },
-          url: "/api/frontend-models/users/update"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1810,7 +1810,7 @@ describe("Frontend models - base", () => {
             attachmentName: "descriptionFile",
             id: 11
           },
-          url: "/api/frontend-models/tasks/download"
+          url: "/frontend-models"
         }
       ])
       expect(downloadedAttachment.filename()).toEqual("a.txt")
@@ -1839,7 +1839,7 @@ describe("Frontend models - base", () => {
             attachmentName: "descriptionFile",
             id: 11
           },
-          url: "/api/frontend-models/tasks/url"
+          url: "/frontend-models"
         }
       ])
       expect(attachmentUrl).toEqual("file:///tmp/attachments/attachment-2-a.txt")
@@ -1948,7 +1948,7 @@ describe("Frontend models - base", () => {
           body: {
             attributes: {email: "john@example.com", name: "Draft"}
           },
-          url: "/api/frontend-models/users/create"
+          url: "/frontend-models"
         }
       ])
       expect(user.isNewRecord()).toEqual(false)
@@ -1988,7 +1988,7 @@ describe("Frontend models - base", () => {
               email: "new@example.com"
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         },
         {
           body: {
@@ -1996,7 +1996,7 @@ describe("Frontend models - base", () => {
               email: "new@example.com"
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         },
         {
           body: {
@@ -2005,7 +2005,7 @@ describe("Frontend models - base", () => {
               name: "Local Name"
             }
           },
-          url: "/api/frontend-models/users/create"
+          url: "/frontend-models"
         }
       ])
       expect(createdUser.isPersisted()).toEqual(true)
@@ -2041,7 +2041,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {id: 7},
-          url: "/velocious/api"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -2055,7 +2055,7 @@ describe("Frontend models - base", () => {
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      url: "http://127.0.0.1:4501/"
+      url: "http://127.0.0.1:4501/frontend-models"
     })
 
     try {
@@ -2064,7 +2064,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "http://127.0.0.1:4501/velocious/api"
+          url: "http://127.0.0.1:4501/frontend-models"
         }
       ])
     } finally {
@@ -2078,7 +2078,7 @@ describe("Frontend models - base", () => {
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      url: () => "http://localhost:4500/v1"
+      url: () => "http://localhost:4500/v1/frontend-models"
     })
 
     try {
@@ -2087,7 +2087,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "http://localhost:4500/v1/velocious/api"
+          url: "http://localhost:4500/v1/frontend-models"
         }
       ])
     } finally {
@@ -2124,7 +2124,7 @@ describe("Frontend models - base", () => {
       expect(calls[0].commandType).toEqual("find")
       expect(calls[0].modelClass).toEqual(User)
       expect(calls[0].payload.id).toEqual(9)
-      expect(calls[0].url).toEqual("/velocious/api")
+      expect(calls[0].url).toEqual("/frontend-models")
       expect(user.readAttribute("createdAt") instanceof Date).toEqual(true)
       expect(user.readAttribute("createdAt").toISOString()).toEqual(responseDateString)
       expect(user.readAttribute("maybeMissing")).toEqual(undefined)
@@ -2253,7 +2253,7 @@ describe("Frontend models - base", () => {
       expect(calls[0].payload.negativeInfinity).toEqual({__velocious_type: "number", value: "-Infinity"})
       expect(calls[0].payload.notANumber).toEqual({__velocious_type: "number", value: "NaN"})
       expect(calls[0].payload.positiveInfinity).toEqual({__velocious_type: "number", value: "Infinity"})
-      expect(calls[0].url).toEqual("/velocious/api")
+      expect(calls[0].url).toEqual("/frontend-models")
     } finally {
       resetFrontendModelTransport()
     }
