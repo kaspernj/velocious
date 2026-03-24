@@ -27,7 +27,7 @@ const frontendModelTransportConfig = {}
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
-/** @type {Array<{commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
+/** @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
@@ -649,13 +649,13 @@ async function flushPendingSharedFrontendModelRequests() {
         }
       }
 
-      const isCustomCommandName = request.commandName && request.commandName !== request.commandType
-      const customPath = isCustomCommandName && request.resourcePath
+      const isCustomCommandRoute = request.commandName && request.commandName !== request.commandType && request.resourcePath
+      const customPath = isCustomCommandRoute
         ? `${request.resourcePath}/${request.commandName}`
         : undefined
 
       return {
-        commandType: isCustomCommandName ? request.commandName : request.commandType,
+        commandType: isCustomCommandRoute ? request.commandName : request.commandType,
         customPath,
         model: request.modelClass.name,
         payload: request.payload,
