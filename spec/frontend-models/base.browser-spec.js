@@ -16,6 +16,7 @@ class BrowserFrontendModel extends FrontendModelBase {
         find: "frontend-find",
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -45,6 +46,7 @@ class BrowserPreloadComment extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -65,6 +67,7 @@ class BrowserPreloadTask extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -106,6 +109,7 @@ class BrowserPreloadProject extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -133,11 +137,8 @@ class BrowserPreloadProject extends FrontendModelBase {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: undefined,
-    baseUrlResolver: undefined,
+    url: undefined,
     credentials: undefined,
-    pathPrefix: undefined,
-    pathPrefixResolver: undefined,
     request: undefined
   })
 }
@@ -153,7 +154,7 @@ function configureBrowserTransport() {
   const backendPort = Number.isFinite(configuredPort) ? configuredPort : 4501
 
   FrontendModelBase.configureTransport({
-    baseUrl: `http://127.0.0.1:${backendPort}`
+    url: `http://127.0.0.1:${backendPort}`
   })
 }
 

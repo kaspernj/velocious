@@ -21,6 +21,18 @@ function summarizeRequestData(data) {
   return {length: data.length, preview}
 }
 
+/**
+ * @param {Error & {velociousContext?: Record<string, unknown>}} error - Error instance.
+ * @returns {Record<string, unknown>} - Safe bad-request details for logs.
+ */
+function badRequestDetails(error) {
+  return {
+    errorClass: error.name,
+    message: error.message,
+    velociousContext: error.velociousContext
+  }
+}
+
 export default class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
@@ -88,7 +100,7 @@ export default class VeoliciousHttpServerClient {
    * @returns {void} - No return value.
    */
   handleBadRequest(error) {
-    this.logger.warn(() => ["Failed to parse HTTP request", error])
+    this.logger.warn(() => ["Failed to parse HTTP request", badRequestDetails(/** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error))])
 
     if (this.currentRequest && "getRequestParser" in this.currentRequest) {
       const httpRequest = /** @type {import("./request.js").default} */ (this.currentRequest)

@@ -161,6 +161,22 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.map((model) => model.name)).toEqual(["Index Alpha", "Index Beta"])
+      expect(payload.models[0].identifier).toMatch(/^task-/)
+    })
+  })
+
+  it("serializes declared column-backed attributes through model methods", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Boolean normalization task")
+      await task.update({isDone: true})
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0].isDone).toEqual(true)
     })
   })
 
@@ -435,6 +451,27 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("applies like search params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      await createTask("Ransack Alpha")
+      await createTask("Ransack Beta")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        searches: [
+          {
+            column: "name",
+            operator: "like",
+            path: [],
+            value: "%Beta%"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Ransack Beta"])
+    })
+  })
+
   it("applies joins params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Join filter task")
@@ -681,6 +718,26 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.status).toEqual("success")
       expect(payload.model.name).toEqual("Updated task")
       expect(persisted.name()).toEqual("Updated task")
+    })
+  })
+
+  it("rejects computed read-only attributes on frontendUpdate", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Update computed attr")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+        attributes: {
+          identifier: "task-overridden",
+          name: "Updated task"
+        },
+        id: task.id()
+      })
+      const persisted = await Task.find(task.id())
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(persisted.name()).toEqual("Update computed attr")
+      expect(persisted.identifier()).toEqual(`task-${task.id()}`)
     })
   })
 

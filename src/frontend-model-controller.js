@@ -1,9 +1,12 @@
 // @ts-check
 
-import Controller from "./controller.js"
 import * as inflection from "inflection"
-import {validateFrontendModelResourcePath} from "./frontend-models/resource-config-validation.js"
+import Controller from "./controller.js"
+import Response from "./http-server/client/response.js"
+import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+import RoutesResolver from "./routes/resolver.js"
 import VelociousError from "./velocious-error.js"
 
 /**
@@ -261,7 +264,7 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
  * @typedef {object} FrontendModelSearch
  * @property {string[]} path - Relationship path.
  * @property {string} column - Column or attribute name.
- * @property {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
  * @property {any} value - Search value.
  */
 
@@ -277,7 +280,7 @@ function normalizeFrontendModelSearchOperator(operator) {
     ">=": "gteq"
   }
   const normalizedOperator = operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
-  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
+  const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
 
   if (!supportedOperators.has(normalizedOperator)) {
     throw frontendModelValidationError(`Invalid search operator: ${operator}`)
@@ -1002,6 +1005,36 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @template T
+   * @param {Record<string, any>} params - Request-scoped params.
+   * @param {import("./http-server/client/response.js").default} response - Response instance.
+   * @param {() => Promise<T>} callback - Callback executed inside resolved tenant and ability context.
+   * @returns {Promise<T>} - Callback return value.
+   */
+  async withFrontendModelRequestContext(params, response, callback) {
+    const configuration = this.getConfiguration()
+    const tenant = await configuration.resolveTenant({
+      params,
+      request: this.request(),
+      response
+    })
+
+    return await configuration.runWithTenant(tenant, async () => {
+      return await configuration.ensureConnections(async () => {
+        const ability = await configuration.resolveAbility({
+          params,
+          request: this.request(),
+          response
+        })
+
+        return await configuration.runWithAbility(ability, async () => {
+          return await callback()
+        })
+      })
+    })
+  }
+
+  /**
    * @returns {typeof import("./database/record/index.js").default} - Frontend model class for controller resource actions.
    */
   frontendModelClass() {
@@ -1016,7 +1049,7 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
+   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
    */
   frontendModelResourceConfiguration() {
     const params = this.frontendModelParams()
@@ -1025,24 +1058,45 @@ export default class FrontendModelController extends Controller {
     const backendProjects = this.getConfiguration().getBackendProjects()
 
     for (const backendProject of backendProjects) {
-      const resources = backendProject.frontendModels || backendProject.resources || {}
+      const resources = frontendModelResourcesForBackendProject(backendProject)
 
       if (modelName && modelName.length > 0 && resources[modelName]) {
+        const resourceDefinition = resources[modelName]
+        const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+
+        if (!resourceConfiguration || !resourceClass) {
+          throw new Error(`Frontend model resource '${modelName}' must be a FrontendModelBaseResource subclass`)
+        }
+
         return {
           backendProject,
           modelName,
-          resourceConfiguration: resources[modelName]
+          resourceClass,
+          resourceConfiguration
         }
       }
 
       if (!controllerName || controllerName.length < 1) continue
 
       for (const resourceModelName in resources) {
-        const resourceConfiguration = resources[resourceModelName]
-        const resourcePath = this.frontendModelResourcePath(resourceModelName, resourceConfiguration)
+        const resourceDefinition = resources[resourceModelName]
+        const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+
+        if (!resourceConfiguration || !resourceClass) {
+          throw new Error(`Frontend model resource '${resourceModelName}' must be a FrontendModelBaseResource subclass`)
+        }
+
+        const resourcePath = this.frontendModelResourcePath(resourceModelName, resourceDefinition)
 
         if (this.frontendModelResourceMatchesController({controllerName, resourcePath})) {
-          return {backendProject, modelName: resourceModelName, resourceConfiguration}
+          return {
+            backendProject,
+            modelName: resourceModelName,
+            resourceClass,
+            resourceConfiguration
+          }
         }
       }
     }
@@ -1052,20 +1106,23 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
-   * @returns {{modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
+   * @returns {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
    */
   frontendModelResourceConfigurationForModelClass(modelClass) {
     const frontendModelResource = this.frontendModelResourceConfiguration()
 
     if (!frontendModelResource) return null
 
-    const resources = frontendModelResource.backendProject.frontendModels || frontendModelResource.backendProject.resources || {}
-    const resourceConfiguration = resources[modelClass.name]
+    const resources = frontendModelResourcesForBackendProject(frontendModelResource.backendProject)
+    const resourceDefinition = resources[modelClass.name]
+    const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+    const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
-    if (!resourceConfiguration) return null
+    if (!resourceConfiguration || !resourceClass) return null
 
     return {
       modelName: modelClass.name,
+      resourceClass,
       resourceConfiguration
     }
   }
@@ -1090,18 +1147,11 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {string} modelName - Model class name.
-   * @param {import("./configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+   * @param {unknown} resourceDefinition - Resource definition.
    * @returns {string} - Normalized resource path.
    */
-  frontendModelResourcePath(modelName, resourceConfiguration) {
-    if (resourceConfiguration.path) {
-      return validateFrontendModelResourcePath({
-        modelName,
-        resourcePath: `/${resourceConfiguration.path.replace(/^\/+/, "")}`
-      })
-    }
-
-    return `/${inflection.dasherize(inflection.pluralize(modelName))}`
+  frontendModelResourcePath(modelName, resourceDefinition) {
+    return frontendModelResourcePath(modelName, resourceDefinition)
   }
 
   /**
@@ -1120,27 +1170,38 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @returns {import("./configuration-types.js").FrontendModelResourceServerConfiguration | null} - Optional server behavior config for frontend model actions.
+   * @returns {FrontendModelBaseResource} - Backend resource instance for current frontend-model action.
    */
-  frontendModelServerConfiguration() {
-    const frontendModelResource = this.frontendModelResourceConfiguration()
-
-    if (!frontendModelResource) return null
-
-    return frontendModelResource.resourceConfiguration.server || null
-  }
-
-  /**
-   * @returns {string} - Frontend model primary key.
-   */
-  frontendModelPrimaryKey() {
+  frontendModelResourceInstance() {
     const frontendModelResource = this.frontendModelResourceConfiguration()
 
     if (!frontendModelResource) {
       throw new Error(`No frontend model resource configuration for controller '${this.frontendModelParams().controller}'`)
     }
 
-    return frontendModelResource.resourceConfiguration.primaryKey || "id"
+    const resourceArgs = {
+      ability: this.currentAbility(),
+      controller: this,
+      context: {
+        ...(this.currentAbility()?.getContext() || {}),
+        params: this.frontendModelParams(),
+        request: this.request()
+      },
+      locals: this.currentAbility()?.getLocals() || {},
+      modelClass: this.frontendModelClass(),
+      modelName: frontendModelResource.modelName,
+      params: this.frontendModelParams(),
+      resourceConfiguration: frontendModelResource.resourceConfiguration
+    }
+
+    return new frontendModelResource.resourceClass(resourceArgs)
+  }
+
+  /**
+   * @returns {string} - Frontend model primary key.
+   */
+  frontendModelPrimaryKey() {
+    return this.frontendModelClass().primaryKey()
   }
 
   /**
@@ -1214,20 +1275,7 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<boolean>} - Whether action should continue.
    */
   async runFrontendModelBeforeAction(action) {
-    const serverConfiguration = this.frontendModelServerConfiguration()
-
-    if (!serverConfiguration?.beforeAction) return true
-
-    const modelClass = this.frontendModelClass()
-    const beforeAction = action === "attach"
-      ? "update"
-      : ((action === "download" || action === "url") ? "find" : action)
-    const result = await serverConfiguration.beforeAction({
-      action: beforeAction,
-      controller: this,
-      modelClass,
-      params: this.frontendModelParams()
-    })
+    const result = await this.frontendModelResourceInstance().beforeAction(action)
 
     return result !== false
   }
@@ -1238,37 +1286,13 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
    */
   async frontendModelFindRecord(action, id) {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const primaryKey = this.frontendModelPrimaryKey()
+    const model = await this.frontendModelResourceInstance().find(action, id)
 
-    if (serverConfiguration?.find) {
-      const findAction = action === "attach"
-        ? "update"
-        : ((action === "download" || action === "url") ? "find" : action)
-      const model = await serverConfiguration.find({
-        action: findAction,
-        controller: this,
-        id,
-        modelClass,
-        params: this.frontendModelParams()
-      })
+    if (!model) return null
 
-      if (!model) return null
+    const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
 
-      const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
-
-      return authorizedModels[0] || null
-    }
-
-    let query = this.frontendModelAuthorizedQuery(action)
-    const preload = action === "find" ? this.frontendModelPreload() : null
-
-    if (preload) {
-      query = query.preload(preload)
-    }
-
-    return await query.findBy({[primaryKey]: id})
+    return authorizedModels[0] || null
   }
 
   /**
@@ -1276,30 +1300,8 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<import("./database/record/index.js").default | null>} - Created model when authorized.
    */
   async frontendModelCreateRecord(attributes) {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const params = this.frontendModelParams()
-    /** @type {import("./database/record/index.js").default} */
-    let model
-
-    if (serverConfiguration?.create) {
-      const callbackModel = await serverConfiguration.create({
-        action: "create",
-        attributes,
-        controller: this,
-        modelClass,
-        params
-      })
-
-      if (!callbackModel) {
-        throw new Error("Expected server.create to return a model.")
-      }
-
-      model = callbackModel
-    } else {
-      model = new modelClass(attributes)
-      await model.save()
-    }
+    const resource = this.frontendModelResourceInstance()
+    const model = await resource.create(attributes)
 
     const authorizedModels = await this.frontendModelFilterAuthorizedModels({action: "create", models: [model]})
 
@@ -1307,9 +1309,7 @@ export default class FrontendModelController extends Controller {
       return authorizedModels[0]
     }
 
-    if (!serverConfiguration?.create) {
-      await model.destroy()
-    }
+    await resource.handleUnauthorizedCreatedModel(model)
 
     return null
   }
@@ -1318,21 +1318,9 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<import("./database/record/index.js").default[]>} - Frontend model records.
    */
   async frontendModelRecords() {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
+    const models = await this.frontendModelResourceInstance().records()
 
-    if (serverConfiguration?.records) {
-      const models = await serverConfiguration.records({
-        action: "index",
-        controller: this,
-        modelClass,
-        params: this.frontendModelParams()
-      })
-
-      return await this.frontendModelFilterAuthorizedModels({action: "index", models})
-    }
-
-    return await this.frontendModelIndexQuery().toArray()
+    return await this.frontendModelFilterAuthorizedModels({action: "index", models})
   }
 
   /**
@@ -1448,8 +1436,10 @@ export default class FrontendModelController extends Controller {
 
     const sorts = this.frontendModelSort()
 
-    for (const sort of sorts) {
-      this.applyFrontendModelSort({query, sort})
+    if (sorts.length > 0) {
+      for (const sort of sorts) {
+        this.applyFrontendModelSort({query, sort})
+      }
     }
 
     if (query._distinct && query.driver.getType() === "mssql") {
@@ -1597,6 +1587,7 @@ export default class FrontendModelController extends Controller {
       eq: "=",
       gt: ">",
       gteq: ">=",
+      like: "LIKE",
       lt: "<",
       lteq: "<=",
       notEq: "!="
@@ -2014,25 +2005,77 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {import("./database/record/index.js").default} model - Model instance.
-   * @returns {Record<string, any>} - Serialized attributes filtered by select map.
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {string[] | null} - Default frontend-model attributes declared on the resource.
    */
-  serializeFrontendModelAttributes(model) {
+  frontendModelDefaultAttributesForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfigurationForModelClass(modelClass)
+    const attributes = frontendModelResource?.resourceConfiguration.attributes
+
+    if (!attributes) return null
+    if (Array.isArray(attributes)) return attributes
+    if (typeof attributes === "object") return Object.keys(attributes)
+
+    return null
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Model instance.
+   * @returns {Promise<Record<string, any>>} - Serialized attributes filtered by select map.
+   */
+  async serializeFrontendModelAttributes(model) {
     const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
     const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+    const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass)
     const modelAttributes = model.attributes()
+    const prototypeAttributeMethod = (attributeName) => {
+      let currentPrototype = Object.getPrototypeOf(model)
+
+      while (currentPrototype && currentPrototype !== Object.prototype) {
+        const candidate = Object.getOwnPropertyDescriptor(currentPrototype, attributeName)?.value
+
+        if (typeof candidate === "function") {
+          return {
+            method: candidate,
+            ownerName: currentPrototype.constructor?.name
+          }
+        }
+
+        currentPrototype = Object.getPrototypeOf(currentPrototype)
+      }
+    }
+    const serializedAttributeValue = async (attributeName) => {
+      const attributeMethodLookup = prototypeAttributeMethod(attributeName)
+      const attributeMethod = attributeMethodLookup?.method
+
+      if (typeof attributeMethod === "function") {
+        return await attributeMethod.call(model)
+      }
+
+      return modelAttributes[attributeName]
+    }
 
     if (!selectedAttributes) {
-      return modelAttributes
+      if (!defaultAttributes || defaultAttributes.length < 1) {
+        return modelAttributes
+      }
+
+      const serializedAttributes = {...modelAttributes}
+
+      for (const attributeName of defaultAttributes) {
+        if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+        serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
+      }
+
+      return serializedAttributes
     }
 
     /** @type {Record<string, any>} */
     const serializedAttributes = {}
 
     for (const attributeName of selectedAttributes) {
-      if (attributeName in modelAttributes) {
-        serializedAttributes[attributeName] = modelAttributes[attributeName]
-      }
+      if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+      serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
     }
 
     return serializedAttributes
@@ -2081,7 +2124,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      const primaryKey = relatedResource.resourceConfiguration.primaryKey || "id"
+      const primaryKey = relatedModelClass.primaryKey()
       const ids = relatedModels
         .map((model) => model.attributes()[primaryKey])
         .filter((id) => id !== undefined && id !== null)
@@ -2198,19 +2241,25 @@ export default class FrontendModelController extends Controller {
       }
     }
 
-    return models.map((model, modelIndex) => {
-      const serializedAttributes = this.serializeFrontendModelAttributes(model)
+    /** @type {Record<string, any>[]} */
+    const serializedModels = []
+
+    for (const [modelIndex, model] of models.entries()) {
+      const serializedAttributes = await this.serializeFrontendModelAttributes(model)
       const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
 
       if (Object.keys(preloadedRelationships).length < 1) {
-        return serializedAttributes
+        serializedModels.push(serializedAttributes)
+        continue
       }
 
-      return {
+      serializedModels.push({
         ...serializedAttributes,
         __preloadedRelationships: preloadedRelationships
-      }
-    })
+      })
+    }
+
+    return serializedModels
   }
 
   /**
@@ -2269,7 +2318,7 @@ export default class FrontendModelController extends Controller {
    * @param {object} args - Error log args.
    * @param {string} args.action - Endpoint/action label.
    * @param {unknown} args.error - Caught error.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} [args.commandType] - Frontend-model command type.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
    * @param {string | undefined} [args.model] - Request model name when available.
    * @param {string | undefined} [args.requestId] - Batch request id when available.
    * @returns {Promise<void>} - Resolves after logging.
@@ -2329,13 +2378,14 @@ export default class FrontendModelController extends Controller {
       return null
     }
 
+    const resource = this.frontendModelResourceInstance()
+
     if (action === "index") {
       const pluck = this.frontendModelPluck()
-      const serverConfiguration = this.frontendModelServerConfiguration()
 
       if (pluck.length > 0) {
-        if (serverConfiguration?.records) {
-          throw new Error("pluck is not supported when server.records callback is configured")
+        if (!(await resource.supportsPluck("index"))) {
+          throw new Error("pluck is not supported when resource records are customized")
         }
 
         const values = await this.frontendModelPluckValues({
@@ -2350,17 +2400,7 @@ export default class FrontendModelController extends Controller {
       }
 
       const models = await this.frontendModelRecords()
-      const serializedModels = serverConfiguration?.serialize
-        ? await Promise.all(models.map(async (model) => {
-          return await serverConfiguration.serialize({
-            action: "index",
-            controller: this,
-            model,
-            modelClass: this.frontendModelClass(),
-            params: this.frontendModelParams()
-          })
-        }))
-        : await this.serializeFrontendModels(models)
+      const serializedModels = await Promise.all(models.map(async (model) => await resource.serialize(model, "index")))
 
       return {
         models: serializedModels,
@@ -2385,16 +2425,7 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      const serverConfiguration = this.frontendModelServerConfiguration()
-      const serializedModel = serverConfiguration?.serialize
-        ? await serverConfiguration.serialize({
-          action: "create",
-          controller: this,
-          model,
-          modelClass,
-          params
-        })
-        : await this.serializeFrontendModel(model)
+      const serializedModel = await resource.serialize(model, "create")
 
       return {
         model: serializedModel,
@@ -2499,16 +2530,7 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      const serverConfiguration = this.frontendModelServerConfiguration()
-      const serializedModel = serverConfiguration?.serialize
-        ? await serverConfiguration.serialize({
-          action: "find",
-          controller: this,
-          model,
-          modelClass,
-          params
-        })
-        : await this.serializeFrontendModel(model)
+      const serializedModel = await resource.serialize(model, "find")
 
       return {
         model: serializedModel,
@@ -2523,40 +2545,14 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload("Expected model attributes.")
       }
 
-      const serverConfiguration = this.frontendModelServerConfiguration()
       const model = await this.frontendModelFindRecord("update", id)
 
       if (!model) {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      let updatedModel = model
-
-      if (serverConfiguration?.update) {
-        const callbackModel = await serverConfiguration.update({
-          action: "update",
-          attributes,
-          controller: this,
-          model,
-          modelClass,
-          params
-        })
-
-        if (callbackModel) updatedModel = callbackModel
-      } else {
-        model.assign(attributes)
-        await model.save()
-      }
-
-      const serializedModel = serverConfiguration?.serialize
-        ? await serverConfiguration.serialize({
-          action: "update",
-          controller: this,
-          model: updatedModel,
-          modelClass,
-          params
-        })
-        : await this.serializeFrontendModel(updatedModel)
+      const updatedModel = await resource.update(model, attributes)
+      const serializedModel = await resource.serialize(updatedModel, "update")
 
       return {
         model: serializedModel,
@@ -2564,24 +2560,13 @@ export default class FrontendModelController extends Controller {
       }
     }
 
-    const serverConfiguration = this.frontendModelServerConfiguration()
     const model = await this.frontendModelFindRecord("destroy", id)
 
     if (!model) {
       return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
     }
 
-    if (serverConfiguration?.destroy) {
-      await serverConfiguration.destroy({
-        action: "destroy",
-        controller: this,
-        model,
-        modelClass,
-        params
-      })
-    } else {
-      await model.destroy()
-    }
+    await resource.destroy(model)
 
     return {status: "success"}
   }
@@ -2600,6 +2585,7 @@ export default class FrontendModelController extends Controller {
 
     for (const requestEntry of requests) {
       const commandType = requestEntry?.commandType
+      const customPath = requestEntry?.customPath
       const model = requestEntry?.model
       const payload = requestEntry?.payload
       const requestId = requestEntry?.requestId
@@ -2612,23 +2598,36 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      if (!["index", "find", "create", "update", "destroy", "attach", "download", "url"].includes(commandType)) {
+      const isBuiltInCommand = ["index", "find", "create", "update", "destroy", "attach", "download", "url"].includes(commandType)
+
+      if (!isBuiltInCommand && (typeof customPath !== "string" || !customPath.startsWith("/"))) {
         responses.push({
           requestId,
-          response: this.frontendModelErrorPayload("Expected request commandType.")
+          response: this.frontendModelErrorPayload("Expected request customPath.")
         })
         continue
       }
 
-      const commandParams = {
-        ...(payload && typeof payload === "object" ? payload : {}),
-        model
-      }
-
       try {
-        const responsePayload = await this.withFrontendModelParams(commandParams, async () => {
-          return await this.frontendModelCommandPayload(commandType)
-        })
+        let responsePayload
+
+        if (isBuiltInCommand) {
+          const commandParams = {
+            ...(payload && typeof payload === "object" ? payload : {}),
+            model
+          }
+
+          responsePayload = await this.withFrontendModelParams(commandParams, async () => {
+            return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
+              return await this.frontendModelCommandPayload(commandType)
+            })
+          })
+        } else {
+          responsePayload = await this.frontendApiCustomCommandPayload({
+            customPath,
+            payload
+          })
+        }
 
         responses.push({
           requestId,
@@ -2657,6 +2656,73 @@ export default class FrontendModelController extends Controller {
         status: "success"
       }))
     })
+  }
+
+  /**
+   * Dispatches a custom frontend-model command through the shared frontend-model API endpoint.
+   * @param {object} args - Arguments.
+   * @param {string} args.customPath - Custom backend route path.
+   * @param {unknown} args.payload - Request payload.
+   * @returns {Promise<Record<string, any>>} - Parsed JSON response payload.
+   */
+  async frontendApiCustomCommandPayload({customPath, payload}) {
+    const configuration = this.getConfiguration()
+    const response = new Response({configuration})
+    const resolver = new RoutesResolver({
+      configuration,
+      request: this.getRequest(),
+      response
+    })
+    resolver.params = {}
+    const routeHookMatch = await resolver.resolveRouteResolverHooks(customPath)
+    const configurationRoutes = configuration.getRoutes()
+    const routeMatch = routeHookMatch || !configurationRoutes?.rootRoute ? undefined : resolver.matchPathWithRoutes(configurationRoutes.rootRoute, customPath)
+
+    if (!routeHookMatch && !routeMatch) {
+      throw new Error(`No custom frontend model route matched '${customPath}'`)
+    }
+
+    const actionParam = routeHookMatch?.action || resolver.params.action
+    const controllerParam = routeHookMatch?.controller || resolver.params.controller
+    const actionValue = typeof actionParam === "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
+    const controllerValue = typeof controllerParam === "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
+
+    if (typeof actionValue !== "string" || actionValue.length < 1 || typeof controllerValue !== "string" || controllerValue.length < 1) {
+      throw new Error(`Custom frontend model route matched '${customPath}' without controller/action params`)
+    }
+
+    const action = inflection.camelize(actionValue.replaceAll("-", "_").replaceAll("/", "_"), true)
+    const controller = controllerValue
+    const controllerPath = routeHookMatch?.controllerPath || `${configuration.getDirectory()}/src/routes/${controller}/controller.js`
+    const viewPath = routeHookMatch?.viewPath || `${configuration.getDirectory()}/src/routes/${controller}`
+    resolver.routeHookControllerClass = routeHookMatch?.controllerClass
+    const controllerClass = await resolver.resolveControllerClass({controllerPath})
+    const controllerParams = {
+      ...((payload && typeof payload === "object") ? payload : {}),
+      ...resolver.params
+    }
+    const controllerInstance = new controllerClass({
+      action,
+      configuration,
+      controller,
+      params: controllerParams,
+      request: /** @type {import("./http-server/client/request.js").default} */ (this.getRequest()),
+      response,
+      viewPath
+    })
+
+    await this.withFrontendModelRequestContext(controllerParams, response, async () => {
+      await controllerInstance._runBeforeCallbacks()
+      await controllerInstance[action]()
+    })
+
+    const responseBody = response.getBody()
+
+    if (typeof responseBody !== "string" || responseBody.length < 1) {
+      return {}
+    }
+
+    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(JSON.parse(responseBody)))
   }
 
   /** @returns {Promise<void>} - Collection action for frontend model resources. */
@@ -2738,4 +2804,58 @@ export default class FrontendModelController extends Controller {
 
     await this.frontendModelRenderCommandResponse("destroy")
   }
+
+  /** @returns {Promise<void>} - Custom collection/member command action for frontend-model resources. */
+  async frontendCustomCommand() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    try {
+      const responsePayload = await this.frontendModelCustomCommandPayload()
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
+      })
+    } catch (error) {
+      await this.frontendModelLogEndpointError({action: "frontendCustomCommand", commandType: "custom-command", error})
+      const errorMessage = frontendModelClientMessageForError(error)
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelErrorPayload(errorMessage)))
+      })
+    }
+  }
+
+  /** @returns {Promise<Record<string, any>>} - Response payload. */
+  async frontendModelCustomCommandPayload() {
+    const params = this.frontendModelParams()
+    const methodName = params.frontendModelCustomCommandMethodName
+    const scope = params.frontendModelCustomCommandScope
+
+    if (typeof methodName !== "string" || methodName.length < 1) {
+      return this.frontendModelErrorPayload("Expected frontend-model custom command method name.")
+    }
+
+    if (scope !== "collection" && scope !== "member") {
+      return this.frontendModelErrorPayload("Expected frontend-model custom command scope.")
+    }
+
+    const resource = /** @type {Record<string, any>} */ (this.frontendModelResourceInstance())
+    const commandMethod = resource[methodName]
+
+    if (typeof commandMethod !== "function") {
+      return this.frontendModelErrorPayload(`Missing frontend-model custom command '${methodName}'.`)
+    }
+
+    const responsePayload = await commandMethod.call(resource)
+
+    if (!responsePayload || typeof responsePayload !== "object") {
+      return {status: "success"}
+    }
+
+    return /** @type {Record<string, any>} */ (responsePayload)
+  }
+
 }

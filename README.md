@@ -71,9 +71,11 @@ Retry flaky tests by setting a retry count on the test args.
 
 ```js
 describe("Tasks", () => {
-  it("retries a flaky check", {retry: 2}, async () => {})
+it("retries a flaky check", {retry: 2}, async () => {})
 })
 ```
+
+During a failing run, Velocious captures all console output emitted while each test executes. At the end of a failed run, those logs are saved under `tmp/screenshots` next to failure screenshots/browser logs/HTML, and each failed test summary prints the saved console log path.
 
 Listen for retry events if you need to restart services between attempts.
 
@@ -257,26 +259,40 @@ npx velocious g:model Task
 You can generate lightweight frontend model classes from resource definitions in your configuration.
 
 ```js
+import FrontendModelBaseResource from "velocious/build/src/frontend-model-resource/base-resource.js"
+
+class UserResource extends FrontendModelBaseResource {
+  static resourceConfig() {
+    return {
+      abilities: {
+        create: "create",
+        destroy: "destroy",
+        find: "read",
+        index: "read",
+        update: "update"
+      },
+      attributes: ["id", "name", "email"],
+      relationships: {
+        projects: {type: "hasMany", model: "Project"}
+      }
+    }
+  }
+}
+
 export default new Configuration({
   // ...
   backendProjects: [
     {
       path: "/path/to/backend-project",
       resources: {
-        User: {
-          attributes: ["id", "name", "email"],
-          relationships: {
-            projects: {type: "hasMany", model: "Project"}
-          },
-          commands: {find: "find", create: "create", update: "update", destroy: "destroy"},
-          path: "/api/frontend-models/users",
-          primaryKey: "id"
-        }
+        User: UserResource
       }
     }
   ]
 })
 ```
+
+`resources` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
 
 Generate classes:
 
@@ -434,16 +450,14 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
-  baseUrlResolver: () => "http://127.0.0.1:4501",
-  pathPrefixResolver: () => "",
+  url: "http://127.0.0.1:4501/frontend-models",
   credentials: "include"
 })
 ```
 
 Available transport options:
 
-- `baseUrl` / `baseUrlResolver`
-- `pathPrefix` / `pathPrefixResolver`
+- `url` (can also be a relative path like `"/frontend-models"` on web)
 - `credentials`
 - `request` (custom request handler)
 
@@ -558,6 +572,24 @@ Task.translates("description", "subTitle", "title")
 Task.validates("name", {presence: true, uniqueness: true})
 
 export default Task
+```
+
+## Lifecycle callbacks
+
+Register lifecycle callbacks with either a function or an instance method name. Registrations run in order, so you can stack multiple callbacks on the same lifecycle hook.
+
+```js
+class Task extends Record {
+  async validateSomething() {
+    await doSomethingElse()
+  }
+}
+
+Task.beforeValidation(async (task) => {
+  await doSomething(task)
+})
+
+Task.beforeValidation("validateSomething")
 ```
 
 ## Preloading relationships
@@ -900,6 +932,23 @@ const specificTask = await Task.where({
 const tasksWithRecentCreators = await Task.where({
   project: {creatingUser: [["createdAt", ">=", new Date("2026-01-01T00:00:00.000Z")]]}
 }).toArray()
+```
+
+### Ransack-style filtering
+
+Use `.ransack(...)` on record queries, record classes, frontend-model queries, and frontend-model classes when you want Rails/Ransack-style predicate keys without hand-writing nested `where(...)` or `search(...)` calls.
+
+Supported predicates include `_eq`, `_not_eq`, `_gt`, `_gteq`, `_lt`, `_lteq`, `_cont`, `_start`, `_end`, `_in`, `_not_in`, and `_null`.
+
+```js
+const tasks = await Task.ransack({
+  name_cont: "deploy",
+  project_project_detail_is_active_eq: true
+}).toArray()
+
+const frontendTasks = await FrontendTask
+  .ransack({name_cont: "deploy", id_in: ["1", "2"]})
+  .toArray()
 ```
 
 ### Raw where clauses
@@ -1465,6 +1514,35 @@ await MyJob.performLaterWithOptions({
 })
 ```
 
+## Scheduled jobs
+
+Velocious can enqueue recurring jobs from the `background-jobs-main` process. Configure them with `scheduledBackgroundJobs` using Sidekiq Scheduler-style `every` arrays:
+
+```js
+import BuildCleanupJob from "./src/jobs/build-cleanup-job.js"
+
+export default new Configuration({
+  // ...
+  scheduledBackgroundJobs: {
+    jobs: {
+      buildCleanup: {
+        class: BuildCleanupJob,
+        every: ["1h", {first_in: "10s"}],
+        options: {forked: false}
+      }
+    }
+  }
+})
+```
+
+Supported schedule syntax:
+
+- `every: "5m"`
+- `every: ["1h", {first_in: "30s"}]`
+- `every: ["1 day", {firstIn: "5 minutes"}]`
+
+`background-jobs-main` owns the schedule and enqueues the configured jobs into the normal Velocious background-jobs queue. The HTTP server does not run scheduled jobs itself.
+
 ## Persistence and retries
 
 Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the job is marked as handed off and the worker reports completion or failure back to the main process.
@@ -1502,7 +1580,7 @@ class UserResource extends BaseResource {
     const currentUser = this.currentUser()
 
     if (currentUser) {
-      this.can("read", User, {id: currentUser.id()})
+      this.can("read", {id: currentUser.id()})
     }
   }
 }
@@ -1544,3 +1622,32 @@ Or require explicit ability passing:
 ```js
 const users = await User.accessibleBy(ability).toArray()
 ```
+
+# Tenant / elevator support
+
+Velocious can resolve a request-scoped tenant and override configured database identifiers per tenant for HTTP routes, websocket subscriptions, and websocket event delivery.
+
+```js
+import Configuration from "velocious/build/src/configuration.js"
+
+export default new Configuration({
+  // ...
+  tenantResolver: async ({params, subscription}) => {
+    const projectSlug = subscription?.params?.project_slug || params.project_slug
+
+    if (!projectSlug) return
+
+    return {
+      databaseIdentifiers: ["auditTenant"],
+      projectSlug
+    }
+  },
+  tenantDatabaseResolver: ({databaseConfiguration, identifier, tenant}) => {
+    if (identifier !== "auditTenant" || !tenant?.projectSlug) return
+
+    return {name: `${databaseConfiguration.name}-${tenant.projectSlug}`}
+  }
+})
+```
+
+Use `configuration.runWithTenant(tenant, callback)` or `Current.tenant()` when custom model/database routing needs to read the active tenant manually.

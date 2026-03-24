@@ -18,6 +18,8 @@ import CliCommandsDbSchemaDump from "./node/cli/commands/db/schema/dump.js"
 import CliCommandsDbSeed from "./node/cli/commands/db/seed.js"
 import CliCommandsRunner from "./node/cli/commands/runner.js"
 import CliCommandsRunScript from "./node/cli/commands/run-script.js"
+import FrontendModelWebsocketChannel from "../frontend-models/websocket-channel.js"
+import frontendModelCommandRouteHook from "../routes/hooks/frontend-model-command-route-hook.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
@@ -26,7 +28,27 @@ import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 
-/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number}} TimezoneStore */
+/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, tenant?: unknown}} TimezoneStore */
+
+/**
+ * @param {string} filePath - Input file path.
+ * @param {string[]} allowedPathPrefixes - Allowed path prefixes.
+ * @returns {boolean} - Whether input path is inside an allowed prefix.
+ */
+function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
+  const resolvedPath = path.resolve(filePath)
+
+  return allowedPathPrefixes.some((allowedPrefix) => {
+    const resolvedPrefix = path.resolve(allowedPrefix)
+    const relativePath = path.relative(resolvedPrefix, resolvedPath)
+
+    if (!relativePath) return true
+    if (relativePath.startsWith("..")) return false
+    if (path.isAbsolute(relativePath)) return false
+
+    return true
+  })
+}
 
 export default class VelociousEnvironmentHandlerNode extends Base{
   /** @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
@@ -34,6 +56,63 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
+
+  /**
+   * @param {import("../configuration.js").default} newConfiguration - New configuration.
+   * @returns {void} - No return value.
+   */
+  setConfiguration(newConfiguration) {
+    super.setConfiguration(newConfiguration)
+    const configurationWithFrontendModelWebsocketResolverState = /** @type {import("../configuration.js").default & {_frontendModelWebsocketResolverWrapped?: boolean}} */ (newConfiguration)
+
+    if (!newConfiguration.getRouteResolverHooks().includes(frontendModelCommandRouteHook)) {
+      newConfiguration.addRouteResolverHook(frontendModelCommandRouteHook)
+    }
+
+    if (!configurationWithFrontendModelWebsocketResolverState._frontendModelWebsocketResolverWrapped) {
+      const existingResolver = newConfiguration.getWebsocketChannelResolver()
+
+      newConfiguration.setWebsocketChannelResolver(async (args) => {
+        if (args.subscription?.channel === "frontend-models") {
+          return FrontendModelWebsocketChannel
+        }
+
+        if (existingResolver) {
+          return await existingResolver(args)
+        }
+      })
+      configurationWithFrontendModelWebsocketResolverState._frontendModelWebsocketResolverWrapped = true
+    }
+  }
+
+  /**
+   * @param {string} filePath - File path.
+   * @returns {Promise<Buffer>} - File bytes.
+   */
+  async readAttachmentInputFile(filePath) {
+    return await fs.readFile(filePath)
+  }
+
+  /**
+   * @param {object} args - Args.
+   * @param {string[]} args.allowedPathPrefixes - Allowed path prefixes.
+   * @param {string} args.inputPath - Input path.
+   * @returns {Promise<{buffer: Buffer, filePath: string}>} - Resolved path and bytes.
+   */
+  async resolveAttachmentInputPath({allowedPathPrefixes, inputPath}) {
+    const filePath = path.resolve(inputPath)
+    const prefixes = Array.isArray(allowedPathPrefixes)
+      ? allowedPathPrefixes.filter((entry) => typeof entry === "string" && entry.length > 0)
+      : []
+
+    if (prefixes.length > 0 && !pathWithinAllowedPrefixes(filePath, prefixes)) {
+      throw new Error("Attachment path is outside allowed directories")
+    }
+
+    const buffer = await this.readAttachmentInputFile(filePath)
+
+    return {buffer, filePath}
+  }
 
   /**
    * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with the commands.
@@ -60,7 +139,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     return await this._timezoneAsyncLocalStorage.run({
       ability: existingStore?.ability,
-      offsetMinutes
+      offsetMinutes,
+      tenant: existingStore?.tenant
     }, callback)
   }
 
@@ -80,7 +160,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
       this._timezoneAsyncLocalStorage.enterWith({
         ability: existingStore?.ability,
-        offsetMinutes
+        offsetMinutes,
+        tenant: existingStore?.tenant
       })
     }
   }
@@ -115,7 +196,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     return await this._timezoneAsyncLocalStorage.run({
       ability,
-      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration())
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      tenant: existingStore?.tenant
     }, callback)
   }
 
@@ -136,7 +218,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     } else {
       this._timezoneAsyncLocalStorage.enterWith({
         ability,
-        offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration())
+        offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
+        tenant: existingStore?.tenant
       })
     }
   }
@@ -150,6 +233,59 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     }
 
     return this._timezoneAsyncLocalStorage.getStore()?.ability
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithTenant(tenant, callback) {
+    if (!this._timezoneAsyncLocalStorage) {
+      return await super.runWithTenant(tenant, callback)
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    return await this._timezoneAsyncLocalStorage.run({
+      ability: existingStore?.ability,
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      tenant
+    }, callback)
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentTenant(tenant) {
+    if (!this._timezoneAsyncLocalStorage) {
+      super.setCurrentTenant(tenant)
+      return
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    if (existingStore) {
+      existingStore.tenant = tenant
+    } else {
+      this._timezoneAsyncLocalStorage.enterWith({
+        ability: undefined,
+        offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
+        tenant
+      })
+    }
+  }
+
+  /**
+   * @returns {unknown} - Current tenant.
+   */
+  getCurrentTenant() {
+    if (!this._timezoneAsyncLocalStorage) {
+      return super.getCurrentTenant()
+    }
+
+    return this._timezoneAsyncLocalStorage.getStore()?.tenant
   }
 
   /**

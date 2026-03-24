@@ -171,6 +171,12 @@
 - Apply the dummy Task frontend-model ability resolver fix across all tracked peakflow test configs (`mariadb`/`sqlite`/`pgsql`/`mssql`) so CI environments load it regardless of selected test database.
 - Add nested relationship tuple-operator support to database `where(...)` hashes (including `like`), enabling queries such as `Event.where({translations: [["name", "like", "%foo%"]]})` and deep chains like `Task.where({project: {account: [["name", "like", "%bar%"], ["createdAt", "gteq", someDate]]}})`.
 - Fix frontend-model relationship-path sorting joins by tracking joined paths per query, ensuring sort/search `ORDER BY` columns always have matching SQL joins without duplicate join clauses.
+- Add unified frontend-model transport endpoint routing at `/velocious/api` (with route-hook/controller support) and batch command processing so multiple frontend model commands can share one HTTP request.
+- Update `FrontendModelBase` transport to target `/velocious/api` and queue same-tick commands into batched fetch payloads while preserving custom request transport support.
+- Add `resourceConfig().modelName` override support so frontend model classes can map to a different backend resource/model name when using the unified API endpoint.
+- Make frontend-model generator stop emitting `path` in generated `resourceConfig()` output.
+- Extend frontend-model generator attribute handling so array `attributes` infer JSDoc types/nullability from backend model columns when model metadata is available, while keeping object-form attribute overrides.
+- Extend frontend-model generator relationship handling to support array-form and inferred relationship metadata from backend model associations, while keeping object-form relationship overrides.
 - Add frontend-model parity APIs (`all`, `order`, `first`, `last`, `findOrInitializeBy`, `findOrCreateBy`, `create`, `save`, record state helpers) and add built-in frontend-model `create` command/action support with resource-ability scoping (including shared `/velocious/api` batches and autoroutes).
 - Regenerate dummy frontend models so single-tag JSDoc blocks (including relationship `@returns` definitions) are emitted on one line.
 - Add frontend-model query `group(...)` support with safe attribute/path normalization (including nested relationship grouping like `{project: {account: ["id"]}}`) and reject SQL-like raw string fragments.
@@ -191,3 +197,8 @@
 - Allow model attachment definitions to pass storage drivers as direct class/instance references (for example `Task.hasOneAttachment("mobileCache", {driver: NativeDriver})`) to avoid forced dynamic imports in Expo-incompatible dependency paths.
 
 - Support root-model select shorthand arrays/strings (`Model.select(["id", "createdAt"])`) across frontend queries, frontend-model controller payloads, and backend model queries so selections stay scoped to the primary model even with joins.
+- Keep frontend-model route-hook controller resolution Expo-safe by only overriding `controllerPath` for shared `/velocious/api` requests, while backend-project frontend-model autoroutes continue resolving app route controllers (with existing resolver controller-class fallback behavior).
+- Register the default frontend-model command route hook through Node environment setup (instead of `Configuration` import-time wiring) so browser bundles avoid backend-only hook imports while Node/server behavior remains unchanged.
+- Make attachment store bundler-safe for Expo/Metro by removing static Node `crypto`/filesystem imports from `RecordAttachmentsStore`; UUID generation now uses `pure-uuid` and the filesystem driver is loaded lazily only when that backend driver is actually used.
+- Make attachment input normalization Expo-safe by lazy-loading Node `fs/promises` and `path` only for Node-only attachment-path branches, preventing Metro eager bundle resolution of Node builtins.
+- Remove attachment-driver dynamic imports from shared code paths: attachment storage now requires explicit configured drivers, while Node-specific file/path attachment operations are handled by `NodeEnvironmentHandler` methods to keep Expo/Metro bundles free of Node-only imports.

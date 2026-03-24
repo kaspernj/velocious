@@ -78,6 +78,36 @@ function buildAttachmentTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with custom primary key.
+ */
+function buildCustomPrimaryKeyTestModelClass() {
+  /** Test model implementation with custom primary key. */
+  class User extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {find: string, index: string}, primaryKey: string}} - Resource configuration.
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["reference", "name"],
+        commands: {
+          find: "find",
+          index: "index"
+        },
+        primaryKey: "reference"
+      }
+    }
+
+    /** @returns {any} */
+    reference() { return this.readAttribute("reference") }
+  }
+
+  return User
+}
+
+/**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with legacy built-in aliases.
+ */
+/**
  * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
  */
 function buildPreloadTestModelClasses() {
@@ -183,9 +213,17 @@ function stubFetch(responseBody) {
 
   globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
     const bodyString = typeof options?.body === "string" ? options.body : "{}"
+    const parsedBody = JSON.parse(bodyString)
+    const batchRequests = Array.isArray(parsedBody.requests) ? parsedBody.requests : null
+    const normalizedBody = batchRequests && batchRequests.length === 1 && typeof batchRequests[0] === "object"
+      ? batchRequests[0].payload
+      : parsedBody
+    const responsePayload = batchRequests
+      ? {responses: batchRequests.map((req) => ({requestId: req.requestId, response: responseBody}))}
+      : responseBody
 
     calls.push({
-      body: JSON.parse(bodyString),
+      body: normalizedBody,
       url: `${url}`
     })
 
@@ -193,9 +231,9 @@ function stubFetch(responseBody) {
       ok: true,
       status: 200,
       /** @returns {Promise<string>} */
-      text: async () => JSON.stringify(responseBody),
+      text: async () => JSON.stringify(responsePayload),
       /** @returns {Promise<Record<string, any>>} */
-      json: async () => responseBody
+      json: async () => responsePayload
     }
   })
 
@@ -210,12 +248,11 @@ function stubFetch(responseBody) {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: undefined,
-    baseUrlResolver: undefined,
     credentials: undefined,
-    pathPrefix: undefined,
-    pathPrefixResolver: undefined,
-    request: undefined
+    request: undefined,
+    shared: undefined,
+    url: undefined,
+    websocketClient: undefined
   })
 }
 
@@ -275,12 +312,293 @@ describe("Frontend models - base", () => {
       ])
 
       expect(calls).toHaveLength(1)
-      expect(calls[0].url).toEqual("/velocious/api")
+      expect(calls[0].url).toEqual("/frontend-models")
       expect(calls[0].body.requests).toHaveLength(2)
       expect(calls[0].body.requests[0].model).toEqual("SharedApiUser")
       expect(calls[0].body.requests[1].model).toEqual("SharedApiUser")
       expect(firstResult).toHaveLength(1)
       expect(secondResult).toHaveLength(1)
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("batches custom commands through the shared frontend-model API", async () => {
+    const User = buildTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+        const body = JSON.parse(bodyString)
+        const requestId = body.requests?.[0]?.requestId
+
+        calls.push({
+          body,
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId,
+              response: {status: "success", value: "pong"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId,
+              response: {status: "success", value: "pong"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      const response = await User.executeCustomCommand({
+        commandName: "ping",
+        commandType: "ping",
+        memberId: 5,
+        payload: {name: "John"},
+        resourcePath: "/custom-frontend-models/users"
+      })
+
+      expect(calls).toEqual([
+        {
+          body: {
+            requests: [{
+              commandType: "ping",
+              customPath: "/custom-frontend-models/users/5/ping",
+              model: "User",
+              payload: {name: "John"},
+              requestId: calls[0].body.requests[0].requestId
+            }]
+          },
+          url: "/frontend-models"
+        }
+      ])
+      expect(response.status).toEqual("success")
+      expect(response.value).toEqual("pong")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("infers default resource paths for pathless custom commands", async () => {
+    const User = buildCustomPrimaryKeyTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+
+        calls.push({
+          body: JSON.parse(bodyString),
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId: calls[0].body.requests[0].requestId,
+              response: {status: "success"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId: calls[0].body.requests[0].requestId,
+              response: {status: "success"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      await User.executeCustomCommand({
+        commandName: "refresh-access",
+        commandType: "refresh-access",
+        memberId: "user-1",
+        payload: {},
+        resourcePath: User.resourcePath()
+      })
+
+      expect(calls[0].body.requests[0].customPath).toEqual("/users/user-1/refresh-access")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("routes path-based frontend-model commands through the shared frontend-model API when shared transport is enabled", async () => {
+    const User = buildTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      FrontendModelBase.configureTransport({shared: true})
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+        const body = JSON.parse(bodyString)
+        const requestId = body.requests?.[0]?.requestId
+
+        calls.push({
+          body,
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId,
+              response: {models: [{email: "john@example.com", id: 5, name: "John"}], status: "success"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId,
+              response: {models: [{email: "john@example.com", id: 5, name: "John"}], status: "success"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      const users = await User.toArray()
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].url).toEqual("/frontend-models")
+      expect(calls[0].body.requests[0].commandType).toEqual("index")
+      expect(calls[0].body.requests[0].model).toEqual("User")
+      expect(users[0].id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("batches shared frontend-model API requests through a websocket client", async () => {
+    const User = buildTestModelClass()
+    /** @type {Array<{body: Record<string, any>, path: string}>} */
+    const calls = []
+
+    FrontendModelBase.configureTransport({
+      shared: true,
+      url: "https://example.test",
+      websocketClient: {
+        post: async (path, body) => {
+          calls.push({
+            body,
+            path
+          })
+
+          return {
+            json: () => ({
+              responses: (body.requests || []).map((requestEntry) => ({
+                requestId: requestEntry.requestId,
+                response: {models: [{email: "john@example.com", id: "5", name: "John"}], status: "success"}
+              })),
+              status: "success"
+            })
+          }
+        }
+      }
+    })
+
+    try {
+      const [firstResult, secondResult] = await Promise.all([
+        User.toArray(),
+        User.toArray()
+      ])
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].path).toEqual("/frontend-models")
+      expect(calls[0].body.requests).toHaveLength(2)
+      expect(firstResult[0].id()).toEqual("5")
+      expect(secondResult[0].name()).toEqual("John")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("uses configured frontend-model primary keys", () => {
+    const User = buildCustomPrimaryKeyTestModelClass()
+    const user = new User({name: "Jane", reference: "user-ref-1"})
+
+    expect(User.primaryKey()).toEqual("reference")
+    expect(user.primaryKeyValue()).toEqual("user-ref-1")
+  })
+
+  it("uses configured shared frontend-model API URL when url is configured", async () => {
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    class SharedApiUser extends FrontendModelBase {
+      /** @returns {{attributes: string[], commands: {index: string}}} */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          commands: {
+            index: "index"
+          }
+        }
+      }
+    }
+
+    FrontendModelBase.configureTransport({
+      url: "https://example.test"
+    })
+
+    globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+      const bodyString = typeof options?.body === "string" ? options.body : "{}"
+      const body = JSON.parse(bodyString)
+
+      calls.push({
+        body,
+        url: `${url}`
+      })
+
+      return {
+        ok: true,
+        status: 200,
+        /** @returns {Promise<string>} */
+        text: async () => JSON.stringify({
+          responses: [{
+            requestId: body.requests[0].requestId,
+            response: {models: [{id: "1", name: "One"}], status: "success"}
+          }],
+          status: "success"
+        }),
+      }
+    })
+
+    try {
+      await SharedApiUser.toArray()
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].url).toEqual("https://example.test/frontend-models")
     } finally {
       resetFrontendModelTransport()
       globalThis.fetch = originalFetch
@@ -297,7 +615,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(users.length).toEqual(1)
@@ -324,7 +642,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(usersCount).toEqual(2)
@@ -405,7 +723,7 @@ describe("Frontend models - base", () => {
           body: {
             where: {project: {creatingUser: {reference: "creator-1"}}}
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -433,7 +751,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(5)
@@ -463,7 +781,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -493,7 +811,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(5)
@@ -530,7 +848,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(7)
@@ -563,7 +881,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -594,10 +912,78 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(usersCount).toEqual(2)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("sends ransack payload when using ransack(...).toArray()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .ransack({email_cont: "john", id_in: ["1", "2"]})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "email",
+                operator: "like",
+                path: [],
+                value: "%john%"
+              },
+              {
+                column: "id",
+                operator: "eq",
+                path: [],
+                value: ["1", "2"]
+              }
+            ]
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("chains ransack filters onto existing frontend-model queries", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .where({id: "2"})
+        .ransack({email_cont: "john"})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "email",
+                operator: "like",
+                path: [],
+                value: "%john%"
+              }
+            ],
+            where: {id: "2"}
+          },
+          url: "/frontend-models"
+        }
+      ])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
@@ -627,7 +1013,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -654,7 +1040,7 @@ describe("Frontend models - base", () => {
               }
             }
           },
-          url: "/api/frontend-models/tasks/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -696,7 +1082,7 @@ describe("Frontend models - base", () => {
               }
             ]
           },
-          url: "/api/frontend-models/tasks/index"
+          url: "/frontend-models"
         }
       ])
       expect(values).toEqual(["project-1"])
@@ -741,7 +1127,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {id: 5},
-          url: "/api/frontend-models/users/find"
+          url: "/frontend-models"
         }
       ])
       expect(user.id()).toEqual(5)
@@ -827,7 +1213,7 @@ describe("Frontend models - base", () => {
               when: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"}
             }
           },
-          url: "/api/frontend-models/users/find"
+          url: "/frontend-models"
         }
       ])
       expect(response.nested.hugeCounter).toEqual(9007199254740993n)
@@ -862,7 +1248,7 @@ describe("Frontend models - base", () => {
               metadata: {region: "eu"}
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(2)
@@ -922,7 +1308,7 @@ describe("Frontend models - base", () => {
               email: "john@example.com"
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         }
       ])
       expect(user?.id()).toEqual(5)
@@ -954,11 +1340,11 @@ describe("Frontend models - base", () => {
               User: ["id", "email"]
             }
           },
-          url: "/api/frontend-models/users/find"
+          url: "/frontend-models"
         },
         {
           body: {id: 5},
-          url: "/api/frontend-models/users/destroy"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1007,7 +1393,7 @@ describe("Frontend models - base", () => {
               }
             }
           },
-          url: "/api/frontend-models/projects/index"
+          url: "/frontend-models"
         }
       ])
       expect(tasks[0].constructor.name).toEqual("Task")
@@ -1046,7 +1432,7 @@ describe("Frontend models - base", () => {
               Task: ["updatedAt"]
             }
           },
-          url: "/api/frontend-models/projects/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1075,7 +1461,7 @@ describe("Frontend models - base", () => {
               Project: ["id", "createdAt"]
             }
           },
-          url: "/api/frontend-models/projects/index"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1168,7 +1554,7 @@ describe("Frontend models - base", () => {
               tasks: true
             }
           },
-          url: "/api/frontend-models/projects/find"
+          url: "/frontend-models"
         }
       ])
       expect(Array.isArray(loadedTasks)).toEqual(true)
@@ -1230,7 +1616,7 @@ describe("Frontend models - base", () => {
   it("updates a model and refreshes local attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
-    const user = new User({email: "john@example.com", id: 5, name: "John"})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
 
     try {
       await user.update({name: "John Changed"})
@@ -1238,14 +1624,62 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            attributes: {email: "john@example.com", id: 5, name: "John Changed"},
+            attributes: {name: "John Changed"},
             id: 5
           },
-          url: "/api/frontend-models/users/update"
+          url: "/frontend-models"
         }
       ])
       expect(user.name()).toEqual("Johnny")
       expect(user.readAttribute("email")).toEqual("johnny@example.com")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("includes previously staged attributes in update payloads", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
+
+    try {
+      user.setAttribute("email", "staged@example.com")
+
+      await user.update({name: "John Changed"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "staged@example.com", name: "John Changed"},
+            id: 5
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("does not include unchanged read-only response attributes in update payloads", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, membersCount: 2, name: "John"}})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, membersCount: 2, name: "John"})
+
+    try {
+      await user.update({name: "John Changed"})
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {name: "John Changed"},
+            id: 5
+          },
+          url: "/frontend-models"
+        }
+      ])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
@@ -1285,6 +1719,74 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("falls back to direct HTTP attachment uploads for attachment updates when shared websocket transport is enabled", async () => {
+    const Task = buildAttachmentTestModelClass()
+    const task = new Task({id: 10, name: "Task"})
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const fetchCalls = []
+    /** @type {Array<{path: string, body: Record<string, any>}>} */
+    const websocketCalls = []
+
+    try {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        websocketClient: {
+          post: async (path, body) => {
+            websocketCalls.push({body, path})
+
+            return {
+              json: () => ({responses: [], status: "success"})
+            }
+          }
+        }
+      })
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+
+        fetchCalls.push({
+          body: JSON.parse(bodyString),
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({model: {id: 10, name: "Task"}}),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({model: {id: 10, name: "Task"}})
+        }
+      })
+
+      await task.update({
+        descriptionFile: {
+          contentBase64: "YQ==",
+          filename: "a.txt"
+        }
+      })
+
+      expect(websocketCalls).toEqual([])
+      expect(fetchCalls).toEqual([
+        {
+          body: {
+            attachment: {
+              contentBase64: "YQ==",
+              contentType: null,
+              filename: "a.txt"
+            },
+            attachmentName: "descriptionFile",
+            id: 10
+          },
+          url: "/api/frontend-models/tasks/attach"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("downloads attachments through attachment helpers", async () => {
     const Task = buildAttachmentTestModelClass()
     const fetchStub = stubFetch({
@@ -1308,7 +1810,7 @@ describe("Frontend models - base", () => {
             attachmentName: "descriptionFile",
             id: 11
           },
-          url: "/api/frontend-models/tasks/download"
+          url: "/frontend-models"
         }
       ])
       expect(downloadedAttachment.filename()).toEqual("a.txt")
@@ -1337,7 +1839,7 @@ describe("Frontend models - base", () => {
             attachmentName: "descriptionFile",
             id: 11
           },
-          url: "/api/frontend-models/tasks/url"
+          url: "/frontend-models"
         }
       ])
       expect(attachmentUrl).toEqual("file:///tmp/attachments/attachment-2-a.txt")
@@ -1364,6 +1866,72 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("falls back to direct HTTP for attachment uploads when shared websocket transport is enabled", async () => {
+    const Task = buildAttachmentTestModelClass()
+    const task = new Task({id: 10, name: "Task"})
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const fetchCalls = []
+    /** @type {Array<{path: string, body: Record<string, any>}>} */
+    const websocketCalls = []
+
+    try {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        websocketClient: {
+          post: async (path, body) => {
+            websocketCalls.push({body, path})
+
+            return {
+              json: () => ({responses: [], status: "success"})
+            }
+          }
+        }
+      })
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+
+        fetchCalls.push({
+          body: JSON.parse(bodyString),
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({model: {id: 10, name: "Task"}}),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({model: {id: 10, name: "Task"}})
+        }
+      })
+
+      await task.descriptionFile().attach({
+        contentBase64: "YQ==",
+        filename: "a.txt"
+      })
+
+      expect(websocketCalls).toEqual([])
+      expect(fetchCalls).toEqual([
+        {
+          body: {
+            attachment: {
+              contentBase64: "YQ==",
+              contentType: null,
+              filename: "a.txt"
+            },
+            attachmentName: "descriptionFile",
+            id: 10
+          },
+          url: "/api/frontend-models/tasks/attach"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("saves a new model with create command and tracks persisted state", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "john@example.com", id: 7, name: "Created"}})
@@ -1380,7 +1948,7 @@ describe("Frontend models - base", () => {
           body: {
             attributes: {email: "john@example.com", name: "Draft"}
           },
-          url: "/api/frontend-models/users/create"
+          url: "/frontend-models"
         }
       ])
       expect(user.isNewRecord()).toEqual(false)
@@ -1420,7 +1988,7 @@ describe("Frontend models - base", () => {
               email: "new@example.com"
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         },
         {
           body: {
@@ -1428,7 +1996,7 @@ describe("Frontend models - base", () => {
               email: "new@example.com"
             }
           },
-          url: "/api/frontend-models/users/index"
+          url: "/frontend-models"
         },
         {
           body: {
@@ -1437,7 +2005,7 @@ describe("Frontend models - base", () => {
               name: "Local Name"
             }
           },
-          url: "/api/frontend-models/users/create"
+          url: "/frontend-models"
         }
       ])
       expect(createdUser.isPersisted()).toEqual(true)
@@ -1473,7 +2041,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {id: 7},
-          url: "/api/frontend-models/users/destroy"
+          url: "/frontend-models"
         }
       ])
     } finally {
@@ -1482,12 +2050,12 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("prefixes command URL with configured base URL", async () => {
+  it("prefixes legacy direct command URLs with configured transport URL", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      baseUrl: "http://127.0.0.1:4501/"
+      url: "http://127.0.0.1:4501/"
     })
 
     try {
@@ -1496,7 +2064,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "http://127.0.0.1:4501/api/frontend-models/users/index"
+          url: "http://127.0.0.1:4501/frontend-models"
         }
       ])
     } finally {
@@ -1505,13 +2073,12 @@ describe("Frontend models - base", () => {
     }
   })
 
-  it("adds configured path prefix before resource path", async () => {
+  it("supports dynamic transport URLs", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      baseUrl: "http://127.0.0.1:4501",
-      pathPrefix: "/backend-api"
+      url: () => "http://localhost:4500/v1"
     })
 
     try {
@@ -1520,31 +2087,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {},
-          url: "http://127.0.0.1:4501/backend-api/api/frontend-models/users/index"
-        }
-      ])
-    } finally {
-      resetFrontendModelTransport()
-      fetchStub.restore()
-    }
-  })
-
-  it("supports dynamic base URL and path prefix resolvers", async () => {
-    const User = buildTestModelClass()
-    const fetchStub = stubFetch({models: []})
-
-    FrontendModelBase.configureTransport({
-      baseUrlResolver: () => "http://localhost:4500/",
-      pathPrefixResolver: () => "v1"
-    })
-
-    try {
-      await User.toArray()
-
-      expect(fetchStub.calls).toEqual([
-        {
-          body: {},
-          url: "http://localhost:4500/v1/api/frontend-models/users/index"
+          url: "http://localhost:4500/v1/frontend-models"
         }
       ])
     } finally {
@@ -1581,7 +2124,7 @@ describe("Frontend models - base", () => {
       expect(calls[0].commandType).toEqual("find")
       expect(calls[0].modelClass).toEqual(User)
       expect(calls[0].payload.id).toEqual(9)
-      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
+      expect(calls[0].url).toEqual("/frontend-models")
       expect(user.readAttribute("createdAt") instanceof Date).toEqual(true)
       expect(user.readAttribute("createdAt").toISOString()).toEqual(responseDateString)
       expect(user.readAttribute("maybeMissing")).toEqual(undefined)
@@ -1710,7 +2253,7 @@ describe("Frontend models - base", () => {
       expect(calls[0].payload.negativeInfinity).toEqual({__velocious_type: "number", value: "-Infinity"})
       expect(calls[0].payload.notANumber).toEqual({__velocious_type: "number", value: "NaN"})
       expect(calls[0].payload.positiveInfinity).toEqual({__velocious_type: "number", value: "Infinity"})
-      expect(calls[0].url).toEqual("/api/frontend-models/users/find")
+      expect(calls[0].url).toEqual("/frontend-models")
     } finally {
       resetFrontendModelTransport()
     }

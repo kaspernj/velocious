@@ -40,4 +40,34 @@ export default class Current {
   static async withAbility(ability, callback) {
     return await this.configuration().runWithAbility(ability, callback)
   }
+
+  /**
+   * @returns {unknown} - Current tenant.
+   */
+  static tenant() {
+    try {
+      return this.configuration().getCurrentTenant()
+    } catch (error) {
+      if (error instanceof CurrentConfigurationNotSetError) return
+
+      throw error
+    }
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant.
+   * @returns {void} - No return value.
+   */
+  static setTenant(tenant) {
+    this.configuration().getEnvironmentHandler().setCurrentTenant(tenant)
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  static async withTenant(tenant, callback) {
+    return await this.configuration().runWithTenant(tenant, callback)
+  }
 }

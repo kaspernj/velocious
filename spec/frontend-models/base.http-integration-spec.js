@@ -1,8 +1,12 @@
 // @ts-check
 
+import {waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
+import WebsocketClient from "../../src/http-client/websocket-client.js"
 import Dummy from "../dummy/index.js"
+import Project from "../dummy/src/models/project.js"
+import TaskRecord from "../dummy/src/models/task.js"
 
 /** Frontend model used for Node HTTP integration tests against dummy backend routes. */
 class HttpFrontendModel extends FrontendModelBase {
@@ -20,6 +24,7 @@ class HttpFrontendModel extends FrontendModelBase {
         find: "frontend-find",
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -33,6 +38,29 @@ class HttpFrontendModel extends FrontendModelBase {
 
   /** @returns {unknown} */
   createdAt() { return this.readAttribute("createdAt") }
+}
+
+/** Shared frontend model task class for websocket transport integration tests. */
+class Task extends FrontendModelBase {
+  /**
+   * @returns {{attributes: string[], commands: {find: string, index: string}, primaryKey: string}}
+   */
+  static resourceConfig() {
+    return {
+      attributes: ["id", "name"],
+      commands: {
+        find: "find",
+        index: "index"
+      },
+      primaryKey: "id"
+    }
+  }
+
+  /** @returns {unknown} */
+  id() { return this.readAttribute("id") }
+
+  /** @returns {unknown} */
+  name() { return this.readAttribute("name") }
 }
 
 /** Frontend model comment class for preload integration tests. */
@@ -49,6 +77,7 @@ class HttpPreloadComment extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -69,6 +98,7 @@ class HttpPreloadTask extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -110,6 +140,7 @@ class HttpPreloadProject extends FrontendModelBase {
       commands: {
         index: "frontend-index"
       },
+      modelName: "BrowserFrontendModel",
       path: "/frontend-model-system-tests",
       primaryKey: "id"
     }
@@ -137,23 +168,111 @@ class HttpPreloadProject extends FrontendModelBase {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: undefined,
-    baseUrlResolver: undefined,
     credentials: undefined,
-    pathPrefix: undefined,
-    pathPrefixResolver: undefined,
-    request: undefined
+    request: undefined,
+    shared: undefined,
+    url: undefined,
+    websocketClient: undefined
   })
 }
 
 /** @returns {void} */
 function configureNodeTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: "http://127.0.0.1:3006"
+    url: "http://127.0.0.1:3006"
+  })
+}
+
+/**
+ * @param {WebsocketClient} websocketClient - Websocket client.
+ * @returns {void}
+ */
+function configureWebsocketSharedTransport(websocketClient) {
+  FrontendModelBase.configureTransport({
+    shared: true,
+    websocketClient
   })
 }
 
 describe("Frontend models - base http integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+  it("loads frontend models through real websocket batch requests", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await Project.create({name: "Websocket frontend-model project"})
+      const task = await TaskRecord.create({name: "Websocket frontend-model task", projectId: project.id()})
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      try {
+        const [tasks, foundTask] = await Promise.all([
+          Task.toArray(),
+          Task.findBy({id: task.id()})
+        ])
+
+        expect(tasks.some((loadedTask) => loadedTask.id() === task.id())).toEqual(true)
+        expect(foundTask?.id()).toEqual(task.id())
+        expect(foundTask?.name()).toEqual("Websocket frontend-model task")
+      } finally {
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("receives frontend-model lifecycle events through websocket subscriptions", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await Project.create({name: "Websocket subscription project"})
+      /** @type {Array<{action: "create" | "destroy" | "update", id: string, model: Task | null, modelName: string}>} */
+      const events = []
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      const unsubscribe = await Task.subscribeToEvents((event) => {
+        events.push(event)
+      })
+
+      try {
+        const task = await TaskRecord.create({name: "Created websocket task", projectId: project.id()})
+
+        await waitFor(() => {
+          if (events.length < 1) {
+            throw new Error(`Expected at least one websocket frontend-model event but got ${events.length}`)
+          }
+        })
+
+        task.setName("Updated websocket task")
+        await task.save()
+
+        await waitFor(() => {
+          if (events.length < 2) {
+            throw new Error(`Expected at least two websocket frontend-model events but got ${events.length}`)
+          }
+        })
+
+        await task.destroy()
+
+        await waitFor(() => {
+          if (events.length < 3) {
+            throw new Error(`Expected at least three websocket frontend-model events but got ${events.length}`)
+          }
+        })
+
+        expect(events[0].action).toEqual("create")
+        expect(events[0].model?.name()).toEqual("Created websocket task")
+        expect(events[1].action).toEqual("update")
+        expect(events[1].model?.name()).toEqual("Updated websocket task")
+        expect(events[2].action).toEqual("destroy")
+        expect(events[2].id).toEqual(task.id())
+        expect(events[2].model).toEqual(null)
+      } finally {
+        unsubscribe()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
   it("findBy loads through real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()

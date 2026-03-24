@@ -285,7 +285,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     const columnType = modelClass.getColumnTypeByName(columnName)
 
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
 
     const normalize = (entry) => {
@@ -311,7 +311,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   _normalizeValueForColumnType({modelClass, columnName, value}) {
     const columnType = modelClass.getColumnTypeByName(columnName)
 
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
 
     const normalizedType = columnType.toLowerCase()
     const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
@@ -358,18 +358,29 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     for (const whereKey in hash) {
       const whereValue = hash[whereKey]
       const relationship = this._getRelationship(modelClass, whereKey)
+      const tuples = this._isRelationshipWhereOperatorTupleContainer(whereValue)
+        ? this._normalizeRelationshipWhereOperatorTuples(whereValue)
+        : null
+      const resolvedColumnName = this._resolveColumnName(modelClass, whereKey)
 
-      if (relationship && this._isRelationshipWhereOperatorTupleContainer(whereValue)) {
+      if (relationship && tuples) {
         if (index > 0) sql += " AND "
 
         const targetModelClass = relationship.getTargetModelClass()
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
-        const tuples = this._normalizeRelationshipWhereOperatorTuples(whereValue)
 
         sql += this._whereSQLFromRelationshipWhereOperatorTuples({
           modelClass: targetModelClass,
           tableName: nestedTableName,
+          tuples
+        })
+      } else if (resolvedColumnName && tuples) {
+        if (index > 0) sql += " AND "
+
+        sql += this._whereSQLFromRelationshipWhereOperatorTuples({
+          modelClass,
+          tableName: tableName || modelQuery.getTableReferenceForJoin(...path),
           tuples
         })
       } else if (Array.isArray(whereValue) && whereValue.length === 0) {

@@ -8,6 +8,7 @@ This repo uses an automated “definition of done” for changes. Before declari
 Prefer using the dummy app for tests instead of fake classes or stubbing.
 For new behavior coverage, prefer adding/updating dummy-app integration specs first and keep mock/stub unit tests as secondary safety nets.
 For frontend-model runtime/query behavior, prefer `spec/frontend-models/base.http-integration-spec.js` and `spec/frontend-models/base.browser-spec.js` over unit-style coverage in `spec/frontend-models/base-spec.js`.
+When a spec helper becomes reusable across multiple specs, move it into `spec/helpers` instead of leaving it inline in one spec file.
 Prefer functional tests over raw SQL assertions because SQL varies by database. Only assert SQL when validating a query parser, and normalize it to avoid quoting differences.
 Document newly discovered behavior, constraints, edge cases, and integration caveats in the `docs/` folder as part of normal development flow.
 After changing base model generator logic, run `npx velocious g:base-models` from `spec/dummy` so the generated base models stay in sync.
@@ -20,9 +21,12 @@ When adding or changing features, update `README.md` with the relevant usage and
 Name specs that should run in browser tests with the `.browser-spec.js` suffix so the browser test runner includes them.
 Use spaces inside named imports (e.g. `import {foo, bar} from "..."`).
 Do not override methods on runtime instances to change behavior; add explicit hooks/flags in the owning class instead.
+Frontend-model resource `create`/`update` paths must raise on unknown or read-only input attributes instead of silently ignoring them; generated models and wrapper models should treat invalid write payloads as contract errors.
 For multi-step method chains, put the receiver on its own line and place each chained call on its own following line.
 In generated code, keep single-tag JSDoc blocks on one line when they fit (e.g. `/** @returns {Type} - Description. */`).
 Do not silence JSDoc/TypeScript errors with broad casts like `/** @type {Record<string, any>} */ (...)`; fix the underlying typedefs/contracts instead.
+When a generated model/base-model JSDoc says a SQLite-backed attribute is `boolean`, make the record read path honor that contract; do not leave SQLite `1` / `0` values leaking through to callers and then normalize them ad hoc in downstream apps.
+For locals or params typed as `string | undefined`, branch on presence only; do not add redundant `typeof value == "string"` guards before calling string methods or normalizing the typed branch.
 For code that runs in Expo/Metro bundles, avoid non-literal dynamic imports (for example `import(variable)`); use static imports or environment-handler indirection.
 
 ## Verification commands

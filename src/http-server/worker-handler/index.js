@@ -83,11 +83,6 @@ export default class VelociousHttpServerWorker {
   addSocketConnection(client) {
     const clientCount = client.clientCount
 
-    client.socket.on("end", () => {
-      this.logger.debug(`Removing ${clientCount} from clients`)
-      delete this.clients[clientCount]
-    })
-
     if (!this.worker) throw new Error("Worker not initialized")
 
     client.setWorker(this.worker)
@@ -118,7 +113,7 @@ export default class VelociousHttpServerWorker {
       void this._closeAllClients()
       throw new Error(`Client worker stopped with exit code ${code}`)
     } else {
-      this.logger.info(() => `Client worker stopped with exit code ${code}`)
+      this.logger.debug(() => `Client worker stopped with exit code ${code}`)
     }
 
     this.unregisterFromEventsHost?.()
@@ -233,7 +228,8 @@ export default class VelociousHttpServerWorker {
    * @returns {void} - No return value.
    */
   dispatchWebsocketEvent({channel, payload}) {
-    if (!this.worker) return
+    // Test and shutdown paths can leave a registered handler without a live worker-thread transport.
+    if (!this.worker || typeof this.worker.postMessage !== "function") return
 
     this.worker.postMessage({channel, command: "websocketEvent", payload})
   }

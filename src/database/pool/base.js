@@ -1,13 +1,35 @@
 // @ts-check
 
 import Configuration from "../../configuration.js"
-import {digg} from "diggerize"
 import Logger from "../../logger.js"
 import baseMethodsForward from "./base-methods-forward.js"
+
+const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
 /** @type {{currentPool: VelociousDatabasePoolBase | null}} */
 const shared = {
   currentPool: null
+}
+
+/**
+ * @param {unknown} value - Value to stringify.
+ * @returns {string} - Stable JSON string.
+ */
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object
+      .keys(/** @type {Record<string, unknown>} */ (value))
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(/** @type {Record<string, unknown>} */ (value)[key])}`)
+
+    return `{${entries.join(",")}}`
+  }
+
+  return JSON.stringify(value)
 }
 
 class VelociousDatabasePoolBase {
@@ -75,10 +97,37 @@ class VelociousDatabasePoolBase {
   }
 
   /**
-   * @returns {{driver: typeof import("../drivers/base.js").default, type: string}} - Driver class and database type identifier.
+   * @returns {import("../../configuration-types.js").DatabaseConfigurationType} - Resolved database configuration for the pool identifier.
    */
   getConfiguration() {
-    return digg(this.configuration.getDatabaseConfiguration(), this.identifier)
+    return this.configuration.resolveDatabaseConfiguration(this.identifier)
+  }
+
+  /**
+   * @returns {string} - Reuse key for the currently resolved database configuration.
+   */
+  getConfigurationReuseKey() {
+    const databaseConfiguration = this.getConfiguration()
+
+    return stableStringify({
+      database: databaseConfiguration.database,
+      host: databaseConfiguration.host,
+      name: databaseConfiguration.name,
+      port: databaseConfiguration.port,
+      schema: databaseConfiguration.schema,
+      sqlConfig: databaseConfiguration.sqlConfig,
+      type: databaseConfiguration.type,
+      useDatabase: databaseConfiguration.useDatabase,
+      username: databaseConfiguration.username
+    })
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Connection.
+   * @returns {boolean} - Whether connection matches current resolved configuration.
+   */
+  connectionMatchesCurrentConfiguration(connection) {
+    return connection[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
   }
 
   /**
@@ -113,12 +162,13 @@ class VelociousDatabasePoolBase {
 
     const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
 
+    connection[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
+
     return connection
   }
 
   /**
-   * @param {object} config - Configuration object.
-   * @param {typeof import("../drivers/base.js").default} config.driver - Database driver instance.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection with configuration.
    */
   async spawnConnectionWithConfiguration(config) {
@@ -134,9 +184,10 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * @template T
    * @abstract
-   * @param {function(import("../drivers/base.js").default) : void} _callback - Callback function.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} _callback - Callback function.
+   * @returns {Promise<T>} - Resolves with the callback result.
    */
   withConnection(_callback) { // eslint-disable-line no-unused-vars
     throw new Error("'withConnection' not implemented")

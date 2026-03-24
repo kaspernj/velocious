@@ -7,7 +7,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * @param {object} args - Resource args.
-   * @param {import("./ability.js").default} args.ability - Ability instance.
+   * @param {import("./ability.js").default} [args.ability] - Ability instance.
    * @param {Record<string, any>} [args.context] - Ability context.
    * @param {Record<string, any>} [args.locals] - Ability locals.
    */
@@ -26,22 +26,58 @@ export default class AuthorizationBaseResource {
 
   /**
    * @param {string | string[]} actions - Ability action(s).
-   * @param {typeof import("../database/record/index.js").default} modelClass - Model class.
    * @param {Record<string, any> | string | ((query: import("../database/query/model-class-query.js").default<any>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<any>)} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
-  can(actions, modelClass, conditions) {
-    this.ability.can(actions, modelClass, conditions)
+  can(actions, conditions) {
+    this.assertResourceConditionsSignature({conditions, methodName: "can"})
+    this.requiredAbility().can(actions, this.requiredModelClass(), conditions)
   }
 
   /**
    * @param {string | string[]} actions - Ability action(s).
-   * @param {typeof import("../database/record/index.js").default} modelClass - Model class.
    * @param {Record<string, any> | string | ((query: import("../database/query/model-class-query.js").default<any>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<any>)} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
-  cannot(actions, modelClass, conditions) {
-    this.ability.cannot(actions, modelClass, conditions)
+  cannot(actions, conditions) {
+    this.assertResourceConditionsSignature({conditions, methodName: "cannot"})
+    this.requiredAbility().cannot(actions, this.requiredModelClass(), conditions)
+  }
+
+  /**
+   * @returns {import("./ability.js").default} - Ability instance.
+   */
+  requiredAbility() {
+    if (!this.ability) {
+      throw new Error(`${this.constructor.name} requires an ability instance before defining abilities.`)
+    }
+
+    return this.ability
+  }
+
+  /**
+   * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
+   */
+  requiredModelClass() {
+    const modelClass = /** @type {typeof AuthorizationBaseResource} */ (this.constructor).modelClass()
+
+    if (!modelClass) {
+      throw new Error(`${this.constructor.name} must define static ModelClass before calling ability helpers.`)
+    }
+
+    return modelClass
+  }
+
+  /**
+   * @param {object} args - Signature args.
+   * @param {unknown} args.conditions - Conditions value.
+   * @param {"can" | "cannot"} args.methodName - Method name.
+   * @returns {void}
+   */
+  assertResourceConditionsSignature({conditions, methodName}) {
+    if (typeof conditions === "function" && "primaryKey" in conditions && "_newQuery" in conditions) {
+      throw new Error(`${this.constructor.name}.${methodName}(...) no longer accepts a model class. Define static ModelClass and pass only conditions.`)
+    }
   }
 
   /** @returns {Record<string, any>} - Ability context. */

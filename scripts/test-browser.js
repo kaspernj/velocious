@@ -415,6 +415,7 @@ async function main() {
     }
 
     if (testRunner.isFailed()) {
+      await testRunner.persistFailedTestConsoleOutputsToAssets()
       const failedTests = testRunner.getFailedTestDetails()
 
       if (failedTests.length > 0) {
@@ -425,6 +426,10 @@ async function main() {
             ? ` (${failed.filePath}:${failed.line})`
             : ""
           console.error(`- ${failed.fullDescription}${location}`)
+
+          if (failed.consoleLogPath) {
+            console.error(`  Console log: ${failed.consoleLogPath}`)
+          }
         }
       }
 

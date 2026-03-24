@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 import {execSync} from "node:child_process"
 
-const run = (command) => {
+/** @param {string} command */
+function run(command) {
   execSync(command, {stdio: "inherit"})
+}
+
+/** Ensures the release runs from the latest local `master` synced with `origin/master`. */
+function ensureLatestMaster() {
+  run("git checkout master")
+  run("git fetch origin")
+  run("git merge origin/master")
 }
 
 try {
@@ -10,6 +18,8 @@ try {
 } catch {
   run("npm login")
 }
+
+ensureLatestMaster()
 
 // Bump patch version without creating a git tag.
 run("npm version patch --no-git-tag-version")

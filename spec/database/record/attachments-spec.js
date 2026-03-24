@@ -90,6 +90,20 @@ describe("Record - attachments", {tags: ["dummy"]}, () => {
     expect(downloadedAttachments.map((attachment) => attachment.content().toString())).toEqual(["A", "B"])
   })
 
+  it("normalizes trailing slash filenames to basename values", async () => {
+    const project = await Project.create({name: "Attachment project"})
+    const task = await Task.create({name: "Attachment task", projectId: project.id()})
+
+    await task.descriptionFile().attach({
+      content: "slash-content",
+      filename: "reports/"
+    })
+
+    const downloadedAttachment = await task.descriptionFile().download()
+
+    expect(downloadedAttachment.filename()).toEqual("reports")
+  })
+
   it("returns a resolvable URL for attachments", async () => {
     const project = await Project.create({name: "Attachment project"})
     const task = await Task.create({name: "Attachment task", projectId: project.id()})

@@ -4,6 +4,7 @@ import BaseCommand from "../../../../cli/base-command.js"
 export default class VelociousCliCommandsServer extends BaseCommand{
   async execute() {
     this.databasePool = this.getConfiguration().getDatabasePool()
+    /** @type {import("../../../../configuration-types.js").DatabaseConfigurationType} */
     this.newConfiguration = Object.assign({}, this.databasePool.getConfiguration())
     this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
 

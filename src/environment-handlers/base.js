@@ -89,6 +89,36 @@ export default class VelociousEnvironmentHandlerBase {
   getCurrentAbility() {
     return this._currentAbility
   }
+
+  /**
+   * @param {unknown} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithTenant(tenant, callback) {
+    this._currentTenant = tenant
+
+    try {
+      return await callback()
+    } finally {
+      this._currentTenant = undefined
+    }
+  }
+
+  /**
+   * @param {unknown} tenant - Tenant to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentTenant(tenant) {
+    this._currentTenant = tenant
+  }
+
+  /**
+   * @returns {unknown} - Current tenant.
+   */
+  getCurrentTenant() {
+    return this._currentTenant
+  }
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.
@@ -305,6 +335,24 @@ export default class VelociousEnvironmentHandlerBase {
    * @returns {void} - No return value.
    */
   setConfiguration(newConfiguration) { this.configuration = newConfiguration }
+
+  /**
+   * @param {string} _filePath - File path.
+   * @returns {Promise<Buffer>} - File bytes.
+   */
+  async readAttachmentInputFile(_filePath) { // eslint-disable-line no-unused-vars
+    throw new Error("Attachment file reads are not supported in this environment")
+  }
+
+  /**
+   * @param {object} _args - Args.
+   * @param {string[]} _args.allowedPathPrefixes - Allowed path prefixes.
+   * @param {string} _args.inputPath - Input path.
+   * @returns {Promise<{buffer: Buffer, filePath: string}>} - Resolved path and file bytes.
+   */
+  async resolveAttachmentInputPath(_args) { // eslint-disable-line no-unused-vars
+    throw new Error("Attachment path input is not supported in this environment")
+  }
 
   /**
    * @returns {import("../configuration.js").default} - The configuration.

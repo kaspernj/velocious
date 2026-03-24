@@ -16,6 +16,9 @@ export default class VelociousHttpServerClientWebsocketSession {
   events = new EventEmitter()
   subscriptions = new Set()
   channels = new Set()
+  subscriptionHandlers = new Map()
+  handlerSubscriptions = new Map()
+  channelTenants = new Map()
 
   /**
    * @param {object} args - Options object.
@@ -73,7 +76,23 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async sendEvent(channel, payload) {
-    if (!this.hasSubscription(channel)) return
+    const channelHandlers = this.subscriptionHandlers.get(channel)
+    const hasChannelHandlers = Boolean(channelHandlers && channelHandlers.size > 0)
+
+    if (!this.hasSubscription(channel) && !hasChannelHandlers) return
+
+    if (hasChannelHandlers) {
+      await Promise.all(Array.from(channelHandlers).map(async (handler) => {
+        const tenant = this.channelTenants.get(handler)
+
+        await this.configuration.runWithTenant(tenant, async () => {
+          await this._withConnections(async () => {
+            await handler.receivedBroadcast({channel, payload})
+          })
+        })
+      }))
+      return
+    }
 
     this.sendJson({channel, payload, type: "event"})
   }
@@ -98,11 +117,14 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (!resolver) return
 
     try {
-      const resolved = await resolver({
-        client: this.client,
-        configuration: this.configuration,
-        request: this.upgradeRequest,
-        websocketSession: this
+      const tenant = await this._resolveTenant({})
+      const resolved = await this.configuration.runWithTenant(tenant, async () => {
+        return await resolver({
+          client: this.client,
+          configuration: this.configuration,
+          request: this.upgradeRequest,
+          websocketSession: this
+        })
       })
 
       if (!resolved) return
@@ -115,7 +137,7 @@ export default class VelociousHttpServerClientWebsocketSession {
         throw new Error("Resolved websocket channel must extend WebsocketChannel")
       }
 
-      await this._registerChannel(channel)
+      await this._registerChannel(channel, tenant)
     } catch (error) {
       this.logger.error(() => ["Failed to initialize websocket channel", error])
     }
@@ -318,11 +340,26 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {{acknowledge?: boolean}} [options] - Subscribe options.
+   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default}} [options] - Subscribe options.
    * @returns {Promise<boolean>} - Whether the subscription was added.
    */
-  async subscribeToChannel(channel, {acknowledge = true} = {}) {
+  async subscribeToChannel(channel, {acknowledge = true, channelHandler} = {}) {
     this.addSubscription(channel)
+
+    if (channelHandler) {
+      if (!this.subscriptionHandlers.has(channel)) {
+        this.subscriptionHandlers.set(channel, new Set())
+      }
+
+      this.subscriptionHandlers.get(channel)?.add(channelHandler)
+
+      if (!this.handlerSubscriptions.has(channelHandler)) {
+        this.handlerSubscriptions.set(channelHandler, new Set())
+      }
+
+      this.handlerSubscriptions.get(channelHandler)?.add(channel)
+    }
+
     if (acknowledge) {
       this.sendJson({channel, type: "subscribed"})
     }
@@ -344,20 +381,43 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   async _teardownSingleChannel(channel) {
     try {
-      await this._withConnections(async () => {
-        await channel?.unsubscribed?.()
+      const tenant = this.channelTenants.get(channel)
+
+      await this.configuration.runWithTenant(tenant, async () => {
+        await this._withConnections(async () => {
+          await channel?.unsubscribed?.()
+        })
       })
     } catch (error) {
       this.logger.error(() => ["Failed to teardown websocket channel", error])
     }
+
+    const subscriptions = this.handlerSubscriptions.get(channel)
+
+    if (subscriptions) {
+      for (const subscriptionChannel of subscriptions) {
+        this.subscriptionHandlers.get(subscriptionChannel)?.delete(channel)
+
+        if (this.subscriptionHandlers.get(subscriptionChannel)?.size === 0) {
+          this.subscriptionHandlers.delete(subscriptionChannel)
+        }
+      }
+
+      this.handlerSubscriptions.delete(channel)
+    }
+
+    this.channelTenants.delete(channel)
   }
 
-  async _registerChannel(channel) {
+  async _registerChannel(channel, tenant) {
     if (!channel) return
 
     this.channels.add(channel)
-    await this._withConnections(async () => {
-      await channel?.subscribed?.()
+    this.channelTenants.set(channel, tenant)
+    await this.configuration.runWithTenant(tenant, async () => {
+      await this._withConnections(async () => {
+        await channel?.subscribed?.()
+      })
     })
   }
 
@@ -373,12 +433,15 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (!resolver) return
 
     try {
-      const resolved = await resolver({
-        client: this.client,
-        configuration: this.configuration,
-        request: this.upgradeRequest,
-        subscription: {channel, params},
-        websocketSession: this
+      const tenant = await this._resolveTenant({channel, params})
+      const resolved = await this.configuration.runWithTenant(tenant, async () => {
+        return await resolver({
+          client: this.client,
+          configuration: this.configuration,
+          request: this.upgradeRequest,
+          subscription: {channel, params},
+          websocketSession: this
+        })
       })
 
       if (!resolved) {
@@ -400,11 +463,30 @@ export default class VelociousHttpServerClientWebsocketSession {
         throw new Error("Resolved websocket channel must extend WebsocketChannel")
       }
 
-      await this._registerChannel(channelInstance)
+      await this._registerChannel(channelInstance, tenant)
     } catch (error) {
       this.logger.warn(() => ["Websocket channel subscription failed", error])
       this.sendJson({channel, error: "Subscription rejected", type: "error"})
     }
+  }
+
+  /**
+   * @param {{channel?: string, params?: Record<string, unknown>}} args - Tenant resolution args.
+   * @returns {Promise<unknown>} - Resolved tenant.
+   */
+  async _resolveTenant({channel, params}) {
+    const requestParams = this.upgradeRequest?.params?.()
+    const mergedParams = {
+      ...(requestParams && typeof requestParams === "object" ? requestParams : {}),
+      ...(params && typeof params === "object" ? params : {})
+    }
+
+    return await this.configuration.resolveTenant({
+      params: mergedParams,
+      request: this.upgradeRequest,
+      response: undefined,
+      subscription: channel ? {channel, params} : undefined
+    })
   }
 
   /**
