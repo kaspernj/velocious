@@ -255,7 +255,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.length).toEqual(1)
-      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
+      expect(payload.models[0].__preloadedRelationships?.project).toBeDefined()
+      expect(payload.models[0].__preloadedRelationships.project?.id).toEqual(task.readAttribute("projectId"))
     })
   })
 
@@ -273,7 +274,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.length).toEqual(1)
-      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
+      expect(payload.models[0].__preloadedRelationships?.project).toBeDefined()
     })
   })
 
@@ -636,7 +637,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("success")
-      expect(payload.model.__preloadedRelationships.project).toEqual(null)
+      expect(payload.model.__preloadedRelationships?.project).toBeDefined()
+      expect(payload.model.__preloadedRelationships.project?.id).toEqual(task.readAttribute("projectId"))
     })
   })
 
