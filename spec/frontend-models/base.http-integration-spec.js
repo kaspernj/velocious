@@ -190,7 +190,6 @@ function configureNodeTransport() {
 function configureWebsocketSharedTransport(websocketClient) {
   FrontendModelBase.configureTransport({
     shared: true,
-    url: "/velocious/api",
     websocketClient
   })
 }
