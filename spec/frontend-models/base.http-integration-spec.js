@@ -286,7 +286,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {john} = await seedHttpFrontendModels()
 
         const model = await User.findBy({email: "john@example.com"})
 
@@ -303,7 +303,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        await seedHttpFrontendModels()
 
         const usersCount = await User.count()
 
@@ -319,7 +319,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {john} = await seedHttpFrontendModels()
 
         const models = await User.where({email: "john@example.com"}).toArray()
 
@@ -337,7 +337,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {john} = await seedHttpFrontendModels()
 
         const model = await User
           .where({email: "john@example.com"})
@@ -410,7 +410,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {jane} = await seedHttpFrontendModels()
 
         const model = await User
           .sort("-createdAt")
@@ -428,7 +428,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {john} = await seedHttpFrontendModels()
 
         const models = await User
           .order("createdAt")
@@ -448,7 +448,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {john} = await seedHttpFrontendModels()
 
         const models = await User
           .order("createdAt")
@@ -468,7 +468,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {john} = await seedHttpFrontendModels()
 
         const model = await User.findBy({id: john.id()})
 
@@ -485,7 +485,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {jane} = await seedHttpFrontendModels()
 
         const model = await User.findBy({createdAt: new Date("2026-02-18T08:00:00.000Z")})
 
@@ -502,7 +502,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        await seedHttpFrontendModels()
 
         const model = await User.findBy({email: "missing@example.com"})
 
@@ -518,7 +518,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        await seedHttpFrontendModels()
 
         await expect(async () => {
           await User.findByOrFail({email: "missing@example.com"})
@@ -663,7 +663,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const {jane, john} = await seedHttpFrontendModels()
+        const {john} = await seedHttpFrontendModels()
 
         const baselineModel = await User.findBy({id: john.id()})
         const models = await User

@@ -1152,7 +1152,6 @@ export default class FrontendModelController extends Controller {
   /**
    * Ensures the frontend model class is initialized (has columns, table name, etc.).
    * This handles the case where model initialization was skipped at startup (e.g., browser tests).
-   *
    * @returns {Promise<void>} - Resolves when the model class is ready.
    */
   async ensureFrontendModelClassInitialized() {
