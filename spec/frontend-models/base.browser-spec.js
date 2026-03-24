@@ -139,11 +139,13 @@ function resetFrontendModelTransport() {
   })
 }
 
+let usersSeeded = false
+
 /** @returns {Promise<void>} */
 async function seedUsers() {
-  const existingCount = await UserRecord.query().count()
+  if (usersSeeded) return
 
-  if (existingCount > 0) return
+  usersSeeded = true
 
   await UserRecord.create({
     createdAt: "2026-02-18T08:00:00.000Z",
@@ -162,15 +164,12 @@ async function seedUsers() {
   })
 }
 
+/** @type {{project: ProjectRecord, task: TaskRecord} | null} */
+let preloadSeedResult = null
+
 /** @returns {Promise<{project: ProjectRecord, task: TaskRecord}>} */
 async function seedBrowserPreloadModels() {
-  const existingProject = await ProjectRecord.query().first()
-
-  if (existingProject) {
-    const existingTask = await TaskRecord.query().first()
-
-    return {project: existingProject, task: existingTask}
-  }
+  if (preloadSeedResult) return preloadSeedResult
 
   const project = await ProjectRecord.create({name: "Browser preload project"})
   const task = await TaskRecord.create({
@@ -181,7 +180,9 @@ async function seedBrowserPreloadModels() {
 
   await CommentRecord.create({body: "Browser preload comment", taskId: task.id()})
 
-  return {project, task}
+  preloadSeedResult = {project, task}
+
+  return preloadSeedResult
 }
 
 /** @returns {boolean} */
