@@ -284,6 +284,10 @@ export function frontendModelResourcePath(modelName, resourceDefinition) {
     throw new Error(`Invalid frontend model resource definition for ${modelName}`)
   }
 
+  if (resourceConfiguration.path) {
+    return resourceConfiguration.path
+  }
+
   return `/${inflection.dasherize(inflection.pluralize(inflection.underscore(modelName)))}`
 }
 
