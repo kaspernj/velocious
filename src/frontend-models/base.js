@@ -11,7 +11,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
- * @typedef {{builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, commands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, path?: string, primaryKey?: string}} FrontendModelResourceConfig
+ * @typedef {{builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, commands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, path?: string, primaryKey?: string}} FrontendModelResourceConfig
  */
 /**
  * @typedef {object} FrontendModelTransportConfig
