@@ -430,6 +430,27 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("applies like search params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      await createTask("Ransack Alpha")
+      await createTask("Ransack Beta")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        searches: [
+          {
+            column: "name",
+            operator: "like",
+            path: [],
+            value: "%Beta%"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Ransack Beta"])
+    })
+  })
+
   it("applies joins params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Join filter task")

@@ -1990,6 +1990,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @returns {ModelClassQuery<MC>} - Query with Ransack filters applied.
+   */
+  static ransack(params) {
+    return this._newQuery().ransack(params)
+  }
+
+  /**
    * @param {Record<string, any>} changes - Changes.
    */
   constructor(changes = {}) {

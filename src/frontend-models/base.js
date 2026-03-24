@@ -1507,12 +1507,22 @@ export default class FrontendModelBase {
    * @this {T}
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
-   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
    * @param {any} value - Search value.
    * @returns {FrontendModelQuery<T>} - Query builder with search filter.
    */
   static search(path, column, operator, value) {
     return this.query().search(path, column, operator, value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @returns {FrontendModelQuery<T>} - Query builder with Ransack filters applied.
+   */
+  static ransack(params) {
+    return this.query().ransack(params)
   }
 
   /**

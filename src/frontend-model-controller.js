@@ -264,7 +264,7 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
  * @typedef {object} FrontendModelSearch
  * @property {string[]} path - Relationship path.
  * @property {string} column - Column or attribute name.
- * @property {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
  * @property {any} value - Search value.
  */
 
@@ -574,7 +574,7 @@ function normalizeFrontendModelSearches(searches) {
 
   /** @type {FrontendModelSearch[]} */
   const normalized = []
-  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
+  const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
 
   for (const search of searches) {
     if (!isPlainObject(search)) {
@@ -1560,6 +1560,7 @@ export default class FrontendModelController extends Controller {
       eq: "=",
       gt: ">",
       gteq: ">=",
+      like: "LIKE",
       lt: "<",
       lteq: "<=",
       notEq: "!="
