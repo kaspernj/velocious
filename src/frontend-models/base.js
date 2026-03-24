@@ -638,13 +638,20 @@ async function flushPendingSharedFrontendModelRequests() {
 
   const url = frontendModelApiUrl()
   const requestPayload = {
-    requests: batchedRequests.map((request) => ({
-      commandType: request.commandType,
-      customPath: request.customPath,
-      model: request.modelClass.name,
-      payload: request.payload,
-      requestId: request.requestId
-    }))
+    requests: batchedRequests.map((request) => {
+      const isCustomCommandName = request.commandName !== request.commandType
+      const customPath = isCustomCommandName && request.resourcePath
+        ? `${request.resourcePath}/${request.commandName}`
+        : undefined
+
+      return {
+        commandType: isCustomCommandName ? request.commandName : request.commandType,
+        customPath,
+        model: request.modelClass.name,
+        payload: request.payload,
+        requestId: request.requestId
+      }
+    })
   }
 
   try {
@@ -1955,12 +1962,14 @@ export default class FrontendModelBase {
     if (useSharedTransport) {
       const batchResponse = await new Promise((resolve, reject) => {
         pendingSharedFrontendModelRequests.push({
+          commandName,
           commandType,
           modelClass: this,
           payload: serializedPayload,
           reject,
           requestId: `${++sharedFrontendModelRequestId}`,
-          resolve
+          resolve,
+          resourcePath
         })
 
         scheduleSharedFrontendModelRequestFlush()
