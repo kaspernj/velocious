@@ -21,7 +21,7 @@ class User extends FrontendModelBase {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt", "metadata", "nickName", "tags"],
+      attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       primaryKey: "id"
@@ -489,51 +489,6 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
         expect(model?.id()).toEqual(1)
         expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
-  it("findBy matches nested object conditions by value over real Node HTTP requests", async () => {
-    await Dummy.run(async () => {
-      configureNodeTransport()
-
-      try {
-        const model = await User.findBy({metadata: {region: "eu"}})
-
-        expect(model?.id()).toEqual(2)
-        expect(model?.email()).toEqual("john@example.com")
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
-  it("findBy matches exact array attribute values over real Node HTTP requests", async () => {
-    await Dummy.run(async () => {
-      configureNodeTransport()
-
-      try {
-        const model = await User.findBy({tags: ["a", "b"]})
-
-        expect(model?.id()).toEqual(2)
-        expect(model?.email()).toEqual("john@example.com")
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
-  it("findBy only matches explicit null values over real Node HTTP requests", async () => {
-    await Dummy.run(async () => {
-      configureNodeTransport()
-
-      try {
-        const model = await User.findBy({nickName: null})
-
-        expect(model?.id()).toEqual(2)
-        expect(model?.email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
       }

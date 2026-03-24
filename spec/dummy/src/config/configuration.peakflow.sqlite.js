@@ -15,8 +15,11 @@ import SqliteDriver from "../../../../src/database/drivers/sqlite/index.js"
 import path from "path"
 import requireContext from "require-context"
 import SingleMultiUsePool from "../../../../src/database/pool/single-multi-use.js"
+import Comment from "../models/comment.js"
+import Project from "../models/project.js"
 import Task from "../models/task.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
+import User from "../models/user.js"
 
 const queryParam = (request, key) => {
   const pathValue = request?.path?.()
@@ -79,6 +82,33 @@ class TaskFrontendModelAbilityResource extends BaseResource {
   }
 }
 
+class UserFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = User
+
+  /** @returns {void} */
+  abilities() {
+    this.can(["read"])
+  }
+}
+
+class ProjectFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Project
+
+  /** @returns {void} */
+  abilities() {
+    this.can(["read"])
+  }
+}
+
+class CommentFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Comment
+
+  /** @returns {void} */
+  abilities() {
+    this.can(["read"])
+  }
+}
+
 /**
  * @param {object} args - Ability resolver args.
  * @param {Record<string, any>} args.params - Request params.
@@ -98,7 +128,7 @@ function resolveTaskFrontendModelAbility({configuration, params, request, respon
 
   return new Ability({
     context: {configuration, params, request, response},
-    resources: [TaskFrontendModelAbilityResource]
+    resources: [TaskFrontendModelAbilityResource, UserFrontendModelAbilityResource, ProjectFrontendModelAbilityResource, CommentFrontendModelAbilityResource]
   })
 }
 
