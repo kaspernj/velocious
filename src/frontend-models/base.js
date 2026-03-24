@@ -561,7 +561,7 @@ function frontendModelCommandUrl(resourcePath, commandName) {
  * @returns {string} - Shared frontend-model API URL.
  */
 function frontendModelApiUrl() {
-  return frontendModelTransportUrl() || SHARED_FRONTEND_MODEL_API_PATH
+  return `${frontendModelTransportUrl()}${SHARED_FRONTEND_MODEL_API_PATH}`
 }
 
 /**

@@ -505,7 +505,7 @@ describe("Frontend models - base", () => {
 
     FrontendModelBase.configureTransport({
       shared: true,
-      url: "https://example.test/frontend-models",
+      url: "https://example.test",
       websocketClient: {
         post: async (path, body) => {
           calls.push({
@@ -568,7 +568,7 @@ describe("Frontend models - base", () => {
     }
 
     FrontendModelBase.configureTransport({
-      url: "https://example.test/frontend-models"
+      url: "https://example.test"
     })
 
     globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
@@ -2055,7 +2055,7 @@ describe("Frontend models - base", () => {
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      url: "http://127.0.0.1:4501/frontend-models"
+      url: "http://127.0.0.1:4501/"
     })
 
     try {
@@ -2078,7 +2078,7 @@ describe("Frontend models - base", () => {
     const fetchStub = stubFetch({models: []})
 
     FrontendModelBase.configureTransport({
-      url: () => "http://localhost:4500/v1/frontend-models"
+      url: () => "http://localhost:4500/v1"
     })
 
     try {
