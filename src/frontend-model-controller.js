@@ -2837,4 +2837,5 @@ export default class FrontendModelController extends Controller {
 
     return /** @type {Record<string, any>} */ (responsePayload)
   }
+
 }

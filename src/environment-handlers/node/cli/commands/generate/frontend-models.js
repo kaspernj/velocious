@@ -93,33 +93,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     if (relationships === undefined) return
 
-    if (!relationships || typeof relationships !== "object" || Array.isArray(relationships)) {
-      throw new Error(`Model '${className}' has invalid relationships config`)
-    }
+    const normalizedRelationships = this.relationshipsForModel({className, modelConfig})
 
-    for (const relationshipName in relationships) {
-      const relationship = relationships[relationshipName]
-
-      if (!relationship || typeof relationship !== "object" || Array.isArray(relationship)) {
-        throw new Error(`Model '${className}' relationship '${relationshipName}' must be an object`)
-      }
-
-      const relationshipType = relationship.type
-
-      if (relationshipType !== "belongsTo" && relationshipType !== "hasOne" && relationshipType !== "hasMany") {
-        throw new Error(`Model '${className}' relationship '${relationshipName}' has invalid type '${relationshipType}'`)
-      }
-
-      const relationshipModelName = relationship.modelClassName || relationship.className || relationship.model
-
-      if (typeof relationshipModelName !== "string" || relationshipModelName.length < 1) {
-        throw new Error(`Model '${className}' relationship '${relationshipName}' must define model/className/modelClassName`)
-      }
-
-      const relationshipTargetClassName = inflection.camelize(relationshipModelName.replaceAll("-", "_"))
-
-      if (!availableFrontendModelClassNames.has(relationshipTargetClassName)) {
-        throw new Error(`Model '${className}' relationship '${relationshipName}' references '${relationshipTargetClassName}', but no frontend model resource exists for that target in this backend project`)
+    for (const relationship of normalizedRelationships) {
+      if (!availableFrontendModelClassNames.has(relationship.targetClassName)) {
+        throw new Error(`Model '${className}' relationship '${relationship.relationshipName}' references '${relationship.targetClassName}', but no frontend model resource exists for that target in this backend project`)
       }
     }
   }
@@ -181,7 +159,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    */
   buildModelFileContent({className, importPath, modelClass, modelConfig}) {
     const attributes = this.attributeDefinitionsForModel({modelClass, modelConfig})
-    const relationships = this.relationshipsForModel(modelConfig)
+    const relationships = this.relationshipsForModel({className, modelConfig})
     const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
       ? modelConfig.attachments
       : {}
@@ -585,14 +563,24 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * @param {Record<string, any>} modelConfig - Model configuration.
+   * @param {object} args - Arguments.
+   * @param {string} args.className - Model class name.
+   * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @returns {Array<{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationships.
    */
-  relationshipsForModel(modelConfig) {
+  relationshipsForModel({className, modelConfig}) {
     const relationships = modelConfig.relationships
 
-    if (!relationships || typeof relationships !== "object" || Array.isArray(relationships)) {
+    if (relationships === undefined || relationships === null) {
       return []
+    }
+
+    if (Array.isArray(relationships)) {
+      return relationships.map((relationshipName) => this.inferredRelationshipDefinition({className, relationshipName}))
+    }
+
+    if (typeof relationships !== "object") {
+      throw new Error(`Model '${className}' has invalid relationships config`)
     }
 
     /** @type {Array<{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}>} */
@@ -600,17 +588,75 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     for (const relationshipName in relationships) {
       const relationship = relationships[relationshipName]
-      const targetModelName = relationship.modelClassName || relationship.className || relationship.model
-      const targetClassName = inflection.camelize(String(targetModelName).replaceAll("-", "_"))
+
+      if (relationship === true) {
+        normalized.push(this.inferredRelationshipDefinition({className, relationshipName}))
+        continue
+      }
+
+      if (!relationship || typeof relationship !== "object" || Array.isArray(relationship)) {
+        throw new Error(`Model '${className}' relationship '${relationshipName}' must be an object or true`)
+      }
+
+      const relationshipModelName = relationship.modelClassName || relationship.className || relationship.model
+      const hasExplicitType = typeof relationship.type === "string" && relationship.type.length > 0
+      const hasExplicitModel = typeof relationshipModelName === "string" && relationshipModelName.length > 0
+      const inferredRelationship = hasExplicitType && hasExplicitModel
+        ? null
+        : this.inferredRelationshipDefinition({className, relationshipName})
+      const relationshipType = relationship.type || inferredRelationship?.type
+
+      if (relationshipType !== "belongsTo" && relationshipType !== "hasOne" && relationshipType !== "hasMany") {
+        throw new Error(`Model '${className}' relationship '${relationshipName}' has invalid type '${relationshipType}'`)
+      }
+
+      const targetClassName = hasExplicitModel
+        ? inflection.camelize(String(relationshipModelName).replaceAll("-", "_"))
+        : inferredRelationship?.targetClassName
 
       normalized.push({
         relationshipName,
         targetClassName,
         targetFileName: inflection.dasherize(inflection.underscore(targetClassName)),
-        type: relationship.type
+        type: relationshipType
       })
     }
 
     return normalized
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {string} args.className - Model class name.
+   * @param {string} args.relationshipName - Relationship name.
+   * @returns {{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}} Inferred relationship definition.
+   */
+  inferredRelationshipDefinition({className, relationshipName}) {
+    const modelClass = this.getConfiguration().getModelClass(className)
+
+    if (!modelClass) {
+      throw new Error(`Could not find backend model class '${className}' for relationship '${relationshipName}'`)
+    }
+
+    const relationship = modelClass.getRelationshipByName(relationshipName)
+    const targetModelClass = relationship.getTargetModelClass()
+    const relationshipType = relationship.getType()
+
+    if (relationshipType !== "belongsTo" && relationshipType !== "hasOne" && relationshipType !== "hasMany") {
+      throw new Error(`Model '${className}' relationship '${relationshipName}' has unsupported type '${relationshipType}'`)
+    }
+
+    if (!targetModelClass) {
+      throw new Error(`Model '${className}' relationship '${relationshipName}' has no target model class`)
+    }
+
+    const targetClassName = targetModelClass.name
+
+    return {
+      relationshipName,
+      targetClassName,
+      targetFileName: inflection.dasherize(inflection.underscore(targetClassName)),
+      type: relationshipType
+    }
   }
 }
