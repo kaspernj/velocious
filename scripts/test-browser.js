@@ -466,10 +466,6 @@ async function loadBrowserBackendConfiguration() {
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
   const backendConfiguration = dummyConfigurationImport.default
 
-  backendConfiguration._initializeModels = async ({configuration}) => {
-    await initializeDummyModels(configuration)
-  }
-
   return backendConfiguration
 }
 

@@ -181,10 +181,35 @@ const configuration = new Configuration({
 
     const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/../src/models`)
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
-    const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
 
-    await configuration.ensureConnections(async () => {
-      await initializerFromRequireContext.initialize({configuration})
+    await configuration.ensureConnections(async (dbs) => {
+      const db = dbs.default
+
+      for (const fileName of requireContextModels.keys()) {
+        const modelClassImport = requireContextModels(fileName)
+        const modelClass = modelClassImport?.default
+
+        if (!modelClass?.initializeRecord) continue
+
+        if (typeof modelClass.getDatabaseIdentifier === "function" && modelClass.getDatabaseIdentifier() !== "default") {
+          continue
+        }
+
+        const tableName = modelClass.tableName()
+
+        if (!db || !await db.tableExists(tableName)) continue
+
+        await modelClass.initializeRecord({configuration})
+
+        if (await modelClass.hasTranslationsTable()) {
+          const translationClass = modelClass.getTranslationClass()
+          const translationTableName = translationClass.tableName()
+
+          if (db && await db.tableExists(translationTableName)) {
+            await translationClass.initializeRecord({configuration})
+          }
+        }
+      }
     })
   },
   locale: () => "en",

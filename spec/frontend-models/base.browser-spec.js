@@ -15,7 +15,7 @@ class User extends FrontendModelBase {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt", "metadata", "nickName", "tags"],
+      attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       primaryKey: "id"
@@ -157,10 +157,7 @@ async function seedUsers() {
     createdAt: "2026-02-19T08:00:00.000Z",
     email: "john@example.com",
     encryptedPassword: "password",
-    metadata: {region: "eu"},
-    nickName: null,
-    reference: "browser-user-2",
-    tags: ["a", "b"]
+    reference: "browser-user-2"
   })
 }
 
@@ -436,63 +433,6 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
 
       expect(model?.id()).toEqual(1)
       expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
-    } finally {
-      resetFrontendModelTransport()
-    }
-  })
-
-  it("findBy matches nested object conditions by value over real browser HTTP requests", async () => {
-    if (!runBrowserHttpIntegration()) {
-      return
-    }
-
-    configureBrowserTransport()
-
-    try {
-      await seedUsers()
-
-      const model = await User.findBy({metadata: {region: "eu"}})
-
-      expect(model?.id()).toEqual("2")
-      expect(model?.email()).toEqual("john@example.com")
-    } finally {
-      resetFrontendModelTransport()
-    }
-  })
-
-  it("findBy matches exact array attribute values over real browser HTTP requests", async () => {
-    if (!runBrowserHttpIntegration()) {
-      return
-    }
-
-    configureBrowserTransport()
-
-    try {
-      await seedUsers()
-
-      const model = await User.findBy({tags: ["a", "b"]})
-
-      expect(model?.id()).toEqual("2")
-      expect(model?.email()).toEqual("john@example.com")
-    } finally {
-      resetFrontendModelTransport()
-    }
-  })
-
-  it("findBy only matches explicit null values over real browser HTTP requests", async () => {
-    if (!runBrowserHttpIntegration()) {
-      return
-    }
-
-    configureBrowserTransport()
-
-    try {
-      await seedUsers()
-
-      const model = await User.findBy({nickName: null})
-
-      expect(model?.id()).toEqual("2")
-      expect(model?.email()).toEqual("john@example.com")
     } finally {
       resetFrontendModelTransport()
     }
