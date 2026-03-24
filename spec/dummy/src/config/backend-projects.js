@@ -63,6 +63,14 @@ class UserFrontendResource extends FrontendModelBaseResource {
         id: true,
         name: true
       },
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
+      collectionCommands: {
+        lookupByEmail: "lookup-by-email"
+      },
+      memberCommands: {
+        refreshProfile: "refresh-profile"
+      },
       path: "/api/frontend-models/users"
     }
   }

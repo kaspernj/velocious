@@ -7,7 +7,7 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /** Frontend model for User. */
 export default class User extends FrontendModelBase {
-  /** @returns {{attachments?: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], collectionCommands?: {create: string, index: string}, memberCommands?: {destroy: string, find: string, update: string}}} - Resource config. */
+  /** @returns {{attachments?: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, primaryKey?: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: [

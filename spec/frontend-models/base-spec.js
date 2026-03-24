@@ -105,6 +105,9 @@ function buildCustomPrimaryKeyTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with legacy built-in aliases.
+ */
+/**
  * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
  */
 function buildPreloadTestModelClasses() {
@@ -376,6 +379,58 @@ describe("Frontend models - base", () => {
       ])
       expect(response.status).toEqual("success")
       expect(response.value).toEqual("pong")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("infers default resource paths for pathless custom commands", async () => {
+    const User = buildCustomPrimaryKeyTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+
+        calls.push({
+          body: JSON.parse(bodyString),
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId: calls[0].body.requests[0].requestId,
+              response: {status: "success"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId: calls[0].body.requests[0].requestId,
+              response: {status: "success"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      await User.executeCustomCommand({
+        commandName: "refresh-access",
+        commandType: "refresh-access",
+        memberId: "user-1",
+        payload: {},
+        resourcePath: User.resourcePath()
+      })
+
+      expect(calls[0].body.requests[0].customPath).toEqual("/users/user-1/refresh-access")
     } finally {
       resetFrontendModelTransport()
       globalThis.fetch = originalFetch

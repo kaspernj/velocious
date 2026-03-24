@@ -86,6 +86,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
   return {
     ...resourceConfiguration,
     abilities: normalizeFrontendModelResourceAbilities(resourceConfiguration.abilities),
+    builtInCollectionCommands: normalizedCommands.builtInCollectionCommands,
+    builtInMemberCommands: normalizedCommands.builtInMemberCommands,
     collectionCommands: normalizedCommands.collectionCommands,
     commands: normalizedCommands.commands,
     memberCommands: normalizedCommands.memberCommands
@@ -140,20 +142,25 @@ function normalizeFrontendModelResourceAbilities(abilities) {
 
 /**
  * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Raw resource configuration.
- * @returns {{collectionCommands: Record<string, string>, commands: Record<string, string>, memberCommands: Record<string, string>}} - Normalized command configuration.
+ * @returns {{builtInCollectionCommands: Record<string, string>, builtInMemberCommands: Record<string, string>, collectionCommands: Record<string, string>, commands: Record<string, string>, memberCommands: Record<string, string>}} - Normalized command configuration.
  */
 function normalizeFrontendModelResourceCommands(resourceConfiguration) {
   const legacyCommands = resourceConfiguration.commands
-  const collectionCommands = resourceConfiguration.collectionCommands
-  const memberCommands = resourceConfiguration.memberCommands
-  const usesSplitCommandConfig = collectionCommands !== undefined || memberCommands !== undefined
+  const builtInCollectionCommands = resourceConfiguration.builtInCollectionCommands
+  const builtInMemberCommands = resourceConfiguration.builtInMemberCommands
+  const customCollectionCommands = resourceConfiguration.collectionCommands
+  const customMemberCommands = resourceConfiguration.memberCommands
+  const usesCustomCommandConfig = builtInCollectionCommands !== undefined || builtInMemberCommands !== undefined
+  const legacyCollectionCommands = usesCustomCommandConfig ? builtInCollectionCommands : customCollectionCommands
+  const legacyMemberCommands = usesCustomCommandConfig ? builtInMemberCommands : customMemberCommands
+  const usesSplitBuiltInCommandConfig = legacyCollectionCommands !== undefined || legacyMemberCommands !== undefined
   /** @type {Record<string, string>} */
-  const normalizedCollectionCommands = usesSplitCommandConfig ? {} : {
+  const normalizedBuiltInCollectionCommands = usesSplitBuiltInCommandConfig ? {} : {
     create: "create",
     index: "index"
   }
   /** @type {Record<string, string>} */
-  const normalizedMemberCommands = usesSplitCommandConfig ? {} : {
+  const normalizedBuiltInMemberCommands = usesSplitBuiltInCommandConfig ? {} : {
     attach: "attach",
     destroy: "destroy",
     download: "download",
@@ -164,13 +171,13 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
 
   for (const commandType of /** @type {const} */ (["create", "index"])) {
     const commandName = frontendModelResourceCommandNameFromConfigs({
-      collectionCommands,
+      collectionCommands: legacyCollectionCommands,
       commandType,
       legacyCommands
     })
 
     if (commandName !== undefined) {
-      normalizedCollectionCommands[commandType] = commandName
+      normalizedBuiltInCollectionCommands[commandType] = commandName
     }
   }
 
@@ -178,22 +185,68 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
     const commandName = frontendModelResourceCommandNameFromConfigs({
       commandType,
       legacyCommands,
-      memberCommands
+      memberCommands: legacyMemberCommands
     })
 
     if (commandName !== undefined) {
-      normalizedMemberCommands[commandType] = commandName
+      normalizedBuiltInMemberCommands[commandType] = commandName
     }
   }
 
   return {
-    collectionCommands: normalizedCollectionCommands,
+    builtInCollectionCommands: normalizedBuiltInCollectionCommands,
+    builtInMemberCommands: normalizedBuiltInMemberCommands,
+    collectionCommands: usesCustomCommandConfig ? normalizeFrontendModelCustomCommands({commandsConfig: customCollectionCommands, modelName: "CollectionCommand"}) : {},
     commands: {
-      ...normalizedCollectionCommands,
-      ...normalizedMemberCommands
+      ...normalizedBuiltInCollectionCommands,
+      ...normalizedBuiltInMemberCommands
     },
-    memberCommands: normalizedMemberCommands
+    memberCommands: usesCustomCommandConfig ? normalizeFrontendModelCustomCommands({commandsConfig: customMemberCommands, modelName: "MemberCommand"}) : {}
   }
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {Record<string, string> | string[] | undefined} args.commandsConfig - Custom commands config.
+ * @param {string} args.modelName - Diagnostic model name.
+ * @returns {Record<string, string>} - Normalized custom command config.
+ */
+function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
+  if (!commandsConfig) {
+    return {}
+  }
+
+  if (Array.isArray(commandsConfig)) {
+    /** @type {Record<string, string>} */
+    const normalizedCommands = {}
+
+    for (const commandName of commandsConfig) {
+      const validatedCommandName = validateFrontendModelResourceCommandName({
+        commandName,
+        commandType: commandName,
+        modelName
+      })
+
+      normalizedCommands[inflection.camelize(validatedCommandName, true)] = validatedCommandName
+    }
+
+    return normalizedCommands
+  }
+
+  /** @type {Record<string, string>} */
+  const normalizedCommands = {}
+
+  for (const methodName of Object.keys(commandsConfig)) {
+    const commandName = commandsConfig[methodName]
+
+    normalizedCommands[methodName] = validateFrontendModelResourceCommandName({
+      commandName,
+      commandType: commandName,
+      modelName
+    })
+  }
+
+  return normalizedCommands
 }
 
 /**
@@ -281,6 +334,74 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
 }
 
 /**
+ * @param {object} args - Arguments.
+ * @param {import("../configuration-types.js").BackendProjectConfiguration[]} args.backendProjects - Backend projects to scan.
+ * @param {string} args.currentPath - Request path without query.
+ * @returns {{commandName: string, memberId?: string, methodName: string, modelName: string, resourcePath: string, scope: "collection" | "member"} | null} - Matched custom command metadata.
+ */
+export function frontendModelCustomCommandForPath({backendProjects, currentPath}) {
+  const normalizedCurrentPath = normalizeFrontendModelResourcePathForMatch(currentPath)
+
+  for (const backendProject of backendProjects) {
+    const resources = frontendModelResourcesForBackendProject(backendProject)
+
+    for (const modelName in resources) {
+      const resourceDefinition = resources[modelName]
+      const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+
+      if (!resourceConfiguration) {
+        continue
+      }
+
+      const resourcePath = normalizeFrontendModelResourcePathForMatch(frontendModelResourcePath(modelName, resourceDefinition))
+      const expectedPrefix = `${resourcePath}/`
+
+      if (!normalizedCurrentPath.startsWith(expectedPrefix)) {
+        continue
+      }
+
+      const pathSegments = normalizedCurrentPath
+        .slice(expectedPrefix.length)
+        .split("/")
+        .filter(Boolean)
+
+      if (pathSegments.length === 1) {
+        const matchedCollectionCommand = Object.entries(resourceConfiguration.collectionCommands)
+          .find(([, commandName]) => commandName === pathSegments[0])
+
+        if (matchedCollectionCommand) {
+          return {
+            commandName: matchedCollectionCommand[1],
+            methodName: matchedCollectionCommand[0],
+            modelName,
+            resourcePath,
+            scope: "collection"
+          }
+        }
+      }
+
+      if (pathSegments.length === 2) {
+        const matchedMemberCommand = Object.entries(resourceConfiguration.memberCommands)
+          .find(([, commandName]) => commandName === pathSegments[1])
+
+        if (matchedMemberCommand) {
+          return {
+            commandName: matchedMemberCommand[1],
+            memberId: decodeURIComponent(pathSegments[0]),
+            methodName: matchedMemberCommand[0],
+            modelName,
+            resourcePath,
+            scope: "member"
+          }
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+/**
  * Prefer configured resource paths, then fall back to an `index.js`-aware require-context path heuristic so layouts like `./users/index.js` still resolve to `User`.
  * @param {string} resourcePath - Require-context resource path.
  * @param {typeof FrontendModelBaseResource} resourceDefinition - Frontend-model resource class.
@@ -310,4 +431,18 @@ function frontendModelModelNameFromResourcePath(resourcePath, resourceDefinition
   }
 
   return inflection.camelize(inflection.singularize(modelSegment))
+}
+
+/**
+ * @param {string} path - Path value.
+ * @returns {string} - Normalized path with leading slash and no trailing slash.
+ */
+function normalizeFrontendModelResourcePathForMatch(path) {
+  const withLeadingSlash = path.startsWith("/") ? path : `/${path}`
+
+  if (withLeadingSlash.length > 1) {
+    return withLeadingSlash.replace(/\/+$/, "")
+  }
+
+  return withLeadingSlash
 }
