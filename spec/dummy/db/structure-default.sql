@@ -1,5 +1,7 @@
 CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT REFERENCES `users`(`id`), `created_at` DATETIME, `updated_at` DATETIME);
 
+CREATE TABLE `background_jobs` (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `forked` BOOLEAN NOT NULL, `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT);
+
 CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
 CREATE TABLE `interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id` BIGINT NOT NULL, `subject_type` VARCHAR(255), `kind` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
@@ -26,9 +28,23 @@ CREATE TABLE `uuid_items` (`id` UUID PRIMARY KEY NOT NULL, `title` VARCHAR(255),
 
 CREATE TABLE "velocious_attachments" (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` VARCHAR(255) NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `content_base64` TEXT NOT NULL, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255));
 
+CREATE TABLE `velocious_internal_migrations` (`key` VARCHAR(255) PRIMARY KEY NOT NULL, `scope` VARCHAR(255) NOT NULL, `version` VARCHAR(255) NOT NULL, `applied_at_ms` BIGINT NOT NULL);
+
 CREATE UNIQUE INDEX `index_on_authentication_tokens_token` ON `authentication_tokens` (`user_token`);
 
 CREATE INDEX `index_on_authentication_tokens_user_id` ON `authentication_tokens` (`user_id`);
+
+CREATE INDEX `index_on_background_jobs_created_at_ms` ON `background_jobs` (`created_at_ms`);
+
+CREATE INDEX `index_on_background_jobs_handed_off_at_ms` ON `background_jobs` (`handed_off_at_ms`);
+
+CREATE INDEX `index_on_background_jobs_job_name` ON `background_jobs` (`job_name`);
+
+CREATE INDEX `index_on_background_jobs_orphaned_at_ms` ON `background_jobs` (`orphaned_at_ms`);
+
+CREATE INDEX `index_on_background_jobs_scheduled_at_ms` ON `background_jobs` (`scheduled_at_ms`);
+
+CREATE INDEX `index_on_background_jobs_status` ON `background_jobs` (`status`);
 
 CREATE INDEX `index_on_comments_task_id` ON `comments` (`task_id`);
 

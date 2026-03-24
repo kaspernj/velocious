@@ -44,6 +44,7 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+
 /**
  * @param {import("../../src/configuration-types.js").BackendProjectConfiguration[]} backendProjects - Backend project config.
  * @returns {Pick<import("../../src/configuration.js").default, "getBackendProjects">} - Minimal configuration stub.

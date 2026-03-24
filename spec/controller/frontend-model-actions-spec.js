@@ -407,6 +407,27 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("accepts symbolic search operators on frontendIndex", async () => {
+    await Dummy.run(async () => {
+      const taskA = await createTask("Symbolic Search A")
+      const taskB = await createTask("Symbolic Search B")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        searches: [
+          {
+            column: "id",
+            operator: ">",
+            path: [],
+            value: taskA.id()
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.id)).toEqual([taskB.id()])
+    })
+  })
+
   it("applies relationship-path search params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const taskA = await createTaskWithProject({projectName: "Search Project A", taskName: "Task A"})
