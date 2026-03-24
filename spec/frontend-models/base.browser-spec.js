@@ -1,3 +1,4 @@
+import Configuration from "../../src/configuration.js"
 import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 import CommentRecord from "../dummy/src/models/comment.js"
 import ProjectRecord from "../dummy/src/models/project.js"
@@ -139,6 +140,30 @@ function resetFrontendModelTransport() {
   })
 }
 
+/**
+ * @returns {import("../../src/configuration.js").default} - Backend configuration for seed operations.
+ */
+function backendConfiguration() {
+  return /** @type {import("../../src/configuration.js").default} */ (globalThis.__velocious_browser_test_backend_configuration)
+}
+
+/**
+ * Re-initializes model classes against the browser-side configuration after seeding
+ * into the backend database to avoid polluting other browser-side DB tests.
+ *
+ * @param {typeof import("../../src/database/record/index.js").default[]} modelClasses - Models to restore.
+ * @returns {Promise<void>}
+ */
+async function restoreBrowserSideModelConfiguration(modelClasses) {
+  const browserConfig = Configuration.current()
+
+  await browserConfig.ensureConnections(async () => {
+    for (const modelClass of modelClasses) {
+      await modelClass.initializeRecord({configuration: browserConfig})
+    }
+  })
+}
+
 let usersSeeded = false
 
 /** @returns {Promise<void>} */
@@ -147,18 +172,27 @@ async function seedUsers() {
 
   usersSeeded = true
 
-  await UserRecord.create({
-    createdAt: "2026-02-18T08:00:00.000Z",
-    email: "jane@example.com",
-    encryptedPassword: "password",
-    reference: "browser-user-1"
+  const config = backendConfiguration()
+
+  await config.ensureConnections(async (dbs) => {
+    await UserRecord.initializeRecord({configuration: config})
+    await dbs.default.truncateAllTables()
+
+    await UserRecord.create({
+      createdAt: "2026-02-18T08:00:00.000Z",
+      email: "jane@example.com",
+      encryptedPassword: "password",
+      reference: "browser-user-1"
+    })
+    await UserRecord.create({
+      createdAt: "2026-02-19T08:00:00.000Z",
+      email: "john@example.com",
+      encryptedPassword: "password",
+      reference: "browser-user-2"
+    })
   })
-  await UserRecord.create({
-    createdAt: "2026-02-19T08:00:00.000Z",
-    email: "john@example.com",
-    encryptedPassword: "password",
-    reference: "browser-user-2"
-  })
+
+  await restoreBrowserSideModelConfiguration([UserRecord])
 }
 
 /** @type {{project: ProjectRecord, task: TaskRecord} | null} */
@@ -168,16 +202,26 @@ let preloadSeedResult = null
 async function seedBrowserPreloadModels() {
   if (preloadSeedResult) return preloadSeedResult
 
-  const project = await ProjectRecord.create({name: "Browser preload project"})
-  const task = await TaskRecord.create({
-    name: "Browser preload task",
-    projectId: project.id(),
-    updatedAt: "2026-02-20T10:00:00.000Z"
+  const config = backendConfiguration()
+
+  await config.ensureConnections(async () => {
+    await ProjectRecord.initializeRecord({configuration: config})
+    await TaskRecord.initializeRecord({configuration: config})
+    await CommentRecord.initializeRecord({configuration: config})
+
+    const project = await ProjectRecord.create({name: "Browser preload project"})
+    const task = await TaskRecord.create({
+      name: "Browser preload task",
+      projectId: project.id(),
+      updatedAt: "2026-02-20T10:00:00.000Z"
+    })
+
+    await CommentRecord.create({body: "Browser preload comment", taskId: task.id()})
+
+    preloadSeedResult = {project, task}
   })
 
-  await CommentRecord.create({body: "Browser preload comment", taskId: task.id()})
-
-  preloadSeedResult = {project, task}
+  await restoreBrowserSideModelConfiguration([ProjectRecord, TaskRecord, CommentRecord])
 
   return preloadSeedResult
 }

@@ -386,8 +386,8 @@ async function main() {
   let backendApplication
 
   try {
-    delete process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION
     const backendConfiguration = await loadBrowserBackendConfiguration()
+    globalThis.__velocious_browser_test_backend_configuration = backendConfiguration
     backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
     systemTest = SystemTest.current({
       debug: process.env.SYSTEM_TEST_DEBUG === "true",

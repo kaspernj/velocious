@@ -1150,6 +1150,35 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Ensures the frontend model class is initialized (has columns, table name, etc.).
+   * This handles the case where model initialization was skipped at startup (e.g., browser tests).
+   *
+   * @returns {Promise<void>} - Resolves when the model class is ready.
+   */
+  async ensureFrontendModelClassInitialized() {
+    const modelClass = this.frontendModelClassFromConfiguration()
+
+    if (!modelClass || modelClass._initialized) return
+
+    const configuration = this.getConfiguration()
+    const backendProjects = configuration.getBackendProjects()
+
+    for (const backendProject of backendProjects) {
+      const resources = frontendModelResourcesForBackendProject(backendProject)
+
+      for (const resourceModelName in resources) {
+        const resourceDefinition = resources[resourceModelName]
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+        const resourceModelClass = resourceClass?.ModelClass
+
+        if (resourceModelClass && !resourceModelClass._initialized && typeof resourceModelClass.initializeRecord === "function") {
+          await resourceModelClass.initializeRecord({configuration})
+        }
+      }
+    }
+  }
+
+  /**
    * @param {string} modelName - Model class name.
    * @param {unknown} resourceDefinition - Resource definition.
    * @returns {string} - Normalized resource path.
@@ -2391,6 +2420,8 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<Record<string, any> | null>} - Response payload.
    */
   async frontendModelCommandPayload(action) {
+    await this.ensureFrontendModelClassInitialized()
+
     if (!(await this.runFrontendModelBeforeAction(action))) {
       return null
     }
