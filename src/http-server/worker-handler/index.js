@@ -165,7 +165,7 @@ export default class VelociousHttpServerWorker {
       const client = this.clients[clientCount]
 
       if (!client) {
-        this.logger.error(() => [`Velocious worker ${this.workerCount} produced output for missing client ${clientCount}`, data])
+        this.logger.warn(() => [`Velocious worker ${this.workerCount} produced output for missing client ${clientCount}`, data])
         return
       }
 
