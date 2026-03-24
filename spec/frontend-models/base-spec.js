@@ -105,6 +105,31 @@ function buildCustomPrimaryKeyTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with legacy built-in aliases.
+ */
+function buildLegacyAliasedCommandModelClass() {
+  /** Test model implementation with legacy built-in aliases on collection/member command keys. */
+  class User extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], collectionCommands: {index: string}, memberCommands: {find: string}}} - Resource configuration.
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "name"],
+        collectionCommands: {
+          index: "list"
+        },
+        memberCommands: {
+          find: "lookup"
+        }
+      }
+    }
+  }
+
+  return User
+}
+
+/**
  * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
  */
 function buildPreloadTestModelClasses() {
@@ -432,6 +457,13 @@ describe("Frontend models - base", () => {
       resetFrontendModelTransport()
       globalThis.fetch = originalFetch
     }
+  })
+
+  it("keeps legacy built-in command aliases working when only collectionCommands/memberCommands are configured", () => {
+    const User = buildLegacyAliasedCommandModelClass()
+
+    expect(User.commandName("index")).toEqual("list")
+    expect(User.commandName("find")).toEqual("lookup")
   })
 
   it("routes path-based frontend-model commands through the shared frontend-model API when shared transport is enabled", async () => {

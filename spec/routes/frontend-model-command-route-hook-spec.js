@@ -162,6 +162,30 @@ describe("routes - frontend model command route hook", () => {
     })
   })
 
+  it("decodes encoded member ids for custom member commands", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([{
+        path: "/tmp/backend",
+        resources: {
+          User: UserFrontendResource
+        }
+      }]),
+      currentPath: "/partners/frontend-models/users/test%40example.com/reset-password"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-custom-command",
+      controller: "partners/frontend-models/users",
+      controllerPath: expectedControllerPath,
+      params: {
+        frontendModelCustomCommandMethodName: "resetPassword",
+        frontendModelCustomCommandScope: "member",
+        id: "test@example.com",
+        model: "User"
+      }
+    })
+  })
+
   it("infers default path and array command config for backend project routes", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{

@@ -1202,8 +1202,15 @@ export default class FrontendModelBase {
     const resourceConfig = this.resourceConfig()
     const builtInCollectionCommands = resourceConfig.builtInCollectionCommands || {}
     const builtInMemberCommands = resourceConfig.builtInMemberCommands || {}
+    const legacyCollectionCommands = resourceConfig.collectionCommands || {}
+    const legacyMemberCommands = resourceConfig.memberCommands || {}
     const commands = resourceConfig.commands || {}
-    const commandName = builtInCollectionCommands[commandType] ?? builtInMemberCommands[commandType] ?? commands[commandType] ?? commandType
+    const commandName = builtInCollectionCommands[commandType]
+      ?? builtInMemberCommands[commandType]
+      ?? legacyCollectionCommands[commandType]
+      ?? legacyMemberCommands[commandType]
+      ?? commands[commandType]
+      ?? commandType
 
     return validateFrontendModelResourceCommandName({
       commandName,

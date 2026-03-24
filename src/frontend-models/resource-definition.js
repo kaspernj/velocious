@@ -387,7 +387,7 @@ export function frontendModelCustomCommandForPath({backendProjects, currentPath}
         if (matchedMemberCommand) {
           return {
             commandName: matchedMemberCommand[1],
-            memberId: pathSegments[0],
+            memberId: decodeURIComponent(pathSegments[0]),
             methodName: matchedMemberCommand[0],
             modelName,
             resourcePath,
