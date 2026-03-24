@@ -118,7 +118,7 @@ class CommentFrontendModelAbilityResource extends BaseResource {
  */
 function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
   const requestPath = request.path().split("?")[0]
-  const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
+  const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/") || requestPath.startsWith("/tasks/")
   const isSharedFrontendModelApi = requestPath === "/frontend-models"
   const frontendModelRequests = Array.isArray(params.requests) ? params.requests : [params]
   const requestedModelNames = frontendModelRequests
