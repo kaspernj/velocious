@@ -116,6 +116,10 @@ function resolveRansackPath({modelClass, value}) {
   let remainingValue = value
 
   while (true) {
+    if (resolveAttributeName({modelClass: currentModelClass, value: remainingValue})) {
+      break
+    }
+
     const match = findRelationshipPrefix({
       modelClass: currentModelClass,
       value: remainingValue
@@ -211,8 +215,16 @@ function relationshipEntries(modelClass) {
     const relationshipsMap = /** @type {any} */ (modelClass).getRelationshipsMap()
 
     for (const relationshipName of Object.keys(relationshipsMap)) {
+      const relationship = relationshipsMap[relationshipName]
+
+      if (typeof relationship.isPolymorphic === "function" && relationship.isPolymorphic()) continue
+
+      const targetModelClass = relationship.getTargetModelClass()
+
+      if (!targetModelClass) continue
+
       entries[relationshipName] = {
-        targetModelClass: relationshipsMap[relationshipName].getTargetModelClass()
+        targetModelClass
       }
     }
 

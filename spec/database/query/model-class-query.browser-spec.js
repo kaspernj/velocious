@@ -1,6 +1,8 @@
 import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
+import UuidInteraction from "../../dummy/src/models/uuid-interaction.js"
+import UuidItem from "../../dummy/src/models/uuid-item.js"
 import User from "../../dummy/src/models/user.js"
 
 describe("Database - query - model class query", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
@@ -120,6 +122,40 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
       .sort()
 
     expect(names).toEqual(["Beta task"])
+  })
+
+  it("prefers root attributes over relationship prefixes in ransack keys", async () => {
+    const projectMatch = await Project.create({
+      creatingUserReference: "owner-ransack-match",
+      nameEn: "Owner Match Project",
+      nameDe: "Eigentuemer Trefferprojekt"
+    })
+    const projectMiss = await Project.create({
+      creatingUserReference: "owner-ransack-miss",
+      nameEn: "Owner Miss Project",
+      nameDe: "Eigentuemer Fehlprojekt"
+    })
+
+    await Task.create({name: "Owner match task", project: projectMatch})
+    await Task.create({name: "Owner miss task", project: projectMiss})
+
+    const names = (await Project.ransack({creating_user_reference_eq: "owner-ransack-match"}).toArray())
+      .map((project) => project.creatingUserReference())
+
+    expect(names).toEqual(["owner-ransack-match"])
+  })
+
+  it("keeps polymorphic foreign-key ransack filters on the root model", async () => {
+    const uuidItem = await UuidItem.create({title: "Uuid item"})
+    const otherUuidItem = await UuidItem.create({title: "Other uuid item"})
+
+    await UuidInteraction.create({kind: "match", subject: uuidItem})
+    await UuidInteraction.create({kind: "miss", subject: otherUuidItem})
+
+    const kinds = (await UuidInteraction.ransack({subject_id_eq: uuidItem.id()}).toArray())
+      .map((interaction) => interaction.kind())
+
+    expect(kinds).toEqual(["match"])
   })
 
   it("filters on deep nested relationship attributes", async () => {
