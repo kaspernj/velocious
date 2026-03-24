@@ -1,6 +1,6 @@
 // @ts-check
 
-import {frontendModelActionForCommand, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "../../frontend-models/resource-definition.js"
+import {frontendModelActionForCommand, frontendModelCustomCommandForPath, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "../../frontend-models/resource-definition.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const SHARED_FRONTEND_MODEL_REQUEST_PATH = "/frontend-models/request"
@@ -29,6 +29,30 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   }
 
   const backendProjects = configuration.getBackendProjects?.() || []
+  const customCommandMatch = frontendModelCustomCommandForPath({
+    backendProjects,
+    currentPath: normalizedCurrentPath
+  })
+
+  if (customCommandMatch) {
+    /** @type {Record<string, any>} */
+    const params = {
+      frontendModelCustomCommandMethodName: customCommandMatch.methodName,
+      frontendModelCustomCommandScope: customCommandMatch.scope,
+      model: customCommandMatch.modelName
+    }
+
+    if (customCommandMatch.memberId) {
+      params.id = customCommandMatch.memberId
+    }
+
+    return {
+      action: "frontend-custom-command",
+      controller: customCommandMatch.resourcePath.replace(/^\/+/, ""),
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH,
+      params
+    }
+  }
 
   for (const backendProject of backendProjects) {
     const resources = frontendModelResourcesForBackendProject(backendProject)

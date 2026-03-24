@@ -14,12 +14,18 @@ class UserFrontendResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["id"],
-      collectionCommands: {
+      builtInCollectionCommands: {
         index: "frontend-index"
       },
-      memberCommands: {
+      builtInMemberCommands: {
         find: "frontend-find",
         update: "update"
+      },
+      collectionCommands: {
+        reindexAll: "reindex-all"
+      },
+      memberCommands: {
+        resetPassword: "reset-password"
       },
       path: "/partners/frontend-models/users"
     }
@@ -109,6 +115,53 @@ describe("routes - frontend model command route hook", () => {
     })
   })
 
+  it("routes custom collection commands through the frontend model controller", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([{
+        path: "/tmp/backend",
+        resources: {
+          User: UserFrontendResource
+        }
+      }]),
+      currentPath: "/partners/frontend-models/users/reindex-all"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-custom-command",
+      controller: "partners/frontend-models/users",
+      controllerPath: expectedControllerPath,
+      params: {
+        frontendModelCustomCommandMethodName: "reindexAll",
+        frontendModelCustomCommandScope: "collection",
+        model: "User"
+      }
+    })
+  })
+
+  it("routes custom member commands through the frontend model controller", async () => {
+    const routeMatch = await frontendModelCommandRouteHook({
+      configuration: configurationForBackendProjects([{
+        path: "/tmp/backend",
+        resources: {
+          User: UserFrontendResource
+        }
+      }]),
+      currentPath: "/partners/frontend-models/users/user-1/reset-password"
+    })
+
+    expect(routeMatch).toEqual({
+      action: "frontend-custom-command",
+      controller: "partners/frontend-models/users",
+      controllerPath: expectedControllerPath,
+      params: {
+        frontendModelCustomCommandMethodName: "resetPassword",
+        frontendModelCustomCommandScope: "member",
+        id: "user-1",
+        model: "User"
+      }
+    })
+  })
+
   it("infers default path and array command config for backend project routes", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
@@ -132,6 +185,24 @@ describe("routes - frontend model command route hook", () => {
     expect(resourceConfiguration?.abilities).toEqual({
       find: "read",
       index: "read"
+    })
+  })
+
+  it("separates built-in and custom command normalization for opted-in resources", () => {
+    const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(UserFrontendResource)
+
+    expect(resourceConfiguration?.builtInCollectionCommands).toEqual({
+      index: "frontend-index"
+    })
+    expect(resourceConfiguration?.builtInMemberCommands).toEqual({
+      find: "frontend-find",
+      update: "update"
+    })
+    expect(resourceConfiguration?.collectionCommands).toEqual({
+      reindexAll: "reindex-all"
+    })
+    expect(resourceConfiguration?.memberCommands).toEqual({
+      resetPassword: "reset-password"
     })
   })
 
@@ -160,6 +231,14 @@ describe("routes - frontend model command route hook", () => {
       commandName: "update",
       modelName: "Project",
       resourceDefinition: ProjectFrontendResource
+    })).toEqual(null)
+  })
+
+  it("does not map custom command names onto built-in frontend actions", () => {
+    expect(frontendModelActionForCommand({
+      commandName: "reindex-all",
+      modelName: "User",
+      resourceDefinition: UserFrontendResource
     })).toEqual(null)
   })
 

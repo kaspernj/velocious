@@ -382,6 +382,58 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("infers default resource paths for pathless custom commands", async () => {
+    const User = buildCustomPrimaryKeyTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const bodyString = typeof options?.body === "string" ? options.body : "{}"
+
+        calls.push({
+          body: JSON.parse(bodyString),
+          url: `${url}`
+        })
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify({
+            responses: [{
+              requestId: calls[0].body.requests[0].requestId,
+              response: {status: "success"}
+            }],
+            status: "success"
+          }),
+          /** @returns {Promise<Record<string, any>>} */
+          json: async () => ({
+            responses: [{
+              requestId: calls[0].body.requests[0].requestId,
+              response: {status: "success"}
+            }],
+            status: "success"
+          })
+        }
+      })
+
+      await User.executeCustomCommand({
+        commandName: "refresh-access",
+        commandType: "refresh-access",
+        memberId: "user-1",
+        payload: {},
+        resourcePath: User.resourcePath()
+      })
+
+      expect(calls[0].body.requests[0].customPath).toEqual("/users/user-1/refresh-access")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("routes path-based frontend-model commands through the shared frontend-model API when shared transport is enabled", async () => {
     const User = buildTestModelClass()
     const originalFetch = globalThis.fetch

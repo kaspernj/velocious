@@ -187,17 +187,27 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       : {}
     const attributesTypeName = `${className}Attributes`
     const attributeNames = attributes.map((attribute) => attribute.name)
-    const collectionCommands = {
-      create: modelConfig.collectionCommands.create || "create",
-      index: modelConfig.collectionCommands.index || "index"
+    const builtInCollectionCommands = {
+      create: modelConfig.builtInCollectionCommands.create || "create",
+      index: modelConfig.builtInCollectionCommands.index || "index"
     }
-    const memberCommands = {
-      destroy: modelConfig.memberCommands.destroy || "destroy",
-      find: modelConfig.memberCommands.find || "find",
-      update: modelConfig.memberCommands.update || "update"
+    const builtInMemberCommands = {
+      attach: modelConfig.builtInMemberCommands.attach || "attach",
+      destroy: modelConfig.builtInMemberCommands.destroy || "destroy",
+      download: modelConfig.builtInMemberCommands.download || "download",
+      find: modelConfig.builtInMemberCommands.find || "find",
+      update: modelConfig.builtInMemberCommands.update || "update",
+      url: modelConfig.builtInMemberCommands.url || "url"
     }
-    const collectionCommandsAreDefault = collectionCommands.create === "create" && collectionCommands.index === "index"
-    const memberCommandsAreDefault = memberCommands.destroy === "destroy" && memberCommands.find === "find" && memberCommands.update === "update"
+    const collectionCommands = modelConfig.collectionCommands
+    const memberCommands = modelConfig.memberCommands
+    const builtInCollectionCommandsAreDefault = builtInCollectionCommands.create === "create" && builtInCollectionCommands.index === "index"
+    const builtInMemberCommandsAreDefault = builtInMemberCommands.attach === "attach"
+      && builtInMemberCommands.destroy === "destroy"
+      && builtInMemberCommands.download === "download"
+      && builtInMemberCommands.find === "find"
+      && builtInMemberCommands.update === "update"
+      && builtInMemberCommands.url === "url"
 
     let fileContent = ""
 
@@ -225,7 +235,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], collectionCommands?: {create: string, index: string}, memberCommands?: {destroy: string, find: string, update: string}}} - Resource config. */\n"
+    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, primaryKey?: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     if (Object.keys(attachments).length > 0) {
@@ -244,14 +254,37 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       propertyName: "attributes",
       values: attributeNames
     })
-    if (!collectionCommandsAreDefault) {
+    if (!builtInCollectionCommandsAreDefault) {
+      fileContent += this.formattedObjectProperty({
+        filterDefaultValues: {create: "create", index: "index"},
+        indent: "      ",
+        propertyName: "builtInCollectionCommands",
+        values: builtInCollectionCommands
+      })
+    }
+    if (!builtInMemberCommandsAreDefault) {
+      fileContent += this.formattedObjectProperty({
+        filterDefaultValues: {
+          attach: "attach",
+          destroy: "destroy",
+          download: "download",
+          find: "find",
+          update: "update",
+          url: "url"
+        },
+        indent: "      ",
+        propertyName: "builtInMemberCommands",
+        values: builtInMemberCommands
+      })
+    }
+    if (Object.keys(collectionCommands).length > 0) {
       fileContent += this.formattedObjectProperty({
         indent: "      ",
         propertyName: "collectionCommands",
         values: collectionCommands
       })
     }
-    if (!memberCommandsAreDefault) {
+    if (Object.keys(memberCommands).length > 0) {
       fileContent += this.formattedObjectProperty({
         indent: "      ",
         propertyName: "memberCommands",
@@ -301,6 +334,39 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Assigned value.\n`
       fileContent += "   */\n"
       fileContent += `  set${camelizedAttributeUpper}(newValue) { return this.setAttribute(${JSON.stringify(attribute.name)}, newValue) }\n`
+    }
+
+    for (const methodName of Object.keys(collectionCommands)) {
+      fileContent += "\n"
+      fileContent += "  /**\n"
+      fileContent += "   * @param {Record<string, any>} [payload={}] - Command payload.\n"
+      fileContent += "   * @returns {Promise<Record<string, any>>} - Command response.\n"
+      fileContent += "   */\n"
+      fileContent += `  static async ${methodName}(payload = {}) {\n`
+      fileContent += "    return await this.executeCustomCommand({\n"
+      fileContent += `      commandName: ${JSON.stringify(collectionCommands[methodName])},\n`
+      fileContent += `      commandType: ${JSON.stringify(collectionCommands[methodName])},\n`
+      fileContent += "      payload,\n"
+      fileContent += "      resourcePath: this.resourcePath()\n"
+      fileContent += "    })\n"
+      fileContent += "  }\n"
+    }
+
+    for (const methodName of Object.keys(memberCommands)) {
+      fileContent += "\n"
+      fileContent += "  /**\n"
+      fileContent += "   * @param {Record<string, any>} [payload={}] - Command payload.\n"
+      fileContent += "   * @returns {Promise<Record<string, any>>} - Command response.\n"
+      fileContent += "   */\n"
+      fileContent += `  async ${methodName}(payload = {}) {\n`
+      fileContent += `    return await ${className}.executeCustomCommand({\n`
+      fileContent += `      commandName: ${JSON.stringify(memberCommands[methodName])},\n`
+      fileContent += `      commandType: ${JSON.stringify(memberCommands[methodName])},\n`
+      fileContent += "      memberId: this.primaryKeyValue(),\n"
+      fileContent += "      payload,\n"
+      fileContent += `      resourcePath: ${className}.resourcePath()\n`
+      fileContent += "    })\n"
+      fileContent += "  }\n"
     }
 
     for (const relationship of relationships) {
@@ -370,12 +436,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {string} args.indent - Base indentation.
    * @param {string} args.propertyName - Object property name.
    * @param {Record<string, string>} args.values - Object key-values.
+   * @param {Record<string, string>} [args.filterDefaultValues] - Default values to omit from output.
    * @returns {string} - Formatted multiline object property.
    */
-  formattedObjectProperty({indent, propertyName, values}) {
+  formattedObjectProperty({filterDefaultValues, indent, propertyName, values}) {
     let output = `${indent}${propertyName}: {\n`
 
     for (const objectKey of Object.keys(values)) {
+      if (filterDefaultValues && filterDefaultValues[objectKey] === values[objectKey]) continue
+
       output += `${indent}  ${objectKey}: ${JSON.stringify(values[objectKey])},\n`
     }
 

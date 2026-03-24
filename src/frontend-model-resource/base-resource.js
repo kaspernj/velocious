@@ -38,7 +38,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /** @type {Record<string, string> | string[] | undefined} */
   static collectionCommands = undefined
   /** @type {Record<string, string> | string[] | undefined} */
+  static builtInCollectionCommands = undefined
+  /** @type {Record<string, string> | string[] | undefined} */
   static memberCommands = undefined
+  /** @type {Record<string, string> | string[] | undefined} */
+  static builtInMemberCommands = undefined
   /** @type {string | undefined} */
   static path = undefined
   /** @type {Record<string, any> | undefined} */
@@ -85,6 +89,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     if (this.attachments) config.attachments = this.attachments
     if (this.commands) config.commands = this.commands
+    if (this.builtInCollectionCommands) config.builtInCollectionCommands = this.builtInCollectionCommands
+    if (this.builtInMemberCommands) config.builtInMemberCommands = this.builtInMemberCommands
     if (this.collectionCommands) config.collectionCommands = this.collectionCommands
     if (this.memberCommands) config.memberCommands = this.memberCommands
     if (this.path) config.path = this.path

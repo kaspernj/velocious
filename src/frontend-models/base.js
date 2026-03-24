@@ -1,5 +1,6 @@
 // @ts-check
 
+import * as inflection from "inflection"
 import FrontendModelQuery from "./query.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
@@ -10,7 +11,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
- * @typedef {{commands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, path?: string, primaryKey?: string}} FrontendModelResourceConfig
+ * @typedef {{builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, commands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, path?: string, primaryKey?: string}} FrontendModelResourceConfig
  */
 /**
  * @typedef {object} FrontendModelTransportConfig
@@ -30,6 +31,14 @@ const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
+
+/**
+ * @param {typeof FrontendModelBase} modelClass - Frontend model class.
+ * @returns {string} - Default resource path for the model class.
+ */
+function defaultFrontendModelResourcePath(modelClass) {
+  return `/${inflection.dasherize(inflection.pluralize(inflection.underscore(modelClass.name)))}`
+}
 
 /** Error raised when reading an attribute that was not selected in query payloads. */
 export class AttributeNotSelectedError extends Error {
@@ -1176,9 +1185,7 @@ export default class FrontendModelBase {
    * @returns {string} - Resource path.
    */
   static resourcePath() {
-    const path = this.resourceConfig().path
-
-    if (!path) throw new Error(`Missing resource path for ${this.name}`)
+    const path = this.resourceConfig().path || defaultFrontendModelResourcePath(this)
 
     return validateFrontendModelResourcePath({
       modelName: this.name,
@@ -1193,10 +1200,10 @@ export default class FrontendModelBase {
    */
   static commandName(commandType) {
     const resourceConfig = this.resourceConfig()
-    const collectionCommands = resourceConfig.collectionCommands || {}
-    const memberCommands = resourceConfig.memberCommands || {}
+    const builtInCollectionCommands = resourceConfig.builtInCollectionCommands || {}
+    const builtInMemberCommands = resourceConfig.builtInMemberCommands || {}
     const commands = resourceConfig.commands || {}
-    const commandName = collectionCommands[commandType] ?? memberCommands[commandType] ?? commands[commandType] ?? commandType
+    const commandName = builtInCollectionCommands[commandType] ?? builtInMemberCommands[commandType] ?? commands[commandType] ?? commandType
 
     return validateFrontendModelResourceCommandName({
       commandName,
