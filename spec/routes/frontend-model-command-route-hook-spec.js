@@ -85,7 +85,8 @@ describe("routes - frontend model command route hook", () => {
 
     expect(routeMatch).toEqual({
       action: "frontend-index",
-      controller: "users"
+      controller: "users",
+      controllerPath: expectedControllerPath
     })
   })
 
@@ -173,7 +174,8 @@ describe("routes - frontend model command route hook", () => {
 
     expect(routeMatch).toEqual({
       action: "frontend-index",
-      controller: "projects"
+      controller: "projects",
+      controllerPath: expectedControllerPath
     })
   })
 
