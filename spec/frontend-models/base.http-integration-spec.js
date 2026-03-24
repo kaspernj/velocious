@@ -167,21 +167,23 @@ function configureWebsocketSharedTransport(websocketClient) {
 }
 
 /**
- * @returns {Promise<void>}
+ * @returns {Promise<{jane: UserRecord, john: UserRecord}>}
  */
 async function seedHttpFrontendModels() {
-  await UserRecord.create({
+  const jane = await UserRecord.create({
     createdAt: "2026-02-18T08:00:00.000Z",
     email: "jane@example.com",
     encryptedPassword: "password",
     reference: "user-1"
   })
-  await UserRecord.create({
+  const john = await UserRecord.create({
     createdAt: "2026-02-19T08:00:00.000Z",
     email: "john@example.com",
     encryptedPassword: "password",
     reference: "user-2"
   })
+
+  return {jane, john}
 }
 
 /**
@@ -284,11 +286,11 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const model = await User.findBy({email: "john@example.com"})
 
-        expect(model?.id()).toEqual(2)
+        expect(model?.id()).toEqual(john.id())
         expect(model?.email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -301,7 +303,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const usersCount = await User.count()
 
@@ -317,12 +319,12 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const models = await User.where({email: "john@example.com"}).toArray()
 
         expect(models.length).toEqual(1)
-        expect(models[0].id()).toEqual(2)
+        expect(models[0].id()).toEqual(john.id())
         expect(models[0].email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -335,13 +337,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const model = await User
           .where({email: "john@example.com"})
-          .findBy({id: "2"})
+          .findBy({id: john.id()})
 
-        expect(model?.id()).toEqual(2)
+        expect(model?.id()).toEqual(john.id())
         expect(model?.email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -354,13 +356,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const models = await User
           .sort("-createdAt")
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual([2, 1])
+        expect(models.map((model) => model.id())).toEqual([john.id(), jane.id()])
       } finally {
         resetFrontendModelTransport()
       }
@@ -372,13 +374,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const models = await User
           .order("-createdAt")
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual([2, 1])
+        expect(models.map((model) => model.id())).toEqual([john.id(), jane.id()])
       } finally {
         resetFrontendModelTransport()
       }
@@ -390,13 +392,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const firstModel = await User.first()
         const lastModel = await User.last()
 
-        expect(firstModel?.id()).toEqual(1)
-        expect(lastModel?.id()).toEqual(2)
+        expect(firstModel?.id()).toEqual(jane.id())
+        expect(lastModel?.id()).toEqual(john.id())
       } finally {
         resetFrontendModelTransport()
       }
@@ -408,13 +410,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const model = await User
           .sort("-createdAt")
           .last()
 
-        expect(model?.id()).toEqual(1)
+        expect(model?.id()).toEqual(jane.id())
       } finally {
         resetFrontendModelTransport()
       }
@@ -426,7 +428,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const models = await User
           .order("createdAt")
@@ -434,7 +436,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
           .limit(1)
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual([2])
+        expect(models.map((model) => model.id())).toEqual([john.id()])
       } finally {
         resetFrontendModelTransport()
       }
@@ -446,7 +448,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const models = await User
           .order("createdAt")
@@ -454,7 +456,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
           .perPage(1)
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual([2])
+        expect(models.map((model) => model.id())).toEqual([john.id()])
       } finally {
         resetFrontendModelTransport()
       }
@@ -466,11 +468,11 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
-        const model = await User.findBy({id: 2})
+        const model = await User.findBy({id: john.id()})
 
-        expect(model?.id()).toEqual(2)
+        expect(model?.id()).toEqual(john.id())
         expect(model?.email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -483,11 +485,11 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const model = await User.findBy({createdAt: new Date("2026-02-18T08:00:00.000Z")})
 
-        expect(model?.id()).toEqual(1)
+        expect(model?.id()).toEqual(jane.id())
         expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
       } finally {
         resetFrontendModelTransport()
@@ -500,7 +502,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         const model = await User.findBy({email: "missing@example.com"})
 
@@ -516,7 +518,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
         await expect(async () => {
           await User.findByOrFail({email: "missing@example.com"})
@@ -661,18 +663,18 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        await seedHttpFrontendModels()
+        const {jane, john} = await seedHttpFrontendModels()
 
-        const baselineModel = await User.findBy({id: "2"})
+        const baselineModel = await User.findBy({id: john.id()})
         const models = await User
           .select(["id", "createdAt"])
-          .where({id: "2"})
+          .where({id: john.id()})
           .toArray()
         const firstModel = models[0]
 
-        expect(baselineModel?.id()).toEqual(2)
+        expect(baselineModel?.id()).toEqual(john.id())
         expect(models.length).toEqual(1)
-        expect(firstModel.id()).toEqual(2)
+        expect(firstModel.id()).toEqual(john.id())
         expect(firstModel.createdAt().toISOString()).toEqual(baselineModel?.createdAt()?.toISOString())
         expect(() => firstModel.email()).toThrow(/User#email was not selected/)
       } finally {
