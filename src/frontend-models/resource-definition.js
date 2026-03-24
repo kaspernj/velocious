@@ -285,6 +285,10 @@ export function frontendModelResourcePath(modelName, resourceDefinition) {
   }
 
   if (resourceConfiguration.path) {
+    if (typeof resourceConfiguration.path !== "string") {
+      throw new Error(`Frontend model resource path for ${modelName} must be a string, got ${typeof resourceConfiguration.path}`)
+    }
+
     return resourceConfiguration.path
   }
 
