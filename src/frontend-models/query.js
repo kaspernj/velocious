@@ -1,5 +1,7 @@
 // @ts-check
 
+import {normalizeRansackParams} from "../utils/ransack.js"
+
 /**
  * @param {unknown} value - Candidate value.
  * @returns {value is Record<string, any>} - Whether value is a plain object.
@@ -173,6 +175,27 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 
     targetSelect[modelName] = Array.from(new Set([...existingAttributes, ...incomingAttributes]))
   }
+}
+
+/**
+ * @param {string} operator - Raw search operator.
+ * @returns {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} - Normalized operator.
+ */
+function normalizeSearchOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+  const normalizedOperator = operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
+
+  if (!supportedOperators.has(normalizedOperator)) {
+    throw new Error(`search operator must be one of: eq, like, notEq, gt, gteq, lt, lteq, >, >=, <, <= (got: ${operator})`)
+  }
+
+  return /** @type {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} */ (normalizedOperator)
 }
 
 /**
@@ -896,6 +919,20 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @returns {this} - Query with Ransack filters applied.
+   */
+  ransack(params) {
+    const conditions = normalizeRansackParams(this.modelClass, params)
+
+    for (const condition of conditions) {
+      applyFrontendRansackCondition({condition, query: this})
+    }
+
+    return this
+  }
+
+  /**
    * @param {string[]} [requiredAttributes] - Extra required attributes for the root model.
    * @returns {Record<string, string[]>} - Select map with required root attributes merged when root select exists.
    */
@@ -948,7 +985,7 @@ export default class FrontendModelQuery {
   /**
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
-   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | ">" | ">=" | "<" | "<="} operator - Search operator.
    * @param {any} value - Search value.
    * @returns {this} - Query with appended search.
    */
@@ -971,9 +1008,11 @@ export default class FrontendModelQuery {
       throw new Error("search operator must be a non-empty string")
     }
 
+    const normalizedOperator = normalizeSearchOperator(operator)
+
     this._searches.push({
       column,
-      operator,
+      operator: normalizedOperator,
       path: [...path],
       value
     })
@@ -1454,4 +1493,46 @@ export default class FrontendModelQuery {
 
     return normalizeFindConditions(conditions)
   }
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {FrontendModelQuery<any>} args.query - Query instance.
+ * @returns {void}
+ */
+function applyFrontendRansackCondition({condition, query}) {
+  if (condition.predicate === "null") {
+    query.search(condition.path, condition.attributeName, condition.value ? "eq" : "notEq", null)
+    return
+  }
+
+  if (condition.predicate === "eq" || condition.predicate === "in") {
+    query.search(condition.path, condition.attributeName, "eq", condition.value)
+    return
+  }
+
+  if (condition.predicate === "not_eq" || condition.predicate === "not_in") {
+    query.search(condition.path, condition.attributeName, "notEq", condition.value)
+    return
+  }
+
+  if (condition.predicate === "gt" || condition.predicate === "gteq" || condition.predicate === "lt" || condition.predicate === "lteq") {
+    query.search(condition.path, condition.attributeName, condition.predicate, condition.value)
+    return
+  }
+
+  query.search(condition.path, condition.attributeName, "like", frontendRansackLikeValue(condition))
+}
+
+/**
+ * @param {import("../utils/ransack.js").RansackCondition} condition - Ransack condition.
+ * @returns {string} - SQL-like pattern.
+ */
+function frontendRansackLikeValue(condition) {
+  if (condition.predicate === "cont") return `%${condition.value}%`
+  if (condition.predicate === "start") return `${condition.value}%`
+  if (condition.predicate === "end") return `%${condition.value}`
+
+  throw new Error(`Unsupported frontend ransack predicate: ${condition.predicate}`)
 }

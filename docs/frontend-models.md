@@ -26,6 +26,7 @@
 - `all()` returns a query builder (parity with backend `all()`).
 - `order(...)` is available as alias parity with backend `order(...)` (and forwards to frontend sort payloads).
 - `first()` and `last()` are available on frontend query/model classes.
+- `search(path, column, operator, value)` supports both named operators (`gt`, `lt`, `gteq`, `lteq`) and symbolic aliases (`>`, `<`, `>=`, `<=`).
 
 ## Record parity helpers
 - `save()` is available for create/update flows (`create` when new record, `update` when persisted).

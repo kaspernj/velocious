@@ -127,6 +127,30 @@
  */
 
 /**
+ * @typedef {object} ScheduledBackgroundJobEveryOptions
+ * @property {number | string} [firstIn] - Delay before the first enqueue.
+ * @property {number | string} [first_in] - Sidekiq-style alias for `firstIn`.
+ */
+
+/**
+ * @typedef {object} ScheduledBackgroundJobConfiguration
+ * @property {any[]} [args] - Arguments passed to the job when enqueued.
+ * @property {typeof import("./background-jobs/job.js").default} class - Job class to enqueue.
+ * @property {boolean} [enabled] - Whether the schedule is enabled.
+ * @property {number | string | [number | string, ScheduledBackgroundJobEveryOptions]} every - Repeat interval.
+ * @property {import("./background-jobs/types.js").BackgroundJobOptions} [options] - Job options.
+ */
+
+/**
+ * @typedef {object} ScheduledBackgroundJobsConfiguration
+ * @property {Record<string, ScheduledBackgroundJobConfiguration>} jobs - Scheduled jobs keyed by name.
+ */
+
+/**
+ * @typedef {function({configuration: import("./configuration.js").default}) : ScheduledBackgroundJobsConfiguration | Promise<ScheduledBackgroundJobsConfiguration>} ScheduledBackgroundJobsLoaderType
+ */
+
+/**
  * @typedef {object} AttachmentDriverConfiguration
  * @property {function({configuration: import("./configuration.js").default, name: string, options: Record<string, any>}) : Record<string, any>} [create] - Optional factory for a custom attachment driver instance.
  * @property {new (...args: any[]) => Record<string, any>} [driverClass] - Optional custom attachment driver class.
@@ -178,19 +202,24 @@
  * @property {string[] | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
  * @property {FrontendModelResourceAbilitiesConfiguration | string[]} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`) or shorthand action list (for example `["create", "read", "update", "destroy"]`).
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
- * @property {Record<string, string> | string[]} [commands] - Legacy command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
- * @property {Record<string, string> | string[]} [collectionCommands] - Collection command names keyed by action (`index`, `create`) or shorthand command list using default names.
- * @property {Record<string, string> | string[]} [memberCommands] - Member command names keyed by action (`find`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
- * @property {Record<string, FrontendModelRelationshipConfiguration>} [relationships] - Relationship helpers to generate for frontend model files.
+ * @property {Record<string, string> | string[]} [commands] - Legacy built-in command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
+ * @property {Record<string, string> | string[]} [collectionCommands] - Custom collection commands keyed by generated method name or shorthand command list using camelized method names. When `builtInCollectionCommands` and `builtInMemberCommands` are omitted, this key keeps its legacy built-in-command behavior.
+ * @property {Record<string, string> | string[]} [memberCommands] - Custom member commands keyed by generated method name or shorthand command list using camelized method names. When `builtInCollectionCommands` and `builtInMemberCommands` are omitted, this key keeps its legacy built-in-command behavior.
+ * @property {Record<string, string> | string[]} [builtInCollectionCommands] - Built-in collection command names keyed by action (`index`, `create`) or shorthand command list using default names.
+ * @property {Record<string, string> | string[]} [builtInMemberCommands] - Built-in member command names keyed by action (`find`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
+ * @property {Record<string, FrontendModelRelationshipConfiguration> | string[]} [relationships] - Relationship helpers to generate for frontend model files. Arrays infer target model/type from backend model relationships.
  * @property {string} [path] - Optional legacy HTTP path prefix used by direct frontend model commands.
+ * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
  */
 
 /**
- * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "commands" | "collectionCommands" | "memberCommands"> & {
+ * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands"> & {
  *   abilities: FrontendModelResourceAbilitiesConfiguration
- *   commands: Record<string, string>
+ *   builtInCollectionCommands: Record<string, string>
+ *   builtInMemberCommands: Record<string, string>
  *   collectionCommands: Record<string, string>
+ *   commands: Record<string, string>
  *   memberCommands: Record<string, string>
  * }} NormalizedFrontendModelResourceConfiguration
  */
@@ -288,6 +317,7 @@
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
+ * @property {ScheduledBackgroundJobsConfiguration | ScheduledBackgroundJobsLoaderType} [scheduledBackgroundJobs] - Scheduled background jobs configuration.
  * @property {MailerBackend} [mailerBackend] - Mail delivery backend.
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.
  * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.

@@ -264,9 +264,30 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
  * @typedef {object} FrontendModelSearch
  * @property {string[]} path - Relationship path.
  * @property {string} column - Column or attribute name.
- * @property {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
  * @property {any} value - Search value.
  */
+
+/**
+ * @param {string} operator - Raw search operator.
+ * @returns {FrontendModelSearch["operator"]} - Normalized search operator.
+ */
+function normalizeFrontendModelSearchOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+  const normalizedOperator = operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
+
+  if (!supportedOperators.has(normalizedOperator)) {
+    throw frontendModelValidationError(`Invalid search operator: ${operator}`)
+  }
+
+  return /** @type {FrontendModelSearch["operator"]} */ (normalizedOperator)
+}
 
 /**
  * @typedef {object} FrontendModelSort
@@ -574,7 +595,6 @@ function normalizeFrontendModelSearches(searches) {
 
   /** @type {FrontendModelSearch[]} */
   const normalized = []
-  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
 
   for (const search of searches) {
     if (!isPlainObject(search)) {
@@ -599,13 +619,13 @@ function normalizeFrontendModelSearches(searches) {
       throw frontendModelValidationError("Invalid search column: expected non-empty string")
     }
 
-    if (typeof operator !== "string" || !supportedOperators.has(operator)) {
+    if (typeof operator !== "string") {
       throw frontendModelValidationError(`Invalid search operator: ${operator}`)
     }
 
     normalized.push({
       column,
-      operator: /** @type {FrontendModelSearch["operator"]} */ (operator),
+      operator: normalizeFrontendModelSearchOperator(operator),
       path: [...path],
       value: search.value
     })
@@ -1160,7 +1180,14 @@ export default class FrontendModelController extends Controller {
     }
 
     const resourceArgs = {
+      ability: this.currentAbility(),
       controller: this,
+      context: {
+        ...(this.currentAbility()?.getContext() || {}),
+        params: this.frontendModelParams(),
+        request: this.request()
+      },
+      locals: this.currentAbility()?.getLocals() || {},
       modelClass: this.frontendModelClass(),
       modelName: frontendModelResource.modelName,
       params: this.frontendModelParams(),
@@ -1560,6 +1587,7 @@ export default class FrontendModelController extends Controller {
       eq: "=",
       gt: ">",
       gteq: ">=",
+      like: "LIKE",
       lt: "<",
       lteq: "<=",
       notEq: "!="
@@ -2290,7 +2318,7 @@ export default class FrontendModelController extends Controller {
    * @param {object} args - Error log args.
    * @param {string} args.action - Endpoint/action label.
    * @param {unknown} args.error - Caught error.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} [args.commandType] - Frontend-model command type.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
    * @param {string | undefined} [args.model] - Request model name when available.
    * @param {string | undefined} [args.requestId] - Batch request id when available.
    * @returns {Promise<void>} - Resolves after logging.
@@ -2776,4 +2804,58 @@ export default class FrontendModelController extends Controller {
 
     await this.frontendModelRenderCommandResponse("destroy")
   }
+
+  /** @returns {Promise<void>} - Custom collection/member command action for frontend-model resources. */
+  async frontendCustomCommand() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    try {
+      const responsePayload = await this.frontendModelCustomCommandPayload()
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
+      })
+    } catch (error) {
+      await this.frontendModelLogEndpointError({action: "frontendCustomCommand", commandType: "custom-command", error})
+      const errorMessage = frontendModelClientMessageForError(error)
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelErrorPayload(errorMessage)))
+      })
+    }
+  }
+
+  /** @returns {Promise<Record<string, any>>} - Response payload. */
+  async frontendModelCustomCommandPayload() {
+    const params = this.frontendModelParams()
+    const methodName = params.frontendModelCustomCommandMethodName
+    const scope = params.frontendModelCustomCommandScope
+
+    if (typeof methodName !== "string" || methodName.length < 1) {
+      return this.frontendModelErrorPayload("Expected frontend-model custom command method name.")
+    }
+
+    if (scope !== "collection" && scope !== "member") {
+      return this.frontendModelErrorPayload("Expected frontend-model custom command scope.")
+    }
+
+    const resource = /** @type {Record<string, any>} */ (this.frontendModelResourceInstance())
+    const commandMethod = resource[methodName]
+
+    if (typeof commandMethod !== "function") {
+      return this.frontendModelErrorPayload(`Missing frontend-model custom command '${methodName}'.`)
+    }
+
+    const responsePayload = await commandMethod.call(resource)
+
+    if (!responsePayload || typeof responsePayload !== "object") {
+      return {status: "success"}
+    }
+
+    return /** @type {Record<string, any>} */ (responsePayload)
+  }
+
 }

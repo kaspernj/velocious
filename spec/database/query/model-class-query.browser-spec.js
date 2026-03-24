@@ -1,6 +1,8 @@
 import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
+import UuidInteraction from "../../dummy/src/models/uuid-interaction.js"
+import UuidItem from "../../dummy/src/models/uuid-item.js"
 import User from "../../dummy/src/models/user.js"
 
 describe("Database - query - model class query", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
@@ -71,6 +73,89 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
       .sort()
 
     expect(names).toEqual(["Match Task"])
+  })
+
+  it("applies ransack predicates from the model class", async () => {
+    const projectMatch = await Project.create({
+      creatingUserReference: "creator-ransack-1",
+      nameEn: "Ransack Match Project",
+      nameDe: "Ransack Trefferprojekt"
+    })
+    const projectMiss = await Project.create({
+      creatingUserReference: "creator-ransack-2",
+      nameEn: "Ransack Miss Project",
+      nameDe: "Ransack Fehlprojekt"
+    })
+
+    await ProjectDetail.create({project: projectMatch, isActive: true, note: "Needs review"})
+    await ProjectDetail.create({project: projectMiss, isActive: false, note: "Ignore me"})
+
+    await Task.create({name: "Alpha needle task", project: projectMatch})
+    await Task.create({name: "Beta needle task", project: projectMiss})
+
+    const names = (await Task.ransack({
+      name_cont: "needle",
+      project_project_detail_is_active_eq: true
+    }).toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Alpha needle task"])
+  })
+
+  it("applies ransack predicates on existing query instances", async () => {
+    const project = await Project.create({
+      creatingUserReference: "creator-ransack-3",
+      nameEn: "Ransack Query Project",
+      nameDe: "Ransack Abfrageprojekt"
+    })
+
+    await Task.create({name: "Alpha task", project})
+    await Task.create({name: "Beta task", project, isDone: false})
+    await Task.create({name: "Beta archived", project, isDone: true})
+
+    const names = (await Task
+      .where({projectId: project.id()})
+      .ransack({name_start: "Beta", is_done_not_eq: true})
+      .toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Beta task"])
+  })
+
+  it("prefers root attributes over relationship prefixes in ransack keys", async () => {
+    const projectMatch = await Project.create({
+      creatingUserReference: "owner-ransack-match",
+      nameEn: "Owner Match Project",
+      nameDe: "Eigentuemer Trefferprojekt"
+    })
+    const projectMiss = await Project.create({
+      creatingUserReference: "owner-ransack-miss",
+      nameEn: "Owner Miss Project",
+      nameDe: "Eigentuemer Fehlprojekt"
+    })
+
+    await Task.create({name: "Owner match task", project: projectMatch})
+    await Task.create({name: "Owner miss task", project: projectMiss})
+
+    const names = (await Project.ransack({creating_user_reference_eq: "owner-ransack-match"}).toArray())
+      .map((project) => project.creatingUserReference())
+
+    expect(names).toEqual(["owner-ransack-match"])
+  })
+
+  it("keeps polymorphic foreign-key ransack filters on the root model", async () => {
+    const uuidItem = await UuidItem.create({title: "Uuid item"})
+    const otherUuidItem = await UuidItem.create({title: "Other uuid item"})
+
+    await UuidInteraction.create({kind: "match", subject: uuidItem})
+    await UuidInteraction.create({kind: "miss", subject: otherUuidItem})
+
+    const kinds = (await UuidInteraction.ransack({subject_id_eq: uuidItem.id()}).toArray())
+      .map((interaction) => interaction.kind())
+
+    expect(kinds).toEqual(["match"])
   })
 
   it("filters on deep nested relationship attributes", async () => {
@@ -192,6 +277,45 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
       .sort()
 
     expect(names).toEqual(["Nested Tuple Match Task"])
+  })
+
+  it("supports symbolic relationship where tuple operators", async () => {
+    const cutoff = new Date("2025-01-01T00:00:00.000Z")
+    const matchingUser = await User.create({
+      createdAt: new Date("2025-02-01T00:00:00.000Z"),
+      email: "symbolic-creator-match@example.com",
+      encryptedPassword: "secret",
+      reference: "symbolic-creator-match"
+    })
+    const oldUser = await User.create({
+      createdAt: new Date("2024-02-01T00:00:00.000Z"),
+      email: "symbolic-creator-old@example.com",
+      encryptedPassword: "secret",
+      reference: "symbolic-creator-old"
+    })
+    const projectMatch = await Project.create({
+      creatingUserReference: matchingUser.reference(),
+      nameEn: "Symbolic Tuple Match",
+      nameDe: "Symbolisches Tupel Treffer"
+    })
+    const projectOld = await Project.create({
+      creatingUserReference: oldUser.reference(),
+      nameEn: "Symbolic Tuple Miss Old",
+      nameDe: "Symbolisches Tupel Alt"
+    })
+
+    await Task.create({name: "Symbolic Tuple Match Task", project: projectMatch})
+    await Task.create({name: "Symbolic Tuple Old Task", project: projectOld})
+
+    const names = (await Task.where({
+      project: {
+        creatingUser: [["reference", "like", "symbolic-creator-%", ["createdAt", ">=", cutoff]]]
+      }
+    }).toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Symbolic Tuple Match Task"])
   })
 
   it("forwards unknown keys to the base where hash", async () => {

@@ -8,7 +8,24 @@ import WhereBase from "./where-base.js"
  */
 
 const NO_MATCH = Symbol("no-match")
-const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like"])
+const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like", ">", ">=", "<", "<="])
+
+/**
+ * @param {string} operator - Raw relationship where operator.
+ * @returns {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} - Normalized operator.
+ */
+function normalizeRelationshipWhereOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+
+  return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
+    operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  )
+}
 
 export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase {
   /**
@@ -102,9 +119,11 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     const normalized = []
     const addCondition = (conditionValue) => {
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
+        const normalizedOperator = normalizeRelationshipWhereOperator(conditionValue[1])
+
         normalized.push([
           conditionValue[0],
-          /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (conditionValue[1]),
+          normalizedOperator,
           conditionValue[2]
         ])
 
@@ -339,18 +358,29 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     for (const whereKey in hash) {
       const whereValue = hash[whereKey]
       const relationship = this._getRelationship(modelClass, whereKey)
+      const tuples = this._isRelationshipWhereOperatorTupleContainer(whereValue)
+        ? this._normalizeRelationshipWhereOperatorTuples(whereValue)
+        : null
+      const resolvedColumnName = this._resolveColumnName(modelClass, whereKey)
 
-      if (relationship && this._isRelationshipWhereOperatorTupleContainer(whereValue)) {
+      if (relationship && tuples) {
         if (index > 0) sql += " AND "
 
         const targetModelClass = relationship.getTargetModelClass()
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
-        const tuples = this._normalizeRelationshipWhereOperatorTuples(whereValue)
 
         sql += this._whereSQLFromRelationshipWhereOperatorTuples({
           modelClass: targetModelClass,
           tableName: nestedTableName,
+          tuples
+        })
+      } else if (resolvedColumnName && tuples) {
+        if (index > 0) sql += " AND "
+
+        sql += this._whereSQLFromRelationshipWhereOperatorTuples({
+          modelClass,
+          tableName: tableName || modelQuery.getTableReferenceForJoin(...path),
           tuples
         })
       } else if (Array.isArray(whereValue) && whereValue.length === 0) {

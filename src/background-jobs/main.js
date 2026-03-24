@@ -2,6 +2,7 @@
 
 import net from "net"
 import JsonSocket from "./json-socket.js"
+import BackgroundJobsScheduler from "./scheduler.js"
 import BackgroundJobsStore from "./store.js"
 import Logger from "../logger.js"
 
@@ -35,23 +36,41 @@ export default class BackgroundJobsMain {
     await this.store.ensureReady()
     this.server = net.createServer((socket) => this._handleConnection(socket))
 
-    await new Promise((resolve, reject) => {
-      this.server.once("error", reject)
-      this.server.listen(this.port, this.host, () => resolve(undefined))
-    })
+    try {
+      await new Promise((resolve, reject) => {
+        this.server.once("error", reject)
+        this.server.listen(this.port, this.host, () => resolve(undefined))
+      })
 
-    const address = this.server.address()
-    if (address && typeof address === "object") {
-      this.port = address.port
+      const address = this.server.address()
+      if (address && typeof address === "object") {
+        this.port = address.port
+      }
+
+      this._dispatchTimer = setInterval(() => {
+        void this._dispatch()
+      }, 1000)
+
+      this._orphanTimer = setInterval(() => {
+        void this._sweepOrphans()
+      }, 60000)
+
+      this.scheduler = new BackgroundJobsScheduler({
+        configuration: this.configuration,
+        enqueueJob: async ({args, jobClass, options}) => {
+          await this.store.enqueue({
+            jobName: jobClass.jobName(),
+            args,
+            options
+          })
+          await this._dispatch()
+        }
+      })
+      await this.scheduler.start()
+    } catch (error) {
+      await this.stop()
+      throw error
     }
-
-    this._dispatchTimer = setInterval(() => {
-      void this._dispatch()
-    }, 1000)
-
-    this._orphanTimer = setInterval(() => {
-      void this._sweepOrphans()
-    }, 60000)
   }
 
   /**
@@ -64,6 +83,7 @@ export default class BackgroundJobsMain {
 
     if (this._dispatchTimer) clearInterval(this._dispatchTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
+    this.scheduler?.stop()
 
     if (!this.server) return
 

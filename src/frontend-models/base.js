@@ -1,5 +1,6 @@
 // @ts-check
 
+import * as inflection from "inflection"
 import FrontendModelQuery from "./query.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
@@ -10,7 +11,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
- * @typedef {{commands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, path?: string, primaryKey?: string}} FrontendModelResourceConfig
+ * @typedef {{builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, commands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, path?: string, primaryKey?: string}} FrontendModelResourceConfig
  */
 /**
  * @typedef {object} FrontendModelTransportConfig
@@ -26,10 +27,18 @@ const frontendModelTransportConfig = {}
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
-/** @type {Array<{commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void}>} */
+/** @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
+
+/**
+ * @param {typeof FrontendModelBase} modelClass - Frontend model class.
+ * @returns {string} - Default resource path for the model class.
+ */
+function defaultFrontendModelResourcePath(modelClass) {
+  return `/${inflection.dasherize(inflection.pluralize(inflection.underscore(modelClass.name)))}`
+}
 
 /** Error raised when reading an attribute that was not selected in query payloads. */
 export class AttributeNotSelectedError extends Error {
@@ -537,9 +546,9 @@ function cloneFrontendModelAttributes(value) {
 }
 
 /**
- * @param {string} resourcePath - Resource path (expected absolute path).
- * @param {string} commandName - Command name.
- * @returns {string} - Combined command URL.
+ * @param {string} resourcePath - Resource path prefix.
+ * @param {string} commandName - Command path segment.
+ * @returns {string} - Frontend model API URL.
  */
 function frontendModelCommandUrl(resourcePath, commandName) {
   const configuredUrl = frontendModelTransportUrl()
@@ -552,7 +561,7 @@ function frontendModelCommandUrl(resourcePath, commandName) {
  * @returns {string} - Shared frontend-model API URL.
  */
 function frontendModelApiUrl() {
-  return frontendModelTransportUrl() || SHARED_FRONTEND_MODEL_API_PATH
+  return `${frontendModelTransportUrl()}${SHARED_FRONTEND_MODEL_API_PATH}`
 }
 
 /**
@@ -629,13 +638,30 @@ async function flushPendingSharedFrontendModelRequests() {
 
   const url = frontendModelApiUrl()
   const requestPayload = {
-    requests: batchedRequests.map((request) => ({
-      commandType: request.commandType,
-      customPath: request.customPath,
-      model: request.modelClass.name,
-      payload: request.payload,
-      requestId: request.requestId
-    }))
+    requests: batchedRequests.map((request) => {
+      if (request.customPath) {
+        return {
+          commandType: request.commandType,
+          customPath: request.customPath,
+          model: request.modelClass.name,
+          payload: request.payload,
+          requestId: request.requestId
+        }
+      }
+
+      const isCustomCommandRoute = request.commandName && request.commandName !== request.commandType && request.resourcePath
+      const customPath = isCustomCommandRoute
+        ? `${request.resourcePath}/${request.commandName}`
+        : undefined
+
+      return {
+        commandType: isCustomCommandRoute ? request.commandName : request.commandType,
+        customPath,
+        model: request.modelClass.name,
+        payload: request.payload,
+        requestId: request.requestId
+      }
+    })
   }
 
   try {
@@ -1176,9 +1202,7 @@ export default class FrontendModelBase {
    * @returns {string} - Resource path.
    */
   static resourcePath() {
-    const path = this.resourceConfig().path
-
-    if (!path) throw new Error(`Missing resource path for ${this.name}`)
+    const path = this.resourceConfig().path || defaultFrontendModelResourcePath(this)
 
     return validateFrontendModelResourcePath({
       modelName: this.name,
@@ -1193,16 +1217,28 @@ export default class FrontendModelBase {
    */
   static commandName(commandType) {
     const resourceConfig = this.resourceConfig()
-    const collectionCommands = resourceConfig.collectionCommands || {}
-    const memberCommands = resourceConfig.memberCommands || {}
+    const builtInCollectionCommands = resourceConfig.builtInCollectionCommands || {}
+    const builtInMemberCommands = resourceConfig.builtInMemberCommands || {}
     const commands = resourceConfig.commands || {}
-    const commandName = collectionCommands[commandType] ?? memberCommands[commandType] ?? commands[commandType] ?? commandType
+    const commandName = builtInCollectionCommands[commandType] ?? builtInMemberCommands[commandType] ?? commands[commandType] ?? commandType
 
     return validateFrontendModelResourceCommandName({
       commandName,
       commandType,
       modelName: this.name
     })
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @returns {string} - Backend model name used by frontend model API requests.
+   */
+  static modelNameForRequest() {
+    const modelName = this.resourceConfig().modelName
+
+    if (typeof modelName === "string" && modelName.length > 0) return modelName
+
+    return this.name
   }
 
   /**
@@ -1507,12 +1543,22 @@ export default class FrontendModelBase {
    * @this {T}
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
-   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | ">" | ">=" | "<" | "<="} operator - Search operator.
    * @param {any} value - Search value.
    * @returns {FrontendModelQuery<T>} - Query builder with search filter.
    */
   static search(path, column, operator, value) {
     return this.query().search(path, column, operator, value)
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @returns {FrontendModelQuery<T>} - Query builder with Ransack filters applied.
+   */
+  static ransack(params) {
+    return this.query().ransack(params)
   }
 
   /**
@@ -1916,12 +1962,8 @@ export default class FrontendModelBase {
     const resourceConfig = /** @type {Record<string, any>} */ (this.resourceConfig())
     const resourcePath = typeof resourceConfig.path === "string" && resourceConfig.path.length > 0 ? this.resourcePath() : null
     const containsAttachmentUpload = frontendModelPayloadContainsAttachmentUpload(serializedPayload)
-    const useSharedTransport = (!resourcePath || frontendModelTransportConfig.shared === true) && !containsAttachmentUpload
-    const url = useSharedTransport
-      ? frontendModelApiUrl()
-      : resourcePath
-        ? frontendModelCommandUrl(resourcePath, commandName)
-        : frontendModelApiUrl()
+    const useSharedTransport = !containsAttachmentUpload
+    const url = useSharedTransport ? frontendModelApiUrl() : frontendModelCommandUrl(resourcePath || "", commandName)
 
     if (frontendModelTransportConfig.request) {
       return await this.performTransportRequest({commandName, commandType, payload: serializedPayload, url})
@@ -1930,12 +1972,14 @@ export default class FrontendModelBase {
     if (useSharedTransport) {
       const batchResponse = await new Promise((resolve, reject) => {
         pendingSharedFrontendModelRequests.push({
+          commandName,
           commandType,
           modelClass: this,
           payload: serializedPayload,
           reject,
           requestId: `${++sharedFrontendModelRequestId}`,
-          resolve
+          resolve,
+          resourcePath
         })
 
         scheduleSharedFrontendModelRequestFlush()
@@ -1951,7 +1995,7 @@ export default class FrontendModelBase {
       return decodedBatchResponse
     }
 
-    const response = await fetch(url, {
+    const directResponse = await fetch(url, {
       body: JSON.stringify(serializedPayload),
       credentials: frontendModelTransportConfig.credentials,
       headers: {
@@ -1960,20 +2004,20 @@ export default class FrontendModelBase {
       method: "POST"
     })
 
-    if (!response.ok) {
-      throw new Error(`Request failed (${response.status}) for ${this.name}#${commandType}`)
+    if (!directResponse.ok) {
+      throw new Error(`Request failed (${directResponse.status}) for ${this.name}#${commandType}`)
     }
 
-    const responseText = await response.text()
-    const json = responseText.length > 0 ? JSON.parse(responseText) : {}
-    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))
+    const directResponseText = await directResponse.text()
+    const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
+    const decodedDirectResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(directJson))
 
     this.throwOnErrorFrontendModelResponse({
       commandType,
-      response: decodedResponse
+      response: decodedDirectResponse
     })
 
-    return decodedResponse
+    return decodedDirectResponse
   }
 
   /**

@@ -928,6 +928,27 @@ const specificTask = await Task.where({
   id: 1,
   project: {nameEn: "Alpha"}
 }).toArray()
+
+const tasksWithRecentCreators = await Task.where({
+  project: {creatingUser: [["createdAt", ">=", new Date("2026-01-01T00:00:00.000Z")]]}
+}).toArray()
+```
+
+### Ransack-style filtering
+
+Use `.ransack(...)` on record queries, record classes, frontend-model queries, and frontend-model classes when you want Rails/Ransack-style predicate keys without hand-writing nested `where(...)` or `search(...)` calls.
+
+Supported predicates include `_eq`, `_not_eq`, `_gt`, `_gteq`, `_lt`, `_lteq`, `_cont`, `_start`, `_end`, `_in`, `_not_in`, and `_null`.
+
+```js
+const tasks = await Task.ransack({
+  name_cont: "deploy",
+  project_project_detail_is_active_eq: true
+}).toArray()
+
+const frontendTasks = await FrontendTask
+  .ransack({name_cont: "deploy", id_in: ["1", "2"]})
+  .toArray()
 ```
 
 ### Raw where clauses
@@ -1492,6 +1513,35 @@ await MyJob.performLaterWithOptions({
   options: {forked: false}
 })
 ```
+
+## Scheduled jobs
+
+Velocious can enqueue recurring jobs from the `background-jobs-main` process. Configure them with `scheduledBackgroundJobs` using Sidekiq Scheduler-style `every` arrays:
+
+```js
+import BuildCleanupJob from "./src/jobs/build-cleanup-job.js"
+
+export default new Configuration({
+  // ...
+  scheduledBackgroundJobs: {
+    jobs: {
+      buildCleanup: {
+        class: BuildCleanupJob,
+        every: ["1h", {first_in: "10s"}],
+        options: {forked: false}
+      }
+    }
+  }
+})
+```
+
+Supported schedule syntax:
+
+- `every: "5m"`
+- `every: ["1h", {first_in: "30s"}]`
+- `every: ["1 day", {firstIn: "5 minutes"}]`
+
+`background-jobs-main` owns the schedule and enqueues the configured jobs into the normal Velocious background-jobs queue. The HTTP server does not run scheduled jobs itself.
 
 ## Persistence and retries
 

@@ -56,12 +56,13 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
     this._abilityResources = abilityResources || []
     this._backgroundJobs = backgroundJobs
+    this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
     this._backendProjects = backendProjects || []
     this.cors = cors
@@ -396,6 +397,29 @@ export default class VelociousConfiguration {
    */
   setBackgroundJobsConfig(backgroundJobs) {
     this._backgroundJobs = Object.assign({}, this._backgroundJobs, backgroundJobs)
+  }
+
+  /**
+   * @returns {Promise<import("./configuration-types.js").ScheduledBackgroundJobsConfiguration | undefined>} - Scheduled background jobs configuration.
+   */
+  async getScheduledBackgroundJobsConfig() {
+    if (!this._scheduledBackgroundJobs) {
+      return undefined
+    }
+
+    if (typeof this._scheduledBackgroundJobs === "function") {
+      return await this._scheduledBackgroundJobs({configuration: this})
+    }
+
+    return this._scheduledBackgroundJobs
+  }
+
+  /**
+   * @param {import("./configuration-types.js").ScheduledBackgroundJobsConfiguration | import("./configuration-types.js").ScheduledBackgroundJobsLoaderType | undefined} scheduledBackgroundJobs - Scheduled background jobs configuration.
+   * @returns {void}
+   */
+  setScheduledBackgroundJobsConfig(scheduledBackgroundJobs) {
+    this._scheduledBackgroundJobs = scheduledBackgroundJobs
   }
 
   /**
