@@ -68,7 +68,7 @@ function resetFrontendModelTransport() {
  */
 function configureNodeTransport() {
   FrontendModelBase.configureTransport({
-    url: "http://127.0.0.1:3006/frontend-models"
+    url: "http://127.0.0.1:3006"
   })
 }
 

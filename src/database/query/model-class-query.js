@@ -869,7 +869,24 @@ function buildJoinObjectFromWhereHash({hash, modelClass}) {
   return joinObject
 }
 
-const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like"])
+const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like", ">", ">=", "<", "<="])
+
+/**
+ * @param {string} operator - Raw relationship where operator.
+ * @returns {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} - Normalized operator.
+ */
+function normalizeRelationshipWhereOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+
+  return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
+    operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  )
+}
 
 /**
  * @param {unknown} tupleValue - Candidate tuple.
@@ -898,9 +915,11 @@ function normalizeRelationshipWhereOperatorTuples(value) {
   const normalized = []
   const addCondition = (conditionValue) => {
     if (isRelationshipWhereOperatorTuple(conditionValue)) {
+      const normalizedOperator = normalizeRelationshipWhereOperator(conditionValue[1])
+
       normalized.push([
         conditionValue[0],
-        /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (conditionValue[1]),
+        normalizedOperator,
         conditionValue[2]
       ])
 
