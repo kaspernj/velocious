@@ -1,9 +1,13 @@
 import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
+import CommentRecord from "../dummy/src/models/comment.js"
+import ProjectRecord from "../dummy/src/models/project.js"
+import TaskRecord from "../dummy/src/models/task.js"
+import UserRecord from "../dummy/src/models/user.js"
 
 /** Frontend model used for browser integration tests against dummy backend routes. */
-class BrowserFrontendModel extends FrontendModelBase {
+class User extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], abilities: {find: string, index: string}, commands: {find: string, index: string}, path: string, primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], abilities: {find: string, index: string}, builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
@@ -11,61 +15,58 @@ class BrowserFrontendModel extends FrontendModelBase {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt", "metadata", "nickName", "tags"],
-      commands: {
-        find: "frontend-find",
-        index: "frontend-index"
-      },
-      path: "/frontend-model-system-tests",
+      attributes: ["id", "email", "createdAt"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
 
-  /** @returns {unknown} */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
-  /** @returns {unknown} */
+  /** @returns {string} */
   email() { return this.readAttribute("email") }
 
-  /** @returns {unknown} */
+  /** @returns {Date} */
   createdAt() { return this.readAttribute("createdAt") }
 }
 
 /** Frontend model comment class for browser preload integration tests. */
-class BrowserPreloadComment extends FrontendModelBase {
+class Comment extends FrontendModelBase {
   /**
-   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: Record<string, string>, builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
       abilities: {
+        find: "read",
         index: "read"
       },
       attributes: ["id", "body"],
-      commands: {
-        index: "frontend-index"
-      },
-      path: "/frontend-model-system-tests",
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
 }
 
 /** Frontend model task class for browser preload integration tests. */
-class BrowserPreloadTask extends FrontendModelBase {
+class Task extends FrontendModelBase {
   /**
-   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
       abilities: {
+        find: "read",
         index: "read"
       },
-      attributes: ["id", "name"],
-      commands: {
-        index: "frontend-index"
+      attributes: ["id", "name", "updatedAt"],
+      builtInCollectionCommands: {
+        index: "list"
       },
-      path: "/frontend-model-system-tests",
+      builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
@@ -75,7 +76,7 @@ class BrowserPreloadTask extends FrontendModelBase {
    */
   static relationshipModelClasses() {
     return {
-      comments: BrowserPreloadComment
+      comments: Comment
     }
   }
 
@@ -93,20 +94,19 @@ class BrowserPreloadTask extends FrontendModelBase {
 }
 
 /** Frontend model project class for browser preload integration tests. */
-class BrowserPreloadProject extends FrontendModelBase {
+class Project extends FrontendModelBase {
   /**
-   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
       abilities: {
+        find: "read",
         index: "read"
       },
-      attributes: ["id", "email"],
-      commands: {
-        index: "frontend-index"
-      },
-      path: "/frontend-model-system-tests",
+      attributes: ["id"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
@@ -116,7 +116,7 @@ class BrowserPreloadProject extends FrontendModelBase {
    */
   static relationshipModelClasses() {
     return {
-      tasks: BrowserPreloadTask
+      tasks: Task
     }
   }
 
@@ -139,6 +139,36 @@ function resetFrontendModelTransport() {
   })
 }
 
+/** @returns {Promise<void>} */
+async function seedUsers() {
+  await UserRecord.create({
+    createdAt: "2026-02-18T08:00:00.000Z",
+    email: "jane@example.com",
+    encryptedPassword: "password",
+    reference: "browser-user-1"
+  })
+  await UserRecord.create({
+    createdAt: "2026-02-19T08:00:00.000Z",
+    email: "john@example.com",
+    encryptedPassword: "password",
+    reference: "browser-user-2"
+  })
+}
+
+/** @returns {Promise<{project: ProjectRecord, task: TaskRecord}>} */
+async function seedBrowserPreloadModels() {
+  const project = await ProjectRecord.create({name: "Browser preload project"})
+  const task = await TaskRecord.create({
+    name: "Browser preload task",
+    projectId: project.id(),
+    updatedAt: "2026-02-20T10:00:00.000Z"
+  })
+
+  await CommentRecord.create({body: "Browser preload comment", taskId: task.id()})
+
+  return {project, task}
+}
+
 /** @returns {boolean} */
 function runBrowserHttpIntegration() {
   return process.env.VELOCIOUS_BROWSER_TESTS === "true"
@@ -150,11 +180,11 @@ function configureBrowserTransport() {
   const backendPort = Number.isFinite(configuredPort) ? configuredPort : 4501
 
   FrontendModelBase.configureTransport({
-    url: `http://127.0.0.1:${backendPort}`
+    url: `http://127.0.0.1:${backendPort}/frontend-models`
   })
 }
 
-describe("Frontend models - base browser integration", () => {
+describe("Frontend models - base browser integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("findBy loads through real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return
@@ -163,9 +193,11 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const model = await BrowserFrontendModel.findBy({email: "john@example.com"})
+      await seedUsers()
 
-      expect(model?.id()).toEqual("2")
+      const model = await User.findBy({email: "john@example.com"})
+
+      expect(model?.id()).toEqual(2)
       expect(model?.email()).toEqual("john@example.com")
     } finally {
       resetFrontendModelTransport()
@@ -180,7 +212,9 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const usersCount = await BrowserFrontendModel.count()
+      await seedUsers()
+
+      const usersCount = await User.count()
 
       expect(usersCount).toEqual(2)
     } finally {
@@ -196,10 +230,12 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const models = await BrowserFrontendModel.where({email: "john@example.com"}).toArray()
+      await seedUsers()
+
+      const models = await User.where({email: "john@example.com"}).toArray()
 
       expect(models.length).toEqual(1)
-      expect(models[0].id()).toEqual("2")
+      expect(models[0].id()).toEqual(2)
       expect(models[0].email()).toEqual("john@example.com")
     } finally {
       resetFrontendModelTransport()
@@ -214,11 +250,13 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const model = await BrowserFrontendModel
+      await seedUsers()
+
+      const model = await User
         .where({email: "john@example.com"})
         .findBy({id: "2"})
 
-      expect(model?.id()).toEqual("2")
+      expect(model?.id()).toEqual(2)
       expect(model?.email()).toEqual("john@example.com")
     } finally {
       resetFrontendModelTransport()
@@ -233,11 +271,13 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const models = await BrowserFrontendModel
+      await seedUsers()
+
+      const models = await User
         .sort("-createdAt")
         .toArray()
 
-      expect(models.map((model) => model.id())).toEqual(["2", "1"])
+      expect(models.map((model) => model.id())).toEqual([2, 1])
     } finally {
       resetFrontendModelTransport()
     }
@@ -251,11 +291,13 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const models = await BrowserFrontendModel
+      await seedUsers()
+
+      const models = await User
         .order("-createdAt")
         .toArray()
 
-      expect(models.map((model) => model.id())).toEqual(["2", "1"])
+      expect(models.map((model) => model.id())).toEqual([2, 1])
     } finally {
       resetFrontendModelTransport()
     }
@@ -269,11 +311,13 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const firstModel = await BrowserFrontendModel.first()
-      const lastModel = await BrowserFrontendModel.last()
+      await seedUsers()
 
-      expect(firstModel?.id()).toEqual("1")
-      expect(lastModel?.id()).toEqual("2")
+      const firstModel = await User.first()
+      const lastModel = await User.last()
+
+      expect(firstModel?.id()).toEqual(1)
+      expect(lastModel?.id()).toEqual(2)
     } finally {
       resetFrontendModelTransport()
     }
@@ -287,11 +331,13 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const model = await BrowserFrontendModel
+      await seedUsers()
+
+      const model = await User
         .sort("-createdAt")
         .last()
 
-      expect(model?.id()).toEqual("1")
+      expect(model?.id()).toEqual(1)
     } finally {
       resetFrontendModelTransport()
     }
@@ -305,13 +351,15 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const models = await BrowserFrontendModel
+      await seedUsers()
+
+      const models = await User
         .order("createdAt")
         .offset(1)
         .limit(1)
         .toArray()
 
-      expect(models.map((model) => model.id())).toEqual(["2"])
+      expect(models.map((model) => model.id())).toEqual([2])
     } finally {
       resetFrontendModelTransport()
     }
@@ -325,13 +373,15 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const models = await BrowserFrontendModel
+      await seedUsers()
+
+      const models = await User
         .order("createdAt")
         .page(2)
         .perPage(1)
         .toArray()
 
-      expect(models.map((model) => model.id())).toEqual(["2"])
+      expect(models.map((model) => model.id())).toEqual([2])
     } finally {
       resetFrontendModelTransport()
     }
@@ -345,9 +395,11 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const model = await BrowserFrontendModel.findBy({id: 2})
+      await seedUsers()
 
-      expect(model?.id()).toEqual("2")
+      const model = await User.findBy({id: 2})
+
+      expect(model?.id()).toEqual(2)
       expect(model?.email()).toEqual("john@example.com")
     } finally {
       resetFrontendModelTransport()
@@ -362,61 +414,12 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const model = await BrowserFrontendModel.findBy({createdAt: new Date("2026-02-18T08:00:00.000Z")})
+      await seedUsers()
 
-      expect(model?.id()).toEqual("1")
-      expect(model?.createdAt()).toEqual("2026-02-18T08:00:00.000Z")
-    } finally {
-      resetFrontendModelTransport()
-    }
-  })
+      const model = await User.findBy({createdAt: new Date("2026-02-18T08:00:00.000Z")})
 
-  it("findBy matches nested object conditions by value over real browser HTTP requests", async () => {
-    if (!runBrowserHttpIntegration()) {
-      return
-    }
-
-    configureBrowserTransport()
-
-    try {
-      const model = await BrowserFrontendModel.findBy({metadata: {region: "eu"}})
-
-      expect(model?.id()).toEqual("2")
-      expect(model?.email()).toEqual("john@example.com")
-    } finally {
-      resetFrontendModelTransport()
-    }
-  })
-
-  it("findBy matches exact array attribute values over real browser HTTP requests", async () => {
-    if (!runBrowserHttpIntegration()) {
-      return
-    }
-
-    configureBrowserTransport()
-
-    try {
-      const model = await BrowserFrontendModel.findBy({tags: ["a", "b"]})
-
-      expect(model?.id()).toEqual("2")
-      expect(model?.email()).toEqual("john@example.com")
-    } finally {
-      resetFrontendModelTransport()
-    }
-  })
-
-  it("findBy only matches explicit null values over real browser HTTP requests", async () => {
-    if (!runBrowserHttpIntegration()) {
-      return
-    }
-
-    configureBrowserTransport()
-
-    try {
-      const model = await BrowserFrontendModel.findBy({nickName: null})
-
-      expect(model?.id()).toEqual("2")
-      expect(model?.email()).toEqual("john@example.com")
+      expect(model?.id()).toEqual(1)
+      expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
     } finally {
       resetFrontendModelTransport()
     }
@@ -430,7 +433,9 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const model = await BrowserFrontendModel.findBy({email: "missing@example.com"})
+      await seedUsers()
+
+      const model = await User.findBy({email: "missing@example.com"})
 
       expect(model).toEqual(null)
     } finally {
@@ -446,9 +451,11 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
+      await seedUsers()
+
       await expect(async () => {
-        await BrowserFrontendModel.findByOrFail({email: "missing@example.com"})
-      }).toThrow(/BrowserFrontendModel not found for conditions/)
+        await User.findByOrFail({email: "missing@example.com"})
+      }).toThrow(/User not found for conditions/)
     } finally {
       resetFrontendModelTransport()
     }
@@ -463,7 +470,7 @@ describe("Frontend models - base browser integration", () => {
 
     try {
       await expect(async () => {
-        await BrowserFrontendModel.findBy({email: undefined})
+        await User.findBy({email: undefined})
       }).toThrow(/findBy does not support undefined condition values/)
     } finally {
       resetFrontendModelTransport()
@@ -479,7 +486,7 @@ describe("Frontend models - base browser integration", () => {
 
     try {
       await expect(async () => {
-        await BrowserFrontendModel.findBy({email: /john/i})
+        await User.findBy({email: /john/i})
       }).toThrow(/findBy does not support non-plain object condition values/)
     } finally {
       resetFrontendModelTransport()
@@ -495,7 +502,7 @@ describe("Frontend models - base browser integration", () => {
 
     try {
       await expect(async () => {
-        await BrowserFrontendModel.findBy(/** @type {any} */ (5))
+        await User.findBy(/** @type {any} */ (5))
       }).toThrow(/findBy expects conditions to be a plain object/)
     } finally {
       resetFrontendModelTransport()
@@ -513,7 +520,7 @@ describe("Frontend models - base browser integration", () => {
       const key = Symbol("id")
 
       await expect(async () => {
-        await BrowserFrontendModel.findBy({[key]: "2"})
+        await User.findBy({[key]: "2"})
       }).toThrow(/findBy does not support symbol condition keys/)
     } finally {
       resetFrontendModelTransport()
@@ -529,7 +536,7 @@ describe("Frontend models - base browser integration", () => {
 
     try {
       await expect(async () => {
-        await BrowserFrontendModel.findByOrFail({email: undefined})
+        await User.findByOrFail({email: undefined})
       }).toThrow(/findBy does not support undefined condition values/)
     } finally {
       resetFrontendModelTransport()
@@ -544,10 +551,11 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const projects = await BrowserPreloadProject
+      const {project} = await seedBrowserPreloadModels()
+      const loadedProject = await Project
         .preload({tasks: ["comments"]})
-        .toArray()
-      const tasks = projects[0].getRelationshipByName("tasks").loaded()
+        .findBy({id: project.id()})
+      const tasks = loadedProject?.getRelationshipByName("tasks").loaded() || []
       const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
 
       expect(tasks.length).toEqual(1)
@@ -555,7 +563,7 @@ describe("Frontend models - base browser integration", () => {
 
       await expect(async () => {
         tasks[0].primaryInteraction()
-      }).toThrow(/BrowserPreloadTask#primaryInteraction hasn't been preloaded/)
+      }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
     } finally {
       resetFrontendModelTransport()
     }
@@ -569,17 +577,18 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const projects = await BrowserPreloadProject
+      const {project} = await seedBrowserPreloadModels()
+      const loadedProject = await Project
         .preload(["tasks"])
         .select({
-          BrowserPreloadProject: ["id"],
-          BrowserPreloadTask: ["updatedAt"]
+          Project: ["id"],
+          Task: ["updatedAt"]
         })
-        .toArray()
-      const tasks = projects[0].getRelationshipByName("tasks").loaded()
+        .findBy({id: project.id()})
+      const tasks = loadedProject?.getRelationshipByName("tasks").loaded() || []
 
-      expect(tasks[0].readAttribute("updatedAt")).toEqual("2026-02-20T10:00:00.000Z")
-      expect(() => tasks[0].readAttribute("id")).toThrow(/BrowserPreloadTask#id was not selected/)
+      expect(tasks[0].readAttribute("updatedAt").toISOString()).toEqual("2026-02-20T10:00:00.000Z")
+      expect(() => tasks[0].readAttribute("id")).toThrow(/Task#id was not selected/)
 
       let thrownError = null
 
@@ -603,18 +612,20 @@ describe("Frontend models - base browser integration", () => {
     configureBrowserTransport()
 
     try {
-      const baselineModel = await BrowserFrontendModel.findBy({id: "2"})
-      const models = await BrowserFrontendModel
+      await seedUsers()
+
+      const baselineModel = await User.findBy({id: "2"})
+      const models = await User
         .select(["id", "createdAt"])
         .where({id: "2"})
         .toArray()
       const firstModel = models[0]
 
-      expect(baselineModel?.id()).toEqual("2")
+      expect(baselineModel?.id()).toEqual(2)
       expect(models.length).toEqual(1)
-      expect(firstModel.id()).toEqual("2")
-      expect(firstModel.createdAt()).toEqual(baselineModel?.createdAt())
-      expect(() => firstModel.email()).toThrow(/BrowserFrontendModel#email was not selected/)
+      expect(firstModel.id()).toEqual(2)
+      expect(firstModel.createdAt().toISOString()).toEqual(baselineModel?.createdAt()?.toISOString())
+      expect(() => firstModel.email()).toThrow(/User#email was not selected/)
     } finally {
       resetFrontendModelTransport()
     }

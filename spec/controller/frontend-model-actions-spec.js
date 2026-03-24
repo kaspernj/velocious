@@ -44,7 +44,7 @@ async function postFrontendModel(path, payload) {
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
 async function postSharedTaskFrontendModelCommand(commandType, payload) {
-  const response = await postFrontendModel("/velocious/api", {
+  const response = await postFrontendModel("/frontend-models", {
     modelName: "Task",
     requests: [{
       commandType,
@@ -185,7 +185,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await createTask("Batch Alpha")
       await createTask("Batch Beta")
 
-      const payload = await postFrontendModel("/velocious/api", {
+      const payload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
@@ -206,7 +206,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("returns client-safe errors from shared frontend-model API when command execution fails", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/velocious/api", {
+      const payload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
@@ -226,7 +226,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("returns generic client-safe errors from shared frontend-model API for unexpected failures", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/velocious/api", {
+      const payload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",

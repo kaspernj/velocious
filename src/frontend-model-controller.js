@@ -1025,7 +1025,7 @@ export default class FrontendModelController extends Controller {
 
     if (frontendModelClass) return frontendModelClass
 
-    throw new Error(`No frontend model configured for model '${modelName || "unknown"}' and controller '${controllerName || "unknown"}'. Configure backendProjects resources.`)
+    throw new Error(`No frontend model configured for model '${modelName || "unknown"}' and controller '${controllerName || "unknown"}'. Configure backendProjects.frontendModels.`)
   }
 
   /**
@@ -1806,6 +1806,19 @@ export default class FrontendModelController extends Controller {
    * @returns {unknown | symbol} - SQL-safe where value.
    */
   normalizeFrontendModelWhereColumnValue({columnName, modelClass, value}) {
+    if (typeof value === "string") {
+      const columnType = modelClass.getColumnTypeByName(columnName)?.toLowerCase()
+      const isDateTimeColumn = typeof columnType === "string" && ["date", "datetime", "timestamp"].some((type) => columnType.includes(type))
+
+      if (isDateTimeColumn) {
+        const parsedDate = new Date(value)
+
+        if (!Number.isNaN(parsedDate.getTime())) {
+          return parsedDate
+        }
+      }
+    }
+
     if (isPlainObject(value)) {
       const columnType = modelClass.getColumnTypeByName(columnName)
 

@@ -7,9 +7,9 @@ import Configuration from "../../../../src/configuration.js"
 import FilesystemAttachmentStorageDriver from "../../../../src/database/record/attachments/storage-drivers/filesystem.js"
 import dummyDirectory from "../../dummy-directory.js"
 import fs from "fs/promises"
-import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
 import MssqlDriver from "../../../../src/database/drivers/mssql/index.js"
 import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js"
+import Project from "../models/project.js"
 import installSqlJsWasmRoute from "../../../../src/plugins/sqljs-wasm-route.js"
 import SqliteDriver from "../../../../src/database/drivers/sqlite/index.js"
 import path from "path"
@@ -17,6 +17,8 @@ import requireContext from "require-context"
 import SingleMultiUsePool from "../../../../src/database/pool/single-multi-use.js"
 import Task from "../models/task.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
+import User from "../models/user.js"
+import Comment from "../models/comment.js"
 
 const queryParam = (request, key) => {
   const pathValue = request?.path?.()
@@ -79,6 +81,33 @@ class TaskFrontendModelAbilityResource extends BaseResource {
   }
 }
 
+class UserFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = User
+
+  /** @returns {void} */
+  abilities() {
+    this.can("read")
+  }
+}
+
+class ProjectFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Project
+
+  /** @returns {void} */
+  abilities() {
+    this.can("read")
+  }
+}
+
+class CommentFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Comment
+
+  /** @returns {void} */
+  abilities() {
+    this.can("read")
+  }
+}
+
 /**
  * @param {object} args - Ability resolver args.
  * @param {Record<string, any>} args.params - Request params.
@@ -92,13 +121,32 @@ function resolveTaskFrontendModelAbility({configuration, params, request, respon
   const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
   const isSharedFrontendModelApi = requestPath === "/frontend-models"
   const frontendModelRequests = Array.isArray(params.requests) ? params.requests : [params]
-  const includesTaskSharedRequest = frontendModelRequests.some((requestEntry) => requestEntry?.model === "Task")
+  const requestedModelNames = frontendModelRequests
+    .map((requestEntry) => requestEntry?.model)
+    .filter((modelName) => typeof modelName === "string")
+  const includesTaskSharedRequest = requestedModelNames.includes("Task")
 
-  if (!isTaskFrontendModelCommand && !(isSharedFrontendModelApi && includesTaskSharedRequest)) return
+  /** @type {Array<typeof BaseResource>} */
+  const resources = []
+
+  if (isTaskFrontendModelCommand || includesTaskSharedRequest) {
+    resources.push(TaskFrontendModelAbilityResource)
+  }
+
+  if (isSharedFrontendModelApi) {
+    resources.push(
+      TaskFrontendModelAbilityResource,
+      UserFrontendModelAbilityResource,
+      ProjectFrontendModelAbilityResource,
+      CommentFrontendModelAbilityResource
+    )
+  }
+
+  if (resources.length === 0) return
 
   return new Ability({
     context: {configuration, params, request, response},
-    resources: [TaskFrontendModelAbilityResource]
+    resources
   })
 }
 
@@ -151,10 +199,27 @@ const configuration = new Configuration({
 
     const modelsPath = await fs.realpath(`${path.dirname(import.meta.dirname)}/../src/models`)
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
-    const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
 
-    await configuration.ensureConnections(async () => {
-      await initializerFromRequireContext.initialize({configuration})
+    await configuration.ensureConnections(async (dbs) => {
+      const db = dbs.default
+
+      for (const key of requireContextModels.keys()) {
+        const importedModel = requireContextModels(key)
+        const modelClass = importedModel?.default
+
+        if (!modelClass?.initializeRecord || typeof modelClass.tableName !== "function") continue
+        if (!db || !await db.tableExists(modelClass.tableName())) continue
+
+        await modelClass.initializeRecord({configuration})
+
+        if (typeof modelClass.hasTranslationsTable === "function" && await modelClass.hasTranslationsTable()) {
+          const translationClass = modelClass.getTranslationClass?.()
+
+          if (translationClass && await db.tableExists(translationClass.tableName())) {
+            await translationClass.initializeRecord({configuration})
+          }
+        }
+      }
     })
   },
   locale: () => "en",

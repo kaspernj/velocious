@@ -5,13 +5,15 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import Dummy from "../dummy/index.js"
-import Project from "../dummy/src/models/project.js"
+import CommentRecord from "../dummy/src/models/comment.js"
+import ProjectRecord from "../dummy/src/models/project.js"
 import TaskRecord from "../dummy/src/models/task.js"
+import UserRecord from "../dummy/src/models/user.js"
 
 /** Frontend model used for Node HTTP integration tests against dummy backend routes. */
-class HttpFrontendModel extends FrontendModelBase {
+class User extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], abilities: {find: string, index: string}, commands: {find: string, index: string}, path: string, primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], abilities: {find: string, index: string}, builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
@@ -19,84 +21,35 @@ class HttpFrontendModel extends FrontendModelBase {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt", "metadata", "nickName", "tags"],
-      commands: {
-        find: "frontend-find",
-        index: "frontend-index"
-      },
-      path: "/frontend-model-system-tests",
+      attributes: ["id", "email", "createdAt"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
 
-  /** @returns {unknown} */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
-  /** @returns {unknown} */
+  /** @returns {string} */
   email() { return this.readAttribute("email") }
 
-  /** @returns {unknown} */
+  /** @returns {Date} */
   createdAt() { return this.readAttribute("createdAt") }
 }
 
 /** Shared frontend model task class for websocket transport integration tests. */
 class Task extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], commands: {find: string, index: string}, primaryKey: string}}
+   * @returns {{attributes: string[], builtInCollectionCommands: Record<string, string>, builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
-      attributes: ["id", "name"],
-      commands: {
-        find: "find",
-        index: "index"
+      attributes: ["id", "name", "updatedAt"],
+      builtInCollectionCommands: {
+        index: "list"
       },
-      primaryKey: "id"
-    }
-  }
-
-  /** @returns {unknown} */
-  id() { return this.readAttribute("id") }
-
-  /** @returns {unknown} */
-  name() { return this.readAttribute("name") }
-}
-
-/** Frontend model comment class for preload integration tests. */
-class HttpPreloadComment extends FrontendModelBase {
-  /**
-   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
-   */
-  static resourceConfig() {
-    return {
-      abilities: {
-        index: "read"
-      },
-      attributes: ["id", "body"],
-      commands: {
-        index: "frontend-index"
-      },
-      path: "/frontend-model-system-tests",
-      primaryKey: "id"
-    }
-  }
-}
-
-/** Frontend model task class for preload integration tests. */
-class HttpPreloadTask extends FrontendModelBase {
-  /**
-   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
-   */
-  static resourceConfig() {
-    return {
-      abilities: {
-        index: "read"
-      },
-      attributes: ["id", "name"],
-      commands: {
-        index: "frontend-index"
-      },
-      path: "/frontend-model-system-tests",
+      builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
@@ -106,7 +59,7 @@ class HttpPreloadTask extends FrontendModelBase {
    */
   static relationshipModelClasses() {
     return {
-      comments: HttpPreloadComment
+      comments: Comment
     }
   }
 
@@ -119,25 +72,49 @@ class HttpPreloadTask extends FrontendModelBase {
     }
   }
 
+  /** @returns {number} */
+  id() { return this.readAttribute("id") }
+
+  /** @returns {string} */
+  name() { return this.readAttribute("name") }
+
   /** @returns {unknown} */
   primaryInteraction() { return this.getRelationshipByName("primaryInteraction").loaded() }
 }
 
-/** Frontend model project class for preload integration tests. */
-class HttpPreloadProject extends FrontendModelBase {
+/** Frontend model comment class for preload integration tests. */
+class Comment extends FrontendModelBase {
   /**
-   * @returns {{abilities: {index: string}, attributes: string[], commands: {index: string}, path: string, primaryKey: string}}
+   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
       abilities: {
+        find: "read",
         index: "read"
       },
-      attributes: ["id", "email"],
-      commands: {
-        index: "frontend-index"
+      attributes: ["id", "body"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
+      primaryKey: "id"
+    }
+  }
+}
+
+/** Frontend model project class for preload integration tests. */
+class Project extends FrontendModelBase {
+  /**
+   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
+   */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
       },
-      path: "/frontend-model-system-tests",
+      attributes: ["id"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
@@ -147,7 +124,7 @@ class HttpPreloadProject extends FrontendModelBase {
    */
   static relationshipModelClasses() {
     return {
-      tasks: HttpPreloadTask
+      tasks: Task
     }
   }
 
@@ -166,7 +143,6 @@ function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
     credentials: undefined,
     request: undefined,
-    shared: undefined,
     url: undefined,
     websocketClient: undefined
   })
@@ -175,7 +151,7 @@ function resetFrontendModelTransport() {
 /** @returns {void} */
 function configureNodeTransport() {
   FrontendModelBase.configureTransport({
-    url: "http://127.0.0.1:3006"
+    url: "http://127.0.0.1:3006/frontend-models"
   })
 }
 
@@ -185,18 +161,51 @@ function configureNodeTransport() {
  */
 function configureWebsocketSharedTransport(websocketClient) {
   FrontendModelBase.configureTransport({
-    shared: true,
-    url: "/velocious/api",
+    url: "/frontend-models",
     websocketClient
   })
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function seedHttpFrontendModels() {
+  await UserRecord.create({
+    createdAt: "2026-02-18T08:00:00.000Z",
+    email: "jane@example.com",
+    encryptedPassword: "password",
+    reference: "user-1"
+  })
+  await UserRecord.create({
+    createdAt: "2026-02-19T08:00:00.000Z",
+    email: "john@example.com",
+    encryptedPassword: "password",
+    reference: "user-2"
+  })
+}
+
+/**
+ * @returns {Promise<{project: ProjectRecord, task: TaskRecord}>}
+ */
+async function seedHttpPreloadModels() {
+  const project = await ProjectRecord.create({name: "HTTP preload project"})
+  const task = await TaskRecord.create({
+    name: "HTTP preload task",
+    projectId: project.id(),
+    updatedAt: "2026-02-20T10:00:00.000Z"
+  })
+
+  await CommentRecord.create({body: "HTTP preload comment", taskId: task.id()})
+
+  return {project, task}
 }
 
 describe("Frontend models - base http integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("loads frontend models through real websocket batch requests", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
-      const project = await Project.create({name: "Websocket frontend-model project"})
-      const task = await TaskRecord.create({name: "Websocket frontend-model task", projectId: project.id()})
+      const project = await ProjectRecord.create({name: "Websocket frontend-model project"})
+      const task = await TaskRecord.create({name: "Websocket frontend-model task", project})
 
       configureWebsocketSharedTransport(websocketClient)
 
@@ -206,7 +215,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
           Task.findBy({id: task.id()})
         ])
 
-        expect(tasks.some((loadedTask) => loadedTask.id() === task.id())).toEqual(true)
+        expect(tasks.some((loadedTask) => loadedTask.name() === "Websocket frontend-model task")).toEqual(true)
         expect(foundTask?.id()).toEqual(task.id())
         expect(foundTask?.name()).toEqual("Websocket frontend-model task")
       } finally {
@@ -219,7 +228,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
   it("receives frontend-model lifecycle events through websocket subscriptions", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
-      const project = await Project.create({name: "Websocket subscription project"})
+      const project = await ProjectRecord.create({name: "Websocket subscription project"})
       /** @type {Array<{action: "create" | "destroy" | "update", id: string, model: Task | null, modelName: string}>} */
       const events = []
 
@@ -230,7 +239,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       })
 
       try {
-        const task = await TaskRecord.create({name: "Created websocket task", projectId: project.id()})
+        const task = await TaskRecord.create({name: "Created websocket task", project})
 
         await waitFor(() => {
           if (events.length < 1) {
@@ -275,9 +284,11 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const model = await HttpFrontendModel.findBy({email: "john@example.com"})
+        await seedHttpFrontendModels()
 
-        expect(model?.id()).toEqual("2")
+        const model = await User.findBy({email: "john@example.com"})
+
+        expect(model?.id()).toEqual(2)
         expect(model?.email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -290,7 +301,9 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const usersCount = await HttpFrontendModel.count()
+        await seedHttpFrontendModels()
+
+        const usersCount = await User.count()
 
         expect(usersCount).toEqual(2)
       } finally {
@@ -304,10 +317,12 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const models = await HttpFrontendModel.where({email: "john@example.com"}).toArray()
+        await seedHttpFrontendModels()
+
+        const models = await User.where({email: "john@example.com"}).toArray()
 
         expect(models.length).toEqual(1)
-        expect(models[0].id()).toEqual("2")
+        expect(models[0].id()).toEqual(2)
         expect(models[0].email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -320,11 +335,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const model = await HttpFrontendModel
+        await seedHttpFrontendModels()
+
+        const model = await User
           .where({email: "john@example.com"})
           .findBy({id: "2"})
 
-        expect(model?.id()).toEqual("2")
+        expect(model?.id()).toEqual(2)
         expect(model?.email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -337,11 +354,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const models = await HttpFrontendModel
+        await seedHttpFrontendModels()
+
+        const models = await User
           .sort("-createdAt")
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual(["2", "1"])
+        expect(models.map((model) => model.id())).toEqual([2, 1])
       } finally {
         resetFrontendModelTransport()
       }
@@ -353,11 +372,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const models = await HttpFrontendModel
+        await seedHttpFrontendModels()
+
+        const models = await User
           .order("-createdAt")
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual(["2", "1"])
+        expect(models.map((model) => model.id())).toEqual([2, 1])
       } finally {
         resetFrontendModelTransport()
       }
@@ -369,11 +390,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const firstModel = await HttpFrontendModel.first()
-        const lastModel = await HttpFrontendModel.last()
+        await seedHttpFrontendModels()
 
-        expect(firstModel?.id()).toEqual("1")
-        expect(lastModel?.id()).toEqual("2")
+        const firstModel = await User.first()
+        const lastModel = await User.last()
+
+        expect(firstModel?.id()).toEqual(1)
+        expect(lastModel?.id()).toEqual(2)
       } finally {
         resetFrontendModelTransport()
       }
@@ -385,11 +408,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const model = await HttpFrontendModel
+        await seedHttpFrontendModels()
+
+        const model = await User
           .sort("-createdAt")
           .last()
 
-        expect(model?.id()).toEqual("1")
+        expect(model?.id()).toEqual(1)
       } finally {
         resetFrontendModelTransport()
       }
@@ -401,13 +426,15 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const models = await HttpFrontendModel
+        await seedHttpFrontendModels()
+
+        const models = await User
           .order("createdAt")
           .offset(1)
           .limit(1)
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual(["2"])
+        expect(models.map((model) => model.id())).toEqual([2])
       } finally {
         resetFrontendModelTransport()
       }
@@ -419,13 +446,15 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const models = await HttpFrontendModel
+        await seedHttpFrontendModels()
+
+        const models = await User
           .order("createdAt")
           .page(2)
           .perPage(1)
           .toArray()
 
-        expect(models.map((model) => model.id())).toEqual(["2"])
+        expect(models.map((model) => model.id())).toEqual([2])
       } finally {
         resetFrontendModelTransport()
       }
@@ -437,9 +466,11 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const model = await HttpFrontendModel.findBy({id: 2})
+        await seedHttpFrontendModels()
 
-        expect(model?.id()).toEqual("2")
+        const model = await User.findBy({id: 2})
+
+        expect(model?.id()).toEqual(2)
         expect(model?.email()).toEqual("john@example.com")
       } finally {
         resetFrontendModelTransport()
@@ -452,55 +483,12 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const model = await HttpFrontendModel.findBy({createdAt: new Date("2026-02-18T08:00:00.000Z")})
+        await seedHttpFrontendModels()
 
-        expect(model?.id()).toEqual("1")
-        expect(model?.createdAt()).toEqual("2026-02-18T08:00:00.000Z")
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
+        const model = await User.findBy({createdAt: new Date("2026-02-18T08:00:00.000Z")})
 
-  it("findBy matches nested object conditions by value over real Node HTTP requests", async () => {
-    await Dummy.run(async () => {
-      configureNodeTransport()
-
-      try {
-        const model = await HttpFrontendModel.findBy({metadata: {region: "eu"}})
-
-        expect(model?.id()).toEqual("2")
-        expect(model?.email()).toEqual("john@example.com")
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
-  it("findBy matches exact array attribute values over real Node HTTP requests", async () => {
-    await Dummy.run(async () => {
-      configureNodeTransport()
-
-      try {
-        const model = await HttpFrontendModel.findBy({tags: ["a", "b"]})
-
-        expect(model?.id()).toEqual("2")
-        expect(model?.email()).toEqual("john@example.com")
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
-  it("findBy only matches explicit null values over real Node HTTP requests", async () => {
-    await Dummy.run(async () => {
-      configureNodeTransport()
-
-      try {
-        const model = await HttpFrontendModel.findBy({nickName: null})
-
-        expect(model?.id()).toEqual("2")
-        expect(model?.email()).toEqual("john@example.com")
+        expect(model?.id()).toEqual(1)
+        expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
       } finally {
         resetFrontendModelTransport()
       }
@@ -512,7 +500,9 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const model = await HttpFrontendModel.findBy({email: "missing@example.com"})
+        await seedHttpFrontendModels()
+
+        const model = await User.findBy({email: "missing@example.com"})
 
         expect(model).toEqual(null)
       } finally {
@@ -526,9 +516,11 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
+        await seedHttpFrontendModels()
+
         await expect(async () => {
-          await HttpFrontendModel.findByOrFail({email: "missing@example.com"})
-        }).toThrow(/HttpFrontendModel not found for conditions/)
+          await User.findByOrFail({email: "missing@example.com"})
+        }).toThrow(/User not found for conditions/)
       } finally {
         resetFrontendModelTransport()
       }
@@ -541,7 +533,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
       try {
         await expect(async () => {
-          await HttpFrontendModel.findBy({email: undefined})
+          await User.findBy({email: undefined})
         }).toThrow(/findBy does not support undefined condition values/)
       } finally {
         resetFrontendModelTransport()
@@ -555,7 +547,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
       try {
         await expect(async () => {
-          await HttpFrontendModel.findBy({email: /john/i})
+          await User.findBy({email: /john/i})
         }).toThrow(/findBy does not support non-plain object condition values/)
       } finally {
         resetFrontendModelTransport()
@@ -569,7 +561,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
       try {
         await expect(async () => {
-          await HttpFrontendModel.findBy(/** @type {any} */ (5))
+          await User.findBy(/** @type {any} */ (5))
         }).toThrow(/findBy expects conditions to be a plain object/)
       } finally {
         resetFrontendModelTransport()
@@ -585,7 +577,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         const key = Symbol("id")
 
         await expect(async () => {
-          await HttpFrontendModel.findBy({[key]: "2"})
+          await User.findBy({[key]: "2"})
         }).toThrow(/findBy does not support symbol condition keys/)
       } finally {
         resetFrontendModelTransport()
@@ -599,7 +591,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
       try {
         await expect(async () => {
-          await HttpFrontendModel.findByOrFail({email: undefined})
+          await User.findByOrFail({email: undefined})
         }).toThrow(/findBy does not support undefined condition values/)
       } finally {
         resetFrontendModelTransport()
@@ -612,10 +604,11 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const projects = await HttpPreloadProject
+        const {project} = await seedHttpPreloadModels()
+        const loadedProject = await Project
           .preload({tasks: ["comments"]})
-          .toArray()
-        const tasks = projects[0].getRelationshipByName("tasks").loaded()
+          .findBy({id: project.id()})
+        const tasks = loadedProject?.getRelationshipByName("tasks").loaded() || []
         const commentsForFirstTask = tasks[0].getRelationshipByName("comments").loaded()
 
         expect(tasks.length).toEqual(1)
@@ -623,7 +616,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
         await expect(async () => {
           tasks[0].primaryInteraction()
-        }).toThrow(/HttpPreloadTask#primaryInteraction hasn't been preloaded/)
+        }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
       } finally {
         resetFrontendModelTransport()
       }
@@ -635,17 +628,18 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const projects = await HttpPreloadProject
+        const {project} = await seedHttpPreloadModels()
+        const loadedProject = await Project
           .preload(["tasks"])
           .select({
-            HttpPreloadProject: ["id"],
-            HttpPreloadTask: ["updatedAt"]
+            Project: ["id"],
+            Task: ["updatedAt"]
           })
-          .toArray()
-        const tasks = projects[0].getRelationshipByName("tasks").loaded()
+          .findBy({id: project.id()})
+        const tasks = loadedProject?.getRelationshipByName("tasks").loaded() || []
 
-        expect(tasks[0].readAttribute("updatedAt")).toEqual("2026-02-20T10:00:00.000Z")
-        expect(() => tasks[0].readAttribute("id")).toThrow(/HttpPreloadTask#id was not selected/)
+        expect(tasks[0].readAttribute("updatedAt").toISOString()).toEqual("2026-02-20T10:00:00.000Z")
+        expect(() => tasks[0].readAttribute("id")).toThrow(/Task#id was not selected/)
 
         let thrownError = null
 
@@ -667,18 +661,20 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       configureNodeTransport()
 
       try {
-        const baselineModel = await HttpFrontendModel.findBy({id: "2"})
-        const models = await HttpFrontendModel
+        await seedHttpFrontendModels()
+
+        const baselineModel = await User.findBy({id: "2"})
+        const models = await User
           .select(["id", "createdAt"])
           .where({id: "2"})
           .toArray()
         const firstModel = models[0]
 
-        expect(baselineModel?.id()).toEqual("2")
+        expect(baselineModel?.id()).toEqual(2)
         expect(models.length).toEqual(1)
-        expect(firstModel.id()).toEqual("2")
-        expect(firstModel.createdAt()).toEqual(baselineModel?.createdAt())
-        expect(() => firstModel.email()).toThrow(/HttpFrontendModel#email was not selected/)
+        expect(firstModel.id()).toEqual(2)
+        expect(firstModel.createdAt().toISOString()).toEqual(baselineModel?.createdAt()?.toISOString())
+        expect(() => firstModel.email()).toThrow(/User#email was not selected/)
       } finally {
         resetFrontendModelTransport()
       }

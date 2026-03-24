@@ -386,6 +386,7 @@ async function main() {
   let backendApplication
 
   try {
+    delete process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION
     const backendConfiguration = await loadBrowserBackendConfiguration()
     backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
     systemTest = SystemTest.current({
@@ -464,6 +465,10 @@ async function loadBrowserBackendConfiguration() {
 
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
   const backendConfiguration = dummyConfigurationImport.default
+
+  backendConfiguration._initializeModels = async ({configuration}) => {
+    await initializeDummyModels(configuration)
+  }
 
   return backendConfiguration
 }
