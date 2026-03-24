@@ -68,7 +68,8 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 
       return {
         action: `frontend-${action}`,
-        controller
+        controller,
+        controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
       }
     }
   }
