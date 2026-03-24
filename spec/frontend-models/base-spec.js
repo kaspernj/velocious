@@ -859,6 +859,74 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends ransack payload when using ransack(...).toArray()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .ransack({email_cont: "john", id_in: ["1", "2"]})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "email",
+                operator: "like",
+                path: [],
+                value: "%john%"
+              },
+              {
+                column: "id",
+                operator: "eq",
+                path: [],
+                value: ["1", "2"]
+              }
+            ]
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("chains ransack filters onto existing frontend-model queries", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .where({id: "2"})
+        .ransack({email_cont: "john"})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "email",
+                operator: "like",
+                path: [],
+                value: "%john%"
+              }
+            ],
+            where: {id: "2"}
+          },
+          url: "/api/frontend-models/users/index"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("sends group payload when using group(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})

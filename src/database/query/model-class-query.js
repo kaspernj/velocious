@@ -8,6 +8,7 @@ import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
 import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
+import {normalizeRansackParams} from "../../utils/ransack.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
 
@@ -614,6 +615,20 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @returns {this} - Query with Ransack filters applied.
+   */
+  ransack(params) {
+    const conditions = normalizeRansackParams(this.getModelClass(), params)
+
+    for (const condition of conditions) {
+      applyRansackCondition({condition, query: this})
+    }
+
+    return this
+  }
+
+  /**
    * @param {import("./index.js").WhereArgumentType} where - Where.
    * @returns {this} This query instance
    */
@@ -649,6 +664,101 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
   }
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @returns {void}
+ */
+function applyRansackCondition({condition, query}) {
+  if (condition.predicate === "eq" || condition.predicate === "in") {
+    query.where(buildNestedRansackHash({condition, value: condition.value}))
+    return
+  }
+
+  if (condition.predicate === "not_eq" || condition.predicate === "not_in") {
+    query.whereNot(buildNestedRansackHash({condition, value: condition.value}))
+    return
+  }
+
+  if (condition.predicate === "null") {
+    if (condition.value) {
+      query.where(buildNestedRansackHash({condition, value: null}))
+    } else {
+      query.whereNot(buildNestedRansackHash({condition, value: null}))
+    }
+
+    return
+  }
+
+  query.where(buildNestedRansackTupleHash({
+    condition,
+    operator: ransackTupleOperator(condition.predicate),
+    value: ransackTupleValue(condition)
+  }))
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {any} args.value - Final value.
+ * @returns {Record<string, any>} - Nested hash suitable for query.where/query.whereNot.
+ */
+function buildNestedRansackHash({condition, value}) {
+  /** @type {Record<string, any>} */
+  let hash = {[condition.attributeName]: value}
+
+  for (let index = condition.path.length - 1; index >= 0; index -= 1) {
+    hash = {[condition.path[index]]: hash}
+  }
+
+  return hash
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {"gt" | "gteq" | "lt" | "lteq" | "like"} args.operator - Tuple operator.
+ * @param {any} args.value - Final value.
+ * @returns {Record<string, any>} - Nested tuple hash suitable for query.where.
+ */
+function buildNestedRansackTupleHash({condition, operator, value}) {
+  /** @type {Record<string, any>} */
+  let hash = {
+    [condition.attributeName]: [[condition.attributeName, operator, value]]
+  }
+
+  for (let index = condition.path.length - 1; index >= 0; index -= 1) {
+    hash = {[condition.path[index]]: hash}
+  }
+
+  return hash
+}
+
+/**
+ * @param {import("../../utils/ransack.js").RansackPredicate} predicate - Ransack predicate.
+ * @returns {"gt" | "gteq" | "lt" | "lteq" | "like"} - Query tuple operator.
+ */
+function ransackTupleOperator(predicate) {
+  if (predicate === "gt" || predicate === "gteq" || predicate === "lt" || predicate === "lteq") {
+    return predicate
+  }
+
+  return "like"
+}
+
+/**
+ * @param {import("../../utils/ransack.js").RansackCondition} condition - Ransack condition.
+ * @returns {any} - Query tuple value.
+ */
+function ransackTupleValue(condition) {
+  if (condition.predicate === "cont") return `%${condition.value}%`
+  if (condition.predicate === "start") return `${condition.value}%`
+  if (condition.predicate === "end") return `%${condition.value}`
+
+  return condition.value
 }
 
 /**

@@ -73,6 +73,55 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(names).toEqual(["Match Task"])
   })
 
+  it("applies ransack predicates from the model class", async () => {
+    const projectMatch = await Project.create({
+      creatingUserReference: "creator-ransack-1",
+      nameEn: "Ransack Match Project",
+      nameDe: "Ransack Trefferprojekt"
+    })
+    const projectMiss = await Project.create({
+      creatingUserReference: "creator-ransack-2",
+      nameEn: "Ransack Miss Project",
+      nameDe: "Ransack Fehlprojekt"
+    })
+
+    await ProjectDetail.create({project: projectMatch, isActive: true, note: "Needs review"})
+    await ProjectDetail.create({project: projectMiss, isActive: false, note: "Ignore me"})
+
+    await Task.create({name: "Alpha needle task", project: projectMatch})
+    await Task.create({name: "Beta needle task", project: projectMiss})
+
+    const names = (await Task.ransack({
+      name_cont: "needle",
+      project_project_detail_is_active_eq: true
+    }).toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Alpha needle task"])
+  })
+
+  it("applies ransack predicates on existing query instances", async () => {
+    const project = await Project.create({
+      creatingUserReference: "creator-ransack-3",
+      nameEn: "Ransack Query Project",
+      nameDe: "Ransack Abfrageprojekt"
+    })
+
+    await Task.create({name: "Alpha task", project})
+    await Task.create({name: "Beta task", project, isDone: false})
+    await Task.create({name: "Beta archived", project, isDone: true})
+
+    const names = (await Task
+      .where({projectId: project.id()})
+      .ransack({name_start: "Beta", is_done_not_eq: true})
+      .toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Beta task"])
+  })
+
   it("filters on deep nested relationship attributes", async () => {
     const projectMatch = await Project.create({
       creatingUserReference: "creator-3",

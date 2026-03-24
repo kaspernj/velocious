@@ -1,0 +1,393 @@
+// @ts-check
+
+import * as inflection from "inflection"
+
+/**
+ * @typedef {"cont" | "end" | "eq" | "gt" | "gteq" | "in" | "lt" | "lteq" | "not_eq" | "not_in" | "null" | "start"} RansackPredicate
+ */
+
+/**
+ * @typedef {typeof import("../database/record/index.js").default | typeof import("../frontend-models/base.js").default} RansackModelClass
+ */
+
+/**
+ * @typedef {object} RansackCondition
+ * @property {string} attributeName - Resolved attribute name.
+ * @property {string[]} path - Resolved relationship path.
+ * @property {RansackPredicate} predicate - Parsed Ransack predicate.
+ * @property {any} value - Normalized value.
+ */
+
+const supportedPredicates = [
+  "not_in",
+  "not_eq",
+  "gteq",
+  "lteq",
+  "start",
+  "cont",
+  "null",
+  "end",
+  "eq",
+  "gt",
+  "lt",
+  "in"
+]
+
+/**
+ * @param {RansackModelClass} modelClass - Model class.
+ * @param {Record<string, any>} params - Ransack-style params hash.
+ * @returns {RansackCondition[]} - Normalized conditions.
+ */
+export function normalizeRansackParams(modelClass, params) {
+  if (!isPlainObject(params)) {
+    throw new Error(`ransack params must be a plain object, got: ${typeof params}`)
+  }
+
+  /** @type {RansackCondition[]} */
+  const normalized = []
+
+  for (const [key, rawValue] of Object.entries(params)) {
+    const parsedKey = parseRansackKey(key)
+
+    if (!parsedKey) {
+      throw new Error(`Unsupported ransack predicate in key: ${key}`)
+    }
+
+    const resolvedPath = resolveRansackPath({modelClass, value: parsedKey.pathValue})
+    const targetModelClass = modelClassAtPath({modelClass, path: resolvedPath.path})
+    const attributeName = resolveAttributeName({modelClass: targetModelClass, value: resolvedPath.attributeValue})
+
+    if (!attributeName) {
+      throw new Error(`Unknown ransack attribute "${resolvedPath.attributeValue}" for ${targetModelClass.name}`)
+    }
+
+    const value = normalizeRansackValue({
+      predicate: parsedKey.predicate,
+      value: rawValue
+    })
+
+    if (value === SKIP_RANSACK_CONDITION) continue
+
+    normalized.push({
+      attributeName,
+      path: resolvedPath.path,
+      predicate: parsedKey.predicate,
+      value
+    })
+  }
+
+  return normalized
+}
+
+const SKIP_RANSACK_CONDITION = Symbol("skip-ransack-condition")
+
+/**
+ * @param {object} args - Options.
+ * @param {RansackModelClass} args.modelClass - Root model class.
+ * @param {string[]} args.path - Relationship path.
+ * @returns {RansackModelClass} - Target model class.
+ */
+function modelClassAtPath({modelClass, path}) {
+  let currentModelClass = modelClass
+
+  for (const relationshipName of path) {
+    const relationship = relationshipEntries(currentModelClass)[relationshipName]
+
+    if (!relationship) {
+      throw new Error(`Unknown ransack relationship "${relationshipName}" for ${currentModelClass.name}`)
+    }
+
+    currentModelClass = relationship.targetModelClass
+  }
+
+  return currentModelClass
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {RansackModelClass} args.modelClass - Current model class.
+ * @param {string} args.value - Remaining path value.
+ * @returns {{attributeValue: string, path: string[]}} - Resolved relationship path and remaining attribute value.
+ */
+function resolveRansackPath({modelClass, value}) {
+  /** @type {string[]} */
+  const path = []
+  let currentModelClass = modelClass
+  let remainingValue = value
+
+  while (true) {
+    const match = findRelationshipPrefix({
+      modelClass: currentModelClass,
+      value: remainingValue
+    })
+
+    if (!match) break
+
+    path.push(match.relationshipName)
+    currentModelClass = match.targetModelClass
+    remainingValue = match.remainingValue
+  }
+
+  if (remainingValue.length < 1) {
+    throw new Error(`Invalid ransack key path: ${value}`)
+  }
+
+  return {
+    attributeValue: remainingValue,
+    path
+  }
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {RansackModelClass} args.modelClass - Current model class.
+ * @param {string} args.value - Remaining value to match.
+ * @returns {{relationshipName: string, remainingValue: string, targetModelClass: RansackModelClass} | null} - Matching relationship prefix.
+ */
+function findRelationshipPrefix({modelClass, value}) {
+  let bestMatch = null
+
+  for (const relationshipName of Object.keys(relationshipEntries(modelClass))) {
+    const relationship = relationshipEntries(modelClass)[relationshipName]
+
+    for (const candidate of relationshipCandidates(relationshipName)) {
+      if (!value.startsWith(`${candidate}_`)) continue
+
+      const remainingValue = value.slice(candidate.length + 1)
+
+      if (remainingValue.length < 1) continue
+      if (bestMatch && candidate.length <= bestMatch.candidateLength) continue
+
+      bestMatch = {
+        candidateLength: candidate.length,
+        relationshipName,
+        remainingValue,
+        targetModelClass: relationship.targetModelClass
+      }
+    }
+  }
+
+  if (!bestMatch) return null
+
+  return {
+    relationshipName: bestMatch.relationshipName,
+    remainingValue: bestMatch.remainingValue,
+    targetModelClass: bestMatch.targetModelClass
+  }
+}
+
+/**
+ * @param {string} relationshipName - Relationship name.
+ * @returns {string[]} - Candidate tokens for matching.
+ */
+function relationshipCandidates(relationshipName) {
+  return uniqunize([relationshipName, inflection.underscore(relationshipName)])
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {RansackModelClass} args.modelClass - Model class.
+ * @param {string} args.value - Attribute candidate.
+ * @returns {string | undefined} - Resolved attribute name.
+ */
+function resolveAttributeName({modelClass, value}) {
+  for (const [attributeName, columnName] of Object.entries(attributeEntries(modelClass))) {
+    if (matchesAttributeValue({attributeName, columnName, value})) {
+      return attributeName
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * @param {RansackModelClass} modelClass - Model class.
+ * @returns {Record<string, {targetModelClass: RansackModelClass}>} - Relationship entries keyed by name.
+ */
+function relationshipEntries(modelClass) {
+  if (typeof /** @type {any} */ (modelClass).getRelationshipsMap === "function") {
+    /** @type {Record<string, {targetModelClass: RansackModelClass}>} */
+    const entries = {}
+    const relationshipsMap = /** @type {any} */ (modelClass).getRelationshipsMap()
+
+    for (const relationshipName of Object.keys(relationshipsMap)) {
+      entries[relationshipName] = {
+        targetModelClass: relationshipsMap[relationshipName].getTargetModelClass()
+      }
+    }
+
+    return entries
+  }
+
+  if (typeof /** @type {any} */ (modelClass).relationshipDefinitions === "function" &&
+    typeof /** @type {any} */ (modelClass).relationshipModelClasses === "function") {
+    /** @type {Record<string, {targetModelClass: RansackModelClass}>} */
+    const entries = {}
+    const definitions = /** @type {any} */ (modelClass).relationshipDefinitions()
+    const relationshipModelClasses = /** @type {any} */ (modelClass).relationshipModelClasses()
+
+    for (const relationshipName of Object.keys(definitions)) {
+      const targetModelClass = relationshipModelClasses[relationshipName]
+
+      if (!targetModelClass) continue
+
+      entries[relationshipName] = {targetModelClass}
+    }
+
+    return entries
+  }
+
+  return {}
+}
+
+/**
+ * @param {RansackModelClass} modelClass - Model class.
+ * @returns {Record<string, string>} - Attribute-to-column entries keyed by attribute name.
+ */
+function attributeEntries(modelClass) {
+  if (typeof /** @type {any} */ (modelClass).getAttributeNameToColumnNameMap === "function") {
+    return /** @type {Record<string, string>} */ ((/** @type {any} */ (modelClass).getAttributeNameToColumnNameMap()))
+  }
+
+  const resourceConfig = typeof /** @type {any} */ (modelClass).resourceConfig === "function"
+    ? /** @type {any} */ (modelClass).resourceConfig()
+    : {}
+  const attributes = resourceConfig.attributes
+  /** @type {Record<string, string>} */
+  const entries = {}
+
+  if (Array.isArray(attributes)) {
+    for (const attributeName of attributes) {
+      if (typeof attributeName !== "string") continue
+
+      entries[attributeName] = attributeName
+    }
+  } else if (isPlainObject(attributes)) {
+    for (const attributeName of Object.keys(attributes)) {
+      entries[attributeName] = attributeName
+    }
+  }
+
+  return entries
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {string} args.attributeName - Attribute name.
+ * @param {string} args.columnName - Column name.
+ * @param {string} args.value - Candidate value.
+ * @returns {boolean} - Whether the candidate resolves to the attribute.
+ */
+function matchesAttributeValue({attributeName, columnName, value}) {
+  return uniqunize([
+    attributeName,
+    columnName,
+    inflection.underscore(attributeName),
+    inflection.underscore(columnName)
+  ]).includes(value)
+}
+
+/**
+ * @param {string} key - Ransack key.
+ * @returns {{pathValue: string, predicate: RansackPredicate} | null} - Parsed key.
+ */
+function parseRansackKey(key) {
+  for (const predicate of supportedPredicates) {
+    const suffix = `_${predicate}`
+
+    if (!key.endsWith(suffix)) continue
+
+    const pathValue = key.slice(0, key.length - suffix.length)
+
+    if (pathValue.length < 1) {
+      throw new Error(`Invalid ransack key: ${key}`)
+    }
+
+    return {
+      pathValue,
+      predicate: /** @type {RansackPredicate} */ (predicate)
+    }
+  }
+
+  return null
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {RansackPredicate} args.predicate - Parsed predicate.
+ * @param {any} args.value - Raw value.
+ * @returns {any} - Normalized value.
+ */
+function normalizeRansackValue({predicate, value}) {
+  if (predicate === "null") {
+    const booleanValue = normalizeRansackBoolean(value)
+
+    if (booleanValue === null) return SKIP_RANSACK_CONDITION
+
+    return booleanValue
+  }
+
+  if (predicate === "in" || predicate === "not_in") {
+    const normalizedArray = normalizeRansackArray(value)
+
+    if (normalizedArray.length < 1) return SKIP_RANSACK_CONDITION
+
+    return normalizedArray
+  }
+
+  if (value === undefined || value === null) return SKIP_RANSACK_CONDITION
+  if (typeof value === "string" && value.length < 1) return SKIP_RANSACK_CONDITION
+
+  return value
+}
+
+/**
+ * @param {unknown} value - Candidate boolean.
+ * @returns {boolean | null} - Normalized boolean or null when blank.
+ */
+function normalizeRansackBoolean(value) {
+  if (value === true || value === false) return value
+  if (value === 1 || value === "1" || value === "true") return true
+  if (value === 0 || value === "0" || value === "false") return false
+  if (value === undefined || value === null || value === "") return null
+
+  throw new Error(`Invalid ransack boolean value: ${String(value)}`)
+}
+
+/**
+ * @param {unknown} value - Candidate array-ish value.
+ * @returns {any[]} - Normalized array values.
+ */
+function normalizeRansackArray(value) {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry !== undefined && entry !== null && entry !== "")
+  }
+
+  if (typeof value === "string") {
+    return value.split(",").map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+  }
+
+  if (value === undefined || value === null || value === "") return []
+
+  return [value]
+}
+
+/**
+ * @param {unknown} value - Candidate object.
+ * @returns {value is Record<string, any>} - Whether this is a plain object.
+ */
+function isPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+
+  const prototype = Object.getPrototypeOf(value)
+
+  return prototype === Object.prototype || prototype === null
+}
+
+/**
+ * @param {string[]} values - Input values.
+ * @returns {string[]} - Unique values in original order.
+ */
+function uniqunize(values) {
+  return Array.from(new Set(values))
+}
