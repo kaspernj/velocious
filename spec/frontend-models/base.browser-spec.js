@@ -137,11 +137,8 @@ class BrowserPreloadProject extends FrontendModelBase {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    baseUrl: undefined,
-    baseUrlResolver: undefined,
+    url: undefined,
     credentials: undefined,
-    pathPrefix: undefined,
-    pathPrefixResolver: undefined,
     request: undefined
   })
 }
@@ -157,7 +154,7 @@ function configureBrowserTransport() {
   const backendPort = Number.isFinite(configuredPort) ? configuredPort : 4501
 
   FrontendModelBase.configureTransport({
-    baseUrl: `http://127.0.0.1:${backendPort}`
+    url: `http://127.0.0.1:${backendPort}`
   })
 }
 
@@ -245,6 +242,100 @@ describe("Frontend models - base browser integration", () => {
         .toArray()
 
       expect(models.map((model) => model.id())).toEqual(["2", "1"])
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("order(...).toArray() orders records through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const models = await BrowserFrontendModel
+        .order("-createdAt")
+        .toArray()
+
+      expect(models.map((model) => model.id())).toEqual(["2", "1"])
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("first()/last() apply deterministic ordering over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const firstModel = await BrowserFrontendModel.first()
+      const lastModel = await BrowserFrontendModel.last()
+
+      expect(firstModel?.id()).toEqual("1")
+      expect(lastModel?.id()).toEqual("2")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("last() reverses explicit sort order over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const model = await BrowserFrontendModel
+        .sort("-createdAt")
+        .last()
+
+      expect(model?.id()).toEqual("1")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("limit(...).offset(...).toArray() paginates records through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const models = await BrowserFrontendModel
+        .order("createdAt")
+        .offset(1)
+        .limit(1)
+        .toArray()
+
+      expect(models.map((model) => model.id())).toEqual(["2"])
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("page(...).perPage(...).toArray() paginates records through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const models = await BrowserFrontendModel
+        .order("createdAt")
+        .page(2)
+        .perPage(1)
+        .toArray()
+
+      expect(models.map((model) => model.id())).toEqual(["2"])
     } finally {
       resetFrontendModelTransport()
     }
@@ -503,6 +594,31 @@ describe("Frontend models - base browser integration", () => {
       }
 
       expect(thrownError instanceof AttributeNotSelectedError).toEqual(true)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("supports select array shorthand as root-model attributes over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const baselineModel = await BrowserFrontendModel.findBy({id: "2"})
+      const models = await BrowserFrontendModel
+        .select(["id", "createdAt"])
+        .where({id: "2"})
+        .toArray()
+      const firstModel = models[0]
+
+      expect(baselineModel?.id()).toEqual("2")
+      expect(models.length).toEqual(1)
+      expect(firstModel.id()).toEqual("2")
+      expect(firstModel.createdAt()).toEqual(baselineModel?.createdAt())
+      expect(() => firstModel.email()).toThrow(/BrowserFrontendModel#email was not selected/)
     } finally {
       resetFrontendModelTransport()
     }

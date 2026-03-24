@@ -17,6 +17,37 @@ function normalizeActionName(actionName) {
   return inflection.camelize(actionName.replaceAll("-", "_").replaceAll("/", "_"), true)
 }
 
+/**
+ * @param {Error} error - Import error.
+ * @returns {string | undefined} - Missing module specifier from an ERR_MODULE_NOT_FOUND message.
+ */
+function missingModuleSpecifierFromError(error) {
+  const firstLine = error.message.split("\n")[0] || ""
+  const match = firstLine.match(/^Cannot find (?:module|package) ['"](.+?)['"] imported from /)
+
+  return match?.[1]
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {Error} args.error - Import error.
+ * @param {string} args.targetPath - Target controller path.
+ * @param {string} args.targetImportSpecifier - Target controller import specifier.
+ * @returns {boolean} - True when the missing module is the target controller file.
+ */
+function isMissingTargetModuleError({error, targetPath, targetImportSpecifier}) {
+  const ensuredError = ensureError(error)
+  const isModuleNotFoundError = "code" in ensuredError && ensuredError.code === "ERR_MODULE_NOT_FOUND"
+
+  if (!isModuleNotFoundError) return false
+
+  const missingSpecifier = missingModuleSpecifierFromError(ensuredError)
+
+  if (!missingSpecifier) return false
+
+  return missingSpecifier === targetPath || missingSpecifier === targetImportSpecifier
+}
+
 export default class VelociousRoutesResolver {
   /** @type {Logger | undefined} */
   logger
@@ -40,6 +71,27 @@ export default class VelociousRoutesResolver {
     delete this.params.controller
     this.request = request
     this.response = response
+  }
+
+  /**
+   * @returns {Record<string, string>} - Flat query params for tenant/ability resolution.
+   */
+  queryParameters() {
+    const query = this.request.path().split("?")[1]
+
+    if (!query) return {}
+
+    /** @type {Record<string, string>} */
+    const params = {}
+    const searchParams = new URLSearchParams(query)
+
+    for (const [key, value] of searchParams.entries()) {
+      if (params[key] === undefined) {
+        params[key] = value
+      }
+    }
+
+    return params
   }
 
   async resolve() {
@@ -100,13 +152,14 @@ export default class VelociousRoutesResolver {
       throw new Error(`Matched the route but didn't know what to do with it: ${rawPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
     }
 
-    const controllerClass = this.routeHookControllerClass || (await import(toImportSpecifier(controllerPath))).default
+    const controllerClass = await this.resolveControllerClass({controllerPath})
+    const controllerRequest = /** @type {import("../http-server/client/request.js").default} */ (this.request)
     const controllerInstance = new controllerClass({
       action,
       configuration: this.configuration,
       controller,
       params: this.params,
-      request: this.request,
+      request: controllerRequest,
       response: this.response,
       viewPath
     })
@@ -118,16 +171,24 @@ export default class VelociousRoutesResolver {
     await this._logActionStart({action, controllerClass})
 
     try {
-      await this.configuration.ensureConnections(async () => {
-        const ability = await this.configuration.resolveAbility({
-          params: this.params,
-          request: this.request,
-          response: this.response
-        })
+      const tenant = await this.configuration.resolveTenant({
+        params: {...this.queryParameters(), ...this.params},
+        request: this.request,
+        response: this.response
+      })
 
-        await this.configuration.runWithAbility(ability, async () => {
-          await controllerInstance._runBeforeCallbacks()
-          await controllerInstance[action]()
+      await this.configuration.runWithTenant(tenant, async () => {
+        await this.configuration.ensureConnections(async () => {
+          const ability = await this.configuration.resolveAbility({
+            params: this.params,
+            request: this.request,
+            response: this.response
+          })
+
+          await this.configuration.runWithAbility(ability, async () => {
+            await controllerInstance._runBeforeCallbacks()
+            await controllerInstance[action]()
+          })
         })
       })
     } catch (error) {
@@ -148,6 +209,33 @@ export default class VelociousRoutesResolver {
       }
 
       throw ensuredError
+    }
+  }
+
+  /**
+   * @param {object} args - Args.
+   * @param {string} args.controllerPath - Controller import path.
+   * @returns {Promise<typeof import("../controller.js").default>} - The resolved controller class.
+   */
+  async resolveControllerClass({controllerPath}) {
+    const controllerImportSpecifier = toImportSpecifier(controllerPath)
+
+    if (!this.routeHookControllerClass) {
+      return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
+    }
+
+    try {
+      return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
+    } catch (error) {
+      const isMissingControllerFileError = isMissingTargetModuleError({
+        error: ensureError(error),
+        targetImportSpecifier: controllerImportSpecifier,
+        targetPath: controllerPath
+      })
+
+      if (!isMissingControllerFileError) throw ensureError(error)
+
+      return /** @type {typeof import("../controller.js").default} */ (this.routeHookControllerClass)
     }
   }
 

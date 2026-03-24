@@ -1,5 +1,7 @@
 // @ts-check
 
+import {normalizeRansackParams} from "../utils/ransack.js"
+
 /**
  * @param {unknown} value - Candidate value.
  * @returns {value is Record<string, any>} - Whether value is a plain object.
@@ -109,10 +111,29 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
 
 /**
  * @param {unknown} select - Select payload.
+ * @param {string | null} [rootModelName] - Optional root model name for shorthand select payloads.
  * @returns {Record<string, string[]>} - Normalized model-name keyed select record.
  */
-function normalizeSelect(select) {
+function normalizeSelect(select, rootModelName = null) {
   if (!select) return {}
+
+  if (typeof select === "string") {
+    if (!rootModelName) throw new Error("Invalid select shorthand without root model name")
+
+    return {[rootModelName]: [select]}
+  }
+
+  if (Array.isArray(select)) {
+    if (!rootModelName) throw new Error("Invalid select shorthand without root model name")
+
+    for (const attributeName of select) {
+      if (typeof attributeName !== "string") {
+        throw new Error(`Invalid select attribute for ${rootModelName}: ${typeof attributeName}`)
+      }
+    }
+
+    return {[rootModelName]: Array.from(new Set(select))}
+  }
 
   if (!isPlainObject(select)) {
     throw new Error(`Invalid select type: ${typeof select}`)
@@ -157,9 +178,101 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 }
 
 /**
+ * @param {Record<string, any>} targetJoins - Existing join record.
+ * @param {Record<string, any>} incomingJoins - Incoming join record.
+ * @returns {void}
+ */
+function mergeJoinRecord(targetJoins, incomingJoins) {
+  for (const [relationshipName, incomingValue] of Object.entries(incomingJoins)) {
+    const existingValue = targetJoins[relationshipName]
+
+    if (incomingValue === true) {
+      if (existingValue === undefined) {
+        targetJoins[relationshipName] = true
+      }
+      continue
+    }
+
+    if (!isPlainObject(incomingValue)) {
+      throw new Error(`Invalid join value for ${relationshipName}: ${typeof incomingValue}`)
+    }
+
+    if (isPlainObject(existingValue)) {
+      mergeJoinRecord(existingValue, incomingValue)
+      continue
+    }
+
+    if (existingValue === true) {
+      targetJoins[relationshipName] = normalizeJoins(incomingValue)
+      continue
+    }
+
+    targetJoins[relationshipName] = normalizeJoins(incomingValue)
+  }
+}
+
+/**
+ * @param {unknown} joins - Join payload.
+ * @returns {Record<string, any>} - Normalized relationship descriptor joins.
+ */
+function normalizeJoins(joins) {
+  if (!joins) return {}
+
+  if (Array.isArray(joins)) {
+    /** @type {Record<string, any>} */
+    const normalized = {}
+
+    for (const joinEntry of joins) {
+      if (!isPlainObject(joinEntry)) {
+        throw new Error(`Invalid joins entry type: ${typeof joinEntry}`)
+      }
+
+      mergeJoinRecord(normalized, normalizeJoins(joinEntry))
+    }
+
+    return normalized
+  }
+
+  if (!isPlainObject(joins)) {
+    throw new Error(`Invalid joins type: ${typeof joins}`)
+  }
+
+  /** @type {Record<string, any>} */
+  const normalized = {}
+
+  for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
+    if (relationshipJoin === true) {
+      normalized[relationshipName] = true
+      continue
+    }
+
+    if (isPlainObject(relationshipJoin)) {
+      normalized[relationshipName] = normalizeJoins(relationshipJoin)
+      continue
+    }
+
+    throw new Error(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+  }
+
+  return normalized
+}
+
+/**
  * @typedef {object} FrontendModelSort
  * @property {string} column - Attribute name to sort by.
  * @property {"asc" | "desc"} direction - Sort direction.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @typedef {object} FrontendModelGroup
+ * @property {string} column - Attribute name to group by.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @typedef {object} FrontendModelPluck
+ * @property {string} column - Attribute name to pluck.
  * @property {string[]} path - Relationship path from root model.
  */
 
@@ -365,6 +478,333 @@ function normalizeSort(sort) {
 }
 
 /**
+ * @param {string} groupValue - Group string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelGroup} - Normalized group descriptor.
+ */
+function parseGroupString(groupValue, path = []) {
+  const trimmed = groupValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid group column: ${groupValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit group descriptor object.
+ */
+function groupDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {Record<string, any>} groupValue - Nested group object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelGroup[]} - Normalized group descriptors.
+ */
+function normalizeGroupObject(groupValue, path) {
+  /** @type {FrontendModelGroup[]} */
+  const normalizedGroups = []
+
+  for (const [groupKey, groupEntry] of Object.entries(groupValue)) {
+    if (typeof groupEntry === "string") {
+      normalizedGroups.push(parseGroupString(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    if (Array.isArray(groupEntry)) {
+      if (groupEntry.length < 1) {
+        throw new Error(`Invalid group definition for "${groupKey}": empty array`)
+      }
+
+      for (const nestedGroupEntry of groupEntry) {
+        if (typeof nestedGroupEntry !== "string") {
+          throw new Error(`Invalid group definition for "${groupKey}": expected string columns`)
+        }
+
+        normalizedGroups.push(parseGroupString(nestedGroupEntry, [...path, groupKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(groupEntry)) {
+      normalizedGroups.push(...normalizeGroupObject(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    throw new Error(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
+  }
+
+  return normalizedGroups
+}
+
+/**
+ * @param {unknown} group - Group payload.
+ * @returns {FrontendModelGroup[]} - Normalized group definitions.
+ */
+function normalizeGroup(group) {
+  if (!group) return []
+
+  if (typeof group === "string") {
+    return [parseGroupString(group)]
+  }
+
+  if (groupDescriptor(group)) {
+    return [{
+      column: parseGroupString(group.column).column,
+      path: [...group.path]
+    }]
+  }
+
+  if (isPlainObject(group)) {
+    return normalizeGroupObject(group, [])
+  }
+
+  if (Array.isArray(group)) {
+    /** @type {FrontendModelGroup[]} */
+    const normalized = []
+
+    for (const groupEntry of group) {
+      if (typeof groupEntry === "string") {
+        normalized.push(parseGroupString(groupEntry))
+        continue
+      }
+
+      if (groupDescriptor(groupEntry)) {
+        normalized.push({
+          column: parseGroupString(groupEntry.column).column,
+          path: [...groupEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(groupEntry)) {
+        normalized.push(...normalizeGroupObject(groupEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid group entry type: ${typeof groupEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid group type: ${typeof group}`)
+}
+
+/**
+ * @param {string} pluckValue - Pluck string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelPluck} - Normalized pluck descriptor.
+ */
+function parsePluckString(pluckValue, path = []) {
+  const trimmed = pluckValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw new Error(`Invalid pluck column: ${pluckValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit pluck descriptor object.
+ */
+function pluckDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {Record<string, any>} pluckValue - Nested pluck object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelPluck[]} - Normalized pluck descriptors.
+ */
+function normalizePluckObject(pluckValue, path) {
+  /** @type {FrontendModelPluck[]} */
+  const normalizedPlucks = []
+
+  for (const [pluckKey, pluckEntry] of Object.entries(pluckValue)) {
+    if (typeof pluckEntry === "string") {
+      normalizedPlucks.push(parsePluckString(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    if (Array.isArray(pluckEntry)) {
+      if (pluckEntry.length < 1) {
+        throw new Error(`Invalid pluck definition for "${pluckKey}": empty array`)
+      }
+
+      for (const nestedPluckEntry of pluckEntry) {
+        if (typeof nestedPluckEntry !== "string") {
+          throw new Error(`Invalid pluck definition for "${pluckKey}": expected string columns`)
+        }
+
+        normalizedPlucks.push(parsePluckString(nestedPluckEntry, [...path, pluckKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(pluckEntry)) {
+      normalizedPlucks.push(...normalizePluckObject(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    throw new Error(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
+  }
+
+  return normalizedPlucks
+}
+
+/**
+ * @param {unknown} pluck - Pluck payload.
+ * @returns {FrontendModelPluck[]} - Normalized pluck definitions.
+ */
+function normalizePluck(pluck) {
+  if (!pluck) return []
+
+  if (typeof pluck === "string") {
+    return [parsePluckString(pluck)]
+  }
+
+  if (pluckDescriptor(pluck)) {
+    return [{
+      column: parsePluckString(pluck.column).column,
+      path: [...pluck.path]
+    }]
+  }
+
+  if (isPlainObject(pluck)) {
+    return normalizePluckObject(pluck, [])
+  }
+
+  if (Array.isArray(pluck)) {
+    /** @type {FrontendModelPluck[]} */
+    const normalized = []
+
+    for (const pluckEntry of pluck) {
+      if (typeof pluckEntry === "string") {
+        normalized.push(parsePluckString(pluckEntry))
+        continue
+      }
+
+      if (pluckDescriptor(pluckEntry)) {
+        normalized.push({
+          column: parsePluckString(pluckEntry.column).column,
+          path: [...pluckEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(pluckEntry)) {
+        normalized.push(...normalizePluckObject(pluckEntry, []))
+        continue
+      }
+
+      throw new Error(`Invalid pluck entry type: ${typeof pluckEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw new Error(`Invalid pluck type: ${typeof pluck}`)
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Model class.
+ * @returns {Set<string>} - Resource attribute names.
+ */
+function frontendModelResourceAttributes(modelClass) {
+  const resourceConfig = /** @type {Record<string, any>} */ (modelClass.resourceConfig())
+  const attributes = resourceConfig.attributes
+
+  if (Array.isArray(attributes)) {
+    return new Set(attributes)
+  }
+
+  if (isPlainObject(attributes)) {
+    return new Set(Object.keys(attributes))
+  }
+
+  return new Set()
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Root model class.
+ * @param {string[]} path - Relationship path.
+ * @returns {typeof import("./base.js").default} - Target model class for path.
+ */
+function frontendModelPluckTargetModelClass(modelClass, path) {
+  let targetModelClass = modelClass
+
+  for (const relationshipName of path) {
+    const relationshipDefinitions = typeof targetModelClass.relationshipDefinitions === "function"
+      ? targetModelClass.relationshipDefinitions()
+      : {}
+    const relationshipModelClasses = typeof targetModelClass.relationshipModelClasses === "function"
+      ? targetModelClass.relationshipModelClasses()
+      : {}
+    const relationshipDefinition = relationshipDefinitions[relationshipName]
+    const relationshipTargetModelClass = relationshipModelClasses[relationshipName]
+
+    if (!relationshipDefinition) {
+      throw new Error(`Unknown pluck relationship "${relationshipName}" for ${targetModelClass.name}`)
+    }
+
+    if (!relationshipTargetModelClass) {
+      throw new Error(`No relationship model class configured for ${targetModelClass.name}#${relationshipName}`)
+    }
+
+    targetModelClass = relationshipTargetModelClass
+  }
+
+  return targetModelClass
+}
+
+/**
+ * @param {object} args - Pluck validation args.
+ * @param {typeof import("./base.js").default} args.modelClass - Root model class.
+ * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
+ * @returns {FrontendModelPluck[]} - Validated pluck descriptors.
+ */
+function validatePluckDefinitions({modelClass, pluck}) {
+  return pluck.map((pluckEntry) => {
+    const targetModelClass = frontendModelPluckTargetModelClass(modelClass, pluckEntry.path)
+    const targetAttributes = frontendModelResourceAttributes(targetModelClass)
+
+    if (!targetAttributes.has(pluckEntry.column)) {
+      throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+    }
+
+    return {
+      column: pluckEntry.column,
+      path: [...pluckEntry.path]
+    }
+  })
+}
+
+/**
  * @param {Record<string, any>} conditions - findBy conditions.
  * @returns {string} - Serialized conditions for error messages.
  */
@@ -389,6 +829,33 @@ function normalizeFindConditions(conditions) {
 }
 
 /**
+ * @param {unknown} value - Candidate integer value.
+ * @param {string} argumentName - Argument name for errors.
+ * @param {object} options - Validation options.
+ * @param {number} options.min - Minimum allowed value.
+ * @returns {number} - Normalized integer value.
+ */
+function normalizeIntegerArgument(value, argumentName, {min}) {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`${argumentName} must be an integer number`)
+  }
+
+  if (value < min) {
+    throw new Error(`${argumentName} must be greater than or equal to ${min}`)
+  }
+
+  return value
+}
+
+/**
+ * @param {"asc" | "desc"} direction - Current sort direction.
+ * @returns {"asc" | "desc"} - Reversed direction.
+ */
+function reverseSortDirection(direction) {
+  return direction === "asc" ? "desc" : "asc"
+}
+
+/**
  * Query wrapper for frontend model commands.
  * @template {typeof import("./base.js").default} T
  */
@@ -401,10 +868,17 @@ export default class FrontendModelQuery {
   constructor({modelClass, preload = {}}) {
     this.modelClass = modelClass
     this._preload = normalizePreload(preload)
+    this._joins = {}
     this._where = {}
     this._searches = []
     this._select = {}
     this._sort = []
+    this._group = []
+    this._distinct = false
+    this._limit = null
+    this._offset = null
+    this._page = null
+    this._perPage = null
   }
 
   /**
@@ -418,6 +892,20 @@ export default class FrontendModelQuery {
     this._where = {
       ...this._where,
       ...normalizedConditions
+    }
+
+    return this
+  }
+
+  /**
+   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @returns {this} - Query with Ransack filters applied.
+   */
+  ransack(params) {
+    const conditions = normalizeRansackParams(this.modelClass, params)
+
+    for (const condition of conditions) {
+      applyFrontendRansackCondition({condition, query: this})
     }
 
     return this
@@ -454,11 +942,21 @@ export default class FrontendModelQuery {
   }
 
   /**
-   * @param {Record<string, string[] | string>} select - Model-aware attribute select map.
+   * @param {Record<string, string[] | string> | string | string[]} select - Model-aware attribute select map or root-model shorthand.
    * @returns {this} - Query with merged selected attributes.
    */
   select(select) {
-    mergeSelectRecord(this._select, normalizeSelect(select))
+    mergeSelectRecord(this._select, normalizeSelect(select, this.modelClass.name))
+
+    return this
+  }
+
+  /**
+   * @param {Record<string, any> | Array<Record<string, any>>} joins - Relationship descriptor joins.
+   * @returns {this} - Query with merged joins.
+   */
+  joins(joins) {
+    mergeJoinRecord(this._joins, normalizeJoins(joins))
 
     return this
   }
@@ -466,7 +964,7 @@ export default class FrontendModelQuery {
   /**
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
-   * @param {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+   * @param {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
    * @param {any} value - Search value.
    * @returns {this} - Query with appended search.
    */
@@ -510,6 +1008,125 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, any> | Array<Record<string, any>>} order - Order definition(s).
+   * @returns {this} - Query with appended sort definitions.
+   */
+  order(order) {
+    return this.sort(order)
+  }
+
+  /**
+   * @param {string | string[] | Record<string, any> | Array<Record<string, any>>} group - Group definition(s).
+   * @returns {this} - Query with appended group definitions.
+   */
+  group(group) {
+    this._group.push(...normalizeGroup(group))
+
+    return this
+  }
+
+  /**
+   * @param {boolean} [value] - Whether to request distinct rows.
+   * @returns {this} - Query with distinct flag.
+   */
+  distinct(value = true) {
+    if (typeof value !== "boolean") {
+      throw new Error(`distinct must be a boolean, got: ${typeof value}`)
+    }
+
+    this._distinct = value
+
+    return this
+  }
+
+  /**
+   * @param {number} value - Maximum number of records.
+   * @returns {this} - Query with limit.
+   */
+  limit(value) {
+    this._limit = normalizeIntegerArgument(value, "limit", {min: 0})
+    this._page = null
+
+    return this
+  }
+
+  /**
+   * @param {number} value - Number of records to skip.
+   * @returns {this} - Query with offset.
+   */
+  offset(value) {
+    this._offset = normalizeIntegerArgument(value, "offset", {min: 0})
+    this._page = null
+
+    return this
+  }
+
+  /**
+   * @param {number} pageNumber - 1-based page number.
+   * @returns {this} - Query with page applied.
+   */
+  page(pageNumber) {
+    this._page = normalizeIntegerArgument(pageNumber, "page", {min: 1})
+    const pageSize = this._perPage || 30
+
+    this._limit = pageSize
+    this._offset = (this._page - 1) * pageSize
+
+    return this
+  }
+
+  /**
+   * @param {number} perPage - Page size.
+   * @returns {this} - Query with per-page applied.
+   */
+  perPage(perPage) {
+    this._perPage = normalizeIntegerArgument(perPage, "perPage", {min: 1})
+
+    if (this._page !== null) {
+      this._limit = this._perPage
+      this._offset = (this._page - 1) * this._perPage
+    }
+
+    return this
+  }
+
+  /**
+   * @returns {FrontendModelQuery<T>} - Cloned query instance.
+   */
+  clone() {
+    const newQuery = /** @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
+      modelClass: this.modelClass,
+      preload: normalizePreload(this._preload)
+    }))
+
+    newQuery._joins = normalizeJoins(this._joins)
+    newQuery._where = normalizeFindConditions(this._where)
+    newQuery._searches = this._searches.map((search) => ({
+      column: search.column,
+      operator: search.operator,
+      path: [...search.path],
+      value: search.value
+    }))
+    newQuery._select = normalizeSelect(this._select)
+    newQuery._sort = this._sort.map((sortEntry) => ({
+      column: sortEntry.column,
+      direction: sortEntry.direction,
+      path: [...sortEntry.path]
+    }))
+    newQuery._group = this._group.map((groupEntry) => ({
+      column: groupEntry.column,
+      path: [...groupEntry.path]
+    }))
+    newQuery._distinct = this._distinct
+    newQuery._limit = this._limit
+    newQuery._offset = this._offset
+    newQuery._page = this._page
+    newQuery._perPage = this._perPage
+
+    return newQuery
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload preload hash when present.
    */
   preloadPayload() {
@@ -547,6 +1164,17 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload joins hash when present.
+   */
+  joinsPayload() {
+    if (Object.keys(this._joins).length === 0) return {}
+
+    return {
+      joins: normalizeJoins(this._joins)
+    }
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload sort array when present.
    */
   sortPayload() {
@@ -562,6 +1190,31 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload group array when present.
+   */
+  groupPayload() {
+    if (this._group.length === 0) return {}
+
+    return {
+      group: this._group.map((groupEntry) => ({
+        column: groupEntry.column,
+        path: [...groupEntry.path]
+      }))
+    }
+  }
+
+  /**
+   * @returns {Record<string, any>} - Payload distinct flag when enabled.
+   */
+  distinctPayload() {
+    if (!this._distinct) return {}
+
+    return {
+      distinct: true
+    }
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload where hash when present.
    */
   wherePayload() {
@@ -573,15 +1226,34 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload pagination params when present.
+   */
+  paginationPayload() {
+    /** @type {Record<string, any>} */
+    const payload = {}
+
+    if (this._limit !== null) payload.limit = this._limit
+    if (this._offset !== null) payload.offset = this._offset
+    if (this._page !== null) payload.page = this._page
+    if (this._perPage !== null) payload.perPage = this._perPage
+
+    return payload
+  }
+
+  /**
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async toArray() {
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
+      ...this.joinsPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(),
+      ...this.groupPayload(),
+      ...this.distinctPayload(),
       ...this.sortPayload(),
-      ...this.wherePayload()
+      ...this.wherePayload(),
+      ...this.paginationPayload()
     })
 
     if (!response || typeof response !== "object") {
@@ -603,6 +1275,90 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Promise<InstanceType<T> | null>} - First model matching query.
+   */
+  async first() {
+    const query = this.clone()
+
+    if (query._sort.length < 1) {
+      query.sort([[this.modelClass.primaryKey(), "asc"]])
+    }
+
+    query.limit(1)
+
+    const models = await query.toArray()
+
+    return models[0] || null
+  }
+
+  /**
+   * @returns {Promise<InstanceType<T> | null>} - Last model matching query.
+   */
+  async last() {
+    // When pagination is already applied, fetch that scoped window and return its last item.
+    if (this._offset !== null || this._page !== null || this._perPage !== null) {
+      const models = await this.toArray()
+
+      if (models.length < 1) return null
+
+      return models[models.length - 1]
+    }
+
+    const query = this.clone()
+
+    if (query._sort.length < 1) {
+      query.sort([[this.modelClass.primaryKey(), "desc"]])
+    } else {
+      query._sort = query._sort.map((sortEntry) => ({
+        ...sortEntry,
+        direction: reverseSortDirection(sortEntry.direction)
+      }))
+    }
+
+    query.limit(1)
+
+    const models = await query.toArray()
+
+    return models[0] || null
+  }
+
+  /**
+   * @param {...(string | string[] | Record<string, any> | Array<Record<string, any>>)} columns - Pluck definition(s).
+   * @returns {Promise<any[]>} - Plucked values.
+   */
+  async pluck(...columns) {
+    if (columns.length < 1) {
+      throw new Error("No columns given to pluck")
+    }
+
+    const normalizedPluck = normalizePluck(columns.length === 1 ? columns[0] : columns)
+    const validatedPluck = validatePluckDefinitions({
+      modelClass: this.modelClass,
+      pluck: normalizedPluck
+    })
+    const response = await this.modelClass.executeCommand("index", {
+      ...this.joinsPayload(),
+      ...this.searchPayload(),
+      ...this.groupPayload(),
+      ...this.distinctPayload(),
+      ...this.sortPayload(),
+      ...this.wherePayload(),
+      ...this.paginationPayload(),
+      pluck: validatedPluck
+    })
+
+    if (!response || typeof response !== "object") {
+      throw new Error(`Expected object response but got: ${response}`)
+    }
+
+    if (!Array.isArray(response.values)) {
+      return []
+    }
+
+    return response.values
+  }
+
+  /**
    * @param {number | string} id - Record id.
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
@@ -621,8 +1377,7 @@ export default class FrontendModelQuery {
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
    */
   async findBy(conditions) {
-    this.modelClass.assertFindByConditions(conditions)
-    const normalizedConditions = normalizeFindConditions(conditions)
+    const normalizedConditions = this.validatedStructuredConditions(conditions)
     const mergedWhere = {
       ...this._where,
       ...normalizedConditions
@@ -630,9 +1385,13 @@ export default class FrontendModelQuery {
 
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
+      ...this.joinsPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(Object.keys(mergedWhere)),
+      ...this.groupPayload(),
+      ...this.distinctPayload(),
       ...this.sortPayload(),
+      ...this.paginationPayload(),
       where: mergedWhere
     })
 
@@ -666,4 +1425,91 @@ export default class FrontendModelQuery {
 
     return model
   }
+
+  /**
+   * @param {Record<string, any>} conditions - Conditions.
+   * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
+   */
+  async findOrInitializeBy(conditions) {
+    const normalizedConditions = this.validatedStructuredConditions(conditions)
+    const model = await this.findBy(conditions)
+
+    if (model) return model
+
+    return /** @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Conditions.
+   * @param {(model: InstanceType<T>) => Promise<void> | void} [callback] - Optional callback before save.
+   * @returns {Promise<InstanceType<T>>} - Existing or newly created model.
+   */
+  async findOrCreateBy(conditions, callback) {
+    const normalizedConditions = this.validatedStructuredConditions(conditions)
+    const model = await this.findBy(conditions)
+
+    if (model) return model
+
+    const newModel = /** @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+
+    if (callback) {
+      await callback(newModel)
+    }
+
+    await newModel.save()
+
+    return newModel
+  }
+
+  /**
+   * @param {Record<string, any>} conditions - Candidate structured conditions.
+   * @returns {Record<string, any>} - Validated and normalized conditions.
+   */
+  validatedStructuredConditions(conditions) {
+    this.modelClass.assertFindByConditions(conditions)
+
+    return normalizeFindConditions(conditions)
+  }
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {FrontendModelQuery<any>} args.query - Query instance.
+ * @returns {void}
+ */
+function applyFrontendRansackCondition({condition, query}) {
+  if (condition.predicate === "null") {
+    query.search(condition.path, condition.attributeName, condition.value ? "eq" : "notEq", null)
+    return
+  }
+
+  if (condition.predicate === "eq" || condition.predicate === "in") {
+    query.search(condition.path, condition.attributeName, "eq", condition.value)
+    return
+  }
+
+  if (condition.predicate === "not_eq" || condition.predicate === "not_in") {
+    query.search(condition.path, condition.attributeName, "notEq", condition.value)
+    return
+  }
+
+  if (condition.predicate === "gt" || condition.predicate === "gteq" || condition.predicate === "lt" || condition.predicate === "lteq") {
+    query.search(condition.path, condition.attributeName, condition.predicate, condition.value)
+    return
+  }
+
+  query.search(condition.path, condition.attributeName, "like", frontendRansackLikeValue(condition))
+}
+
+/**
+ * @param {import("../utils/ransack.js").RansackCondition} condition - Ransack condition.
+ * @returns {string} - SQL-like pattern.
+ */
+function frontendRansackLikeValue(condition) {
+  if (condition.predicate === "cont") return `%${condition.value}%`
+  if (condition.predicate === "start") return `${condition.value}%`
+  if (condition.predicate === "end") return `%${condition.value}`
+
+  throw new Error(`Unsupported frontend ransack predicate: ${condition.predicate}`)
 }

@@ -127,6 +127,45 @@
  */
 
 /**
+ * @typedef {object} ScheduledBackgroundJobEveryOptions
+ * @property {number | string} [firstIn] - Delay before the first enqueue.
+ * @property {number | string} [first_in] - Sidekiq-style alias for `firstIn`.
+ */
+
+/**
+ * @typedef {object} ScheduledBackgroundJobConfiguration
+ * @property {any[]} [args] - Arguments passed to the job when enqueued.
+ * @property {typeof import("./background-jobs/job.js").default} class - Job class to enqueue.
+ * @property {boolean} [enabled] - Whether the schedule is enabled.
+ * @property {number | string | [number | string, ScheduledBackgroundJobEveryOptions]} every - Repeat interval.
+ * @property {import("./background-jobs/types.js").BackgroundJobOptions} [options] - Job options.
+ */
+
+/**
+ * @typedef {object} ScheduledBackgroundJobsConfiguration
+ * @property {Record<string, ScheduledBackgroundJobConfiguration>} jobs - Scheduled jobs keyed by name.
+ */
+
+/**
+ * @typedef {function({configuration: import("./configuration.js").default}) : ScheduledBackgroundJobsConfiguration | Promise<ScheduledBackgroundJobsConfiguration>} ScheduledBackgroundJobsLoaderType
+ */
+
+/**
+ * @typedef {object} AttachmentDriverConfiguration
+ * @property {function({configuration: import("./configuration.js").default, name: string, options: Record<string, any>}) : Record<string, any>} [create] - Optional factory for a custom attachment driver instance.
+ * @property {new (...args: any[]) => Record<string, any>} [driverClass] - Optional custom attachment driver class.
+ * @property {Record<string, any>} [instance] - Optional custom attachment driver instance.
+ */
+
+/**
+ * @typedef {object} AttachmentsConfiguration
+ * @property {string} [defaultDriver] - Default attachment storage driver name.
+ * @property {Record<string, AttachmentDriverConfiguration & Record<string, any>>} [drivers] - Named attachment driver configurations.
+ * @property {boolean} [allowPathInput] - Whether `{path: ...}` attachment input is allowed.
+ * @property {string[]} [allowedPathPrefixes] - Optional allowlist of directories for `{path: ...}` input.
+ */
+
+/**
  * @typedef {object} MailerBackend
  * @property {function({payload: import("./mailer.js").MailerDeliveryPayload, configuration: import("./configuration.js").default}) : Promise<unknown> | unknown} deliver - Deliver a mailer payload.
  */
@@ -154,14 +193,43 @@
  */
 
 /**
+ * @typedef {object} FrontendModelAttachmentConfiguration
+ * @property {"hasOne" | "hasMany"} type - Attachment cardinality.
+ */
+
+/**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {string[] | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
- * @property {FrontendModelResourceAbilitiesConfiguration} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`).
- * @property {Record<string, string>} [commands] - Command names keyed by action (`index`, `find`, `update`, `destroy`).
+ * @property {FrontendModelResourceAbilitiesConfiguration | string[]} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`) or shorthand action list (for example `["create", "read", "update", "destroy"]`).
+ * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
+ * @property {Record<string, string> | string[]} [commands] - Legacy built-in command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
+ * @property {Record<string, string> | string[]} [collectionCommands] - Custom collection commands keyed by generated method name or shorthand command list using camelized method names. When `builtInCollectionCommands` and `builtInMemberCommands` are omitted, this key keeps its legacy built-in-command behavior.
+ * @property {Record<string, string> | string[]} [memberCommands] - Custom member commands keyed by generated method name or shorthand command list using camelized method names. When `builtInCollectionCommands` and `builtInMemberCommands` are omitted, this key keeps its legacy built-in-command behavior.
+ * @property {Record<string, string> | string[]} [builtInCollectionCommands] - Built-in collection command names keyed by action (`index`, `create`) or shorthand command list using default names.
+ * @property {Record<string, string> | string[]} [builtInMemberCommands] - Built-in member command names keyed by action (`find`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
  * @property {Record<string, FrontendModelRelationshipConfiguration> | string[]} [relationships] - Relationship helpers to generate for frontend model files. Arrays infer target model/type from backend model relationships.
- * @property {string} [path] - Legacy HTTP path prefix (frontend model API now uses `/velocious/api`).
+ * @property {string} [path] - Optional legacy HTTP path prefix used by direct frontend model commands.
  * @property {string} [primaryKey] - Primary key attribute name.
- * @property {FrontendModelResourceServerConfiguration} [server] - Optional backend behavior overrides for built-in frontend actions.
+ * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
+ */
+
+/**
+ * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands"> & {
+ *   abilities: FrontendModelResourceAbilitiesConfiguration
+ *   builtInCollectionCommands: Record<string, string>
+ *   builtInMemberCommands: Record<string, string>
+ *   collectionCommands: Record<string, string>
+ *   commands: Record<string, string>
+ *   memberCommands: Record<string, string>
+ * }} NormalizedFrontendModelResourceConfiguration
+ */
+
+/**
+ * @typedef {typeof import("./frontend-model-resource/base-resource.js").default} FrontendModelResourceClassType
+ */
+
+/**
+ * @typedef {FrontendModelResourceClassType} FrontendModelResourceDefinition
  */
 
 /**
@@ -175,10 +243,11 @@
 
 /**
  * @typedef {object} FrontendModelResourceServerConfiguration
- * @property {function({action: "index" | "find" | "update" | "destroy", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default}) : (boolean | void | Promise<boolean | void>)} [beforeAction] - Optional callback run before built-in frontend actions.
+ * @property {function({action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default}) : (boolean | void | Promise<boolean | void>)} [beforeAction] - Optional callback run before built-in frontend actions.
  * @property {function({action: "index", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default}) : Promise<import("./database/record/index.js").default[]>} [records] - Records loader for frontendIndex.
- * @property {function({action: "index" | "find" | "update", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Record<string, any> | Promise<Record<string, any>>} [serialize] - Record serializer for response payloads.
- * @property {function({action: "find" | "update" | "destroy", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, id: string | number}) : Promise<import("./database/record/index.js").default | null>} [find] - Record loader for find/update/destroy actions.
+ * @property {function({action: "index" | "find" | "create" | "update", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Record<string, any> | Promise<Record<string, any>>} [serialize] - Record serializer for response payloads.
+ * @property {function({action: "find" | "update" | "destroy" | "attach" | "download" | "url", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, id: string | number}) : Promise<import("./database/record/index.js").default | null>} [find] - Record loader for find/update/destroy/attach/download/url actions.
+ * @property {function({action: "create", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, attributes: Record<string, any>}) : Promise<import("./database/record/index.js").default>} [create] - Custom create callback.
  * @property {function({action: "update", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default, attributes: Record<string, any>}) : Promise<import("./database/record/index.js").default | void>} [update] - Custom update callback.
  * @property {function({action: "destroy", controller: import("./controller.js").default, params: Record<string, any>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Promise<void>} [destroy] - Custom destroy callback.
  */
@@ -187,8 +256,10 @@
  * @typedef {object} BackendProjectConfiguration
  * @property {string} path - Path to the backend project.
  * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
- * @property {Record<string, FrontendModelResourceConfiguration>} [frontendModels] - Frontend model definitions keyed by model class name.
- * @property {Record<string, FrontendModelResourceConfiguration>} [resources] - Alias for `frontendModels`.
+ * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Frontend model definitions keyed by model class name.
+ * @property {{(id: string): {default?: unknown}, keys: () => string[]}} [frontendModelsRequireContext] - Webpack-style require context for frontend model resource files.
+ * @property {Record<string, FrontendModelResourceDefinition>} [resources] - Alias for `frontendModels`.
+ * @property {{(id: string): {default?: unknown}, keys: () => string[]}} [resourcesRequireContext] - Alias for `frontendModelsRequireContext`.
  */
 
 /**
@@ -224,11 +295,20 @@
  */
 
 /**
+ * @typedef {function({configuration: import("./configuration.js").default, params: Record<string, any>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, response: import("./http-server/client/response.js").default | undefined, subscription?: {channel: string, params?: Record<string, unknown>}}) : unknown | void | Promise<unknown | void>} TenantResolverType
+ */
+
+/**
+ * @typedef {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : DatabaseConfigurationType | Partial<DatabaseConfigurationType> | void} TenantDatabaseResolverType
+ */
+
+/**
  * @typedef {object} ConfigurationArgsType
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
  * @property {string} [cookieSecret] - Secret for encrypting cookies.
  * @property {AbilityResourceClassType[]} [abilityResources] - Resource classes used to define abilities per model.
  * @property {AbilityResolverType} [abilityResolver] - Resolver for creating request-scoped ability instances.
+ * @property {AttachmentsConfiguration} [attachments] - Attachment storage configuration.
  * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
  * @property {boolean} [debug] - Enable debug logging.
@@ -237,6 +317,7 @@
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
+ * @property {ScheduledBackgroundJobsConfiguration | ScheduledBackgroundJobsLoaderType} [scheduledBackgroundJobs] - Scheduled background jobs configuration.
  * @property {MailerBackend} [mailerBackend] - Mail delivery backend.
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.
  * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.
@@ -244,6 +325,8 @@
  * @property {string[]} locales - Supported locales.
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
  * @property {StructureSqlConfiguration} [structureSql] - Structure SQL generation configuration.
+ * @property {TenantResolverType} [tenantResolver] - Resolver for creating request-scoped tenant context objects.
+ * @property {TenantDatabaseResolverType} [tenantDatabaseResolver] - Resolver for deriving tenant-specific database config overrides.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.

@@ -6,4 +6,9 @@ export default class FrontendModelsController extends Controller {
   async frontendIndex() {
     await this.render({json: {source: "frontend-autoroute", status: "success"}})
   }
+
+  /** @returns {Promise<void>} - Resolves when complete. */
+  async frontendCreate() {
+    await this.render({json: {source: "frontend-autoroute", status: "success"}})
+  }
 }

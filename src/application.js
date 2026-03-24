@@ -3,6 +3,7 @@
 import AppRoutes from "./routes/app-routes.js"
 import Logger from "./logger.js"
 import HttpServer from "./http-server/index.js"
+import websocketEventsHost from "./http-server/websocket-events-host.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 /**
@@ -78,6 +79,10 @@ export default class VelociousApplication {
     const port = httpServerConfiguration.port || 3006
 
     await this.logger.debug(`Starting server on port ${port}`)
+
+    if (!configuration.getWebsocketEvents()) {
+      configuration.setWebsocketEvents(/** @type {any} */ (websocketEventsHost))
+    }
 
     this.httpServer = new HttpServer({configuration, port})
     this.httpServer.events.on("close", this.onHttpServerClose)

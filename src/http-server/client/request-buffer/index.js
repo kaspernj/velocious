@@ -8,6 +8,18 @@ import Logger from "../../../logger.js"
 import ParamsToObject from "../params-to-object.js"
 import querystring from "querystring"
 
+/**
+ * @param {string | undefined} input - Input string.
+ * @param {number} [limit] - Max preview length.
+ * @returns {string | undefined} - Truncated preview.
+ */
+function truncatePreview(input, limit = 300) {
+  if (typeof input !== "string") return undefined
+  if (input.length <= limit) return input
+
+  return `${input.slice(0, limit)}...`
+}
+
 export default class RequestBuffer {
   bodyLength = 0
 
@@ -444,12 +456,30 @@ export default class RequestBuffer {
 
   parseQueryStringPostParams() {
     if (this.postBody) {
-      /** @type {Record<string, string | string[]>} */
-      const unparsedParams = querystring.parse(this.postBody)
-      const paramsToObject = new ParamsToObject(unparsedParams)
-      const newParams = paramsToObject.toObject()
+      try {
+        /** @type {Record<string, string | string[]>} */
+        const unparsedParams = querystring.parse(this.postBody)
+        const paramsToObject = new ParamsToObject(unparsedParams)
+        const newParams = paramsToObject.toObject()
 
-      incorporate(this.params, newParams)
+        incorporate(this.params, newParams)
+      } catch (error) {
+        const ensuredError = /** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error)
+
+        ensuredError.velociousContext = {
+          ...(ensuredError.velociousContext || {}),
+          requestParsing: {
+            contentType: this.getHeader("content-type")?.value,
+            httpMethod: this.httpMethod,
+            parameterKeys: Object.keys(querystring.parse(this.postBody)),
+            path: this.path,
+            postBodyPreview: truncatePreview(this.postBody),
+            stage: "query-string-post-params"
+          }
+        }
+
+        throw ensuredError
+      }
     }
   }
 }

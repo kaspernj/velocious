@@ -69,6 +69,7 @@ export default class VelociousDatabaseDriversBase {
     this.configuration = configuration
     this.mutex = new Mutex() // Can be used to lock this instance for exclusive use
     this.logger = new Logger(this)
+    this._afterCommitCallbackFrames = []
     this._transactionsCount = 0
     this._transactionsActionsMutex = new Mutex()
   }
@@ -514,8 +515,11 @@ export default class VelociousDatabaseDriversBase {
    */
   async transaction(callback) {
     const savePointName = this.generateSavePointName()
+    const callbackFrame = []
     let transactionStarted = false
     let savePointStarted = false
+
+    this._afterCommitCallbackFrames.push(callbackFrame)
 
     if (this._transactionsCount == 0) {
       this.logger.debug("Start transaction")
@@ -541,6 +545,8 @@ export default class VelociousDatabaseDriversBase {
         this.logger.debug("Commit transaction")
         await this.commitTransaction()
       }
+
+      await this._commitAfterCommitCallbackFrame()
     } catch (error) {
       if (error instanceof Error) {
         this.logger.debug("Transaction error", error.message)
@@ -573,10 +579,29 @@ export default class VelociousDatabaseDriversBase {
         await this.rollbackTransaction()
       }
 
+      this._afterCommitCallbackFrames.pop()
+
       throw error
     }
 
     return result
+  }
+
+  /**
+   * Runs a callback after the surrounding transaction commits.
+   * If no transaction is active, the callback runs immediately.
+   * @param {() => void | Promise<void>} callback - Callback.
+   * @returns {Promise<void>} - Resolves when the callback has been registered or run.
+   */
+  async afterCommit(callback) {
+    const currentFrame = this._afterCommitCallbackFrames[this._afterCommitCallbackFrames.length - 1]
+
+    if (!currentFrame) {
+      await callback()
+      return
+    }
+
+    currentFrame.push(callback)
   }
 
   /**
@@ -611,6 +636,27 @@ export default class VelociousDatabaseDriversBase {
    */
   async _commitTransactionAction() {
     await this.query("COMMIT")
+  }
+
+  /**
+   * Merges committed callbacks into the parent transaction frame or runs them when the outermost commit completes.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _commitAfterCommitCallbackFrame() {
+    const committedCallbacks = this._afterCommitCallbackFrames.pop()
+
+    if (!committedCallbacks || committedCallbacks.length === 0) return
+
+    const parentFrame = this._afterCommitCallbackFrames[this._afterCommitCallbackFrames.length - 1]
+
+    if (parentFrame) {
+      parentFrame.push(...committedCallbacks)
+      return
+    }
+
+    for (const callback of committedCallbacks) {
+      await callback()
+    }
   }
 
   /**

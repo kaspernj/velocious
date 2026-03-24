@@ -53,7 +53,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
   async checkout() {
-    let connection = this.connections.shift()
+    const connectionIndex = this.connections.findIndex((queuedConnection) => this.connectionMatchesCurrentConfiguration(queuedConnection))
+    let connection = connectionIndex === -1 ? undefined : this.connections.splice(connectionIndex, 1)[0]
 
     if (!connection) {
       connection = await this.spawnConnection()
@@ -69,14 +70,18 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     return connection
   }
 
-  /** @param {function(import("../drivers/base.js").default) : void} callback - Callback to invoke with the connection. */
+  /**
+   * @template T
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} callback - Callback to invoke with the connection.
+   * @returns {Promise<T>} - Resolves with the callback result.
+   */
   async withConnection(callback) {
     const connection = await this.checkout()
     const id = connection.getIdSeq()
 
-    await this.asyncLocalStorage.run(id, async () => {
+    return await this.asyncLocalStorage.run(id, async () => {
       try {
-        await callback(connection)
+        return await callback(connection)
       } finally {
         this.checkin(connection)
       }
@@ -164,8 +169,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   getGlobalConnection() {
     const klass = /** @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
     const mapForConfiguration = klass.globalConnections.get(this.configuration)
+    const connection = mapForConfiguration?.[this.identifier]
 
-    return mapForConfiguration?.[this.identifier]
+    if (!connection) return
+    if (!this.connectionMatchesCurrentConfiguration(connection)) return
+
+    return connection
   }
 
   /**

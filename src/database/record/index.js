@@ -4,6 +4,10 @@
  * @typedef {{type: string, message: string}} ValidationErrorObjectType
  */
 
+/**
+ * @typedef {((model: VelociousDatabaseRecord) => void | Promise<void>) | string} LifecycleCallbackType
+ */
+
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
 import Configuration from "../../configuration.js"
@@ -14,6 +18,7 @@ import HasManyInstanceRelationship from "./instance-relationships/has-many.js"
 import HasManyRelationship from "./relationships/has-many.js"
 import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
+import RecordAttachmentHandle from "./attachments/handle.js"
 import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
 import restArgsError from "../../utils/rest-args-error.js"
@@ -21,6 +26,10 @@ import singularizeModelName from "../../utils/singularize-model-name.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 import UUID from "pure-uuid"
+
+/**
+ * @typedef {new (...args: any[]) => Record<string, any>} AttachmentDriverConstructor
+ */
 
 class ValidationError extends Error {
   /**
@@ -90,6 +99,16 @@ class VelociousDatabaseRecord {
     return this._validators
   }
 
+  /** @returns {Record<string, LifecycleCallbackType[]>} - Lifecycle callbacks keyed by name. */
+  static getLifecycleCallbacksMap() {
+    if (!this._lifecycleCallbacks) {
+      /** @type {Record<string, LifecycleCallbackType[]>} */
+      this._lifecycleCallbacks = {}
+    }
+
+    return this._lifecycleCallbacks
+  }
+
   static getValidatorTypesMap() {
     if (!this._validatorTypes) {
       /** @type {Record<string, typeof import("./validators/base.js").default>} */
@@ -97,6 +116,18 @@ class VelociousDatabaseRecord {
     }
 
     return this._validatorTypes
+  }
+
+  /**
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
+   */
+  static getAttachmentsMap() {
+    if (!this._attachmentsMap) {
+      /** @type {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} */
+      this._attachmentsMap = {}
+    }
+
+    return this._attachmentsMap
   }
 
   /** @type {Record<string, any>} */
@@ -113,6 +144,8 @@ class VelociousDatabaseRecord {
 
   /** @type {Record<string, import("./instance-relationships/base.js").default>} */
   _instanceRelationships = {}
+  /** @type {Record<string, RecordAttachmentHandle>} */
+  _attachments = {}
 
   /** @type {string | undefined} */
   __tableName = undefined
@@ -130,6 +163,93 @@ class VelociousDatabaseRecord {
    */
   static registerValidatorType(name, validatorClass) {
     this.validatorTypes()[name] = validatorClass
+  }
+
+  /**
+   * @param {"afterCreate" | "afterDestroy" | "afterSave" | "afterUpdate" | "beforeCreate" | "beforeDestroy" | "beforeSave" | "beforeUpdate" | "beforeValidation"} callbackName - Callback type.
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static registerLifecycleCallback(callbackName, callback) {
+    const callbacks = this.getLifecycleCallbacksMap()
+
+    if (!callbacks[callbackName]) {
+      callbacks[callbackName] = []
+    }
+
+    callbacks[callbackName].push(callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static beforeValidation(callback) {
+    this.registerLifecycleCallback("beforeValidation", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static beforeSave(callback) {
+    this.registerLifecycleCallback("beforeSave", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static beforeCreate(callback) {
+    this.registerLifecycleCallback("beforeCreate", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static beforeUpdate(callback) {
+    this.registerLifecycleCallback("beforeUpdate", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static beforeDestroy(callback) {
+    this.registerLifecycleCallback("beforeDestroy", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static afterSave(callback) {
+    this.registerLifecycleCallback("afterSave", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static afterCreate(callback) {
+    this.registerLifecycleCallback("afterCreate", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static afterUpdate(callback) {
+    this.registerLifecycleCallback("afterUpdate", callback)
+  }
+
+  /**
+   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @returns {void}
+   */
+  static afterDestroy(callback) {
+    this.registerLifecycleCallback("afterDestroy", callback)
   }
 
   /**
@@ -329,6 +449,25 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
+   */
+  static getAttachments() {
+    return this.getAttachmentsMap()
+  }
+
+  /**
+   * @param {string} attachmentName - Attachment name.
+   * @returns {{driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}} - Attachment definition.
+   */
+  static getAttachmentByName(attachmentName) {
+    const definition = this.getAttachmentsMap()[attachmentName]
+
+    if (!definition) throw new Error(`No attachment in ${this.name} called "${attachmentName}" in list: ${Object.keys(this.getAttachmentsMap()).join(", ")}`)
+
+    return definition
+  }
+
+  /**
    * @param {string} relationshipName - Relationship name.
    * @returns {import("./instance-relationships/base.js").default} - The relationship by name.
    */
@@ -352,6 +491,24 @@ class VelociousDatabaseRecord {
     }
 
     return this._instanceRelationships[relationshipName]
+  }
+
+  /**
+   * @param {string} attachmentName - Attachment name.
+   * @returns {RecordAttachmentHandle} - Attachment handle.
+   */
+  getAttachmentByName(attachmentName) {
+    if (!(attachmentName in this._attachments)) {
+      const attachmentDefinition = this.getModelClass().getAttachmentByName(attachmentName)
+
+      this._attachments[attachmentName] = new RecordAttachmentHandle({
+        model: this,
+        name: attachmentName,
+        type: attachmentDefinition.type
+      })
+    }
+
+    return this._attachments[attachmentName]
   }
 
   /**
@@ -441,6 +598,49 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {string} attachmentName - Attachment name.
+   * @param {object} args - Attachment args.
+   * @param {string | AttachmentDriverConstructor | Record<string, any>} [args.driver] - Attachment driver name, class, or instance.
+   * @param {"hasOne" | "hasMany"} args.type - Attachment type.
+   * @returns {void} - No return value.
+   */
+  static _defineAttachment(attachmentName, {driver, type}) {
+    if (!attachmentName || typeof attachmentName !== "string") throw new Error(`Invalid attachment name: ${attachmentName}`)
+    if (attachmentName in this.getAttachmentsMap()) throw new Error(`Attachment ${attachmentName} already exists`)
+
+    this.getAttachmentsMap()[attachmentName] = {driver, type}
+
+    this.prototype[attachmentName] = function() {
+      return this.getAttachmentByName(attachmentName)
+    }
+
+    this.prototype[`set${inflection.camelize(attachmentName)}`] = function(newValue) {
+      this.getAttachmentByName(attachmentName).queueAttach(newValue)
+      return newValue
+    }
+  }
+
+  /**
+   * Adds a single attachment helper to the model.
+   * @param {string} attachmentName - Attachment name.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
+   * @returns {void} - No return value.
+   */
+  static hasOneAttachment(attachmentName, args = {}) {
+    this._defineAttachment(attachmentName, {driver: args.driver, type: "hasOne"})
+  }
+
+  /**
+   * Adds a collection attachment helper to the model.
+   * @param {string} attachmentName - Attachment name.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
+   * @returns {void} - No return value.
+   */
+  static hasManyAttachments(attachmentName, args = {}) {
+    this._defineAttachment(attachmentName, {driver: args.driver, type: "hasMany"})
+  }
+
+  /**
    * @param {string} attributeName - Attribute name.
    * @returns {string} - The human attribute name.
    */
@@ -491,18 +691,24 @@ class VelociousDatabaseRecord {
       attributeNameToColumnName[camelizedColumnName] = column.getName()
       columnNameToAttributeName[column.getName()] = camelizedColumnName
 
-      this.prototype[camelizedColumnName] = function() {
-        return this.readAttribute(camelizedColumnName)
+      if (!(camelizedColumnName in this.prototype)) {
+        this.prototype[camelizedColumnName] = function() {
+          return this.readAttribute(camelizedColumnName)
+        }
       }
 
-      this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
-        return this._setColumnAttribute(camelizedColumnName, newValue)
+      if (!(`set${camelizedColumnNameBigFirst}` in this.prototype)) {
+        this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
+          return this._setColumnAttribute(camelizedColumnName, newValue)
+        }
       }
 
-      this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
-        let value = this[camelizedColumnName]()
+      if (!(`has${camelizedColumnNameBigFirst}` in this.prototype)) {
+        this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
+          let value = this[camelizedColumnName]()
 
-        return this._hasAttribute(value)
+          return this._hasAttribute(value)
+        }
       }
     }
 
@@ -614,6 +820,12 @@ class VelociousDatabaseRecord {
    * @returns {string} - The database identifier.
    */
   static getDatabaseIdentifier() {
+    const tenantDatabaseIdentifier = this.getTenantDatabaseIdentifier()
+
+    if (tenantDatabaseIdentifier) {
+      return tenantDatabaseIdentifier
+    }
+
     return this._databaseIdentifier || "default"
   }
 
@@ -623,6 +835,36 @@ class VelociousDatabaseRecord {
    */
   static setDatabaseIdentifier(databaseIdentifier) {
     this._databaseIdentifier = databaseIdentifier
+  }
+
+  /**
+   * Declares a tenant-aware database identifier resolver for this model class.
+   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: unknown}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
+   * @returns {void} - No return value.
+   */
+  static switchesTenantDatabase(databaseIdentifierOrResolver) {
+    this._tenantDatabaseIdentifierResolver = databaseIdentifierOrResolver
+  }
+
+  /**
+   * @param {unknown} [tenant] - Tenant override.
+   * @returns {string | undefined} - Tenant-scoped database identifier when configured.
+   */
+  static getTenantDatabaseIdentifier(tenant = Current.tenant()) {
+    const tenantDatabaseIdentifierResolver = this._tenantDatabaseIdentifierResolver
+
+    if (!tenantDatabaseIdentifierResolver) {
+      return
+    }
+
+    if (typeof tenantDatabaseIdentifierResolver === "function") {
+      return tenantDatabaseIdentifierResolver({
+        modelClass: this,
+        tenant
+      })
+    }
+
+    return tenantDatabaseIdentifierResolver
   }
 
   /**
@@ -716,7 +958,7 @@ class VelociousDatabaseRecord {
    */
   _normalizeSqliteBooleanValue({columnType, value}) {
     if (this.getModelClass().getDatabaseType() != "sqlite") return value
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
     if (value === true) return 1
     if (value === false) return 0
@@ -1040,7 +1282,7 @@ class VelociousDatabaseRecord {
    */
   static _normalizeSqliteBooleanValueForInsert({columnType, value}) {
     if (this.getDatabaseType() != "sqlite") return value
-    if (!columnType || typeof columnType != "string") return value
+    if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
     if (value === true) return 1
     if (value === false) return 0
@@ -1095,24 +1337,35 @@ class VelociousDatabaseRecord {
     let result
 
     await this._getConfiguration().ensureConnections(async () => {
+      await this._runLifecycleCallbacks("beforeValidation")
       await this._runValidations()
 
       await this.getModelClass().transaction(async () => {
+        await this._runLifecycleCallbacks("beforeSave")
+
         // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
         const {savedCount} = await this._autoSaveBelongsToRelationships()
 
         if (this.isPersisted()) {
+          await this._runLifecycleCallbacks("beforeUpdate")
+
           // If any has-many-relationships will be saved, then updated-at should still be set on this record.
           const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
 
           if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
             result = await this._updateRecordWithChanges()
           }
+
+          await this._runLifecycleCallbacks("afterUpdate")
         } else {
+          await this._runLifecycleCallbacks("beforeCreate")
           result = await this._createNewRecord()
+          await this._runLifecycleCallbacks("afterCreate")
         }
 
         await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
+        await this._autoSaveAttachments()
+        await this._runLifecycleCallbacks("afterSave")
       })
     })
 
@@ -1244,6 +1497,19 @@ class VelociousDatabaseRecord {
       if (isNewRecord) {
         instanceRelationship.setPreloaded(true)
       }
+    }
+  }
+
+  /**
+   * @returns {Promise<void>} - Resolves when pending attachments have been saved.
+   */
+  async _autoSaveAttachments() {
+    for (const attachmentName in this._attachments) {
+      const attachment = this._attachments[attachmentName]
+
+      if (!attachment.hasPendingAttachments()) continue
+
+      await attachment.flushPendingAttachments()
     }
   }
 
@@ -1724,6 +1990,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @returns {ModelClassQuery<MC>} - Query with Ransack filters applied.
+   */
+  static ransack(params) {
+    return this._newQuery().ransack(params)
+  }
+
+  /**
    * @param {Record<string, any>} changes - Changes.
    */
   constructor(changes = {}) {
@@ -1798,6 +2074,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async destroy() {
+    await this._runLifecycleCallbacks("beforeDestroy")
+
     for (const relationship of this.getModelClass().getRelationships()) {
       if (relationship.getDependent() != "destroy") {
         continue
@@ -1854,6 +2132,39 @@ class VelociousDatabaseRecord {
     })
 
     await this._connection().query(sql)
+    await this._runLifecycleCallbacks("afterDestroy")
+  }
+
+  /**
+   * @param {"afterCreate" | "afterDestroy" | "afterSave" | "afterUpdate" | "beforeCreate" | "beforeDestroy" | "beforeSave" | "beforeUpdate" | "beforeValidation"} callbackName - Callback type.
+   * @returns {Promise<void>}
+   */
+  async _runLifecycleCallbacks(callbackName) {
+    const callbacks = this.getModelClass().getLifecycleCallbacksMap()[callbackName] || []
+    let callbackNameRegisteredAsString = false
+
+    for (const callback of callbacks) {
+      if (typeof callback == "string") {
+        if (callback == callbackName) {
+          callbackNameRegisteredAsString = true
+        }
+        const methodCallback = this[callback]
+
+        if (typeof methodCallback != "function") {
+          throw new Error(`Lifecycle callback "${callback}" is not a function on ${this.getModelClass().name}`)
+        }
+
+        await methodCallback.call(this)
+      } else {
+        await callback(this)
+      }
+    }
+
+    const instanceCallback = this[callbackName]
+
+    if (!callbackNameRegisteredAsString && typeof instanceCallback === "function") {
+      await instanceCallback.call(this)
+    }
   }
 
   /** @returns {boolean} - Whether changes.  */
@@ -1956,7 +2267,24 @@ class VelociousDatabaseRecord {
       result = this._normalizeDateValueForRead(result)
     }
 
+    result = this._normalizeBooleanValueForRead({columnType, value: result})
+
     return result
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string | undefined} args.columnType - Column type.
+   * @param {any} args.value - Value to normalize.
+   * @returns {any} - Normalized value.
+   */
+  _normalizeBooleanValueForRead({columnType, value}) {
+    if (!columnType) return value
+    if (columnType.toLowerCase() !== "boolean") return value
+    if (value === 1) return true
+    if (value === 0) return false
+
+    return value
   }
 
   /**

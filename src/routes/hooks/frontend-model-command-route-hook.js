@@ -1,33 +1,65 @@
 // @ts-check
 
-import * as inflection from "inflection"
-import FrontendModelController from "../../frontend-model-controller.js"
+import {frontendModelActionForCommand, frontendModelCustomCommandForPath, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "../../frontend-models/resource-definition.js"
+
+const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
+const SHARED_FRONTEND_MODEL_REQUEST_PATH = "/frontend-models/request"
+const LEGACY_SHARED_FRONTEND_MODEL_API_PATH = "/velocious/api"
+const FRONTEND_MODEL_CONTROLLER_PATH = new URL("../../frontend-model-controller.js", import.meta.url).href
 
 /**
  * @param {object} args - Hook args.
  * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
  * @param {string} args.currentPath - Request path without query.
- * @returns {{action: string, controller: string, controllerClass?: typeof import("../../frontend-model-controller.js").default} | null} - Route override or null.
+ * @returns {Promise<import("../../configuration-types.js").RouteResolverHookResult | null>} - Route override or null.
  */
-export default function frontendModelCommandRouteHook({configuration, currentPath}) {
+export default async function frontendModelCommandRouteHook({configuration, currentPath}) {
   const normalizedCurrentPath = normalizePath(currentPath)
 
-  if (normalizedCurrentPath === "/velocious/api") {
+  if (
+    normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH
+    || normalizedCurrentPath === SHARED_FRONTEND_MODEL_REQUEST_PATH
+    || normalizedCurrentPath === LEGACY_SHARED_FRONTEND_MODEL_API_PATH
+  ) {
     return {
       action: "frontend-api",
       controller: "velocious/api",
-      controllerClass: FrontendModelController
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
     }
   }
 
   const backendProjects = configuration.getBackendProjects?.() || []
+  const customCommandMatch = frontendModelCustomCommandForPath({
+    backendProjects,
+    currentPath: normalizedCurrentPath
+  })
+
+  if (customCommandMatch) {
+    /** @type {Record<string, any>} */
+    const params = {
+      frontendModelCustomCommandMethodName: customCommandMatch.methodName,
+      frontendModelCustomCommandScope: customCommandMatch.scope,
+      model: customCommandMatch.modelName
+    }
+
+    if (customCommandMatch.memberId) {
+      params.id = customCommandMatch.memberId
+    }
+
+    return {
+      action: "frontend-custom-command",
+      controller: customCommandMatch.resourcePath.replace(/^\/+/, ""),
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH,
+      params
+    }
+  }
 
   for (const backendProject of backendProjects) {
-    const resources = backendProject.frontendModels || backendProject.resources || {}
+    const resources = frontendModelResourcesForBackendProject(backendProject)
 
     for (const modelName in resources) {
-      const resourceConfiguration = resources[modelName]
-      const resourcePath = frontendModelResourcePath(modelName, resourceConfiguration)
+      const resourceDefinition = resources[modelName]
+      const resourcePath = frontendModelResourcePath(modelName, resourceDefinition)
       const normalizedResourcePath = normalizePath(resourcePath)
       const expectedPrefix = `${normalizedResourcePath}/`
 
@@ -36,50 +68,18 @@ export default function frontendModelCommandRouteHook({configuration, currentPat
       const commandName = normalizedCurrentPath.slice(expectedPrefix.length)
       if (commandName.includes("/")) continue
 
-      const action = frontendModelActionForCommand({commandName, resourceConfiguration})
+      const action = frontendModelActionForCommand({commandName, modelName, resourceDefinition})
       if (!action) continue
+      const controller = normalizedResourcePath.replace(/^\/+/, "")
 
       return {
         action: `frontend-${action}`,
-        controller: normalizedResourcePath.replace(/^\/+/, "")
+        controller
       }
     }
   }
 
   return null
-}
-
-/**
- * @param {object} args - Arguments.
- * @param {string} args.commandName - Command path segment.
- * @param {import("../../configuration-types.js").FrontendModelResourceConfiguration} args.resourceConfiguration - Resource configuration.
- * @returns {"destroy" | "find" | "index" | "update" | null} - Frontend action for command.
- */
-function frontendModelActionForCommand({commandName, resourceConfiguration}) {
-  const commands = {
-    destroy: resourceConfiguration.commands?.destroy || "destroy",
-    find: resourceConfiguration.commands?.find || "find",
-    index: resourceConfiguration.commands?.index || "index",
-    update: resourceConfiguration.commands?.update || "update"
-  }
-
-  if (commandName === commands.destroy) return "destroy"
-  if (commandName === commands.find) return "find"
-  if (commandName === commands.index) return "index"
-  if (commandName === commands.update) return "update"
-
-  return null
-}
-
-/**
- * @param {string} modelName - Model class name.
- * @param {import("../../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
- * @returns {string} - Normalized frontend model resource path.
- */
-function frontendModelResourcePath(modelName, resourceConfiguration) {
-  if (resourceConfiguration.path) return `/${resourceConfiguration.path.replace(/^\/+/, "")}`
-
-  return `/${inflection.dasherize(inflection.pluralize(modelName))}`
 }
 
 /**

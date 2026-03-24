@@ -1,6 +1,7 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
+import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
@@ -8,6 +9,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   async execute() {
     const configuration = this.getConfiguration()
     const backendProjects = configuration.getBackendProjects()
+
+    await configuration.initializeModels()
 
     if (!Array.isArray(backendProjects) || backendProjects.length === 0) {
       throw new Error("No backend projects configured. Configure 'backendProjects' in your configuration first")
@@ -31,10 +34,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
       for (const modelClassName in resources) {
-        const modelConfig = resources[modelClassName]
+        const modelConfig = frontendModelResourceConfigurationFromDefinition(resources[modelClassName])
         const className = inflection.camelize(modelClassName.replaceAll("-", "_"))
         const fileName = `${inflection.dasherize(inflection.underscore(className))}.js`
         const filePath = `${frontendModelsDir}/${fileName}`
+
+        if (!modelConfig) {
+          throw new Error(`Invalid frontend model resource definition for '${className}'`)
+        }
 
         this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig})
 
@@ -47,6 +54,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const fileContent = this.buildModelFileContent({
           className,
           importPath,
+          modelClass: configuration.getModelClasses()[className],
           modelConfig
         })
 
@@ -95,17 +103,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * @param {{frontendModels?: Record<string, any>, resources?: Record<string, any>}} backendProject - Backend project config.
-   * @returns {Record<string, any>} - Resource definitions keyed by model class name.
+   * @param {import("../../../../../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
+   * @returns {Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>} - Resource definitions keyed by model class name.
    */
   resourcesForBackendProject(backendProject) {
-    const resources = backendProject.frontendModels || backendProject.resources || {}
-
-    if (!resources || typeof resources !== "object") {
-      throw new Error(`Expected backend project resources object but got: ${resources}`)
-    }
-
-    return resources
+    return frontendModelResourcesForBackendProject(backendProject)
   }
 
   /**
@@ -151,19 +153,39 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {object} args - Method args.
    * @param {string} args.className - Model class name.
    * @param {string} args.importPath - Base class import path.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @returns {string} - Generated file content.
    */
-  buildModelFileContent({className, importPath, modelConfig}) {
-    const attributes = this.attributeDefinitionsForModel({className, modelConfig})
+  buildModelFileContent({className, importPath, modelClass, modelConfig}) {
+    const attributes = this.attributeDefinitionsForModel({modelClass, modelConfig})
     const relationships = this.relationshipsForModel({className, modelConfig})
+    const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
+      ? modelConfig.attachments
+      : {}
     const attributesTypeName = `${className}Attributes`
-    const commands = {
-      destroy: modelConfig.commands?.destroy || "destroy",
-      find: modelConfig.commands?.find || "find",
-      index: modelConfig.commands?.index || "index",
-      update: modelConfig.commands?.update || "update"
+    const attributeNames = attributes.map((attribute) => attribute.name)
+    const builtInCollectionCommands = {
+      create: modelConfig.builtInCollectionCommands.create || "create",
+      index: modelConfig.builtInCollectionCommands.index || "index"
     }
+    const builtInMemberCommands = {
+      attach: modelConfig.builtInMemberCommands.attach || "attach",
+      destroy: modelConfig.builtInMemberCommands.destroy || "destroy",
+      download: modelConfig.builtInMemberCommands.download || "download",
+      find: modelConfig.builtInMemberCommands.find || "find",
+      update: modelConfig.builtInMemberCommands.update || "update",
+      url: modelConfig.builtInMemberCommands.url || "url"
+    }
+    const collectionCommands = modelConfig.collectionCommands
+    const memberCommands = modelConfig.memberCommands
+    const builtInCollectionCommandsAreDefault = builtInCollectionCommands.create === "create" && builtInCollectionCommands.index === "index"
+    const builtInMemberCommandsAreDefault = builtInMemberCommands.attach === "attach"
+      && builtInMemberCommands.destroy === "destroy"
+      && builtInMemberCommands.download === "download"
+      && builtInMemberCommands.find === "find"
+      && builtInMemberCommands.update === "update"
+      && builtInMemberCommands.url === "url"
 
     let fileContent = ""
 
@@ -191,22 +213,71 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /**\n"
-    fileContent += "   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource config.\n"
-    fileContent += "   */\n"
+    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, primaryKey?: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
-    fileContent += `      attributes: ${JSON.stringify(attributes.map((attribute) => attribute.name))},\n`
-    fileContent += `      commands: ${JSON.stringify(commands)},\n`
-    fileContent += `      primaryKey: ${JSON.stringify(modelConfig.primaryKey || "id")}\n`
+    if (Object.keys(attachments).length > 0) {
+      fileContent += "      attachments: {\n"
+      for (const [attachmentName, attachmentConfig] of Object.entries(attachments)) {
+        const attachmentType = attachmentConfig && typeof attachmentConfig === "object" && attachmentConfig.type === "hasMany"
+          ? "hasMany"
+          : "hasOne"
+
+        fileContent += `        ${attachmentName}: {type: ${JSON.stringify(attachmentType)}},\n`
+      }
+      fileContent += "      },\n"
+    }
+    fileContent += this.formattedArrayProperty({
+      indent: "      ",
+      propertyName: "attributes",
+      values: attributeNames
+    })
+    if (!builtInCollectionCommandsAreDefault) {
+      fileContent += this.formattedObjectProperty({
+        filterDefaultValues: {create: "create", index: "index"},
+        indent: "      ",
+        propertyName: "builtInCollectionCommands",
+        values: builtInCollectionCommands
+      })
+    }
+    if (!builtInMemberCommandsAreDefault) {
+      fileContent += this.formattedObjectProperty({
+        filterDefaultValues: {
+          attach: "attach",
+          destroy: "destroy",
+          download: "download",
+          find: "find",
+          update: "update",
+          url: "url"
+        },
+        indent: "      ",
+        propertyName: "builtInMemberCommands",
+        values: builtInMemberCommands
+      })
+    }
+    if (Object.keys(collectionCommands).length > 0) {
+      fileContent += this.formattedObjectProperty({
+        indent: "      ",
+        propertyName: "collectionCommands",
+        values: collectionCommands
+      })
+    }
+    if (Object.keys(memberCommands).length > 0) {
+      fileContent += this.formattedObjectProperty({
+        indent: "      ",
+        propertyName: "memberCommands",
+        values: memberCommands
+      })
+    }
+    if (modelClass && modelClass.primaryKey() !== "id") {
+      fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
+    }
     fileContent += "    }\n"
     fileContent += "  }\n"
 
     if (relationships.length > 0) {
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions. */\n"
       fileContent += "  static relationshipDefinitions() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -216,9 +287,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  }\n"
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */\n"
       fileContent += "  static relationshipModelClasses() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -234,9 +303,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const camelizedAttributeUpper = inflection.camelize(attribute.name)
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value.\n`
-      fileContent += "   */\n"
+      fileContent += `  /** @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value. */\n`
       fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attribute.name)}) }\n`
 
       fileContent += "\n"
@@ -247,27 +314,58 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += `  set${camelizedAttributeUpper}(newValue) { return this.setAttribute(${JSON.stringify(attribute.name)}, newValue) }\n`
     }
 
+    for (const methodName of Object.keys(collectionCommands)) {
+      fileContent += "\n"
+      fileContent += "  /**\n"
+      fileContent += "   * @param {Record<string, any>} [payload={}] - Command payload.\n"
+      fileContent += "   * @returns {Promise<Record<string, any>>} - Command response.\n"
+      fileContent += "   */\n"
+      fileContent += `  static async ${methodName}(payload = {}) {\n`
+      fileContent += "    return await this.executeCustomCommand({\n"
+      fileContent += `      commandName: ${JSON.stringify(collectionCommands[methodName])},\n`
+      fileContent += `      commandType: ${JSON.stringify(collectionCommands[methodName])},\n`
+      fileContent += "      payload,\n"
+      fileContent += "      resourcePath: this.resourcePath()\n"
+      fileContent += "    })\n"
+      fileContent += "  }\n"
+    }
+
+    for (const methodName of Object.keys(memberCommands)) {
+      fileContent += "\n"
+      fileContent += "  /**\n"
+      fileContent += "   * @param {Record<string, any>} [payload={}] - Command payload.\n"
+      fileContent += "   * @returns {Promise<Record<string, any>>} - Command response.\n"
+      fileContent += "   */\n"
+      fileContent += `  async ${methodName}(payload = {}) {\n`
+      fileContent += `    return await ${className}.executeCustomCommand({\n`
+      fileContent += `      commandName: ${JSON.stringify(memberCommands[methodName])},\n`
+      fileContent += `      commandType: ${JSON.stringify(memberCommands[methodName])},\n`
+      fileContent += "      memberId: this.primaryKeyValue(),\n"
+      fileContent += "      payload,\n"
+      fileContent += `      resourcePath: ${className}.resourcePath()\n`
+      fileContent += "    })\n"
+      fileContent += "  }\n"
+    }
+
     for (const relationship of relationships) {
       const relationshipNameCamelized = inflection.camelize(relationship.relationshipName)
       const targetImportPath = `./${relationship.targetFileName}.js`
 
       if (relationship.type == "hasMany") {
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} - Relationship helper.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} - Relationship helper. */\n`
         fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)})) }\n`
 
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models. */\n`
         fileContent += `  ${relationship.relationshipName}Loaded() { return /** @type {Array<import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
+
+        fileContent += "\n"
+        fileContent += `  /** @returns {Promise<Array<import(${JSON.stringify(targetImportPath)}).default>>} - Loaded related models. */\n`
+        fileContent += `  async load${relationshipNameCamelized}() { return /** @type {Promise<Array<import(${JSON.stringify(targetImportPath)}).default>>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
       } else {
         fileContent += "\n"
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model.\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model. */\n`
         fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
 
         fileContent += "\n"
@@ -276,6 +374,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default} - Built related model.\n`
         fileContent += "   */\n"
         fileContent += `  build${relationshipNameCamelized}(attributes = {}) { return /** @type {import(${JSON.stringify(targetImportPath)}).default} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).build(attributes)) }\n`
+
+        fileContent += "\n"
+        fileContent += `  /** @returns {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} - Loaded related model. */\n`
+        fileContent += `  async load${relationshipNameCamelized}() { return /** @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
+
+        fileContent += "\n"
+        fileContent += `  /** @param {import(${JSON.stringify(targetImportPath)}).default | null} model - Related model. @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Assigned related model. */\n`
+        fileContent += `  set${relationshipNameCamelized}(model) { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.setRelationship(${JSON.stringify(relationship.relationshipName)}, model)) }\n`
       }
     }
 
@@ -285,21 +391,59 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Base indentation.
+   * @param {string} args.propertyName - Object property name.
+   * @param {string[]} args.values - String values.
+   * @returns {string} - Formatted multiline array property.
+   */
+  formattedArrayProperty({indent, propertyName, values}) {
+    let output = `${indent}${propertyName}: [\n`
+
+    for (const value of values) {
+      output += `${indent}  ${JSON.stringify(value)},\n`
+    }
+
+    output += `${indent}],\n`
+
+    return output
+  }
+
+  /**
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Base indentation.
+   * @param {string} args.propertyName - Object property name.
+   * @param {Record<string, string>} args.values - Object key-values.
+   * @param {Record<string, string>} [args.filterDefaultValues] - Default values to omit from output.
+   * @returns {string} - Formatted multiline object property.
+   */
+  formattedObjectProperty({filterDefaultValues, indent, propertyName, values}) {
+    let output = `${indent}${propertyName}: {\n`
+
+    for (const objectKey of Object.keys(values)) {
+      if (filterDefaultValues && filterDefaultValues[objectKey] === values[objectKey]) continue
+
+      output += `${indent}  ${objectKey}: ${JSON.stringify(values[objectKey])},\n`
+    }
+
+    output += `${indent}},\n`
+
+    return output
+  }
+
+  /**
    * @param {object} args - Arguments.
-   * @param {string} args.className - Model class name.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @returns {Array<{jsDocType: string, name: string}>} - Attribute definitions.
    */
-  attributeDefinitionsForModel({className, modelConfig}) {
+  attributeDefinitionsForModel({modelClass, modelConfig}) {
     const attributes = modelConfig.attributes
 
     if (Array.isArray(attributes)) {
       return attributes.map((attributeName) => ({
         jsDocType: this.jsDocTypeForFrontendAttribute({
-          attributeConfig: this.inferredFrontendAttributeConfiguration({
-            attributeName,
-            className
-          })
+          attributeConfig: this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
         }),
         name: attributeName
       }))
@@ -317,46 +461,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         name: attributeName
       }
     })
-  }
-
-  /**
-   * @param {object} args - Arguments.
-   * @param {string} args.className - Model class name.
-   * @param {string} args.attributeName - Attribute name.
-   * @returns {{type: string, null?: boolean} | null} Inferred frontend attribute configuration from backend model columns.
-   */
-  inferredFrontendAttributeConfiguration({className, attributeName}) {
-    const modelClass = this.getConfiguration().getModelClass(className)
-
-    if (!modelClass) return null
-
-    let attributeNameToColumnName
-    let columnsHash
-
-    try {
-      attributeNameToColumnName = modelClass.getAttributeNameToColumnNameMap()
-      columnsHash = modelClass.getColumnsHash()
-    } catch {
-      return null
-    }
-
-    const columnName = attributeNameToColumnName[attributeName]
-
-    if (typeof columnName !== "string") return null
-
-    const column = columnsHash[columnName]
-
-    if (!column) return null
-
-    const type = column.getType()
-    const canBeNull = column.getNull()
-
-    if (typeof type !== "string" || type.length < 1) return null
-
-    return {
-      null: canBeNull === true || undefined,
-      type
-    }
   }
 
   /**
@@ -387,13 +491,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     if (type == "boolean") {
       return "boolean"
-    } else if (type == "json") {
+    } else if (type == "json" || type == "jsonb") {
       return "Record<string, any>"
     } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
-    } else if (["bit", "bigint", "float", "int", "integer", "smallint", "tinyint"].includes(type)) {
+    } else if (["bit", "bigint", "decimal", "double", "double precision", "float", "int", "integer", "numeric", "real", "smallint", "tinyint"].includes(type)) {
       return "number"
-    } else if (["date", "datetime", "timestamp without time zone"].includes(type)) {
+    } else if (["date", "datetime", "timestamp", "timestamp without time zone", "timestamptz"].includes(type)) {
       return "Date"
     } else {
       return "any"
@@ -407,6 +511,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   frontendAttributeCanBeNull(attributeConfig) {
     if (!attributeConfig || typeof attributeConfig !== "object") {
       return false
+    }
+
+    if (typeof attributeConfig.getNull == "function") {
+      return attributeConfig.getNull() === true
     }
 
     return attributeConfig.null === true
@@ -432,6 +540,26 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return typeValue
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {string} args.attributeName - Frontend model attribute name.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
+   * @returns {any} - Attribute config inferred from the backend model when available.
+   */
+  frontendAttributeConfigForModelAttribute({attributeName, modelClass}) {
+    if (!modelClass) {
+      return null
+    }
+
+    const columnName = modelClass.getAttributeNameToColumnNameMap()[attributeName]
+
+    if (!columnName) {
+      return null
+    }
+
+    return modelClass.getColumnsHash()[columnName] || null
   }
 
   /**
@@ -470,17 +598,21 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         throw new Error(`Model '${className}' relationship '${relationshipName}' must be an object or true`)
       }
 
-      const inferredRelationship = this.inferredRelationshipDefinition({className, relationshipName})
-      const relationshipType = relationship.type || inferredRelationship.type
+      const relationshipModelName = relationship.modelClassName || relationship.className || relationship.model
+      const hasExplicitType = typeof relationship.type === "string" && relationship.type.length > 0
+      const hasExplicitModel = typeof relationshipModelName === "string" && relationshipModelName.length > 0
+      const inferredRelationship = hasExplicitType && hasExplicitModel
+        ? null
+        : this.inferredRelationshipDefinition({className, relationshipName})
+      const relationshipType = relationship.type || inferredRelationship?.type
 
       if (relationshipType !== "belongsTo" && relationshipType !== "hasOne" && relationshipType !== "hasMany") {
         throw new Error(`Model '${className}' relationship '${relationshipName}' has invalid type '${relationshipType}'`)
       }
 
-      const relationshipModelName = relationship.modelClassName || relationship.className || relationship.model
-      const targetClassName = typeof relationshipModelName === "string" && relationshipModelName.length > 0
+      const targetClassName = hasExplicitModel
         ? inflection.camelize(String(relationshipModelName).replaceAll("-", "_"))
-        : inferredRelationship.targetClassName
+        : inferredRelationship?.targetClassName
 
       normalized.push({
         relationshipName,

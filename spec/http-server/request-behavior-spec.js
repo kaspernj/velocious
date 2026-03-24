@@ -116,6 +116,23 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
     })
   })
 
+  it("responds with bad request on malformed nested post parameter keys", async () => {
+    await Dummy.run(async () => {
+      const body = "task[]]=Broken"
+      const response = await sendRawRequest([
+        "POST /tasks/collection-post HTTP/1.1",
+        "Host: localhost",
+        "Connection: close",
+        "Content-Type: application/x-www-form-urlencoded",
+        `Content-Length: ${Buffer.byteLength(body)}`,
+        "",
+        body
+      ].join("\r\n"))
+
+      expect(response).toContain("HTTP/1.1 400 Bad Request")
+    })
+  })
+
   it("responds to non-POST methods without hanging", async () => {
     await Dummy.run(async () => {
       const response = await sendRawRequest([

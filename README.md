@@ -71,9 +71,11 @@ Retry flaky tests by setting a retry count on the test args.
 
 ```js
 describe("Tasks", () => {
-  it("retries a flaky check", {retry: 2}, async () => {})
+it("retries a flaky check", {retry: 2}, async () => {})
 })
 ```
+
+During a failing run, Velocious captures all console output emitted while each test executes. At the end of a failed run, those logs are saved under `tmp/screenshots` next to failure screenshots/browser logs/HTML, and each failed test summary prints the saved console log path.
 
 Listen for retry events if you need to restart services between attempts.
 
@@ -257,26 +259,40 @@ npx velocious g:model Task
 You can generate lightweight frontend model classes from resource definitions in your configuration.
 
 ```js
+import FrontendModelBaseResource from "velocious/build/src/frontend-model-resource/base-resource.js"
+
+class UserResource extends FrontendModelBaseResource {
+  static resourceConfig() {
+    return {
+      abilities: {
+        create: "create",
+        destroy: "destroy",
+        find: "read",
+        index: "read",
+        update: "update"
+      },
+      attributes: ["id", "name", "email"],
+      relationships: {
+        projects: {type: "hasMany", model: "Project"}
+      }
+    }
+  }
+}
+
 export default new Configuration({
   // ...
   backendProjects: [
     {
       path: "/path/to/backend-project",
       resources: {
-        User: {
-          attributes: ["id", "name", "email"],
-          relationships: {
-            projects: {type: "hasMany", model: "Project"}
-          },
-          commands: {find: "find", update: "update", destroy: "destroy"},
-          path: "/api/frontend-models/users",
-          primaryKey: "id"
-        }
+        User: UserResource
       }
     }
   ]
 })
 ```
+
+`resources` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
 
 Generate classes:
 
@@ -292,24 +308,141 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await User.findBy({email: "john@example.com"})`
 - `await User.findByOrFail({email: "john@example.com"})`
 - `await User.toArray()`
+- `await User.create({name: "John"})`
 - `await Task.sort("-createdAt").toArray()`
+- `await Task.order("-createdAt").toArray()`
+- `await Task.limit(10).offset(20).toArray()`
+- `await Task.page(2).perPage(25).toArray()`
+- `await Task.where({project: {creatingUser: {reference: "owner-b"}}}).toArray()`
+- `await Task.joins({project: {creatingUser: true}}).where({project: {creatingUser: {reference: "owner-b"}}}).toArray()`
 - `await Task.sort({project: {creatingUser: ["reference", "desc"]}}).toArray()`
 - `await Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}}).toArray()`
+- `await Task.group({project: {account: ["id"]}}).toArray()`
+- `await Task.sort({comments: ["body", "asc"]}).distinct().toArray()`
+- `await Task.pluck("id")`
+- `await Task.pluck({project: ["id"]})`
 - `await User.preload({projects: ["tasks"]}).toArray()`
 - `await Project`
   `.preload(["tasks"])`
   `.select({Project: ["id", "createdAt"], Task: ["updatedAt"]})`
   `.toArray()`
 - `await user.update({...})`
+- `await user.save()` (persists new records and updates existing records)
 - `await user.destroy()`
+- State helpers like `user.isNewRecord()`, `user.isPersisted()`, `user.isChanged()`, and `user.changes()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `project.tasks().loaded()`, and `project.tasks().build({...})`
+- Attachment helpers (when `attachments` are configured), for example `await task.descriptionFile().attach(file)`, `await task.descriptionFile().download()`, and `await task.update({descriptionFile: file})`
+
+Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
+Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
+Frontend-model `joins(...)` supports relationship-object descriptors only (for example `Task.joins({project: {creatingUser: true}})`) and rejects raw SQL join strings.
+Frontend-model `distinct(...)` only accepts booleans (`true` by default) and is applied server-side through the backend query API.
+Frontend-model `pluck(...)` validates attribute/path descriptors against configured model metadata and does not accept SQL fragments.
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
 
 When queries include `select(...)`, backend frontend-model actions only serialize selected attributes for each model class. Reading a non-selected attribute on a frontend model raises `AttributeNotSelectedError`.
 
-You do not need to manually define `frontend-index` / `frontend-find` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
+You do not need to manually define `frontend-index` / `frontend-find` / `frontend-create` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
+
+For backend models, you can declare attachment helpers directly:
+
+```js
+Task.hasManyAttachments("files")
+Task.hasOneAttachment("descriptionFile")
+Task.hasOneAttachment("archivedPdf", {driver: "s3"})
+```
+
+You can also pass a driver class or instance directly on the attachment:
+
+```js
+import NativeDriver from "./storage/native-driver.js"
+
+Task.hasOneAttachment("mobileCache", {driver: NativeDriver})
+// or:
+Task.hasOneAttachment("mobileCache", {driver: new NativeDriver()})
+```
+
+Then use them from backend records:
+
+```js
+await task.descriptionFile().attach({
+  content: "my file content",
+  filename: "file.doc"
+})
+const descriptionFileUrl = await task.descriptionFile().url()
+await task.update({
+  descriptionFile: {
+    contentBase64: Buffer.from("my file content").toString("base64"),
+    filename: "my-doc.doc"
+  }
+})
+```
+
+Configure attachment storage drivers in `Configuration`:
+
+```js
+export default new Configuration({
+  attachments: {
+    defaultDriver: "filesystem",
+    // Path-based attachment input is disabled by default.
+    // Enable explicitly only when backend-side file ingestion is needed.
+    allowPathInput: false,
+    // Optional allowlist when allowPathInput is true.
+    allowedPathPrefixes: ["/var/app/uploads"],
+    drivers: {
+      filesystem: {
+        directory: "/tmp/velocious-attachments"
+      },
+      native: {
+        write: async ({attachmentId, contentBase64, filename}) => {
+          // Persist using your native file API and return a storage key
+          return {storageKey: `${attachmentId}-${filename}`}
+        },
+        read: async ({storageKey}) => {
+          // Return Buffer, Uint8Array, ArrayBuffer or base64 string
+          return await readNativeFile(storageKey)
+        },
+        url: async ({storageKey}) => {
+          return `file://${storageKey}`
+        }
+      },
+      s3: {
+        bucket: "my-bucket",
+        region: "eu-west-1",
+        signedUrlExpiresIn: 3600
+      }
+    }
+  }
+})
+```
+
+If you want backend-side path ingestion, enable it explicitly:
+
+```js
+new Configuration({
+  attachments: {
+    allowPathInput: true,
+    allowedPathPrefixes: ["/var/app/uploads"]
+  }
+})
+```
+
+Then `{path: "..."}`
+inputs are only accepted when the file resolves inside one of the allowed prefixes.
+
+For frontend models, configure `resourceConfig().attachments` and use:
+
+```js
+await frontendTask.update({descriptionFile: file})
+const descriptionFile = await frontendTask.descriptionFile().download()
+const descriptionFileUrl = await frontendTask.descriptionFile().url()
+await frontendTask.attach(file)
+```
+
+Frontend model attachment input does not support `{path: ...}`.
+Use `File`/`Blob`/bytes/`contentBase64` payloads instead.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 
@@ -317,16 +450,14 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
-  baseUrlResolver: () => "http://127.0.0.1:4501",
-  pathPrefixResolver: () => "",
+  url: "http://127.0.0.1:4501/frontend-models",
   credentials: "include"
 })
 ```
 
 Available transport options:
 
-- `baseUrl` / `baseUrlResolver`
-- `pathPrefix` / `pathPrefixResolver`
+- `url` (can also be a relative path like `"/frontend-models"` on web)
 - `credentials`
 - `request` (custom request handler)
 
@@ -441,6 +572,24 @@ Task.translates("description", "subTitle", "title")
 Task.validates("name", {presence: true, uniqueness: true})
 
 export default Task
+```
+
+## Lifecycle callbacks
+
+Register lifecycle callbacks with either a function or an instance method name. Registrations run in order, so you can stack multiple callbacks on the same lifecycle hook.
+
+```js
+class Task extends Record {
+  async validateSomething() {
+    await doSomethingElse()
+  }
+}
+
+Task.beforeValidation(async (task) => {
+  await doSomething(task)
+})
+
+Task.beforeValidation("validateSomething")
 ```
 
 ## Preloading relationships
@@ -779,6 +928,23 @@ const specificTask = await Task.where({
   id: 1,
   project: {nameEn: "Alpha"}
 }).toArray()
+```
+
+### Ransack-style filtering
+
+Use `.ransack(...)` on record queries, record classes, frontend-model queries, and frontend-model classes when you want Rails/Ransack-style predicate keys without hand-writing nested `where(...)` or `search(...)` calls.
+
+Supported predicates include `_eq`, `_not_eq`, `_gt`, `_gteq`, `_lt`, `_lteq`, `_cont`, `_start`, `_end`, `_in`, `_not_in`, and `_null`.
+
+```js
+const tasks = await Task.ransack({
+  name_cont: "deploy",
+  project_project_detail_is_active_eq: true
+}).toArray()
+
+const frontendTasks = await FrontendTask
+  .ransack({name_cont: "deploy", id_in: ["1", "2"]})
+  .toArray()
 ```
 
 ### Raw where clauses
@@ -1344,6 +1510,35 @@ await MyJob.performLaterWithOptions({
 })
 ```
 
+## Scheduled jobs
+
+Velocious can enqueue recurring jobs from the `background-jobs-main` process. Configure them with `scheduledBackgroundJobs` using Sidekiq Scheduler-style `every` arrays:
+
+```js
+import BuildCleanupJob from "./src/jobs/build-cleanup-job.js"
+
+export default new Configuration({
+  // ...
+  scheduledBackgroundJobs: {
+    jobs: {
+      buildCleanup: {
+        class: BuildCleanupJob,
+        every: ["1h", {first_in: "10s"}],
+        options: {forked: false}
+      }
+    }
+  }
+})
+```
+
+Supported schedule syntax:
+
+- `every: "5m"`
+- `every: ["1h", {first_in: "30s"}]`
+- `every: ["1 day", {firstIn: "5 minutes"}]`
+
+`background-jobs-main` owns the schedule and enqueues the configured jobs into the normal Velocious background-jobs queue. The HTTP server does not run scheduled jobs itself.
+
 ## Persistence and retries
 
 Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the job is marked as handed off and the worker reports completion or failure back to the main process.
@@ -1381,7 +1576,7 @@ class UserResource extends BaseResource {
     const currentUser = this.currentUser()
 
     if (currentUser) {
-      this.can("read", User, {id: currentUser.id()})
+      this.can("read", {id: currentUser.id()})
     }
   }
 }
@@ -1423,3 +1618,32 @@ Or require explicit ability passing:
 ```js
 const users = await User.accessibleBy(ability).toArray()
 ```
+
+# Tenant / elevator support
+
+Velocious can resolve a request-scoped tenant and override configured database identifiers per tenant for HTTP routes, websocket subscriptions, and websocket event delivery.
+
+```js
+import Configuration from "velocious/build/src/configuration.js"
+
+export default new Configuration({
+  // ...
+  tenantResolver: async ({params, subscription}) => {
+    const projectSlug = subscription?.params?.project_slug || params.project_slug
+
+    if (!projectSlug) return
+
+    return {
+      databaseIdentifiers: ["auditTenant"],
+      projectSlug
+    }
+  },
+  tenantDatabaseResolver: ({databaseConfiguration, identifier, tenant}) => {
+    if (identifier !== "auditTenant" || !tenant?.projectSlug) return
+
+    return {name: `${databaseConfiguration.name}-${tenant.projectSlug}`}
+  }
+})
+```
+
+Use `configuration.runWithTenant(tenant, callback)` or `Current.tenant()` when custom model/database routing needs to read the active tenant manually.

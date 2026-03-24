@@ -4,6 +4,7 @@ import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tra
 import backendProjects from "./backend-projects.js"
 import BaseResource from "../../../../src/authorization/base-resource.js"
 import Configuration from "../../../../src/configuration.js"
+import FilesystemAttachmentStorageDriver from "../../../../src/database/record/attachments/storage-drivers/filesystem.js"
 import dummyDirectory from "../../dummy-directory.js"
 import fs from "fs/promises"
 import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
@@ -61,12 +62,19 @@ class TaskFrontendModelAbilityResource extends BaseResource {
 
   /** @returns {void} */
   abilities() {
-    this.can(["destroy", "read", "update"], Task)
+    const applyReadDistinctScope = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE === "1"
+
+    if (applyReadDistinctScope) {
+      this.can(["destroy", "update"])
+      this.can("read", (query) => query.distinct(true))
+    } else {
+      this.can(["destroy", "read", "update"])
+    }
 
     const deniedAction = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
 
     if (deniedAction === "destroy" || deniedAction === "read" || deniedAction === "update") {
-      this.cannot(deniedAction, Task)
+      this.cannot(deniedAction)
     }
   }
 }
@@ -81,9 +89,12 @@ class TaskFrontendModelAbilityResource extends BaseResource {
  */
 function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
   const requestPath = request.path().split("?")[0]
-  const isTaskFrontendModelCommand = requestPath === "/velocious/api" && params.modelName === "Task"
+  const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
+  const isSharedFrontendModelApi = requestPath === "/velocious/api" || requestPath === "/frontend-models" || requestPath === "/frontend-models/request"
+  const frontendModelRequests = Array.isArray(params.requests) ? params.requests : [params]
+  const includesTaskSharedRequest = frontendModelRequests.some((requestEntry) => requestEntry?.model === "Task")
 
-  if (!isTaskFrontendModelCommand) return
+  if (!isTaskFrontendModelCommand && !(isSharedFrontendModelApi && includesTaskSharedRequest)) return
 
   return new Ability({
     context: {configuration, params, request, response},
@@ -92,6 +103,14 @@ function resolveTaskFrontendModelAbility({configuration, params, request, respon
 }
 
 const configuration = new Configuration({
+  attachments: {
+    defaultDriver: "filesystem",
+    drivers: {
+      filesystem: {
+        driverClass: FilesystemAttachmentStorageDriver
+      }
+    }
+  },
   abilityResolver: resolveTaskFrontendModelAbility,
   backendProjects,
   database: {

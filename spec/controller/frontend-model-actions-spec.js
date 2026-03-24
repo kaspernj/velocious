@@ -1,1338 +1,923 @@
 // @ts-check
 
-import FrontendModelController from "../../src/frontend-model-controller.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
+import Dummy from "../dummy/index.js"
+import Comment from "../dummy/src/models/comment.js"
+import Project from "../dummy/src/models/project.js"
+import Task from "../dummy/src/models/task.js"
+import User from "../dummy/src/models/user.js"
 
-/** Fake request for controller unit tests. */
-class FakeRequest {
-  /** @param {{httpMethod?: string, path?: string}} [args] */
-  constructor(args = {}) {
-    this._httpMethod = args.httpMethod || "POST"
-    this._path = args.path || "/frontend"
-  }
-
-  /** @returns {string} */
-  httpMethod() { return this._httpMethod }
-
-  /** @returns {string} */
-  path() { return this._path }
-
-  /** @returns {undefined} */
-  header() { return undefined }
-}
-
-/** Fake response for controller unit tests. */
-class FakeResponse {
-  constructor() {
-    this.body = ""
-    this.headers = {}
-    this.statusCode = 200
-  }
-
-  /** @param {string} key @param {string} value */
-  setHeader(key, value) {
-    this.headers[key] = value
-  }
-
-  /** @param {string} body */
-  setBody(body) {
-    this.body = body
-  }
-
-  /** @param {number|string} status */
-  setStatus(status) {
-    this.statusCode = typeof status === "number" ? status : 200
-  }
-
-  /** @returns {number} */
-  getStatusCode() {
-    return this.statusCode
-  }
-
-  /** @param {string} key @param {string} value */
-  addHeader(key, value) {
-    this.headers[key] = value
-  }
-}
+const FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE = "Request failed."
 
 /**
- * @param {object} [args]
- * @param {Record<string, any>} [args.params]
- * @param {string} [args.httpMethod]
- * @param {Record<string, import("../../src/configuration-types.js").FrontendModelResourceConfiguration>} [args.resources]
- * @param {Record<string, any>} [args.modelClasses]
- * @param {any} [args.currentAbility]
- * @param {Partial<import("../../src/configuration-types.js").FrontendModelResourceConfiguration>} [args.resourceConfiguration]
- * @param {import("../../src/configuration-types.js").FrontendModelResourceServerConfiguration} [args.serverConfiguration]
- * @returns {FrontendController}
+ * @param {string} path - Request path.
+ * @param {Record<string, any>} payload - JSON payload.
+ * @returns {Promise<Record<string, any>>} - Parsed response payload.
  */
-function buildController(args = {}) {
-  const request = new FakeRequest({httpMethod: args.httpMethod})
-  const response = new FakeResponse()
-  /** @type {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  const frontendModelResourceConfiguration = {
-    attributes: ["id", "name"],
-    abilities: {
-      destroy: "destroy",
-      find: "read",
-      index: "read",
-      update: "update"
+async function postFrontendModel(path, payload) {
+  const response = await fetch(`http://127.0.0.1:3006${path}`, {
+    body: JSON.stringify(serializeFrontendModelTransportValue(payload)),
+    headers: {
+      "Content-Type": "application/json"
     },
-    path: "/frontend-models",
-    primaryKey: "id",
-    server: args.serverConfiguration,
-    ...args.resourceConfiguration
-  }
-
-  return new FrontendController({
-    action: "frontendIndex",
-    configuration: {
-      getBackendProjects: () => [{
-        path: "/tmp/example",
-        resources: args.resources || {
-          MockFrontendModel: frontendModelResourceConfiguration
-        }
-      }],
-      getCurrentAbility: () => args.currentAbility,
-      getModelClasses: () => args.modelClasses || ({MockFrontendModel})
-    },
-    controller: "frontend-models",
-    params: args.params || {},
-    request,
-    response,
-    viewPath: import.meta.dirname
+    method: "POST"
   })
-}
+  const responseText = await response.text()
+  try {
+    const responseJson = responseText.length > 0 ? JSON.parse(responseText) : {}
 
-/** Test frontend model class for controller action specs. */
-class MockFrontendModel {
-  /** @type {Record<string, any>[]} */
-  static data = [
-    {id: "1", name: "One"},
-    {id: "2", name: "Two"}
-  ]
-  static lastQuery = null
-  static relationshipsMap = {}
+    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(responseJson))
+  } catch (error) {
+    void error
 
-  /**
-   * @returns {Record<string, string>}
-   */
-  static getAttributeNameToColumnNameMap() {
     return {
-      createdAt: "created_at",
-      id: "id",
-      name: "name"
+      errorMessage: responseText,
+      status: "error"
     }
-  }
-
-  /** @param {Record<string, any>} attributes */
-  constructor(attributes) {
-    this._attributes = {...attributes}
-  }
-
-  /**
-   * @returns {Record<string, any>}
-   */
-  static getRelationshipsMap() {
-    return this.relationshipsMap
-  }
-
-  /** @returns {Promise<MockFrontendModel[]>} */
-  static async toArray() {
-    return this.data.map((attributes) => new this(attributes))
-  }
-
-  /** @param {{id: string | number}} args @returns {Promise<MockFrontendModel | null>} */
-  static async findBy({id}) {
-    const attributes = this.data.find((record) => `${record.id}` === `${id}`)
-
-    return attributes ? new this(attributes) : null
-  }
-
-  /**
-   * @returns {MockFrontendModelQuery}
-   */
-  static accessibleFor() {
-    return new MockFrontendModelQuery(this)
-  }
-
-  /**
-   * @returns {{getPreloaded: () => boolean, loaded: () => any}}
-   */
-  getRelationshipByName() {
-    return {
-      getPreloaded: () => false,
-      loaded: () => undefined
-    }
-  }
-
-  /** @returns {Record<string, any>} */
-  attributes() {
-    return {...this._attributes}
-  }
-
-  /** @param {Record<string, any>} attributes */
-  assign(attributes) {
-    Object.assign(this._attributes, attributes)
-  }
-
-  /** @returns {Promise<void>} */
-  async save() {
-    // no-op
-  }
-
-  /** @returns {Promise<void>} */
-  async destroy() {
-    MockFrontendModel.data = MockFrontendModel.data.filter((record) => `${record.id}` !== `${this._attributes.id}`)
-  }
-}
-
-/** Minimal query object for ability-scoped mock model tests. */
-class MockFrontendModelQuery {
-  /**
-   * @param {typeof MockFrontendModel} modelClass
-   */
-  constructor(modelClass) {
-    this.modelClass = modelClass
-    this.conditions = {}
-    this.joinsArgs = []
-    this.preloads = []
-    this.whereSqls = []
-    this.modelClass.lastQuery = this
-  }
-
-  /**
-   * @param {Record<string, any> | string} conditions
-   * @returns {this}
-   */
-  where(conditions) {
-    if (typeof conditions === "string") {
-      this.whereSqls.push(conditions)
-      return this
-    }
-
-    this.conditions = {...this.conditions, ...conditions}
-    return this
-  }
-
-  /**
-   * @param {Record<string, any>} preload
-   * @returns {this}
-   */
-  preload(preload) {
-    this.preloads.push(preload)
-    return this
-  }
-
-  /**
-   * @param {Record<string, any>} _joinObject
-   * @returns {this}
-   */
-  joins(_joinObject) {
-    this.joinsArgs.push(_joinObject)
-    return this
-  }
-
-  /**
-   * @param {...string} path
-   * @returns {string}
-   */
-  getTableReferenceForJoin(...path) {
-    if (path.length === 0) return "mock_frontend_models"
-
-    return path.join("__")
-  }
-
-  /** @returns {{quote: (value: any) => string, quoteColumn: (value: string) => string, quoteTable: (value: string) => string}} */
-  get driver() {
-    return {
-      quote: (value) => JSON.stringify(value),
-      quoteColumn: (value) => `"${value}"`,
-      quoteTable: (value) => `"${value}"`
-    }
-  }
-
-  /** @returns {Promise<MockFrontendModel[]>} */
-  async toArray() {
-    const records = this.modelClass.data.filter((record) => this.matches(record))
-    return records.map((record) => new this.modelClass(record))
-  }
-
-  /**
-   * @param {Record<string, any>} conditions
-   * @returns {Promise<MockFrontendModel | null>}
-   */
-  async findBy(conditions) {
-    const records = this.modelClass.data.filter((record) => this.matches(record))
-    const key = Object.keys(conditions)[0]
-    const value = conditions[key]
-    const found = records.find((record) => `${record[key]}` === `${value}`)
-
-    return found ? new this.modelClass(found) : null
-  }
-
-  /**
-   * @param {string} column
-   * @returns {Promise<any[]>}
-   */
-  async pluck(column) {
-    const records = this.modelClass.data.filter((record) => this.matches(record))
-    return records.map((record) => record[column])
-  }
-
-  /**
-   * @param {Record<string, any>} record
-   * @returns {boolean}
-   */
-  matches(record) {
-    for (const key in this.conditions) {
-      const expectedValue = this.conditions[key]
-
-      if (Array.isArray(expectedValue)) {
-        if (!expectedValue.map((value) => `${value}`).includes(`${record[key]}`)) return false
-      } else if (`${record[key]}` !== `${expectedValue}`) {
-        return false
-      }
-    }
-
-    return true
   }
 }
 
 /**
- * @param {string} deniedAbilityAction
- * @returns {typeof MockFrontendModel}
+ * @param {"destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
+ * @param {Record<string, any>} payload - Command payload.
+ * @returns {Promise<Record<string, any>>} - Command response payload.
  */
-function buildAbilityDeniedModelClass(deniedAbilityAction) {
-  /** Frontend model class that can deny one ability action through accessibleFor scopes. */
-  class AbilityDeniedFrontendModel extends MockFrontendModel {
-    /** @type {string[]} */
-    static seenAbilityActions = []
+async function postSharedTaskFrontendModelCommand(commandType, payload) {
+  const response = await postFrontendModel("/velocious/api", {
+    modelName: "Task",
+    requests: [{
+      commandType,
+      model: "Task",
+      payload,
+      requestId: "request-1"
+    }]
+  })
 
-    /**
-     * @param {string} abilityAction
-     * @returns {MockFrontendModelQuery}
-     */
-    static accessibleFor(abilityAction) {
-      this.seenAbilityActions.push(abilityAction)
-      const query = new MockFrontendModelQuery(this)
-
-      if (abilityAction === deniedAbilityAction) {
-        query.matches = () => false
-      }
-
-      return query
-    }
-  }
-
-  return AbilityDeniedFrontendModel
+  return /** @type {Record<string, any>} */ (response.responses?.[0]?.response || response)
 }
 
-/** Test controller using built-in frontend model actions. */
-class FrontendController extends FrontendModelController {}
+/**
+ * @param {"destroy" | "read" | "update" | undefined} deniedAbilityAction - Ability action to deny.
+ * @param {() => Promise<void>} callback - Callback.
+ * @returns {Promise<void>}
+ */
+async function withDeniedTaskAbilityAction(deniedAbilityAction, callback) {
+  const previousDeniedAction = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
 
-describe("Controller frontend model actions", () => {
+  try {
+    process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION = deniedAbilityAction
+    await callback()
+  } finally {
+    if (previousDeniedAction === undefined) {
+      delete process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION
+    } else {
+      process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION = previousDeniedAction
+    }
+  }
+}
+
+/**
+ * @param {() => Promise<void>} callback - Callback.
+ * @returns {Promise<void>}
+ */
+async function withTaskReadDistinctAbilityScope(callback) {
+  const previousDistinctScope = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE
+
+  try {
+    process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE = "1"
+    await callback()
+  } finally {
+    if (previousDistinctScope === undefined) {
+      delete process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE
+    } else {
+      process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_READ_DISTINCT_SCOPE = previousDistinctScope
+    }
+  }
+}
+
+/**
+ * @param {string} name - Task name.
+ * @returns {Promise<Task>} - Created task.
+ */
+async function createTask(name) {
+  const project = await Project.create({name: `Project for ${name}`})
+
+  return /** @type {Task} */ (await Task.create({
+    name,
+    projectId: project.id()
+  }))
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {string} args.projectName - Project name.
+ * @param {string} args.taskName - Task name.
+ * @param {string} [args.creatingUserReference] - Optional project owner reference.
+ * @returns {Promise<Task>} - Created task model.
+ */
+async function createTaskWithProject({projectName, taskName, creatingUserReference}) {
+  const project = await Project.create({
+    creatingUserReference,
+    name: projectName
+  })
+
+  return /** @type {Task} */ (await Task.create({
+    name: taskName,
+    projectId: project.id()
+  }))
+}
+
+describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+  it("does not override scoped distinct when distinct param is omitted", async () => {
+    await withTaskReadDistinctAbilityScope(async () => {
+      await Dummy.run(async () => {
+        const task = await createTask(`Distinct scoped ${Date.now()}`)
+
+        await Comment.create({body: "Scoped comment A", taskId: task.id()})
+        await Comment.create({body: "Scoped comment B", taskId: task.id()})
+
+        const payload = await postSharedTaskFrontendModelCommand("index", {
+          searches: [{column: "id", operator: "gteq", path: ["comments"], value: 1}],
+          where: {id: task.id()}
+        })
+
+        const occurrences = payload.models.filter((model) => model.id === task.id()).length
+
+        expect(payload.status).toEqual("success")
+        expect(occurrences).toEqual(1)
+      })
+    })
+  })
+
   it("returns models from frontendIndex", async () => {
-    MockFrontendModel.data = [
-      {id: "1", name: "One"},
-      {id: "2", name: "Two"}
-    ]
+    await Dummy.run(async () => {
+      await createTask("Index Alpha")
+      await createTask("Index Beta")
 
-    const controller = buildController()
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        sort: "name asc"
+      })
 
-    await controller.frontendIndex()
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Index Alpha", "Index Beta"])
+      expect(payload.models[0].identifier).toMatch(/^task-/)
+    })
+  })
 
-    const payload = JSON.parse(controller.response().body)
+  it("serializes declared column-backed attributes through model methods", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Boolean normalization task")
+      await task.update({isDone: true})
 
-    expect(payload).toEqual({
-      models: [
-        {id: "1", name: "One"},
-        {id: "2", name: "Two"}
-      ],
-      status: "success"
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0].isDone).toEqual(true)
+    })
+  })
+
+  it("handles shared frontend-model API batch requests by model name", async () => {
+    await Dummy.run(async () => {
+      await createTask("Batch Alpha")
+      await createTask("Batch Beta")
+
+      const payload = await postFrontendModel("/velocious/api", {
+        requests: [
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {sort: "name asc"},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.responses.length).toEqual(1)
+      expect(payload.responses[0].requestId).toEqual("request-1")
+      expect(payload.responses[0].response.status).toEqual("success")
+      expect(payload.responses[0].response.models.map((model) => model.name)).toEqual(["Batch Alpha", "Batch Beta"])
+    })
+  })
+
+  it("returns client-safe errors from shared frontend-model API when command execution fails", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/velocious/api", {
+        requests: [
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {distinct: "1 OR 1=1"},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.responses.length).toEqual(1)
+      expect(payload.responses[0].response.status).toEqual("error")
+      expect(payload.responses[0].response.errorMessage).toMatch(/Invalid distinct/)
+    })
+  })
+
+  it("returns generic client-safe errors from shared frontend-model API for unexpected failures", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/velocious/api", {
+        requests: [
+          {
+            commandType: "index",
+            model: "UnknownModel",
+            payload: {},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.responses.length).toEqual(1)
+      expect(payload.responses[0].response.status).toEqual("error")
+      expect(payload.responses[0].response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
     })
   })
 
   it("applies preload params to frontendIndex query", async () => {
-    MockFrontendModel.data = [{id: "1", name: "One"}]
+    await Dummy.run(async () => {
+      const task = await createTask("Preload Task")
 
-    const controller = buildController({
-      params: {
-        preload: {
-          tasks: ["comments"]
-        }
-      }
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        preload: {project: true},
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
     })
-
-    await controller.frontendIndex()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload).toEqual({
-      models: [{id: "1", name: "One"}],
-      status: "success"
-    })
-    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
-      {
-        tasks: {
-          comments: true
-        }
-      }
-    ])
   })
 
   it("merges nested preload entries from array shorthand", async () => {
-    MockFrontendModel.data = [{id: "1", name: "One"}]
+    await Dummy.run(async () => {
+      const task = await createTask("Merged preload task")
 
-    const controller = buildController({
-      params: {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
         preload: [
-          {tasks: ["comments"]},
-          {tasks: ["labels"]}
-        ]
-      }
+          {project: ["tasks"]},
+          {project: ["projectDetail"]}
+        ],
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
     })
+  })
 
-    await controller.frontendIndex()
+  it("applies limit, offset, perPage, and page params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      await createTask("Page Alpha")
+      await createTask("Page Bravo")
 
-    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
-      {
-        tasks: {
-          comments: true,
-          labels: true
-        }
-      }
-    ])
+      const limitOffsetPayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        limit: 1,
+        offset: 1,
+        sort: "name asc"
+      })
+      const pagePayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        page: 2,
+        perPage: 1,
+        sort: "name asc"
+      })
+
+      expect(limitOffsetPayload.models.map((model) => model.name)).toEqual(["Page Bravo"])
+      expect(pagePayload.models.map((model) => model.name)).toEqual(["Page Bravo"])
+    })
+  })
+
+  it("applies distinct params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask(`Distinct Controller ${Date.now()}`)
+
+      await Comment.create({body: "Distinct comment A", taskId: task.id()})
+      await Comment.create({body: "Distinct comment B", taskId: task.id()})
+
+      const withoutDistinctPayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        searches: [{column: "id", operator: "gteq", path: ["comments"], value: 1}]
+      })
+      const withDistinctPayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        distinct: true,
+        searches: [{column: "id", operator: "gteq", path: ["comments"], value: 1}]
+      })
+
+      const withoutDistinctCount = withoutDistinctPayload.models.filter((model) => model.id === task.id()).length
+      const withDistinctCount = withDistinctPayload.models.filter((model) => model.id === task.id()).length
+
+      expect(withoutDistinctCount).toEqual(2)
+      expect(withDistinctCount).toEqual(1)
+    })
+  })
+
+  it("rejects non-boolean distinct params on frontendIndex", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        distinct: "1 OR 1=1"
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Invalid distinct/)
+    })
+  })
+
+  it("rejects non-numeric pagination params on frontendIndex", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        limit: "1; DROP TABLE accounts"
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Invalid limit/)
+    })
   })
 
   it("filters serialized frontendIndex attributes by select map", async () => {
-    MockFrontendModel.data = [
-      {email: "one@example.com", id: "1", name: "One"},
-      {email: "two@example.com", id: "2", name: "Two"}
-    ]
+    await Dummy.run(async () => {
+      const task = await createTask("Select Task")
 
-    const controller = buildController({
-      params: {
-        select: {
-          MockFrontendModel: ["id"]
-        }
-      }
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        select: {Task: ["id"]},
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.id)).toEqual([task.id()])
     })
+  })
 
-    await controller.frontendIndex()
+  it("treats select array shorthand as root-model attributes", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Select Array Task")
+      const baselinePayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: task.id()}
+      })
 
-    const payload = JSON.parse(controller.response().body)
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: {project: true},
+        select: ["id", "createdAt"],
+        where: {id: task.id()}
+      })
 
-    expect(payload).toEqual({
-      models: [
-        {
-          id: "1"
-        },
-        {
-          id: "2"
-        }
-      ],
-      status: "success"
+      expect(baselinePayload.status).toEqual("success")
+      expect(baselinePayload.models.length).toEqual(1)
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.id)).toEqual([task.id()])
+      const baselineCreatedAt = baselinePayload.models[0].createdAt instanceof Date
+        ? baselinePayload.models[0].createdAt.toISOString()
+        : baselinePayload.models[0].createdAt
+      const selectedCreatedAt = payload.models[0].createdAt instanceof Date
+        ? payload.models[0].createdAt.toISOString()
+        : payload.models[0].createdAt
+
+      expect(selectedCreatedAt).toEqual(baselineCreatedAt)
+      expect(payload.models[0].name).toEqual(undefined)
     })
   })
 
   it("applies search params to frontendIndex query", async () => {
-    MockFrontendModel.data = [{id: "1", name: "One"}]
+    await Dummy.run(async () => {
+      await createTask("Search Alpha")
+      await createTask("Search Beta")
 
-    const controller = buildController({
-      params: {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
         searches: [
           {
-            column: "createdAt",
-            operator: "gteq",
+            column: "name",
+            operator: "eq",
             path: [],
-            value: "2026-02-24T10:00:00.000Z"
+            value: "Search Beta"
           }
         ]
-      }
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Search Beta"])
     })
-
-    await controller.frontendIndex()
-
-    expect(MockFrontendModel.lastQuery?.whereSqls).toEqual([
-      "\"mock_frontend_models\".\"created_at\" >= \"2026-02-24T10:00:00.000Z\""
-    ])
   })
 
   it("applies relationship-path search params to frontendIndex query", async () => {
-    MockFrontendModel.data = [{id: "1", name: "One"}]
+    await Dummy.run(async () => {
+      const taskA = await createTaskWithProject({projectName: "Search Project A", taskName: "Task A"})
+      const taskB = await createTaskWithProject({projectName: "Search Project B", taskName: "Task B"})
 
-    class MockAccountModel {
-      /**
-       * @returns {Record<string, string>}
-       */
-      static getAttributeNameToColumnNameMap() {
-        return {
-          createdAt: "created_at"
-        }
-      }
-
-      /**
-       * @returns {Record<string, any>}
-       */
-      static getRelationshipsMap() {
-        return {}
-      }
-    }
-
-    class MockAccountUserModel {
-      /**
-       * @returns {Record<string, string>}
-       */
-      static getAttributeNameToColumnNameMap() {
-        return {}
-      }
-
-      /**
-       * @returns {Record<string, any>}
-       */
-      static getRelationshipsMap() {
-        return {
-          account: {
-            getTargetModelClass: () => MockAccountModel
-          }
-        }
-      }
-    }
-
-    MockFrontendModel.relationshipsMap = {
-      accountUsers: {
-        getTargetModelClass: () => MockAccountUserModel
-      }
-    }
-
-    const controller = buildController({
-      params: {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
         searches: [
           {
-            column: "createdAt",
-            operator: "gteq",
-            path: ["accountUsers", "account"],
-            value: "2026-02-24T10:00:00.000Z"
+            column: "id",
+            operator: "eq",
+            path: ["project"],
+            value: taskB.projectId()
           }
         ]
-      }
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Task B"])
+      expect(payload.models[0].id).toEqual(taskB.id())
+      expect(payload.models.find((model) => model.id === taskA.id())).toEqual(undefined)
     })
+  })
 
-    await controller.frontendIndex()
+  it("applies like search params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      await createTask("Ransack Alpha")
+      await createTask("Ransack Beta")
 
-    expect(MockFrontendModel.lastQuery?.joinsArgs).toEqual([
-      {
-        accountUsers: {
-          account: {}
-        }
-      }
-    ])
-    expect(MockFrontendModel.lastQuery?.whereSqls).toEqual([
-      "\"accountUsers__account\".\"created_at\" >= \"2026-02-24T10:00:00.000Z\""
-    ])
-    MockFrontendModel.relationshipsMap = {}
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        searches: [
+          {
+            column: "name",
+            operator: "like",
+            path: [],
+            value: "%Beta%"
+          }
+        ]
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Ransack Beta"])
+    })
+  })
+
+  it("applies joins params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Join filter task")
+
+      await Comment.create({body: "Join comment A", taskId: task.id()})
+      await Comment.create({body: "Join comment B", taskId: task.id()})
+
+      const payloadWithoutJoins = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: task.id()}
+      })
+      const payloadWithJoins = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: {comments: true},
+        where: {id: task.id()}
+      })
+
+      const withoutJoinsCount = payloadWithoutJoins.models.filter((model) => model.id === task.id()).length
+      const withJoinsCount = payloadWithJoins.models.filter((model) => model.id === task.id()).length
+
+      expect(payloadWithoutJoins.status).toEqual("success")
+      expect(payloadWithJoins.status).toEqual("success")
+      expect(withoutJoinsCount).toEqual(1)
+      expect(withJoinsCount).toEqual(2)
+    })
+  })
+
+  it("supports nested joins params without duplicating parent joins", async () => {
+    await Dummy.run(async () => {
+      await User.create({
+        email: "nested-join-owner@example.com",
+        encryptedPassword: "secret",
+        reference: "nested-join-owner"
+      })
+      const task = await createTaskWithProject({
+        creatingUserReference: "nested-join-owner",
+        projectName: "Nested join project",
+        taskName: "Nested join task"
+      })
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: {
+          project: {
+            creatingUser: true
+          }
+        },
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.id)).toEqual([task.id()])
+    })
+  })
+
+  it("rejects raw string joins params", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        joins: "LEFT JOIN comments ON comments.task_id = tasks.id"
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Invalid joins type/)
+    })
+  })
+
+  it("rejects unsafe string group params", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        group: "id; DROP TABLE accounts"
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Invalid group column/)
+    })
+  })
+
+  it("returns plucked values from frontendIndex", async () => {
+    await Dummy.run(async () => {
+      const alphaTask = await createTask("Pluck Alpha")
+      const betaTask = await createTask("Pluck Beta")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        pluck: ["id", "name"],
+        sort: "name asc",
+        where: {id: [alphaTask.id(), betaTask.id()]}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.values.length).toEqual(2)
+      expect(payload.values.map((row) => row[0]).sort((a, b) => a - b)).toEqual([alphaTask.id(), betaTask.id()].sort((a, b) => a - b))
+    })
+  })
+
+  it("applies relationship-path pluck params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      const firstTask = await createTaskWithProject({projectName: "Pluck project A", taskName: "Pluck relation A"})
+      const secondTask = await createTaskWithProject({projectName: "Pluck project B", taskName: "Pluck relation B"})
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        pluck: {project: ["id"]},
+        sort: "name asc",
+        where: {id: [firstTask.id(), secondTask.id()]}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.values.length).toEqual(2)
+      expect(payload.values[0]).not.toEqual(payload.values[1])
+    })
+  })
+
+  it("reuses existing joined paths when pluck path overlaps search and sort joins", async () => {
+    await Dummy.run(async () => {
+      const firstTask = await createTaskWithProject({projectName: "Overlap project A", taskName: "Overlap task A"})
+      const secondTask = await createTaskWithProject({projectName: "Overlap project B", taskName: "Overlap task B"})
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        pluck: {project: ["id"]},
+        searches: [
+          {
+            column: "id",
+            operator: "gteq",
+            path: ["project"],
+            value: 1
+          }
+        ],
+        sort: {project: ["id", "asc"]},
+        where: {id: [firstTask.id(), secondTask.id()]}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.values.length).toEqual(2)
+    })
+  })
+
+  it("rejects unsafe string pluck params", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        pluck: "id; DROP TABLE accounts"
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Invalid pluck column/)
+    })
   })
 
   it("returns one model from frontendFind", async () => {
-    MockFrontendModel.data = [{id: "2", name: "Two"}]
+    await Dummy.run(async () => {
+      const task = await createTask("Find task")
+      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {id: task.id()})
 
-    const controller = buildController({params: {id: "2"}})
-
-    await controller.frontendFind()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload).toEqual({
-      model: {id: "2", name: "Two"},
-      status: "success"
+      expect(payload.status).toEqual("success")
+      expect(payload.model.id).toEqual(task.id())
+      expect(payload.model.name).toEqual("Find task")
     })
   })
 
   it("applies preload params to frontendFind query", async () => {
-    MockFrontendModel.data = [{id: "2", name: "Two"}]
+    await Dummy.run(async () => {
+      const task = await createTask("Find preload task")
 
-    const controller = buildController({
-      params: {
-        id: "2",
-        preload: {
-          project: true
-        }
-      }
+      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {
+        id: task.id(),
+        preload: {project: true}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.__preloadedRelationships.project).toEqual(null)
     })
-
-    await controller.frontendFind()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload).toEqual({
-      model: {id: "2", name: "Two"},
-      status: "success"
-    })
-    expect(MockFrontendModel.lastQuery?.preloads).toEqual([
-      {
-        project: true
-      }
-    ])
   })
 
   it("returns error payload when frontendFind record is missing", async () => {
-    MockFrontendModel.data = []
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {id: 404})
 
-    const controller = buildController({params: {id: "404"}})
-
-    await controller.frontendFind()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload.status).toEqual("error")
-    expect(payload.errorMessage).toEqual("MockFrontendModel not found.")
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual("Task not found.")
+    })
   })
 
   it("returns no models from frontendIndex when read ability scope denies access", async () => {
-    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("read")
-    AbilityDeniedFrontendModel.data = [{id: "1", name: "One"}]
-    const controller = buildController({
-      modelClasses: {AbilityDeniedFrontendModel},
-      resources: {
-        AbilityDeniedFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id", "name"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        }
-      }
+    await withDeniedTaskAbilityAction("read", async () => {
+      await Dummy.run(async () => {
+        await createTask("Denied index")
+
+        const payload = await postSharedTaskFrontendModelCommand("index", {})
+
+        expect(payload.status).toEqual("success")
+        expect(payload.models).toEqual([])
+      })
     })
-
-    await controller.frontendIndex()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload).toEqual({
-      models: [],
-      status: "success"
-    })
-    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["read"])
   })
 
   it("returns not found from frontendFind when read ability scope denies access", async () => {
-    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("read")
-    AbilityDeniedFrontendModel.data = [{id: "2", name: "Two"}]
-    const controller = buildController({
-      modelClasses: {AbilityDeniedFrontendModel},
-      params: {id: "2"},
-      resources: {
-        AbilityDeniedFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id", "name"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        }
-      }
+    await withDeniedTaskAbilityAction("read", async () => {
+      await Dummy.run(async () => {
+        const task = await createTask("Denied find")
+        const payload = await postSharedTaskFrontendModelCommand("find", {id: task.id()})
+
+        expect(payload.status).toEqual("error")
+        expect(payload.errorMessage).toEqual("Task not found.")
+      })
     })
-
-    await controller.frontendFind()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload.status).toEqual("error")
-    expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
-    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["read"])
   })
 
   it("returns not found from frontendUpdate when update ability scope denies access", async () => {
-    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("update")
-    AbilityDeniedFrontendModel.data = [{id: "2", name: "Two"}]
-    const controller = buildController({
-      modelClasses: {AbilityDeniedFrontendModel},
-      params: {attributes: {name: "Changed"}, id: "2"},
-      resources: {
-        AbilityDeniedFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id", "name"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        }
-      }
+    await withDeniedTaskAbilityAction("update", async () => {
+      await Dummy.run(async () => {
+        const task = await createTask("Denied update")
+
+        const payload = await postSharedTaskFrontendModelCommand("update", {
+          attributes: {name: "Changed"},
+          id: task.id()
+        })
+
+        expect(payload.status).toEqual("error")
+        expect(payload.errorMessage).toEqual("Task not found.")
+      })
     })
-
-    await controller.frontendUpdate()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload.status).toEqual("error")
-    expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
-    expect(AbilityDeniedFrontendModel.data).toEqual([{id: "2", name: "Two"}])
-    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["update"])
   })
 
   it("returns not found from frontendDestroy when destroy ability scope denies access", async () => {
-    const AbilityDeniedFrontendModel = buildAbilityDeniedModelClass("destroy")
-    AbilityDeniedFrontendModel.data = [{id: "2", name: "Two"}]
-    const controller = buildController({
-      modelClasses: {AbilityDeniedFrontendModel},
-      params: {id: "2"},
-      resources: {
-        AbilityDeniedFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id", "name"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        }
-      }
+    await withDeniedTaskAbilityAction("destroy", async () => {
+      await Dummy.run(async () => {
+        const task = await createTask("Denied destroy")
+
+        const payload = await postSharedTaskFrontendModelCommand("destroy", {
+          id: task.id()
+        })
+
+        expect(payload.status).toEqual("error")
+        expect(payload.errorMessage).toEqual("Task not found.")
+      })
     })
-
-    await controller.frontendDestroy()
-
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload.status).toEqual("error")
-    expect(payload.errorMessage).toEqual("AbilityDeniedFrontendModel not found.")
-    expect(AbilityDeniedFrontendModel.data).toEqual([{id: "2", name: "Two"}])
-    expect(AbilityDeniedFrontendModel.seenAbilityActions).toEqual(["destroy"])
   })
 
-  it("runs server beforeAction callback", async () => {
-    let beforeActionCalls = 0
-    const controller = buildController({
-      serverConfiguration: {
-        beforeAction: async () => {
-          beforeActionCalls += 1
-          return true
-        }
-      }
+  it("updates models from frontendUpdate", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Update me")
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+        attributes: {name: "Updated task"},
+        id: task.id()
+      })
+      const persisted = await Task.find(task.id())
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.name).toEqual("Updated task")
+      expect(persisted.name()).toEqual("Updated task")
     })
-
-    await controller.frontendIndex()
-
-    expect(beforeActionCalls).toEqual(1)
   })
 
-  it("supports server records callback", async () => {
-    MockFrontendModel.data = [{id: "9", name: "Nine"}]
+  it("rejects computed read-only attributes on frontendUpdate", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Update computed attr")
 
-    const controller = buildController({
-      serverConfiguration: {
-        records: async () => [new MockFrontendModel({id: "9", name: "Nine"})]
-      }
-    })
-
-    await controller.frontendIndex()
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload.models).toEqual([{id: "9", name: "Nine"}])
-  })
-
-  it("supports server serialize callback", async () => {
-    MockFrontendModel.data = [{id: "1", name: "One"}]
-
-    const controller = buildController({
-      params: {id: "1"},
-      serverConfiguration: {
-        serialize: async ({model}) => {
-          return {
-            id: model.attributes().id,
-            label: model.attributes().name
-          }
-        }
-      }
-    })
-
-    await controller.frontendFind()
-    const payload = JSON.parse(controller.response().body)
-
-    expect(payload.model).toEqual({id: "1", label: "One"})
-  })
-
-  it("deserializes Date and undefined markers from request params", async () => {
-    MockFrontendModel.data = [{id: "1", name: "One"}]
-    const seen = {attributes: null}
-    const controller = buildController({
-      params: {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
         attributes: {
-          dueAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
-          optionalValue: {__velocious_type: "undefined"}
+          identifier: "task-overridden",
+          name: "Updated task"
         },
-        id: "1"
-      },
-      serverConfiguration: {
-        update: async ({attributes, model}) => {
-          seen.attributes = attributes
-          model.assign({
-            id: model.attributes().id,
-            name: "Updated"
-          })
-          return model
-        }
-      }
+        id: task.id()
+      })
+      const persisted = await Task.find(task.id())
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(persisted.name()).toEqual("Update computed attr")
+      expect(persisted.identifier()).toEqual(`task-${task.id()}`)
     })
-
-    await controller.frontendUpdate()
-
-    expect(seen.attributes?.dueAt instanceof Date).toEqual(true)
-    expect(seen.attributes?.dueAt.toISOString()).toEqual("2026-02-20T12:00:00.000Z")
-    expect("optionalValue" in /** @type {Record<string, any>} */ (seen.attributes)).toEqual(true)
-    expect(seen.attributes?.optionalValue).toEqual(undefined)
   })
 
-  it("serializes Date, undefined, bigint and non-finite number values in frontend JSON responses", async () => {
-    MockFrontendModel.data = [{id: "1", name: "One"}]
-    const createdAt = new Date("2026-02-20T12:00:00.000Z")
+  it("updates models from frontendUpdate with has-one attachment payload", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Update attachment")
 
-    const controller = buildController({
-      params: {id: "1"},
-      serverConfiguration: {
-        serialize: async ({model}) => {
-          return {
-            createdAt,
-            hugeCounter: 9007199254740993n,
-            id: model.attributes().id,
-            missing: undefined,
-            notANumber: Number.NaN,
-            positiveInfinity: Number.POSITIVE_INFINITY
+      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+        attributes: {
+          descriptionFile: {
+            contentBase64: Buffer.from("attachment-content").toString("base64"),
+            filename: "my-doc.doc"
           }
-        }
-      }
-    })
+        },
+        id: task.id()
+      })
 
-    await controller.frontendFind()
-    const payload = JSON.parse(controller.response().body)
+      const downloadedAttachment = await task.descriptionFile().download()
 
-    expect(payload).toEqual({
-      model: {
-        createdAt: {__velocious_type: "date", value: "2026-02-20T12:00:00.000Z"},
-        hugeCounter: {__velocious_type: "bigint", value: "9007199254740993"},
-        id: "1",
-        missing: {__velocious_type: "undefined"},
-        notANumber: {__velocious_type: "number", value: "NaN"},
-        positiveInfinity: {__velocious_type: "number", value: "Infinity"}
-      },
-      status: "success"
+      expect(payload.status).toEqual("success")
+      expect(downloadedAttachment.filename()).toEqual("my-doc.doc")
+      expect(downloadedAttachment.content().toString()).toEqual("attachment-content")
     })
   })
 
-  it("fails when resource abilities are missing", async () => {
-    const controller = buildController({
-      resourceConfiguration: {
-        abilities: undefined
-      }
-    })
+  it("attaches and downloads files through frontend-model attachment endpoints", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Attach endpoint")
+      const attachPayload = await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          contentBase64: Buffer.from("endpoint-content").toString("base64"),
+          filename: "endpoint.doc"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
+      const downloadPayload = await postFrontendModel("/api/frontend-models/tasks/download", {
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
 
-    await expect(async () => {
-      await controller.frontendIndex()
-    }).toThrow(/must define an 'abilities' object/)
-  })
-
-  it("serializes missing preloaded singular relationships as null", async () => {
-    const controller = buildController()
-    const fakeModelClass = {
-      getRelationshipsMap() {
-        return {projectDetail: {}}
-      }
-    }
-    const fakeModel = {
-      constructor: fakeModelClass,
-      attributes() {
-        return {id: "1", name: "One"}
-      },
-      getRelationshipByName() {
-        return {
-          getPreloaded() {
-            return true
-          },
-          loaded() {
-            return undefined
-          }
-        }
-      }
-    }
-    const payload = await controller.serializeFrontendModel(/** @type {any} */ (fakeModel))
-
-    expect(payload).toEqual({
-      __preloadedRelationships: {
-        projectDetail: null
-      },
-      id: "1",
-      name: "One"
+      expect(attachPayload.status).toEqual("success")
+      expect(attachPayload.model.id).toEqual(task.id())
+      expect(downloadPayload.status).toEqual("success")
+      expect(downloadPayload.attachment.filename).toEqual("endpoint.doc")
+      expect(Buffer.from(downloadPayload.attachment.contentBase64, "base64").toString()).toEqual("endpoint-content")
+      expect(typeof downloadPayload.attachment.url).toEqual("string")
+      expect(downloadPayload.attachment.url.startsWith("file://")).toEqual(true)
     })
   })
 
-  it("filters serialized preloaded model attributes by select map", async () => {
-    /** Related model class used in select-map preload serialization test. */
-    class RelatedFrontendModel {
-      /** @param {Record<string, any>} attributes */
-      constructor(attributes) {
-        this._attributes = attributes
-      }
+  it("returns attachment URL through frontend-model URL endpoint", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Attachment URL endpoint")
 
-      /** @returns {Record<string, any>} */
-      attributes() { return this._attributes }
+      await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          contentBase64: Buffer.from("url-endpoint-content").toString("base64"),
+          filename: "url-endpoint.doc"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
 
-      /** @returns {Record<string, any>} */
-      static getRelationshipsMap() {
-        return {}
-      }
-    }
+      const urlPayload = await postFrontendModel("/api/frontend-models/tasks/url", {
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
 
-    /** Parent model class used in select-map preload serialization test. */
-    class ParentFrontendModel {
-      /** @returns {Record<string, any>} */
-      static getRelationshipsMap() {
-        return {related: {}}
-      }
-    }
-
-    const controller = buildController({
-      params: {
-        select: {
-          ParentFrontendModel: ["id"],
-          RelatedFrontendModel: ["value"]
-        }
-      }
-    })
-    const relatedModel = new RelatedFrontendModel({id: "related-1", value: "Allowed one"})
-    const parentModel = {
-      constructor: ParentFrontendModel,
-      attributes() {
-        return {id: "1", name: "Parent"}
-      },
-      getRelationshipByName() {
-        return {
-          getPreloaded() {
-            return true
-          },
-          loaded() {
-            return relatedModel
-          }
-        }
-      }
-    }
-
-    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
-
-    expect(payload).toEqual({
-      __preloadedRelationships: {
-        related: {
-          value: "Allowed one"
-        }
-      },
-      id: "1"
+      expect(urlPayload.status).toEqual("success")
+      expect(typeof urlPayload.url).toEqual("string")
+      expect(urlPayload.url.startsWith("file://")).toEqual(true)
     })
   })
 
-  it("does not serialize unauthorized nested preloaded relationships", async () => {
-    /** Related model class used in nested authorization serialization test. */
-    class RelatedFrontendModel {
-      static whereCalls = 0
-      static pluckCalls = 0
+  it("rejects path attachment input from frontend endpoints by default", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Path input blocked")
 
-      /** @param {Record<string, any>} attributes */
-      constructor(attributes) {
-        this._attributes = attributes
-      }
+      const payload = await postFrontendModel("/api/frontend-models/tasks/attach", {
+        attachment: {
+          filename: "file.txt",
+          path: "/etc/passwd"
+        },
+        attachmentName: "descriptionFile",
+        id: task.id()
+      })
 
-      /** @returns {Record<string, any>} */
-      attributes() { return this._attributes }
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+    })
+  })
 
-      /** @returns {Record<string, any>} */
-      static getRelationshipsMap() {
-        return {}
-      }
+  it("destroys models from frontendDestroy", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Destroy me")
 
-      /**
-       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
-       */
-      static accessibleFor() {
-        const RelatedClass = this
+      const payload = await postFrontendModel("/api/frontend-models/tasks/destroy", {id: task.id()})
+      const persisted = await Task.findBy({id: task.id()})
 
-        return {
-          where: ({id}) => {
-            RelatedClass.whereCalls += 1
+      expect(payload.status).toEqual("success")
+      expect(persisted).toEqual(null)
+    })
+  })
 
-            return {
-              pluck: async (column) => {
-                void column
-                RelatedClass.pluckCalls += 1
+  it("returns error when frontendFind id is missing", async () => {
+    await Dummy.run(async () => {
+      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {})
 
-                return id.filter((entry) => entry === "allowed")
-              }
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toEqual("Expected model id.")
+    })
+  })
+
+  it("applies relationship-path where params to frontendIndex query", async () => {
+    await Dummy.run(async () => {
+      await User.create({
+        email: "where-owner-a@example.com",
+        encryptedPassword: "secret",
+        reference: "where-owner-a"
+      })
+      await User.create({
+        email: "where-owner-b@example.com",
+        encryptedPassword: "secret",
+        reference: "where-owner-b"
+      })
+      await createTaskWithProject({
+        creatingUserReference: "where-owner-a",
+        projectName: "Where Owner Project A",
+        taskName: "Where Owner Task A"
+      })
+      await createTaskWithProject({
+        creatingUserReference: "where-owner-b",
+        projectName: "Where Owner Project B",
+        taskName: "Where Owner Task B"
+      })
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {
+          project: {
+            creatingUser: {
+              reference: "where-owner-b"
             }
           }
         }
-      }
-    }
+      })
 
-    const controller = buildController({
-      currentAbility: {},
-      modelClasses: {
-        MockFrontendModel,
-        RelatedFrontendModel
-      },
-      resources: {
-        MockFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        },
-        RelatedFrontendModel: {
-          abilities: {find: "read", index: "read"},
-          attributes: ["id"],
-          path: "/related-frontend-models",
-          primaryKey: "id"
-        }
-      }
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Where Owner Task B"])
     })
-
-    const fakeParentModelClass = {
-      getRelationshipsMap() {
-        return {related: {}}
-      }
-    }
-    const deniedRelated = new RelatedFrontendModel({id: "denied"})
-    const parentModel = {
-      constructor: fakeParentModelClass,
-      attributes() {
-        return {id: "1", name: "One"}
-      },
-      getRelationshipByName() {
-        return {
-          getPreloaded() {
-            return true
-          },
-          loaded() {
-            return deniedRelated
-          }
-        }
-      }
-    }
-
-    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
-
-    expect(payload).toEqual({
-      __preloadedRelationships: {
-        related: null
-      },
-      id: "1",
-      name: "One"
-    })
-    expect(RelatedFrontendModel.whereCalls).toEqual(1)
-    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
   })
 
-  it("authorizes preloaded has-many relationships in bulk", async () => {
-    /** Related model class used in nested bulk authorization serialization test. */
-    class RelatedFrontendModel {
-      static whereCalls = 0
-      static pluckCalls = 0
+  it("treats plain-object values on root where columns as values", async () => {
+    await Dummy.run(async () => {
+      await createTask("Object where value")
 
-      /** @param {Record<string, any>} attributes */
-      constructor(attributes) {
-        this._attributes = attributes
-      }
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        where: {id: {raw: 1}}
+      })
 
-      /** @returns {Record<string, any>} */
-      attributes() { return this._attributes }
-
-      /** @returns {Record<string, any>} */
-      static getRelationshipsMap() {
-        return {}
-      }
-
-      /**
-       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
-       */
-      static accessibleFor() {
-        const RelatedClass = this
-
-        return {
-          where: ({id}) => {
-            RelatedClass.whereCalls += 1
-
-            return {
-              pluck: async (column) => {
-                void column
-                RelatedClass.pluckCalls += 1
-
-                return id.filter((entry) => entry === "allowed-1" || entry === "allowed-2")
-              }
-            }
-          }
-        }
-      }
-    }
-
-    const controller = buildController({
-      currentAbility: {},
-      modelClasses: {
-        MockFrontendModel,
-        RelatedFrontendModel
-      },
-      resources: {
-        MockFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        },
-        RelatedFrontendModel: {
-          abilities: {find: "read", index: "read"},
-          attributes: ["id"],
-          path: "/related-frontend-models",
-          primaryKey: "id"
-        }
-      }
+      expect(payload.status).toEqual("success")
+      expect(payload.models).toEqual([])
     })
+  })
 
-    const fakeParentModelClass = {
-      getRelationshipsMap() {
-        return {related: {}}
-      }
-    }
-    const relatedOne = new RelatedFrontendModel({id: "allowed-1", value: "One"})
-    const relatedTwo = new RelatedFrontendModel({id: "denied", value: "Two"})
-    const relatedThree = new RelatedFrontendModel({id: "allowed-2", value: "Three"})
-    const parentModel = {
-      constructor: fakeParentModelClass,
-      attributes() {
-        return {id: "1", name: "Parent"}
-      },
-      getRelationshipByName() {
-        return {
-          getPreloaded() {
-            return true
-          },
-          loaded() {
-            return [relatedOne, relatedTwo, relatedThree]
+  it("supports relationship-path search through project creating user", async () => {
+    await Dummy.run(async () => {
+      await User.create({
+        email: "owner-a@example.com",
+        encryptedPassword: "secret",
+        reference: "owner-a"
+      })
+      await User.create({
+        email: "owner-b@example.com",
+        encryptedPassword: "secret",
+        reference: "owner-b"
+      })
+      await createTaskWithProject({
+        creatingUserReference: "owner-a",
+        projectName: "Owner Project A",
+        taskName: "Owner Task A"
+      })
+      await createTaskWithProject({
+        creatingUserReference: "owner-b",
+        projectName: "Owner Project B",
+        taskName: "Owner Task B"
+      })
+
+      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+        searches: [
+          {
+            column: "reference",
+            operator: "eq",
+            path: ["project", "creatingUser"],
+            value: "owner-b"
           }
-        }
-      }
-    }
-
-    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
-
-    expect(payload).toEqual({
-      __preloadedRelationships: {
-        related: [
-          {id: "allowed-1", value: "One"},
-          {id: "allowed-2", value: "Three"}
         ]
-      },
-      id: "1",
-      name: "Parent"
-    })
-    expect(RelatedFrontendModel.whereCalls).toEqual(1)
-    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
-  })
+      })
 
-  it("authorizes preloaded singular relationships in bulk for index serialization", async () => {
-    /** Related model class used in nested singular bulk authorization serialization test. */
-    class RelatedFrontendModel {
-      static whereCalls = 0
-      static pluckCalls = 0
-
-      /** @param {Record<string, any>} attributes */
-      constructor(attributes) {
-        this._attributes = attributes
-      }
-
-      /** @returns {Record<string, any>} */
-      attributes() { return this._attributes }
-
-      /** @returns {Record<string, any>} */
-      static getRelationshipsMap() {
-        return {}
-      }
-
-      /**
-       * @returns {{where: ({id}: {id: string[]}) => {pluck: (column: string) => Promise<string[]>}}}
-       */
-      static accessibleFor() {
-        const RelatedClass = this
-
-        return {
-          where: ({id}) => {
-            RelatedClass.whereCalls += 1
-
-            return {
-              pluck: async (column) => {
-                void column
-                RelatedClass.pluckCalls += 1
-
-                return id.filter((entry) => entry.startsWith("allowed"))
-              }
-            }
-          }
-        }
-      }
-    }
-
-    const controller = buildController({
-      currentAbility: {},
-      modelClasses: {
-        MockFrontendModel,
-        RelatedFrontendModel
-      },
-      resources: {
-        MockFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        },
-        RelatedFrontendModel: {
-          abilities: {find: "read", index: "read"},
-          attributes: ["id"],
-          path: "/related-frontend-models",
-          primaryKey: "id"
-        }
-      }
-    })
-
-    const fakeParentModelClass = {
-      getRelationshipsMap() {
-        return {related: {}}
-      }
-    }
-    const parentModels = [
-      {
-        constructor: fakeParentModelClass,
-        attributes() {
-          return {id: "1", name: "One"}
-        },
-        getRelationshipByName() {
-          return {
-            getPreloaded() {
-              return true
-            },
-            loaded() {
-              return new RelatedFrontendModel({id: "allowed-1", value: "Allowed one"})
-            }
-          }
-        }
-      },
-      {
-        constructor: fakeParentModelClass,
-        attributes() {
-          return {id: "2", name: "Two"}
-        },
-        getRelationshipByName() {
-          return {
-            getPreloaded() {
-              return true
-            },
-            loaded() {
-              return new RelatedFrontendModel({id: "denied-2", value: "Denied"})
-            }
-          }
-        }
-      },
-      {
-        constructor: fakeParentModelClass,
-        attributes() {
-          return {id: "3", name: "Three"}
-        },
-        getRelationshipByName() {
-          return {
-            getPreloaded() {
-              return true
-            },
-            loaded() {
-              return new RelatedFrontendModel({id: "allowed-3", value: "Allowed three"})
-            }
-          }
-        }
-      }
-    ]
-
-    const serialized = await controller.serializeFrontendModels(/** @type {any} */ (parentModels))
-
-    expect(serialized).toEqual([
-      {
-        __preloadedRelationships: {
-          related: {id: "allowed-1", value: "Allowed one"}
-        },
-        id: "1",
-        name: "One"
-      },
-      {
-        __preloadedRelationships: {
-          related: null
-        },
-        id: "2",
-        name: "Two"
-      },
-      {
-        __preloadedRelationships: {
-          related: {id: "allowed-3", value: "Allowed three"}
-        },
-        id: "3",
-        name: "Three"
-      }
-    ])
-    expect(RelatedFrontendModel.whereCalls).toEqual(1)
-    expect(RelatedFrontendModel.pluckCalls).toEqual(1)
-  })
-
-  it("does not serialize nested preloaded models without frontend resource definitions", async () => {
-    /** Related backend-only model class used in nested authorization serialization test. */
-    class BackendOnlyRelatedModel {
-      /** @param {Record<string, any>} attributes */
-      constructor(attributes) {
-        this._attributes = attributes
-      }
-
-      /** @returns {Record<string, any>} */
-      attributes() { return this._attributes }
-    }
-
-    const controller = buildController({
-      currentAbility: {},
-      modelClasses: {
-        BackendOnlyRelatedModel,
-        MockFrontendModel
-      },
-      resources: {
-        MockFrontendModel: {
-          abilities: {destroy: "destroy", find: "read", index: "read", update: "update"},
-          attributes: ["id"],
-          path: "/frontend-models",
-          primaryKey: "id"
-        }
-      }
-    })
-
-    const fakeParentModelClass = {
-      getRelationshipsMap() {
-        return {related: {}}
-      }
-    }
-    const backendOnlyRelated = new BackendOnlyRelatedModel({id: "secret"})
-    const parentModel = {
-      constructor: fakeParentModelClass,
-      attributes() {
-        return {id: "1", name: "One"}
-      },
-      getRelationshipByName() {
-        return {
-          getPreloaded() {
-            return true
-          },
-          loaded() {
-            return backendOnlyRelated
-          }
-        }
-      }
-    }
-
-    const payload = await controller.serializeFrontendModel(/** @type {any} */ (parentModel))
-
-    expect(payload).toEqual({
-      __preloadedRelationships: {
-        related: null
-      },
-      id: "1",
-      name: "One"
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name)).toEqual(["Owner Task B"])
     })
   })
 })

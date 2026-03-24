@@ -29,24 +29,22 @@ function addTrackedStackToError(error) {
 
 /**
  *
- * @param {() => Promise<void> | string} arg1 - Arg1.
- * @param {() => Promise<void> | Error} [arg2] - Arg2.
- * @returns {Promise<void>} - Resolves when complete.
+ * @param {(() => Promise<unknown>) | string} arg1 - Arg1.
+ * @param {(() => Promise<unknown>) | Error} [arg2] - Arg2.
+ * @returns {Promise<unknown>} - Resolves with the callback result.
  */
 async function withTrackedStack(arg1, arg2) {
-  /** @type {() => Promise<void>} */
+  /** @type {() => Promise<unknown>} */
   let callback
 
   /** @type {string} */
   let stack
 
   if (typeof arg2 == "function" && typeof arg1 == "string") {
-    // @ts-expect-error
-    callback = arg2
+    callback = /** @type {() => Promise<unknown>} */ (arg2)
     stack = arg1
   } else {
-    // @ts-expect-error
-    callback = arg1
+    callback = /** @type {() => Promise<unknown>} */ (arg1)
     stack = Error().stack || ""
   }
 
@@ -71,8 +69,8 @@ async function withTrackedStack(arg1, arg2) {
 
   const newStacks = [additionalStackLines, ...parentStacks]
 
-  await asyncLocalStorage.run(newStacks, async () => {
-    await callback()
+  return await asyncLocalStorage.run(newStacks, async () => {
+    return await callback()
   })
 }
 

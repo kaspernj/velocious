@@ -38,10 +38,25 @@ export default class VelociousHttpServerWebsocketChannel {
   /**
    * Subscribe this connection to a broadcast channel.
    * @param {string} channel - Channel name.
+   * @param {{acknowledge?: boolean}} [options] - Subscription options.
    * @returns {Promise<boolean>} - Whether the subscription succeeded.
    */
-  async streamFrom(channel) {
-    return await this.websocketSession.subscribeToChannel(channel, {acknowledge: true})
+  async streamFrom(channel, options = {}) {
+    return await this.websocketSession.subscribeToChannel(channel, {
+      acknowledge: options.acknowledge ?? true,
+      channelHandler: this
+    })
+  }
+
+  /**
+   * Called when a broadcast event is delivered for one of this channel instance's subscriptions.
+   * @param {object} args - Event args.
+   * @param {string} args.channel - Broadcast channel name.
+   * @param {any} args.payload - Broadcast payload.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async receivedBroadcast({channel, payload}) {
+    this.websocketSession.sendJson({channel, payload, type: "event"})
   }
 
   /**

@@ -1,8 +1,13 @@
 // @ts-check
 
-import Controller from "./controller.js"
 import * as inflection from "inflection"
+import Controller from "./controller.js"
+import Response from "./http-server/client/response.js"
+import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+import RoutesResolver from "./routes/resolver.js"
+import VelociousError from "./velocious-error.js"
 
 /**
  * @param {unknown} value - Candidate value.
@@ -48,14 +53,14 @@ function normalizeFrontendModelPreload(preload) {
         continue
       }
 
-      throw new Error(`Invalid preload entry type: ${typeof entry}`)
+      throw frontendModelValidationError(`Invalid preload entry type: ${typeof entry}`)
     }
 
     return normalized
   }
 
   if (!isPlainObject(preload)) {
-    throw new Error(`Invalid preload type: ${typeof preload}`)
+    throw frontendModelValidationError(`Invalid preload type: ${typeof preload}`)
   }
 
   /** @type {import("./database/query/index.js").NestedPreloadRecord} */
@@ -74,7 +79,7 @@ function normalizeFrontendModelPreload(preload) {
       continue
     }
 
-    throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+    throw frontendModelValidationError(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
   }
 
   return normalized
@@ -102,7 +107,7 @@ function mergeNormalizedPreload(target, source) {
     }
 
     if (!isPlainObject(relationshipPreload)) {
-      throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+      throw frontendModelValidationError(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
     }
 
     if (isPlainObject(existingValue)) {
@@ -118,14 +123,116 @@ function mergeNormalizedPreload(target, source) {
 }
 
 /**
+ * @param {Record<string, any>} target - Target joins object.
+ * @param {Record<string, any>} source - Source joins object.
+ * @returns {void} - Mutates target with merged nested joins tree.
+ */
+function mergeNormalizedJoins(target, source) {
+  for (const [relationshipName, relationshipJoin] of Object.entries(source)) {
+    const existingValue = target[relationshipName]
+
+    if (relationshipJoin === true) {
+      if (existingValue === undefined) {
+        target[relationshipName] = true
+      }
+      continue
+    }
+
+    if (!isPlainObject(relationshipJoin)) {
+      throw frontendModelValidationError(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+    }
+
+    if (isPlainObject(existingValue)) {
+      mergeNormalizedJoins(existingValue, relationshipJoin)
+      continue
+    }
+
+    target[relationshipName] = relationshipJoin
+  }
+}
+
+/**
+ * @param {unknown} joins - Joins payload.
+ * @returns {Record<string, any> | null} - Normalized relationship-object joins.
+ */
+function normalizeFrontendModelJoins(joins) {
+  if (!joins) return null
+
+  if (Array.isArray(joins)) {
+    /** @type {Record<string, any>} */
+    const normalized = {}
+
+    for (const joinEntry of joins) {
+      if (!isPlainObject(joinEntry)) {
+        throw frontendModelValidationError(`Invalid joins entry type: ${typeof joinEntry}`)
+      }
+
+      const nested = normalizeFrontendModelJoins(joinEntry)
+
+      if (nested) {
+        mergeNormalizedJoins(normalized, nested)
+      }
+    }
+
+    return normalized
+  }
+
+  if (!isPlainObject(joins)) {
+    throw frontendModelValidationError(`Invalid joins type: ${typeof joins}`)
+  }
+
+  /** @type {Record<string, any>} */
+  const normalized = {}
+
+  for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
+    if (relationshipJoin === true) {
+      normalized[relationshipName] = true
+      continue
+    }
+
+    if (isPlainObject(relationshipJoin)) {
+      normalized[relationshipName] = normalizeFrontendModelJoins(relationshipJoin) || {}
+      continue
+    }
+
+    throw frontendModelValidationError(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+  }
+
+  return normalized
+}
+
+/**
  * @param {unknown} select - Select payload.
+ * @param {string | null} [rootModelName] - Optional root model name for shorthand payloads.
  * @returns {Record<string, string[]> | null} - Normalized model-name keyed select record.
  */
-function normalizeFrontendModelSelect(select) {
+function normalizeFrontendModelSelect(select, rootModelName = null) {
   if (!select) return null
 
+  if (typeof select === "string") {
+    if (!rootModelName) {
+      throw frontendModelValidationError("Invalid select shorthand without root model name")
+    }
+
+    return {[rootModelName]: [select]}
+  }
+
+  if (Array.isArray(select)) {
+    if (!rootModelName) {
+      throw frontendModelValidationError("Invalid select shorthand without root model name")
+    }
+
+    for (const attributeName of select) {
+      if (typeof attributeName !== "string") {
+        throw frontendModelValidationError(`Invalid select attribute for ${rootModelName}: ${typeof attributeName}`)
+      }
+    }
+
+    return {[rootModelName]: Array.from(new Set(select))}
+  }
+
   if (!isPlainObject(select)) {
-    throw new Error(`Invalid select type: ${typeof select}`)
+    throw frontendModelValidationError(`Invalid select type: ${typeof select}`)
   }
 
   /** @type {Record<string, string[]>} */
@@ -138,12 +245,12 @@ function normalizeFrontendModelSelect(select) {
     }
 
     if (!Array.isArray(selectValue)) {
-      throw new Error(`Invalid select value for ${modelName}: ${typeof selectValue}`)
+      throw frontendModelValidationError(`Invalid select value for ${modelName}: ${typeof selectValue}`)
     }
 
     for (const attributeName of selectValue) {
       if (typeof attributeName !== "string") {
-        throw new Error(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
+        throw frontendModelValidationError(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
       }
     }
 
@@ -157,7 +264,7 @@ function normalizeFrontendModelSelect(select) {
  * @typedef {object} FrontendModelSearch
  * @property {string[]} path - Relationship path.
  * @property {string} column - Column or attribute name.
- * @property {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
  * @property {any} value - Search value.
  */
 
@@ -168,7 +275,50 @@ function normalizeFrontendModelSelect(select) {
  * @property {string[]} path - Relationship path from root model.
  */
 
+/**
+ * @typedef {object} FrontendModelGroup
+ * @property {string} column - Attribute name to group by.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @typedef {object} FrontendModelPluck
+ * @property {string} column - Attribute name to pluck.
+ * @property {string[]} path - Relationship path from root model.
+ */
+
+/**
+ * @typedef {object} FrontendModelPagination
+ * @property {number | null} limit - Maximum number of records.
+ * @property {number | null} offset - Number of records to skip.
+ * @property {number | null} page - 1-based page number.
+ * @property {number | null} perPage - Page size.
+ */
+
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
+const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
+const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
+const frontendModelClientSafeErrorMessage = "Request failed."
+
+/**
+ * @param {string} message - Validation error message.
+ * @returns {VelociousError} - Client-safe validation error.
+ */
+function frontendModelValidationError(message) {
+  return VelociousError.safe(message, {code: "frontend-model-validation"})
+}
+
+/**
+ * @param {unknown} error - Caught error.
+ * @returns {string} - Message safe to return to API clients.
+ */
+function frontendModelClientMessageForError(error) {
+  if (error instanceof VelociousError && error.safeToExpose) {
+    return error.message
+  }
+
+  return frontendModelClientSafeErrorMessage
+}
 
 /**
  * @param {unknown} direction - Direction candidate.
@@ -176,13 +326,13 @@ const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
  */
 function normalizeFrontendModelSortDirection(direction) {
   if (typeof direction !== "string") {
-    throw new Error(`Invalid sort direction type: ${typeof direction}`)
+    throw frontendModelValidationError(`Invalid sort direction type: ${typeof direction}`)
   }
 
   const normalizedDirection = direction.trim().toLowerCase()
 
   if (normalizedDirection !== "asc" && normalizedDirection !== "desc") {
-    throw new Error(`Invalid sort direction: ${direction}`)
+    throw frontendModelValidationError(`Invalid sort direction: ${direction}`)
   }
 
   return normalizedDirection
@@ -219,6 +369,19 @@ function frontendModelSortDescriptor(value) {
 }
 
 /**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit group descriptor object.
+ */
+function frontendModelGroupDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
  * @param {string} sortValue - Sort string.
  * @param {string[]} [path] - Relationship path.
  * @returns {FrontendModelSort} - Normalized sort descriptor.
@@ -227,14 +390,14 @@ function frontendModelSortFromString(sortValue, path = []) {
   const trimmed = sortValue.trim()
 
   if (trimmed.length < 1) {
-    throw new Error("Invalid sort value: expected non-empty string")
+    throw frontendModelValidationError("Invalid sort value: expected non-empty string")
   }
 
   if (trimmed.startsWith("-")) {
     const column = trimmed.slice(1).trim()
 
     if (column.length < 1) {
-      throw new Error(`Invalid sort definition: ${sortValue}`)
+      throw frontendModelValidationError(`Invalid sort definition: ${sortValue}`)
     }
 
     return {
@@ -247,13 +410,13 @@ function frontendModelSortFromString(sortValue, path = []) {
   const sortParts = trimmed.split(/\s+/).filter(Boolean)
 
   if (sortParts.length > 2) {
-    throw new Error(`Invalid sort definition: ${sortValue}`)
+    throw frontendModelValidationError(`Invalid sort definition: ${sortValue}`)
   }
 
   const column = sortParts[0]
 
   if (column.length < 1) {
-    throw new Error(`Invalid sort definition: ${sortValue}`)
+    throw frontendModelValidationError(`Invalid sort definition: ${sortValue}`)
   }
 
   const direction = sortParts.length === 2
@@ -288,6 +451,24 @@ function frontendModelSortFromTuple(sortValue, path = []) {
 }
 
 /**
+ * @param {string} groupValue - Group string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelGroup} - Normalized group descriptor.
+ */
+function frontendModelGroupFromString(groupValue, path = []) {
+  const trimmed = groupValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw frontendModelValidationError(`Invalid group column: ${groupValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
  * @param {Record<string, any>} sortValue - Nested sort object.
  * @param {string[]} path - Relationship path.
  * @returns {FrontendModelSort[]} - Normalized sort descriptors.
@@ -313,12 +494,12 @@ function normalizeFrontendModelSortObject(sortValue, path) {
 
     if (Array.isArray(sortEntry)) {
       if (sortEntry.length < 1) {
-        throw new Error(`Invalid sort definition for "${sortKey}": empty array`)
+        throw frontendModelValidationError(`Invalid sort definition for "${sortKey}": empty array`)
       }
 
       for (const nestedSortEntry of sortEntry) {
         if (!frontendModelSortTuple(nestedSortEntry)) {
-          throw new Error(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
+          throw frontendModelValidationError(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
         }
 
         normalizedSorts.push(frontendModelSortFromTuple(nestedSortEntry, [...path, sortKey]))
@@ -332,10 +513,52 @@ function normalizeFrontendModelSortObject(sortValue, path) {
       continue
     }
 
-    throw new Error(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
+    throw frontendModelValidationError(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
   }
 
   return normalizedSorts
+}
+
+/**
+ * @param {Record<string, any>} groupValue - Nested group object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelGroup[]} - Normalized group descriptors.
+ */
+function normalizeFrontendModelGroupObject(groupValue, path) {
+  /** @type {FrontendModelGroup[]} */
+  const normalizedGroups = []
+
+  for (const [groupKey, groupEntry] of Object.entries(groupValue)) {
+    if (typeof groupEntry === "string") {
+      normalizedGroups.push(frontendModelGroupFromString(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    if (Array.isArray(groupEntry)) {
+      if (groupEntry.length < 1) {
+        throw frontendModelValidationError(`Invalid group definition for "${groupKey}": empty array`)
+      }
+
+      for (const nestedGroupEntry of groupEntry) {
+        if (typeof nestedGroupEntry !== "string") {
+          throw frontendModelValidationError(`Invalid group definition for "${groupKey}": expected string columns`)
+        }
+
+        normalizedGroups.push(frontendModelGroupFromString(nestedGroupEntry, [...path, groupKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(groupEntry)) {
+      normalizedGroups.push(...normalizeFrontendModelGroupObject(groupEntry, [...path, groupKey]))
+      continue
+    }
+
+    throw frontendModelValidationError(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
+  }
+
+  return normalizedGroups
 }
 
 /**
@@ -346,16 +569,16 @@ function normalizeFrontendModelSearches(searches) {
   if (!searches) return []
 
   if (!Array.isArray(searches)) {
-    throw new Error(`Invalid searches type: ${typeof searches}`)
+    throw frontendModelValidationError(`Invalid searches type: ${typeof searches}`)
   }
 
   /** @type {FrontendModelSearch[]} */
   const normalized = []
-  const supportedOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq"])
+  const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
 
   for (const search of searches) {
     if (!isPlainObject(search)) {
-      throw new Error(`Invalid search entry type: ${typeof search}`)
+      throw frontendModelValidationError(`Invalid search entry type: ${typeof search}`)
     }
 
     const path = search.path
@@ -363,21 +586,21 @@ function normalizeFrontendModelSearches(searches) {
     const operator = search.operator
 
     if (!Array.isArray(path)) {
-      throw new Error("Invalid search path: expected an array")
+      throw frontendModelValidationError("Invalid search path: expected an array")
     }
 
     for (const pathEntry of path) {
       if (typeof pathEntry !== "string" || pathEntry.length < 1) {
-        throw new Error("Invalid search path entry: expected non-empty string")
+        throw frontendModelValidationError("Invalid search path entry: expected non-empty string")
       }
     }
 
     if (typeof column !== "string" || column.length < 1) {
-      throw new Error("Invalid search column: expected non-empty string")
+      throw frontendModelValidationError("Invalid search column: expected non-empty string")
     }
 
     if (typeof operator !== "string" || !supportedOperators.has(operator)) {
-      throw new Error(`Invalid search operator: ${operator}`)
+      throw frontendModelValidationError(`Invalid search operator: ${operator}`)
     }
 
     normalized.push({
@@ -399,10 +622,61 @@ function normalizeFrontendModelWhere(where) {
   if (!where) return null
 
   if (!isPlainObject(where)) {
-    throw new Error(`Invalid where type: ${typeof where}`)
+    throw frontendModelValidationError(`Invalid where type: ${typeof where}`)
   }
 
   return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(where)))
+}
+
+/**
+ * @param {unknown} value - Candidate integer.
+ * @param {string} name - Param name for errors.
+ * @param {number} min - Minimum allowed value.
+ * @returns {number | null} - Normalized integer.
+ */
+function normalizeFrontendModelIntegerParam(value, name, min) {
+  if (value == null) return null
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw frontendModelValidationError(`Invalid ${name}: expected integer number`)
+  }
+
+  if (value < min) {
+    throw frontendModelValidationError(`Invalid ${name}: expected value >= ${min}`)
+  }
+
+  return value
+}
+
+/**
+ * @param {object} args - Pagination args.
+ * @param {unknown} args.limit - Limit payload.
+ * @param {unknown} args.offset - Offset payload.
+ * @param {unknown} args.page - Page payload.
+ * @param {unknown} args.perPage - Per-page payload.
+ * @returns {FrontendModelPagination} - Normalized pagination data.
+ */
+function normalizeFrontendModelPagination({limit, offset, page, perPage}) {
+  return {
+    limit: normalizeFrontendModelIntegerParam(limit, "limit", 0),
+    offset: normalizeFrontendModelIntegerParam(offset, "offset", 0),
+    page: normalizeFrontendModelIntegerParam(page, "page", 1),
+    perPage: normalizeFrontendModelIntegerParam(perPage, "perPage", 1)
+  }
+}
+
+/**
+ * @param {unknown} distinct - Distinct payload.
+ * @returns {boolean | null} - Normalized distinct flag when provided.
+ */
+function normalizeFrontendModelDistinct(distinct) {
+  if (distinct == null) return null
+
+  if (typeof distinct !== "boolean") {
+    throw frontendModelValidationError(`Invalid distinct: expected boolean`)
+  }
+
+  return distinct
 }
 
 /**
@@ -461,13 +735,194 @@ function normalizeFrontendModelSort(sort) {
         continue
       }
 
-      throw new Error(`Invalid sort entry type: ${typeof sortEntry}`)
+      throw frontendModelValidationError(`Invalid sort entry type: ${typeof sortEntry}`)
     }
 
     return normalized
   }
 
-  throw new Error(`Invalid sort type: ${typeof sort}`)
+  throw frontendModelValidationError(`Invalid sort type: ${typeof sort}`)
+}
+
+/**
+ * @param {unknown} group - Group payload.
+ * @returns {FrontendModelGroup[]} - Normalized group definitions.
+ */
+function normalizeFrontendModelGroup(group) {
+  if (!group) return []
+
+  if (typeof group === "string") {
+    return [frontendModelGroupFromString(group)]
+  }
+
+  if (frontendModelGroupDescriptor(group)) {
+    return [{
+      column: frontendModelGroupFromString(group.column).column,
+      path: [...group.path]
+    }]
+  }
+
+  if (isPlainObject(group)) {
+    return normalizeFrontendModelGroupObject(group, [])
+  }
+
+  if (Array.isArray(group)) {
+    /** @type {FrontendModelGroup[]} */
+    const normalized = []
+
+    for (const groupEntry of group) {
+      if (typeof groupEntry === "string") {
+        normalized.push(frontendModelGroupFromString(groupEntry))
+        continue
+      }
+
+      if (frontendModelGroupDescriptor(groupEntry)) {
+        normalized.push({
+          column: frontendModelGroupFromString(groupEntry.column).column,
+          path: [...groupEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(groupEntry)) {
+        normalized.push(...normalizeFrontendModelGroupObject(groupEntry, []))
+        continue
+      }
+
+      throw frontendModelValidationError(`Invalid group entry type: ${typeof groupEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw frontendModelValidationError(`Invalid group type: ${typeof group}`)
+}
+
+/**
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit pluck descriptor object.
+ */
+function frontendModelPluckDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * @param {string} pluckValue - Pluck string.
+ * @param {string[]} [path] - Relationship path.
+ * @returns {FrontendModelPluck} - Normalized pluck descriptor.
+ */
+function frontendModelPluckFromString(pluckValue, path = []) {
+  const trimmed = pluckValue.trim()
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    throw frontendModelValidationError(`Invalid pluck column: ${pluckValue}`)
+  }
+
+  return {
+    column: trimmed,
+    path: [...path]
+  }
+}
+
+/**
+ * @param {Record<string, any>} pluckValue - Nested pluck object.
+ * @param {string[]} path - Relationship path.
+ * @returns {FrontendModelPluck[]} - Normalized pluck descriptors.
+ */
+function normalizeFrontendModelPluckObject(pluckValue, path) {
+  /** @type {FrontendModelPluck[]} */
+  const normalizedPlucks = []
+
+  for (const [pluckKey, pluckEntry] of Object.entries(pluckValue)) {
+    if (typeof pluckEntry === "string") {
+      normalizedPlucks.push(frontendModelPluckFromString(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    if (Array.isArray(pluckEntry)) {
+      if (pluckEntry.length < 1) {
+        throw frontendModelValidationError(`Invalid pluck definition for "${pluckKey}": empty array`)
+      }
+
+      for (const nestedPluckEntry of pluckEntry) {
+        if (typeof nestedPluckEntry !== "string") {
+          throw frontendModelValidationError(`Invalid pluck definition for "${pluckKey}": expected string columns`)
+        }
+
+        normalizedPlucks.push(frontendModelPluckFromString(nestedPluckEntry, [...path, pluckKey]))
+      }
+
+      continue
+    }
+
+    if (isPlainObject(pluckEntry)) {
+      normalizedPlucks.push(...normalizeFrontendModelPluckObject(pluckEntry, [...path, pluckKey]))
+      continue
+    }
+
+    throw frontendModelValidationError(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
+  }
+
+  return normalizedPlucks
+}
+
+/**
+ * @param {unknown} pluck - Pluck payload.
+ * @returns {FrontendModelPluck[]} - Normalized pluck definitions.
+ */
+function normalizeFrontendModelPluck(pluck) {
+  if (!pluck) return []
+
+  if (typeof pluck === "string") {
+    return [frontendModelPluckFromString(pluck)]
+  }
+
+  if (frontendModelPluckDescriptor(pluck)) {
+    return [{
+      column: frontendModelPluckFromString(pluck.column).column,
+      path: [...pluck.path]
+    }]
+  }
+
+  if (isPlainObject(pluck)) {
+    return normalizeFrontendModelPluckObject(pluck, [])
+  }
+
+  if (Array.isArray(pluck)) {
+    /** @type {FrontendModelPluck[]} */
+    const normalized = []
+
+    for (const pluckEntry of pluck) {
+      if (typeof pluckEntry === "string") {
+        normalized.push(frontendModelPluckFromString(pluckEntry))
+        continue
+      }
+
+      if (frontendModelPluckDescriptor(pluckEntry)) {
+        normalized.push({
+          column: frontendModelPluckFromString(pluckEntry.column).column,
+          path: [...pluckEntry.path]
+        })
+        continue
+      }
+
+      if (isPlainObject(pluckEntry)) {
+        normalized.push(...normalizeFrontendModelPluckObject(pluckEntry, []))
+        continue
+      }
+
+      throw frontendModelValidationError(`Invalid pluck entry type: ${typeof pluckEntry}`)
+    }
+
+    return normalized
+  }
+
+  throw frontendModelValidationError(`Invalid pluck type: ${typeof pluck}`)
 }
 
 /**
@@ -492,14 +947,71 @@ function buildFrontendModelJoinObjectFromPath(path) {
 export default class FrontendModelController extends Controller {
   /** @type {Record<string, any> | undefined} */
   _frontendModelParams = undefined
+  /** @type {Record<string, any> | undefined} */
+  _frontendModelParamsOverride = undefined
 
   /**
    * @returns {Record<string, any>} - Decoded request params.
    */
   frontendModelParams() {
+    if (this._frontendModelParamsOverride) {
+      return this._frontendModelParamsOverride
+    }
+
     this._frontendModelParams ||= /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(this.params()))
 
     return this._frontendModelParams
+  }
+
+  /**
+   * @template T
+   * @param {Record<string, any>} params - Temporary frontend model params.
+   * @param {() => Promise<T>} callback - Callback executed with temporary params.
+   * @returns {Promise<T>} - Callback return value.
+   */
+  async withFrontendModelParams(params, callback) {
+    const previousOverride = this._frontendModelParamsOverride
+    const previousParams = this._frontendModelParams
+
+    this._frontendModelParamsOverride = params
+    this._frontendModelParams = undefined
+
+    try {
+      return await callback()
+    } finally {
+      this._frontendModelParamsOverride = previousOverride
+      this._frontendModelParams = previousParams
+    }
+  }
+
+  /**
+   * @template T
+   * @param {Record<string, any>} params - Request-scoped params.
+   * @param {import("./http-server/client/response.js").default} response - Response instance.
+   * @param {() => Promise<T>} callback - Callback executed inside resolved tenant and ability context.
+   * @returns {Promise<T>} - Callback return value.
+   */
+  async withFrontendModelRequestContext(params, response, callback) {
+    const configuration = this.getConfiguration()
+    const tenant = await configuration.resolveTenant({
+      params,
+      request: this.request(),
+      response
+    })
+
+    return await configuration.runWithTenant(tenant, async () => {
+      return await configuration.ensureConnections(async () => {
+        const ability = await configuration.resolveAbility({
+          params,
+          request: this.request(),
+          response
+        })
+
+        return await configuration.runWithAbility(ability, async () => {
+          return await callback()
+        })
+      })
+    })
   }
 
   /**
@@ -507,46 +1019,64 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelClass() {
     const frontendModelClass = this.frontendModelClassFromConfiguration()
+    const params = this.frontendModelParams()
+    const modelName = typeof params.model === "string" ? params.model : undefined
+    const controllerName = typeof params.controller === "string" ? params.controller : undefined
 
     if (frontendModelClass) return frontendModelClass
 
-    throw new Error(`No frontend model configured for controller '${this.frontendModelParams().controller}'. Configure backendProjects resources.`)
+    throw new Error(`No frontend model configured for model '${modelName || "unknown"}' and controller '${controllerName || "unknown"}'. Configure backendProjects resources.`)
   }
 
   /**
-   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
+   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for current controller.
    */
   frontendModelResourceConfiguration() {
     const params = this.frontendModelParams()
+    const modelName = typeof params.model === "string" ? params.model : undefined
     const controllerName = typeof params.controller === "string" ? params.controller : undefined
-    const modelName = typeof params.modelName === "string" ? params.modelName : undefined
-    const normalizedModelName = typeof modelName === "string" ? modelName.trim() : ""
-
-    if ((!controllerName || controllerName.length < 1) && normalizedModelName.length < 1) return null
-
     const backendProjects = this.getConfiguration().getBackendProjects()
 
     for (const backendProject of backendProjects) {
-      const resources = backendProject.frontendModels || backendProject.resources || {}
+      const resources = frontendModelResourcesForBackendProject(backendProject)
 
-      if (normalizedModelName.length > 0) {
-        const modelResourceConfiguration = resources[normalizedModelName]
+      if (modelName && modelName.length > 0 && resources[modelName]) {
+        const resourceDefinition = resources[modelName]
+        const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
-        if (modelResourceConfiguration) {
-          return {
-            backendProject,
-            modelName: normalizedModelName,
-            resourceConfiguration: modelResourceConfiguration
-          }
+        if (!resourceConfiguration || !resourceClass) {
+          throw new Error(`Frontend model resource '${modelName}' must be a FrontendModelBaseResource subclass`)
+        }
+
+        return {
+          backendProject,
+          modelName,
+          resourceClass,
+          resourceConfiguration
         }
       }
 
-      for (const modelName in resources) {
-        const resourceConfiguration = resources[modelName]
-        const resourcePath = this.frontendModelResourcePath(modelName, resourceConfiguration)
+      if (!controllerName || controllerName.length < 1) continue
+
+      for (const resourceModelName in resources) {
+        const resourceDefinition = resources[resourceModelName]
+        const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+
+        if (!resourceConfiguration || !resourceClass) {
+          throw new Error(`Frontend model resource '${resourceModelName}' must be a FrontendModelBaseResource subclass`)
+        }
+
+        const resourcePath = this.frontendModelResourcePath(resourceModelName, resourceDefinition)
 
         if (this.frontendModelResourceMatchesController({controllerName, resourcePath})) {
-          return {backendProject, modelName, resourceConfiguration}
+          return {
+            backendProject,
+            modelName: resourceModelName,
+            resourceClass,
+            resourceConfiguration
+          }
         }
       }
     }
@@ -556,20 +1086,23 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
-   * @returns {{modelName: string, resourceConfiguration: import("./configuration-types.js").FrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
+   * @returns {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
    */
   frontendModelResourceConfigurationForModelClass(modelClass) {
     const frontendModelResource = this.frontendModelResourceConfiguration()
 
     if (!frontendModelResource) return null
 
-    const resources = frontendModelResource.backendProject.frontendModels || frontendModelResource.backendProject.resources || {}
-    const resourceConfiguration = resources[modelClass.name]
+    const resources = frontendModelResourcesForBackendProject(frontendModelResource.backendProject)
+    const resourceDefinition = resources[modelClass.name]
+    const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+    const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
-    if (!resourceConfiguration) return null
+    if (!resourceConfiguration || !resourceClass) return null
 
     return {
       modelName: modelClass.name,
+      resourceClass,
       resourceConfiguration
     }
   }
@@ -594,13 +1127,11 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {string} modelName - Model class name.
-   * @param {import("./configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+   * @param {unknown} resourceDefinition - Resource definition.
    * @returns {string} - Normalized resource path.
    */
-  frontendModelResourcePath(modelName, resourceConfiguration) {
-    if (resourceConfiguration.path) return `/${resourceConfiguration.path.replace(/^\/+/, "")}`
-
-    return `/${inflection.dasherize(inflection.pluralize(modelName))}`
+  frontendModelResourcePath(modelName, resourceDefinition) {
+    return frontendModelResourcePath(modelName, resourceDefinition)
   }
 
   /**
@@ -619,31 +1150,42 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @returns {import("./configuration-types.js").FrontendModelResourceServerConfiguration | null} - Optional server behavior config for frontend model actions.
+   * @returns {FrontendModelBaseResource} - Backend resource instance for current frontend-model action.
    */
-  frontendModelServerConfiguration() {
-    const frontendModelResource = this.frontendModelResourceConfiguration()
-
-    if (!frontendModelResource) return null
-
-    return frontendModelResource.resourceConfiguration.server || null
-  }
-
-  /**
-   * @returns {string} - Frontend model primary key.
-   */
-  frontendModelPrimaryKey() {
+  frontendModelResourceInstance() {
     const frontendModelResource = this.frontendModelResourceConfiguration()
 
     if (!frontendModelResource) {
       throw new Error(`No frontend model resource configuration for controller '${this.frontendModelParams().controller}'`)
     }
 
-    return frontendModelResource.resourceConfiguration.primaryKey || "id"
+    const resourceArgs = {
+      ability: this.currentAbility(),
+      controller: this,
+      context: {
+        ...(this.currentAbility()?.getContext() || {}),
+        params: this.frontendModelParams(),
+        request: this.request()
+      },
+      locals: this.currentAbility()?.getLocals() || {},
+      modelClass: this.frontendModelClass(),
+      modelName: frontendModelResource.modelName,
+      params: this.frontendModelParams(),
+      resourceConfiguration: frontendModelResource.resourceConfiguration
+    }
+
+    return new frontendModelResource.resourceClass(resourceArgs)
   }
 
   /**
-   * @param {"index" | "find" | "create" | "update" | "destroy"} action - Frontend action.
+   * @returns {string} - Frontend model primary key.
+   */
+  frontendModelPrimaryKey() {
+    return this.frontendModelClass().primaryKey()
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {string} - Ability action configured for the frontend action.
    */
   frontendModelAbilityAction(action) {
@@ -659,17 +1201,20 @@ export default class FrontendModelController extends Controller {
       throw new Error(`Resource '${frontendModelResource.modelName}' must define an 'abilities' object`)
     }
 
-    const abilityAction = abilities[action]
+    const abilityKey = action === "attach"
+      ? "update"
+      : ((action === "download" || action === "url") ? "find" : action)
+    const abilityAction = abilities[abilityKey]
 
     if (typeof abilityAction !== "string" || abilityAction.length < 1) {
-      throw new Error(`Resource '${frontendModelResource.modelName}' must define abilities.${action}`)
+      throw new Error(`Resource '${frontendModelResource.modelName}' must define abilities.${abilityKey}`)
     }
 
     return abilityAction
   }
 
   /**
-   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {import("./database/query/model-class-query.js").default<any>} - Authorized query for the action.
    */
   frontendModelAuthorizedQuery(action) {
@@ -690,7 +1235,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {object} args - Arguments.
-   * @param {"index" | "find" | "update" | "destroy"} args.action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} args.action - Frontend action.
    * @param {import("./database/record/index.js").default[]} args.models - Candidate models.
    * @returns {Promise<import("./database/record/index.js").default[]>} - Authorized models.
    */
@@ -706,105 +1251,56 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {"index" | "find" | "update" | "destroy"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @returns {Promise<boolean>} - Whether action should continue.
    */
   async runFrontendModelBeforeAction(action) {
-    const serverConfiguration = this.frontendModelServerConfiguration()
-
-    if (!serverConfiguration?.beforeAction) return true
-
-    const modelClass = this.frontendModelClass()
-    const result = await serverConfiguration.beforeAction({
-      action,
-      controller: this,
-      modelClass,
-      params: this.frontendModelParams()
-    })
+    const result = await this.frontendModelResourceInstance().beforeAction(action)
 
     return result !== false
   }
 
   /**
-   * @param {"find" | "update" | "destroy"} action - Frontend action.
+   * @param {"find" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
    * @param {string | number} id - Record id.
    * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
    */
   async frontendModelFindRecord(action, id) {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const primaryKey = this.frontendModelPrimaryKey()
+    const model = await this.frontendModelResourceInstance().find(action, id)
 
-    if (serverConfiguration?.find) {
-      const model = await serverConfiguration.find({
-        action,
-        controller: this,
-        id,
-        modelClass,
-        params: this.frontendModelParams()
-      })
+    if (!model) return null
 
-      if (!model) return null
+    const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
 
-      const authorizedModels = await this.frontendModelFilterAuthorizedModels({action, models: [model]})
+    return authorizedModels[0] || null
+  }
 
-      return authorizedModels[0] || null
+  /**
+   * @param {Record<string, any>} attributes - Create attributes.
+   * @returns {Promise<import("./database/record/index.js").default | null>} - Created model when authorized.
+   */
+  async frontendModelCreateRecord(attributes) {
+    const resource = this.frontendModelResourceInstance()
+    const model = await resource.create(attributes)
+
+    const authorizedModels = await this.frontendModelFilterAuthorizedModels({action: "create", models: [model]})
+
+    if (authorizedModels.length > 0) {
+      return authorizedModels[0]
     }
 
-    let query = this.frontendModelAuthorizedQuery(action)
-    const preload = action === "find" ? this.frontendModelPreload() : null
+    await resource.handleUnauthorizedCreatedModel(model)
 
-    if (preload) {
-      query = query.preload(preload)
-    }
-
-    return await query.findBy({[primaryKey]: id})
+    return null
   }
 
   /**
    * @returns {Promise<import("./database/record/index.js").default[]>} - Frontend model records.
    */
   async frontendModelRecords() {
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
+    const models = await this.frontendModelResourceInstance().records()
 
-    if (serverConfiguration?.records) {
-      const models = await serverConfiguration.records({
-        action: "index",
-        controller: this,
-        modelClass,
-        params: this.frontendModelParams()
-      })
-
-      return await this.frontendModelFilterAuthorizedModels({action: "index", models})
-    }
-
-    let query = this.frontendModelAuthorizedQuery("index")
-    const preload = this.frontendModelPreload()
-
-    if (preload) {
-      query = query.preload(preload)
-    }
-
-    const where = this.frontendModelWhere()
-
-    if (where) {
-      this.applyFrontendModelWhere({query, where})
-    }
-
-    const searches = this.frontendModelSearches()
-
-    for (const search of searches) {
-      this.applyFrontendModelSearch({query, search})
-    }
-
-    const sorts = this.frontendModelSort()
-
-    for (const sort of sorts) {
-      this.applyFrontendModelSort({query, sort})
-    }
-
-    return await query.toArray()
+    return await this.frontendModelFilterAuthorizedModels({action: "index", models})
   }
 
   /**
@@ -818,7 +1314,7 @@ export default class FrontendModelController extends Controller {
    * @returns {Record<string, string[]> | null} - Frontend select data.
    */
   frontendModelSelect() {
-    return normalizeFrontendModelSelect(this.frontendModelParams().select)
+    return normalizeFrontendModelSelect(this.frontendModelParams().select, this.frontendModelClass().name)
   }
 
   /**
@@ -835,9 +1331,184 @@ export default class FrontendModelController extends Controller {
     return normalizeFrontendModelWhere(this.frontendModelParams().where)
   }
 
+  /** @returns {Record<string, any> | null} - Frontend joins descriptors. */
+  frontendModelJoins() {
+    return normalizeFrontendModelJoins(this.frontendModelParams().joins)
+  }
+
   /** @returns {FrontendModelSort[]} - Frontend sort definitions. */
   frontendModelSort() {
     return normalizeFrontendModelSort(this.frontendModelParams().sort)
+  }
+
+  /** @returns {FrontendModelGroup[]} - Frontend group definitions. */
+  frontendModelGroup() {
+    return normalizeFrontendModelGroup(this.frontendModelParams().group)
+  }
+
+  /** @returns {FrontendModelPagination} - Frontend pagination params. */
+  frontendModelPagination() {
+    const params = this.frontendModelParams()
+
+    return normalizeFrontendModelPagination({
+      limit: params.limit,
+      offset: params.offset,
+      page: params.page,
+      perPage: params.perPage
+    })
+  }
+
+  /** @returns {boolean | null} - Frontend distinct flag when provided. */
+  frontendModelDistinct() {
+    return normalizeFrontendModelDistinct(this.frontendModelParams().distinct)
+  }
+
+  /** @returns {FrontendModelPluck[]} - Frontend pluck definitions. */
+  frontendModelPluck() {
+    return normalizeFrontendModelPluck(this.frontendModelParams().pluck)
+  }
+
+  /**
+   * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
+   */
+  frontendModelIndexQuery() {
+    let query = this.frontendModelAuthorizedQuery("index")
+    const preload = this.frontendModelPreload()
+
+    if (preload) {
+      query = query.preload(preload)
+    }
+
+    const joins = this.frontendModelJoins()
+    const where = this.frontendModelWhere()
+    const pagination = this.frontendModelPagination()
+    const distinct = this.frontendModelDistinct()
+
+    this.applyFrontendModelPagination({pagination, query})
+
+    if (distinct !== null) {
+      query.distinct(distinct)
+    }
+
+    if (where) {
+      this.applyFrontendModelWhere({query, where})
+    }
+
+    if (joins) {
+      this.applyFrontendModelJoins({joins, query})
+    }
+
+    const searches = this.frontendModelSearches()
+
+    for (const search of searches) {
+      this.applyFrontendModelSearch({query, search})
+    }
+
+    const groups = this.frontendModelGroup()
+
+    if (groups.length > 0) {
+      this.applyFrontendModelRootGroupColumns({query})
+    }
+
+    for (const group of groups) {
+      this.applyFrontendModelGroup({group, query})
+    }
+
+    const sorts = this.frontendModelSort()
+
+    if (sorts.length > 0) {
+      for (const sort of sorts) {
+        this.applyFrontendModelSort({query, sort})
+      }
+    }
+
+    if (query._distinct && query.driver.getType() === "mssql") {
+      return this.frontendModelMssqlDistinctByPrimaryKeyQuery({query})
+    }
+
+    return query
+  }
+
+  /**
+   * MSSQL cannot apply DISTINCT over non-comparable text columns in table.* selects.
+   * This rewrites distinct frontend-model queries to select root records by distinct PK subquery.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query with distinct and filters.
+   * @returns {import("./database/query/model-class-query.js").default} - MSSQL-safe distinct query.
+   */
+  frontendModelMssqlDistinctByPrimaryKeyQuery({query}) {
+    const modelClass = this.frontendModelClass()
+    const primaryKey = modelClass.primaryKey()
+    const rootTableSql = query.driver.quoteTable(modelClass.tableName())
+    const primaryKeySql = `${rootTableSql}.${query.driver.quoteColumn(primaryKey)}`
+    const distinctIdsQuery = query.clone()
+
+    distinctIdsQuery._preload = {}
+    distinctIdsQuery._selects = []
+    distinctIdsQuery.select(primaryKeySql)
+    distinctIdsQuery.distinct(true)
+
+    const distinctRootQuery = modelClass._newQuery()
+
+    distinctRootQuery.where(`${primaryKeySql} IN (${distinctIdsQuery.toSql()})`)
+    distinctRootQuery._preload = {...query._preload}
+
+    return distinctRootQuery
+  }
+
+  /**
+   * @param {object} args - Pluck args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
+   * @returns {Promise<any[]>} - Plucked values.
+   */
+  async frontendModelPluckValues({query, pluck}) {
+    if (pluck.length < 1) {
+      throw new Error("No columns given to pluck")
+    }
+
+    const modelClass = this.frontendModelClass()
+    const pluckQuery = query.clone()
+    const aliases = []
+    const joinedPaths = query[frontendModelJoinedPathsSymbol]
+
+    pluckQuery._preload = {}
+    pluckQuery._selects = []
+    pluckQuery[frontendModelJoinedPathsSymbol] = joinedPaths ? new Set(joinedPaths) : new Set()
+
+    for (const [pluckIndex, pluckEntry] of pluck.entries()) {
+      const targetModelClass = this.frontendModelSearchTargetModelClass({
+        modelClass,
+        path: pluckEntry.path
+      })
+      const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
+      const columnName = attributeNameToColumnNameMap[pluckEntry.column]
+
+      if (!columnName) {
+        throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+      }
+
+      if (pluckEntry.path.length > 0) {
+        this.ensureFrontendModelJoinPath({path: pluckEntry.path, query: pluckQuery})
+      }
+
+      const tableReference = pluckQuery.getTableReferenceForJoin(...pluckEntry.path)
+      const columnSql = `${pluckQuery.driver.quoteTable(tableReference)}.${pluckQuery.driver.quoteColumn(columnName)}`
+      const alias = `frontend_model_pluck_${pluckIndex}`
+
+      pluckQuery.select(`${columnSql} AS ${pluckQuery.driver.quoteColumn(alias)}`)
+      aliases.push(alias)
+    }
+
+    const rows = await pluckQuery.results()
+
+    if (aliases.length === 1) {
+      const [alias] = aliases
+
+      return rows.map((row) => row[alias])
+    }
+
+    return rows.map((row) => aliases.map((alias) => row[alias]))
   }
 
   /**
@@ -896,6 +1567,7 @@ export default class FrontendModelController extends Controller {
       eq: "=",
       gt: ">",
       gteq: ">=",
+      like: "LIKE",
       lt: "<",
       lteq: "<=",
       notEq: "!="
@@ -940,41 +1612,281 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @param {object} args - Pagination args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelPagination} args.pagination - Pagination values.
+   * @returns {void}
+   */
+  applyFrontendModelPagination({query, pagination}) {
+    if (pagination.limit !== null) {
+      query.limit(pagination.limit)
+    }
+
+    if (pagination.offset !== null) {
+      query.offset(pagination.offset)
+    }
+
+    if (pagination.perPage !== null) {
+      query.perPage(pagination.perPage)
+    }
+
+    if (pagination.page !== null) {
+      query.page(pagination.page)
+    }
+  }
+
+  /**
    * @param {object} args - Where args.
    * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
    * @param {Record<string, any>} args.where - Root-model where conditions.
    * @returns {void}
    */
   applyFrontendModelWhere({query, where}) {
-    const modelClass = this.frontendModelClass()
+    this.applyFrontendModelWhereForPath({
+      modelClass: this.frontendModelClass(),
+      path: [],
+      query,
+      where
+    })
+  }
+
+  /**
+   * @param {object} args - Joins args.
+   * @param {Record<string, any>} args.joins - Relationship-object joins.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelJoins({joins, query}) {
+    const joinPathKeys = new Set()
+
+    this.applyFrontendModelJoinsForPath({
+      joins,
+      joinPathKeys,
+      modelClass: this.frontendModelClass(),
+      path: [],
+      query
+    })
+
+    query.joins(joins)
+
+    const joinedPaths = query[frontendModelJoinedPathsSymbol] || new Set()
+
+    for (const joinPathKey of joinPathKeys) {
+      joinedPaths.add(joinPathKey)
+    }
+
+    query[frontendModelJoinedPathsSymbol] = joinedPaths
+  }
+
+  /**
+   * @param {object} args - Joins args.
+   * @param {Record<string, any>} args.joins - Joins for current path.
+   * @param {Set<string>} args.joinPathKeys - Joined path keys.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class for current path.
+   * @param {string[]} args.path - Relationship path.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelJoinsForPath({joins, joinPathKeys, modelClass, path, query}) {
+    void query
+
+    for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
+      const relationship = modelClass.getRelationshipsMap()[relationshipName]
+
+      if (!relationship) {
+        throw new Error(`Unknown join relationship "${relationshipName}" for ${modelClass.name}`)
+      }
+
+      const targetModelClass = relationship.getTargetModelClass()
+
+      if (!targetModelClass) {
+        throw new Error(`No target model class for join relationship "${relationshipName}" on ${modelClass.name}`)
+      }
+
+      const relationshipPath = [...path, relationshipName]
+      joinPathKeys.add(relationshipPath.join("."))
+
+      if (relationshipJoin === true) continue
+
+      this.applyFrontendModelJoinsForPath({
+        joins: relationshipJoin,
+        joinPathKeys,
+        modelClass: targetModelClass,
+        path: relationshipPath,
+        query
+      })
+    }
+  }
+
+  /**
+   * @param {object} args - Where args.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class for current where scope.
+   * @param {string[]} args.path - Relationship path from root.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {Record<string, any>} args.where - Where conditions for current scope.
+   * @returns {void}
+   */
+  applyFrontendModelWhereForPath({modelClass, path, query, where}) {
     const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
-    const rootTableReference = query.getTableReferenceForJoin()
 
     for (const [attributeName, value] of Object.entries(where)) {
       const columnName = attributeNameToColumnNameMap[attributeName]
 
-      if (!columnName) {
-        throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
-      }
+      if (columnName) {
+        this.ensureFrontendModelJoinPath({path, query})
 
-      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+        const tableReference = query.getTableReferenceForJoin(...path)
+        const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
 
-      if (Array.isArray(value)) {
-        if (value.length === 0) {
-          query.where("1=0")
+        if (Array.isArray(value)) {
+          if (value.length === 0) {
+            query.where("1=0")
+          } else {
+            const normalizedValues = value.map((entry) => this.normalizeFrontendModelWhereColumnValue({columnName, modelClass, value: entry}))
+
+            if (normalizedValues.includes(frontendModelWhereNoMatchSymbol)) {
+              query.where("1=0")
+            } else {
+              query.where(`${columnSql} IN (${normalizedValues.map((entry) => query.driver.quote(entry)).join(", ")})`)
+            }
+          }
+
+          continue
+        }
+
+        if (value == null) {
+          query.where(`${columnSql} IS NULL`)
         } else {
-          query.where(`${columnSql} IN (${value.map((entry) => query.driver.quote(entry)).join(", ")})`)
+          const normalizedValue = this.normalizeFrontendModelWhereColumnValue({columnName, modelClass, value})
+
+          if (normalizedValue === frontendModelWhereNoMatchSymbol) {
+            query.where("1=0")
+          } else {
+            query.where(`${columnSql} = ${query.driver.quote(normalizedValue)}`)
+          }
         }
 
         continue
       }
 
-      if (value == null) {
-        query.where(`${columnSql} IS NULL`)
-      } else {
-        query.where(`${columnSql} = ${query.driver.quote(value)}`)
+      if (isPlainObject(value)) {
+        const relationship = modelClass.getRelationshipsMap()[attributeName]
+
+        if (!relationship) {
+          throw new Error(`Unknown where relationship "${attributeName}" for ${modelClass.name}`)
+        }
+
+        const targetModelClass = relationship.getTargetModelClass()
+
+        if (!targetModelClass) {
+          throw new Error(`No target model class for where relationship "${attributeName}" on ${modelClass.name}`)
+        }
+
+        const relationshipPath = [...path, attributeName]
+
+        this.applyFrontendModelWhereForPath({
+          modelClass: targetModelClass,
+          path: relationshipPath,
+          query,
+          where: value
+        })
+
+        continue
       }
+
+      throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
     }
+  }
+
+  /**
+   * @param {object} args - Args.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.columnName - Column name.
+   * @param {unknown} args.value - Where value.
+   * @returns {unknown | symbol} - SQL-safe where value.
+   */
+  normalizeFrontendModelWhereColumnValue({columnName, modelClass, value}) {
+    if (isPlainObject(value)) {
+      const columnType = modelClass.getColumnTypeByName(columnName)
+
+      if (typeof columnType !== "string") {
+        return frontendModelWhereNoMatchSymbol
+      }
+
+      const normalizedType = columnType.toLowerCase()
+      const objectValueTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
+      const supportsObjectValues = normalizedType.includes("text") || objectValueTypes.has(normalizedType)
+
+      if (!supportsObjectValues) {
+        return frontendModelWhereNoMatchSymbol
+      }
+
+      return JSON.stringify(value)
+    }
+
+    return value
+  }
+
+  /**
+   * @param {object} args - Group args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @param {FrontendModelGroup} args.group - Group definition.
+   * @returns {void}
+   */
+  applyFrontendModelGroup({query, group}) {
+    const modelClass = this.frontendModelClass()
+    const targetModelClass = this.frontendModelSearchTargetModelClass({
+      modelClass,
+      path: group.path
+    })
+    const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
+    const columnName = attributeNameToColumnNameMap[group.column]
+
+    if (!columnName) {
+      throw new Error(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
+    }
+
+    this.ensureFrontendModelJoinPath({path: group.path, query})
+
+    const tableReference = query.getTableReferenceForJoin(...group.path)
+    const columnSql = `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnName)}`
+
+    this.ensureFrontendModelGroupColumn({columnSql, query})
+  }
+
+  /**
+   * Adds root-model columns to GROUP BY so strict SQL engines accept default root-table selects.
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelRootGroupColumns({query}) {
+    const modelClass = this.frontendModelClass()
+    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
+    const rootTableReference = query.getTableReferenceForJoin()
+
+    for (const columnName of Object.values(attributeNameToColumnNameMap)) {
+      const columnSql = `${query.driver.quoteTable(rootTableReference)}.${query.driver.quoteColumn(columnName)}`
+
+      this.ensureFrontendModelGroupColumn({columnSql, query})
+    }
+  }
+
+  /**
+   * Ensures a group-by SQL column is only appended once.
+   * @param {object} args - Args.
+   * @param {string} args.columnSql - Fully-qualified column SQL.
+   * @param {import("./database/query/model-class-query.js").default} args.query - Query instance.
+   * @returns {void}
+   */
+  ensureFrontendModelGroupColumn({columnSql, query}) {
+    const groupedColumns = query[frontendModelGroupedColumnsSymbol] || new Set()
+
+    if (groupedColumns.has(columnSql)) return
+
+    query.group(columnSql)
+    groupedColumns.add(columnSql)
+    query[frontendModelGroupedColumnsSymbol] = groupedColumns
   }
 
   /**
@@ -1073,25 +1985,77 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {import("./database/record/index.js").default} model - Model instance.
-   * @returns {Record<string, any>} - Serialized attributes filtered by select map.
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {string[] | null} - Default frontend-model attributes declared on the resource.
    */
-  serializeFrontendModelAttributes(model) {
+  frontendModelDefaultAttributesForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfigurationForModelClass(modelClass)
+    const attributes = frontendModelResource?.resourceConfiguration.attributes
+
+    if (!attributes) return null
+    if (Array.isArray(attributes)) return attributes
+    if (typeof attributes === "object") return Object.keys(attributes)
+
+    return null
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Model instance.
+   * @returns {Promise<Record<string, any>>} - Serialized attributes filtered by select map.
+   */
+  async serializeFrontendModelAttributes(model) {
     const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
     const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+    const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass)
     const modelAttributes = model.attributes()
+    const prototypeAttributeMethod = (attributeName) => {
+      let currentPrototype = Object.getPrototypeOf(model)
+
+      while (currentPrototype && currentPrototype !== Object.prototype) {
+        const candidate = Object.getOwnPropertyDescriptor(currentPrototype, attributeName)?.value
+
+        if (typeof candidate === "function") {
+          return {
+            method: candidate,
+            ownerName: currentPrototype.constructor?.name
+          }
+        }
+
+        currentPrototype = Object.getPrototypeOf(currentPrototype)
+      }
+    }
+    const serializedAttributeValue = async (attributeName) => {
+      const attributeMethodLookup = prototypeAttributeMethod(attributeName)
+      const attributeMethod = attributeMethodLookup?.method
+
+      if (typeof attributeMethod === "function") {
+        return await attributeMethod.call(model)
+      }
+
+      return modelAttributes[attributeName]
+    }
 
     if (!selectedAttributes) {
-      return modelAttributes
+      if (!defaultAttributes || defaultAttributes.length < 1) {
+        return modelAttributes
+      }
+
+      const serializedAttributes = {...modelAttributes}
+
+      for (const attributeName of defaultAttributes) {
+        if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+        serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
+      }
+
+      return serializedAttributes
     }
 
     /** @type {Record<string, any>} */
     const serializedAttributes = {}
 
     for (const attributeName of selectedAttributes) {
-      if (attributeName in modelAttributes) {
-        serializedAttributes[attributeName] = modelAttributes[attributeName]
-      }
+      if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+      serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
     }
 
     return serializedAttributes
@@ -1140,7 +2104,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      const primaryKey = relatedResource.resourceConfiguration.primaryKey || "id"
+      const primaryKey = relatedModelClass.primaryKey()
       const ids = relatedModels
         .map((model) => model.attributes()[primaryKey])
         .filter((id) => id !== undefined && id !== null)
@@ -1257,19 +2221,25 @@ export default class FrontendModelController extends Controller {
       }
     }
 
-    return models.map((model, modelIndex) => {
-      const serializedAttributes = this.serializeFrontendModelAttributes(model)
+    /** @type {Record<string, any>[]} */
+    const serializedModels = []
+
+    for (const [modelIndex, model] of models.entries()) {
+      const serializedAttributes = await this.serializeFrontendModelAttributes(model)
       const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
 
       if (Object.keys(preloadedRelationships).length < 1) {
-        return serializedAttributes
+        serializedModels.push(serializedAttributes)
+        continue
       }
 
-      return {
+      serializedModels.push({
         ...serializedAttributes,
         __preloadedRelationships: preloadedRelationships
-      }
-    })
+      })
+    }
+
+    return serializedModels
   }
 
   /**
@@ -1287,21 +2257,452 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<void>} - Resolves when error has been rendered.
    */
   async frontendModelRenderError(errorMessage) {
+    await this.logger.error(`Frontend model request failed: ${errorMessage}`)
+
     const renderError = /** @type {((errorMessage: string) => Promise<void>) | undefined} */ (
       /** @type {any} */ (this).renderError
     )
 
     if (typeof renderError === "function") {
-      await renderError.call(this, errorMessage)
+      await renderError.call(this, frontendModelClientSafeErrorMessage)
       return
     }
 
     await this.render({
       json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
-        errorMessage,
+        errorMessage: frontendModelClientSafeErrorMessage,
         status: "error"
       }))
     })
+  }
+
+  /**
+   * @param {string} errorMessage - Error message.
+   * @returns {Record<string, any>} - Error payload.
+   */
+  frontendModelErrorPayload(errorMessage) {
+    return {
+      errorMessage,
+      status: "error"
+    }
+  }
+
+  /**
+   * @returns {Record<string, any>} - Client-safe error payload.
+   */
+  frontendModelClientSafeErrorPayload() {
+    return this.frontendModelErrorPayload(frontendModelClientSafeErrorMessage)
+  }
+
+  /**
+   * @param {object} args - Error log args.
+   * @param {string} args.action - Endpoint/action label.
+   * @param {unknown} args.error - Caught error.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
+   * @param {string | undefined} [args.model] - Request model name when available.
+   * @param {string | undefined} [args.requestId] - Batch request id when available.
+   * @returns {Promise<void>} - Resolves after logging.
+   */
+  async frontendModelLogEndpointError({action, error, commandType, model, requestId}) {
+    let resolvedModel = model
+
+    if (!resolvedModel) {
+      try {
+        resolvedModel = this.frontendModelParams().model
+      } catch {
+        resolvedModel = undefined
+      }
+    }
+
+    const errorMessage = error instanceof Error
+      ? `${error.message}\n${error.stack || ""}`
+      : String(error)
+
+    await this.logger.error(() => ["Frontend model endpoint request failed", {
+      action,
+      commandType,
+      error: errorMessage,
+      model: resolvedModel,
+      requestId
+    }])
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @returns {Promise<void>} - Resolves when response has been rendered.
+   */
+  async frontendModelRenderCommandResponse(action) {
+    try {
+      const responsePayload = await this.frontendModelCommandPayload(action)
+      if (!responsePayload) return
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
+      })
+    } catch (error) {
+      await this.frontendModelLogEndpointError({action, commandType: action, error})
+      const errorMessage = frontendModelClientMessageForError(error)
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelErrorPayload(errorMessage)))
+      })
+    }
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @returns {Promise<Record<string, any> | null>} - Response payload.
+   */
+  async frontendModelCommandPayload(action) {
+    if (!(await this.runFrontendModelBeforeAction(action))) {
+      return null
+    }
+
+    const resource = this.frontendModelResourceInstance()
+
+    if (action === "index") {
+      const pluck = this.frontendModelPluck()
+
+      if (pluck.length > 0) {
+        if (!(await resource.supportsPluck("index"))) {
+          throw new Error("pluck is not supported when resource records are customized")
+        }
+
+        const values = await this.frontendModelPluckValues({
+          pluck,
+          query: this.frontendModelIndexQuery()
+        })
+
+        return {
+          status: "success",
+          values
+        }
+      }
+
+      const models = await this.frontendModelRecords()
+      const serializedModels = await Promise.all(models.map(async (model) => await resource.serialize(model, "index")))
+
+      return {
+        models: serializedModels,
+        status: "success"
+      }
+    }
+
+    const params = this.frontendModelParams()
+    const modelClass = this.frontendModelClass()
+    const id = params.id
+
+    if (action === "create") {
+      const attributes = params.attributes
+
+      if (!attributes || typeof attributes !== "object") {
+        return this.frontendModelErrorPayload("Expected model attributes.")
+      }
+
+      const model = await this.frontendModelCreateRecord(attributes)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const serializedModel = await resource.serialize(model, "create")
+
+      return {
+        model: serializedModel,
+        status: "success"
+      }
+    }
+
+    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+      return this.frontendModelErrorPayload("Expected model id.")
+    }
+
+    if (action === "attach") {
+      const attachmentName = params.attachmentName
+      const attachmentInput = params.attachment
+
+      if (typeof attachmentName !== "string" || attachmentName.length < 1) {
+        return this.frontendModelErrorPayload("Expected attachmentName.")
+      }
+
+      if (typeof attachmentInput === "undefined") {
+        return this.frontendModelErrorPayload("Expected attachment input.")
+      }
+
+      const model = await this.frontendModelFindRecord("attach", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      await model.getAttachmentByName(attachmentName).attach(attachmentInput)
+      const serializedModel = await this.serializeFrontendModel(model)
+
+      return {
+        model: serializedModel,
+        status: "success"
+      }
+    }
+
+    if (action === "download") {
+      const attachmentName = params.attachmentName
+      const attachmentId = typeof params.attachmentId === "string" ? params.attachmentId : undefined
+
+      if (typeof attachmentName !== "string" || attachmentName.length < 1) {
+        return this.frontendModelErrorPayload("Expected attachmentName.")
+      }
+
+      const model = await this.frontendModelFindRecord("download", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const downloadedAttachment = await model.getAttachmentByName(attachmentName).download(attachmentId)
+
+      if (!downloadedAttachment) {
+        return this.frontendModelErrorPayload("Attachment not found.")
+      }
+
+      return {
+        attachment: {
+          byteSize: downloadedAttachment.byteSize(),
+          contentBase64: downloadedAttachment.content().toString("base64"),
+          contentType: downloadedAttachment.contentType(),
+          filename: downloadedAttachment.filename(),
+          id: downloadedAttachment.id(),
+          url: downloadedAttachment.url()
+        },
+        status: "success"
+      }
+    }
+
+    if (action === "url") {
+      const attachmentName = params.attachmentName
+      const attachmentId = typeof params.attachmentId === "string" ? params.attachmentId : undefined
+
+      if (typeof attachmentName !== "string" || attachmentName.length < 1) {
+        return this.frontendModelErrorPayload("Expected attachmentName.")
+      }
+
+      const model = await this.frontendModelFindRecord("url", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const url = await model.getAttachmentByName(attachmentName).url(attachmentId)
+
+      if (!url) {
+        return this.frontendModelErrorPayload("Attachment URL not available.")
+      }
+
+      return {
+        status: "success",
+        url
+      }
+    }
+
+    if (action === "find") {
+      const model = await this.frontendModelFindRecord("find", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const serializedModel = await resource.serialize(model, "find")
+
+      return {
+        model: serializedModel,
+        status: "success"
+      }
+    }
+
+    if (action === "update") {
+      const attributes = params.attributes
+
+      if (!attributes || typeof attributes !== "object") {
+        return this.frontendModelErrorPayload("Expected model attributes.")
+      }
+
+      const model = await this.frontendModelFindRecord("update", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const updatedModel = await resource.update(model, attributes)
+      const serializedModel = await resource.serialize(updatedModel, "update")
+
+      return {
+        model: serializedModel,
+        status: "success"
+      }
+    }
+
+    const model = await this.frontendModelFindRecord("destroy", id)
+
+    if (!model) {
+      return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+    }
+
+    await resource.destroy(model)
+
+    return {status: "success"}
+  }
+
+  /** @returns {Promise<void>} - Shared frontend model API action with batch support. */
+  async frontendApi() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(this.params()))
+    const requests = Array.isArray(params.requests) ? params.requests : [params]
+    /** @type {Array<Record<string, any>>} */
+    const responses = []
+
+    for (const requestEntry of requests) {
+      const commandType = requestEntry?.commandType
+      const customPath = requestEntry?.customPath
+      const model = requestEntry?.model
+      const payload = requestEntry?.payload
+      const requestId = requestEntry?.requestId
+
+      if (typeof model !== "string" || model.length < 1) {
+        responses.push({
+          requestId,
+          response: this.frontendModelErrorPayload("Expected request model.")
+        })
+        continue
+      }
+
+      const isBuiltInCommand = ["index", "find", "create", "update", "destroy", "attach", "download", "url"].includes(commandType)
+
+      if (!isBuiltInCommand && (typeof customPath !== "string" || !customPath.startsWith("/"))) {
+        responses.push({
+          requestId,
+          response: this.frontendModelErrorPayload("Expected request customPath.")
+        })
+        continue
+      }
+
+      try {
+        let responsePayload
+
+        if (isBuiltInCommand) {
+          const commandParams = {
+            ...(payload && typeof payload === "object" ? payload : {}),
+            model
+          }
+
+          responsePayload = await this.withFrontendModelParams(commandParams, async () => {
+            return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
+              return await this.frontendModelCommandPayload(commandType)
+            })
+          })
+        } else {
+          responsePayload = await this.frontendApiCustomCommandPayload({
+            customPath,
+            payload
+          })
+        }
+
+        responses.push({
+          requestId,
+          response: responsePayload || this.frontendModelErrorPayload("Action halted by beforeAction.")
+        })
+      } catch (error) {
+        await this.frontendModelLogEndpointError({
+          action: "frontendApi",
+          commandType,
+          error,
+          model,
+          requestId
+        })
+        const errorMessage = frontendModelClientMessageForError(error)
+
+        responses.push({
+          requestId,
+          response: this.frontendModelErrorPayload(errorMessage)
+        })
+      }
+    }
+
+    await this.render({
+      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
+        responses,
+        status: "success"
+      }))
+    })
+  }
+
+  /**
+   * Dispatches a custom frontend-model command through the shared frontend-model API endpoint.
+   * @param {object} args - Arguments.
+   * @param {string} args.customPath - Custom backend route path.
+   * @param {unknown} args.payload - Request payload.
+   * @returns {Promise<Record<string, any>>} - Parsed JSON response payload.
+   */
+  async frontendApiCustomCommandPayload({customPath, payload}) {
+    const configuration = this.getConfiguration()
+    const response = new Response({configuration})
+    const resolver = new RoutesResolver({
+      configuration,
+      request: this.getRequest(),
+      response
+    })
+    resolver.params = {}
+    const routeHookMatch = await resolver.resolveRouteResolverHooks(customPath)
+    const configurationRoutes = configuration.getRoutes()
+    const routeMatch = routeHookMatch || !configurationRoutes?.rootRoute ? undefined : resolver.matchPathWithRoutes(configurationRoutes.rootRoute, customPath)
+
+    if (!routeHookMatch && !routeMatch) {
+      throw new Error(`No custom frontend model route matched '${customPath}'`)
+    }
+
+    const actionParam = routeHookMatch?.action || resolver.params.action
+    const controllerParam = routeHookMatch?.controller || resolver.params.controller
+    const actionValue = typeof actionParam === "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
+    const controllerValue = typeof controllerParam === "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
+
+    if (typeof actionValue !== "string" || actionValue.length < 1 || typeof controllerValue !== "string" || controllerValue.length < 1) {
+      throw new Error(`Custom frontend model route matched '${customPath}' without controller/action params`)
+    }
+
+    const action = inflection.camelize(actionValue.replaceAll("-", "_").replaceAll("/", "_"), true)
+    const controller = controllerValue
+    const controllerPath = routeHookMatch?.controllerPath || `${configuration.getDirectory()}/src/routes/${controller}/controller.js`
+    const viewPath = routeHookMatch?.viewPath || `${configuration.getDirectory()}/src/routes/${controller}`
+    resolver.routeHookControllerClass = routeHookMatch?.controllerClass
+    const controllerClass = await resolver.resolveControllerClass({controllerPath})
+    const controllerParams = {
+      ...((payload && typeof payload === "object") ? payload : {}),
+      ...resolver.params
+    }
+    const controllerInstance = new controllerClass({
+      action,
+      configuration,
+      controller,
+      params: controllerParams,
+      request: /** @type {import("./http-server/client/request.js").default} */ (this.getRequest()),
+      response,
+      viewPath
+    })
+
+    await this.withFrontendModelRequestContext(controllerParams, response, async () => {
+      await controllerInstance._runBeforeCallbacks()
+      await controllerInstance[action]()
+    })
+
+    const responseBody = response.getBody()
+
+    if (typeof responseBody !== "string" || responseBody.length < 1) {
+      return {}
+    }
+
+    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(JSON.parse(responseBody)))
   }
 
   /** @returns {Promise<void>} - Collection action for frontend model resources. */
@@ -1311,29 +2712,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    if (!(await this.runFrontendModelBeforeAction("index"))) return
-
-    const models = await this.frontendModelRecords()
-
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const serializedModels = serverConfiguration?.serialize
-      ? await Promise.all(models.map(async (model) => {
-        return await serverConfiguration.serialize({
-          action: "index",
-          controller: this,
-          model,
-          modelClass: this.frontendModelClass(),
-          params: this.frontendModelParams()
-        })
-      }))
-      : await this.serializeFrontendModels(models)
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
-        models: serializedModels,
-        status: "success"
-      }))
-    })
+    await this.frontendModelRenderCommandResponse("index")
   }
 
   /** @returns {Promise<void>} - Member find action for frontend model resources. */
@@ -1343,41 +2722,7 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    if (!(await this.runFrontendModelBeforeAction("find"))) return
-
-    const params = this.frontendModelParams()
-    const id = params.id
-
-    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
-      await this.frontendModelRenderError("Expected model id.")
-      return
-    }
-
-    const modelClass = this.frontendModelClass()
-    const model = await this.frontendModelFindRecord("find", id)
-
-    if (!model) {
-      await this.frontendModelRenderError(`${modelClass.name} not found.`)
-      return
-    }
-
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const serializedModel = serverConfiguration?.serialize
-      ? await serverConfiguration.serialize({
-        action: "find",
-        controller: this,
-        model,
-        modelClass,
-        params
-      })
-      : await this.serializeFrontendModel(model)
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
-        model: serializedModel,
-        status: "success"
-      }))
-    })
+    await this.frontendModelRenderCommandResponse("find")
   }
 
   /** @returns {Promise<void>} - Member update action for frontend model resources. */
@@ -1387,65 +2732,47 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    if (!(await this.runFrontendModelBeforeAction("update"))) return
+    await this.frontendModelRenderCommandResponse("update")
+  }
 
-    const params = this.frontendModelParams()
-    const id = params.id
-    const attributes = params.attributes
-
-    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
-      await this.frontendModelRenderError("Expected model id.")
+  /** @returns {Promise<void>} - Member attach action for frontend model resources. */
+  async frontendAttach() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
       return
     }
 
-    if (!attributes || typeof attributes !== "object") {
-      await this.frontendModelRenderError("Expected model attributes.")
+    await this.frontendModelRenderCommandResponse("attach")
+  }
+
+  /** @returns {Promise<void>} - Member download action for frontend model resources. */
+  async frontendDownload() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
       return
     }
 
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const model = await this.frontendModelFindRecord("update", id)
+    await this.frontendModelRenderCommandResponse("download")
+  }
 
-    if (!model) {
-      await this.frontendModelRenderError(`${modelClass.name} not found.`)
+  /** @returns {Promise<void>} - Member URL action for frontend model resources. */
+  async frontendUrl() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
       return
     }
 
-    let updatedModel = model
+    await this.frontendModelRenderCommandResponse("url")
+  }
 
-    if (serverConfiguration?.update) {
-      const callbackModel = await serverConfiguration.update({
-        action: "update",
-        attributes,
-        controller: this,
-        model,
-        modelClass,
-        params
-      })
-
-      if (callbackModel) updatedModel = callbackModel
-    } else {
-      model.assign(attributes)
-      await model.save()
+  /** @returns {Promise<void>} - Member create action for frontend model resources. */
+  async frontendCreate() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
     }
 
-    const serializedModel = serverConfiguration?.serialize
-      ? await serverConfiguration.serialize({
-        action: "update",
-        controller: this,
-        model: updatedModel,
-        modelClass,
-        params
-      })
-      : await this.serializeFrontendModel(updatedModel)
-
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
-        model: serializedModel,
-        status: "success"
-      }))
-    })
+    await this.frontendModelRenderCommandResponse("create")
   }
 
   /** @returns {Promise<void>} - Member destroy action for frontend model resources. */
@@ -1455,42 +2782,60 @@ export default class FrontendModelController extends Controller {
       return
     }
 
-    if (!(await this.runFrontendModelBeforeAction("destroy"))) return
+    await this.frontendModelRenderCommandResponse("destroy")
+  }
 
-    const params = this.frontendModelParams()
-    const id = params.id
-
-    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
-      await this.frontendModelRenderError("Expected model id.")
+  /** @returns {Promise<void>} - Custom collection/member command action for frontend-model resources. */
+  async frontendCustomCommand() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
       return
     }
 
-    const modelClass = this.frontendModelClass()
-    const serverConfiguration = this.frontendModelServerConfiguration()
-    const model = await this.frontendModelFindRecord("destroy", id)
+    try {
+      const responsePayload = await this.frontendModelCustomCommandPayload()
 
-    if (!model) {
-      await this.frontendModelRenderError(`${modelClass.name} not found.`)
-      return
-    }
-
-    if (serverConfiguration?.destroy) {
-      await serverConfiguration.destroy({
-        action: "destroy",
-        controller: this,
-        model,
-        modelClass,
-        params
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(responsePayload))
       })
-    } else {
-      await model.destroy()
+    } catch (error) {
+      await this.frontendModelLogEndpointError({action: "frontendCustomCommand", commandType: "custom-command", error})
+      const errorMessage = frontendModelClientMessageForError(error)
+
+      await this.render({
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelErrorPayload(errorMessage)))
+      })
+    }
+  }
+
+  /** @returns {Promise<Record<string, any>>} - Response payload. */
+  async frontendModelCustomCommandPayload() {
+    const params = this.frontendModelParams()
+    const methodName = params.frontendModelCustomCommandMethodName
+    const scope = params.frontendModelCustomCommandScope
+
+    if (typeof methodName !== "string" || methodName.length < 1) {
+      return this.frontendModelErrorPayload("Expected frontend-model custom command method name.")
     }
 
-    await this.render({
-      json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue({
-        status: "success"
-      }))
-    })
+    if (scope !== "collection" && scope !== "member") {
+      return this.frontendModelErrorPayload("Expected frontend-model custom command scope.")
+    }
+
+    const resource = /** @type {Record<string, any>} */ (this.frontendModelResourceInstance())
+    const commandMethod = resource[methodName]
+
+    if (typeof commandMethod !== "function") {
+      return this.frontendModelErrorPayload(`Missing frontend-model custom command '${methodName}'.`)
+    }
+
+    const responsePayload = await commandMethod.call(resource)
+
+    if (!responsePayload || typeof responsePayload !== "object") {
+      return {status: "success"}
+    }
+
+    return /** @type {Record<string, any>} */ (responsePayload)
   }
 
   /**

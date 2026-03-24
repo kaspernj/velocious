@@ -1,5 +1,12 @@
 # Changelog
 
+- Allow symbolic search operators (`>`, `<`, `>=`, `<=`) as aliases for `gt`, `lt`, `gteq`, and `lteq` across frontend-model `search(...)` payloads and backend relationship tuple filters.
+- Add frontend-model nested relationship `where(...)` support via structured relationship-path descriptors (for example `{project: {creatingUser: {reference: "owner-b"}}}`), with backend relationship-join application and integration coverage.
+- Normalize plain-object frontend-model `where(...)` column values to JSON strings only for text/JSON-like columns and treat object values on non-text columns as no-match (`1=0`) to avoid invalid SQL/cast errors across MySQL/MariaDB/PG.
+- Add frontend-model `joins(...)` support using relationship-object descriptors only (for example `{project: {creatingUser: true}}`), reject raw SQL join strings, and apply explicit joins in built-in `frontendIndex`.
+- Validate and normalize structured `findOrInitializeBy(...)` / `findOrCreateBy(...)` conditions before model initialization/creation, and cover invalid-condition rejections in frontend-model specs.
+- Add frontend-model query `limit(...)`, `offset(...)`, and `page(...).perPage(...)` support with integer-only payload validation (rejecting string SQL fragments), backend application in `frontendIndex`, and dummy-app integration coverage.
+- Document frontend vs backend model API differences in docs, including query-surface scope, resource-mapped command behavior for `toArray()`, and transport/runtime differences.
 - Add frontend-model query `sort(...)` support end-to-end (query payload, `FrontendModelBase.sort`, and backend frontend-model controller order application), including relationship-path sort definitions (for example `Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}})`), and cover sorting through dummy-app integration specs.
 - Infer generated frontend-model attribute JSDoc types from resource attribute metadata/column descriptors (including nullability) instead of always emitting `any`.
 - Add a CanCan-style authorization library with request-scoped abilities, resource-defined `abilities()` rules, and `Model.accessible()` query filtering.
@@ -111,6 +118,7 @@
 - Bump `system-testing` from `1.0.76` to `1.0.77`.
 - Inline browser `EXPO_PUBLIC_SYSTEM_TEST*` env values in the browser test bundle to prevent websocket startup failures when `process` is unavailable in the browser runtime.
 - Resolve built-in controller frontend model actions (`frontendIndex`, `frontendFind`, `frontendUpdate`, `frontendDestroy`) from `backendProjects.resources` configuration so controllers no longer need a `frontendModelClass()` implementation.
+- Resolve backendProjects frontend-model command routes with `controllerClass: FrontendModelController` (instead of route `controllerPath`/local route controllers), so apps no longer need per-resource wrapper controllers under `src/routes/**/frontend-models/**/controller.js`.
 - Add optional `backendProjects.resources.*.server` hooks (`beforeAction`, `records`, `serialize`, `find`, `update`, `destroy`) for backend-side customization without controller action overrides.
 - Move built-in frontend model actions out of the base `Controller` class into a dedicated `FrontendModelController` class so projects opt in explicitly.
 - Require `backendProjects.resources.*.abilities` for frontend model generation and runtime actions, and enforce CanCan-style action scoping via ability-aware queries (`read`, `update`, `destroy`, etc.).
@@ -169,3 +177,28 @@
 - Make frontend-model generator stop emitting `path` in generated `resourceConfig()` output.
 - Extend frontend-model generator attribute handling so array `attributes` infer JSDoc types/nullability from backend model columns when model metadata is available, while keeping object-form attribute overrides.
 - Extend frontend-model generator relationship handling to support array-form and inferred relationship metadata from backend model associations, while keeping object-form relationship overrides.
+- Add frontend-model parity APIs (`all`, `order`, `first`, `last`, `findOrInitializeBy`, `findOrCreateBy`, `create`, `save`, record state helpers) and add built-in frontend-model `create` command/action support with resource-ability scoping (including shared `/velocious/api` batches and autoroutes).
+- Regenerate dummy frontend models so single-tag JSDoc blocks (including relationship `@returns` definitions) are emitted on one line.
+- Add frontend-model query `group(...)` support with safe attribute/path normalization (including nested relationship grouping like `{project: {account: ["id"]}}`) and reject SQL-like raw string fragments.
+- Add frontend-model `order(...)` as an alias for query sorting so frontend model query naming aligns with backend model `order(...)` usage.
+- Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.
+- Add frontend-model query `pluck(...)` support with safe attribute/path normalization and backend metadata validation for relationship-aware plucks.
+- Replace non-literal dynamic import in frontend-model route hook with a static controller import so Expo/Metro builds do not fail on `import(variable)` usage.
+- Restore frontend-model parity APIs after merge resolution (`first`/`last`, `findOrInitializeBy`/`findOrCreateBy`, `isNewRecord`/`isPersisted`, relationship parity helpers, create/save flows) and re-add query helpers so `FrontendModelBase` and `FrontendModelQuery` stay API-compatible.
+- Validate missing ids for `find`/`update`/`destroy` frontend-model actions while keeping `create` id-free, so missing-id find requests return `Expected model id.` instead of an incorrect not-found response.
+- Avoid eagerly importing `FrontendModelController` in the frontend-model route hook; return a `controllerPath` override for `/velocious/api` so browser-test bundling no longer pulls Node-only controller dependencies (`ejs`, `crypto`, `node:path`, etc.) into the browser graph.
+- Add frontend-model query/base support for `first()` and `last()` with deterministic primary-key ordering and limit semantics.
+- Add frontend-model integration coverage for `first()`/`last()` over Node and browser transports, and remove the completed `first()`/`last()` item from `TODO.md`.
+
+- Add `VelociousError` with `safeToExpose` support and use it for frontend-model validation failures so safe `Invalid ...` messages are returned to clients while unexpected errors stay generic and fully logged server-side.
+- Add explicit allowlist validation for frontend-model `resourceConfig().path` and `resourceConfig().commands` (safe URL segments only) and enforce it in frontend command URLs plus backend autoroute resolution.
+- Add built-in model/frontend-model attachment support with `hasOneAttachment`/`hasManyAttachments`, attachment-aware frontend-model `attach`/`download` commands, and backend/frontend update flows that accept attachment payloads.
+- Add pluggable attachment storage drivers (`filesystem`, `native`, `s3`) with per-attachment driver selection, driver-backed persistence reads/writes, and attachment `url()` support on backend/frontend attachment helpers (including frontend-model `url` command responses).
+- Allow model attachment definitions to pass storage drivers as direct class/instance references (for example `Task.hasOneAttachment("mobileCache", {driver: NativeDriver})`) to avoid forced dynamic imports in Expo-incompatible dependency paths.
+
+- Support root-model select shorthand arrays/strings (`Model.select(["id", "createdAt"])`) across frontend queries, frontend-model controller payloads, and backend model queries so selections stay scoped to the primary model even with joins.
+- Keep frontend-model route-hook controller resolution Expo-safe by only overriding `controllerPath` for shared `/velocious/api` requests, while backend-project frontend-model autoroutes continue resolving app route controllers (with existing resolver controller-class fallback behavior).
+- Register the default frontend-model command route hook through Node environment setup (instead of `Configuration` import-time wiring) so browser bundles avoid backend-only hook imports while Node/server behavior remains unchanged.
+- Make attachment store bundler-safe for Expo/Metro by removing static Node `crypto`/filesystem imports from `RecordAttachmentsStore`; UUID generation now uses `pure-uuid` and the filesystem driver is loaded lazily only when that backend driver is actually used.
+- Make attachment input normalization Expo-safe by lazy-loading Node `fs/promises` and `path` only for Node-only attachment-path branches, preventing Metro eager bundle resolution of Node builtins.
+- Remove attachment-driver dynamic imports from shared code paths: attachment storage now requires explicit configured drivers, while Node-specific file/path attachment operations are handled by `NodeEnvironmentHandler` methods to keep Expo/Metro bundles free of Node-only imports.

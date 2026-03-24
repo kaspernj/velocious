@@ -13,4 +13,13 @@ describe("Expect#toContain", () => {
       expect("hello").toContain("world")
     }).toThrowError('"hello" doesn\'t contain "world"')
   })
+
+  it("supports negated contains checks", async () => {
+    expect([1, 2, 3]).not.toContain(4)
+    expect("hello").not.toContain("world")
+
+    await expect(() => {
+      expect([1, 2, 3]).not.toContain(2)
+    }).toThrowError("[1,2,3] was unexpected to contain 2")
+  })
 })
