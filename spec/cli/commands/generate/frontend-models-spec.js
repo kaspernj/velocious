@@ -158,6 +158,14 @@ describe("Cli - generate - frontend-models", () => {
     expect(projectContents).toContain("tasksLoaded() { return /** @type {Array<import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\").loaded()) }")
     expect(projectContents).toContain("async loadTasks() { return /** @type {Promise<Array<import(\"./task.js\").default>>} */ (this.loadRelationship(\"tasks\")) }")
 
+    const indexPath = `${dummyDirectory()}/src/frontend-models/index.js`
+    const indexContents = await fs.readFile(indexPath, "utf8")
+
+    expect(indexContents).toContain("export {default as Comment} from \"./comment.js\"")
+    expect(indexContents).toContain("export {default as Project} from \"./project.js\"")
+    expect(indexContents).toContain("export {default as Task} from \"./task.js\"")
+    expect(indexContents).toContain("export {default as User} from \"./user.js\"")
+
     expect(userContents).toContain("class User extends FrontendModelBase")
     expect(userContents).toContain("      collectionCommands: {\n")
     expect(userContents).toContain("        lookupByEmail: \"lookup-by-email\",\n")
