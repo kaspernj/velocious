@@ -174,7 +174,7 @@ describe("Cli - generate - frontend-models", () => {
       configuration: buildConfiguration({
         backendProjectsList: [{
           path: "/tmp/backend",
-          resources: {
+          frontendModels: {
             Call: CallFrontendResource
           }
         }]
@@ -222,7 +222,7 @@ describe("Cli - generate - frontend-models", () => {
       configuration: buildConfiguration({
         backendProjectsList: [{
           path: "/tmp/backend",
-          resources: {
+          frontendModels: {
             Call: CallFrontendResource
           }
         }],
@@ -266,7 +266,7 @@ describe("Cli - generate - frontend-models", () => {
       configuration: buildConfiguration({
         backendProjectsList: [{
           path: "/tmp/backend",
-          resources: {
+          frontendModels: {
             Task: MissingAbilitiesTaskFrontendResource
           }
         }]
@@ -280,14 +280,14 @@ describe("Cli - generate - frontend-models", () => {
     await cli.execute()
   })
 
-  it("generates frontend models from backend project resource require contexts", async () => {
+  it("generates frontend models from backend project frontendModelsRequireContext", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
     const cli = new Cli({
       configuration: buildConfiguration({
         backendProjectsList: [{
           path: "/tmp/backend",
-          resourcesRequireContext: buildRequireContext({
+          frontendModelsRequireContext: buildRequireContext({
             "./call.js": {default: CallFrontendResource},
             "./helper.js": {default: {not: "a resource"}}
           })
@@ -311,7 +311,7 @@ describe("Cli - generate - frontend-models", () => {
       configuration: buildConfiguration({
         backendProjectsList: [{
           path: "/tmp/backend",
-          resources: {
+          frontendModels: {
             Task: MissingRelationshipTargetTaskFrontendResource
           }
         }]
@@ -332,7 +332,7 @@ describe("Cli - generate - frontend-models", () => {
       configuration: buildConfiguration({
         backendProjectsList: [{
           path: "/tmp/backend",
-          resources: {
+          frontendModels: {
             Call: NullableIdCallFrontendResource
           }
         }]
@@ -357,7 +357,7 @@ describe("Cli - generate - frontend-models", () => {
       configuration: buildConfiguration({
         backendProjectsList: [{
           path: "/tmp/backend",
-          resources: {
+          frontendModels: {
             User: ReferenceUserFrontendResource
           }
         }],

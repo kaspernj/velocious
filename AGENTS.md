@@ -26,6 +26,7 @@ For multi-step method chains, put the receiver on its own line and place each ch
 In generated code, keep single-tag JSDoc blocks on one line when they fit (e.g. `/** @returns {Type} - Description. */`).
 Do not silence JSDoc/TypeScript errors with broad casts like `/** @type {Record<string, any>} */ (...)`; fix the underlying typedefs/contracts instead.
 When a generated model/base-model JSDoc says a SQLite-backed attribute is `boolean`, make the record read path honor that contract; do not leave SQLite `1` / `0` values leaking through to callers and then normalize them ad hoc in downstream apps.
+Trust JSDoc-typed model/accessor return values directly in Velocious code and specs; do not patch contract mismatches with `String(model.id())`, `Number(value)`, or similar coercions just to make comparisons pass. Fix the serializer/accessor contract and prove it with `npm run typecheck`.
 For locals or params typed as `string | undefined`, branch on presence only; do not add redundant `typeof value == "string"` guards before calling string methods or normalizing the typed branch.
 For code that runs in Expo/Metro bundles, avoid non-literal dynamic imports (for example `import(variable)`); use static imports or environment-handler indirection.
 

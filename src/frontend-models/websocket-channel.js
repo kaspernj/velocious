@@ -161,7 +161,7 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
       headers: this.request?.headers?.() || {},
       method: "POST",
       params: this.syntheticParams(),
-      path: "/velocious/api",
+      path: "/frontend-models",
       remoteAddress: this.request?.remoteAddress?.()
     })
   }

@@ -219,7 +219,6 @@
  *   builtInCollectionCommands: Record<string, string>
  *   builtInMemberCommands: Record<string, string>
  *   collectionCommands: Record<string, string>
- *   commands: Record<string, string>
  *   memberCommands: Record<string, string>
  * }} NormalizedFrontendModelResourceConfiguration
  */

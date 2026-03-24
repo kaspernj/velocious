@@ -1,6 +1,12 @@
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
+import Comment from "../models/comment.js"
+import Project from "../models/project.js"
+import Task from "../models/task.js"
+import User from "../models/user.js"
 
 class TaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -11,26 +17,33 @@ class TaskFrontendResource extends FrontendModelBaseResource {
         index: "read",
         update: "update"
       },
-      attributes: ["id", "identifier", "isDone", "name"],
-      commands: {
+      attributes: ["id", "identifier", "isDone", "name", "updatedAt"],
+      builtInCollectionCommands: {
+        index: "list",
+      },
+      builtInMemberCommands: {
         destroy: "destroy",
         find: "find",
-        index: "list",
         update: "update"
       },
       relationships: {
         project: {
           model: "Project",
           type: "belongsTo"
+        },
+        comments: {
+          model: "Comment",
+          type: "hasMany"
         }
       },
-      path: "/api/frontend-models/tasks",
       primaryKey: "id"
     }
   }
 }
 
 class ProjectFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Project
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -38,19 +51,22 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "name"],
+      attributes: ["id"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
       relationships: {
         tasks: {
           model: "Task",
           type: "hasMany"
         }
-      },
-      path: "/api/frontend-models/projects"
+      }
     }
   }
 }
 
 class UserFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = User
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -58,11 +74,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
         find: "read",
         index: "read"
       },
-      attributes: {
-        email: true,
-        id: true,
-        name: true
-      },
+      attributes: ["id", "email", "name", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       collectionCommands: {
@@ -70,13 +82,14 @@ class UserFrontendResource extends FrontendModelBaseResource {
       },
       memberCommands: {
         refreshProfile: "refresh-profile"
-      },
-      path: "/api/frontend-models/users"
+      }
     }
   }
 }
 
-class BrowserFrontendModelResource extends FrontendModelBaseResource {
+class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Comment
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -84,12 +97,9 @@ class BrowserFrontendModelResource extends FrontendModelBaseResource {
         find: "read",
         index: "read"
       },
-      attributes: ["id", "email", "createdAt"],
-      commands: {
-        find: "frontend-find",
-        index: "frontend-index"
-      },
-      path: "/frontend-model-system-tests"
+      attributes: ["id", "body"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"]
     }
   }
 }
@@ -98,8 +108,8 @@ class BrowserFrontendModelResource extends FrontendModelBaseResource {
 const backendProjects = [
   {
     path: "/tmp/example-backend",
-    resources: {
-      BrowserFrontendModel: BrowserFrontendModelResource,
+    frontendModels: {
+      Comment: SystemTestCommentFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,
       User: UserFrontendResource

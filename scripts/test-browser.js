@@ -387,6 +387,7 @@ async function main() {
 
   try {
     const backendConfiguration = await loadBrowserBackendConfiguration()
+    globalThis.__velocious_browser_test_backend_configuration = backendConfiguration
     backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
     systemTest = SystemTest.current({
       debug: process.env.SYSTEM_TEST_DEBUG === "true",
@@ -464,6 +465,17 @@ async function loadBrowserBackendConfiguration() {
 
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
   const backendConfiguration = dummyConfigurationImport.default
+
+  const nodeEnvironmentHandler = new NodeEnvironmentHandler()
+  nodeEnvironmentHandler.setConfiguration(backendConfiguration)
+
+  const migrator = new Migrator({configuration: backendConfiguration})
+
+  await backendConfiguration.ensureConnections(async () => {
+    await migrator.prepare()
+    const migrations = await nodeEnvironmentHandler.findMigrations()
+    await migrator.migrateFiles(migrations, async (filePath) => await nodeEnvironmentHandler.requireMigration(filePath))
+  })
 
   return backendConfiguration
 }

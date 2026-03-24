@@ -44,7 +44,7 @@ async function postFrontendModel(path, payload) {
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
 async function postSharedTaskFrontendModelCommand(commandType, payload) {
-  const response = await postFrontendModel("/velocious/api", {
+  const response = await postFrontendModel("/frontend-models", {
     modelName: "Task",
     requests: [{
       commandType,
@@ -155,7 +155,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await createTask("Index Alpha")
       await createTask("Index Beta")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         sort: "name asc"
       })
 
@@ -170,7 +170,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const task = await createTask("Boolean normalization task")
       await task.update({isDone: true})
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         where: {id: task.id()}
       })
 
@@ -185,7 +185,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await createTask("Batch Alpha")
       await createTask("Batch Beta")
 
-      const payload = await postFrontendModel("/velocious/api", {
+      const payload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
@@ -206,7 +206,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("returns client-safe errors from shared frontend-model API when command execution fails", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/velocious/api", {
+      const payload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
@@ -226,7 +226,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("returns generic client-safe errors from shared frontend-model API for unexpected failures", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/velocious/api", {
+      const payload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
@@ -248,14 +248,15 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Preload Task")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         preload: {project: true},
         where: {id: task.id()}
       })
 
       expect(payload.status).toEqual("success")
       expect(payload.models.length).toEqual(1)
-      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
+      expect(payload.models[0].__preloadedRelationships?.project).toBeDefined()
+      expect(payload.models[0].__preloadedRelationships.project?.id).toEqual(task.readAttribute("projectId"))
     })
   })
 
@@ -263,7 +264,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Merged preload task")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         preload: [
           {project: ["tasks"]},
           {project: ["projectDetail"]}
@@ -273,7 +274,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.length).toEqual(1)
-      expect(payload.models[0].__preloadedRelationships.project).toEqual(null)
+      expect(payload.models[0].__preloadedRelationships?.project).toBeDefined()
     })
   })
 
@@ -282,12 +283,12 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await createTask("Page Alpha")
       await createTask("Page Bravo")
 
-      const limitOffsetPayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const limitOffsetPayload = await postSharedTaskFrontendModelCommand("index", {
         limit: 1,
         offset: 1,
         sort: "name asc"
       })
-      const pagePayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const pagePayload = await postSharedTaskFrontendModelCommand("index", {
         page: 2,
         perPage: 1,
         sort: "name asc"
@@ -305,10 +306,10 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await Comment.create({body: "Distinct comment A", taskId: task.id()})
       await Comment.create({body: "Distinct comment B", taskId: task.id()})
 
-      const withoutDistinctPayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const withoutDistinctPayload = await postSharedTaskFrontendModelCommand("index", {
         searches: [{column: "id", operator: "gteq", path: ["comments"], value: 1}]
       })
-      const withDistinctPayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const withDistinctPayload = await postSharedTaskFrontendModelCommand("index", {
         distinct: true,
         searches: [{column: "id", operator: "gteq", path: ["comments"], value: 1}]
       })
@@ -323,7 +324,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("rejects non-boolean distinct params on frontendIndex", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         distinct: "1 OR 1=1"
       })
 
@@ -334,7 +335,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("rejects non-numeric pagination params on frontendIndex", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         limit: "1; DROP TABLE accounts"
       })
 
@@ -347,7 +348,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Select Task")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         select: {Task: ["id"]},
         where: {id: task.id()}
       })
@@ -360,11 +361,11 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
   it("treats select array shorthand as root-model attributes", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Select Array Task")
-      const baselinePayload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const baselinePayload = await postSharedTaskFrontendModelCommand("index", {
         where: {id: task.id()}
       })
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         joins: {project: true},
         select: ["id", "createdAt"],
         where: {id: task.id()}
@@ -391,7 +392,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await createTask("Search Alpha")
       await createTask("Search Beta")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         searches: [
           {
             column: "name",
@@ -412,7 +413,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const taskA = await createTask("Symbolic Search A")
       const taskB = await createTask("Symbolic Search B")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         searches: [
           {
             column: "id",
@@ -433,7 +434,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const taskA = await createTaskWithProject({projectName: "Search Project A", taskName: "Task A"})
       const taskB = await createTaskWithProject({projectName: "Search Project B", taskName: "Task B"})
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         searches: [
           {
             column: "id",
@@ -456,7 +457,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await createTask("Ransack Alpha")
       await createTask("Ransack Beta")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         searches: [
           {
             column: "name",
@@ -479,10 +480,10 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       await Comment.create({body: "Join comment A", taskId: task.id()})
       await Comment.create({body: "Join comment B", taskId: task.id()})
 
-      const payloadWithoutJoins = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payloadWithoutJoins = await postSharedTaskFrontendModelCommand("index", {
         where: {id: task.id()}
       })
-      const payloadWithJoins = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payloadWithJoins = await postSharedTaskFrontendModelCommand("index", {
         joins: {comments: true},
         where: {id: task.id()}
       })
@@ -510,7 +511,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         taskName: "Nested join task"
       })
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         joins: {
           project: {
             creatingUser: true
@@ -526,7 +527,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("rejects raw string joins params", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         joins: "LEFT JOIN comments ON comments.task_id = tasks.id"
       })
 
@@ -537,7 +538,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("rejects unsafe string group params", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         group: "id; DROP TABLE accounts"
       })
 
@@ -551,7 +552,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const alphaTask = await createTask("Pluck Alpha")
       const betaTask = await createTask("Pluck Beta")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         pluck: ["id", "name"],
         sort: "name asc",
         where: {id: [alphaTask.id(), betaTask.id()]}
@@ -568,7 +569,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const firstTask = await createTaskWithProject({projectName: "Pluck project A", taskName: "Pluck relation A"})
       const secondTask = await createTaskWithProject({projectName: "Pluck project B", taskName: "Pluck relation B"})
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         pluck: {project: ["id"]},
         sort: "name asc",
         where: {id: [firstTask.id(), secondTask.id()]}
@@ -585,7 +586,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const firstTask = await createTaskWithProject({projectName: "Overlap project A", taskName: "Overlap task A"})
       const secondTask = await createTaskWithProject({projectName: "Overlap project B", taskName: "Overlap task B"})
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         pluck: {project: ["id"]},
         searches: [
           {
@@ -606,7 +607,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("rejects unsafe string pluck params", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         pluck: "id; DROP TABLE accounts"
       })
 
@@ -618,7 +619,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
   it("returns one model from frontendFind", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Find task")
-      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {id: task.id()})
+      const payload = await postSharedTaskFrontendModelCommand("find", {id: task.id()})
 
       expect(payload.status).toEqual("success")
       expect(payload.model.id).toEqual(task.id())
@@ -630,19 +631,20 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Find preload task")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {
+      const payload = await postSharedTaskFrontendModelCommand("find", {
         id: task.id(),
         preload: {project: true}
       })
 
       expect(payload.status).toEqual("success")
-      expect(payload.model.__preloadedRelationships.project).toEqual(null)
+      expect(payload.model.__preloadedRelationships?.project).toBeDefined()
+      expect(payload.model.__preloadedRelationships.project?.id).toEqual(task.readAttribute("projectId"))
     })
   })
 
   it("returns error payload when frontendFind record is missing", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {id: 404})
+      const payload = await postSharedTaskFrontendModelCommand("find", {id: 404})
 
       expect(payload.status).toEqual("error")
       expect(payload.errorMessage).toEqual("Task not found.")
@@ -709,7 +711,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Update me")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+      const payload = await postSharedTaskFrontendModelCommand("update", {
         attributes: {name: "Updated task"},
         id: task.id()
       })
@@ -725,7 +727,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Update computed attr")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+      const payload = await postSharedTaskFrontendModelCommand("update", {
         attributes: {
           identifier: "task-overridden",
           name: "Updated task"
@@ -745,7 +747,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Update attachment")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/update", {
+      const payload = await postSharedTaskFrontendModelCommand("update", {
         attributes: {
           descriptionFile: {
             contentBase64: Buffer.from("attachment-content").toString("base64"),
@@ -766,7 +768,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
   it("attaches and downloads files through frontend-model attachment endpoints", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Attach endpoint")
-      const attachPayload = await postFrontendModel("/api/frontend-models/tasks/attach", {
+      const attachPayload = await postSharedTaskFrontendModelCommand("attach", {
         attachment: {
           contentBase64: Buffer.from("endpoint-content").toString("base64"),
           filename: "endpoint.doc"
@@ -774,7 +776,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         attachmentName: "descriptionFile",
         id: task.id()
       })
-      const downloadPayload = await postFrontendModel("/api/frontend-models/tasks/download", {
+      const downloadPayload = await postSharedTaskFrontendModelCommand("download", {
         attachmentName: "descriptionFile",
         id: task.id()
       })
@@ -793,7 +795,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Attachment URL endpoint")
 
-      await postFrontendModel("/api/frontend-models/tasks/attach", {
+      await postSharedTaskFrontendModelCommand("attach", {
         attachment: {
           contentBase64: Buffer.from("url-endpoint-content").toString("base64"),
           filename: "url-endpoint.doc"
@@ -802,7 +804,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         id: task.id()
       })
 
-      const urlPayload = await postFrontendModel("/api/frontend-models/tasks/url", {
+      const urlPayload = await postSharedTaskFrontendModelCommand("url", {
         attachmentName: "descriptionFile",
         id: task.id()
       })
@@ -817,7 +819,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Path input blocked")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/attach", {
+      const payload = await postSharedTaskFrontendModelCommand("attach", {
         attachment: {
           filename: "file.txt",
           path: "/etc/passwd"
@@ -835,7 +837,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       const task = await createTask("Destroy me")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/destroy", {id: task.id()})
+      const payload = await postSharedTaskFrontendModelCommand("destroy", {id: task.id()})
       const persisted = await Task.findBy({id: task.id()})
 
       expect(payload.status).toEqual("success")
@@ -845,7 +847,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("returns error when frontendFind id is missing", async () => {
     await Dummy.run(async () => {
-      const payload = await postFrontendModel("/api/frontend-models/tasks/find", {})
+      const payload = await postSharedTaskFrontendModelCommand("find", {})
 
       expect(payload.status).toEqual("error")
       expect(payload.errorMessage).toEqual("Expected model id.")
@@ -875,7 +877,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         taskName: "Where Owner Task B"
       })
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         where: {
           project: {
             creatingUser: {
@@ -894,7 +896,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     await Dummy.run(async () => {
       await createTask("Object where value")
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         where: {id: {raw: 1}}
       })
 
@@ -926,7 +928,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         taskName: "Owner Task B"
       })
 
-      const payload = await postFrontendModel("/api/frontend-models/tasks/list", {
+      const payload = await postSharedTaskFrontendModelCommand("index", {
         searches: [
           {
             column: "reference",

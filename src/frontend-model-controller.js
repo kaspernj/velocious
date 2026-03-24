@@ -1045,7 +1045,7 @@ export default class FrontendModelController extends Controller {
 
     if (frontendModelClass) return frontendModelClass
 
-    throw new Error(`No frontend model configured for model '${modelName || "unknown"}' and controller '${controllerName || "unknown"}'. Configure backendProjects resources.`)
+    throw new Error(`No frontend model configured for model '${modelName || "unknown"}' and controller '${controllerName || "unknown"}'. Configure backendProjects.frontendModels.`)
   }
 
   /**
@@ -1135,6 +1135,10 @@ export default class FrontendModelController extends Controller {
 
     if (!frontendModelResource) return null
 
+    const resourceModelClass = frontendModelResource.resourceClass?.ModelClass
+
+    if (resourceModelClass) return resourceModelClass
+
     const modelClasses = this.getConfiguration().getModelClasses()
     const modelClass = modelClasses[frontendModelResource.modelName]
 
@@ -1143,6 +1147,34 @@ export default class FrontendModelController extends Controller {
     }
 
     return modelClass
+  }
+
+  /**
+   * Ensures the frontend model class is initialized (has columns, table name, etc.).
+   * This handles the case where model initialization was skipped at startup (e.g., browser tests).
+   * @returns {Promise<void>} - Resolves when the model class is ready.
+   */
+  async ensureFrontendModelClassInitialized() {
+    const modelClass = this.frontendModelClassFromConfiguration()
+
+    if (!modelClass || modelClass._initialized) return
+
+    const configuration = this.getConfiguration()
+    const backendProjects = configuration.getBackendProjects()
+
+    for (const backendProject of backendProjects) {
+      const resources = frontendModelResourcesForBackendProject(backendProject)
+
+      for (const resourceModelName in resources) {
+        const resourceDefinition = resources[resourceModelName]
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+        const resourceModelClass = resourceClass?.ModelClass
+
+        if (resourceModelClass && !resourceModelClass._initialized && typeof resourceModelClass.initializeRecord === "function") {
+          await resourceModelClass.initializeRecord({configuration})
+        }
+      }
+    }
   }
 
   /**
@@ -1826,6 +1858,19 @@ export default class FrontendModelController extends Controller {
    * @returns {unknown | symbol} - SQL-safe where value.
    */
   normalizeFrontendModelWhereColumnValue({columnName, modelClass, value}) {
+    if (typeof value === "string") {
+      const columnType = modelClass.getColumnTypeByName(columnName)?.toLowerCase()
+      const isDateTimeColumn = typeof columnType === "string" && ["date", "datetime", "timestamp"].some((type) => columnType.includes(type))
+
+      if (isDateTimeColumn) {
+        const parsedDate = new Date(value)
+
+        if (!Number.isNaN(parsedDate.getTime())) {
+          return parsedDate
+        }
+      }
+    }
+
     if (isPlainObject(value)) {
       const columnType = modelClass.getColumnTypeByName(columnName)
 
@@ -2374,6 +2419,8 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<Record<string, any> | null>} - Response payload.
    */
   async frontendModelCommandPayload(action) {
+    await this.ensureFrontendModelClassInitialized()
+
     if (!(await this.runFrontendModelBeforeAction(action))) {
       return null
     }

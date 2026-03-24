@@ -284,7 +284,7 @@ export default new Configuration({
   backendProjects: [
     {
       path: "/path/to/backend-project",
-      resources: {
+      frontendModels: {
         User: UserResource
       }
     }
@@ -292,7 +292,7 @@ export default new Configuration({
 })
 ```
 
-`resources` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
+`frontendModels` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
 
 Generate classes:
 
@@ -300,7 +300,7 @@ Generate classes:
 npx velocious g:frontend-models
 ```
 
-When `resources.*.attributes` is an object, the generator can infer JSDoc typedefs from attribute metadata (`type`/`columnType`/`sqlType`/`dataType` and `null`). If metadata is absent, the generated attribute type falls back to `any`.
+When `frontendModels.*.attributes` is an object, the generator can infer JSDoc typedefs from attribute metadata (`type`/`columnType`/`sqlType`/`dataType` and `null`). If metadata is absent, the generated attribute type falls back to `any`.
 
 This creates `src/frontend-models/user.js` (and one file per configured resource). Generated classes support:
 
@@ -344,7 +344,7 @@ When backend payloads include `__preloadedRelationships`, nested frontend-model 
 
 When queries include `select(...)`, backend frontend-model actions only serialize selected attributes for each model class. Reading a non-selected attribute on a frontend model raises `AttributeNotSelectedError`.
 
-You do not need to manually define `frontend-index` / `frontend-find` / `frontend-create` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.resources`.
+You do not need to manually define `frontend-index` / `frontend-find` / `frontend-create` / `frontend-update` / `frontend-destroy` routes for those resources. Velocious can auto-resolve frontend model command paths from `backendProjects.frontendModels`.
 
 For backend models, you can declare attachment helpers directly:
 

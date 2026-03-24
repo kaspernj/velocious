@@ -14,8 +14,11 @@ import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js
 import installSqlJsWasmRoute from "../../../../src/plugins/sqljs-wasm-route.js"
 import path from "path"
 import requireContext from "require-context"
+import Comment from "../models/comment.js"
+import Project from "../models/project.js"
 import Task from "../models/task.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
+import User from "../models/user.js"
 
 const queryParam = (request, key) => {
   const pathValue = request?.path?.()
@@ -78,6 +81,33 @@ class TaskFrontendModelAbilityResource extends BaseResource {
   }
 }
 
+class UserFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = User
+
+  /** @returns {void} */
+  abilities() {
+    this.can(["read"])
+  }
+}
+
+class ProjectFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Project
+
+  /** @returns {void} */
+  abilities() {
+    this.can(["read"])
+  }
+}
+
+class CommentFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Comment
+
+  /** @returns {void} */
+  abilities() {
+    this.can(["read"])
+  }
+}
+
 /**
  * @param {object} args - Ability resolver args.
  * @param {Record<string, any>} args.params - Request params.
@@ -88,16 +118,16 @@ class TaskFrontendModelAbilityResource extends BaseResource {
  */
 function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
   const requestPath = request.path().split("?")[0]
-  const isTaskFrontendModelCommand = requestPath.startsWith("/api/frontend-models/tasks/")
+  const isFrontendModelCommand = requestPath.startsWith("/api/frontend-models/")
   const isSharedFrontendModelApi = requestPath === "/velocious/api" || requestPath === "/frontend-models" || requestPath === "/frontend-models/request"
   const frontendModelRequests = Array.isArray(params.requests) ? params.requests : [params]
-  const includesTaskSharedRequest = frontendModelRequests.some((requestEntry) => requestEntry?.model === "Task")
+  const includesFrontendModelRequest = frontendModelRequests.some((requestEntry) => typeof requestEntry?.model === "string")
 
-  if (!isTaskFrontendModelCommand && !(isSharedFrontendModelApi && includesTaskSharedRequest)) return
+  if (!isFrontendModelCommand && !(isSharedFrontendModelApi && includesFrontendModelRequest)) return
 
   return new Ability({
     context: {configuration, params, request, response},
-    resources: [TaskFrontendModelAbilityResource]
+    resources: [TaskFrontendModelAbilityResource, UserFrontendModelAbilityResource, ProjectFrontendModelAbilityResource, CommentFrontendModelAbilityResource]
   })
 }
 

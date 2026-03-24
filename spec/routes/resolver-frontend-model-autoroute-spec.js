@@ -19,11 +19,12 @@ class ClassBasedFrontendModelResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["id"],
-      commands: {
-        find: "frontend-find",
+      builtInCollectionCommands: {
         index: "frontend-index"
       },
-      path: "/frontend-models"
+      builtInMemberCommands: {
+        find: "frontend-find"
+      }
     }
   }
 }
@@ -38,30 +39,13 @@ class CreateFrontendModelResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["id"],
-      commands: {
+      builtInCollectionCommands: {
         create: "frontend-create",
-        find: "frontend-find",
         index: "frontend-index"
       },
-      path: "/frontend-models"
-    }
-  }
-}
-
-class InvalidPathFrontendModelResource extends FrontendModelBaseResource {
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
-      attributes: ["id"],
-      commands: {
+      builtInMemberCommands: {
         find: "frontend-find",
-        index: "frontend-index"
-      },
-      path: "/frontend-models;drop"
+      }
     }
   }
 }
@@ -75,11 +59,12 @@ class InvalidCommandFrontendModelResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["id"],
-      commands: {
-        find: "frontend-find",
+      builtInCollectionCommands: {
         index: "frontend-index?raw=1"
       },
-      path: "/frontend-models"
+      builtInMemberCommands: {
+        find: "frontend-find"
+      }
     }
   }
 }
@@ -93,11 +78,12 @@ class EmptyCommandFrontendModelResource extends FrontendModelBaseResource {
         index: "read"
       },
       attributes: ["id"],
-      commands: {
-        find: "frontend-find",
+      builtInCollectionCommands: {
         index: ""
       },
-      path: "/frontend-models"
+      builtInMemberCommands: {
+        find: "frontend-find"
+      }
     }
   }
 }
@@ -126,12 +112,26 @@ function buildRequireContext(modules) {
   return requireContext
 }
 
+/**
+ * @param {string} path - Request path.
+ * @returns {string} - Raw HTTP request lines.
+ */
+function requestLinesForPath(path) {
+  return [
+    `POST ${path} HTTP/1.1`,
+    "Host: example.com",
+    "Content-Length: 0",
+    "",
+    ""
+  ].join("\r\n")
+}
+
 describe("routes - resolver frontend model autoroute", async () => {
-  it("resolves frontend model commands from backendProjects resources without explicit routes", async () => {
+  it("resolves frontend model commands from backendProjects.frontendModels without explicit routes", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           FrontendModel: ClassBasedFrontendModelResource
         }
       }],
@@ -160,13 +160,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const request = new Request({client, configuration})
     const response = new Response({configuration})
     const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = [
-      "POST /frontend-models/frontend-index HTTP/1.1",
-      "Host: example.com",
-      "Content-Length: 0",
-      "",
-      ""
-    ].join("\r\n")
+    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
 
     try {
       request.feed(Buffer.from(requestLines, "utf8"))
@@ -182,11 +176,11 @@ describe("routes - resolver frontend model autoroute", async () => {
     expect(JSON.parse(response.getBody())).toEqual({source: "frontend-autoroute", status: "success"})
   })
 
-  it("resolves frontend model commands from backendProjects resource require contexts", async () => {
+  it("resolves frontend model commands from backendProjects.frontendModelsRequireContext", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
-        resourcesRequireContext: buildRequireContext({
+        frontendModelsRequireContext: buildRequireContext({
           "./frontend-model.js": {default: ClassBasedFrontendModelResource},
           "./shared-access.js": {default: {not: "a resource"}}
         })
@@ -216,13 +210,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const request = new Request({client, configuration})
     const response = new Response({configuration})
     const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = [
-      "POST /frontend-models/frontend-index HTTP/1.1",
-      "Host: example.com",
-      "Content-Length: 0",
-      "",
-      ""
-    ].join("\r\n")
+    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
 
     try {
       request.feed(Buffer.from(requestLines, "utf8"))
@@ -238,11 +226,11 @@ describe("routes - resolver frontend model autoroute", async () => {
     expect(JSON.parse(response.getBody())).toEqual({source: "frontend-autoroute", status: "success"})
   })
 
-  it("resolves frontend model create command from backendProjects resources without explicit routes", async () => {
+  it("resolves frontend model create command from backendProjects.frontendModels without explicit routes", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           FrontendModel: CreateFrontendModelResource
         }
       }],
@@ -271,13 +259,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const request = new Request({client, configuration})
     const response = new Response({configuration})
     const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = [
-      "POST /frontend-models/frontend-create HTTP/1.1",
-      "Host: example.com",
-      "Content-Length: 0",
-      "",
-      ""
-    ].join("\r\n")
+    const requestLines = requestLinesForPath("/frontend-models/frontend-create")
 
     try {
       request.feed(Buffer.from(requestLines, "utf8"))
@@ -293,66 +275,11 @@ describe("routes - resolver frontend model autoroute", async () => {
     expect(JSON.parse(response.getBody())).toEqual({source: "frontend-autoroute", status: "success"})
   })
 
-  it("raises on unsafe frontend model resource paths in backendProjects config", async () => {
-    const configuration = new Configuration({
-      backendProjects: [{
-        path: "/tmp/backend",
-        resources: {
-          FrontendModel: InvalidPathFrontendModelResource
-        }
-      }],
-      database: {test: {}},
-      directory: dummyDirectory(),
-      environment: "test",
-      environmentHandler: new EnvironmentHandlerNode(),
-      initializeModels: async () => {},
-      locale: "en",
-      localeFallbacks: {en: ["en"]},
-      locales: ["en"],
-      logging: {console: true, file: false, levels: ["info", "warn", "error"]}
-    })
-
-    let previousConfiguration
-    try {
-      previousConfiguration = Configuration.current()
-    } catch {
-      // Ignore missing configuration
-    }
-
-    configuration.setCurrent()
-    configuration.setRoutes(dummyRoutes.routes)
-
-    const client = {remoteAddress: "127.0.0.1"}
-    const request = new Request({client, configuration})
-    const response = new Response({configuration})
-    const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = [
-      "POST /frontend-models/frontend-index HTTP/1.1",
-      "Host: example.com",
-      "Content-Length: 0",
-      "",
-      ""
-    ].join("\r\n")
-
-    try {
-      request.feed(Buffer.from(requestLines, "utf8"))
-      await donePromise
-
-      const resolver = new RoutesResolver({configuration, request, response})
-
-      await expect(async () => {
-        await resolver.resolve()
-      }).toThrow(/Invalid frontend model resource path/)
-    } finally {
-      if (previousConfiguration) previousConfiguration.setCurrent()
-    }
-  })
-
   it("raises on unsafe frontend model commands in backendProjects config", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           FrontendModel: InvalidCommandFrontendModelResource
         }
       }],
@@ -381,13 +308,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const request = new Request({client, configuration})
     const response = new Response({configuration})
     const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = [
-      "POST /frontend-models/frontend-index HTTP/1.1",
-      "Host: example.com",
-      "Content-Length: 0",
-      "",
-      ""
-    ].join("\r\n")
+    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
 
     try {
       request.feed(Buffer.from(requestLines, "utf8"))
@@ -407,7 +328,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           FrontendModel: EmptyCommandFrontendModelResource
         }
       }],
@@ -436,13 +357,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const request = new Request({client, configuration})
     const response = new Response({configuration})
     const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = [
-      "POST /frontend-models/frontend-index HTTP/1.1",
-      "Host: example.com",
-      "Content-Length: 0",
-      "",
-      ""
-    ].join("\r\n")
+    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
 
     try {
       request.feed(Buffer.from(requestLines, "utf8"))

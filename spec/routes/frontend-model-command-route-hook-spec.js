@@ -26,8 +26,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
       },
       memberCommands: {
         resetPassword: "reset-password"
-      },
-      path: "/partners/frontend-models/users"
+      }
     }
   }
 }
@@ -38,8 +37,8 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
     return {
       abilities: ["read"],
       attributes: ["id"],
-      collectionCommands: ["index"],
-      memberCommands: ["find"]
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"]
     }
   }
 }
@@ -73,46 +72,20 @@ describe("routes - frontend model command route hook", () => {
     })
   })
 
-  it("returns frontend model controller path for shared request path alias", async () => {
-    const routeMatch = await frontendModelCommandRouteHook({
-      configuration: configurationForBackendProjects([]),
-      currentPath: "/frontend-models/request"
-    })
-
-    expect(routeMatch).toEqual({
-      action: "frontend-api",
-      controller: "velocious/api",
-      controllerPath: expectedControllerPath
-    })
-  })
-
-  it("returns frontend model controller path for legacy shared API path alias", async () => {
-    const routeMatch = await frontendModelCommandRouteHook({
-      configuration: configurationForBackendProjects([]),
-      currentPath: "/velocious/api"
-    })
-
-    expect(routeMatch).toEqual({
-      action: "frontend-api",
-      controller: "velocious/api",
-      controllerPath: expectedControllerPath
-    })
-  })
-
   it("returns frontend model command action and controller for backend project routes", async () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           User: UserFrontendResource
         }
       }]),
-      currentPath: "/partners/frontend-models/users/frontend-index"
+      currentPath: "/users/frontend-index"
     })
 
     expect(routeMatch).toEqual({
       action: "frontend-index",
-      controller: "partners/frontend-models/users"
+      controller: "users"
     })
   })
 
@@ -120,16 +93,16 @@ describe("routes - frontend model command route hook", () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           User: UserFrontendResource
         }
       }]),
-      currentPath: "/partners/frontend-models/users/reindex-all"
+      currentPath: "/users/reindex-all"
     })
 
     expect(routeMatch).toEqual({
       action: "frontend-custom-command",
-      controller: "partners/frontend-models/users",
+      controller: "users",
       controllerPath: expectedControllerPath,
       params: {
         frontendModelCustomCommandMethodName: "reindexAll",
@@ -143,16 +116,16 @@ describe("routes - frontend model command route hook", () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           User: UserFrontendResource
         }
       }]),
-      currentPath: "/partners/frontend-models/users/user-1/reset-password"
+      currentPath: "/users/user-1/reset-password"
     })
 
     expect(routeMatch).toEqual({
       action: "frontend-custom-command",
-      controller: "partners/frontend-models/users",
+      controller: "users",
       controllerPath: expectedControllerPath,
       params: {
         frontendModelCustomCommandMethodName: "resetPassword",
@@ -167,16 +140,16 @@ describe("routes - frontend model command route hook", () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           User: UserFrontendResource
         }
       }]),
-      currentPath: "/partners/frontend-models/users/test%40example.com/reset-password"
+      currentPath: "/users/test%40example.com/reset-password"
     })
 
     expect(routeMatch).toEqual({
       action: "frontend-custom-command",
-      controller: "partners/frontend-models/users",
+      controller: "users",
       controllerPath: expectedControllerPath,
       params: {
         frontendModelCustomCommandMethodName: "resetPassword",
@@ -191,7 +164,7 @@ describe("routes - frontend model command route hook", () => {
     const routeMatch = await frontendModelCommandRouteHook({
       configuration: configurationForBackendProjects([{
         path: "/tmp/backend",
-        resources: {
+        frontendModels: {
           Project: ProjectFrontendResource
         }
       }]),
