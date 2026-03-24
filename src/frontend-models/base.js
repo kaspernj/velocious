@@ -639,7 +639,17 @@ async function flushPendingSharedFrontendModelRequests() {
   const url = frontendModelApiUrl()
   const requestPayload = {
     requests: batchedRequests.map((request) => {
-      const isCustomCommandName = request.commandName !== request.commandType
+      if (request.customPath) {
+        return {
+          commandType: request.commandType,
+          customPath: request.customPath,
+          model: request.modelClass.name,
+          payload: request.payload,
+          requestId: request.requestId
+        }
+      }
+
+      const isCustomCommandName = request.commandName && request.commandName !== request.commandType
       const customPath = isCustomCommandName && request.resourcePath
         ? `${request.resourcePath}/${request.commandName}`
         : undefined
