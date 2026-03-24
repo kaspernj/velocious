@@ -1,5 +1,6 @@
 // @ts-check
 
+import {resolveFrontendModelClass} from "./model-registry.js"
 import {normalizeRansackParams} from "../utils/ransack.js"
 
 /**
@@ -787,7 +788,7 @@ function frontendModelPluckTargetModelClass(modelClass, path) {
       ? targetModelClass.relationshipModelClasses()
       : {}
     const relationshipDefinition = relationshipDefinitions[relationshipName]
-    const relationshipTargetModelClass = relationshipModelClasses[relationshipName]
+    const relationshipTargetModelClass = resolveFrontendModelClass(relationshipModelClasses[relationshipName])
 
     if (!relationshipDefinition) {
       throw new Error(`Unknown pluck relationship "${relationshipName}" for ${targetModelClass.name}`)

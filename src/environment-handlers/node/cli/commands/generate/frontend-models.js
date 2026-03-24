@@ -192,16 +192,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += `import FrontendModelBase from "${importPath}"\n`
 
     if (relationships.length > 0) {
-      /** @type {Set<string>} */
-      const importedTargetClasses = new Set()
-
-      for (const relationship of relationships) {
-        if (relationship.targetClassName == className) continue
-        if (importedTargetClasses.has(relationship.targetClassName)) continue
-
-        fileContent += `import ${relationship.targetClassName} from "./${relationship.targetFileName}.js"\n`
-        importedTargetClasses.add(relationship.targetClassName)
-      }
+      // No static imports for related models - use string-based resolution via the model registry to avoid circular dependencies
     }
 
     fileContent += "\n"
@@ -287,12 +278,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  }\n"
 
       fileContent += "\n"
-      fileContent += "  /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */\n"
+      fileContent += "  /** @returns {Record<string, string>} - Relationship model class names. */\n"
       fileContent += "  static relationshipModelClasses() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
-        const targetClassReference = relationship.targetClassName == className ? className : relationship.targetClassName
-        fileContent += `      ${relationship.relationshipName}: ${targetClassReference},\n`
+        fileContent += `      ${relationship.relationshipName}: ${JSON.stringify(relationship.targetClassName)},\n`
       }
       fileContent += "    }\n"
       fileContent += "  }\n"
@@ -386,6 +376,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     fileContent += "}\n"
+    fileContent += "\n"
+    fileContent += `FrontendModelBase.registerModel(${className})\n`
 
     return fileContent
   }

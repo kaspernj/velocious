@@ -1,6 +1,7 @@
 // @ts-check
 
 import * as inflection from "inflection"
+import {resolveFrontendModelClass} from "../frontend-models/model-registry.js"
 
 /**
  * @typedef {"cont" | "end" | "eq" | "gt" | "gteq" | "in" | "lt" | "lteq" | "not_eq" | "not_in" | "null" | "start"} RansackPredicate
@@ -239,7 +240,7 @@ function relationshipEntries(modelClass) {
     const relationshipModelClasses = /** @type {any} */ (modelClass).relationshipModelClasses()
 
     for (const relationshipName of Object.keys(definitions)) {
-      const targetModelClass = relationshipModelClasses[relationshipName]
+      const targetModelClass = resolveFrontendModelClass(relationshipModelClasses[relationshipName])
 
       if (!targetModelClass) continue
 

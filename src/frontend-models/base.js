@@ -2,6 +2,7 @@
 
 import * as inflection from "inflection"
 import FrontendModelQuery from "./query.js"
+import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
@@ -932,10 +933,28 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes keyed by relationship name.
+   * @returns {Record<string, typeof FrontendModelBase | string>} - Relationship model classes (or class name strings) keyed by relationship name.
    */
   static relationshipModelClasses() {
     return {}
+  }
+
+  /**
+   * Register a frontend model class so it can be resolved by name in relationship lookups.
+   * @param {typeof FrontendModelBase} modelClass - Model class to register.
+   * @returns {void}
+   */
+  static registerModel(modelClass) {
+    registerFrontendModel(modelClass)
+  }
+
+  /**
+   * Resolve a relationship model class value that may be a class reference or a string name.
+   * @param {typeof FrontendModelBase | string | null | undefined} value - Class or class name.
+   * @returns {typeof FrontendModelBase | null} - Resolved model class.
+   */
+  static resolveModelClass(value) {
+    return resolveFrontendModelClass(value)
   }
 
   /**
@@ -981,8 +1000,9 @@ export default class FrontendModelBase {
    */
   static relationshipModelClass(relationshipName) {
     const relationshipModelClasses = this.relationshipModelClasses()
+    const value = relationshipModelClasses[relationshipName]
 
-    return relationshipModelClasses[relationshipName] || null
+    return FrontendModelBase.resolveModelClass(value)
   }
 
   /**
