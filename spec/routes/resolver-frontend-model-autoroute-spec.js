@@ -127,7 +127,7 @@ function buildRequireContext(modules) {
 }
 
 describe("routes - resolver frontend model autoroute", async () => {
-  it("routes frontend model index commands through frontend model controller without explicit routes", async () => {
+  it("resolves frontend model commands from backendProjects resources without explicit routes", async () => {
     const configuration = new Configuration({
       backendProjects: [{
         path: "/tmp/backend",
@@ -179,7 +179,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       if (previousConfiguration) previousConfiguration.setCurrent()
     }
 
-    expect(JSON.parse(response.getBody())).toEqual({errorMessage: "Request failed.", status: "error"})
+    expect(JSON.parse(response.getBody())).toEqual({source: "frontend-autoroute", status: "success"})
   })
 
   it("resolves frontend model commands from backendProjects resource require contexts", async () => {
@@ -290,7 +290,7 @@ describe("routes - resolver frontend model autoroute", async () => {
       if (previousConfiguration) previousConfiguration.setCurrent()
     }
 
-    expect(JSON.parse(response.getBody())).toEqual({errorMessage: "Request failed.", status: "error"})
+    expect(JSON.parse(response.getBody())).toEqual({source: "frontend-autoroute", status: "success"})
   })
 
   it("raises on unsafe frontend model resource paths in backendProjects config", async () => {
