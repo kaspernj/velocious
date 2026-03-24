@@ -546,6 +546,8 @@ function cloneFrontendModelAttributes(value) {
 }
 
 /**
+ * @param {string} resourcePath - Resource path prefix.
+ * @param {string} commandName - Command path segment.
  * @returns {string} - Frontend model API URL.
  */
 function frontendModelCommandUrl(resourcePath, commandName) {
@@ -1977,6 +1979,30 @@ export default class FrontendModelBase {
 
       return decodedBatchResponse
     }
+
+    const directResponse = await fetch(url, {
+      body: JSON.stringify(serializedPayload),
+      credentials: frontendModelTransportConfig.credentials,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    })
+
+    if (!directResponse.ok) {
+      throw new Error(`Request failed (${directResponse.status}) for ${this.name}#${commandType}`)
+    }
+
+    const directResponseText = await directResponse.text()
+    const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
+    const decodedDirectResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(directJson))
+
+    this.throwOnErrorFrontendModelResponse({
+      commandType,
+      response: decodedDirectResponse
+    })
+
+    return decodedDirectResponse
   }
 
   /**
