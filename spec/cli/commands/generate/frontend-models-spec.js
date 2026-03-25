@@ -140,19 +140,31 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
     expect(taskContents).toContain("identifier() { return this.readAttribute(\"identifier\") }")
     expect(taskContents).toContain("setIdentifier(newValue) { return this.setAttribute(\"identifier\", newValue) }")
-    expect(taskContents).toContain("import Project from \"./project.js\"")
+    expect(taskContents.includes("import Project from")).toEqual(false)
     expect(taskContents).toContain("/** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions. */")
     expect(taskContents).toContain("static relationshipDefinitions()")
+    expect(taskContents).toContain("project: \"Project\",")
+    expect(taskContents).toContain("FrontendModelBase.registerModel(Task)")
     expect(taskContents).toContain("project: {type: \"belongsTo\"}")
     expect(taskContents).toContain("project() { return /** @type {import(\"./project.js\").default | null} */ (this.getRelationshipByName(\"project\").loaded()) }")
     expect(taskContents).toContain("async loadProject() { return /** @type {Promise<import(\"./project.js\").default | null>} */ (this.loadRelationship(\"project\")) }")
     expect(taskContents).toContain("setProject(model) { return /** @type {import(\"./project.js\").default | null} */ (this.setRelationship(\"project\", model)) }")
 
-    expect(projectContents).toContain("import Task from \"./task.js\"")
+    expect(projectContents.includes("import Task from")).toEqual(false)
+    expect(projectContents).toContain("tasks: \"Task\",")
+    expect(projectContents).toContain("FrontendModelBase.registerModel(Project)")
     expect(projectContents).toContain("tasks: {type: \"hasMany\"}")
     expect(projectContents).toContain("tasks() { return /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelHasManyRelationship<typeof import(\"./project.js\").default, typeof import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\")) }")
     expect(projectContents).toContain("tasksLoaded() { return /** @type {Array<import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\").loaded()) }")
     expect(projectContents).toContain("async loadTasks() { return /** @type {Promise<Array<import(\"./task.js\").default>>} */ (this.loadRelationship(\"tasks\")) }")
+
+    const indexPath = `${dummyDirectory()}/src/frontend-models/index.js`
+    const indexContents = await fs.readFile(indexPath, "utf8")
+
+    expect(indexContents).toContain("export {default as Comment} from \"./comment.js\"")
+    expect(indexContents).toContain("export {default as Project} from \"./project.js\"")
+    expect(indexContents).toContain("export {default as Task} from \"./task.js\"")
+    expect(indexContents).toContain("export {default as User} from \"./user.js\"")
 
     expect(userContents).toContain("class User extends FrontendModelBase")
     expect(userContents).toContain("      collectionCommands: {\n")

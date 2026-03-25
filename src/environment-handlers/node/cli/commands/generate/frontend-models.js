@@ -20,6 +20,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const generatedModelNames = new Set()
     /** @type {Set<string>} */
     const ensuredDirectories = new Set()
+    /** @type {Map<string, Array<{className: string, fileName: string}>>} */
+    const generatedFilesByDirectory = new Map()
 
     for (const backendProject of backendProjects) {
       const frontendModelsDir = this.frontendModelsDirectoryForBackendProject(backendProject)
@@ -30,6 +32,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         ensuredDirectories.add(frontendModelsDir)
       }
 
+      if (!generatedFilesByDirectory.has(frontendModelsDir)) {
+        generatedFilesByDirectory.set(frontendModelsDir, [])
+      }
+
+      const generatedFiles = generatedFilesByDirectory.get(frontendModelsDir)
       const resources = this.resourcesForBackendProject(backendProject)
       const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
@@ -59,9 +66,18 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         })
 
         await fs.writeFile(filePath, fileContent)
+        generatedFiles.push({className, fileName})
 
         console.log(`create src/frontend-models/${fileName}`)
       }
+    }
+
+    for (const [frontendModelsDir, generatedFiles] of generatedFilesByDirectory) {
+      const indexContent = this.buildIndexFileContent(generatedFiles)
+
+      await fs.writeFile(`${frontendModelsDir}/index.js`, indexContent)
+
+      console.log("create src/frontend-models/index.js")
     }
   }
 
@@ -191,19 +207,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     fileContent += `import FrontendModelBase from "${importPath}"\n`
 
-    if (relationships.length > 0) {
-      /** @type {Set<string>} */
-      const importedTargetClasses = new Set()
-
-      for (const relationship of relationships) {
-        if (relationship.targetClassName == className) continue
-        if (importedTargetClasses.has(relationship.targetClassName)) continue
-
-        fileContent += `import ${relationship.targetClassName} from "./${relationship.targetFileName}.js"\n`
-        importedTargetClasses.add(relationship.targetClassName)
-      }
-    }
-
     fileContent += "\n"
     fileContent += "/**\n"
     fileContent += ` * @typedef {object} ${attributesTypeName}\n`
@@ -287,12 +290,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  }\n"
 
       fileContent += "\n"
-      fileContent += "  /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */\n"
+      fileContent += "  /** @returns {Record<string, string>} - Relationship model class names. */\n"
       fileContent += "  static relationshipModelClasses() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
-        const targetClassReference = relationship.targetClassName == className ? className : relationship.targetClassName
-        fileContent += `      ${relationship.relationshipName}: ${targetClassReference},\n`
+        fileContent += `      ${relationship.relationshipName}: ${JSON.stringify(relationship.targetClassName)},\n`
       }
       fileContent += "    }\n"
       fileContent += "  }\n"
@@ -386,8 +388,24 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     fileContent += "}\n"
+    fileContent += "\n"
+    fileContent += `FrontendModelBase.registerModel(${className})\n`
 
     return fileContent
+  }
+
+  /**
+   * @param {Array<{className: string, fileName: string}>} generatedFiles - Generated model files.
+   * @returns {string} - Index file content that imports and re-exports all models.
+   */
+  buildIndexFileContent(generatedFiles) {
+    let content = ""
+
+    for (const {className, fileName} of generatedFiles) {
+      content += `export {default as ${className}} from "./${fileName}"\n`
+    }
+
+    return content
   }
 
   /**
