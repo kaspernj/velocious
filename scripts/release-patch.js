@@ -32,7 +32,7 @@ run("git add package.json package-lock.json")
 run('git commit -m "chore: bump patch version"')
 
 // Push to the current remote/branch.
-run("git push")
+run("git push origin master")
 
 // Publish to npm (requires correct auth).
 run("npm publish")
