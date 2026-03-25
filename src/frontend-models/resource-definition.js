@@ -98,15 +98,6 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
  * @returns {Record<string, string>} - Normalized abilities config.
  */
 function normalizeFrontendModelResourceAbilities(abilities) {
-  /** @type {Record<string, string>} */
-  const defaultAbilities = {
-    create: "create",
-    destroy: "destroy",
-    find: "read",
-    index: "read",
-    update: "update"
-  }
-
   if (!abilities) {
     return {find: "read", index: "read"}
   }
