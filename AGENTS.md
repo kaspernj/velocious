@@ -91,3 +91,4 @@ Do not push to GitHub unless explicitly asked.
 
 ## Branches and commits
 When asked to create branches and commit changes, come up with fitting branch names and commit messages. Split commits into smaller commits for each distinct change.
+Never commit or push directly to `master`; always use a feature branch and open a PR.
