@@ -11,6 +11,7 @@ describe("EnvironmentHandlerNode find commands", () => {
     const filePaths = [
       "C:\\Users\\steve\\GithubProjects\\auraline\\backend\\node_modules\\velocious\\src\\cli\\commands\\server.js",
       "C:\\Users\\steve\\GithubProjects\\auraline\\backend\\node_modules\\velocious\\src\\cli\\commands\\db\\schema\\dump.js",
+      "C:\\Users\\steve\\GithubProjects\\auraline\\backend\\node_modules\\velocious\\src\\cli\\commands\\db\\schema\\load.js",
       "C:\\Users\\steve\\GithubProjects\\auraline\\backend\\node_modules\\velocious\\src\\cli\\commands\\db\\index.js"
     ]
 
@@ -27,7 +28,8 @@ describe("EnvironmentHandlerNode find commands", () => {
       expect(commands).toEqual([
         {name: "server", file: filePaths[0]},
         {name: "db:schema:dump", file: filePaths[1]},
-        {name: "db", file: filePaths[2]}
+        {name: "db:schema:load", file: filePaths[2]},
+        {name: "db", file: filePaths[3]}
       ])
     } finally {
       fs.glob = originalGlob

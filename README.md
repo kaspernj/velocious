@@ -856,6 +856,14 @@ npx velocious db:schema:dump
 
 `db:schema:dump` only writes `db/structure-<identifier>.sql` files when one or more expected files are missing.
 
+If you need to load the checked-in structure files for each configured database, use:
+
+```bash
+npx velocious db:schema:load
+```
+
+`db:schema:load` reads `db/structure-<identifier>.sql` for each configured database identifier and executes those statements against the current connections.
+
 ## Configure CLI commands (Node vs Browser)
 
 Node loads CLI commands from disk automatically via the Node environment handler:
