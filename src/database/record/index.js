@@ -751,7 +751,7 @@ class VelociousDatabaseRecord {
   }
 
   static async _defineTranslationMethods() {
-    if (this._translations) {
+    if (this._translations && Object.keys(this._translations).length > 0) {
       const locales = this._getConfiguration().getLocales()
 
       if (!locales) throw new Error("Locales hasn't been set in the configuration")
