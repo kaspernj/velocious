@@ -1,0 +1,204 @@
+# Changelog
+
+- Allow symbolic search operators (`>`, `<`, `>=`, `<=`) as aliases for `gt`, `lt`, `gteq`, and `lteq` across frontend-model `search(...)` payloads and backend relationship tuple filters.
+- Add frontend-model nested relationship `where(...)` support via structured relationship-path descriptors (for example `{project: {creatingUser: {reference: "owner-b"}}}`), with backend relationship-join application and integration coverage.
+- Normalize plain-object frontend-model `where(...)` column values to JSON strings only for text/JSON-like columns and treat object values on non-text columns as no-match (`1=0`) to avoid invalid SQL/cast errors across MySQL/MariaDB/PG.
+- Add frontend-model `joins(...)` support using relationship-object descriptors only (for example `{project: {creatingUser: true}}`), reject raw SQL join strings, and apply explicit joins in built-in `frontendIndex`.
+- Validate and normalize structured `findOrInitializeBy(...)` / `findOrCreateBy(...)` conditions before model initialization/creation, and cover invalid-condition rejections in frontend-model specs.
+- Add frontend-model query `limit(...)`, `offset(...)`, and `page(...).perPage(...)` support with integer-only payload validation (rejecting string SQL fragments), backend application in `frontendIndex`, and dummy-app integration coverage.
+- Document frontend vs backend model API differences in docs, including query-surface scope, resource-mapped command behavior for `toArray()`, and transport/runtime differences.
+- Add frontend-model query `sort(...)` support end-to-end (query payload, `FrontendModelBase.sort`, and backend frontend-model controller order application), including relationship-path sort definitions (for example `Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}})`), and cover sorting through dummy-app integration specs.
+- Infer generated frontend-model attribute JSDoc types from resource attribute metadata/column descriptors (including nullability) instead of always emitting `any`.
+- Add a CanCan-style authorization library with request-scoped abilities, resource-defined `abilities()` rules, and `Model.accessible()` query filtering.
+- Add `g:frontend-models` generation from `backendProjects` resource config to create `src/frontend-models/*.js` classes.
+- Add a frontend model runtime base with first-iteration `find`, `update`, `destroy`, and attribute helpers.
+- Add specs for frontend model generation and runtime command behavior.
+- Add frontend-model `preload(...)` query chaining with nested relationship hydration from `__preloadedRelationships`, and pass preload params through built-in frontend model controller index/find actions.
+- Generate typed frontend-model relationship helpers from `backendProjects.resources.*.relationships`, including belongs-to/has-one getter methods and has-many relationship helpers with `.loaded()`/`.build()`.
+- Authorize nested preloaded frontend-model relationship serialization using each related model resource ability scope, and null out unauthorized singular relationships.
+- Fail frontend-model generation when a configured relationship target has no corresponding frontend resource in the same backend project.
+- Deny nested preload serialization for related models without frontend resource configuration when ability context is active.
+- Authorize preloaded has-many nested frontend-model serialization in bulk per related model class to avoid N+1 authorization queries.
+- Clear frontend-model relationship cache on attribute changes so stale preloaded relationships do not survive after updates/foreign-key changes.
+- Scope nested preload authorization resource lookup to the current backend project so same-named models in other backend projects do not affect authorization.
+- Authorize preloaded singular nested relationships in bulk during collection serialization to avoid per-row authorization queries.
+- Keep browser test runner strict on `spec/dummy/src/config/configuration.js` and update Peakflow browser build to copy `configuration.peakflow.sqlite.js` into `configuration.js` before running browser tests.
+- Move `db:schema:dump` implementation under the Node environment handler so browser/Expo builds avoid Node-only command code.
+- Add a `db:schema:dump` CLI command that generates missing `db/structure-*.sql` files and cover it with a command spec.
+- Fix base-model generation to use the current database connection when reading table columns, avoiding SQLite "No connection" errors.
+- Fix base-model generation to honor the configured project directory instead of always using the current working directory.
+- Fix background job status reporting timeout to use milliseconds so network round trips are not prematurely aborted.
+- Move background job CLI commands into the Node environment handler so browser builds avoid Node-only imports.
+- Add README examples for configuring CLI command loading in Node and browser environments.
+- Add browser system test runner and browser-safe test app harness for System Testing.
+- Add dummy-tag handling for browser tests with a SQLite web driver setup.
+- Add a Peakflow build step for browser system tests.
+- Fix dummy helper path resolution when running tests from spec/dummy.
+- Normalize dummy helper path resolution to avoid trailing-slash mismatches.
+- Run dummy migrations for browser tests instead of loading structure SQL.
+- Enable browser coverage for preloader belongs-to and has-many record specs.
+- Enable browser coverage for database query specs.
+- Enable browser coverage for migration specs that use dummy models.
+- Enable browser coverage for utility specs.
+- Allow preload shorthand forms like `{project: \"translations\"}` and `{project: [\"translations\", \"projectDetail\"]}`.
+- Allow join shorthand forms like `{project: \"translations\"}` and `{project: [\"translations\", \"projectDetail\"]}`.
+- Merge join array branches targeting the same relationship so nested joins are preserved.
+- Require a test-file require context when importing browser tests to avoid bundling unintended files.
+- Enable browser coverage for table data, transactions, and selected driver specs.
+- Add npm release patch script entrypoint and ensure npm login before publishing.
+- Refactor release patch script to Node for cross-platform usage.
+- Document the user module in the README.
+- Add mailer support with EJS rendering, background job delivery, and test delivery tracking.
+- Add configurable mailer backends with a built-in SMTP backend.
+- Prefer app-defined background jobs over built-in ones when names collide.
+- Type cast values for `insertMultiple` based on column types.
+- Insert SQL now renders null values as SQL NULL.
+- Implement `insertMultiple` for MySQL, MariaDB, PostgreSQL, and MSSQL drivers.
+- Move shared `insertMultiple` implementation into the base driver.
+- Validate `insertMultiple` row lengths against column count.
+- Preserve numeric strings for decimal/numeric columns and unsafe integers.
+- Ensure dummy app stops even when tests fail.
+- Order SQLite structure SQL with tables before indexes.
+- Use gettext-universal as the default translator and expose `_` in mailer views.
+- Document translation setup and mailer view translations in the README.
+- Fix default translator fallback handling for validation attribute names.
+- Clear gettext locale fallbacks when no locale is resolved.
+- Emit testRetrying before a retry attempt and testRetried after it finishes.
+- Document test retry events in the README.
+- Document how to run CLI commands in the browser.
+- Add insertMultiple retry-on-failure with per-row results reporting.
+- Safely serialize insertMultiple failed rows with BigInt/circular handling.
+- Document insertMultiple usage in the README.
+- Add controller cookie helpers with encrypted cookie support.
+- Normalize undefined encrypted cookie values to avoid cipher errors.
+- Log when retrying a test.
+- Color retry logs red with picocolors.
+- Color test failure logs red with picocolors.
+- Color CLI test summaries with picocolors.
+- Retry MySQL queries on connection failures with reconnect attempts.
+- Prevent reconnect retries when a transaction is active to avoid bypassing transactions.
+- Use env-sense to force console logging APIs in browsers.
+- Treat large integer request timeout env values as milliseconds to avoid unintended long waits.
+- Support chunked HTTP request bodies and broader HTTP methods to prevent request parsing hangs.
+- Close HTTP/1.1 connections when clients request `Connection: close`.
+- Treat `Connection: close` as a token in comma-separated HTTP/1.1 Connection headers.
+- Allow instance mailer actions to return delivery wrappers for `new Mailer().action(...).deliverLater()` usage.
+- Remove mailer class proxies and require instance action delivery for mailers.
+- Require mailer actions to return `mail(...)` with an explicit action name.
+- Support async mailer setup via `actionPromise` on `mail(...)`.
+- Allow configuring the browser test HTTP host/port via `SYSTEM_TEST_HTTP_HOST`/`SYSTEM_TEST_HTTP_PORT`.
+- Prevent reused request params from leaking controller/action between requests.
+- Disallow reusing a request parser after completion to enforce one-request-per-parser.
+- Preserve leftover bytes to support HTTP/1.0 keep-alive requests in a single socket write.
+- Copy JS templates into build output so CLI generation can find them after `npm run build`.
+- Exclude `src/build` from TypeScript compilation so `npm run build` succeeds.
+- Add websocketMessageHandlerResolver to support raw websocket message handlers outside the standard request/subscribe protocol.
+- Copy templates into build/src/templates so CLI template paths resolve after builds.
+- Remove `src/build` template sources in favor of `src/templates`.
+- Preserve `src/routes` when copying EJS templates into build output.
+- Gate worker client close logs behind debug logging.
+- Add a Node console CLI command with `console`/`c` aliases and REPL context setup.
+- Allow disabling MSSQL connections via `VELOCIOUS_DISABLE_MSSQL=1` or `VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS`.
+- Respect configured MSSQL schemas when listing tables, and skip schema filtering when none is provided.
+- Return a 400 response for malformed HTTP status lines instead of crashing the server.
+- Add configurable logger outputs with console/stdout/array support and per-output levels.
+- Avoid resolving logger message callbacks when no outputs accept a level and only resolve once across outputs.
+- Preserve per-logger debug overrides when outputs inherit global levels.
+- Default array logger output levels to debug and above (excluding debug-low-level).
+- Require explicit logger outputs in configuration instead of default console/file outputs.
+- Remove the default logger function export in favor of the Logger class only.
+- Export Logger as the default export without named exports.
+- Allow configuring explicit logger instances with per-logger levels.
+- Add BaseLogger for custom logger implementations, reject unknown logger configs, and default to console logging when no logging is provided.
+- Allow per-output log levels for default console and file outputs via configuration.
+- Allow skipping structure SQL file generation per environment via configuration.
+- Normalize dynamic import file paths to file URLs for Windows ESM compatibility across configuration, routes, workers, migrations, tests, and jobs.
+- Fix Windows CLI command discovery by parsing both `\` and `/` command file path separators.
+- Make npm build/test scripts Windows-compatible by replacing POSIX shell commands with Node script wrappers.
+- Bump `system-testing` from `1.0.76` to `1.0.77`.
+- Inline browser `EXPO_PUBLIC_SYSTEM_TEST*` env values in the browser test bundle to prevent websocket startup failures when `process` is unavailable in the browser runtime.
+- Resolve built-in controller frontend model actions (`frontendIndex`, `frontendFind`, `frontendUpdate`, `frontendDestroy`) from `backendProjects.resources` configuration so controllers no longer need a `frontendModelClass()` implementation.
+- Resolve backendProjects frontend-model command routes with `controllerClass: FrontendModelController` (instead of route `controllerPath`/local route controllers), so apps no longer need per-resource wrapper controllers under `src/routes/**/frontend-models/**/controller.js`.
+- Add optional `backendProjects.resources.*.server` hooks (`beforeAction`, `records`, `serialize`, `find`, `update`, `destroy`) for backend-side customization without controller action overrides.
+- Move built-in frontend model actions out of the base `Controller` class into a dedicated `FrontendModelController` class so projects opt in explicitly.
+- Require `backendProjects.resources.*.abilities` for frontend model generation and runtime actions, and enforce CanCan-style action scoping via ability-aware queries (`read`, `update`, `destroy`, etc.).
+- Make `Model.accessibleBy(ability)` require an explicit ability object and raise a clear error when called without one.
+- Add a Rails-style `Current` API backed by async-local request context and make `Model.accessible()` resolve ability from `Current.ability()` by default.
+- Improve `g:frontend-models` output JSDoc typing by generating per-model `@typedef` attribute maps and using typed getter/setter signatures (`ModelAttributes["field"]`) instead of `any`.
+- Support `backendProjects[].frontendModelsOutputPath` so `g:frontend-models` can write generated files to another project directory (for example a separate frontend app).
+- Auto-resolve frontend model command paths (for example `/accounts/frontend-index`) from `backendProjects.resources` even when those custom command routes are not explicitly declared in app route files.
+- Add a general `routeResolverHooks` configuration API (plus `configuration.addRouteResolverHook(...)`) so libraries can hijack unresolved routes before 404 handling.
+- Add Node CLI commands `db:seed`, `run-script [file-path]`, and Rails-style `runner "<javascript-code>"` with initialized app/DB context.
+- Run `routeResolverHooks` before regular route matching so hooks can truly hijack routable paths (for example frontend model command endpoints that overlap resource routes).
+- Add `FrontendModelBase.configureTransport(...)` with `baseUrl`/`baseUrlResolver`, `pathPrefix`/`pathPrefixResolver`, `credentials`, and custom `request` support so apps configure backend endpoint location without overriding frontend model internals.
+- Add `FrontendModelBase.findBy(...)` and `FrontendModelBase.findByOrFail(...)` for generated frontend models with condition matching via `index` payloads.
+- Harden frontend `findBy`/`findByOrFail` condition handling by rejecting undefined/function/symbol/bigint/non-finite values, normalizing condition serialization before matching, and supporting deep object/array equality checks.
+- Make frontend `findBy`/`findByOrFail` fail fast when top-level conditions are not plain objects (for example primitives/arrays), preventing accidental broad lookups from invalid inputs.
+- Normalize numeric string/number primitive comparisons in frontend `findBy` matching so conditions like `{id: 2}` match serialized backend ids like `"2"`.
+- Make `test:browser` require `spec/dummy/src/config/configuration.js` explicitly and raise a clear error when the dummy backend configuration is missing.
+- Harden `test:browser` backend startup by stopping partially initialized apps on startup errors and skipping dummy model initialization for browser integration backend endpoints.
+- Fix frontend `findBy` condition matching for array-valued attributes by using deep array equality when both expected and actual values are arrays.
+- Validate browser test runner ports (`VELOCIOUS_BROWSER_BACKEND_PORT`, `SYSTEM_TEST_HTTP_PORT`) as positive integers and normalize env values so specs and server share the same resolved ports.
+- Reject symbol-keyed frontend `findBy` conditions explicitly and iterate own condition keys during validation/matching so symbol-based inputs cannot degrade into unfiltered lookups.
+- Make `test:browser` skip dummy model initialization in worker-loaded backend configs via `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1`, preventing table-dependent startup failures (for example missing `accounts`) in CI environments.
+- Enforce `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` inside HTTP worker threads by overriding worker-loaded configuration model initialization hooks before app initialization.
+- Move `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` handling into `Configuration.initializeModels(...)` and remove runtime method overrides in browser test startup paths.
+- Make frontend `findBy` object matching exact by own-key set and value (not subset matching), so object conditions do not incorrectly match broader nested payloads.
+- Log request failures with a separate cleaned backtrace block so stack frames are visible without node internals and `node_modules` noise.
+- Scope `VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION=1` to browser test runs (`VELOCIOUS_BROWSER_TESTS=true` in test environment) so regular app/server initialization still loads models.
+- Add frontend-model `select({ModelName: [...]})` query payload support with model-aware serialization filtering (including nested preloads), and raise `AttributeNotSelectedError` when frontend code reads attributes that were not selected.
+- Extract frontend model query-builder logic from `FrontendModelBase` into a dedicated `src/frontend-models/query.js` class to align frontend/backend query structure.
+- Add frontend-model transport markers for `Date` and `undefined` values (`{__velocious_type: "date", value: ...}` / `{__velocious_type: "undefined"}`) with decode support on request and response paths.
+- Extend frontend-model transport markers to preserve `bigint`, `NaN`, `Infinity`, and `-Infinity` values across request/response JSON payloads.
+- Harden frontend-model transport serialization/deserialization against `__proto__` prototype pollution by using null-prototype object accumulators.
+- Add controller specs proving frontend model `index`, `find`, `update`, and `destroy` actions deny unauthorized records via resource ability scopes (`accessibleFor(...)`).
+- Make frontend model commands raise on backend `{status: "error"}` responses so unauthorized `find`/`update`/`destroy` requests fail instead of being treated as success.
+- Add dummy-app end-to-end frontend-model authorization integration tests using generated frontend models for denied `index`/`find`/`update`/`destroy` flows.
+- Normalize route action-name resolution to treat slash-delimited actions like `current-user/update` as `currentUserUpdate`, with resolver + CLI normalization updates and regression coverage.
+- Bump `@eslint/js` from `9.39.2` to `10.0.1` and `eslint-plugin-jsdoc` from `62.5.5` to `62.7.0`.
+- Add `cause` when rethrowing errors in caught-error paths and remove useless initial assignments to satisfy ESLint 10 recommended rules (`preserve-caught-error`, `no-useless-assignment`).
+- Add `FrontendModelBase.count()` / query `count()` for generated frontend models, returning the current index-query result size for model-first dashboard metrics.
+- Add frontend-model query `search(path, column, operator, value)` support (`eq`/`notEq`/`gt`/`gteq`/`lt`/`lteq`) and apply `searches` payload filters in built-in `frontendIndex`.
+- Add frontend-model query `where({attribute: value})` chaining support and apply `where` payload filters in built-in `frontendIndex`, enabling server-side filtering for `toArray()` flows.
+- Revert sqlite web driver packaged wasm default and restore configurable `locateFile(file)` support, with default fallback to `https://sql.js.org/dist/<file>`.
+- Add a `sqljs-wasm-route` plugin helper that serves `sql.js` dist assets from a Velocious backend route, plus `sqlJsLocateFileFromBackend(...)` helper for sqlite-web `locateFile` callbacks.
+- Extend route resolver hooks to allow optional `controllerPath`/`viewPath` overrides so plugin-style libraries can resolve controllers outside app route directories.
+- Add `Controller#sendFile(path, {contentType, status})` with streamed HTTP output so controllers can send files (for example wasm assets) without loading full files into memory first.
+- Add `configuration.routes((routes) => ...)` plugin-route DSL with `routes.get`/`routes.post` and `to: [ControllerClass, action]` for simple plugin endpoint registration.
+- Stabilize `Background jobs - queue` forked-job timing spec by waiting for a valid parsed JSON payload instead of only waiting for file existence, preventing intermittent `Unexpected end of JSON input` failures.
+- Fix dummy frontend-model system-test route sorting to honor descriptor-style `sort` payloads (`[{column, direction, path}]`) used by frontend-model queries.
+- Always resolve dummy Task frontend-model abilities for `/api/frontend-models/tasks/*` commands so integration specs with relationship-path sorting run with an ability context.
+- Apply the dummy Task frontend-model ability resolver fix across all tracked peakflow test configs (`mariadb`/`sqlite`/`pgsql`/`mssql`) so CI environments load it regardless of selected test database.
+- Add nested relationship tuple-operator support to database `where(...)` hashes (including `like`), enabling queries such as `Event.where({translations: [["name", "like", "%foo%"]]})` and deep chains like `Task.where({project: {account: [["name", "like", "%bar%"], ["createdAt", "gteq", someDate]]}})`.
+- Fix frontend-model relationship-path sorting joins by tracking joined paths per query, ensuring sort/search `ORDER BY` columns always have matching SQL joins without duplicate join clauses.
+- Add unified frontend-model transport endpoint routing at `/velocious/api` (with route-hook/controller support) and batch command processing so multiple frontend model commands can share one HTTP request.
+- Update `FrontendModelBase` transport to target `/velocious/api` and queue same-tick commands into batched fetch payloads while preserving custom request transport support.
+- Add `resourceConfig().modelName` override support so frontend model classes can map to a different backend resource/model name when using the unified API endpoint.
+- Make frontend-model generator stop emitting `path` in generated `resourceConfig()` output.
+- Extend frontend-model generator attribute handling so array `attributes` infer JSDoc types/nullability from backend model columns when model metadata is available, while keeping object-form attribute overrides.
+- Extend frontend-model generator relationship handling to support array-form and inferred relationship metadata from backend model associations, while keeping object-form relationship overrides.
+- Add frontend-model parity APIs (`all`, `order`, `first`, `last`, `findOrInitializeBy`, `findOrCreateBy`, `create`, `save`, record state helpers) and add built-in frontend-model `create` command/action support with resource-ability scoping (including shared `/velocious/api` batches and autoroutes).
+- Regenerate dummy frontend models so single-tag JSDoc blocks (including relationship `@returns` definitions) are emitted on one line.
+- Add frontend-model query `group(...)` support with safe attribute/path normalization (including nested relationship grouping like `{project: {account: ["id"]}}`) and reject SQL-like raw string fragments.
+- Add frontend-model `order(...)` as an alias for query sorting so frontend model query naming aligns with backend model `order(...)` usage.
+- Add frontend-model query `distinct(...)` support with strict boolean validation and backend-applied DISTINCT semantics.
+- Add frontend-model query `pluck(...)` support with safe attribute/path normalization and backend metadata validation for relationship-aware plucks.
+- Replace non-literal dynamic import in frontend-model route hook with a static controller import so Expo/Metro builds do not fail on `import(variable)` usage.
+- Restore frontend-model parity APIs after merge resolution (`first`/`last`, `findOrInitializeBy`/`findOrCreateBy`, `isNewRecord`/`isPersisted`, relationship parity helpers, create/save flows) and re-add query helpers so `FrontendModelBase` and `FrontendModelQuery` stay API-compatible.
+- Validate missing ids for `find`/`update`/`destroy` frontend-model actions while keeping `create` id-free, so missing-id find requests return `Expected model id.` instead of an incorrect not-found response.
+- Avoid eagerly importing `FrontendModelController` in the frontend-model route hook; return a `controllerPath` override for `/velocious/api` so browser-test bundling no longer pulls Node-only controller dependencies (`ejs`, `crypto`, `node:path`, etc.) into the browser graph.
+- Add frontend-model query/base support for `first()` and `last()` with deterministic primary-key ordering and limit semantics.
+- Add frontend-model integration coverage for `first()`/`last()` over Node and browser transports, and remove the completed `first()`/`last()` item from `TODO.md`.
+
+- Add `VelociousError` with `safeToExpose` support and use it for frontend-model validation failures so safe `Invalid ...` messages are returned to clients while unexpected errors stay generic and fully logged server-side.
+- Add explicit allowlist validation for frontend-model `resourceConfig().path` and `resourceConfig().commands` (safe URL segments only) and enforce it in frontend command URLs plus backend autoroute resolution.
+- Add built-in model/frontend-model attachment support with `hasOneAttachment`/`hasManyAttachments`, attachment-aware frontend-model `attach`/`download` commands, and backend/frontend update flows that accept attachment payloads.
+- Add pluggable attachment storage drivers (`filesystem`, `native`, `s3`) with per-attachment driver selection, driver-backed persistence reads/writes, and attachment `url()` support on backend/frontend attachment helpers (including frontend-model `url` command responses).
+- Allow model attachment definitions to pass storage drivers as direct class/instance references (for example `Task.hasOneAttachment("mobileCache", {driver: NativeDriver})`) to avoid forced dynamic imports in Expo-incompatible dependency paths.
+
+- Support root-model select shorthand arrays/strings (`Model.select(["id", "createdAt"])`) across frontend queries, frontend-model controller payloads, and backend model queries so selections stay scoped to the primary model even with joins.
+- Keep frontend-model route-hook controller resolution Expo-safe by only overriding `controllerPath` for shared `/velocious/api` requests, while backend-project frontend-model autoroutes continue resolving app route controllers (with existing resolver controller-class fallback behavior).
+- Register the default frontend-model command route hook through Node environment setup (instead of `Configuration` import-time wiring) so browser bundles avoid backend-only hook imports while Node/server behavior remains unchanged.
+- Make attachment store bundler-safe for Expo/Metro by removing static Node `crypto`/filesystem imports from `RecordAttachmentsStore`; UUID generation now uses `pure-uuid` and the filesystem driver is loaded lazily only when that backend driver is actually used.
+- Make attachment input normalization Expo-safe by lazy-loading Node `fs/promises` and `path` only for Node-only attachment-path branches, preventing Metro eager bundle resolution of Node builtins.
+- Remove attachment-driver dynamic imports from shared code paths: attachment storage now requires explicit configured drivers, while Node-specific file/path attachment operations are handled by `NodeEnvironmentHandler` methods to keep Expo/Metro bundles free of Node-only imports.

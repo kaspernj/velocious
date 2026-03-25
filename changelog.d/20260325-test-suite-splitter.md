@@ -1,0 +1,1 @@
+Add `--groups=N` and `--group-number=M` flags to the test runner for splitting test files across parallel CI jobs using a greedy load-balancing algorithm with directory-based weights and browser-spec multipliers.
