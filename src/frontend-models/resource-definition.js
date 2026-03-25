@@ -243,14 +243,15 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
     /** @type {Record<string, string>} */
     const normalizedCommands = {}
 
-    for (const commandName of commandsConfig) {
+    for (const methodName of commandsConfig) {
+      const kebabCommandName = inflection.dasherize(inflection.underscore(methodName))
       const validatedCommandName = validateFrontendModelResourceCommandName({
-        commandName,
-        commandType: commandName,
+        commandName: kebabCommandName,
+        commandType: methodName,
         modelName
       })
 
-      normalizedCommands[inflection.camelize(validatedCommandName, true)] = validatedCommandName
+      normalizedCommands[methodName] = validatedCommandName
     }
 
     return normalizedCommands

@@ -200,7 +200,7 @@
 /**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {string[] | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
- * @property {FrontendModelResourceAbilitiesConfiguration | string[]} abilities - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`) or shorthand action list (for example `["create", "read", "update", "destroy"]`).
+ * @property {FrontendModelResourceAbilitiesConfiguration | string[]} [abilities] - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`) or shorthand action list. Defaults to `{find: "read", index: "read"}` when omitted.
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
  * @property {Record<string, string> | string[]} [commands] - Legacy built-in command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
  * @property {Record<string, string> | string[]} [collectionCommands] - Custom collection commands keyed by generated method name or shorthand command list using camelized method names. When `builtInCollectionCommands` and `builtInMemberCommands` are omitted, this key keeps its legacy built-in-command behavior.
