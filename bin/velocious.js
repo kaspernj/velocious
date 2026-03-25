@@ -39,5 +39,10 @@ const cli = new Cli({
   processArgs
 })
 
-await cli.execute()
+try {
+  await cli.execute()
+} finally {
+  await configuration.closeDatabaseConnections()
+}
+
 process.exit(0)
