@@ -3,6 +3,8 @@
 const INCLUDE_TAG_FLAGS = new Set(["--tag", "--include-tag", "-t"])
 const EXCLUDE_TAG_FLAGS = new Set(["--exclude-tag", "--skip-tag", "-x"])
 const EXAMPLE_FLAGS = new Set(["--example", "--name", "-e"])
+const GROUPS_FLAGS = new Set(["--groups"])
+const GROUP_NUMBER_FLAGS = new Set(["--group-number"])
 
 /**
  * @param {string | undefined} value - Tag argument value.
@@ -46,14 +48,30 @@ export function normalizeExamplePatterns(patterns) {
 }
 
 /**
+ * @typedef {object} ParseFiltersResult
+ * @property {string[]} includeTags - Tags to include.
+ * @property {string[]} excludeTags - Tags to exclude.
+ * @property {string[]} examplePatterns - Example name patterns.
+ * @property {string[]} filteredProcessArgs - Remaining process args with filter flags removed.
+ * @property {number | undefined} groups - Total number of groups for test splitting.
+ * @property {number | undefined} groupNumber - Which group to run (1-indexed).
+ */
+
+/**
  * @param {string[]} processArgs - Process args.
- * @returns {{includeTags: string[], excludeTags: string[], examplePatterns: string[], filteredProcessArgs: string[]}} - Parsed tags and process args.
+ * @returns {ParseFiltersResult} - Parsed tags, group options, and process args.
  */
 export function parseFilters(processArgs) {
   const includeTags = []
   const excludeTags = []
   const filteredProcessArgs = processArgs.length > 0 ? [processArgs[0]] : []
   const examplePatterns = []
+
+  /** @type {number | undefined} */
+  let groups
+  /** @type {number | undefined} */
+  let groupNumber
+
   let inRestArgs = false
 
   for (let i = 1; i < processArgs.length; i++) {
@@ -125,6 +143,36 @@ export function parseFilters(processArgs) {
         examplePatterns.push(arg.slice("--name=".length))
         continue
       }
+
+      if (GROUPS_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (nextValue && !nextValue.startsWith("-")) {
+          groups = parseInt(nextValue, 10)
+          i++
+        }
+        continue
+      }
+
+      if (arg.startsWith("--groups=")) {
+        groups = parseInt(arg.slice("--groups=".length), 10)
+        continue
+      }
+
+      if (GROUP_NUMBER_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (nextValue && !nextValue.startsWith("-")) {
+          groupNumber = parseInt(nextValue, 10)
+          i++
+        }
+        continue
+      }
+
+      if (arg.startsWith("--group-number=")) {
+        groupNumber = parseInt(arg.slice("--group-number=".length), 10)
+        continue
+      }
     }
 
     filteredProcessArgs.push(arg)
@@ -134,6 +182,8 @@ export function parseFilters(processArgs) {
     includeTags: Array.from(new Set(includeTags)),
     excludeTags: Array.from(new Set(excludeTags)),
     examplePatterns,
-    filteredProcessArgs
+    filteredProcessArgs,
+    groups,
+    groupNumber
   }
 }

@@ -4,6 +4,7 @@ import BaseCommand from "../../../../cli/base-command.js"
 import picocolors from "picocolors"
 import TestFilesFinder from "../../../../testing/test-files-finder.js"
 import TestRunner from "../../../../testing/test-runner.js"
+import TestSuiteSplitter from "../../../../testing/test-suite-splitter.js"
 import {normalizeExamplePatterns, parseFilters} from "../../../../testing/test-filter-parser.js"
 
 export default class VelociousCliCommandsTest extends BaseCommand {
@@ -23,9 +24,17 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       directories.push(`${this.directory()}/spec`)
     }
 
-    const {includeTags, excludeTags, examplePatterns, filteredProcessArgs} = parseFilters(this.processArgs || [])
+    const {includeTags, excludeTags, examplePatterns, filteredProcessArgs, groups, groupNumber} = parseFilters(this.processArgs || [])
     const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
-    const testFiles = await testFilesFinder.findTestFiles()
+    let testFiles = await testFilesFinder.findTestFiles()
+
+    if (groups !== undefined && groupNumber !== undefined) {
+      const splitter = new TestSuiteSplitter({groups, groupNumber, testFiles, baseDirectory: directory})
+
+      testFiles = splitter.getGroupFiles()
+      console.log(picocolors.cyan(`Running group ${groupNumber} of ${groups} (${testFiles.length} files)`))
+    }
+
     const testRunner = new TestRunner({
       configuration: this.getConfiguration(),
       excludeTags,
