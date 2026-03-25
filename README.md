@@ -91,6 +91,30 @@ testEvents.on("testRetried", ({testDescription, attemptNumber}) => {
 })
 ```
 
+## Parallel test splitting
+
+Split test files across parallel CI jobs using `--groups` and `--group-number`.
+
+```bash
+# Run group 1 of 4
+npx velocious test --groups=4 --group-number=1
+
+# Run group 2 of 4
+npx velocious test --groups=4 --group-number=2
+
+# Combine with tags
+npx velocious test --groups=3 --group-number=1 --tag fast
+```
+
+Files are distributed using a greedy load-balancing algorithm. Each file is
+weighted by its spec directory (`system/` = 20, `frontend-models/` = 10,
+`controller/` = 3, default = 1) with a 2x multiplier for `.browser-spec.js`
+files. The heaviest files are assigned first to the group with the least
+accumulated weight, producing balanced wall-clock times across groups.
+
+The algorithm is deterministic: the same file list always produces the same
+group assignments.
+
 ## Browser system tests
 
 Run browser compatibility tests via System Testing:
