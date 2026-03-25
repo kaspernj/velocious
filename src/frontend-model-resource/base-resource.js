@@ -252,7 +252,7 @@ function filterWritableFrontendModelAttributes(receiver, attributes) {
  */
 function normalizeFrontendModelResourceAbilities(abilities) {
   if (!abilities) {
-    return {}
+    return {find: "read", index: "read"}
   }
 
   if (!Array.isArray(abilities)) {
