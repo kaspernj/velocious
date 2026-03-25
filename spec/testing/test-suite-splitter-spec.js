@@ -198,4 +198,26 @@ describe("TestSuiteSplitter", () => {
 
     expect(weighted[0].weight).toBe(20)
   })
+
+  it("applies directory weights when base directory is spec itself", () => {
+    const splitter = new TestSuiteSplitter({
+      groups: 1,
+      groupNumber: 1,
+      testFiles: [
+        "/project/spec/system/login-spec.js",
+        "/project/spec/frontend-models/query-spec.js",
+        "/project/spec/controller/routes-spec.js",
+        "/project/spec/utils/string-spec.js"
+      ],
+      baseDirectory: "/project/spec"
+    })
+
+    const weighted = splitter.computeWeightedFiles()
+    const byPath = Object.fromEntries(weighted.map((entry) => [entry.filePath, entry.weight]))
+
+    expect(byPath["/project/spec/system/login-spec.js"]).toBe(20)
+    expect(byPath["/project/spec/frontend-models/query-spec.js"]).toBe(10)
+    expect(byPath["/project/spec/controller/routes-spec.js"]).toBe(3)
+    expect(byPath["/project/spec/utils/string-spec.js"]).toBe(1)
+  })
 })

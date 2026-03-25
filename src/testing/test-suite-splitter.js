@@ -93,8 +93,9 @@ export default class TestSuiteSplitter {
     const relativePath = path.relative(this._baseDirectory, filePath).split(path.sep).join("/")
     let weight = DEFAULT_WEIGHT
 
-    // Extract the first directory under spec/ (e.g., "spec/database/..." → "database")
-    const specDirMatch = relativePath.match(/^(?:spec|__tests__|tests)\/([^/]+)\//)
+    // Extract the type directory from the relative path.
+    // Matches both "spec/system/..." (base is project root) and "system/..." (base is spec/ itself).
+    const specDirMatch = relativePath.match(/^(?:(?:spec|__tests__|tests)\/)?([^/]+)\//)
 
     if (specDirMatch) {
       const dirName = specDirMatch[1]

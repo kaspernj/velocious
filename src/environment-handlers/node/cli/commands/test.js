@@ -28,7 +28,11 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
     let testFiles = await testFilesFinder.findTestFiles()
 
-    if (groups !== undefined && groupNumber !== undefined) {
+    if (groups !== undefined || groupNumber !== undefined) {
+      if (groups === undefined || groupNumber === undefined) {
+        throw new Error("Both --groups and --group-number must be provided together")
+      }
+
       const splitter = new TestSuiteSplitter({groups, groupNumber, testFiles, baseDirectory: directory})
 
       testFiles = splitter.getGroupFiles()
