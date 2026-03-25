@@ -1049,7 +1049,7 @@ export default class FrontendModelBase {
       const previousValue = this._persistedAttributes[attributeName]
       const currentValue = this._attributes[attributeName]
 
-      if (serializeFrontendModelTransportValue(previousValue) !== serializeFrontendModelTransportValue(currentValue)) {
+      if (JSON.stringify(serializeFrontendModelTransportValue(previousValue)) !== JSON.stringify(serializeFrontendModelTransportValue(currentValue))) {
         changedAttributes[attributeName] = [previousValue, currentValue]
       }
     }
