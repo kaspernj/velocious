@@ -36,3 +36,5 @@ export default class User extends FrontendModelBase {
    */
   setEmail(newValue) { return this.setAttribute("email", newValue) }
 }
+
+FrontendModelBase.registerModel(User)
