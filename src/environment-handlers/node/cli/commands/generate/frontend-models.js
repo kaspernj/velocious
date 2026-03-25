@@ -207,10 +207,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     fileContent += `import FrontendModelBase from "${importPath}"\n`
 
-    if (relationships.length > 0) {
-      // No static imports for related models - use string-based resolution via the model registry to avoid circular dependencies
-    }
-
     fileContent += "\n"
     fileContent += "/**\n"
     fileContent += ` * @typedef {object} ${attributesTypeName}\n`
