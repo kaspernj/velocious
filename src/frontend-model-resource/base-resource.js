@@ -41,7 +41,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static memberCommands = undefined
   /** @type {Record<string, string> | string[] | undefined} */
   static builtInMemberCommands = undefined
-  /** @type {Record<string, any> | undefined} */
+  /** @type {Record<string, any> | string[] | undefined} */
   static relationships = undefined
 
   /**

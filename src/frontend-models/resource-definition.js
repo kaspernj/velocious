@@ -108,7 +108,7 @@ function normalizeFrontendModelResourceAbilities(abilities) {
   }
 
   if (!abilities) {
-    return defaultAbilities
+    return {find: "read", index: "read"}
   }
 
   if (!Array.isArray(abilities)) {
@@ -243,15 +243,14 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
     /** @type {Record<string, string>} */
     const normalizedCommands = {}
 
-    for (const methodName of commandsConfig) {
-      const kebabCommandName = inflection.dasherize(inflection.underscore(methodName))
+    for (const commandName of commandsConfig) {
       const validatedCommandName = validateFrontendModelResourceCommandName({
-        commandName: kebabCommandName,
-        commandType: methodName,
+        commandName,
+        commandType: commandName,
         modelName
       })
 
-      normalizedCommands[methodName] = validatedCommandName
+      normalizedCommands[inflection.camelize(validatedCommandName, true)] = validatedCommandName
     }
 
     return normalizedCommands
