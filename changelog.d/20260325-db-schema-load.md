@@ -1,0 +1,1 @@
+- Add a `db:schema:load` CLI command that loads each configured `db/structure-<identifier>.sql` file into its matching database connection.
