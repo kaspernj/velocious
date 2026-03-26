@@ -85,6 +85,9 @@ describe("something", () => {
 })
 ```
 
+## Test concurrency
+Velocious does not support running multiple test processes simultaneously. Always wait for one test run to finish before starting another. Running parallel test processes will cause port conflicts and database lock issues.
+
 ## Pull requests
 Use the `gh` CLI to open GitHub pull requests when needed.
 Do not push to GitHub unless explicitly asked.
