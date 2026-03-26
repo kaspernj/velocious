@@ -4,6 +4,14 @@ import {resolveFrontendModelClass} from "./model-registry.js"
 import {normalizeRansackParams} from "../utils/ransack.js"
 
 /**
+ * @typedef {object} FrontendModelSearch
+ * @property {string} column - Attribute name to search.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {string[]} path - Relationship path from root model.
+ * @property {unknown} value - Search value.
+ */
+
+/**
  * @param {unknown} value - Candidate value.
  * @returns {value is Record<string, any>} - Whether value is a plain object.
  */
@@ -882,6 +890,13 @@ function reverseSortDirection(direction) {
  * @template {typeof import("./base.js").default} T
  */
 export default class FrontendModelQuery {
+  /** @type {FrontendModelSearch[]} */
+  _searches = []
+  /** @type {FrontendModelSort[]} */
+  _sort = []
+  /** @type {FrontendModelGroup[]} */
+  _group = []
+
   /**
    * @param {object} args - Constructor args.
    * @param {T} args.modelClass - Frontend model class.
@@ -939,16 +954,17 @@ export default class FrontendModelQuery {
    */
   selectWithRequiredRootAttributes(requiredAttributes = []) {
     const rootModelName = this.modelClass.name
-    const existingRootAttributes = this._select[rootModelName]
+    const selectMap = /** @type {Record<string, string[]>} */ (this._select)
+    const existingRootAttributes = selectMap[rootModelName]
 
     if (!existingRootAttributes) {
-      return this._select
+      return selectMap
     }
 
     const rootPrimaryKey = this.modelClass.primaryKey()
 
     return {
-      ...this._select,
+      ...selectMap,
       [rootModelName]: Array.from(new Set([rootPrimaryKey, ...existingRootAttributes, ...requiredAttributes]))
     }
   }

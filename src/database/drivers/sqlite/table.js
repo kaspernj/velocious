@@ -62,7 +62,9 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
 
       if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
 
-      columnsIndex.data.columnNames = this._parseColumnsFromSQL(String(sql))
+      const indexData = /** @type {typeof columnsIndex.data & {columnNames?: string[]}} */ (columnsIndex.data)
+
+      indexData.columnNames = this._parseColumnsFromSQL(String(sql))
 
       indexes.push(columnsIndex)
     }

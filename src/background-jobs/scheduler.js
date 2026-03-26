@@ -20,6 +20,7 @@ const DURATION_MULTIPLIERS = {
   week: 7 * 24 * 60 * 60 * 1000,
   weeks: 7 * 24 * 60 * 60 * 1000
 }
+/** @typedef {keyof typeof DURATION_MULTIPLIERS} DurationUnit */
 
 /**
  * @param {number | string} value - Duration value.
@@ -47,7 +48,7 @@ export function parseScheduledDuration(value, fieldName) {
   }
 
   const numericValue = Number(match[1])
-  const multiplier = DURATION_MULTIPLIERS[match[2]]
+  const multiplier = DURATION_MULTIPLIERS[/** @type {DurationUnit} */ (match[2])]
 
   if (!multiplier) {
     throw new Error(`Invalid scheduled background job ${fieldName}: ${value}`)

@@ -306,17 +306,18 @@ class VelociousDatabaseRecord {
     }
 
     let relationship
+    const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
 
     if (actualData.type == "belongsTo") {
       relationship = new BelongsToRelationship(actualData)
 
-      this.prototype[relationshipName] = function() {
+      prototype[relationshipName] = function() {
         const relationship = this.getRelationshipByName(relationshipName)
 
         return relationship.loaded()
       }
 
-      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
+      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, any>} */ attributes) {
         const instanceRelationship = this.getRelationshipByName(relationshipName)
         const record = instanceRelationship.build(attributes)
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
@@ -338,11 +339,11 @@ class VelociousDatabaseRecord {
         return record
       }
 
-      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+      prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
 
-      this.prototype[`set${inflection.camelize(relationshipName)}`] = function(model) {
+      prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {any} */ model) {
         const relationship = this.getRelationshipByName(relationshipName)
 
         relationship.setLoaded(model)
@@ -351,25 +352,25 @@ class VelociousDatabaseRecord {
     } else if (actualData.type == "hasMany") {
       relationship = new HasManyRelationship(actualData)
 
-      this.prototype[relationshipName] = function() {
-        return /** @type {import("./instance-relationships/has-many.js").default} */ (this.getRelationshipByName(relationshipName))
+      prototype[relationshipName] = function() {
+        return /** @type {import("./instance-relationships/has-many.js").default<any, any>} */ (this.getRelationshipByName(relationshipName))
       }
 
-      this.prototype[`${relationshipName}Loaded`] = function() {
+      prototype[`${relationshipName}Loaded`] = function() {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+      prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
     } else if (actualData.type == "hasOne") {
       relationship = new HasOneRelationship(actualData)
 
-      this.prototype[relationshipName] = function() {
+      prototype[relationshipName] = function() {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      this.prototype[`build${inflection.camelize(relationshipName)}`] = function(attributes) {
+      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, any>} */ attributes) {
         const instanceRelationship = this.getRelationshipByName(relationshipName)
         const record = instanceRelationship.build(attributes)
         const inverseOf = instanceRelationship.getRelationship().getInverseOf()
@@ -384,7 +385,7 @@ class VelociousDatabaseRecord {
         return record
       }
 
-      this.prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
+      prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         await this.getRelationshipByName(relationshipName).load()
       }
     } else {
@@ -402,7 +403,7 @@ class VelociousDatabaseRecord {
   static _normalizeRelationshipArgs(scopeOrOptions, options) {
     if (typeof scopeOrOptions == "function") {
       return {
-        scope: scopeOrOptions,
+        scope: /** @type {RelationshipScopeCallback} */ (scopeOrOptions),
         relationshipOptions: options || {}
       }
     }
@@ -610,11 +611,13 @@ class VelociousDatabaseRecord {
 
     this.getAttachmentsMap()[attachmentName] = {driver, type}
 
-    this.prototype[attachmentName] = function() {
+    const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
+
+    prototype[attachmentName] = function() {
       return this.getAttachmentByName(attachmentName)
     }
 
-    this.prototype[`set${inflection.camelize(attachmentName)}`] = function(newValue) {
+      prototype[`set${inflection.camelize(attachmentName)}`] = function(/** @type {any} */ newValue) {
       this.getAttachmentByName(attachmentName).queueAttach(newValue)
       return newValue
     }
@@ -681,6 +684,7 @@ class VelociousDatabaseRecord {
 
     const columnNameToAttributeName = this.getColumnNameToAttributeNameMap()
     const attributeNameToColumnName = this.getAttributeNameToColumnNameMap()
+    const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
 
     for (const column of this._columns) {
       this._columnsAsHash[column.getName()] = column
@@ -691,21 +695,22 @@ class VelociousDatabaseRecord {
       attributeNameToColumnName[camelizedColumnName] = column.getName()
       columnNameToAttributeName[column.getName()] = camelizedColumnName
 
-      if (!(camelizedColumnName in this.prototype)) {
-        this.prototype[camelizedColumnName] = function() {
+      if (!(camelizedColumnName in prototype)) {
+        prototype[camelizedColumnName] = function() {
           return this.readAttribute(camelizedColumnName)
         }
       }
 
-      if (!(`set${camelizedColumnNameBigFirst}` in this.prototype)) {
-        this.prototype[`set${camelizedColumnNameBigFirst}`] = function(newValue) {
+      if (!(`set${camelizedColumnNameBigFirst}` in prototype)) {
+        prototype[`set${camelizedColumnNameBigFirst}`] = function(/** @type {any} */ newValue) {
           return this._setColumnAttribute(camelizedColumnName, newValue)
         }
       }
 
-      if (!(`has${camelizedColumnNameBigFirst}` in this.prototype)) {
-        this.prototype[`has${camelizedColumnNameBigFirst}`] = function() {
-          let value = this[camelizedColumnName]()
+      if (!(`has${camelizedColumnNameBigFirst}` in prototype)) {
+        prototype[`has${camelizedColumnNameBigFirst}`] = function() {
+          const dynamicThis = /** @type {Record<string, (...args: any[]) => unknown>} */ (/** @type {unknown} */ (this))
+          const value = dynamicThis[camelizedColumnName]()
 
           return this._hasAttribute(value)
         }
@@ -761,15 +766,17 @@ class VelociousDatabaseRecord {
       for (const name in this._translations) {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
+        const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
 
-        this.prototype[name] = function getTranslatedAttribute() {
+        prototype[name] = function getTranslatedAttribute() {
           const locale = this._getConfiguration().getLocale()
 
           return this._getTranslatedAttributeWithFallback(name, locale)
         }
 
-        this.prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
-          const candidate = this[name]
+        prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
+          const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+          const candidate = dynamicThis[name]
 
           if (typeof candidate == "function") {
             const value = candidate.bind(this)()
@@ -780,7 +787,7 @@ class VelociousDatabaseRecord {
           }
         }
 
-        this.prototype[setterMethodName] = function setTranslatedAttribute(newValue) {
+        prototype[setterMethodName] = function setTranslatedAttribute(/** @type {any} */ newValue) {
           const locale = this._getConfiguration().getLocale()
 
           return this._setTranslatedAttribute(name, locale, newValue)
@@ -792,16 +799,17 @@ class VelociousDatabaseRecord {
           const setterMethodNameLocalized = `${setterMethodName}${localeCamelized}`
           const hasMethodNameLocalized = `has${inflection.camelize(name)}${localeCamelized}`
 
-          this.prototype[getterMethodNameLocalized] = function getTranslatedAttributeWithLocale() {
+          prototype[getterMethodNameLocalized] = function getTranslatedAttributeWithLocale() {
             return this._getTranslatedAttribute(name, locale)
           }
 
-          this.prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(newValue) {
+          prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(/** @type {any} */ newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
           }
 
-          this.prototype[hasMethodNameLocalized] = function hasTranslatedAttribute() {
-            const candidate = this[getterMethodNameLocalized]
+          prototype[hasMethodNameLocalized] = function hasTranslatedAttribute() {
+            const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+            const candidate = dynamicThis[getterMethodNameLocalized]
 
             if (typeof candidate == "function") {
               const value = candidate.bind(this)()
@@ -898,12 +906,13 @@ class VelociousDatabaseRecord {
    */
   setAttribute(name, newValue) {
     const setterName = `set${inflection.camelize(name)}`
+    const dynamicThis = /** @type {Record<string, (value: any) => void>} */ (/** @type {unknown} */ (this))
 
     this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
     if (!(setterName in this)) throw new Error(`No such setter method: ${this.constructor.name}#${setterName}`)
 
-    this[setterName](newValue)
+    dynamicThis[setterName](newValue)
   }
 
   /**
@@ -996,6 +1005,7 @@ class VelociousDatabaseRecord {
    */
   static getColumnTypeByName(name) {
     if (!this._columnTypeByName) {
+      /** @type {Record<string, string | undefined>} */
       this._columnTypeByName = {}
 
       for (const column of this.getColumns()) {
@@ -1070,6 +1080,7 @@ class VelociousDatabaseRecord {
       if (returnResults) return {succeededRows: normalizedRows.slice(), failedRows: [], errors: []}
       return
     } catch {
+      /** @type {{succeededRows: unknown[][], failedRows: unknown[][], errors: Array<{row: unknown[], error: unknown}>}} */
       const results = {
         succeededRows: [],
         failedRows: [],
@@ -1896,7 +1907,11 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the first.
    */
   static async first() {
-    return await this._newQuery().first()
+    const result = await this._newQuery().first()
+
+    if (!result) throw new Error(`${this.name}.first() returned no records`)
+
+    return result
   }
 
   /**
@@ -1915,7 +1930,11 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the last.
    */
   static async last() {
-    return await this._newQuery().last()
+    const result = await this._newQuery().last()
+
+    if (!result) throw new Error(`${this.name}.last() returned no records`)
+
+    return result
   }
 
   /**
@@ -2148,7 +2167,8 @@ class VelociousDatabaseRecord {
         if (callback == callbackName) {
           callbackNameRegisteredAsString = true
         }
-        const methodCallback = this[callback]
+        const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+        const methodCallback = dynamicThis[callback]
 
         if (typeof methodCallback != "function") {
           throw new Error(`Lifecycle callback "${callback}" is not a function on ${this.getModelClass().name}`)
@@ -2160,7 +2180,8 @@ class VelociousDatabaseRecord {
       }
     }
 
-    const instanceCallback = this[callbackName]
+    const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+    const instanceCallback = dynamicThis[callbackName]
 
     if (!callbackNameRegisteredAsString && typeof instanceCallback === "function") {
       await instanceCallback.call(this)

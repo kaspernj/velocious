@@ -526,7 +526,8 @@ export default class RecordAttachmentsStore {
       .order("position DESC")
       .limit(1)
     const rows = await query.results()
-    const current = Number(rows[0]?.position)
+    const currentRow = /** @type {{position?: string | number | null} | undefined} */ (rows[0])
+    const current = Number(currentRow?.position)
 
     if (!Number.isFinite(current)) return 0
 

@@ -27,14 +27,17 @@ export default function baseMethodsForward(PoolBase) {
     "updateSql"
   ]
 
+  const prototype = /** @type {Record<string, (...args: any[]) => unknown>} */ (/** @type {unknown} */ (PoolBase.prototype))
+
   for (const forwardMethod of forwardMethods) {
-    PoolBase.prototype[forwardMethod] = function(...args) {
+    prototype[forwardMethod] = function(...args) {
       const connection = this.getCurrentConnection()
-      const connectionMethod = connection[forwardMethod]
+      const connectionRecord = /** @type {Record<string, (...args: any[]) => unknown>} */ (/** @type {unknown} */ (connection))
+      const connectionMethod = connectionRecord[forwardMethod]
 
       if (!connectionMethod) throw new Error(`${forwardMethod} isn't defined on driver`)
 
-      return connection[forwardMethod](...args)
+      return connectionMethod.apply(connection, args)
     }
   }
 }

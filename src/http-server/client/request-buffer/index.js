@@ -30,6 +30,8 @@ export default class RequestBuffer {
 
   /** @type {Record<string, Header>} */
   headersByName = {}
+  /** @type {number[] | undefined} */
+  chunkedBodyChars = undefined
 
   multiPartyFormData = false
 
@@ -78,19 +80,25 @@ export default class RequestBuffer {
           }
 
           break
-        case "chunked-data":
+        case "chunked-data": {
+          const chunkedBodyChars = this.chunkedBodyChars
+
           if (this.currentChunkSize === undefined) throw new Error("Chunk size not initialized")
-          if (!this.chunkedBodyChars) throw new Error("Chunked body not initialized")
+          if (!chunkedBodyChars) throw new Error("Chunked body not initialized")
 
-          this.chunkedBodyChars.push(char)
-          this.currentChunkBytesRead += 1
+          chunkedBodyChars.push(char)
+          /** @type {number} */
+          const currentChunkBytesRead = (this.currentChunkBytesRead || 0) + 1
 
-          if (this.currentChunkBytesRead >= this.currentChunkSize) {
+          this.currentChunkBytesRead = currentChunkBytesRead
+
+          if (currentChunkBytesRead >= this.currentChunkSize) {
             this.currentChunkCrlfRead = 0
             this.setState("chunked-data-crlf")
           }
 
           break
+        }
         case "chunked-data-crlf":
           this.currentChunkCrlfRead = (this.currentChunkCrlfRead || 0) + 1
 
@@ -457,8 +465,16 @@ export default class RequestBuffer {
   parseQueryStringPostParams() {
     if (this.postBody) {
       try {
+        const parsedQuery = querystring.parse(this.postBody)
         /** @type {Record<string, string | string[]>} */
-        const unparsedParams = querystring.parse(this.postBody)
+        const unparsedParams = {}
+
+        for (const [key, value] of Object.entries(parsedQuery)) {
+          if (typeof value !== "undefined") {
+            unparsedParams[key] = value
+          }
+        }
+
         const paramsToObject = new ParamsToObject(unparsedParams)
         const newParams = paramsToObject.toObject()
 

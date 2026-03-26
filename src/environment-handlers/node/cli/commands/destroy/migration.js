@@ -10,7 +10,10 @@ export default class DbDestroyMigration extends BaseCommand {
    * @returns {Promise<void | DestroyMigrationResult>} - Resolves with the execute.
    */
   async execute() {
-    const migrationName = this.processArgs[1]
+    const migrationName = this.processArgs?.[1]
+
+    if (!migrationName) throw new Error("Expected migration name")
+
     const migrationDir = `${this.getConfiguration().getDirectory()}/src/database/migrations`
     const migrationFiles = await fs.readdir(migrationDir)
     const destroyed = []

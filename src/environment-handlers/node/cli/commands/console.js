@@ -101,14 +101,14 @@ async function startConsoleRepl({configuration, context}) {
       if (error) {
         reject(error)
       } else {
-        resolve()
+        resolve(undefined)
       }
     })
   })
 
   await new Promise((resolve) => {
     replServer.on("exit", () => {
-      resolve()
+      resolve(undefined)
     })
   })
 

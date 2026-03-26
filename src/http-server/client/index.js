@@ -117,16 +117,18 @@ export default class VeoliciousHttpServerClient {
   executeCurrentRequest = () => {
     this.logger.debug("executeCurrentRequest")
 
-    if (!this.currentRequest) throw new Error("No current request")
+    const currentRequest = this.currentRequest
+
+    if (!currentRequest) throw new Error("No current request")
     this.logger.debug(() => ["executeCurrentRequest request", {
       clientCount: this.clientCount,
-      httpMethod: this.currentRequest.httpMethod(),
-      httpVersion: this.currentRequest.httpVersion(),
-      path: this.currentRequest.path(),
+      httpMethod: currentRequest.httpMethod(),
+      httpVersion: currentRequest.httpVersion(),
+      path: currentRequest.path(),
       queueLength: this.requestRunners.length
     }])
 
-    if (this._isWebsocketUpgrade(this.currentRequest)) {
+    if (this._isWebsocketUpgrade(currentRequest)) {
       this._upgradeToWebsocket()
       return
     }
@@ -136,7 +138,7 @@ export default class VeoliciousHttpServerClient {
 
     const requestRunner = new RequestRunner({
       configuration: this.configuration,
-      request: this.currentRequest
+      request: currentRequest
     })
 
     this.requestRunners.push(requestRunner)
@@ -165,9 +167,13 @@ export default class VeoliciousHttpServerClient {
       /** @type {Buffer | undefined} */
       let remaining = data
 
-      while (remaining && remaining.length > 0) {
+      while (remaining) {
+        if (remaining.length <= 0) break
+
         if (this.state == "initial") {
-          this.logger.debug(() => ["onWrite creating request parser", {clientCount: this.clientCount, remainingLength: remaining.length}])
+          const remainingLength = remaining.length
+
+          this.logger.debug(() => ["onWrite creating request parser", {clientCount: this.clientCount, remainingLength}])
           this.currentRequest = new Request({client: this, configuration: this.configuration})
           this.currentRequest.requestParser.events.on("done", this.executeCurrentRequest)
           this.state = "requestStarted"
@@ -189,12 +195,16 @@ export default class VeoliciousHttpServerClient {
           const requestParser = this.currentRequest.getRequestParser()
 
           if (!requestParser.hasCompleted) {
-            this.logger.debug(() => ["onWrite waiting for more data", {clientCount: this.clientCount, remainingLength: remaining.length}])
+            const remainingLength = remaining.length
+
+            this.logger.debug(() => ["onWrite waiting for more data", {clientCount: this.clientCount, remainingLength}])
             break
           }
 
           this.state = "initial"
-          this.logger.debug(() => ["onWrite parser completed with remaining bytes", {clientCount: this.clientCount, remainingLength: remaining.length}])
+          const remainingLength = remaining.length
+
+          this.logger.debug(() => ["onWrite parser completed with remaining bytes", {clientCount: this.clientCount, remainingLength}])
         }
       }
       this.logger.debug(() => ["onWrite end", {clientCount: this.clientCount, state: this.state, queueLength: this.requestRunners.length}])

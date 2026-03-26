@@ -52,7 +52,7 @@ export default class VelociousHttpServer {
       try {
         this.netServer.listen(this.port, this.host, () => {
           this.logger.debug(`Velocious listening on ${this.host}:${this.port}`)
-          resolve(null)
+          resolve(undefined)
         })
       } catch (error) {
         reject(error)
@@ -93,7 +93,7 @@ export default class VelociousHttpServer {
   stopServer() {
     return new Promise((resolve, reject) => {
       if (!this.netServer || !this.netServer.listening) {
-        resolve(null)
+        resolve(undefined)
         return
       }
 
@@ -101,7 +101,7 @@ export default class VelociousHttpServer {
         if (error) {
           reject(error)
         } else {
-          resolve(null)
+          resolve(undefined)
         }
       })
     })

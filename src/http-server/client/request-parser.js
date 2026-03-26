@@ -136,7 +136,7 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /** @returns {string | null} - The protocol.  */
-  getProtocol() { return this._getHostMatch()?.protocol }
+  getProtocol() { return this._getHostMatch()?.protocol || null }
 
   /** @returns {RequestBuffer} - The request buffer.  */
   getRequestBuffer() { return this.requestBuffer }

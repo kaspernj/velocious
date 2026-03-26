@@ -38,7 +38,11 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
         sql += "ADD "
         sql += column.getSQL({driver: this.getDriver(), forAlterTable: false})
       } else if (column.getNewName()) {
-        sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(column.getNewName())}`
+        const newColumnName = column.getNewName()
+
+        if (!newColumnName) throw new Error(`Expected new column name for ${column.getName()}`)
+
+        sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(newColumnName)}`
       } else if (column.getDropColumn()) {
         sql += `DROP COLUMN ${options.quoteColumnName(column.getName())}`
       } else {
@@ -59,15 +63,16 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
     if (databaseType == "pgsql") {
       for (const column of tableData.getColumns()) {
-        if (!column.isNewColumn() || column.getDropColumn()) continue
+      if (!column.isNewColumn() || column.getDropColumn()) continue
 
-        const notes = column.getNotesForDatabase(databaseType)
+      const notes = column.getNotesForDatabase(databaseType)
+      const actualName = column.getActualName()
 
-        if (!notes) continue
+      if (!notes || !actualName) continue
 
-        sqls.push(
-          `COMMENT ON COLUMN ${options.quoteTableName(tableData.getName())}.${options.quoteColumnName(column.getActualName())} IS ${options.quote(notes)}`
-        )
+      sqls.push(
+        `COMMENT ON COLUMN ${options.quoteTableName(tableData.getName())}.${options.quoteColumnName(actualName)} IS ${options.quote(notes)}`
+      )
       }
     }
 

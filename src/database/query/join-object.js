@@ -50,6 +50,11 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
       const joinValue = join[joinKey]
       const relationship = modelClass.getRelationshipByName(joinKey)
       const targetModelClass = relationship.getTargetModelClass()
+
+      if (!targetModelClass) {
+        throw new Error(`Relationship ${modelClass.name}#${joinKey} has no target model class`)
+      }
+
       const joinPath = path.concat([joinKey])
       const parentTableRef = query.getJoinTableReference(path)
       const targetEntry = query._registerJoinPath(joinPath)

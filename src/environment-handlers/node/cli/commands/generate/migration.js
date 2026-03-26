@@ -13,7 +13,10 @@ export default class DbGenerateMigration extends BaseCommand {
    * @returns {Promise<void | DbGenerateMigrationReturnType>} - Resolves with the execute.
    */
   async execute() {
-    const migrationName = this.processArgs[1]
+    const migrationName = this.processArgs?.[1]
+
+    if (!migrationName) throw new Error("Expected migration name")
+
     const migrationNameCamelized = inflection.camelize(migrationName.replaceAll("-", "_"))
     const date = new Date()
     const migrationNumber = strftime("%Y%m%d%H%M%S")

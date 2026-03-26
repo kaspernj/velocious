@@ -3,7 +3,7 @@
 import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
-const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
+export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
   /**
@@ -45,7 +45,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(undefined)
 
-    if (connection[CLOSED_CONNECTION]) return
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean}} */ (connection)
+
+    if (trackedConnection[CLOSED_CONNECTION]) return
 
     this.connections.push(connection)
 
@@ -192,12 +194,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.connectionsInUse = {}
 
     for (const connection of connections) {
-      connection[CLOSED_CONNECTION] = true
+      if (!connection) continue
 
-      if (typeof connection.close === "function") {
-        await connection.close()
-      } else if (typeof connection.disconnect === "function") {
-        await connection.disconnect()
+      const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean}} */ (connection)
+      trackedConnection[CLOSED_CONNECTION] = true
+
+      if (typeof trackedConnection.close === "function") {
+        await trackedConnection.close()
+      } else if (typeof trackedConnection.disconnect === "function") {
+        await trackedConnection.disconnect()
       }
     }
 

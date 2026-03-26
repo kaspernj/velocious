@@ -177,6 +177,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    */
   async _queryActual(sql) {
     if (!this.pool) await this.connect()
+    if (!this.pool) throw new Error("MySQL pool failed to initialize")
 
     try {
       return await query(this.pool, sql)

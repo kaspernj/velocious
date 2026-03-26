@@ -134,6 +134,9 @@ export class FrontendModelSingularRelationship {
  * @template {typeof FrontendModelBase} T
  */
 export class FrontendModelHasManyRelationship {
+  /** @type {Array<InstanceType<T>>} */
+  _loadedValue
+
   /**
    * @param {InstanceType<S>} model - Parent model.
    * @param {string} relationshipName - Relationship name.
@@ -886,6 +889,19 @@ function assertFindByConditionSerializationPreservesValue(originalValue, normali
 
 /** Base class for generated frontend model classes. */
 export default class FrontendModelBase {
+  /** @type {Record<string, any>} */
+  _attributes
+  /** @type {Record<string, FrontendModelHasManyRelationship<any, any> | FrontendModelSingularRelationship<any, any>>} */
+  _relationships
+  /** @type {Record<string, FrontendModelAttachmentHandle>} */
+  _attachments
+  /** @type {Set<string> | null} */
+  _selectedAttributes
+  /** @type {boolean} */
+  _isNewRecord
+  /** @type {Record<string, any>} */
+  _persistedAttributes
+
   /**
    * @param {Record<string, any>} [attributes] - Initial attributes.
    */
@@ -910,10 +926,11 @@ export default class FrontendModelBase {
     if (this._generatedAttachmentMethods) return
 
     const attachments = this.attachmentDefinitions()
+    const prototype = /** @type {Record<string, any>} */ (this.prototype)
 
     for (const attachmentName of Object.keys(attachments)) {
-      if (!(attachmentName in this.prototype)) {
-        this.prototype[attachmentName] = function() {
+      if (!(attachmentName in prototype)) {
+        prototype[attachmentName] = function() {
           return this.getAttachmentByName(attachmentName)
         }
       }
@@ -1305,22 +1322,24 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
-   * @returns {{attributes: Record<string, any>, preloadedRelationships: Record<string, any>, selectedAttributes: string[] | null}} - Attributes and preload/select payload.
+   * @returns {{attributes: Record<string, any>, preloadedRelationships: Record<string, any>, selectedAttributes: Set<string>}} - Attributes and preload/select payload.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
       throw new Error(`Expected object response but got: ${response}`)
     }
 
+    const responseObject = /** @type {Record<string, any>} */ (response)
+
     /** @type {Record<string, any>} */
     let modelData
 
-    if (response.model && typeof response.model === "object") {
-      modelData = response.model
-    } else if (response.attributes && typeof response.attributes === "object") {
-      modelData = response.attributes
+    if (responseObject.model && typeof responseObject.model === "object") {
+      modelData = /** @type {Record<string, any>} */ (responseObject.model)
+    } else if (responseObject.attributes && typeof responseObject.attributes === "object") {
+      modelData = /** @type {Record<string, any>} */ (responseObject.attributes)
     } else {
-      modelData = /** @type {Record<string, any>} */ (response)
+      modelData = responseObject
     }
 
     const attributes = {...modelData}
@@ -1328,13 +1347,13 @@ export default class FrontendModelBase {
       ? /** @type {Record<string, any>} */ (attributes[PRELOADED_RELATIONSHIPS_KEY])
       : {}
     const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
-      ? /** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string")
+      ? new Set(/** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
       : null
 
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
     delete attributes[SELECTED_ATTRIBUTES_KEY]
 
-    const selectedAttributes = selectedAttributesFromPayload || Object.keys(attributes)
+    const selectedAttributes = selectedAttributesFromPayload || new Set(Object.keys(attributes))
 
     return {attributes, preloadedRelationships, selectedAttributes}
   }
@@ -2099,7 +2118,11 @@ export default class FrontendModelBase {
    * @returns {Promise<Record<string, any>>} - Decoded response payload.
    */
   static async performTransportRequest({commandName, commandType, customPath, payload, url}) {
-    const customResponse = await frontendModelTransportConfig.request({
+    const request = frontendModelTransportConfig.request
+
+    if (!request) throw new Error("Frontend model transport request handler is not configured")
+
+    const customResponse = await request({
       commandName,
       commandType,
       customPath,

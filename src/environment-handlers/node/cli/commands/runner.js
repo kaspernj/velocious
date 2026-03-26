@@ -38,7 +38,7 @@ export default class RunnerCommand extends BaseCommand {
 
   /** @returns {string} - Inline JavaScript code to evaluate. */
   runnerCode() {
-    const code = this.processArgs.slice(1).join(" ").trim()
+    const code = (this.processArgs || []).slice(1).join(" ").trim()
 
     if (!code) {
       throw new Error("Missing code argument. Usage: npx velocious runner \"<javascript-code>\"")
@@ -52,12 +52,14 @@ export default class RunnerCommand extends BaseCommand {
     const configuration = this.getConfiguration()
     const dbs = configuration.getCurrentConnections()
     const identifiers = Object.keys(dbs)
+    /** @type {string[]} */
+    const processArgs = this.processArgs || []
 
     return {
       configuration,
       db: dbs.default || (identifiers.length > 0 ? dbs[identifiers[0]] : undefined),
       dbs,
-      args: this.processArgs.slice(2)
+      args: processArgs.slice(2)
     }
   }
 

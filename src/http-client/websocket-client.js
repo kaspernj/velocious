@@ -4,6 +4,13 @@
  * A small websocket client that mirrors simple HTTP-style calls and channel subscriptions.
  */
 export default class VelociousWebsocketClient {
+  /** @type {Map<string, {reject: (error: unknown) => void, resolve: (response: VelociousWebsocketResponse) => void}>} */
+  pendingRequests
+  /** @type {Map<string, {reject: (error: unknown) => void, resolve: (value?: void) => void}>} */
+  pendingSubscriptions
+  /** @type {Map<string, {callbacks: Set<(payload: any) => void>, channel: string, params: Record<string, any> | undefined, ready: Promise<void>}>} */
+  listeners
+
   /**
    * @param {object} [args] - Options object.
    * @param {boolean} [args.debug] - Whether debug.
@@ -38,9 +45,9 @@ export default class VelociousWebsocketClient {
 
       const onOpen = () => {
         cleanup()
-        resolve()
+        resolve(undefined)
       }
-      const onError = (event) => {
+      const onError = (/** @type {Event & {error?: unknown}} */ event) => {
         cleanup()
         const error = event?.error || new Error("Websocket connection error")
         reject(error)
@@ -63,7 +70,7 @@ export default class VelociousWebsocketClient {
     if (!this.socket) return
 
     await new Promise((resolve) => {
-      this.socket?.addEventListener("close", () => resolve())
+      this.socket?.addEventListener("close", () => resolve(undefined))
       this.socket?.close()
     })
 
@@ -114,7 +121,10 @@ export default class VelociousWebsocketClient {
     const subscriptionKey = this._subscriptionKey(channel, params)
 
     if (!this.listeners.has(subscriptionKey)) {
+      /** @type {(() => void) | undefined} */
+      /** @type {((value?: void) => void) | undefined} */
       let resolveReady
+      /** @type {((error: unknown) => void) | undefined} */
       let rejectReady
       const ready = new Promise((resolve, reject) => {
         resolveReady = resolve
@@ -127,7 +137,10 @@ export default class VelociousWebsocketClient {
         params,
         ready
       })
-      this.pendingSubscriptions.set(subscriptionKey, {reject: rejectReady, resolve: resolveReady})
+      this.pendingSubscriptions.set(subscriptionKey, {
+        reject: rejectReady || (() => {}),
+        resolve: resolveReady || (() => {})
+      })
 
       void this.connect().then(() => {
         this._sendMessage({channel, params, type: "subscribe"})
@@ -205,6 +218,7 @@ export default class VelociousWebsocketClient {
 
     if (!raw) return
 
+    /** @type {Record<string, any>} */
     let message
 
     try {
@@ -239,7 +253,7 @@ export default class VelociousWebsocketClient {
       for (const listenerEntry of this.listeners.values()) {
         if (listenerEntry.channel !== channel) continue
 
-        listenerEntry.callbacks.forEach((callback) => {
+        listenerEntry.callbacks.forEach((/** @type {(payload: any) => void} */ callback) => {
           try {
             callback(payload)
           } catch (error) {
@@ -317,12 +331,14 @@ class VelociousWebsocketResponse {
    * @param {object} message - Message text.
    */
   constructor(message) {
-    this.body = message.body
-    this.headers = message.headers || {}
-    this.id = message.id
-    this.statusCode = message.statusCode || 200
-    this.statusMessage = message.statusMessage || "OK"
-    this.type = message.type
+    const responseMessage = /** @type {{body?: any, headers?: Record<string, any>, id?: string | number | null, statusCode?: number, statusMessage?: string, type?: string}} */ (message)
+
+    this.body = responseMessage.body
+    this.headers = responseMessage.headers || {}
+    this.id = responseMessage.id
+    this.statusCode = responseMessage.statusCode || 200
+    this.statusMessage = responseMessage.statusMessage || "OK"
+    this.type = responseMessage.type
   }
 
   /** @returns {any} - The json.  */

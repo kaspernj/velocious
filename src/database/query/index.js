@@ -381,7 +381,7 @@ export default class VelociousDatabaseQuery {
     if (typeof where == "string") {
       this._wheres.push(new WherePlain(this, where))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
-      this._wheres.push(new WhereHash(this, where))
+      this._wheres.push(new WhereHash(this, /** @type {import("./where-hash.js").WhereHash} */ (where)))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }
@@ -397,7 +397,7 @@ export default class VelociousDatabaseQuery {
     if (typeof where == "string") {
       this._wheres.push(new WhereNot(new WherePlain(this, where)))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
-      this._wheres.push(new WhereNot(new WhereHash(this, where)))
+      this._wheres.push(new WhereNot(new WhereHash(this, /** @type {import("./where-hash.js").WhereHash} */ (where))))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }

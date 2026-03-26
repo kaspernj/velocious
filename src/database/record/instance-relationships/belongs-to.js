@@ -6,6 +6,7 @@ import BaseInstanceRelationship from "./base.js"
  * A generic query over some model type.
  * @template {typeof import("../index.js").default} MC
  * @template {typeof import("../index.js").default} TMC
+ * @extends {BaseInstanceRelationship<MC, TMC>}
  */
 export default class VelociousDatabaseRecordBelongsToInstanceRelationship extends BaseInstanceRelationship {
   /**
@@ -41,6 +42,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     if (!TargetModelClass) throw new Error("Can't load without a target model")
 
     const primaryKey = TargetModelClass.primaryKey()
+    /** @type {Record<string, string | number | null | undefined>} */
     const whereArgs = {}
 
     whereArgs[primaryKey] = foreignModelID
@@ -51,7 +53,11 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     const foreignModel = await query.first()
 
-    this.setLoaded(foreignModel)
+    if (foreignModel) {
+      this.setLoaded(foreignModel)
+    } else {
+      this.setLoaded(undefined)
+    }
     this.setDirty(false)
     this.setPreloaded(true)
   }

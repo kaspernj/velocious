@@ -1,1 +1,1 @@
-- Restore `npm run typecheck` compatibility on the TypeScript 6 upgrade branch by making the JS-checking compiler behavior explicit and fixing the remaining TS 6 runtime typing regressions.
+- Restore `npm run typecheck` compatibility on the TypeScript 6 upgrade branch by fixing the remaining TS 6 JSDoc, nullability, and runtime typing regressions across the codebase.

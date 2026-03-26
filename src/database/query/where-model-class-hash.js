@@ -117,19 +117,21 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} */
     const normalized = []
+    /** @param {unknown} conditionValue - Candidate nested condition. */
     const addCondition = (conditionValue) => {
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
-        const normalizedOperator = normalizeRelationshipWhereOperator(conditionValue[1])
+        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", any, ...unknown[]]} */ (conditionValue)
+        const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
         normalized.push([
-          conditionValue[0],
+          tuple[0],
           normalizedOperator,
-          conditionValue[2]
+          tuple[2]
         ])
 
-        if (conditionValue.length > 3) {
-          for (let index = 3; index < conditionValue.length; index += 1) {
-            addCondition(conditionValue[index])
+        if (tuple.length > 3) {
+          for (let index = 3; index < tuple.length; index += 1) {
+            addCondition(tuple[index])
           }
         }
 
@@ -288,6 +290,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
 
+    /** @param {any} entry - Value to normalize. */
     const normalize = (entry) => {
       if (entry === true) return 1
       if (entry === false) return 0
@@ -320,6 +323,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
       normalizedType.includes("text") ||
       stringTypes.has(normalizedType)
 
+    /** @param {any} entry - Value to normalize. */
     const normalize = (entry) => {
       if (isUuidType && typeof entry === "number") return NO_MATCH
       if (!shouldCoerceToString || typeof entry !== "number") return entry
@@ -367,6 +371,9 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
         if (index > 0) sql += " AND "
 
         const targetModelClass = relationship.getTargetModelClass()
+
+        if (!targetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
 
@@ -392,6 +399,9 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
         }
 
         const targetModelClass = relationship.getTargetModelClass()
+
+        if (!targetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+
         const nestedHash = /** @type {WhereHash} */ (whereValue)
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)

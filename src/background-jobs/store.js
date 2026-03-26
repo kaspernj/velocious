@@ -90,7 +90,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * @returns {Promise<import("./store.js").BackgroundJobRow | null>} - Next job.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next job.
    */
   async nextAvailableJob() {
     await this.ensureReady()
@@ -117,7 +117,7 @@ export default class BackgroundJobsStore {
 
   /**
    * @param {string} jobId - Job id.
-   * @returns {Promise<import("./store.js").BackgroundJobRow | null>} - Job row.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Job row.
    */
   async getJob(jobId) {
     await this.ensureReady()
@@ -293,7 +293,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * @param {number | undefined} maxRetries - Input.
+   * @param {number | null | undefined} maxRetries - Input.
    * @returns {number} - Normalized max retries.
    */
   _normalizeMaxRetries(maxRetries) {
@@ -325,6 +325,10 @@ export default class BackgroundJobsStore {
     })
   }
 
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async _ensureMigrationsTable(db) {
     if (await db.tableExists(MIGRATIONS_TABLE)) return
 
@@ -338,6 +342,10 @@ export default class BackgroundJobsStore {
     await db.createTable(table)
   }
 
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<boolean>} - Whether migration exists.
+   */
   async _hasMigration(db) {
     const query = db
       .newQuery()
@@ -350,6 +358,10 @@ export default class BackgroundJobsStore {
     return rows.length > 0
   }
 
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async _applyMigrations(db) {
     this.logger.info("Applying background jobs schema")
 
@@ -391,6 +403,11 @@ export default class BackgroundJobsStore {
     })
   }
 
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} jobId - Job id.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Job row.
+   */
   async _getJobRowById(db, jobId) {
     const query = db
       .newQuery()
@@ -405,6 +422,14 @@ export default class BackgroundJobsStore {
     return this._normalizeJobRow(rows[0])
   }
 
+  /**
+   * @param {object} args - Options.
+   * @param {import("../database/drivers/base.js").default} args.db - Database connection.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
+   * @param {unknown} args.error - Error.
+   * @param {boolean} args.markOrphaned - Whether marking orphaned.
+   * @returns {Promise<void>} - Resolves when updated.
+   */
   async _applyFailure({db, job, error, markOrphaned}) {
     const now = Date.now()
     const nextAttempt = (job.attempts || 0) + 1
@@ -442,6 +467,10 @@ export default class BackgroundJobsStore {
     })
   }
 
+  /**
+   * @param {Record<string, any>} row - Raw database row.
+   * @returns {import("./types.js").BackgroundJobRow} - Normalized job row.
+   */
   _normalizeJobRow(row) {
     return {
       id: String(row.id),
@@ -462,6 +491,10 @@ export default class BackgroundJobsStore {
     }
   }
 
+  /**
+   * @param {unknown} value - Input value.
+   * @returns {number | null} - Normalized number.
+   */
   _normalizeNumber(value) {
     if (value === null || value === undefined || value === "") return null
 
@@ -472,6 +505,10 @@ export default class BackgroundJobsStore {
     return numeric
   }
 
+  /**
+   * @param {unknown} value - Input value.
+   * @returns {boolean} - Normalized boolean.
+   */
   _normalizeBoolean(value) {
     if (value === null || value === undefined) return false
     if (typeof value === "boolean") return value
@@ -480,6 +517,10 @@ export default class BackgroundJobsStore {
     return value === "true"
   }
 
+  /**
+   * @param {unknown} value - Input value.
+   * @returns {any[]} - Parsed args.
+   */
   _parseArgs(value) {
     if (!value) return []
 
@@ -494,6 +535,10 @@ export default class BackgroundJobsStore {
     return []
   }
 
+  /**
+   * @param {unknown} error - Error input.
+   * @returns {string} - Normalized error string.
+   */
   _normalizeError(error) {
     if (error instanceof Error) return error.stack || error.message
     if (typeof error === "string") return error
@@ -505,20 +550,30 @@ export default class BackgroundJobsStore {
     }
   }
 
+  /**
+   * @template T
+   * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Callback.
+   * @returns {Promise<T>} - Callback result.
+   */
   async _withDb(callback) {
     const pool = this.configuration.getDatabasePool(this.getDatabaseIdentifier())
+    /** @type {T | undefined} */
     let result
 
     await pool.withConnection(async (db) => {
       result = await callback(db)
     })
 
+    if (result === undefined) {
+      throw new Error("Background jobs store callback returned undefined")
+    }
+
     return result
   }
 
   /**
    * @param {object} args - Options.
-   * @param {import("./store.js").BackgroundJobRow} args.job - Job row.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {string | null | undefined} args.workerId - Worker id from report.
    * @param {number | null | undefined} args.handedOffAtMs - Handed off timestamp from report.
    * @returns {boolean} - Whether to accept the report.
@@ -537,22 +592,3 @@ export default class BackgroundJobsStore {
     return `${MIGRATION_SCOPE}:${MIGRATION_VERSION}`
   }
 }
-
-/**
- * @typedef {object} BackgroundJobRow
- * @property {string} id - Job id.
- * @property {string} jobName - Job class name.
- * @property {any[]} args - Serialized job arguments.
- * @property {boolean} forked - Whether the job is forked.
- * @property {string} status - Current job status.
- * @property {number | null} attempts - Failure attempts count.
- * @property {number | null} maxRetries - Max retry attempts.
- * @property {number | null} scheduledAtMs - Next scheduled time in ms.
- * @property {number | null} createdAtMs - Creation time in ms.
- * @property {number | null} handedOffAtMs - Time handed to worker in ms.
- * @property {number | null} completedAtMs - Completion time in ms.
- * @property {number | null} failedAtMs - Failure time in ms.
- * @property {number | null} orphanedAtMs - Orphaned time in ms.
- * @property {string | null} workerId - Worker id handling the job.
- * @property {string | null} lastError - Last failure message.
- */

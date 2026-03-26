@@ -17,8 +17,10 @@ export default class VelociousHttpServerClientWebsocketRequest {
     if (!path) throw new Error("path is required")
 
     this.body = body
+    /** @type {Record<string, string>} */
     this.headersMap = {}
     this.method = method.toUpperCase()
+    /** @type {Record<string, any>} */
     this.paramsObject = {}
     this._path = path
     this.remoteAddressValue = remoteAddress
@@ -47,6 +49,10 @@ export default class VelociousHttpServerClientWebsocketRequest {
     if (protocol && host) return `${protocol}://${host}`
   }
 
+  /**
+   * @param {string} name - Header name.
+   * @returns {string | null} - Header value.
+   */
   header(name) { return this.headersMap[name.toLowerCase()] || null }
 
   headers() { return this.headersMap }
@@ -94,16 +100,18 @@ export default class VelociousHttpServerClientWebsocketRequest {
 
     if (!query) return {}
 
-    /** @type {Record<string, string | string[]>} */
-    const unparsedParams = querystring.parse(query)
+    const parsedQuery = querystring.parse(query)
     /** @type {Record<string, string | string[]>} */
     const params = {}
 
-    for (const key of Object.keys(unparsedParams)) {
-      params[key] = unparsedParams[key]
+    for (const key of Object.keys(parsedQuery)) {
+      const value = parsedQuery[key]
+
+      if (typeof value !== "undefined") {
+        params[key] = value
+      }
     }
 
     return params
   }
 }
-

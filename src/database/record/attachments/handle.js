@@ -35,6 +35,9 @@ function isArray(value) {
  * Attachment helper bound to one model + attachment name.
  */
 export default class RecordAttachmentHandle {
+  /** @type {unknown[]} */
+  pendingInputs = []
+
   /**
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
@@ -45,7 +48,6 @@ export default class RecordAttachmentHandle {
     this.model = model
     this.name = name
     this.type = type
-    this.pendingInputs = []
   }
 
   /** @returns {boolean} - Whether there are pending attachment writes. */

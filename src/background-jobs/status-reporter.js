@@ -43,11 +43,12 @@ export default class BackgroundJobsStatusReporter {
           jsonSocket.removeAllListeners()
         }
 
-        jsonSocket.on("error", (err) => {
+        jsonSocket.on("error", (error) => {
           cleanup()
-          reject(err)
+          reject(error)
         })
 
+        /** @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message. */
         jsonSocket.on("message", (message) => {
           if (message?.type === "job-updated" && message.jobId === jobId) {
             cleanup()
@@ -95,14 +96,14 @@ export default class BackgroundJobsStatusReporter {
       try {
         await this.report({jobId, status, error, handedOffAtMs, workerId})
         return
-      } catch (err) {
+      } catch (error) {
         attempt += 1
         const delaySeconds = Math.min(30, 0.5 * attempt)
 
-        this.logger.debug(() => ["Background job status report failed, retrying", err])
+        this.logger.debug(() => ["Background job status report failed, retrying", error])
 
         if (maxDurationMs && Date.now() - startTime >= maxDurationMs) {
-          this.logger.warn(() => ["Background job status report timed out, giving up", err])
+          this.logger.warn(() => ["Background job status report timed out, giving up", error])
           return
         }
 
@@ -111,6 +112,10 @@ export default class BackgroundJobsStatusReporter {
     }
   }
 
+  /**
+   * @param {unknown} error - Error input.
+   * @returns {string} - Normalized error string.
+   */
   _normalizeError(error) {
     if (error instanceof Error) return error.stack || error.message
     if (typeof error === "string") return error

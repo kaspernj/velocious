@@ -141,11 +141,13 @@ export default class VelociousHttpServerClientRequestRunner {
         await this.logger.debug("Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
         const startTimeMs = Date.now()
+        /** @type {ReturnType<typeof setTimeout> | undefined} */
         let timeoutId
+        /** @type {((error: Error) => void) | undefined} */
         let timeoutReject
         let timedOut = false
 
-        const setRequestTimeoutSeconds = (timeoutSeconds) => {
+        const setRequestTimeoutSeconds = (/** @type {number | undefined} */ timeoutSeconds) => {
           if (timeoutId) {
             clearTimeout(timeoutId)
             timeoutId = undefined

@@ -56,6 +56,14 @@ export default class FormDataPart {
     this.body = []
   }
 
+  /**
+   * @param {Buffer} buffer - File buffer.
+   * @returns {import("../uploaded-file/memory-uploaded-file.js").default | import("../uploaded-file/temporary-uploaded-file.js").default} - Uploaded file wrapper.
+   */
+  /**
+   * @param {Buffer} buffer - File buffer.
+   * @returns {import("../uploaded-file/memory-uploaded-file.js").default | import("../uploaded-file/temporary-uploaded-file.js").default} - Uploaded file wrapper.
+   */
   buildUploadedFile(buffer) {
     const filename = this._sanitizeFilename(this.filename) || "upload"
     const fieldName = this.getName()

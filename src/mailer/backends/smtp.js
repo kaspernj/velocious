@@ -83,7 +83,7 @@ export default class SmtpMailerBackend {
 
     const message = `${headers.join("\r\n")}\r\n\r\n${payload.html}`
     const {default: SmtpConnection} = await import("smtp-connection")
-    const connection = new SmtpConnection(this.connectionOptions)
+    const connection = new SmtpConnection(/** @type {Record<string, unknown>} */ (this.connectionOptions))
 
     await new Promise((resolve, reject) => {
       connection.connect((connectError) => {
@@ -92,7 +92,7 @@ export default class SmtpMailerBackend {
           return
         }
 
-        connection.send({from, to: recipients}, message, (sendError) => {
+        connection.send({from, to: recipients}, /** @type {any} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             connection.quit(() => reject(sendError))
             return

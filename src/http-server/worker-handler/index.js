@@ -162,18 +162,20 @@ export default class VelociousHttpServerWorker {
       this.logger.debug("CLIENT OUTPUT", summarizeWorkerMessage(data))
 
       const {clientCount, output} = data
-      const client = this.clients[clientCount]
+      const client = typeof clientCount === "number" ? this.clients[clientCount] : undefined
 
       if (!client) {
         this.logger.warn(() => [`Velocious worker ${this.workerCount} produced output for missing client ${clientCount}`, data])
         return
       }
 
-      if (output !== null) {
+      if (output !== null && output !== undefined) {
+        const outputLength = typeof output === "string" ? output.length : output.byteLength
+
         void client.send(output).then(() => {
           this.logger.debug(() => ["Client output delivered", {
             clientCount,
-            outputLength: typeof output === "string" ? output.length : output.byteLength,
+            outputLength,
             workerCount: this.workerCount
           }])
         }).catch((error) => {
@@ -185,7 +187,7 @@ export default class VelociousHttpServerWorker {
       }
     } else if (command == "clientClose") {
       const {clientCount} = data
-      const client = this.clients[clientCount]
+      const client = typeof clientCount === "number" ? this.clients[clientCount] : undefined
 
       if (!client) {
         this.logger.error(() => [`Velocious worker ${this.workerCount} requested close for missing client ${clientCount}`, data])
@@ -193,12 +195,19 @@ export default class VelociousHttpServerWorker {
       }
 
       void client.end()
-      delete this.clients[clientCount]
+
+      if (typeof clientCount === "number") {
+        delete this.clients[clientCount]
+      }
     } else if (command == "shutdownComplete") {
       this._stopResolve?.()
       this._stopResolve = null
     } else if (command == "websocketPublish") {
       const {channel, payload} = data
+
+      if (typeof channel !== "string") {
+        throw new Error("Worker websocket publish channel must be a string")
+      }
 
       websocketEventsHost.publish({channel, payload})
     } else {
@@ -214,10 +223,13 @@ export default class VelociousHttpServerWorker {
     if (this._hasExited) return Promise.resolve()
 
     this._stopping = true
+    const worker = this.worker
+
+    if (!worker) return Promise.resolve()
 
     return new Promise((resolve) => {
       this._stopResolve = resolve
-      this.worker.postMessage({command: "shutdown"})
+      worker.postMessage({command: "shutdown"})
     })
   }
 

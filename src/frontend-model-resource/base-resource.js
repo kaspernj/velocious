@@ -94,7 +94,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /** @returns {import("../controller.js").default} - Controller instance. */
-  controllerInstance() { return this.controller }
+  controllerInstance() {
+    if (!this.controller) throw new Error(`${this.constructor.name} requires a controller instance.`)
+
+    return this.controller
+  }
 
   /** @returns {typeof import("../database/record/index.js").default} - Model class. */
   modelClass() {
@@ -106,13 +110,21 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /** @returns {string} - Model name. */
-  modelName() { return this.modelNameValue }
+  modelName() {
+    if (!this.modelNameValue) throw new Error(`${this.constructor.name} requires a model name.`)
+
+    return this.modelNameValue
+  }
 
   /** @returns {Record<string, any>} - Params. */
   params() { return this.paramsValue || super.params() || {} }
 
   /** @returns {import("../configuration-types.js").FrontendModelResourceConfiguration} - Normalized resource config. */
-  resourceConfiguration() { return this.resourceConfigurationValue }
+  resourceConfiguration() {
+    if (!this.resourceConfigurationValue) throw new Error(`${this.constructor.name} requires a resource configuration.`)
+
+    return this.resourceConfigurationValue
+  }
 
   /** @returns {string} - Primary key. */
   primaryKey() { return this.modelClass().primaryKey() }

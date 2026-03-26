@@ -43,7 +43,8 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
 
   connectArgs() {
     const args = this.getArgs()
-    const connectArgs = []
+    /** @type {Record<string, unknown>} */
+    const connectArgs = {}
     const forward = ["database", "host", "password"]
 
     for (const forwardValue of forward) {
@@ -60,6 +61,10 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     this.connection = undefined
   }
 
+  /**
+   * @param {string} sql - SQL string.
+   * @returns {Promise<Record<string, any>[]>} - Query result rows.
+   */
   async _queryActual(sql) {
     if (!this.connection) throw new Error("Not connected yet")
 

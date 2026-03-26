@@ -37,6 +37,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       }
 
       const generatedFiles = generatedFilesByDirectory.get(frontendModelsDir)
+
+      if (!generatedFiles) throw new Error(`Generated files list missing for ${frontendModelsDir}`)
       const resources = this.resourcesForBackendProject(backendProject)
       const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
@@ -511,11 +513,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       return "boolean"
     } else if (type == "json" || type == "jsonb") {
       return "Record<string, any>"
-    } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
+    } else if (type && ["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
-    } else if (["bit", "bigint", "decimal", "double", "double precision", "float", "int", "integer", "numeric", "real", "smallint", "tinyint"].includes(type)) {
+    } else if (type && ["bit", "bigint", "decimal", "double", "double precision", "float", "int", "integer", "numeric", "real", "smallint", "tinyint"].includes(type)) {
       return "number"
-    } else if (["date", "datetime", "timestamp", "timestamp without time zone", "timestamptz"].includes(type)) {
+    } else if (type && ["date", "datetime", "timestamp", "timestamp without time zone", "timestamptz"].includes(type)) {
       return "Date"
     } else {
       return "any"
@@ -631,6 +633,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const targetClassName = hasExplicitModel
         ? inflection.camelize(String(relationshipModelName).replaceAll("-", "_"))
         : inferredRelationship?.targetClassName
+
+      if (!targetClassName) {
+        throw new Error(`Model '${className}' relationship '${relationshipName}' has no target model class`)
+      }
 
       normalized.push({
         relationshipName,

@@ -145,6 +145,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     let response
 
     if (!this.connection) await this.connect()
+    if (!this.connection) throw new Error("PostgreSQL connection failed to initialize")
 
     try {
       response = await this.connection.query(sql)

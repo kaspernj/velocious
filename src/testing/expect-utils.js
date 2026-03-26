@@ -128,15 +128,18 @@ function collectMatchDifferences(actual, expected, path, differences) {
       return
     }
 
-    for (const key of Object.keys(expected)) {
+    const expectedObject = /** @type {Record<string, unknown>} */ (expected)
+    const actualObject = /** @type {Record<string, unknown>} */ (actual)
+
+    for (const key of Object.keys(expectedObject)) {
       const nextPath = path ? `${path}.${key}` : key
 
-      if (!Object.prototype.hasOwnProperty.call(/** @type {Record<string, unknown>} */ (actual), key)) {
-        differences[nextPath] = [expected[key], undefined]
+      if (!Object.prototype.hasOwnProperty.call(actualObject, key)) {
+        differences[nextPath] = [expectedObject[key], undefined]
         continue
       }
 
-      collectMatchDifferences(actual[key], expected[key], nextPath, differences)
+      collectMatchDifferences(actualObject[key], expectedObject[key], nextPath, differences)
     }
 
     return

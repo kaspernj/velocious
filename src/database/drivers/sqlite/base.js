@@ -17,6 +17,13 @@ import StructureSql from "./structure-sql.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
+  /** @type {number | undefined} */
+  versionMajor = undefined
+  /** @type {number | undefined} */
+  versionMinor = undefined
+  /** @type {number | undefined} */
+  versionPatch = undefined
+
   /**
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
@@ -150,9 +157,16 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {boolean} - Whether supports multiple insert values.
    */
   supportsMultipleInsertValues() {
-    if (this.versionMajor >= 4) return true
-    if (this.versionMajor == 3 && this.versionMinor >= 8) return true
-    if (this.versionMajor == 3 && this.versionMinor == 7 && this.versionPatch >= 11) return true
+    /** @type {number} */
+    const versionMajor = this.versionMajor || 0
+    /** @type {number} */
+    const versionMinor = this.versionMinor || 0
+    /** @type {number} */
+    const versionPatch = this.versionPatch || 0
+
+    if (versionMajor >= 4) return true
+    if (versionMajor == 3 && versionMinor >= 8) return true
+    if (versionMajor == 3 && versionMinor == 7 && versionPatch >= 11) return true
 
     return false
   }
@@ -161,8 +175,13 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {boolean} - Whether supports insert into returning.
    */
   supportsInsertIntoReturning() {
-    if (this.versionMajor >= 4) return true
-    if (this.versionMajor == 3 && this.versionMinor >= 35) return true
+    /** @type {number} */
+    const versionMajor = this.versionMajor || 0
+    /** @type {number} */
+    const versionMinor = this.versionMinor || 0
+
+    if (versionMajor >= 4) return true
+    if (versionMajor == 3 && versionMinor >= 35) return true
 
     return false
   }

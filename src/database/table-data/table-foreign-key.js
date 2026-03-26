@@ -51,7 +51,7 @@ export default class TableForeignKey {
   /**
    * @returns {string} - The name.
    */
-  getName() { return this._name }
+  getName() { return this._name || "" }
 
   /**
    * @param {string} newName - New name.

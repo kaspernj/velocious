@@ -73,6 +73,9 @@ export default class DbGenerateModel extends BaseCommand {
       }
 
       const table = await modelClass.connection().getTableByName(modelClass.tableName())
+
+      if (!table) throw new Error(`Could not find table for model '${modelClass.name}'`)
+
       const columns = await table.getColumns()
       let methodsCount = 0
 
@@ -125,7 +128,7 @@ export default class DbGenerateModel extends BaseCommand {
             translationJsdocType = this.jsDocTypeFromColumn(column)
           }
 
-          if (translationJsdocType) {
+          if (translationJsdocType && column) {
             fileContent += `\n`
             fileContent += "  /**\n"
             fileContent += `   * @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
@@ -148,7 +151,7 @@ export default class DbGenerateModel extends BaseCommand {
           for (const locale of this.getConfiguration().getLocales()) {
             const localeMethodName = `${name}${inflection.camelize(locale)}`
 
-            if (translationJsdocType) {
+            if (translationJsdocType && column) {
               fileContent += `\n`
               fileContent += "  /**\n"
               fileContent += `   * @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
@@ -177,7 +180,11 @@ export default class DbGenerateModel extends BaseCommand {
         if (relationship.getPolymorphic()) {
           fileName = "velocious/build/src/database/record/index.js"
         } else {
-          fileName = inflection.dasherize(inflection.underscore(relationship.getTargetModelClass().name))
+          const targetModelClass = relationship.getTargetModelClass()
+
+          if (!targetModelClass) throw new Error(`Relationship '${relationship.getRelationshipName()}' on '${modelClass.name}' has no target model class`)
+
+          fileName = inflection.dasherize(inflection.underscore(targetModelClass.name))
           fullFilePath = `src/models/${fileName}.js`
           baseFilePath = `../model-bases/${fileName}.js`
           baseFullFilePath = `src/model-bases/${fileName}.js`

@@ -22,8 +22,11 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @returns {void} - No return value.
    */
   publish(channelOrArgs, payloadArg) {
-    const channel = typeof channelOrArgs === "string" ? channelOrArgs : channelOrArgs.channel
-    const payload = typeof channelOrArgs === "string" ? payloadArg : channelOrArgs.payload
+    const publishArgs = typeof channelOrArgs === "string"
+      ? {channel: channelOrArgs, payload: payloadArg}
+      : /** @type {{channel: string, payload: any}} */ (channelOrArgs)
+    const channel = publishArgs.channel
+    const payload = publishArgs.payload
 
     for (const handler of this.handlers) {
       handler.dispatchWebsocketEvent({channel, payload})

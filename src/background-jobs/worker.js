@@ -16,11 +16,18 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.port] - Port.
    */
   constructor({configuration, host, port} = {}) {
+    /** @type {Promise<import("../configuration.js").default>} */
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
+    /** @type {import("../configuration.js").default | undefined} */
+    this.configuration = undefined
     this.host = host
     this.port = port
     this.shouldStop = false
     this.workerId = randomUUID()
+    /** @type {JsonSocket | undefined} */
+    this.jsonSocket = undefined
+    /** @type {BackgroundJobsStatusReporter | undefined} */
+    this.statusReporter = undefined
   }
 
   /**
@@ -47,13 +54,17 @@ export default class BackgroundJobsWorker {
   }
 
   async _connect() {
-    const config = this.configuration.getBackgroundJobsConfig()
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const config = configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
     const socket = net.createConnection({host, port})
     const jsonSocket = new JsonSocket(socket)
     this.jsonSocket = jsonSocket
 
+    /** @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message. */
     jsonSocket.on("message", async (message) => {
       if (message?.type === "job") {
         await this._handleJob(message.payload)
@@ -76,10 +87,12 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * @param {object} payload - Payload.
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
    * @returns {Promise<void>} - Resolves when done.
    */
   async _handleJob(payload) {
+    if (!payload.id) throw new Error("Background job payload missing id")
+
     const options = payload.options || {}
     const shouldFork = options.forked !== false
 
@@ -110,28 +123,36 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * @param {object} payload - Payload.
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
    * @returns {Promise<void>} - Resolves when done.
    */
   async _runJobInline(payload) {
-    const registry = new BackgroundJobRegistry({configuration: this.configuration})
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const registry = new BackgroundJobRegistry({configuration})
     await registry.load()
     const JobClass = registry.getJobByName(payload.jobName)
     const jobInstance = new JobClass()
+    /** @type {(...args: any[]) => Promise<void>} */
+    const perform = jobInstance.perform
 
-    await jobInstance.perform.apply(jobInstance, payload.args || [])
+    await perform.apply(jobInstance, payload.args || [])
   }
 
   /**
-   * @param {object} payload - Payload.
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
    * @returns {Promise<void>} - Resolves when spawned.
    */
   async _spawnDetachedJob(payload) {
-    const directory = this.configuration.getDirectory()
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const directory = configuration.getDirectory()
     const argvCommand = process.argv[1]
     const command = argvCommand ? argvCommand : `${directory}/bin/velocious.js`
     const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64")
-    const backgroundJobsConfig = this.configuration.getBackgroundJobsConfig()
+    const backgroundJobsConfig = configuration.getBackgroundJobsConfig()
     const child = spawn(process.execPath, [command, "background-jobs-runner"], {
       cwd: directory,
       detached: true,

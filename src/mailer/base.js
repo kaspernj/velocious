@@ -162,7 +162,7 @@ export class VelociousMailerBase {
     const actionName = this._getActionName()
     const fileName = viewFileName(actionName)
     const viewPath = `${configuration.getDirectory()}/src/mailers/${mailerDir}/${fileName}.ejs`
-    const translate = (msgID, args) => configuration.getTranslator()(msgID, args)
+    const translate = (/** @type {string} */ msgID, /** @type {Record<string, any> | undefined} */ args) => configuration.getTranslator()(msgID, args)
     const viewParams = incorporate({mailer: this, _: translate}, this._viewParams)
 
     return await new Promise((resolve, reject) => {
@@ -222,7 +222,7 @@ export function setDeliveryHandler(handler) {
 }
 
 /**
- * @returns {(payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown | null} - Handler or null.
+ * @returns {((payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown) | null} - Handler or null.
  */
 export function getDeliveryHandler() {
   return deliveryHandler

@@ -137,7 +137,11 @@ export default class VelociousRoutesResolver {
         const requestedPath = currentPath.replace(/^\//, "") || "_root"
         const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
 
-        await this.logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
+        const logger = this.logger
+
+        if (!logger) throw new Error("Logger not initialized")
+
+        await logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
 
         controller = "errors"
         controllerPath = "./built-in/errors/controller.js"
@@ -168,6 +172,8 @@ export default class VelociousRoutesResolver {
       throw new Error(`Missing action on controller: ${controller}#${action}`)
     }
 
+    const actionHandlers = /** @type {Record<string, () => void | Promise<void>>} */ (/** @type {unknown} */ (controllerInstance))
+
     await this._logActionStart({action, controllerClass})
 
     try {
@@ -187,7 +193,7 @@ export default class VelociousRoutesResolver {
 
           await this.configuration.runWithAbility(ability, async () => {
             await controllerInstance._runBeforeCallbacks()
-            await controllerInstance[action]()
+            await actionHandlers[action]()
           })
         })
       })

@@ -5,6 +5,9 @@ import {AsyncLocalStorage} from "node:async_hooks"
 /** @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
 let asyncLocalStorage
 
+/** @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<unknown>), arg2?: (() => Promise<unknown>) | Error) => Promise<unknown>}}} */
+const trackedStackGlobal = /** @type {any} */ (globalThis)
+
 if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
 }
@@ -74,10 +77,10 @@ async function withTrackedStack(arg1, arg2) {
   })
 }
 
-if (globalThis.withTrackedStack) {
+if (trackedStackGlobal.withTrackedStack) {
   console.warn("globalThis.withTrackedStack was already defined")
 } else {
-  globalThis.withTrackedStack = {addTrackedStackToError, withTrackedStack}
+  trackedStackGlobal.withTrackedStack = {addTrackedStackToError, withTrackedStack}
 }
 
 export {addTrackedStackToError, withTrackedStack}

@@ -49,7 +49,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     })
     let signalHandled = false
 
-    const handleSignal = async (signal) => {
+    const handleSignal = async (/** @type {string} */ signal) => {
       if (signalHandled) return
       signalHandled = true
       console.error(`\nReceived ${signal}, running afterAll hooks before exit...`)

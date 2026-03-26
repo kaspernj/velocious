@@ -4,7 +4,7 @@ import Configuration from "../../configuration.js"
 import Logger from "../../logger.js"
 import baseMethodsForward from "./base-methods-forward.js"
 
-const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
+export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
 /** @type {{currentPool: VelociousDatabasePoolBase | null}} */
 const shared = {
@@ -127,7 +127,9 @@ class VelociousDatabasePoolBase {
    * @returns {boolean} - Whether connection matches current resolved configuration.
    */
   connectionMatchesCurrentConfiguration(connection) {
-    return connection[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+
+    return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
   }
 
   /**
@@ -162,7 +164,8 @@ class VelociousDatabasePoolBase {
 
     const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
 
-    connection[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+    connectionWithPoolKey[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
 
     return connection
   }

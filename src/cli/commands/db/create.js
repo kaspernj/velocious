@@ -54,10 +54,15 @@ export default class DbCreate extends BaseCommand{
   async createDatabase(databaseIdentifier) {
     const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
     const sqls = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
+    if (this.args.testing && !this.result) {
+      throw new Error("Expected test result collection to be initialized")
+    }
+
+    const result = /** @type {Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>} */ (this.result)
 
     for (const sql of sqls) {
       if (this.args.testing) {
-        this.result.push({databaseName, sql})
+        result.push({databaseName, sql})
       } else {
         await this.databaseConnection.query(sql)
       }
@@ -73,10 +78,15 @@ export default class DbCreate extends BaseCommand{
     schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
     const createSchemaMigrationsTableSqls = await this.databaseConnection.createTableSql(schemaMigrationsTable)
+    if (this.args.testing && !this.result) {
+      throw new Error("Expected test result collection to be initialized")
+    }
+
+    const result = /** @type {Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>} */ (this.result)
 
     for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
       if (this.args.testing) {
-        this.result.push({createSchemaMigrationsTableSql})
+        result.push({createSchemaMigrationsTableSql})
       } else {
         await this.databaseConnection.query(createSchemaMigrationsTableSql)
       }

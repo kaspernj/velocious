@@ -47,6 +47,7 @@ function mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration
 }
 
 export default class VelociousConfiguration {
+  /** @type {Promise<void> | null} */
   _closeDatabaseConnectionsPromise = null
   /** @returns {VelociousConfiguration} - The current.  */
   static current() {
@@ -338,7 +339,7 @@ export default class VelociousConfiguration {
   /**
    * @param {object} [args] - Options object.
    * @param {boolean} [args.defaultConsole] - Whether default console.
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs" | "loggers">>} - The logging configuration.
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Pick<import("./configuration-types.js").LoggingConfiguration, "directory" | "filePath"> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs" | "loggers">>} - The logging configuration.
    */
   getLoggingConfiguration({defaultConsole} = {}) {
     const environment = this.getEnvironment()
@@ -439,7 +440,7 @@ export default class VelociousConfiguration {
 
   /**
    * Logging configuration tailored for HTTP request logging. Defaults console logging to true and applies the user `logging.console` flag only for request logging.
-   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "directory" | "file" | "filePath" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs" | "loggers">>} - The http logging configuration.
+   * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Pick<import("./configuration-types.js").LoggingConfiguration, "directory" | "filePath"> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs" | "loggers">>} - The http logging configuration.
    */
   getHttpLoggingConfiguration() {
     return this.getLoggingConfiguration({defaultConsole: true})
@@ -525,7 +526,7 @@ export default class VelociousConfiguration {
     return this.modelClasses
   }
 
-  /** @returns {string} The path to a config file that should be used for testing. */
+  /** @returns {string | undefined} The path to a config file that should be used for testing. */
   getTesting() { return this._testing }
 
   /**
@@ -859,7 +860,7 @@ export default class VelociousConfiguration {
 
     const stack = Error().stack
     const actualCallback = async () => {
-      return await withTrackedStack(stack, async () => {
+      return await withTrackedStack(stack || "withConnections", async () => {
         return await callback(dbs)
       })
     }
