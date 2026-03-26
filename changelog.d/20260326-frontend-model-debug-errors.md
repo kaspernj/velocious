@@ -1,0 +1,1 @@
+Unexpected frontend-model endpoint failures now keep `errorMessage: "Request failed."` in production while adding `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields in development/test responses to make browser and system-test debugging easier.

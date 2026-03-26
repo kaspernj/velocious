@@ -485,6 +485,9 @@ Available transport options:
 - `credentials`
 - `request` (custom request handler)
 
+Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
+In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.
+
 For sqlite web databases, Velocious defaults to `https://sql.js.org/dist/<file>` for `sql.js` wasm loading. You can override wasm resolution per database config with `locateFile`:
 
 ```js

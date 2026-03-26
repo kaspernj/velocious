@@ -320,6 +320,7 @@ const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
 const frontendModelClientSafeErrorMessage = "Request failed."
+const frontendModelDebugErrorEnvironments = new Set(["development", "test"])
 
 /**
  * @param {import("./database/query/model-class-query.js").default} query - Query instance.
@@ -347,6 +348,38 @@ function frontendModelClientMessageForError(error) {
   }
 
   return frontendModelClientSafeErrorMessage
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {string} args.environment - Current environment.
+ * @param {unknown} args.error - Caught error.
+ * @returns {Record<string, any>} - Optional debug payload for non-production environments.
+ */
+function frontendModelDebugPayloadForError({environment, error}) {
+  if (!frontendModelDebugErrorEnvironments.has(environment)) {
+    return {}
+  }
+
+  if (error instanceof VelociousError && error.safeToExpose) {
+    return {}
+  }
+
+  const debugErrorClass = error instanceof Error && error.name
+    ? error.name
+    : typeof error
+  const debugErrorMessage = error instanceof Error
+    ? error.message
+    : String(error)
+  const debugBacktrace = error instanceof Error && typeof error.stack === "string" && error.stack.length > 0
+    ? error.stack.split("\n")
+    : undefined
+
+  return {
+    debugErrorClass,
+    debugErrorMessage,
+    ...(debugBacktrace ? {debugBacktrace} : {})
+  }
 }
 
 /**
@@ -2380,6 +2413,20 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @param {unknown} error - Caught error.
+   * @returns {Record<string, any>} - Client payload for the current environment.
+   */
+  frontendModelClientErrorPayloadForError(error) {
+    return {
+      ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error)),
+      ...frontendModelDebugPayloadForError({
+        environment: this.getConfiguration().getEnvironment(),
+        error
+      })
+    }
+  }
+
+  /**
    * @param {object} args - Error log args.
    * @param {string} args.action - Endpoint/action label.
    * @param {unknown} args.error - Caught error.
@@ -2426,10 +2473,9 @@ export default class FrontendModelController extends Controller {
       })
     } catch (error) {
       await this.frontendModelLogEndpointError({action, commandType: action, error})
-      const errorMessage = frontendModelClientMessageForError(error)
 
       await this.render({
-        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelErrorPayload(errorMessage)))
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelClientErrorPayloadForError(error)))
       })
     }
   }
@@ -2708,11 +2754,10 @@ export default class FrontendModelController extends Controller {
           model,
           requestId
         })
-        const errorMessage = frontendModelClientMessageForError(error)
 
         responses.push({
           requestId,
-          response: this.frontendModelErrorPayload(errorMessage)
+          response: this.frontendModelClientErrorPayloadForError(error)
         })
       }
     }
@@ -2889,10 +2934,9 @@ export default class FrontendModelController extends Controller {
       })
     } catch (error) {
       await this.frontendModelLogEndpointError({action: "frontendCustomCommand", commandType: "custom-command", error})
-      const errorMessage = frontendModelClientMessageForError(error)
 
       await this.render({
-        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelErrorPayload(errorMessage)))
+        json: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValue(this.frontendModelClientErrorPayloadForError(error)))
       })
     }
   }
