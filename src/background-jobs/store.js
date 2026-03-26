@@ -557,18 +557,20 @@ export default class BackgroundJobsStore {
    */
   async _withDb(callback) {
     const pool = this.configuration.getDatabasePool(this.getDatabaseIdentifier())
+    let callbackCalled = false
     /** @type {T | undefined} */
     let result
 
     await pool.withConnection(async (db) => {
+      callbackCalled = true
       result = await callback(db)
     })
 
-    if (result === undefined) {
-      throw new Error("Background jobs store callback returned undefined")
+    if (!callbackCalled) {
+      throw new Error("Background jobs store callback was not invoked")
     }
 
-    return result
+    return /** @type {T} */ (result)
   }
 
   /**
