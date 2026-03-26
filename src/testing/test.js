@@ -85,6 +85,7 @@ function normalizeTags(tags) {
   return Array.from(new Set(values))
 }
 
+/** @type {VelociousTestConfig} */
 const testConfig = {
   excludeTags: [],
   defaultTimeoutSeconds: 60
@@ -169,6 +170,7 @@ function afterAll(callback) {
  * @returns {Promise<void>} - Resolves when complete.
  */
 async function describe(description, arg1, arg2) {
+  /** @type {Record<string, any>} */
   let testArgs, testFunction
 
   if (typeof arg2 == "function") {
@@ -230,16 +232,17 @@ expect.arrayContaining = arrayContaining
  */
 function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
+  /** @type {Record<string, any>} */
   let testArgs
 
   /** @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
-    testFunction = arg1
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {}
   } else if (typeof arg2 == "function") {
-    testFunction = arg2
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = arg1
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
@@ -264,16 +267,17 @@ function it(description, arg1, arg2) {
  * @returns {void} - No return value.
  */
 function fit(description, arg1, arg2) {
+  /** @type {Record<string, any>} */
   let testArgs
 
   /** @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
-    testFunction = arg1
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {focus: true}
   } else if (typeof arg2 == "function") {
-    testFunction = arg2
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = Object.assign({focus: true}, arg1)
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
@@ -295,3 +299,8 @@ globalThis.testEvents = testEvents
 globalThis.configureTests = configureTests
 
 export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests}
+/**
+ * @typedef {object} VelociousTestConfig
+ * @property {string[]} excludeTags - Tags excluded by default.
+ * @property {number} defaultTimeoutSeconds - Default timeout in seconds.
+ */

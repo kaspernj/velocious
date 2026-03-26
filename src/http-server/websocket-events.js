@@ -18,8 +18,8 @@ export default class VelociousHttpServerWebsocketEvents {
    */
   publish(channel, payload) {
     if (!channel) throw new Error("channel is required")
+    if (!this.parentPort) throw new Error("parentPort is required")
 
     this.parentPort.postMessage({channel, command: "websocketPublish", payload, workerCount: this.workerCount})
   }
 }
-

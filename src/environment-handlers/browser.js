@@ -27,6 +27,14 @@ import Logger from "../logger.js"
  * }} TestFilesRequireContextType
  */
 
+/**
+ * @param {import("./base.js").MigrationObjectType | null} migration - Candidate migration object.
+ * @returns {migration is import("./base.js").MigrationObjectType} - Whether migration exists.
+ */
+function isMigrationObject(migration) {
+  return Boolean(migration)
+}
+
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /** @type {CommandsRequireContextType | undefined} */
   findCommandsRequireContextResult = undefined
@@ -168,7 +176,8 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
    */
   async findMigrations() {
     const migrationsRequireContext = await this.migrationsRequireContext()
-    const files = migrationsRequireContext
+    /** @type {Array<import("./base.js").MigrationObjectType | null>} */
+    const migrations = migrationsRequireContext
       .keys()
       .map((file) => {
         // "13,14" because somes "require-context"-npm-module deletes first character!?
@@ -197,8 +206,11 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
           migrationClassName
         }
       })
-      .filter((migration) => Boolean(migration))
-      .sort((migration1, migration2) => migration1.date - migration2.date)
+      .filter(isMigrationObject)
+    /** @type {import("./base.js").MigrationObjectType[]} */
+    const files = /** @type {import("./base.js").MigrationObjectType[]} */ (migrations)
+
+    files.sort((migration1, migration2) => migration1.date - migration2.date)
 
     return files
   }

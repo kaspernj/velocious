@@ -48,7 +48,7 @@ export default class VelociousBaseRoute {
 
   /**
    * @abstract
-   * @returns {Array<{action: string, method: string, path: string}>} - Route definitions for this resource.
+   * @returns {Array<{action: string | null, method: string, path: string}>} - Route definitions for this resource.
    */
   getHumanPaths() { throw new Error(`'getHumanPaths' not implemented for ${this.constructor.name}`) }
 
@@ -89,4 +89,3 @@ export default class VelociousBaseRoute {
    */
   resources(name, callback) { throw new Error("'resources' not implemented") } // eslint-disable-line no-unused-vars
 }
-

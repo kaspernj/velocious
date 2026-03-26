@@ -57,7 +57,7 @@ export default class RunScriptCommand extends BaseCommand {
 
   /** @returns {string} - Absolute path to the user-provided script file. */
   scriptFilePath() {
-    const filePath = this.processArgs[1]
+    const filePath = this.processArgs?.[1]
 
     if (!filePath) {
       throw new Error("Missing file path argument. Usage: npx velocious run-script [file-path]")
@@ -71,12 +71,14 @@ export default class RunScriptCommand extends BaseCommand {
     const configuration = this.getConfiguration()
     const dbs = configuration.getCurrentConnections()
     const identifiers = Object.keys(dbs)
+    /** @type {string[]} */
+    const processArgs = this.processArgs || []
 
     return {
       configuration,
       db: dbs.default || (identifiers.length > 0 ? dbs[identifiers[0]] : undefined),
       dbs,
-      args: this.processArgs.slice(2)
+      args: processArgs.slice(2)
     }
   }
 }

@@ -6,6 +6,7 @@ import BaseInstanceRelationship from "./base.js"
  * A generic query over some model type.
  * @template {typeof import("../index.js").default} MC
  * @template {typeof import("../index.js").default} TMC
+ * @extends {BaseInstanceRelationship<MC, TMC>}
  */
 export default class VelociousDatabaseRecordHasManyInstanceRelationship extends BaseInstanceRelationship {
   /**
@@ -25,12 +26,11 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     if (!targetModelClass) throw new Error("Can't build a new record without a taget model class")
 
-    const newInstance = new targetModelClass(data)
+    const newInstance = /** @type {InstanceType<TMC>} */ (new targetModelClass(data))
 
 
     // Add it to the loaded models of this relationship
     if (this._loaded === undefined) {
-      /** @type {import("../index.js").default[]} */
       this._loaded = [newInstance]
     } else if (Array.isArray(this._loaded)) {
       this._loaded.push(newInstance)
@@ -55,9 +55,12 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     if (parentModel.isPersisted()) {
       const foreignKeyName = this.getForeignKey()
-      const foreignKeyAttributeName = this.getTargetModelClass().getColumnNameToAttributeNameMap()[foreignKeyName]
+      const columnNameMap = targetModelClass.getColumnNameToAttributeNameMap()
+      const foreignKeyAttributeName = columnNameMap[foreignKeyName]
+      if (!foreignKeyAttributeName) throw new Error(`Unknown foreign key attribute name for ${foreignKeyName}`)
       const primaryKeyName = this.getPrimaryKey()
       const foreignKeyValue = parentModel.readColumn(primaryKeyName)
+      /** @type {Record<string, any>} */
       const assignData = {}
 
       assignData[foreignKeyAttributeName] = foreignKeyValue
@@ -84,7 +87,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async load() {
-    const foreignModels = await this.query().toArray()
+    const foreignModels = /** @type {InstanceType<TMC>[]} */ (await this.query().toArray())
 
     this.setLoaded(foreignModels)
     this.setDirty(false)
@@ -104,7 +107,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the find.
    */
   async find(modelID) {
-    return await this.query().find(modelID)
+    return /** @type {Promise<InstanceType<TMC>>} */ (this.query().find(modelID))
   }
 
   /** @returns {import("../../query/model-class-query.js").default<TMC>} - The query.  */
@@ -131,7 +134,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const throughTable = throughModelClass.tableName()
       const driver = TargetModelClass.connection()
       const parentPrimaryKey = this.getPrimaryKey()
-    const parentId = /** @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
+      const parentId = /** @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
       const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
       const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
 
@@ -164,11 +167,11 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       return []
     }
 
-    return this._loaded
+    return Array.isArray(this._loaded) ? this._loaded : []
   }
 
   /**
-   * @param {InstanceType<MC>[] | InstanceType<MC>} models - Model instances.
+   * @param {InstanceType<TMC>[] | InstanceType<TMC>} models - Model instances.
    * @returns {void} - No return value.
    */
   addToLoaded(models) {

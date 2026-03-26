@@ -169,7 +169,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
       }
     }
 
-    return result.recordsets[0]
+    return Array.isArray(result.recordsets) ? result.recordsets[0] || [] : []
   }
 
   /**
@@ -187,12 +187,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
    */
   escape(value) {
     value = this._convertValue(value)
+    const stringValue = typeof value == "string" ? value : `${value}`
 
-    const type = typeof value
-
-    if (type != "string") value = `${value}`
-
-    const resultWithQuotes = escapeString(value, null)
+    const resultWithQuotes = escapeString(stringValue, null)
     const result = resultWithQuotes.substring(1, resultWithQuotes.length - 1)
 
     return result
@@ -205,12 +202,10 @@ export default class VelociousDatabaseDriversMssql extends Base{
   quote(value) {
     value = this._convertValue(value)
 
-    const type = typeof value
+    if (typeof value == "number") return value
+    const stringValue = typeof value == "string" ? value : String(value)
 
-    if (type == "number") return /** @type {number} */ (value)
-    if (type != "string") value = String(value)
-
-    return escapeString(value, null)
+    return escapeString(stringValue, null)
   }
 
   /**

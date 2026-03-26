@@ -63,17 +63,19 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     if (!this.configuration) throw new Error(`Configuration couldn't be loaded from: ${configurationPath}`)
 
-    this.configuration.debug = debug === true
-    this.configuration.setEnvironment(environment)
-    this.configuration.setCurrent()
-    await this.logger.debug(() => ["Worker thread configuration loaded", {debug: this.configuration.debug, workerCount: this.workerCount}])
+    const configuration = this.configuration
+
+    configuration.debug = debug === true
+    configuration.setEnvironment(environment)
+    configuration.setCurrent()
+    await this.logger.debug(() => ["Worker thread configuration loaded", {debug: configuration.debug, workerCount: this.workerCount}])
     this.websocketEvents = new WebsocketEvents({parentPort: this.parentPort, workerCount: this.workerCount})
-    this.configuration.setWebsocketEvents(this.websocketEvents)
+    configuration.setWebsocketEvents(this.websocketEvents)
 
-    this.application = new Application({configuration: this.configuration, type: "worker-handler"})
+    this.application = new Application({configuration, type: "worker-handler"})
 
-    if (this.configuration.isInitialized()) {
-      await this.configuration.initialize({type: "worker-handler"})
+    if (configuration.isInitialized()) {
+      await configuration.initialize({type: "worker-handler"})
     }
   }
 
@@ -95,6 +97,9 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       if (!this.configuration) throw new Error("Configuration not initialized")
 
       const {clientCount, remoteAddress} = data
+
+      if (typeof clientCount !== "number") throw new Error("clientCount must be a number")
+
       const client = new Client({
         clientCount,
         configuration: this.configuration,
@@ -116,13 +121,19 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
       const {chunk, clientCount} = data
       if (!chunk) throw new Error("No chunk given")
-      const client = digg(this.clients, clientCount)
+      const client = /** @type {Client | undefined} */ (digg(this.clients, clientCount))
 
-      await this.logger.debug(() => ["Sending clientWrite to parser", {clientCount, ...summarizeClientWriteChunk(chunk)}])
+      if (!client) throw new Error(`Client not found for clientWrite: ${clientCount}`)
 
-      client.onWrite(chunk)
+      const clientChunk = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk)
+
+      await this.logger.debug(() => ["Sending clientWrite to parser", {clientCount, ...summarizeClientWriteChunk(clientChunk)}])
+
+      client.onWrite(clientChunk)
     } else if (command == "websocketEvent") {
       const {channel, payload} = data
+
+      if (typeof channel !== "string") throw new Error("No channel given")
 
       await this.broadcastWebsocketEvent({channel, payload})
     } else if (command == "shutdown") {
@@ -147,7 +158,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const sendTasks = []
 
     for (const clientKey of Object.keys(this.clients)) {
-      const client = this.clients[clientKey]
+      const client = this.clients[Number(clientKey)]
+      if (!client) continue
       const session = client.websocketSession
 
       if (!session) continue

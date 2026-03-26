@@ -10,14 +10,16 @@ export default async function query(pool, sql) {
         reject(new Error(`Query failed because of ${error}: ${sql}`))
       } else {
         const rows = []
+        const resultRows = Array.isArray(results) ? results : []
+        const resultFields = Array.isArray(fields) ? fields : []
 
-        for (const resultIndex in results) {
+        for (const rowData of resultRows) {
           /** @type {Record<string, any>} */
           const result = {}
 
-          for (const fieldKey in fields) {
-            const field = fields[fieldKey].name
-            const value = results[resultIndex][field]
+          for (const fieldData of resultFields) {
+            const field = fieldData.name
+            const value = rowData[field]
 
             result[field] = value
           }
@@ -30,4 +32,3 @@ export default async function query(pool, sql) {
     })
   })
 }
-

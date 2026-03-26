@@ -6,6 +6,7 @@ import BaseInstanceRelationship from "./base.js"
  * A generic query over some model type.
  * @template {typeof import("../index.js").default} MC
  * @template {typeof import("../index.js").default} TMC
+ * @augments {BaseInstanceRelationship<MC, TMC>}
  */
 export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
   /**
@@ -51,9 +52,13 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
     query = this.applyScope(query)
 
-    const foreignModel = /** @type {InstanceType<TMC>} */ (await query.first())
+    const foreignModel = await query.first()
 
-    this.setLoaded(foreignModel)
+    if (foreignModel) {
+      this.setLoaded(foreignModel)
+    } else {
+      this.setLoaded(undefined)
+    }
     this.setDirty(false)
     this.setPreloaded(true)
   }
@@ -71,12 +76,12 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   getLoadedOrUndefined() { return this._loaded }
 
-  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>>} model - Related model(s). */
+  /** @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model - Related model(s). */
   setLoaded(model) {
     if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
 
     this._loaded = model
   }
 
-  getTargetModelClass() { return this.relationship.getTargetModelClass() }
+  getTargetModelClass() { return /** @type {TMC | undefined} */ (this.relationship.getTargetModelClass()) }
 }

@@ -1,8 +1,8 @@
 // @ts-check
 
 /**
- * @template {typeof import("../index.js").default} MC
- * @template {typeof import("../index.js").default} TMC
+ * @template {typeof import("../index.js").default} [MC=typeof import("../index.js").default]
+ * @template {typeof import("../index.js").default} [TMC=typeof import("../index.js").default]
  * @typedef {object} InstanceRelationshipsBaseArgs
  * @property {InstanceType<MC>} model - Parent model instance.
  * @property {import("../relationships/base.js").default} relationship - Relationship metadata definition.
@@ -10,12 +10,16 @@
 
 /**
  * A generic query over some model type.
- * @template {typeof import("../index.js").default} MC
- * @template {typeof import("../index.js").default} TMC
+ * @template {typeof import("../index.js").default} [MC=typeof import("../index.js").default]
+ * @template {typeof import("../index.js").default} [TMC=typeof import("../index.js").default]
  */
 export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /** @type {boolean | undefined} */
   _autoSave = undefined
+  /** @type {boolean | undefined} */
+  _preloaded = undefined
+  /** @type {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} */
+  _loaded = undefined
 
   /**
    * @param {InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.

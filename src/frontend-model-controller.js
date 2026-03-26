@@ -322,6 +322,14 @@ const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
 const frontendModelClientSafeErrorMessage = "Request failed."
 
 /**
+ * @param {import("./database/query/model-class-query.js").default} query - Query instance.
+ * @returns {import("./database/query/model-class-query.js").default & {[frontendModelJoinedPathsSymbol]?: Set<string>, [frontendModelGroupedColumnsSymbol]?: Set<string>}} - Query metadata access helper.
+ */
+function frontendModelQueryMetadata(query) {
+  return /** @type {import("./database/query/model-class-query.js").default & {[frontendModelJoinedPathsSymbol]?: Set<string>, [frontendModelGroupedColumnsSymbol]?: Set<string>}} */ (query)
+}
+
+/**
  * @param {string} message - Validation error message.
  * @returns {VelociousError} - Client-safe validation error.
  */
@@ -1521,12 +1529,15 @@ export default class FrontendModelController extends Controller {
 
     const modelClass = this.frontendModelClass()
     const pluckQuery = query.clone()
+    /** @type {string[]} */
     const aliases = []
-    const joinedPaths = query[frontendModelJoinedPathsSymbol]
+    const queryMetadata = frontendModelQueryMetadata(query)
+    const pluckQueryMetadata = frontendModelQueryMetadata(pluckQuery)
+    const joinedPaths = queryMetadata[frontendModelJoinedPathsSymbol]
 
     pluckQuery._preload = {}
     pluckQuery._selects = []
-    pluckQuery[frontendModelJoinedPathsSymbol] = joinedPaths ? new Set(joinedPaths) : new Set()
+    pluckQueryMetadata[frontendModelJoinedPathsSymbol] = joinedPaths ? new Set(joinedPaths) : new Set()
 
     for (const [pluckIndex, pluckEntry] of pluck.entries()) {
       const targetModelClass = this.frontendModelSearchTargetModelClass({
@@ -1557,10 +1568,14 @@ export default class FrontendModelController extends Controller {
     if (aliases.length === 1) {
       const [alias] = aliases
 
-      return rows.map((row) => row[alias])
+      return rows.map((row) => /** @type {Record<string, any>} */ (row)[alias])
     }
 
-    return rows.map((row) => aliases.map((alias) => row[alias]))
+    return rows.map((row) => {
+      const rowHash = /** @type {Record<string, any>} */ (row)
+
+      return aliases.map((alias) => rowHash[alias])
+    })
   }
 
   /**
@@ -1721,13 +1736,14 @@ export default class FrontendModelController extends Controller {
 
     query.joins(joins)
 
-    const joinedPaths = query[frontendModelJoinedPathsSymbol] || new Set()
+    const queryMetadata = frontendModelQueryMetadata(query)
+    const joinedPaths = queryMetadata[frontendModelJoinedPathsSymbol] || new Set()
 
     for (const joinPathKey of joinPathKeys) {
       joinedPaths.add(joinPathKey)
     }
 
-    query[frontendModelJoinedPathsSymbol] = joinedPaths
+    queryMetadata[frontendModelJoinedPathsSymbol] = joinedPaths
   }
 
   /**
@@ -1945,13 +1961,14 @@ export default class FrontendModelController extends Controller {
    * @returns {void}
    */
   ensureFrontendModelGroupColumn({columnSql, query}) {
-    const groupedColumns = query[frontendModelGroupedColumnsSymbol] || new Set()
+    const queryMetadata = frontendModelQueryMetadata(query)
+    const groupedColumns = queryMetadata[frontendModelGroupedColumnsSymbol] || new Set()
 
     if (groupedColumns.has(columnSql)) return
 
     query.group(columnSql)
     groupedColumns.add(columnSql)
-    query[frontendModelGroupedColumnsSymbol] = groupedColumns
+    queryMetadata[frontendModelGroupedColumnsSymbol] = groupedColumns
   }
 
   /**
@@ -2027,14 +2044,15 @@ export default class FrontendModelController extends Controller {
   ensureFrontendModelJoinPath({path, query}) {
     if (path.length < 1) return
 
-    const joinedPaths = query[frontendModelJoinedPathsSymbol] || new Set()
+    const queryMetadata = frontendModelQueryMetadata(query)
+    const joinedPaths = queryMetadata[frontendModelJoinedPathsSymbol] || new Set()
     const pathKey = path.join(".")
 
     if (joinedPaths.has(pathKey)) return
 
     query.joins(buildFrontendModelJoinObjectFromPath(path))
     joinedPaths.add(pathKey)
-    query[frontendModelJoinedPathsSymbol] = joinedPaths
+    queryMetadata[frontendModelJoinedPathsSymbol] = joinedPaths
   }
 
   /**
@@ -2073,6 +2091,7 @@ export default class FrontendModelController extends Controller {
     const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
     const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass)
     const modelAttributes = model.attributes()
+    /** @param {string} attributeName - Attribute name. */
     const prototypeAttributeMethod = (attributeName) => {
       let currentPrototype = Object.getPrototypeOf(model)
 
@@ -2089,6 +2108,7 @@ export default class FrontendModelController extends Controller {
         currentPrototype = Object.getPrototypeOf(currentPrototype)
       }
     }
+    /** @param {string} attributeName - Attribute name. */
     const serializedAttributeValue = async (attributeName) => {
       const attributeMethodLookup = prototypeAttributeMethod(attributeName)
       const attributeMethod = attributeMethodLookup?.method
@@ -2760,7 +2780,9 @@ export default class FrontendModelController extends Controller {
 
     await this.withFrontendModelRequestContext(controllerParams, response, async () => {
       await controllerInstance._runBeforeCallbacks()
-      await controllerInstance[action]()
+      const controllerMethods = /** @type {Record<string, () => Promise<void> | void>} */ (/** @type {unknown} */ (controllerInstance))
+
+      await controllerMethods[action]()
     })
 
     const responseBody = response.getBody()

@@ -12,6 +12,30 @@ const WEBSOCKET_OPCODE_CLOSE = 0x8
 const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
 
+/**
+ * @typedef {{type: "subscribe", channel: string, params?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
+ */
+
+/**
+ * @param {WebsocketSessionMessage} message - Raw websocket message.
+ * @returns {{type: "subscribe", channel: string, params?: Record<string, any>} | null} - Subscribe message when matched.
+ */
+function subscribeMessage(message) {
+  return message.type === "subscribe"
+    ? /** @type {{type: "subscribe", channel: string, params?: Record<string, any>}} */ (message)
+    : null
+}
+
+/**
+ * @param {WebsocketSessionMessage} message - Raw websocket message.
+ * @returns {{type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | null} - Request message when matched.
+ */
+function requestMessage(message) {
+  if (message.type && message.type !== "request") return null
+
+  return /** @type {{type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string}} */ (message)
+}
+
 export default class VelociousHttpServerClientWebsocketSession {
   events = new EventEmitter()
   subscriptions = new Set()
@@ -19,6 +43,8 @@ export default class VelociousHttpServerClientWebsocketSession {
   subscriptionHandlers = new Map()
   handlerSubscriptions = new Map()
   channelTenants = new Map()
+  /** @type {WebsocketSessionMessage[]} */
+  messageQueue = []
 
   /**
    * @param {object} args - Options object.
@@ -35,7 +61,6 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.upgradeRequest = upgradeRequest
     this.messageHandler = messageHandler
     this.messageHandlerPromise = messageHandlerPromise
-    this.messageQueue = []
     this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
   }
@@ -154,7 +179,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {object} message - Message text.
+   * @param {WebsocketSessionMessage} message - Message text.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
@@ -168,8 +193,10 @@ export default class VelociousHttpServerClientWebsocketSession {
       return
     }
 
-    if (message.type === "subscribe") {
-      const {channel, params} = message
+    const subscribePayload = subscribeMessage(message)
+
+    if (subscribePayload) {
+      const {channel, params} = subscribePayload
 
       if (!channel) throw new Error("channel is required for subscribe")
       const resolver = this.configuration.getWebsocketChannelResolver?.()
@@ -188,7 +215,14 @@ export default class VelociousHttpServerClientWebsocketSession {
       return
     }
 
-    const {body, headers, id, method, path} = message
+    const requestPayload = requestMessage(message)
+
+    if (!requestPayload) {
+      this.sendJson({error: `Unknown message type: ${message.type}`, type: "error"})
+      return
+    }
+
+    const {body, headers, id, method, path} = requestPayload
 
     if (!method) throw new Error("method is required")
     if (!path) throw new Error("path is required")
@@ -379,6 +413,10 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.channels.clear()
   }
 
+  /**
+   * @param {WebsocketChannel} channel - Channel instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async _teardownSingleChannel(channel) {
     try {
       const tenant = this.channelTenants.get(channel)
@@ -409,6 +447,11 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.channelTenants.delete(channel)
   }
 
+  /**
+   * @param {WebsocketChannel | undefined} channel - Channel instance.
+   * @param {string | null | undefined} tenant - Tenant key.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async _registerChannel(channel, tenant) {
     if (!channel) return
 
@@ -421,12 +464,20 @@ export default class VelociousHttpServerClientWebsocketSession {
     })
   }
 
+  /**
+   * @param {() => Promise<void>} callback - Callback.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async _withConnections(callback) {
     await this.configuration.ensureConnections(async () => {
       await callback()
     })
   }
 
+  /**
+   * @param {{channel: string, params?: Record<string, any>}} args - Subscription args.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async _handleChannelSubscription({channel, params}) {
     const resolver = this.configuration.getWebsocketChannelResolver?.()
 
@@ -472,7 +523,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {{channel?: string, params?: Record<string, unknown>}} args - Tenant resolution args.
-   * @returns {Promise<unknown>} - Resolved tenant.
+   * @returns {Promise<string | null | undefined>} - Resolved tenant.
    */
   async _resolveTenant({channel, params}) {
     const requestParams = this.upgradeRequest?.params?.()
@@ -481,12 +532,12 @@ export default class VelociousHttpServerClientWebsocketSession {
       ...(params && typeof params === "object" ? params : {})
     }
 
-    return await this.configuration.resolveTenant({
+    return /** @type {Promise<string | null | undefined>} */ (this.configuration.resolveTenant({
       params: mergedParams,
       request: this.upgradeRequest,
       response: undefined,
       subscription: channel ? {channel, params} : undefined
-    })
+    }))
   }
 
   /**
@@ -518,6 +569,10 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
   }
 
+  /**
+   * @param {WebsocketSessionMessage} message - Incoming websocket message.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async _runMessageHandlerMessage(message) {
     try {
       const handler = this.messageHandler
@@ -532,7 +587,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       const onError = handler ? handler.onError : null
 
       if (onError) {
-        await onError({error, session: this})
+        await onError({error: error instanceof Error ? error : new Error(String(error)), session: this})
       }
     }
   }

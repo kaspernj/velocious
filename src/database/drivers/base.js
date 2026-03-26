@@ -59,6 +59,8 @@ import wait from "awaitery/build/wait.js"
 export default class VelociousDatabaseDriversBase {
   /** @type {number | undefined} */
   idSeq = undefined
+  /** @type {Array<Array<() => void | Promise<void>>>} */
+  _afterCommitCallbackFrames
 
   /**
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
@@ -324,7 +326,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<import("./base-table.js").default>} - Resolves with the table by name or fail.
    */
   async getTableByNameOrFail(name) {
-    return await this.getTableByName(name, {throwError: true})
+    return /** @type {import("./base-table.js").default} */ (await this.getTableByName(name, {throwError: true}))
   }
 
   /**
@@ -515,6 +517,7 @@ export default class VelociousDatabaseDriversBase {
    */
   async transaction(callback) {
     const savePointName = this.generateSavePointName()
+    /** @type {Array<() => void | Promise<void>>} */
     const callbackFrame = []
     let transactionStarted = false
     let savePointStarted = false
@@ -688,7 +691,7 @@ export default class VelociousDatabaseDriversBase {
             await this.reconnect()
           }
 
-          const waitMs = Number.isFinite(retryInfo.waitMs) ? retryInfo.waitMs : 100
+          const waitMs = typeof retryInfo.waitMs === "number" && Number.isFinite(retryInfo.waitMs) ? retryInfo.waitMs : 100
 
           if (waitMs > 0) await wait(waitMs)
           this.logger.warn(`Retrying query because failed with: ${error.stack}`)

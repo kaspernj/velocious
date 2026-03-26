@@ -5,10 +5,6 @@
  * @returns {(...args: any[]) => Promise<void>} - The error logger.
  */
 export default function errorLogger(callback) {
-  /**
-   * @param  {...unknown[]} args - Arguments forwarded to the callback.
-   * @returns {Promise<void>} - Resolves when complete.
-   */
   return async function(...args) {
     try {
       await callback(...args)
@@ -31,4 +27,3 @@ export default function errorLogger(callback) {
     }
   }
 }
-

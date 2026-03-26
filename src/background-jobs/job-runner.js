@@ -5,7 +5,7 @@ import BackgroundJobRegistry from "./job-registry.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
 
 /**
- * @param {object} payload - Payload.
+ * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
  * @returns {Promise<void>} - Resolves when complete.
  */
 export default async function runJobPayload(payload) {
@@ -18,9 +18,11 @@ export default async function runJobPayload(payload) {
   await registry.load()
   const JobClass = registry.getJobByName(payload.jobName)
   const jobInstance = new JobClass()
+  /** @type {(...args: any[]) => Promise<void>} */
+  const perform = jobInstance.perform
 
   try {
-    await jobInstance.perform.apply(jobInstance, payload.args || [])
+    await perform.apply(jobInstance, payload.args || [])
 
     if (payload.id) {
       await reporter.reportWithRetry({

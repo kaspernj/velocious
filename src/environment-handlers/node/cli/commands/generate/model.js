@@ -12,7 +12,10 @@ export default class DbGenerateModel extends BaseCommand {
    * @returns {Promise<void | DbGenerateModelResult>} - Resolves with the execute.
    */
   async execute() {
-    const modelName = this.processArgs[1]
+    const modelName = this.processArgs?.[1]
+
+    if (!modelName) throw new Error("Expected model name")
+
     const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
     const date = new Date()
     const modelFileName = `${inflection.dasherize(inflection.underscore(modelName))}.js`

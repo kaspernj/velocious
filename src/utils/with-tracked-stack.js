@@ -1,8 +1,11 @@
 // @ts-check
 
+/** @type {{withTrackedStack?: {withTrackedStack?: (stack: string | undefined, fn: () => Promise<unknown>) => Promise<unknown>, addTrackedStackToError?: (error: Error) => void}}} */
+const trackedStackGlobal = /** @type {any} */ (globalThis)
+
 /** @param {Error} error - Error to annotate with a tracked stack. */
 function addTrackedStackToError(error) {
-  globalThis.withTrackedStack?.addTrackedStackToError(error)
+  trackedStackGlobal.withTrackedStack?.addTrackedStackToError?.(error)
 }
 
 /**
@@ -11,7 +14,7 @@ function addTrackedStackToError(error) {
  * @returns {Promise<any>} - Resolves with value.
  */
 async function withTrackedStack(stackOrCallback, callback) {
-  const tracked = /** @type {((stack: string | undefined, fn: () => Promise<unknown>) => Promise<unknown>) | undefined} */ (globalThis.withTrackedStack?.withTrackedStack)
+  const tracked = trackedStackGlobal.withTrackedStack?.withTrackedStack
   const resolvedCallback = callback ?? /** @type {() => Promise<unknown>} */ (stackOrCallback)
   const stack = typeof stackOrCallback == "string" ? stackOrCallback : undefined
 
@@ -23,4 +26,3 @@ async function withTrackedStack(stackOrCallback, callback) {
 }
 
 export {addTrackedStackToError, withTrackedStack}
-

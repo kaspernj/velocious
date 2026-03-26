@@ -87,6 +87,12 @@ function toFileSlug(value) {
  */
 
 /**
+ * @typedef {object} ActiveAfterAllScopeEntry
+ * @property {TestsArgument} tests - Scope test tree.
+ * @property {boolean} afterAllsRun - Whether cleanup hooks have run.
+ */
+
+/**
  * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : (void|Promise<void>)} AfterBeforeEachCallbackType
  */
 
@@ -119,6 +125,12 @@ function toFileSlug(value) {
  */
 
 export default class TestRunner {
+  /** @type {ActiveAfterAllScopeEntry[]} */
+  _activeAfterAllScopes
+
+  /** @type {FailedTestDetail[]} */
+  _failedTestDetails
+
   /**
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
@@ -285,6 +297,7 @@ export default class TestRunner {
    * @returns {Set<string>} - Exclude tag set.
    */
   getExcludeTagSet() {
+    /** @type {string[]} */
     const configTags = Array.isArray(testConfig.excludeTags) ? testConfig.excludeTags : []
 
     return new Set([...this._excludeTags, ...configTags])
@@ -635,7 +648,7 @@ export default class TestRunner {
 
     if (!shouldRunAnyTests) return
 
-    /** @type {{tests: TestsArgument, afterAllsRun: boolean}} */
+    /** @type {ActiveAfterAllScopeEntry} */
     const scopeEntry = {tests, afterAllsRun: false}
     this._activeAfterAllScopes.push(scopeEntry)
 
@@ -820,7 +833,7 @@ export default class TestRunner {
   }
 
   /**
-   * @param {{tests: TestsArgument, afterAllsRun: boolean}} scopeEntry - Scope entry.
+   * @param {ActiveAfterAllScopeEntry} scopeEntry - Scope entry.
    * @returns {Promise<void>} - Resolves when scope cleanup finishes.
    */
   async runAfterAllsForScope(scopeEntry) {
@@ -892,6 +905,7 @@ export default class TestRunner {
    * @returns {() => string} - Stops the capture and returns captured text.
    */
   startConsoleCapture() {
+    /** @type {string[]} */
     const lines = []
     /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */
     const consoleObject = /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */ (console)

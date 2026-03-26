@@ -66,7 +66,11 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
         sql += " INDEX"
 
         if (index.getName()) {
-          sql += ` ${options.quoteIndexName(index.getName())}`
+          const indexName = index.getName()
+
+          if (!indexName) throw new Error("Expected index name")
+
+          sql += ` ${options.quoteIndexName(indexName)}`
         }
 
         sql += " ("
@@ -121,11 +125,12 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
     if (databaseType == "pgsql") {
       for (const column of tableData.getColumns()) {
         const notes = column.getNotesForDatabase(databaseType)
+        const actualName = column.getActualName()
 
-        if (!notes) continue
+        if (!notes || !actualName) continue
 
         sqls.push(
-          `COMMENT ON COLUMN ${options.quoteTableName(tableData.getName())}.${options.quoteColumnName(column.getActualName())} IS ${options.quote(notes)}`
+          `COMMENT ON COLUMN ${options.quoteTableName(tableData.getName())}.${options.quoteColumnName(actualName)} IS ${options.quote(notes)}`
         )
       }
     }

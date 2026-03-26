@@ -58,11 +58,11 @@ export default class ServerClient {
   end() {
     return new Promise((resolve) => {
       if (this.socket.destroyed || this.socket.writableEnded || this.socket.writable === false) {
-        resolve(null)
+        resolve(undefined)
         return
       }
 
-      this.socket.once("close", () => resolve(null))
+      this.socket.once("close", () => resolve(undefined))
       this.socket.end()
     })
   }
@@ -157,7 +157,7 @@ export default class ServerClient {
         this.socket.off("error", onWriteError)
         resolve()
       }
-      const onWriteError = (error) => {
+      const onWriteError = (/** @type {Error} */ error) => {
         const errorCode = /** @type {{code?: string}} */ (error).code
 
         this.logger.error(() => [`Socket ${this.clientCount} write error`, errorCode || error.message])

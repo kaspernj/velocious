@@ -220,7 +220,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       this._timezoneAsyncLocalStorage.enterWith({
         ability,
         offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
-        tenant: existingStore?.tenant
+        tenant: undefined
       })
     }
   }

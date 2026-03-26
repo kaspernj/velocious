@@ -41,6 +41,7 @@ export default class VelociousEnvironmentHandlerBase {
   setTimezoneOffset(_offsetMinutes) {
     if (!this.configuration) throw new Error("Configuration hasn't been set")
 
+    /** @type {number} */
     this.configuration._timezoneOffsetMinutes = _offsetMinutes
   }
 
@@ -57,7 +58,7 @@ export default class VelociousEnvironmentHandlerBase {
       return activeConfiguration._timezoneOffsetMinutes
     }
 
-    return activeConfiguration.getTimezoneOffsetMinutes()
+    return /** @type {number} */ (activeConfiguration.getTimezoneOffsetMinutes())
   }
 
   /**

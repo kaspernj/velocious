@@ -22,6 +22,8 @@ export default class VelociousCliCommandsServer extends BaseCommand{
     await application.initialize()
     const routes = this.getConfiguration().getRoutes()
 
+    if (!routes?.rootRoute) throw new Error("Routes have not been initialized")
+
     this.printRoutes(routes.rootRoute)
 
     return {output: this.output}

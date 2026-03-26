@@ -82,8 +82,17 @@ export default class VelociousController {
    */
   setCookie(name, value, args = {}) {
     const {encrypted = false, ...options} = args
-    const secret = encrypted ? this.getConfiguration().getCookieSecret() : undefined
-    const cookieValue = encrypted ? Cookie.encryptValue(value, secret) : String(value ?? "")
+    /** @type {string} */
+    let cookieValue
+
+    if (encrypted) {
+      const secret = this.getConfiguration().getCookieSecret()
+      if (!secret) throw new Error("Missing cookie secret for encrypted cookie")
+      cookieValue = Cookie.encryptValue(value, secret)
+    } else {
+      cookieValue = String(value ?? "")
+    }
+
     const cookie = new Cookie({name, value: cookieValue, options, encrypted})
 
     this._response.addHeader("Set-Cookie", cookie.toHeader())
@@ -124,8 +133,10 @@ export default class VelociousController {
       const beforeActions = currentControllerClass._beforeActions
 
       if (beforeActions) {
+        const controllerPrototype = /** @type {Record<string, Function | undefined>} */ (/** @type {unknown} */ (currentControllerClass.prototype))
+
         for (const beforeActionName of beforeActions) {
-          const beforeAction = currentControllerClass.prototype[beforeActionName]
+          const beforeAction = controllerPrototype[beforeActionName]
 
           if (!beforeAction) throw new Error(`No such before action: ${beforeActionName}`)
 
@@ -219,7 +230,9 @@ export default class VelociousController {
 
       ejs.renderFile(viewPath, actualViewParams, {}, (err, str) => {
         if (err) {
-          if (err.code === "ENOENT") {
+          const renderError = /** @type {Error & {code?: string}} */ (err)
+
+          if (renderError.code === "ENOENT") {
             this.logger.warn(`Missing view file: ${viewPath}`)
 
             if (this._response.getStatusCode() === 200) {
@@ -229,15 +242,15 @@ export default class VelociousController {
             this._response.setHeader("Content-Type", "text/plain; charset=UTF-8")
             this._response.setBody(`Missing view file: ${viewPath}`)
 
-            resolve(null)
+            resolve(undefined)
           } else {
-            reject(err)
+            reject(renderError)
           }
         } else {
           this._response.setHeader("Content-Type", "text/html; charset=UTF-8")
           this._response.setBody(str)
 
-          resolve(null)
+          resolve(undefined)
         }
       })
     })

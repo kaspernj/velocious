@@ -15,7 +15,7 @@ export default class TestWebsocketChannel extends WebsocketChannel {
     }
     if (!subscribe) return
     if (params.checkDb) {
-      await User.first()
+      await User.count()
     }
 
     await this.streamFrom(String(subscribe))

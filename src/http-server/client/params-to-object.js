@@ -60,20 +60,23 @@ export default class ParamsToObject {
 
       /** @type {Array<any> | Record<string, any>} */
       let newResult
+      const objectResult = /** @type {Record<string, any>} */ (result)
 
-      if (inputName in result) {
-        newResult = result[inputName]
+      if (inputName in objectResult) {
+        newResult = /** @type {Array<any> | Record<string, any>} */ (objectResult[inputName])
       } else if (rest == "[]") {
         newResult = []
-        result[inputName] = newResult
+        objectResult[inputName] = newResult
       } else {
         newResult = {}
-        result[inputName] = newResult
+        objectResult[inputName] = newResult
       }
 
       this.treatSecond(value, rest, newResult, key)
     } else {
-      result[key] = value
+      const objectResult = /** @type {Record<string, any>} */ (result)
+
+      objectResult[key] = value
     }
   }
 
@@ -102,16 +105,18 @@ export default class ParamsToObject {
 
       result.push(value)
     } else if (newRest == "") {
-      result[key] = value
+      /** @type {Record<string, any>} */ (result)[key] = value
     } else {
-      if (typeof result == "object" && key in result) {
-        newResult = result[key]
+      const objectResult = /** @type {Record<string, any>} */ (result)
+
+      if (!Array.isArray(result) && key in objectResult) {
+        newResult = /** @type {Array<any> | Record<string, any>} */ (objectResult[key])
       } else if (newRest == "[]") {
         newResult = []
-        result[key] = newResult
+        objectResult[key] = newResult
       } else {
         newResult = {}
-        result[key] = newResult
+        objectResult[key] = newResult
       }
 
       this.treatSecond(value, newRest, newResult, fullKey)

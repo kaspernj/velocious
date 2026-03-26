@@ -4,8 +4,11 @@
 
 /** Logger file output. */
 export default class LoggerFileOutput {
+  /** @type {import("../../configuration.js").default | undefined} */
   _configuration = undefined
+  /** @type {string | undefined} */
   _filePath = undefined
+  /** @type {(() => import("../../configuration.js").default | undefined) | undefined} */
   _getConfiguration = undefined
 
   /**

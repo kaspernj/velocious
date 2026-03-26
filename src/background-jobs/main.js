@@ -24,6 +24,14 @@ export default class BackgroundJobsMain {
     this.workers = new Set()
     /** @type {Set<JsonSocket>} */
     this.readyWorkers = new Set()
+    /** @type {net.Server | undefined} */
+    this.server = undefined
+    /** @type {NodeJS.Timeout | undefined} */
+    this._dispatchTimer = undefined
+    /** @type {NodeJS.Timeout | undefined} */
+    this._orphanTimer = undefined
+    /** @type {BackgroundJobsScheduler | undefined} */
+    this.scheduler = undefined
     this._dispatching = false
   }
 
@@ -34,15 +42,16 @@ export default class BackgroundJobsMain {
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-main"})
     await this.store.ensureReady()
-    this.server = net.createServer((socket) => this._handleConnection(socket))
+    const server = net.createServer((socket) => this._handleConnection(socket))
+    this.server = server
 
     try {
       await new Promise((resolve, reject) => {
-        this.server.once("error", reject)
-        this.server.listen(this.port, this.host, () => resolve(undefined))
+        server.once("error", reject)
+        server.listen(this.port, this.host, () => resolve(undefined))
       })
 
-      const address = this.server.address()
+      const address = server.address()
       if (address && typeof address === "object") {
         this.port = address.port
       }
@@ -87,7 +96,8 @@ export default class BackgroundJobsMain {
 
     if (!this.server) return
 
-    await new Promise((resolve) => this.server.close(() => resolve(undefined)))
+    const {server} = this
+    await new Promise((resolve) => server.close(() => resolve(undefined)))
   }
 
   /**
@@ -103,6 +113,7 @@ export default class BackgroundJobsMain {
    */
   _handleConnection(socket) {
     const jsonSocket = new JsonSocket(socket)
+    /** @type {import("./types.js").BackgroundJobSocketRole | null} */
     let role = null
 
     const cleanup = () => {
@@ -118,6 +129,7 @@ export default class BackgroundJobsMain {
       cleanup()
     })
 
+    /** @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message. */
     jsonSocket.on("message", (message) => {
       if (!role && message?.type === "hello") {
         role = message.role
@@ -154,6 +166,12 @@ export default class BackgroundJobsMain {
     })
   }
 
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobEnqueueMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
   async _handleEnqueue({jsonSocket, message}) {
     try {
       const jobId = await this.store.enqueue({
@@ -170,6 +188,12 @@ export default class BackgroundJobsMain {
     }
   }
 
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobCompleteMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
   async _handleJobComplete({jsonSocket, message}) {
     try {
       await this.store.markCompleted({
@@ -184,6 +208,12 @@ export default class BackgroundJobsMain {
     }
   }
 
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobFailedMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
   async _handleJobFailed({jsonSocket, message}) {
     try {
       await this.store.markFailed({

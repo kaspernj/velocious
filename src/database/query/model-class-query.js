@@ -103,16 +103,16 @@ function normalizePreloadRecord(preload) {
 }
 
 /**
- * @template {typeof import("../record/index.js").default} MC
+ * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
  */
 /**
- * @template {typeof import("../record/index.js").default} MC
+ * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
  * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean}} ModelClassQueryArgsType
  */
 
 /**
  * A generic query over some model type.
- * @template {typeof import("../record/index.js").default} MC
+ * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
  */
 export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery {
   /** @param {ModelClassQueryArgsType<MC>} args - Query constructor arguments. */
@@ -466,7 +466,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {object} conditions - Conditions.
+   * @param {Record<string, any>} conditions - Conditions.
    * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
    */
@@ -485,21 +485,21 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return newRecord
   }
 
-  /** @returns {Promise<InstanceType<MC> | undefined>} - Resolves with the first.  */
+  /** @returns {Promise<InstanceType<MC> | null>} - Resolves with the first.  */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
     const results = await newQuery.toArray()
 
-    return results[0]
+    return results[0] || null
   }
 
-  /** @returns {Promise<InstanceType<MC> | undefined>} - Resolves with the last.  */
+  /** @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.  */
   async last() {
     const primaryKey = this.getModelClass().primaryKey()
     const tableName = this.getModelClass().tableName()
     const results = await this.clone().reorder(`${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(primaryKey)} DESC`).limit(1).toArray()
 
-    return results[0]
+    return results[0] || null
   }
 
   /**
@@ -571,10 +571,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     if (columnNames.length === 1) {
       const [columnName] = columnNames
-      return rows.map((row) => row[columnName])
+      return rows.map((row) => /** @type {Record<string, any>} */ (row)[columnName])
     }
 
-    return rows.map((row) => columnNames.map((columnName) => row[columnName]))
+    return rows.map((row) => {
+      const rowHash = /** @type {Record<string, any>} */ (row)
+
+      return columnNames.map((columnName) => rowHash[columnName])
+    })
   }
 
   /**
@@ -804,6 +808,10 @@ function splitWhereHash({hash, modelClass}) {
     if (isNested) {
       if (relationship) {
         const targetModelClass = relationship.getTargetModelClass()
+        if (!targetModelClass) {
+          fallbackHash[key] = value
+          continue
+        }
         const nestedResult = splitWhereHash({hash: value, modelClass: targetModelClass})
         const nestedResolvedKeys = Object.keys(nestedResult.resolvedHash)
         const nestedFallbackKeys = Object.keys(nestedResult.fallbackHash)
@@ -855,6 +863,7 @@ function buildJoinObjectFromWhereHash({hash, modelClass}) {
 
     if (isPlainObject(value)) {
       const targetModelClass = relationship.getTargetModelClass()
+      if (!targetModelClass) continue
       const nestedJoinObject = buildJoinObjectFromWhereHash({hash: value, modelClass: targetModelClass})
 
       joinObject[key] = Object.keys(nestedJoinObject).length > 0 ? nestedJoinObject : true
@@ -913,20 +922,22 @@ function normalizeRelationshipWhereOperatorTuples(value) {
 
   /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} */
   const normalized = []
-  const addCondition = (conditionValue) => {
-    if (isRelationshipWhereOperatorTuple(conditionValue)) {
-      const normalizedOperator = normalizeRelationshipWhereOperator(conditionValue[1])
+    /** @param {unknown} conditionValue - Candidate nested condition. */
+    const addCondition = (conditionValue) => {
+      if (isRelationshipWhereOperatorTuple(conditionValue)) {
+        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", any, ...unknown[]]} */ (conditionValue)
+        const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
-      normalized.push([
-        conditionValue[0],
-        normalizedOperator,
-        conditionValue[2]
-      ])
+        normalized.push([
+          tuple[0],
+          normalizedOperator,
+          tuple[2]
+        ])
 
-      if (conditionValue.length > 3) {
-        for (let index = 3; index < conditionValue.length; index += 1) {
-          addCondition(conditionValue[index])
-        }
+        if (tuple.length > 3) {
+          for (let index = 3; index < tuple.length; index += 1) {
+            addCondition(tuple[index])
+          }
       }
 
       return
@@ -936,7 +947,7 @@ function normalizeRelationshipWhereOperatorTuples(value) {
       throw new Error("Relationship where conditions must be tuples")
     }
 
-    conditionValue.forEach((nestedConditionValue) => {
+    /** @type {unknown[]} */ (conditionValue).forEach((nestedConditionValue) => {
       addCondition(nestedConditionValue)
     })
   }
