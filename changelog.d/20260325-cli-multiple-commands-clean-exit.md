@@ -1,0 +1,1 @@
+- Let the CLI run multiple commands in one invocation, close database connections between chained commands, and close connections before exiting after successful command completion.

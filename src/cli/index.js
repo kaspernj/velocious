@@ -21,8 +21,34 @@ export default class VelociousCli {
     this.environmentHandler.setConfiguration(args.configuration)
   }
 
+  /**
+   * @returns {Promise<unknown>} - Resolves with the final command result.
+   */
   async execute() {
-    const commandParts = this.args.processArgs[0].split(":")
+    const commandGroups = await this.commandGroups()
+    let result
+
+    for (const [index, commandProcessArgs] of commandGroups.entries()) {
+      if (index > 0) {
+        await this.getConfiguration().closeDatabaseConnections()
+      }
+
+      result = await this.executeCommand(commandProcessArgs)
+    }
+
+    return result
+  }
+
+  /**
+   * @param {string[]} processArgs - Process args for a single command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async executeCommand(processArgs) {
+    if (!processArgs[0]) {
+      throw new Error("Missing command argument")
+    }
+
+    const commandParts = processArgs[0].split(":")
     const parsedCommandParts = []
 
     for (let commandPart of commandParts) {
@@ -35,11 +61,53 @@ export default class VelociousCli {
     }
 
     const CommandClass = await this.environmentHandler.requireCommand({commandParts: parsedCommandParts})
-    const commandInstance = new CommandClass({args: this.args, cli: this})
+    const commandInstance = new CommandClass({
+      args: Object.assign({}, this.args, {processArgs}),
+      cli: this
+    })
 
     await commandInstance.initialize()
 
     return await commandInstance.execute()
+  }
+
+  /**
+   * @returns {Promise<string[][]>} - Command groups with process args for each command.
+   */
+  async commandGroups() {
+    const processArgs = this.args.processArgs || []
+    const commands = await this.environmentHandler.findCommands()
+    const commandNames = new Set(commands.map((command) => command.name))
+    /** @type {string[][]} */
+    const groups = []
+    /** @type {string[]} */
+    let currentGroup = []
+
+    for (const processArg of processArgs) {
+      if (currentGroup.length == 0) {
+        if (processArg.startsWith("-")) continue
+
+        currentGroup = [processArg]
+        continue
+      }
+
+      if (!processArg.startsWith("-") && commandNames.has(processArg)) {
+        groups.push(currentGroup)
+        currentGroup = [processArg]
+      } else {
+        currentGroup.push(processArg)
+      }
+    }
+
+    if (currentGroup.length > 0) {
+      groups.push(currentGroup)
+    }
+
+    if (groups.length == 0) {
+      throw new Error("Missing command argument")
+    }
+
+    return groups
   }
 
   /** @returns {import("../configuration.js").default} configuration */

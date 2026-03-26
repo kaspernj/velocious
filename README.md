@@ -825,6 +825,12 @@ Run project seeds from `src/db/seed.js` (default export should be an async funct
 npx velocious db:seed
 ```
 
+You can chain multiple commands in one invocation:
+
+```bash
+npx velocious db:create db:migrate
+```
+
 Run script files with initialized app/database context:
 
 ```bash
@@ -855,6 +861,14 @@ npx velocious db:schema:dump
 ```
 
 `db:schema:dump` only writes `db/structure-<identifier>.sql` files when one or more expected files are missing.
+
+If you need to load the checked-in structure files for each configured database, use:
+
+```bash
+npx velocious db:schema:load
+```
+
+`db:schema:load` reads `db/structure-<identifier>.sql` for each configured database identifier and executes those statements against the current connections.
 
 ## Configure CLI commands (Node vs Browser)
 
