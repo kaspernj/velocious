@@ -1,10 +1,16 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import Configuration from "../../src/configuration.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import Dummy from "../dummy/index.js"
 import Comment from "../dummy/src/models/comment.js"
+import dummyDirectory from "../dummy/dummy-directory.js"
+import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import FrontendModelController from "../../src/frontend-model-controller.js"
 import Project from "../dummy/src/models/project.js"
+import Request from "../../src/http-server/client/request.js"
+import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 
@@ -55,6 +61,79 @@ async function postSharedTaskFrontendModelCommand(commandType, payload) {
   })
 
   return /** @type {Record<string, any>} */ (response.responses?.[0]?.response || response)
+}
+
+/**
+ * @param {string} environment - Environment.
+ * @returns {Configuration} - Test configuration.
+ */
+function buildFrontendModelControllerConfiguration(environment) {
+  return new Configuration({
+    database: {[environment]: {}},
+    directory: dummyDirectory(),
+    environment,
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]},
+    locales: ["en"]
+  })
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {Configuration} args.configuration - Configuration.
+ * @param {Record<string, any>} args.params - Controller params.
+ * @returns {Promise<Record<string, any>>} - Parsed frontend API payload.
+ */
+async function runFrontendApi({configuration, params}) {
+  const client = {remoteAddress: "127.0.0.1"}
+  const request = new Request({client, configuration})
+  const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
+
+  request.feed(Buffer.from([
+    "POST /frontend-models HTTP/1.1",
+    "Host: example.com",
+    "Content-Length: 0",
+    "",
+    ""
+  ].join("\r\n"), "utf8"))
+
+  await donePromise
+
+  const response = new Response({configuration})
+  const controller = new FrontendModelController({
+    action: "frontendApi",
+    configuration,
+    controller: "frontend-models",
+    params,
+    request,
+    response,
+    viewPath: `${dummyDirectory()}/src/routes/frontend-models`
+  })
+
+  await controller.frontendApi()
+  const body = response.getBody()
+  const responseText = typeof body === "string"
+    ? body
+    : Buffer.from(body).toString("utf8")
+  const responseJson = responseText.length > 0 ? JSON.parse(responseText) : {}
+
+  return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(responseJson))
+}
+
+/**
+ * @param {Record<string, any>} payload - Error payload.
+ * @param {RegExp} messagePattern - Expected debug message.
+ * @returns {void}
+ */
+function expectDebugFrontendModelError(payload, messagePattern) {
+  expect(payload.status).toEqual("error")
+  expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+  expect(payload.debugErrorClass).toEqual("Error")
+  expect(payload.debugErrorMessage).toMatch(messagePattern)
+  expect(Array.isArray(payload.debugBacktrace)).toEqual(true)
+  expect(payload.debugBacktrace[0]).toMatch(messagePattern)
 }
 
 /**
@@ -239,9 +318,31 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.responses.length).toEqual(1)
-      expect(payload.responses[0].response.status).toEqual("error")
-      expect(payload.responses[0].response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expectDebugFrontendModelError(payload.responses[0].response, /No frontend model resource configuration/)
     })
+  })
+
+  it("keeps unexpected shared frontend-model failures generic in production", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production")
+    const payload = await runFrontendApi({
+      configuration,
+      params: {
+        requests: [{
+          commandType: "index",
+          model: "UnknownModel",
+          payload: {},
+          requestId: "request-1"
+        }]
+      }
+    })
+
+    expect(payload.status).toEqual("success")
+    expect(payload.responses.length).toEqual(1)
+    expect(payload.responses[0].response.status).toEqual("error")
+    expect(payload.responses[0].response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+    expect(payload.responses[0].response.debugErrorClass).toEqual(undefined)
+    expect(payload.responses[0].response.debugErrorMessage).toEqual(undefined)
+    expect(payload.responses[0].response.debugBacktrace).toEqual(undefined)
   })
 
   it("applies preload params to frontendIndex query", async () => {
