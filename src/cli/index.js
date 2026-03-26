@@ -115,6 +115,6 @@ export default class VelociousCli {
 
   /** @returns {boolean} - Whether testing.  */
   getTesting() {
-    return this.args.testing
+    return this.args.testing || false
   }
 }

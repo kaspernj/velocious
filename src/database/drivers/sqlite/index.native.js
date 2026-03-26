@@ -25,7 +25,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
       try {
         await SQLite.deleteDatabaseAsync(databaseName)
       } catch (error) {
-        if (error.message.match(/Database '(.+)' not found/)) {
+        if (error instanceof Error && error.message.match(/Database '(.+)' not found/)) {
           // Ignore not found
         } else {
           throw error

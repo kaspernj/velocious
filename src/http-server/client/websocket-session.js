@@ -532,7 +532,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       const onError = handler ? handler.onError : null
 
       if (onError) {
-        await onError({error, session: this})
+        await onError({error: error instanceof Error ? error : new Error(String(error)), session: this})
       }
     }
   }

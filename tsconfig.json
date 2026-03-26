@@ -6,7 +6,10 @@
     "declarationMap": true,
     "inlineSourceMap": true,
     "inlineSources": true,
+    "noImplicitAny": false,
     "outDir": "build",
+    "skipLibCheck": true,
+    "strictNullChecks": false,
     "target": "ES2024",
     "moduleResolution": "nodenext",
     "module": "nodenext"

@@ -88,7 +88,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
 
     if (!scope) return query
 
-    const scopedQuery = scope.call(query, query)
+    const scopedQuery = /** @type {T | void} */ (scope.call(query, /** @type {import("../../query/model-class-query.js").default} */ (query)))
 
     return scopedQuery || query
   }
