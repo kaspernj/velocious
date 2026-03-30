@@ -214,8 +214,8 @@ export class FrontendModelHasManyRelationship {
    * @returns {Promise<Array<InstanceType<T>>>} - Loaded relationship models.
    */
   async toArray() {
-    if (this.getPreloaded()) {
-      return this.loaded()
+    if (this._loadedValue.length > 0 || this.getPreloaded()) {
+      return this._loadedValue
     }
 
     return await this.load()
@@ -1165,8 +1165,8 @@ export default class FrontendModelBase {
   async relationshipOrLoad(relationshipName) {
     const relationship = this.getRelationshipByName(relationshipName)
 
-    if (relationship.getPreloaded()) {
-      return relationship.loaded()
+    if ("_loadedValue" in relationship && (relationship.getPreloaded() || relationship._loadedValue !== null)) {
+      return relationship._loadedValue
     }
 
     return await this.loadRelationship(relationshipName)

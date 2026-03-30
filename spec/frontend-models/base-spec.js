@@ -1627,6 +1627,34 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("reuses in-memory singular frontend relationships before loading again", async () => {
+    const {Project, Task} = buildPreloadTestModelClasses()
+    const task = new Task({id: "11", name: "Task 1"})
+    const assignedProject = task.setRelationship("project", new Project({id: "1", name: "One"}))
+    const fetchStub = stubFetch({
+      model: {
+        id: "11",
+        name: "Task 1",
+        __preloadedRelationships: {
+          project: {
+            id: "2",
+            name: "Two"
+          }
+        }
+      }
+    })
+
+    try {
+      const project = await task.relationshipOrLoad("project")
+
+      expect(project).toEqual(assignedProject)
+      expect(fetchStub.calls).toEqual([])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("supports lazy toArray() and explicit load() for has-many frontend relationships", async () => {
     const {Project} = buildPreloadTestModelClasses()
     const fetchStub = stubFetch({
@@ -1670,6 +1698,33 @@ describe("Frontend models - base", () => {
           url: "/frontend-models"
         }
       ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("reuses in-memory has-many frontend relationships before querying again", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const project = new Project({id: "1", name: "One"})
+    const builtTask = project.getRelationshipByName("tasks").build({id: "11", name: "Task 1"})
+    const fetchStub = stubFetch({
+      model: {
+        id: "1",
+        name: "One",
+        __preloadedRelationships: {
+          tasks: [
+            {id: "22", name: "Task 2"}
+          ]
+        }
+      }
+    })
+
+    try {
+      const loadedTasks = await project.getRelationshipByName("tasks").toArray()
+
+      expect(loadedTasks).toEqual([builtTask])
+      expect(fetchStub.calls).toEqual([])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
