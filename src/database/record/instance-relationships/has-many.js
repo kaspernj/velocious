@@ -98,8 +98,10 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /** @returns {Promise<InstanceType<TMC>[]>} - Resolves with the array. */
   async toArray() {
-    if (this.getPreloaded()) {
-      return this.loaded()
+    const loadedValue = this.getLoadedOrUndefined()
+
+    if (loadedValue !== undefined) {
+      return Array.isArray(loadedValue) ? loadedValue : []
     }
 
     return await this.load()

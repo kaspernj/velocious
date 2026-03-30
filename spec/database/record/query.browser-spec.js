@@ -75,6 +75,25 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(reloadedTasks.map((loadedTask) => loadedTask.id())).toEqual([task.id()])
   })
 
+  it("reuses in-memory belongs-to relationships before loading again", async () => {
+    const task = new Task({name: "Unsaved task"})
+    const project = task.buildProject({name: "Unsaved project"})
+
+    const loadedProject = await task.projectOrLoad()
+
+    expect(loadedProject).toEqual(project)
+    expect(loadedProject.name()).toEqual("Unsaved project")
+  })
+
+  it("reuses in-memory has-many relationships before querying again", async () => {
+    const project = new Project({name: "Unsaved project"})
+    const builtTask = project.tasks().build({name: "Built task"})
+    const loadedTasks = await project.tasks().toArray()
+
+    expect(loadedTasks).toEqual([builtTask])
+    expect(loadedTasks[0].name()).toEqual("Built task")
+  })
+
   it("finds the first record", async () => {
     const taskIDs = []
     const project = await Project.create()

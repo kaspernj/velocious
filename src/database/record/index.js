@@ -520,9 +520,10 @@ class VelociousDatabaseRecord {
    */
   async relationshipOrLoad(relationshipName) {
     const relationship = this.getRelationshipByName(relationshipName)
+    const loadedValue = relationship.getLoadedOrUndefined()
 
-    if (relationship.getPreloaded()) {
-      return relationship.loaded()
+    if (loadedValue !== undefined) {
+      return loadedValue
     }
 
     return await this.loadRelationship(relationshipName)
