@@ -1283,7 +1283,7 @@ export default class FrontendModelQuery {
   /**
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
-  async toArray() {
+  async load() {
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
       ...this.joinsPayload(),
@@ -1303,6 +1303,13 @@ export default class FrontendModelQuery {
     const models = Array.isArray(response.models) ? response.models : []
 
     return /** @type {InstanceType<T>[]} */ (models.map((model) => this.modelClass.instantiateFromResponse(model)))
+  }
+
+  /**
+   * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
+   */
+  async toArray() {
+    return await this.load()
   }
 
   /**

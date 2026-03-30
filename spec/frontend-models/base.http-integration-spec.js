@@ -41,7 +41,7 @@ class User extends FrontendModelBase {
 /** Shared frontend model task class for websocket transport integration tests. */
 class Task extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], builtInCollectionCommands: Record<string, string>, builtInMemberCommands: string[], primaryKey: string}}
+   * @returns {{attributes: string[], builtInCollectionCommands: Record<string, string>, builtInMemberCommands: Record<string, string>, primaryKey: string}}
    */
   static resourceConfig() {
     return {
@@ -49,7 +49,9 @@ class Task extends FrontendModelBase {
       builtInCollectionCommands: {
         index: "list"
       },
-      builtInMemberCommands: ["find"],
+      builtInMemberCommands: {
+        find: "find"
+      },
       primaryKey: "id"
     }
   }
@@ -59,16 +61,18 @@ class Task extends FrontendModelBase {
    */
   static relationshipModelClasses() {
     return {
-      comments: Comment
+      comments: Comment,
+      project: Project
     }
   }
 
   /**
-   * @returns {Record<string, {type: "hasMany"}>}
+   * @returns {Record<string, {type: "belongsTo" | "hasMany"}>}
    */
   static relationshipDefinitions() {
     return {
-      comments: {type: "hasMany"}
+      comments: {type: "hasMany"},
+      project: {type: "belongsTo"}
     }
   }
 
@@ -104,7 +108,7 @@ class Comment extends FrontendModelBase {
 /** Frontend model project class for preload integration tests. */
 class Project extends FrontendModelBase {
   /**
-   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
+   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: Record<string, string>, builtInMemberCommands: Record<string, string>, primaryKey: string}}
    */
   static resourceConfig() {
     return {
@@ -113,8 +117,12 @@ class Project extends FrontendModelBase {
         index: "read"
       },
       attributes: ["id"],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find"],
+      builtInCollectionCommands: {
+        index: "index"
+      },
+      builtInMemberCommands: {
+        find: "find"
+      },
       primaryKey: "id"
     }
   }
@@ -136,6 +144,9 @@ class Project extends FrontendModelBase {
       tasks: {type: "hasMany"}
     }
   }
+
+  /** @returns {number} */
+  id() { return this.readAttribute("id") }
 }
 
 /** @returns {void} */
@@ -619,6 +630,30 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         await expect(async () => {
           tasks[0].primaryInteraction()
         }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("reuses preloaded and explicit relationship loading over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {task} = await seedHttpPreloadModels()
+        const loadedTask = await Task
+          .preload(["project"])
+          .findBy({id: task.id()})
+        const loadedProject = await loadedTask?.relationshipOrLoad("project")
+        const loadedTasks = await loadedProject?.getRelationshipByName("tasks").toArray()
+        const cachedTasks = await loadedProject?.getRelationshipByName("tasks").toArray()
+        const reloadedTasks = await loadedProject?.getRelationshipByName("tasks").load()
+
+        expect(loadedProject?.id()).toEqual(task.projectId())
+        expect(loadedTasks?.map((loadedModel) => loadedModel.id())).toEqual([task.id()])
+        expect(cachedTasks?.map((loadedModel) => loadedModel.id())).toEqual([task.id()])
+        expect(reloadedTasks?.map((loadedModel) => loadedModel.id())).toEqual([task.id()])
       } finally {
         resetFrontendModelTransport()
       }

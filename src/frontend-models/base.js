@@ -202,6 +202,24 @@ export class FrontendModelHasManyRelationship {
 
     return model
   }
+
+  /**
+   * @returns {Promise<Array<InstanceType<T>>>} - Loaded relationship models.
+   */
+  async load() {
+    return /** @type {Promise<Array<InstanceType<T>>>} */ (this.model.loadRelationship(this.relationshipName))
+  }
+
+  /**
+   * @returns {Promise<Array<InstanceType<T>>>} - Loaded relationship models.
+   */
+  async toArray() {
+    if (this.getPreloaded()) {
+      return this.loaded()
+    }
+
+    return await this.load()
+  }
 }
 
 /**
@@ -1142,6 +1160,20 @@ export default class FrontendModelBase {
 
   /**
    * @param {string} relationshipName - Relationship name.
+   * @returns {Promise<any>} - Loaded relationship value.
+   */
+  async relationshipOrLoad(relationshipName) {
+    const relationship = this.getRelationshipByName(relationshipName)
+
+    if (relationship.getPreloaded()) {
+      return relationship.loaded()
+    }
+
+    return await this.loadRelationship(relationshipName)
+  }
+
+  /**
+   * @param {string} relationshipName - Relationship name.
    * @param {any} relationshipValue - Relationship value.
    * @returns {any} - Assigned relationship value.
    */
@@ -1450,6 +1482,15 @@ export default class FrontendModelBase {
    */
   static async toArray() {
     return await this.query().toArray()
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
+   */
+  static async load() {
+    return await this.query().load()
   }
 
   /**

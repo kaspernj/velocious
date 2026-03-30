@@ -513,10 +513,10 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * Converts query results to array of model instances
+   * Loads query results into model instances.
    * @returns {Promise<Array<InstanceType<MC>>>} - Resolves with the array.
    */
-  async toArray() {
+  async load() {
     const models = []
     const results = await this.results()
 
@@ -539,6 +539,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     }
 
     return models
+  }
+
+  /**
+   * Converts query results to array of model instances
+   * @returns {Promise<Array<InstanceType<MC>>>} - Resolves with the array.
+   */
+  async toArray() {
+    return await this.load()
   }
 
   /**

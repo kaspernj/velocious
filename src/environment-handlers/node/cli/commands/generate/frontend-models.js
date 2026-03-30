@@ -384,6 +384,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         fileContent += `  async load${relationshipNameCamelized}() { return /** @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
 
         fileContent += "\n"
+        fileContent += `  /** @returns {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} - Loaded related model. */\n`
+        fileContent += `  async ${relationship.relationshipName}OrLoad() { return /** @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.relationshipOrLoad(${JSON.stringify(relationship.relationshipName)})) }\n`
+
+        fileContent += "\n"
         fileContent += `  /** @param {import(${JSON.stringify(targetImportPath)}).default | null} model - Related model. @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Assigned related model. */\n`
         fileContent += `  set${relationshipNameCamelized}(model) { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.setRelationship(${JSON.stringify(relationship.relationshipName)}, model)) }\n`
       }

@@ -68,7 +68,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
   /**
    * @abstract
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<InstanceType<TMC> | Array<InstanceType<TMC>> | undefined>} - Resolves with loaded relationship value.
    */
   load() {
     throw new Error("'load' not implemented")

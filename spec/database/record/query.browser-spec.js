@@ -59,6 +59,22 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(arrayProject.projectDetail().note()).toEqual("Shorthand note")
   })
 
+  it("reuses preloaded relationships from relationship helpers before loading again", async () => {
+    const project = await Project.create({name: "Helper project"})
+    const task = await Task.create({name: "Helper task", project})
+    const preloadedTask = /** @type {Task} */ (await Task.preload({project: true}).find(task.id()))
+
+    const loadedProject = await preloadedTask.projectOrLoad()
+    const loadedTasks = await loadedProject.tasks().toArray()
+    const cachedTasks = await loadedProject.tasks().toArray()
+    const reloadedTasks = await loadedProject.tasks().load()
+
+    expect(loadedProject.id()).toEqual(project.id())
+    expect(loadedTasks.map((loadedTask) => loadedTask.id())).toEqual([task.id()])
+    expect(cachedTasks.map((loadedTask) => loadedTask.id())).toEqual([task.id()])
+    expect(reloadedTasks.map((loadedTask) => loadedTask.id())).toEqual([task.id()])
+  })
+
   it("finds the first record", async () => {
     const taskIDs = []
     const project = await Project.create()
@@ -171,5 +187,15 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     const tasksCount = await Task.count()
 
     expect(tasksCount).toEqual(5)
+  })
+
+  it("supports explicit load() on record model classes", async () => {
+    const project = await Project.create()
+
+    await Task.create({name: "Loaded task", project})
+
+    const tasks = await Task.load()
+
+    expect(tasks.map((task) => task.name())).toContain("Loaded task")
   })
 })
