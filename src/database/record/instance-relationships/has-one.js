@@ -61,6 +61,8 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     }
     this.setDirty(false)
     this.setPreloaded(true)
+
+    return this.loaded()
   }
 
   /**

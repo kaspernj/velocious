@@ -346,6 +346,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await Task.pluck("id")`
 - `await Task.pluck({project: ["id"]})`
 - `await User.preload({projects: ["tasks"]}).toArray()`
+- `await Task.load()`
 - `await Project`
   `.preload(["tasks"])`
   `.select({Project: ["id", "createdAt"], Task: ["updatedAt"]})`
@@ -355,7 +356,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await user.destroy()`
 - State helpers like `user.isNewRecord()`, `user.isPersisted()`, `user.isChanged()`, and `user.changes()`
 - Attribute methods like `user.name()` and `user.setName(...)`
-- Relationship helpers (when `relationships` are configured), for example `task.project()`, `project.tasks().loaded()`, and `project.tasks().build({...})`
+- Relationship helpers (when `relationships` are configured), for example `task.project()`, `await task.projectOrLoad()`, `await project.tasks().toArray()`, `await project.tasks().load()`, and `project.tasks().build({...})`
 - Attachment helpers (when `attachments` are configured), for example `await task.descriptionFile().attach(file)`, `await task.descriptionFile().download()`, and `await task.update({descriptionFile: file})`
 
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
@@ -631,13 +632,17 @@ const projectNames = tasks.map((task) => task.project().name())
 ```js
 const task = await Task.find(5)
 
+const project = await task.projectOrLoad()
+
 await task.loadProject()
 
-const projects = task.project()
+const sameProject = task.project()
 ```
 
 ```js
 const project = await Project.find(4)
+const tasks = await project.tasks().toArray()
+const refreshedTasks = await project.tasks().load()
 
 await project.loadTasks()
 

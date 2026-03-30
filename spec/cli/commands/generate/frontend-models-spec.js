@@ -148,6 +148,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("project: {type: \"belongsTo\"}")
     expect(taskContents).toContain("project() { return /** @type {import(\"./project.js\").default | null} */ (this.getRelationshipByName(\"project\").loaded()) }")
     expect(taskContents).toContain("async loadProject() { return /** @type {Promise<import(\"./project.js\").default | null>} */ (this.loadRelationship(\"project\")) }")
+    expect(taskContents).toContain("async projectOrLoad() { return /** @type {Promise<import(\"./project.js\").default | null>} */ (this.relationshipOrLoad(\"project\")) }")
     expect(taskContents).toContain("setProject(model) { return /** @type {import(\"./project.js\").default | null} */ (this.setRelationship(\"project\", model)) }")
 
     expect(projectContents.includes("import Task from")).toEqual(false)

@@ -1,0 +1,1 @@
+Added explicit query `load()` helpers and relationship load parity so generated/frontend models can use `project.tasks().toArray()`, `project.tasks().load()`, and singular `projectOrLoad()` accessors without reloading already preloaded relationships.

@@ -498,6 +498,26 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("supports explicit load() on frontend model classes", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({
+      models: [{email: "john@example.com", id: 5, name: "John"}]
+    })
+
+    try {
+      const users = await User.load()
+
+      expect(fetchStub.calls).toEqual([{
+        body: {},
+        url: "/frontend-models"
+      }])
+      expect(users[0].id()).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("batches shared frontend-model API requests through a websocket client", async () => {
     const User = buildTestModelClass()
     /** @type {Array<{body: Record<string, any>, path: string}>} */
@@ -1564,6 +1584,147 @@ describe("Frontend models - base", () => {
 
       expect(assignedProject).toEqual(project)
       expect(task.getRelationshipByName("project").loaded()).toEqual(project)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("reuses preloaded frontend relationships before loading again", async () => {
+    const {Project, Task} = buildPreloadTestModelClasses()
+    const preloadedProject = new Project({id: "1", name: "One"})
+    const task = Task.instantiateFromResponse({
+      id: "11",
+      name: "Task 1",
+      __preloadedRelationships: {
+        project: {
+          id: "1",
+          name: "One"
+        }
+      }
+    })
+    const fetchStub = stubFetch({
+      model: {
+        id: "11",
+        name: "Task 1",
+        __preloadedRelationships: {
+          project: {
+            id: "2",
+            name: "Two"
+          }
+        }
+      }
+    })
+
+    try {
+      const project = await task.relationshipOrLoad("project")
+
+      expect(project?.readAttribute("id")).toEqual(preloadedProject.readAttribute("id"))
+      expect(fetchStub.calls).toEqual([])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("reuses in-memory singular frontend relationships before loading again", async () => {
+    const {Project, Task} = buildPreloadTestModelClasses()
+    const task = new Task({id: "11", name: "Task 1"})
+    const assignedProject = task.setRelationship("project", new Project({id: "1", name: "One"}))
+    const fetchStub = stubFetch({
+      model: {
+        id: "11",
+        name: "Task 1",
+        __preloadedRelationships: {
+          project: {
+            id: "2",
+            name: "Two"
+          }
+        }
+      }
+    })
+
+    try {
+      const project = await task.relationshipOrLoad("project")
+
+      expect(project).toEqual(assignedProject)
+      expect(fetchStub.calls).toEqual([])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("supports lazy toArray() and explicit load() for has-many frontend relationships", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({
+      model: {
+        id: "1",
+        name: "One",
+        __preloadedRelationships: {
+          tasks: [
+            {id: "11", name: "Task 1"}
+          ]
+        }
+      }
+    })
+    const project = new Project({id: "1", name: "One"})
+
+    try {
+      const loadedTasks = await project.getRelationshipByName("tasks").toArray()
+      const cachedTasks = await project.getRelationshipByName("tasks").toArray()
+      const reloadedTasks = await project.getRelationshipByName("tasks").load()
+
+      expect(loadedTasks.map((task) => task.readAttribute("id"))).toEqual(["11"])
+      expect(cachedTasks.map((task) => task.readAttribute("id"))).toEqual(["11"])
+      expect(reloadedTasks.map((task) => task.readAttribute("id"))).toEqual(["11"])
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            id: "1",
+            preload: {
+              tasks: true
+            }
+          },
+          url: "/frontend-models"
+        },
+        {
+          body: {
+            id: "1",
+            preload: {
+              tasks: true
+            }
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("reuses in-memory has-many frontend relationships before querying again", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const project = new Project({id: "1", name: "One"})
+    const builtTask = project.getRelationshipByName("tasks").build({id: "11", name: "Task 1"})
+    const fetchStub = stubFetch({
+      model: {
+        id: "1",
+        name: "One",
+        __preloadedRelationships: {
+          tasks: [
+            {id: "22", name: "Task 2"}
+          ]
+        }
+      }
+    })
+
+    try {
+      const loadedTasks = await project.getRelationshipByName("tasks").toArray()
+
+      expect(loadedTasks).toEqual([builtTask])
+      expect(fetchStub.calls).toEqual([])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

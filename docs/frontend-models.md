@@ -8,6 +8,7 @@
 ## Frontend vs backend model API differences
 - Frontend models expose a narrower query surface (mainly `find`, `findBy`, `findByOrFail`, `findOrInitializeBy`, `findOrCreateBy`, `toArray`, `where`, `joins`, `sort`, `order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`) and do not expose the full backend query API (raw SQL joins, etc.).
 - Frontend model commands are resource-mapped; `toArray()` calls the configured `index` command, which may map to a backend command name like `list` instead of literal `index`.
+- Query `load()` is the explicit "always fetch" path; `toArray()` remains the common array reader and relationship helpers can reuse preloaded data before fetching.
 - Frontend models are HTTP/resource-transport based; backend models run against direct database model/query APIs.
 
 ## Commands and URL mapping
@@ -32,7 +33,8 @@
 - `save()` is available for create/update flows (`create` when new record, `update` when persisted).
 - `create(attributes)` is available on frontend model classes.
 - `isNewRecord()`, `isPersisted()`, `changes()`, and `isChanged()` are available on frontend model instances.
-- Relationship parity helpers are available via `loadRelationship(name)` / `setRelationship(name, value)` and generated `loadXxx` / `setXxx` methods where applicable.
+- Relationship parity helpers are available via `loadRelationship(name)` / `relationshipOrLoad(name)` / `setRelationship(name, value)` and generated `loadXxx` / `xxxOrLoad` / `setXxx` methods where applicable.
+- Has-many relationship helpers support `await model.relationshipName().toArray()` to reuse preloaded data and `await model.relationshipName().load()` to force a refresh.
 
 ## Attachment support
 - Frontend models can define `resourceConfig().attachments` and use generated attachment handles:

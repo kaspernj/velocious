@@ -6,7 +6,7 @@ import BaseInstanceRelationship from "./base.js"
  * A generic query over some model type.
  * @template {typeof import("../index.js").default} MC
  * @template {typeof import("../index.js").default} TMC
- * @extends {BaseInstanceRelationship<MC, TMC>}
+ * @augments {BaseInstanceRelationship<MC, TMC>}
  */
 export default class VelociousDatabaseRecordBelongsToInstanceRelationship extends BaseInstanceRelationship {
   /**
@@ -60,5 +60,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     }
     this.setDirty(false)
     this.setPreloaded(true)
+
+    return this.loaded()
   }
 }

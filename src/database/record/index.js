@@ -340,7 +340,11 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
-        await this.getRelationshipByName(relationshipName).load()
+        return await this.loadRelationship(relationshipName)
+      }
+
+      prototype[`${relationshipName}OrLoad`] = async function() {
+        return await this.relationshipOrLoad(relationshipName)
       }
 
       prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {any} */ model) {
@@ -361,7 +365,7 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
-        await this.getRelationshipByName(relationshipName).load()
+        return await this.loadRelationship(relationshipName)
       }
     } else if (actualData.type == "hasOne") {
       relationship = new HasOneRelationship(actualData)
@@ -386,7 +390,11 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
-        await this.getRelationshipByName(relationshipName).load()
+        return await this.loadRelationship(relationshipName)
+      }
+
+      prototype[`${relationshipName}OrLoad`] = async function() {
+        return await this.relationshipOrLoad(relationshipName)
       }
     } else {
       throw new Error(`Unknown relationship type: ${actualData.type}`)
@@ -492,6 +500,33 @@ class VelociousDatabaseRecord {
     }
 
     return this._instanceRelationships[relationshipName]
+  }
+
+  /**
+   * @param {string} relationshipName - Relationship name.
+   * @returns {Promise<any>} - Loaded relationship value.
+   */
+  async loadRelationship(relationshipName) {
+    const relationship = this.getRelationshipByName(relationshipName)
+
+    await relationship.load()
+
+    return relationship.loaded()
+  }
+
+  /**
+   * @param {string} relationshipName - Relationship name.
+   * @returns {Promise<any>} - Loaded relationship value.
+   */
+  async relationshipOrLoad(relationshipName) {
+    const relationship = this.getRelationshipByName(relationshipName)
+    const loadedValue = relationship.getLoadedOrUndefined()
+
+    if (loadedValue !== undefined) {
+      return loadedValue
+    }
+
+    return await this.loadRelationship(relationshipName)
   }
 
   /**
@@ -1996,6 +2031,15 @@ class VelociousDatabaseRecord {
    */
   static async toArray() {
     return await this._newQuery().toArray()
+  }
+
+  /**
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @returns {Promise<InstanceType<MC>[]>} - Resolves with the array.
+   */
+  static async load() {
+    return await this._newQuery().load()
   }
 
   /**

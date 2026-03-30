@@ -6,7 +6,7 @@ import BaseInstanceRelationship from "./base.js"
  * A generic query over some model type.
  * @template {typeof import("../index.js").default} MC
  * @template {typeof import("../index.js").default} TMC
- * @extends {BaseInstanceRelationship<MC, TMC>}
+ * @augments {BaseInstanceRelationship<MC, TMC>}
  */
 export default class VelociousDatabaseRecordHasManyInstanceRelationship extends BaseInstanceRelationship {
   /**
@@ -85,13 +85,26 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     return model
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /** @returns {Promise<InstanceType<TMC>[]>} - Resolves with loaded models. */
   async load() {
-    const foreignModels = /** @type {InstanceType<TMC>[]} */ (await this.query().toArray())
+    const foreignModels = /** @type {InstanceType<TMC>[]} */ (await this.query().load())
 
     this.setLoaded(foreignModels)
     this.setDirty(false)
     this.setPreloaded(true)
+
+    return foreignModels
+  }
+
+  /** @returns {Promise<InstanceType<TMC>[]>} - Resolves with the array. */
+  async toArray() {
+    const loadedValue = this.getLoadedOrUndefined()
+
+    if (loadedValue !== undefined) {
+      return Array.isArray(loadedValue) ? loadedValue : []
+    }
+
+    return await this.load()
   }
 
   /**
