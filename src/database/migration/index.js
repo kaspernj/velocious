@@ -162,14 +162,14 @@ export default class VelociousDatabaseMigration {
    */
   async addForeignKey(tableName, referenceName) {
     const referenceNameUnderscore = inflection.underscore(referenceName)
-    const tableNameUnderscore = inflection.underscore(tableName)
+    const referencedTableName = inflection.pluralize(referenceNameUnderscore)
     const columnName = `${referenceNameUnderscore}_id`
     const foreignKeyName = `fk_${tableName}_${referenceName}`
 
     await this.getDriver().addForeignKey(
       tableName,
       columnName,
-      tableNameUnderscore,
+      referencedTableName,
       "id",
       {
         isNewForeignKey: true,
@@ -182,18 +182,22 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName - Table name.
    * @param {string} referenceName - Reference name.
    * @param {object} args - Options object.
-   * @param {boolean} args.foreignKey - Whether foreign key.
-   * @param {string} args.type - Type identifier.
-   * @param {boolean} args.unique - Whether unique.
+   * @param {boolean} [args.foreignKey] - Whether foreign key.
+   * @param {boolean} [args.null] - Whether nullable.
+   * @param {string} [args.type] - Type identifier.
+   * @param {boolean} [args.unique] - Whether unique.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async addReference(tableName, referenceName, args) {
-    const {foreignKey, type, unique, ...restArgs} = args
+    const {foreignKey, null: nullable, type, unique, ...restArgs} = args
     const columnName = `${inflection.underscore(referenceName)}_id`
 
     restArgsError(restArgs)
 
-    await this.addColumn(tableName, columnName, type || "integer")
+    const columnType = type || "integer"
+    const columnArgs = nullable !== undefined ? {null: nullable} : undefined
+
+    await this.addColumn(tableName, columnName, columnType, columnArgs)
     await this.addIndex(tableName, [columnName], {unique: unique})
 
     if (foreignKey) {
