@@ -20,7 +20,7 @@ export default class VelociousEnvironmentHandlerBase {
    * @param {import("../configuration.js").default} _configuration - Configuration instance.
    * @returns {Promise<void>}
    */
-  async autoDiscoverResources(_configuration) {}
+  async autoDiscoverResources(_configuration) {} // eslint-disable-line no-unused-vars
 
   /**
    * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
