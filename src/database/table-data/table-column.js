@@ -20,7 +20,9 @@ import TableForeignKey from "./table-foreign-key.js"
  * @property {string} [notes] - Column notes or comment.
  * @property {boolean} [null] - Whether the column allows null values.
  * @property {boolean} [polymorphic] - Whether the column is polymorphic.
+ * @property {number} [precision] - Numeric precision (total digits) for decimal/numeric types.
  * @property {boolean} [primaryKey] - Whether the column is a primary key.
+ * @property {number} [scale] - Numeric scale (digits after decimal point) for decimal/numeric types.
  * @property {string} [type] - Column data type.
  */
 
@@ -31,7 +33,7 @@ export default class TableColumn {
    */
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, notes, null: argsNull, polymorphic, primaryKey, type, ...restArgs} = args // eslint-disable-line no-unused-vars
+      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, notes, null: argsNull, polymorphic, precision, primaryKey, scale, type, ...restArgs} = args // eslint-disable-line no-unused-vars
 
       if (Object.keys(args).length == 0) {
         throw new Error("Empty args given")
@@ -167,6 +169,11 @@ export default class TableColumn {
   setNull(nullable) { this.args.null = nullable }
 
   /**
+   * @returns {number | undefined} - Numeric precision (total digits).
+   */
+  getPrecision() { return this.args?.precision }
+
+  /**
    * @returns {boolean} - Whether primary key.
    */
   getPrimaryKey() { return this.args?.primaryKey || false }
@@ -176,6 +183,11 @@ export default class TableColumn {
    * @returns {void} - No return value.
    */
   setPrimaryKey(newPrimaryKey) { this.args.primaryKey = newPrimaryKey }
+
+  /**
+   * @returns {number | undefined} - Numeric scale (digits after decimal point).
+   */
+  getScale() { return this.args?.scale }
 
   /**
    * @returns {string | undefined} - The type.
@@ -270,7 +282,15 @@ export default class TableColumn {
 
     if (databaseType == "pgsql" && forAlterTable) sql += "TYPE "
     if (type) sql += type
-    if (type && maxlength !== undefined && maxlength !== null) sql += `(${maxlength})`
+
+    const precision = this.getPrecision()
+    const scale = this.getScale()
+
+    if (precision !== undefined && precision !== null) {
+      sql += scale !== undefined && scale !== null ? `(${precision}, ${scale})` : `(${precision})`
+    } else if (type && maxlength !== undefined && maxlength !== null) {
+      sql += `(${maxlength})`
+    }
 
     if (this.getAutoIncrement() && driver.shouldSetAutoIncrementWhenPrimaryKey()) {
       if (databaseType == "mssql") {

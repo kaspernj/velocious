@@ -295,7 +295,7 @@ export default class DbGenerateModel extends BaseCommand {
       return "Record<string, any>"
     } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
-    } else if (["bit", "bigint", "float", "int", "integer", "smallint", "tinyint"].includes(type)) {
+    } else if (["bit", "bigint", "decimal", "float", "int", "integer", "numeric", "smallint", "tinyint"].includes(type)) {
       return "number"
     } else if (["date", "datetime", "timestamp without time zone"].includes(type)) {
       return "Date"
