@@ -12,6 +12,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     await configuration.initializeModels()
 
+    if (typeof configuration._autoDiscoverResources === "function") {
+      await configuration._autoDiscoverResources()
+    }
+
     if (!Array.isArray(backendProjects) || backendProjects.length === 0) {
       throw new Error("No backend projects configured. Configure 'backendProjects' in your configuration first")
     }
@@ -221,6 +225,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, primaryKey?: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
+    if (modelConfig.path) {
+      fileContent += `      path: ${JSON.stringify(modelConfig.path)},\n`
+    }
     if (Object.keys(attachments).length > 0) {
       fileContent += "      attachments: {\n"
       for (const [attachmentName, attachmentConfig] of Object.entries(attachments)) {
@@ -261,14 +268,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       })
     }
     if (Object.keys(collectionCommands).length > 0) {
-      fileContent += this.formattedObjectProperty({
+      fileContent += this.formattedCommandsProperty({
         indent: "      ",
         propertyName: "collectionCommands",
         values: collectionCommands
       })
     }
     if (Object.keys(memberCommands).length > 0) {
-      fileContent += this.formattedObjectProperty({
+      fileContent += this.formattedCommandsProperty({
         indent: "      ",
         propertyName: "memberCommands",
         values: memberCommands
@@ -441,6 +448,31 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {Record<string, string>} [args.filterDefaultValues] - Default values to omit from output.
    * @returns {string} - Formatted multiline object property.
    */
+  /**
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Base indentation.
+   * @param {string} args.propertyName - Object property name.
+   * @param {Record<string, string>} args.values - Command key-values.
+   * @returns {string} - Formatted property (array when keys match values, object otherwise).
+   */
+  formattedCommandsProperty({indent, propertyName, values}) {
+    const allKeysMatchValues = Object.entries(values).every(([key, value]) => key === value)
+
+    if (allKeysMatchValues) {
+      return this.formattedArrayProperty({indent, propertyName, values: Object.keys(values)})
+    }
+
+    return this.formattedObjectProperty({indent, propertyName, values})
+  }
+
+  /**
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Base indentation.
+   * @param {string} args.propertyName - Object property name.
+   * @param {Record<string, string>} args.values - Object key-values.
+   * @param {Record<string, string>} [args.filterDefaultValues] - Default values to omit from output.
+   * @returns {string} - Formatted multiline object property.
+   */
   formattedObjectProperty({filterDefaultValues, indent, propertyName, values}) {
     let output = `${indent}${propertyName}: {\n`
 
@@ -462,7 +494,20 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {Array<{jsDocType: string, name: string}>} - Attribute definitions.
    */
   attributeDefinitionsForModel({modelClass, modelConfig}) {
-    const attributes = modelConfig.attributes
+    let attributes = modelConfig.attributes
+
+    // Auto-derive attributes from model columns when not explicitly defined
+    if ((!attributes || (Array.isArray(attributes) && attributes.length === 0)) && modelClass) {
+      try {
+        const columns = modelClass.getColumns()
+
+        if (Array.isArray(columns)) {
+          attributes = columns.map((column) => inflection.camelize(column.getName(), true))
+        }
+      } catch {
+        // Model may not be initialized yet
+      }
+    }
 
     if (Array.isArray(attributes)) {
       return attributes.map((attributeName) => ({

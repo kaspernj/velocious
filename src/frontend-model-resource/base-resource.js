@@ -41,6 +41,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static memberCommands = undefined
   /** @type {Record<string, string> | string[] | undefined} */
   static builtInMemberCommands = undefined
+  /** @type {string | undefined} */
+  static path = undefined
   /** @type {Record<string, any> | string[] | undefined} */
   static relationships = undefined
 
@@ -84,6 +86,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     }
 
     if (this.attachments) config.attachments = this.attachments
+    if (this.path) config.path = this.path
     if (this.builtInCollectionCommands) config.builtInCollectionCommands = this.builtInCollectionCommands
     if (this.builtInMemberCommands) config.builtInMemberCommands = this.builtInMemberCommands
     if (this.collectionCommands) config.collectionCommands = this.collectionCommands

@@ -208,6 +208,7 @@
  * @property {Record<string, string> | string[]} [builtInCollectionCommands] - Built-in collection command names keyed by action (`index`, `create`) or shorthand command list using default names.
  * @property {Record<string, string> | string[]} [builtInMemberCommands] - Built-in member command names keyed by action (`find`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
  * @property {Record<string, FrontendModelRelationshipConfiguration> | string[]} [relationships] - Relationship helpers to generate for frontend model files. Arrays infer target model/type from backend model relationships.
+ * @property {string} [path] - Resource path (e.g., "/users"). Generated into frontend model resourceConfig so minified class names don't break path derivation.
  * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
  */
