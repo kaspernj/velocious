@@ -16,6 +16,13 @@
 
 export default class VelociousEnvironmentHandlerBase {
   /**
+   * Auto-discovers resource classes. No-op in base handler; overridden in Node handler.
+   * @param {import("../configuration.js").default} _configuration - Configuration instance.
+   * @returns {Promise<void>}
+   */
+  async autoDiscoverResources(_configuration) {} // eslint-disable-line no-unused-vars
+
+  /**
    * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
    * @param {() => Promise<any>} callback - Callback to run.
    * @returns {Promise<any>} - Result of the callback.

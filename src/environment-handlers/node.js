@@ -59,6 +59,55 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   _findCommandsResult = undefined
 
   /**
+   * Auto-discovers resource classes from src/resources/ in each backend project.
+   * @param {import("../configuration.js").default} configuration - Configuration instance.
+   * @returns {Promise<void>}
+   */
+  async autoDiscoverResources(configuration) {
+    const {frontendModelResourceDefinitionIsClass} = await import("../frontend-models/resource-definition.js")
+    const backendProjects = configuration.getBackendProjects()
+
+    for (const backendProject of backendProjects) {
+      if (backendProject.frontendModels || backendProject.frontendModelsRequireContext) continue
+
+      const resourcesDir = path.join(backendProject.path, "src", "resources")
+      let files
+
+      try {
+        files = await fs.readdir(resourcesDir)
+      } catch {
+        continue
+      }
+
+      /** @type {Record<string, any>} */
+      const discovered = {}
+
+      for (const file of files) {
+        if (!file.endsWith(".js") && !file.endsWith(".mjs")) continue
+        if (file.startsWith("frontend-model-resources")) continue
+
+        const filePath = path.join(resourcesDir, file)
+        const imported = await import(filePath)
+        const ResourceClass = imported.default
+
+        if (!frontendModelResourceDefinitionIsClass(ResourceClass)) continue
+
+        const baseName = file.replace(/\.(js|mjs)$/, "")
+        const modelName = baseName.replace(/-resource$/, "")
+          .split("-")
+          .map((/** @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join("")
+
+        discovered[modelName] = ResourceClass
+      }
+
+      if (Object.keys(discovered).length > 0) {
+        backendProject.frontendModels = discovered
+      }
+    }
+  }
+
+  /**
    * @param {import("../configuration.js").default} newConfiguration - New configuration.
    * @returns {void} - No return value.
    */

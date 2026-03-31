@@ -12,8 +12,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     await configuration.initializeModels()
 
-    if (typeof configuration._autoDiscoverResources === "function") {
-      await configuration._autoDiscoverResources()
+    const environmentHandler = configuration.getEnvironmentHandler()
+
+    if (typeof environmentHandler.autoDiscoverResources === "function") {
+      await environmentHandler.autoDiscoverResources(configuration)
     }
 
     if (!Array.isArray(backendProjects) || backendProjects.length === 0) {
