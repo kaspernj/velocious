@@ -230,56 +230,6 @@ export default class VelociousConfiguration {
    */
   getBackendProjects() { return this._backendProjects }
 
-  /**
-   * Auto-discovers resource classes from src/resources/ in each backend project
-   * that doesn't have explicit frontendModels or frontendModelsRequireContext.
-   * @returns {Promise<void>}
-   */
-  async _autoDiscoverResources() {
-    const fs = await import("fs/promises")
-    const path = await import("path")
-    const {frontendModelResourceDefinitionIsClass} = await import("./frontend-models/resource-definition.js")
-
-    for (const backendProject of this._backendProjects) {
-      if (backendProject.frontendModels || backendProject.frontendModelsRequireContext) continue
-
-      const resourcesDir = path.default.join(backendProject.path, "src", "resources")
-      let files
-
-      try {
-        files = await fs.default.readdir(resourcesDir)
-      } catch {
-        continue
-      }
-
-      /** @type {Record<string, any>} */
-      const discovered = {}
-
-      for (const file of files) {
-        if (!file.endsWith(".js") && !file.endsWith(".mjs")) continue
-        if (file.startsWith("frontend-model-resources")) continue
-
-        const filePath = path.default.join(resourcesDir, file)
-        const imported = await import(filePath)
-        const ResourceClass = imported.default
-
-        if (!frontendModelResourceDefinitionIsClass(ResourceClass)) continue
-
-        const baseName = file.replace(/\.(js|mjs)$/, "")
-        const modelName = baseName.replace(/-resource$/, "")
-          .split("-")
-          .map((/** @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
-          .join("")
-
-        discovered[modelName] = ResourceClass
-      }
-
-      if (Object.keys(discovered).length > 0) {
-        backendProject.frontendModels = discovered
-      }
-    }
-  }
-
   /** @returns {import("./configuration-types.js").AbilityResourceClassType[]} - Ability resource classes. */
   getAbilityResources() { return this._abilityResources }
 
@@ -650,7 +600,7 @@ export default class VelociousConfiguration {
       this._isInitialized = true
 
       await this.initializeModels({type})
-      await this._autoDiscoverResources()
+      await this.getEnvironmentHandler().autoDiscoverResources(this)
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})
