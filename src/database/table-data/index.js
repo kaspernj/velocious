@@ -126,6 +126,13 @@ export default class TableData {
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
    */
+  decimal(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "decimal"}, args)) }
+
+  /**
+   * @param {string} name - Name.
+   * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
+   * @returns {void} - No return value.
+   */
   integer(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "integer"}, args)) }
 
   /**
