@@ -195,9 +195,9 @@ export default class VelociousDatabaseMigration {
     restArgsError(restArgs)
 
     const columnType = type || "integer"
-    const columnSql = nullable === false ? `${columnType} NOT NULL` : columnType
+    const columnArgs = nullable !== undefined ? {null: nullable} : undefined
 
-    await this.addColumn(tableName, columnName, columnSql)
+    await this.addColumn(tableName, columnName, columnType, columnArgs)
     await this.addIndex(tableName, [columnName], {unique: unique})
 
     if (foreignKey) {
