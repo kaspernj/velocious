@@ -12,6 +12,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     await configuration.initializeModels()
 
+    if (typeof configuration._autoDiscoverResources === "function") {
+      await configuration._autoDiscoverResources()
+    }
+
     if (!Array.isArray(backendProjects) || backendProjects.length === 0) {
       throw new Error("No backend projects configured. Configure 'backendProjects' in your configuration first")
     }
@@ -490,7 +494,20 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {Array<{jsDocType: string, name: string}>} - Attribute definitions.
    */
   attributeDefinitionsForModel({modelClass, modelConfig}) {
-    const attributes = modelConfig.attributes
+    let attributes = modelConfig.attributes
+
+    // Auto-derive attributes from model columns when not explicitly defined
+    if ((!attributes || (Array.isArray(attributes) && attributes.length === 0)) && modelClass) {
+      try {
+        const columns = modelClass.getColumns()
+
+        if (Array.isArray(columns)) {
+          attributes = columns.map((column) => inflection.camelize(column.getName(), true))
+        }
+      } catch {
+        // Model may not be initialized yet
+      }
+    }
 
     if (Array.isArray(attributes)) {
       return attributes.map((attributeName) => ({
