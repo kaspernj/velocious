@@ -286,6 +286,10 @@ export default class TableColumn {
     const precision = this.getPrecision()
     const scale = this.getScale()
 
+    if ((scale !== undefined && scale !== null) && (precision === undefined || precision === null)) {
+      throw new Error(`Column '${this.getActualName()}': scale requires precision to be set`)
+    }
+
     if (precision !== undefined && precision !== null) {
       sql += scale !== undefined && scale !== null ? `(${precision}, ${scale})` : `(${precision})`
     } else if (type && maxlength !== undefined && maxlength !== null) {
