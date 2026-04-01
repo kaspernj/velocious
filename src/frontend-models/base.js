@@ -17,10 +17,8 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
 /**
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. For shared-endpoint models this should be the full shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`). For legacy direct-resource models this can be the backend origin/prefix.
- * @property {"omit" | "same-origin" | "include"} [credentials] - Optional credentials mode forwarded to fetch.
  * @property {boolean} [shared] - When true, route built-in commands for path-based models through the shared frontend-model API envelope instead of direct per-command endpoints.
  * @property {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
- * @property {((args: {commandName: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -630,7 +628,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
 
   const response = await fetch(url, {
     body: JSON.stringify(serializedRequestPayload),
-    credentials: frontendModelTransportConfig.credentials,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json"
     },
@@ -665,7 +663,7 @@ async function flushPendingSharedFrontendModelRequests() {
         return {
           commandType: request.commandType,
           customPath: request.customPath,
-          model: request.modelClass.name,
+          model: request.modelClass.modelNameForRequest(),
           payload: request.payload,
           requestId: request.requestId
         }
@@ -679,7 +677,7 @@ async function flushPendingSharedFrontendModelRequests() {
       return {
         commandType: isCustomCommandRoute ? request.commandName : request.commandType,
         customPath,
-        model: request.modelClass.name,
+        model: request.modelClass.modelNameForRequest(),
         payload: request.payload,
         requestId: request.requestId
       }
@@ -1319,10 +1317,6 @@ export default class FrontendModelBase {
       return
     }
 
-    if (Object.prototype.hasOwnProperty.call(config, "credentials")) {
-      frontendModelTransportConfig.credentials = config.credentials
-    }
-
     if (Object.prototype.hasOwnProperty.call(config, "url")) {
       frontendModelTransportConfig.url = config.url
     }
@@ -1333,10 +1327,6 @@ export default class FrontendModelBase {
 
     if (Object.prototype.hasOwnProperty.call(config, "websocketClient")) {
       frontendModelTransportConfig.websocketClient = config.websocketClient
-    }
-
-    if (Object.prototype.hasOwnProperty.call(config, "request")) {
-      frontendModelTransportConfig.request = config.request
     }
   }
 
@@ -2045,10 +2035,6 @@ export default class FrontendModelBase {
     const useSharedTransport = !containsAttachmentUpload
     const url = useSharedTransport ? frontendModelApiUrl() : frontendModelCommandUrl(resourcePath || "", commandName)
 
-    if (frontendModelTransportConfig.request) {
-      return await this.performTransportRequest({commandName, commandType, payload: serializedPayload, url})
-    }
-
     if (useSharedTransport) {
       const batchResponse = await new Promise((resolve, reject) => {
         pendingSharedFrontendModelRequests.push({
@@ -2077,7 +2063,7 @@ export default class FrontendModelBase {
 
     const directResponse = await fetch(url, {
       body: JSON.stringify(serializedPayload),
-      credentials: frontendModelTransportConfig.credentials,
+      credentials: "include",
       headers: {
         "Content-Type": "application/json"
       },
@@ -2115,14 +2101,9 @@ export default class FrontendModelBase {
     const customPath = frontendModelCustomCommandPath({
       commandName,
       memberId,
-      modelName: this.name,
+      modelName: this.modelNameForRequest(),
       resourcePath
     })
-    const url = frontendModelApiUrl()
-
-    if (frontendModelTransportConfig.request) {
-      return await this.performTransportRequest({commandName, commandType, customPath, payload: serializedPayload, url})
-    }
 
     const batchResponse = await new Promise((resolve, reject) => {
       pendingSharedFrontendModelRequests.push({
@@ -2146,40 +2127,6 @@ export default class FrontendModelBase {
     })
 
     return decodedBatchResponse
-  }
-
-  /**
-   * @this {typeof FrontendModelBase}
-   * @param {object} args - Request arguments.
-   * @param {string} args.commandName - Transport command name.
-   * @param {FrontendModelRequestCommandType} args.commandType - Logical command type.
-   * @param {string} [args.customPath] - Custom backend route path when bypassing built-in resource commands.
-   * @param {Record<string, any>} args.payload - Serialized payload.
-   * @param {string} args.url - Request URL.
-   * @returns {Promise<Record<string, any>>} - Decoded response payload.
-   */
-  static async performTransportRequest({commandName, commandType, customPath, payload, url}) {
-    const request = frontendModelTransportConfig.request
-
-    if (!request) throw new Error("Frontend model transport request handler is not configured")
-
-    const customResponse = await request({
-      commandName,
-      commandType,
-      customPath,
-      modelClass: this,
-      payload,
-      url
-    })
-
-    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
-
-    this.throwOnErrorFrontendModelResponse({
-      commandType,
-      response: decodedResponse
-    })
-
-    return decodedResponse
   }
 
   /**

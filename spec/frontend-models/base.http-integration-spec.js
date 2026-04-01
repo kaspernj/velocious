@@ -13,7 +13,7 @@ import UserRecord from "../dummy/src/models/user.js"
 /** Frontend model used for Node HTTP integration tests against dummy backend routes. */
 class User extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], abilities: {find: string, index: string}, builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], abilities: {find: string, index: string}, builtInCollectionCommands: string[], builtInMemberCommands: string[], collectionCommands: Record<string, string>, modelName: string, primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
@@ -24,6 +24,11 @@ class User extends FrontendModelBase {
       attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
+      collectionCommands: {
+        currentSessionCookie: "current-session-cookie",
+        setSessionCookie: "set-session-cookie"
+      },
+      modelName: "User",
       primaryKey: "id"
     }
   }
@@ -36,6 +41,58 @@ class User extends FrontendModelBase {
 
   /** @returns {Date} */
   createdAt() { return this.readAttribute("createdAt") }
+
+  /**
+   * @param {Record<string, any>} [payload={}] - Command payload.
+   * @returns {Promise<Record<string, any>>} - Command response.
+   */
+  static async currentSessionCookie(payload = {}) {
+    return await this.executeCustomCommand({
+      commandName: "current-session-cookie",
+      commandType: "current-session-cookie",
+      payload,
+      resourcePath: this.resourcePath()
+    })
+  }
+
+  /**
+   * @param {Record<string, any>} [payload={}] - Command payload.
+   * @returns {Promise<Record<string, any>>} - Command response.
+   */
+  static async setSessionCookie(payload = {}) {
+    return await this.executeCustomCommand({
+      commandName: "set-session-cookie",
+      commandType: "set-session-cookie",
+      payload,
+      resourcePath: this.resourcePath()
+    })
+  }
+}
+
+/** Frontend model that uses a stable backend model name different from its class name. */
+class MinifiedUserTransportModel extends FrontendModelBase {
+  /**
+   * @returns {{attributes: string[], abilities: {find: string, index: string}, builtInCollectionCommands: string[], builtInMemberCommands: string[], modelName: string, primaryKey: string}} - Resource config.
+   */
+  static resourceConfig() {
+    return {
+      abilities: {
+        find: "read",
+        index: "read"
+      },
+      attributes: ["id", "email", "createdAt"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
+      modelName: "User",
+      primaryKey: "id"
+    }
+  }
+
+  /** @returns {number} */
+  id() { return this.readAttribute("id") }
+
+  /** @returns {string} */
+  email() { return this.readAttribute("email") }
 }
 
 /** Shared frontend model task class for websocket transport integration tests. */
@@ -152,8 +209,6 @@ class Project extends FrontendModelBase {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    credentials: undefined,
-    request: undefined,
     url: undefined,
     websocketClient: undefined
   })
@@ -234,6 +289,22 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       } finally {
         resetFrontendModelTransport()
         await websocketClient.close()
+      }
+    })
+  })
+
+  it("uses resourceConfig.modelName for shared HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await seedHttpFrontendModels()
+
+        const user = await MinifiedUserTransportModel.findBy({email: "john@example.com"})
+
+        expect(user?.email()).toEqual("john@example.com")
+      } finally {
+        resetFrontendModelTransport()
       }
     })
   })

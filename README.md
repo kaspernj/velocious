@@ -475,16 +475,15 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
-  url: "http://127.0.0.1:4501/frontend-models",
-  credentials: "include"
+  url: "http://127.0.0.1:4501/frontend-models"
 })
 ```
 
 Available transport options:
 
 - `url` (can also be a relative path like `"/frontend-models"` on web)
-- `credentials`
-- `request` (custom request handler)
+
+Frontend-model HTTP requests always use `credentials: "include"` so shared custom commands can set session cookies without app-level transport overrides.
 
 Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
 In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.

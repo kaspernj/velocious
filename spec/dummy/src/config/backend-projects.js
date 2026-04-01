@@ -78,12 +78,32 @@ class UserFrontendResource extends FrontendModelBaseResource {
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       collectionCommands: {
+        currentSessionCookie: "current-session-cookie",
+        setSessionCookie: "set-session-cookie",
         lookupByEmail: "lookup-by-email"
       },
       memberCommands: {
         refreshProfile: "refresh-profile"
       }
     }
+  }
+
+  /** @returns {Promise<{success: true}>} */
+  async setSessionCookie() {
+    this.controllerInstance().setCookie("frontend_model_session", "frontend-model-shared-cookie", {
+      httpOnly: true,
+      path: "/",
+      sameSite: "Lax"
+    })
+
+    return {success: true}
+  }
+
+  /** @returns {{value: string | null}} */
+  currentSessionCookie() {
+    const cookie = this.controllerInstance().getCookies().find((entry) => entry.name() === "frontend_model_session")
+
+    return {value: cookie ? cookie.value() : null}
   }
 }
 

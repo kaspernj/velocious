@@ -57,9 +57,9 @@ async function withDeniedTaskAbilityAction(deniedAbilityAction, callback) {
  */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
-    credentials: undefined,
+    shared: undefined,
     url: undefined,
-    request: undefined
+    websocketClient: undefined
   })
 }
 

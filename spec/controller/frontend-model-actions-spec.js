@@ -5,6 +5,7 @@ import Configuration from "../../src/configuration.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import Dummy from "../dummy/index.js"
 import Comment from "../dummy/src/models/comment.js"
+import backendProjects from "../dummy/src/config/backend-projects.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
@@ -69,6 +70,8 @@ async function postSharedTaskFrontendModelCommand(commandType, payload) {
  */
 function buildFrontendModelControllerConfiguration(environment) {
   return new Configuration({
+    backendProjects,
+    cookieSecret: "dummy-cookie-secret",
     database: {[environment]: {}},
     directory: dummyDirectory(),
     environment,
@@ -87,6 +90,18 @@ function buildFrontendModelControllerConfiguration(environment) {
  * @returns {Promise<Record<string, any>>} - Parsed frontend API payload.
  */
 async function runFrontendApi({configuration, params}) {
+  const {payload} = await runFrontendApiWithResponse({configuration, params})
+
+  return payload
+}
+
+/**
+ * @param {object} args - Arguments.
+ * @param {Configuration} args.configuration - Configuration.
+ * @param {Record<string, any>} args.params - Controller params.
+ * @returns {Promise<{payload: Record<string, any>, response: Response}>} - Parsed frontend API payload and raw response.
+ */
+async function runFrontendApiWithResponse({configuration, params}) {
   const client = {remoteAddress: "127.0.0.1"}
   const request = new Request({client, configuration})
   const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
@@ -119,7 +134,10 @@ async function runFrontendApi({configuration, params}) {
     : Buffer.from(body).toString("utf8")
   const responseJson = responseText.length > 0 ? JSON.parse(responseText) : {}
 
-  return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(responseJson))
+  return {
+    payload: /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(responseJson)),
+    response
+  }
 }
 
 /**
@@ -320,6 +338,29 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.responses.length).toEqual(1)
       expectDebugFrontendModelError(payload.responses[0].response, /No frontend model resource configuration/)
     })
+  })
+
+  it("forwards Set-Cookie headers from shared custom frontend-model commands", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("test")
+
+    await configuration.initializeModels()
+
+    const {response} = await runFrontendApiWithResponse({
+      configuration,
+      params: {
+        requests: [{
+          commandType: "set-session-cookie",
+          customPath: "/users/set-session-cookie",
+          model: "User",
+          payload: {},
+          requestId: "request-1"
+        }]
+      }
+    })
+
+    expect(response.headers["Set-Cookie"]).toEqual([
+      "frontend_model_session=frontend-model-shared-cookie; Path=/; HttpOnly; SameSite=Lax"
+    ])
   })
 
   it("keeps unexpected shared frontend-model failures generic in production", async () => {
