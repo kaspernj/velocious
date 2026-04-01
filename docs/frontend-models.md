@@ -61,3 +61,4 @@
 - Frontend model files in app projects are generated artifacts.
 - Fix generator/source behavior in Velocious instead of hand-editing generated output.
 - Generated files should include valid JSDoc typing.
+- Generated shared-endpoint models should emit stable `resourceConfig().modelName` metadata so production-minified class names do not break backend model lookup.

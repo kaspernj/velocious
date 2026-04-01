@@ -227,6 +227,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, primaryKey?: string}} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
+    fileContent += `      modelName: ${JSON.stringify(className)},\n`
     if (modelConfig.path) {
       fileContent += `      path: ${JSON.stringify(modelConfig.path)},\n`
     }

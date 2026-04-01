@@ -953,7 +953,7 @@ export default class FrontendModelQuery {
    * @returns {Record<string, string[]>} - Select map with required root attributes merged when root select exists.
    */
   selectWithRequiredRootAttributes(requiredAttributes = []) {
-    const rootModelName = this.modelClass.name
+    const rootModelName = this.modelClass.modelNameForRequest()
     const selectMap = /** @type {Record<string, string[]>} */ (this._select)
     const existingRootAttributes = selectMap[rootModelName]
 
@@ -984,7 +984,7 @@ export default class FrontendModelQuery {
    * @returns {this} - Query with merged selected attributes.
    */
   select(select) {
-    mergeSelectRecord(this._select, normalizeSelect(select, this.modelClass.name))
+    mergeSelectRecord(this._select, normalizeSelect(select, this.modelClass.modelNameForRequest()))
 
     return this
   }

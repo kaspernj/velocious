@@ -1,0 +1,1 @@
+Frontend models now always send HTTP requests with `credentials: "include"`, forward `Set-Cookie` headers from shared custom commands, and use stable `modelName` metadata in generated/shared requests so production-minified frontend classes still resolve the correct backend model.

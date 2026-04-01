@@ -2830,6 +2830,12 @@ export default class FrontendModelController extends Controller {
       await controllerMethods[action]()
     })
 
+    const setCookieHeaders = response.headers["Set-Cookie"] || []
+
+    for (const setCookieHeader of setCookieHeaders) {
+      this.response().addHeader("Set-Cookie", setCookieHeader)
+    }
+
     const responseBody = response.getBody()
 
     if (typeof responseBody !== "string" || responseBody.length < 1) {
