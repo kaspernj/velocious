@@ -661,7 +661,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} msgID - Msg id.
-   * @param {Record<string, any> | undefined} args - Translator options and variables.
+   * @param {Record<string, any>} [args] - Translator options and variables.
    * @returns {string} - The default translator.
    */
   _defaultTranslator(msgID, args) {
@@ -687,7 +687,7 @@ export default class VelociousConfiguration {
     return message
   }
 
-  /** @returns {function(string, Record<string, any> | undefined) : string} - The translator.  */
+  /** @returns {(msgID: string, args?: Record<string, any>) => string} */
   getTranslator() {
     if (this._translator) return this._translator
 
