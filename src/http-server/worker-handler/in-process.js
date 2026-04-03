@@ -93,13 +93,8 @@ export default class VelociousHttpServerInProcessHandler {
     this.unregisterFromEventsHost?.()
   }
 
-  /**
-   * @param {object} args - Options object.
-   * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Payload data.
-   * @returns {void}
-   */
-  dispatchWebsocketEvent({channel, payload}) {
+  /** @returns {void} */
+  dispatchWebsocketEvent() {
     // No-op for in-process handler — websocket events not supported in test mode
   }
 }
