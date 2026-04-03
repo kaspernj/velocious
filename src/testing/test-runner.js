@@ -417,7 +417,7 @@ export default class TestRunner {
     if (!this._application) {
       this._application = new Application({
         configuration: this.getConfiguration(),
-        httpServer: {port: 31006},
+        httpServer: {inProcess: true, port: 31006},
         type: "test-runner"
       })
 
