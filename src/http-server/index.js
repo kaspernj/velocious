@@ -2,6 +2,7 @@
 
 import {digg} from "diggerize"
 import EventEmitter from "../utils/event-emitter.js"
+import InProcessHandler from "./worker-handler/in-process.js"
 import Logger from "../logger.js"
 import Net from "net"
 import ServerClient from "./server-client.js"
@@ -16,18 +17,20 @@ export default class VelociousHttpServer {
   events = new EventEmitter()
   workerCount = 0
 
-  /** @type {WorkerHandler[]} */
+  /** @type {Array<WorkerHandler | InProcessHandler>} */
   workerHandlers = []
 
   /**
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {string} [args.host] - Host.
+   * @param {boolean} [args.inProcess] - Run HTTP handlers in the main thread instead of worker threads.
    * @param {number} [args.port] - Port.
    * @param {number} [args.maxWorkers] - Max workers.
    */
-  constructor({configuration, host, maxWorkers, port}) {
+  constructor({configuration, host, inProcess, maxWorkers, port}) {
     this.configuration = configuration
+    this.inProcess = inProcess || false
     this.logger = new Logger(this)
     this.host = host || "0.0.0.0"
     this.port = port || 3006
@@ -187,7 +190,8 @@ export default class VelociousHttpServer {
 
     this.workerCount++
 
-    const workerHandler = new WorkerHandler({
+    const Handler = this.inProcess ? InProcessHandler : WorkerHandler
+    const workerHandler = new Handler({
       configuration: this.configuration,
       workerCount
     })
@@ -196,7 +200,7 @@ export default class VelociousHttpServer {
     this.workerHandlers.push(workerHandler)
   }
 
-  /** @returns {WorkerHandler} - The worker handler to use.  */
+  /** @returns {WorkerHandler | InProcessHandler} - The worker handler to use. */
   workerHandlerToUse() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 
