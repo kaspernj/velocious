@@ -572,34 +572,14 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async run() {
-    await this.getConfiguration().ensureConnections(async (dbs) => {
-      const configuration = this.getConfiguration()
-
-      for (const identifier of configuration.getDatabaseIdentifiers()) {
-        const pool = /** @type {Record<string, any>} */ (configuration.getDatabasePool(identifier))
-
-        if (typeof pool.setTestSharedConnection === "function" && dbs[identifier]) {
-          pool.setTestSharedConnection(dbs[identifier])
-        }
-      }
-
-      try {
-        await this.runTests({
-          afterEaches: [],
-          beforeEaches: [],
-          tests,
-          descriptions: [],
-          indentLevel: 0
-        })
-      } finally {
-        for (const identifier of configuration.getDatabaseIdentifiers()) {
-          const pool = /** @type {Record<string, any>} */ (configuration.getDatabasePool(identifier))
-
-          if (typeof pool.clearTestSharedConnection === "function") {
-            pool.clearTestSharedConnection()
-          }
-        }
-      }
+    await this.getConfiguration().ensureConnections(async () => {
+      await this.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
+      })
     })
   }
 

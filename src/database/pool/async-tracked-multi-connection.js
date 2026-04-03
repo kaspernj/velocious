@@ -103,10 +103,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const id = this.asyncLocalStorage.getStore()
 
     if (id === undefined) {
-      if (this._testSharedConnection) {
-        return this._testSharedConnection
-      }
-
       const fallbackConnection = this.getGlobalConnection()
 
       if (fallbackConnection) {
