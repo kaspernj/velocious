@@ -182,8 +182,7 @@ describe("Cli - Commands - db:migrate", () => {
           "tasks",
           "users",
           "uuid_interactions",
-          "uuid_items",
-          "velocious_attachments"
+          "uuid_items"
         ]
       )
 
@@ -221,8 +220,7 @@ describe("Cli - Commands - db:migrate", () => {
           "tasks",
           "users",
           "uuid_interactions",
-          "uuid_items",
-          "velocious_attachments"
+          "uuid_items"
         ]
       )
 
