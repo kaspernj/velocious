@@ -14,6 +14,14 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   asyncLocalStorage = new AsyncLocalStorage()
 
+  /**
+   * When set, returned by getCurrentContextConnection when no async context exists.
+   * Used by the test runner to share a connection between test code and HTTP handlers
+   * running in the same process (in-process test server mode).
+   * @type {import("../drivers/base.js").default | undefined}
+   */
+  _testSharedConnection = undefined
+
   /** @type {import("../drivers/base.js").default[]} */
   connections = []
 
@@ -153,14 +161,29 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Set a shared connection for test mode so that HTTP handlers running
+   * in the same process can reuse the test runner's database connection.
+   * @param {import("../drivers/base.js").default} connection - Shared connection.
+   * @returns {void}
+   */
+  setTestSharedConnection(connection) {
+    this._testSharedConnection = connection
+  }
+
+  /** @returns {void} */
+  clearTestSharedConnection() {
+    this._testSharedConnection = undefined
+  }
+
+  /**
    * Returns the connection tied to the current async context, if any.
-   * Does not fall back to the global connection.
+   * Falls back to the test shared connection when no async context exists.
    * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
    */
   getCurrentContextConnection() {
     const id = this.asyncLocalStorage.getStore()
 
-    if (id === undefined) return undefined
+    if (id === undefined) return this._testSharedConnection
 
     return this.getCurrentConnection()
   }
