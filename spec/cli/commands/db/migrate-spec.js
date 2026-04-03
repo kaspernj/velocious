@@ -41,7 +41,7 @@ describe("Cli - Commands - db:migrate", () => {
 
     /** @type {string[]} */
     const tablesResult = []
-    const internalTables = new Set(["background_jobs", "velocious_internal_migrations"])
+    const internalTables = new Set(["background_jobs", "velocious_attachments", "velocious_internal_migrations"])
 
     /** @type {import("../../../../src/database/drivers/base-foreign-key.js").default | undefined} */
     let projectForeignKey
