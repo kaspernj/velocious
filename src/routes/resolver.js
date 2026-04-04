@@ -103,8 +103,8 @@ export default class VelociousRoutesResolver {
     const currentPath = rawPath.split("?")[0]
     let viewPath
 
-    const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath)
-    const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
+    const matchResult = currentRoute ? this.matchPathWithRoutes(currentRoute, currentPath) : undefined
+    const routeResolverHookMatch = matchResult ? undefined : await this.resolveRouteResolverHooks(currentPath)
     const actionParam = this.params.action
     const controllerParam = this.params.controller
     const actionValue = typeof actionParam == "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
