@@ -17,7 +17,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
         index: "read",
         update: "update"
       },
-      attributes: ["id", "identifier", "isDone", "name", "updatedAt"],
+      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "updatedAt"],
       builtInCollectionCommands: {
         index: "list",
       },
@@ -38,6 +38,18 @@ class TaskFrontendResource extends FrontendModelBaseResource {
       },
       primaryKey: "id"
     }
+  }
+
+  /**
+   * Virtual attribute: returns the task name in uppercase.
+   *
+   * @param {import("../models/task.js").default} model - Task model instance.
+   * @returns {string | null}
+   */
+  nameUppercase(model) {
+    const name = model.readAttribute("name")
+
+    return typeof name === "string" ? name.toUpperCase() : null
   }
 }
 

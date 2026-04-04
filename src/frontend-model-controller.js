@@ -2124,6 +2124,13 @@ export default class FrontendModelController extends Controller {
     const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
     const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass)
     const modelAttributes = model.attributes()
+    const resourceInstance = this._serializationResourceInstanceForModel(model)
+
+    /** @param {string} attributeName - Attribute name. */
+    const resourceHasAttribute = (attributeName) => {
+      return resourceInstance && typeof /** @type {Record<string, any>} */ (/** @type {unknown} */ (resourceInstance))[attributeName] === "function"
+    }
+
     /** @param {string} attributeName - Attribute name. */
     const prototypeAttributeMethod = (attributeName) => {
       let currentPrototype = Object.getPrototypeOf(model)
@@ -2141,8 +2148,15 @@ export default class FrontendModelController extends Controller {
         currentPrototype = Object.getPrototypeOf(currentPrototype)
       }
     }
+
     /** @param {string} attributeName - Attribute name. */
     const serializedAttributeValue = async (attributeName) => {
+      // Check resource instance first (virtual/computed attributes)
+      if (resourceHasAttribute(attributeName)) {
+        return await /** @type {Record<string, Function>} */ (/** @type {unknown} */ (resourceInstance))[attributeName](model)
+      }
+
+      // Fall back to model method
       const attributeMethodLookup = prototypeAttributeMethod(attributeName)
       const attributeMethod = attributeMethodLookup?.method
 
@@ -2153,6 +2167,11 @@ export default class FrontendModelController extends Controller {
       return modelAttributes[attributeName]
     }
 
+    /** @param {string} attributeName - Attribute name. */
+    const attributeExists = (attributeName) => {
+      return (attributeName in modelAttributes) || (attributeName in /** @type {Record<string, any>} */ (model)) || resourceHasAttribute(attributeName)
+    }
+
     if (!selectedAttributes) {
       if (!defaultAttributes || defaultAttributes.length < 1) {
         return modelAttributes
@@ -2161,7 +2180,7 @@ export default class FrontendModelController extends Controller {
       const serializedAttributes = {...modelAttributes}
 
       for (const attributeName of defaultAttributes) {
-        if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+        if (!attributeExists(attributeName)) continue
         serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
       }
 
@@ -2172,11 +2191,56 @@ export default class FrontendModelController extends Controller {
     const serializedAttributes = {}
 
     for (const attributeName of selectedAttributes) {
-      if (!(attributeName in modelAttributes) && !(attributeName in /** @type {Record<string, any>} */ (model))) continue
+      if (!attributeExists(attributeName)) continue
       serializedAttributes[attributeName] = await serializedAttributeValue(attributeName)
     }
 
     return serializedAttributes
+  }
+
+  /**
+   * @param {import("./database/record/index.js").default} model - Model instance.
+   * @returns {import("./frontend-model-resource/base-resource.js").default | null} - Resource instance or null.
+   */
+  _serializationResourceInstanceForModel(model) {
+    try {
+      const resource = this.frontendModelResourceInstance()
+
+      // Only return if the resource's model class matches the model being serialized
+      if (resource.modelClass() === model.constructor) {
+        return resource
+      }
+    } catch {
+      // No resource available (e.g., serializing a preloaded relationship model)
+    }
+
+    // Try to find a resource for this model class from backendProjects
+    const configuration = this.getConfiguration()
+    const backendProjects = configuration.getBackendProjects?.() || []
+    const modelClassName = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor).name
+
+    for (const backendProject of backendProjects) {
+      const resources = backendProject.frontendModels || {}
+      const resourceClass = resources[modelClassName]
+
+      if (resourceClass && typeof resourceClass === "function") {
+        try {
+          return new resourceClass({
+            ability: this.currentAbility(),
+            context: this.currentAbility()?.getContext() || {},
+            locals: this.currentAbility()?.getLocals() || {},
+            modelClass: /** @type {typeof import("./database/record/index.js").default} */ (model.constructor),
+            modelName: modelClassName,
+            params: {},
+            resourceConfiguration: /** @type {import("./configuration-types.js").FrontendModelResourceConfiguration | undefined} */ (typeof resourceClass.resourceConfig === "function" ? resourceClass.resourceConfig() : undefined)
+          })
+        } catch {
+          // Resource instantiation failed
+        }
+      }
+    }
+
+    return null
   }
 
   /**
