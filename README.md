@@ -4,6 +4,7 @@
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
 * Database models that work almost the same in frontend and backend
+* Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes
 * Controllers and views for HTTP endpoints
 
