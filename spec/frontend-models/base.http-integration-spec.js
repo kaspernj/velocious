@@ -102,7 +102,7 @@ class Task extends FrontendModelBase {
    */
   static resourceConfig() {
     return {
-      attributes: ["id", "name", "updatedAt"],
+      attributes: ["id", "name", "nameUppercase", "updatedAt"],
       builtInCollectionCommands: {
         index: "list"
       },
@@ -748,6 +748,30 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
         expect(loadedProject).toBeDefined()
         expect(loadedProject.id()).toEqual(project.id())
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("serializes virtual resource attributes defined as methods on the resource class", async () => {
+    await Dummy.run(async () => {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        url: "http://127.0.0.1:3006"
+      })
+
+      try {
+        const project = await ProjectRecord.create({name: "Virtual attr project"})
+        const task = await TaskRecord.create({
+          name: "Virtual attr test",
+          projectId: project.id(),
+          updatedAt: "2026-02-20T10:00:00.000Z"
+        })
+        const loadedTask = await Task.find(task.id())
+
+        expect(loadedTask.name()).toEqual("Virtual attr test")
+        expect(loadedTask.readAttribute("nameUppercase")).toEqual("VIRTUAL ATTR TEST")
       } finally {
         resetFrontendModelTransport()
       }
