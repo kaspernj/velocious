@@ -11,7 +11,7 @@ const FRONTEND_MODEL_CONTROLLER_PATH = new URL("../../frontend-model-controller.
  * @param {string} args.currentPath - Request path without query.
  * @returns {Promise<import("../../configuration-types.js").RouteResolverHookResult | null>} - Route override or null.
  */
-export default async function frontendModelCommandRouteHook({configuration, currentPath}) {
+export default async function frontendModelCommandRouteHook({configuration, currentPath, hasMatchingCustomRoute}) {
   const normalizedCurrentPath = normalizePath(currentPath)
 
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
@@ -21,6 +21,9 @@ export default async function frontendModelCommandRouteHook({configuration, curr
       controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
     }
   }
+
+  // Don't intercept paths that match explicitly defined custom routes
+  if (hasMatchingCustomRoute) return null
 
   const backendProjects = configuration.getBackendProjects?.() || []
   const customCommandMatch = frontendModelCustomCommandForPath({
