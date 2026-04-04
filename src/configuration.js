@@ -602,7 +602,7 @@ export default class VelociousConfiguration {
 
       await this.initializeModels({type})
       await this.getEnvironmentHandler().autoDiscoverResources(this)
-      this._registerResourceRelationshipsOnModels()
+      this._validateResourceRelationshipsOnModels()
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})
@@ -623,11 +623,12 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * Registers resource-defined relationships on model classes so that preloading and relationship accessors work at the model level.
+   * Validates that resource-defined relationships are also defined on the corresponding model classes.
+   * Throws an error if a relationship is defined on a resource but missing from the model.
    *
    * @returns {void}
    */
-  _registerResourceRelationshipsOnModels() {
+  _validateResourceRelationshipsOnModels() {
     for (const backendProject of this._backendProjects) {
       const resources = frontendModelResourcesForBackendProject(backendProject)
 
@@ -636,30 +637,18 @@ export default class VelociousConfiguration {
 
         if (!resourceConfig?.relationships) continue
 
-        const relationships = resourceConfig.relationships
-
         const modelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
 
         if (!modelClass) continue
 
         const existingRelationships = modelClass.getRelationshipsMap()
 
-        for (const [relationshipName, relationshipDef] of Object.entries(relationships)) {
-          if (relationshipName in existingRelationships) continue
-
-          const targetModelClassName = relationshipDef.model
-          const targetModelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[targetModelClassName])
-
-          if (!targetModelClass) continue
-
-          const type = relationshipDef.type || "belongsTo"
-
-          if (type === "belongsTo") {
-            modelClass.belongsTo(relationshipName, {klass: targetModelClass})
-          } else if (type === "hasMany") {
-            modelClass.hasMany(relationshipName, {klass: targetModelClass})
-          } else if (type === "hasOne") {
-            modelClass.hasOne(relationshipName, {klass: targetModelClass})
+        for (const relationshipName of Object.keys(resourceConfig.relationships)) {
+          if (!(relationshipName in existingRelationships)) {
+            throw new Error(
+              `Resource for ${modelName} defines relationship "${relationshipName}" but ${modelName} model does not. ` +
+              `Add ${modelName}.belongsTo("${relationshipName}", ...) or the appropriate relationship call on the model class.`
+            )
           }
         }
       }
