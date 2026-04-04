@@ -1304,7 +1304,16 @@ export default class FrontendModelBase {
   static normalizeCustomCommandPayloadArguments(args) {
     if (args.length === 0) return {}
     if (args.length === 1) {
-      return args[0] === undefined ? {} : /** @type {Record<string, any>} */ (args[0])
+      const payload = args[0]
+      if (payload === undefined) {
+        return {}
+      }
+
+      if (typeof payload !== "object" || payload === null) {
+        return {arg1: payload}
+      }
+
+      return /** @type {Record<string, any>} */ (payload)
     }
 
     /** @type {Record<string, number | string | any[]>} */
