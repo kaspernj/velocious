@@ -331,14 +331,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     for (const methodName of Object.keys(collectionCommands)) {
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += "   * @param {Record<string, any>} [payload={}] - Command payload.\n"
+      fileContent += "   * @param {...any} commandArguments - Custom command arguments.\n"
       fileContent += "   * @returns {Promise<Record<string, any>>} - Command response.\n"
       fileContent += "   */\n"
-      fileContent += `  static async ${methodName}(payload = {}) {\n`
+      fileContent += `  static async ${methodName}(...commandArguments) {\n`
       fileContent += "    return await this.executeCustomCommand({\n"
       fileContent += `      commandName: ${JSON.stringify(collectionCommands[methodName])},\n`
       fileContent += `      commandType: ${JSON.stringify(collectionCommands[methodName])},\n`
-      fileContent += "      payload,\n"
+      fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(commandArguments),\n`
       fileContent += "      resourcePath: this.resourcePath()\n"
       fileContent += "    })\n"
       fileContent += "  }\n"
@@ -347,15 +347,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     for (const methodName of Object.keys(memberCommands)) {
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += "   * @param {Record<string, any>} [payload={}] - Command payload.\n"
+      fileContent += "   * @param {...any} commandArguments - Custom command arguments.\n"
       fileContent += "   * @returns {Promise<Record<string, any>>} - Command response.\n"
       fileContent += "   */\n"
-      fileContent += `  async ${methodName}(payload = {}) {\n`
+      fileContent += `  async ${methodName}(...commandArguments) {\n`
       fileContent += `    return await ${className}.executeCustomCommand({\n`
       fileContent += `      commandName: ${JSON.stringify(memberCommands[methodName])},\n`
       fileContent += `      commandType: ${JSON.stringify(memberCommands[methodName])},\n`
       fileContent += "      memberId: this.primaryKeyValue(),\n"
-      fileContent += "      payload,\n"
+      fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(commandArguments),\n`
       fileContent += `      resourcePath: ${className}.resourcePath()\n`
       fileContent += "    })\n"
       fileContent += "  }\n"

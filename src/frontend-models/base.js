@@ -1298,6 +1298,27 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
+   * @param {any[]} args - Command arguments.
+   * @returns {Record<string, any>} - Command payload.
+   */
+  static normalizeCustomCommandPayloadArguments(args) {
+    if (args.length === 0) return {}
+    if (args.length === 1) {
+      return args[0] === undefined ? {} : /** @type {Record<string, any>} */ (args[0])
+    }
+
+    /** @type {Record<string, number | string | any[]>} */
+    const payload = {}
+
+    for (let index = 0; index < args.length; index += 1) {
+      payload[`arg${index + 1}`] = args[index]
+    }
+
+    return payload
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
    * @returns {string} - Backend model name used by frontend model API requests.
    */
   static modelNameForRequest() {
