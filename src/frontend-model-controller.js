@@ -2127,8 +2127,13 @@ export default class FrontendModelController extends Controller {
     const resourceInstance = this._serializationResourceInstanceForModel(model)
 
     /** @param {string} attributeName - Attribute name. */
+    const resourceAttributeMethodName = (attributeName) => `${attributeName}Attribute`
+
+    /** @param {string} attributeName - Attribute name. */
     const resourceHasAttribute = (attributeName) => {
-      return resourceInstance && typeof /** @type {Record<string, any>} */ (/** @type {unknown} */ (resourceInstance))[attributeName] === "function"
+      const methodName = resourceAttributeMethodName(attributeName)
+
+      return resourceInstance && typeof /** @type {Record<string, any>} */ (/** @type {unknown} */ (resourceInstance))[methodName] === "function"
     }
 
     /** @param {string} attributeName - Attribute name. */
@@ -2151,9 +2156,11 @@ export default class FrontendModelController extends Controller {
 
     /** @param {string} attributeName - Attribute name. */
     const serializedAttributeValue = async (attributeName) => {
-      // Check resource instance first (virtual/computed attributes)
+      // Check resource instance first (virtual/computed attributes via ${name}Attribute convention)
       if (resourceHasAttribute(attributeName)) {
-        return await /** @type {Record<string, Function>} */ (/** @type {unknown} */ (resourceInstance))[attributeName](model)
+        const methodName = resourceAttributeMethodName(attributeName)
+
+        return await /** @type {Record<string, Function>} */ (/** @type {unknown} */ (resourceInstance))[methodName](model)
       }
 
       // Fall back to model method
@@ -2220,10 +2227,11 @@ export default class FrontendModelController extends Controller {
     const modelClassName = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor).name
 
     for (const backendProject of backendProjects) {
-      const resources = backendProject.frontendModels || {}
-      const resourceClass = resources[modelClassName]
+      const resources = frontendModelResourcesForBackendProject(backendProject)
+      const resourceDefinition = resources[modelClassName]
+      const resourceClass = resourceDefinition ? frontendModelResourceClassFromDefinition(resourceDefinition) : null
 
-      if (resourceClass && typeof resourceClass === "function") {
+      if (resourceClass) {
         try {
           return new resourceClass({
             ability: this.currentAbility(),

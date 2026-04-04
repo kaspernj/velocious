@@ -46,7 +46,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
    * @param {import("../models/task.js").default} model - Task model instance.
    * @returns {string | null}
    */
-  nameUppercase(model) {
+  nameUppercaseAttribute(model) {
     const name = model.readAttribute("name")
 
     return typeof name === "string" ? name.toUpperCase() : null
