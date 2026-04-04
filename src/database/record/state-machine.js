@@ -22,6 +22,9 @@
  * }} EventDefinition
  */
 
+/** @type {string} */
+const PENDING_TRANSITION_KEY = "_stateMachinePendingTransition"
+
 /**
  * Registers a state machine on a Velocious model class.
  *
@@ -51,14 +54,8 @@
  * })
  * ```
  *
- * This adds to the model class:
- * - Instance methods for each event: `queue()`, `run()`, `fail()`, etc. — these set the state column
- * - Guard methods: `canQueue()`, `canRun()`, `canFail()`, etc. — return boolean
- * - A beforeSave callback that runs beforeEnter/afterEnter hooks on state transitions
- * - Static `getStateMachineDefinition()` for introspection
- *
- * @param {typeof import("./index.js").default} ModelClass
- * @param {StateMachineDefinition} definition
+ * @param {typeof import("./index.js").default} ModelClass - The model class to add state machine behavior to.
+ * @param {StateMachineDefinition} definition - The state machine definition.
  * @returns {void}
  */
 export function stateMachine(ModelClass, definition) {
@@ -72,17 +69,17 @@ export function stateMachine(ModelClass, definition) {
   dynamicClass._stateMachineDefinition = definition
   dynamicClass._stateMachineColumn = column
 
-  /** @returns {StateMachineDefinition} */
+  /** @returns {StateMachineDefinition} - The registered state machine definition. */
   dynamicClass.getStateMachineDefinition = function () {
     return dynamicClass._stateMachineDefinition
   }
 
-  /** @returns {string} */
+  /** @returns {string} - The column name used for state storage. */
   dynamicClass.getStateMachineColumn = function () {
     return dynamicClass._stateMachineColumn
   }
 
-  /** @returns {string[]} */
+  /** @returns {string[]} - All declared state names. */
   dynamicClass.getStateMachineStateNames = function () {
     return stateNames
   }
@@ -105,7 +102,6 @@ export function stateMachine(ModelClass, definition) {
         return false
       }
 
-      // Synchronous guard check — if async guard, use canTransitionToAsync instead
       if (eventDef.guard) {
         const guardResult = eventDef.guard(this)
 
@@ -134,59 +130,88 @@ export function stateMachine(ModelClass, definition) {
       return true
     }
 
-    // Transition method: queue(), run(), etc. — sets the state but does NOT save
+    // Transition method: queue(), run(), etc. — checks guard, sets the state, stashes event name
     proto[eventName] = function () {
-      const currentState = this.readAttribute(column)
+      /** @type {any} */
+      const self = this
+      const currentState = self.readAttribute(column)
 
       if (!fromStates.includes(currentState)) {
         throw new Error(
-          `Cannot transition "${eventName}" from "${currentState}" on ${this.getModelClass().name}. ` +
+          `Cannot transition "${eventName}" from "${currentState}" on ${self.getModelClass().name}. ` +
           `Allowed source states: ${fromStates.join(", ")}`
         )
       }
 
-      /** @type {any} */ (this)[setterName](eventDef.to)
+      // Enforce synchronous guard before mutating state
+      if (eventDef.guard) {
+        const guardResult = eventDef.guard(self)
+
+        if (guardResult instanceof Promise) {
+          throw new Error(`Guard for event "${eventName}" returned a Promise. Use await model.${eventName}AndSave() for async guards.`)
+        }
+
+        if (!guardResult) {
+          throw new Error(
+            `Guard rejected transition "${eventName}" from "${currentState}" on ${self.getModelClass().name}.`
+          )
+        }
+      }
+
+      // Stash the transition so beforeSave/afterSave know which event was invoked
+      self[PENDING_TRANSITION_KEY] = {eventName, from: currentState, to: eventDef.to}
+      self[setterName](eventDef.to)
     }
 
-    // Bang method: queueAndSave(), runAndSave(), etc. — transitions AND saves
+    // Bang method: queueAndSave(), runAndSave(), etc. — transitions AND saves (supports async guards)
     proto[`${eventName}AndSave`] = async function () {
-      /** @type {any} */ (this)[eventName]()
-      await this.save()
+      /** @type {any} */
+      const self = this
+      const currentState = self.readAttribute(column)
+
+      if (!fromStates.includes(currentState)) {
+        throw new Error(
+          `Cannot transition "${eventName}" from "${currentState}" on ${self.getModelClass().name}. ` +
+          `Allowed source states: ${fromStates.join(", ")}`
+        )
+      }
+
+      // Enforce async guard before mutating state
+      if (eventDef.guard) {
+        const allowed = await eventDef.guard(self)
+
+        if (!allowed) {
+          throw new Error(
+            `Guard rejected transition "${eventName}" from "${currentState}" on ${self.getModelClass().name}.`
+          )
+        }
+      }
+
+      self[PENDING_TRANSITION_KEY] = {eventName, from: currentState, to: eventDef.to}
+      self[setterName](eventDef.to)
+      await self.save()
     }
   }
 
   // Register a beforeSave callback that fires state-enter hooks
   ModelClass.beforeSave(async function (model) {
-    const changes = model.changes()
-    const stateChange = changes[column]
+    /** @type {any} */
+    const dynamicModel = model
+    const pending = dynamicModel[PENDING_TRANSITION_KEY]
 
-    if (!stateChange) {
+    if (!pending) {
       return
     }
 
-    const [previousState, newState] = stateChange
-
-    // Find which event triggered this transition (if any)
-    const matchingEvent = findMatchingEvent(definition, previousState, newState)
+    const eventDef = definition.events[pending.eventName]
 
     // Run event-level before callback
-    if (matchingEvent?.before) {
-      await matchingEvent.before(model)
-    }
-
-    // Run event-level guard (async-safe in beforeSave)
-    if (matchingEvent?.guard) {
-      const allowed = await matchingEvent.guard(model)
-
-      if (!allowed) {
-        throw new Error(
-          `Guard rejected transition from "${previousState}" to "${newState}" on ${model.getModelClass().name}.`
-        )
-      }
+    if (eventDef?.before) {
+      await eventDef.before(model)
     }
 
     // Run state-level beforeEnter callback
-    const stateDefinition = definition.states[newState]
+    const stateDefinition = definition.states[pending.to]
 
     if (stateDefinition?.beforeEnter) {
       await stateDefinition.beforeEnter(model)
@@ -195,54 +220,37 @@ export function stateMachine(ModelClass, definition) {
 
   // Register an afterSave callback for afterEnter hooks
   ModelClass.afterSave(async function (model) {
-    const changes = model.changes()
-    const stateChange = changes[column]
+    /** @type {any} */
+    const dynamicModel = model
+    const pending = dynamicModel[PENDING_TRANSITION_KEY]
 
-    if (!stateChange) {
+    if (!pending) {
       return
     }
 
-    const [previousState, newState] = stateChange
+    // Clear the pending transition now that save is complete
+    dynamicModel[PENDING_TRANSITION_KEY] = null
 
     // Run state-level afterEnter callback
-    const stateDefinition = definition.states[newState]
+    const stateDefinition = definition.states[pending.to]
 
     if (stateDefinition?.afterEnter) {
       await stateDefinition.afterEnter(model)
     }
 
     // Run event-level after callback
-    const matchingEvent = findMatchingEvent(definition, previousState, newState)
+    const eventDef = definition.events[pending.eventName]
 
-    if (matchingEvent?.after) {
-      await matchingEvent.after(model)
+    if (eventDef?.after) {
+      await eventDef.after(model)
     }
   })
 }
 
 /**
- * Finds the event definition that matches a state transition.
- * @param {StateMachineDefinition} definition
- * @param {string} fromState
- * @param {string} toState
- * @returns {EventDefinition | null}
- */
-function findMatchingEvent(definition, fromState, toState) {
-  for (const eventDef of Object.values(definition.events)) {
-    const fromStates = Array.isArray(eventDef.from) ? eventDef.from : [eventDef.from]
-
-    if (eventDef.to === toState && fromStates.includes(fromState)) {
-      return eventDef
-    }
-  }
-
-  return null
-}
-
-/**
  * Returns the setter method name for a column (e.g., "status" → "setStatus", "state" → "setState").
- * @param {string} column
- * @returns {string}
+ * @param {string} column - The column name.
+ * @returns {string} - The setter method name.
  */
 function columnSetterName(column) {
   return `set${column.charAt(0).toUpperCase()}${column.slice(1)}`

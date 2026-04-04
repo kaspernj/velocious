@@ -240,6 +240,80 @@ describe("stateMachine", () => {
     expect(persistedBuild.canCancel()).toEqual(true)
   })
 
+  it("enforces guards in event methods and rejects forbidden transitions", () => {
+    class TestBuild extends MockModelBase {
+      /** @param {string} value */
+      setStatus(value) { this._setAttribute("status", value) }
+    }
+
+    TestBuild._registeredCallbacks = []
+
+    stateMachine(TestBuild, {
+      column: "status",
+      events: {
+        cancel: {
+          from: ["new", "queued"],
+          guard: (model) => !model.isNewRecord(),
+          to: "cancelled"
+        }
+      },
+      initial: "new",
+      states: {cancelled: {}, new: {}, queued: {}}
+    })
+
+    const newBuild = new TestBuild({status: "new"})
+    let thrownError = null
+
+    try {
+      newBuild.cancel()
+    } catch (error) {
+      thrownError = error
+    }
+
+    expect(thrownError).not.toEqual(null)
+    expect(thrownError.message).toContain("Guard rejected")
+    // State should NOT have been mutated
+    expect(newBuild.readAttribute("status")).toEqual("new")
+  })
+
+  it("tracks the invoked event name so afterSave uses the correct callbacks", async () => {
+    /** @type {string[]} */
+    const callOrder = []
+
+    class TestBuild extends MockModelBase {
+      /** @param {string} value */
+      setStatus(value) { this._setAttribute("status", value) }
+    }
+
+    TestBuild._registeredCallbacks = []
+
+    stateMachine(TestBuild, {
+      column: "status",
+      events: {
+        failBuild: {
+          after: () => { callOrder.push("failBuild-after") },
+          from: "running",
+          to: "failed"
+        },
+        timeOut: {
+          after: () => { callOrder.push("timeOut-after") },
+          from: "running",
+          to: "failed"
+        }
+      },
+      initial: "new",
+      states: {failed: {}, new: {}, running: {}}
+    })
+
+    // Both events share the same from/to edge — the tracked event name determines which callback fires
+    const build = new TestBuild({id: "123", status: "running"})
+
+    build.timeOut()
+    await build._runAfterSaveCallbacks()
+
+    expect(callOrder).toEqual(["timeOut-after"])
+  })
+
   it("runs beforeEnter callbacks during save", async () => {
     class TestBuild extends MockModelBase {
       /** @param {string} value */
