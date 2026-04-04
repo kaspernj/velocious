@@ -52,20 +52,11 @@ function buildCreatedAtTestModelClass() {
   /** Test model implementation with createdAt attribute. */
   class User extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, path: string, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[]}} - Resource configuration.
      */
     static resourceConfig() {
       return {
-        attributes: ["id", "createdAt"],
-        commands: {
-          create: "create",
-          destroy: "destroy",
-          find: "find",
-          index: "index",
-          update: "update"
-        },
-        path: "/api/frontend-models/users",
-        primaryKey: "id"
+        attributes: ["id", "createdAt"]
       }
     }
 
