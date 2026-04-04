@@ -2,6 +2,7 @@
 
 import * as inflection from "inflection"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
+import restArgsError from "../utils/rest-args-error.js"
 import {validateFrontendModelResourceCommandName} from "./resource-config-validation.js"
 
 /**
@@ -81,6 +82,28 @@ export function frontendModelResourceConfigurationFromDefinition(resourceDefinit
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} - Normalized resource configuration.
  */
 function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
+  const restArgs = /** @type {Record<string, any>} */ ({...resourceConfiguration})
+
+  for (const key of [
+    "abilities",
+    "attributes",
+    "attachments",
+    "builtInCollectionCommands",
+    "builtInMemberCommands",
+    "collectionCommands",
+    "commands",
+    "memberCommands",
+    "modelName",
+    "path",
+    "primaryKey",
+    "relationships",
+    "server"
+  ]) {
+    delete restArgs[key]
+  }
+
+  restArgsError(restArgs)
+
   const normalizedCommands = normalizeFrontendModelResourceCommands(resourceConfiguration)
 
   return {

@@ -188,6 +188,26 @@ describe("routes - frontend model command route hook", () => {
     })
   })
 
+  it("throws on unknown resourceConfig keys", () => {
+    class UnknownKeyUserFrontendResource extends FrontendModelBaseResource {
+      /** @returns {Record<string, any>} */
+      static resourceConfig() {
+        return {
+          attributes: ["id"],
+          capabilities: {index: "read"},
+          abilities: {
+            find: "read",
+            index: "read"
+          }
+        }
+      }
+    }
+
+    expect(() => {
+      frontendModelResourceConfigurationFromDefinition(UnknownKeyUserFrontendResource)
+    }).toThrow("Unknown arguments: capabilities")
+  })
+
   it("separates built-in and custom command normalization for opted-in resources", () => {
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(UserFrontendResource)
 
