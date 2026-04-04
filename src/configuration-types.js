@@ -266,6 +266,7 @@
  * @property {import("./configuration.js").default} configuration - Configuration instance.
  * @property {Record<string, any>} params - Mutable request params object.
  * @property {string} currentPath - Request path without query.
+ * @property {boolean} [hasMatchingCustomRoute] - True when matching a configured custom route.
  * @property {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} request - Request object.
  * @property {import("./http-server/client/response.js").default} response - Response object.
  * @property {import("./routes/resolver.js").default} resolver - Resolver instance.

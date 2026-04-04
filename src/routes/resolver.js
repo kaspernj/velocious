@@ -103,7 +103,14 @@ export default class VelociousRoutesResolver {
     const currentPath = rawPath.split("?")[0]
     let viewPath
 
-    const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath)
+    const preCheckParams = {...this.params}
+    const hasMatchingCustomRoute = currentRoute ? !!this.matchPathWithRoutes(currentRoute, currentPath) : false
+
+    if (hasMatchingCustomRoute) {
+      this.params = preCheckParams
+    }
+
+    const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath, {hasMatchingCustomRoute})
     const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
     const actionParam = this.params.action
     const controllerParam = this.params.controller
@@ -285,15 +292,20 @@ export default class VelociousRoutesResolver {
 
   /**
    * @param {string} currentPath - Request path without query string.
+   * @param {object} options - Resolver hook options.
+   * @param {boolean} [options.hasMatchingCustomRoute] - True when the path matched an explicit custom route.
    * @returns {Promise<import("../configuration-types.js").RouteResolverHookResult | null>} - Matched action/controller from hooks.
    */
-  async resolveRouteResolverHooks(currentPath) {
+  async resolveRouteResolverHooks(currentPath, options = {}) {
+    const {hasMatchingCustomRoute = false} = options
+
     const hooks = this.configuration.getRouteResolverHooks?.() || []
 
     for (const hook of hooks) {
       const hookResult = await hook({
         configuration: this.configuration,
         currentPath,
+        hasMatchingCustomRoute,
         params: this.params,
         request: this.request,
         resolver: this,
