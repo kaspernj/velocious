@@ -731,6 +731,29 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("preloads belongsTo relationships via shared transport with find()", async () => {
+    await Dummy.run(async () => {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        url: "http://127.0.0.1:3006"
+      })
+
+      try {
+        const {project, task} = await seedHttpPreloadModels()
+        const loadedTask = await Task.preload({project: true}).find(task.id())
+
+        expect(loadedTask.name()).toEqual("HTTP preload task")
+
+        const loadedProject = loadedTask.getRelationshipByName("project").loaded()
+
+        expect(loadedProject).toBeDefined()
+        expect(loadedProject.id()).toEqual(project.id())
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("throws AttributeNotSelectedError for non-selected frontend attributes", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()
