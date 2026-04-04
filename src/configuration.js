@@ -11,6 +11,7 @@ import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import {ensureFrontendModelWebsocketPublishersRegistered} from "./frontend-models/websocket-publishers.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -601,6 +602,7 @@ export default class VelociousConfiguration {
 
       await this.initializeModels({type})
       await this.getEnvironmentHandler().autoDiscoverResources(this)
+      this._registerResourceRelationshipsOnModels()
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})
@@ -614,6 +616,52 @@ export default class VelociousConfiguration {
             const initializerInstance = new InitializerClass({configuration: this, type})
 
             await initializerInstance.run()
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Registers resource-defined relationships on model classes so that preloading and relationship accessors work at the model level.
+   *
+   * @returns {void}
+   */
+  _registerResourceRelationshipsOnModels() {
+    for (const backendProject of this._backendProjects) {
+      const resources = frontendModelResourcesForBackendProject(backendProject)
+
+      for (const [modelName, resourceDefinition] of Object.entries(resources)) {
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+
+        if (!resourceClass) continue
+
+        const relationships = resourceClass.relationships
+
+        if (!relationships) continue
+
+        const modelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
+
+        if (!modelClass) continue
+
+        const existingRelationships = modelClass.getRelationshipsMap()
+
+        for (const [relationshipName, relationshipDef] of Object.entries(relationships)) {
+          if (relationshipName in existingRelationships) continue
+
+          const targetModelClassName = relationshipDef.model
+          const targetModelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[targetModelClassName])
+
+          if (!targetModelClass) continue
+
+          const type = relationshipDef.type || "belongsTo"
+
+          if (type === "belongsTo") {
+            modelClass.belongsTo(relationshipName, {klass: targetModelClass})
+          } else if (type === "hasMany") {
+            modelClass.hasMany(relationshipName, {klass: targetModelClass})
+          } else if (type === "hasOne") {
+            modelClass.hasOne(relationshipName, {klass: targetModelClass})
           }
         }
       }
