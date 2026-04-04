@@ -9,6 +9,7 @@ const FRONTEND_MODEL_CONTROLLER_PATH = new URL("../../frontend-model-controller.
  * @param {object} args - Hook args.
  * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
  * @param {string} args.currentPath - Request path without query.
+ * @param {boolean} [args.hasMatchingCustomRoute] - Set when the request path matches an explicit custom route.
  * @returns {Promise<import("../../configuration-types.js").RouteResolverHookResult | null>} - Route override or null.
  */
 export default async function frontendModelCommandRouteHook({configuration, currentPath, hasMatchingCustomRoute}) {

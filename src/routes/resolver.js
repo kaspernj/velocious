@@ -292,9 +292,13 @@ export default class VelociousRoutesResolver {
 
   /**
    * @param {string} currentPath - Request path without query string.
+   * @param {object} options - Resolver hook options.
+   * @param {boolean} [options.hasMatchingCustomRoute] - True when the path matched an explicit custom route.
    * @returns {Promise<import("../configuration-types.js").RouteResolverHookResult | null>} - Matched action/controller from hooks.
    */
-  async resolveRouteResolverHooks(currentPath, {hasMatchingCustomRoute = false} = {}) {
+  async resolveRouteResolverHooks(currentPath, options = {}) {
+    const {hasMatchingCustomRoute = false} = options
+
     const hooks = this.configuration.getRouteResolverHooks?.() || []
 
     for (const hook of hooks) {
