@@ -46,6 +46,31 @@ function buildTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test model with createdAt attribute.
+ */
+function buildCreatedAtTestModelClass() {
+  /** Test model implementation with createdAt attribute. */
+  class User extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[]}} - Resource configuration.
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "createdAt"]
+      }
+    }
+
+    /** @returns {any} */
+    id() { return this.readAttribute("id") }
+
+    /** @returns {any} */
+    createdAt() { return this.readAttribute("createdAt") }
+  }
+
+  return User
+}
+
+/**
  * @returns {typeof FrontendModelBase} - Test frontend model class with attachments.
  */
 function buildAttachmentTestModelClass() {
@@ -980,6 +1005,66 @@ describe("Frontend models - base", () => {
                 operator: "eq",
                 path: [],
                 value: ["1", "2"]
+              }
+            ]
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("throws when using ransack with an unknown attribute", async () => {
+    const User = buildTestModelClass()
+    const sevenDaysAgo = new Date("2026-02-24T10:00:00.000Z")
+
+    await expect(async () => {
+      await User
+        .ransack({unknown_column_gteq: sevenDaysAgo})
+        .count()
+    }).toThrow('Unknown ransack attribute "unknown_column" for User')
+  })
+
+  it("supports snake_case and camelCase ransack keys", async () => {
+    const User = buildCreatedAtTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      const sevenDaysAgo = new Date("2026-02-24T10:00:00.000Z")
+
+      await User
+        .ransack({created_at_gteq: sevenDaysAgo})
+        .toArray()
+
+      await User
+        .ransack({createdAtGteq: sevenDaysAgo})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "createdAt",
+                operator: "gteq",
+                path: [],
+                value: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}
+              }
+            ]
+          },
+          url: "/frontend-models"
+        },
+        {
+          body: {
+            searches: [
+              {
+                column: "createdAt",
+                operator: "gteq",
+                path: [],
+                value: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}
               }
             ]
           },
