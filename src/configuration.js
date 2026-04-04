@@ -11,6 +11,7 @@ import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import {ensureFrontendModelWebsocketPublishersRegistered} from "./frontend-models/websocket-publishers.js"
+import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -601,6 +602,7 @@ export default class VelociousConfiguration {
 
       await this.initializeModels({type})
       await this.getEnvironmentHandler().autoDiscoverResources(this)
+      this._validateResourceRelationshipsOnModels()
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})
@@ -614,6 +616,39 @@ export default class VelociousConfiguration {
             const initializerInstance = new InitializerClass({configuration: this, type})
 
             await initializerInstance.run()
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Validates that resource-defined relationships are also defined on the corresponding model classes.
+   * Throws an error if a relationship is defined on a resource but missing from the model.
+   *
+   * @returns {void}
+   */
+  _validateResourceRelationshipsOnModels() {
+    for (const backendProject of this._backendProjects) {
+      const resources = frontendModelResourcesForBackendProject(backendProject)
+
+      for (const [modelName, resourceDefinition] of Object.entries(resources)) {
+        const resourceConfig = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+
+        if (!resourceConfig?.relationships) continue
+
+        const modelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
+
+        if (!modelClass) continue
+
+        const existingRelationships = modelClass.getRelationshipsMap()
+
+        for (const relationshipName of Object.keys(resourceConfig.relationships)) {
+          if (!(relationshipName in existingRelationships)) {
+            throw new Error(
+              `Resource for ${modelName} defines relationship "${relationshipName}" but ${modelName} model does not. ` +
+              `Add ${modelName}.belongsTo("${relationshipName}", ...) or the appropriate relationship call on the model class.`
+            )
           }
         }
       }
