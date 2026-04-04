@@ -11,7 +11,7 @@ import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import {ensureFrontendModelWebsocketPublishersRegistered} from "./frontend-models/websocket-publishers.js"
-import {frontendModelResourceClassFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
+import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -632,13 +632,11 @@ export default class VelociousConfiguration {
       const resources = frontendModelResourcesForBackendProject(backendProject)
 
       for (const [modelName, resourceDefinition] of Object.entries(resources)) {
-        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+        const resourceConfig = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
 
-        if (!resourceClass) continue
+        if (!resourceConfig?.relationships) continue
 
-        const relationships = resourceClass.relationships
-
-        if (!relationships) continue
+        const relationships = resourceConfig.relationships
 
         const modelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
 
