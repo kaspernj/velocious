@@ -307,7 +307,6 @@ function matchesAttributeValue({attributeName, columnName, value}) {
 function parseRansackKey(key) {
   for (const predicate of supportedPredicates) {
     const suffix = `_${predicate}`
-
     if (!key.endsWith(suffix)) continue
 
     const pathValue = key.slice(0, key.length - suffix.length)
@@ -322,7 +321,34 @@ function parseRansackKey(key) {
     }
   }
 
+  for (const predicate of supportedPredicates) {
+    const camelSuffix = snakeToCamelSuffix(predicate)
+
+    if (!key.endsWith(camelSuffix)) continue
+
+    const pathValue = key.slice(0, key.length - camelSuffix.length)
+
+    if (pathValue.length < 1) {
+      throw new Error(`Invalid ransack key: ${key}`)
+    }
+
+    return {
+      pathValue,
+      predicate: /** @type {RansackPredicate} */ (predicate)
+    }
+  }
+
   return null
+}
+
+/**
+ * @param {string} value - Snake-case predicate.
+ * @returns {string} - CamelCase predicate suffix used in ransack keys.
+ */
+function snakeToCamelSuffix(value) {
+  const segments = value.split("_")
+
+  return segments.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1)).join("")
 }
 
 /**
