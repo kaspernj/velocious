@@ -442,7 +442,7 @@ class VelociousDatabaseRecord {
   }
 
   static getRelationshipsMap() {
-    if (!this._relationships) {
+    if (!Object.hasOwn(this, "_relationships")) {
       /** @type {Record<string, import("./relationships/base.js").default>} */
       this._relationships = {}
     }
