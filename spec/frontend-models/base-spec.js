@@ -391,6 +391,22 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("normalizes custom command arguments", () => {
+    const User = buildTestModelClass()
+
+    expect(User.normalizeCustomCommandPayloadArguments([])).toEqual({})
+    expect(User.normalizeCustomCommandPayloadArguments([undefined])).toEqual({})
+    expect(User.normalizeCustomCommandPayloadArguments([{}])).toEqual({})
+    expect(User.normalizeCustomCommandPayloadArguments([{name: "John"}])).toEqual({name: "John"})
+    expect(User.normalizeCustomCommandPayloadArguments([1])).toEqual({arg1: 1})
+    expect(User.normalizeCustomCommandPayloadArguments([1, "admin", true])).toEqual({
+      arg1: 1,
+      arg2: "admin",
+      arg3: true
+    })
+    expect(User.normalizeCustomCommandPayloadArguments([null])).toEqual({arg1: null})
+  })
+
   it("infers default resource paths for pathless custom commands", async () => {
     const User = buildCustomPrimaryKeyTestModelClass()
     const originalFetch = globalThis.fetch
