@@ -823,7 +823,7 @@ function splitWhereHash({hash, modelClass}) {
       const columnName = resolveColumnName(modelClass, key)
 
       if (columnName) {
-        resolvedHash[key] = value
+        resolvedHash[columnName] = value
       } else {
         fallbackHash[key] = value
       }
