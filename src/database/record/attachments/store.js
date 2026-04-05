@@ -143,7 +143,7 @@ export default class RecordAttachmentsStore {
     const attachmentDriver = await this.resolveAttachmentDriver({model, name})
     const attachmentDriverName = this._attachmentDriverNameFor({model, name})
     const now = Date.now()
-    const recordType = model.getModelClass().name
+    const recordType = model.getModelClass().getModelName()
     const recordId = String(model.id())
     const attachmentId = generateUUID()
     const {storageKey} = await attachmentDriver.write({
@@ -300,7 +300,7 @@ export default class RecordAttachmentsStore {
     await this.ensureReady()
 
     return await this._withDb(async (db) => {
-      const recordType = model.getModelClass().name
+      const recordType = model.getModelClass().getModelName()
       const recordId = String(model.id())
       let query = db
         .newQuery()
@@ -330,7 +330,7 @@ export default class RecordAttachmentsStore {
     await this.ensureReady()
 
     return await this._withDb(async (db) => {
-      const recordType = model.getModelClass().name
+      const recordType = model.getModelClass().getModelName()
       const recordId = String(model.id())
       const query = db
         .newQuery()

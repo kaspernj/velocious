@@ -1155,14 +1155,14 @@ export default class FrontendModelController extends Controller {
     if (!frontendModelResource) return null
 
     const resources = frontendModelResourcesForBackendProject(frontendModelResource.backendProject)
-    const resourceDefinition = resources[modelClass.name]
+    const resourceDefinition = resources[modelClass.getModelName()]
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
     const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
     if (!resourceConfiguration || !resourceClass) return null
 
     return {
-      modelName: modelClass.name,
+      modelName: modelClass.getModelName(),
       resourceClass,
       resourceConfiguration
     }
@@ -1407,7 +1407,7 @@ export default class FrontendModelController extends Controller {
    * @returns {Record<string, string[]> | null} - Frontend select data.
    */
   frontendModelSelect() {
-    return normalizeFrontendModelSelect(this.frontendModelParams().select, this.frontendModelClass().name)
+    return normalizeFrontendModelSelect(this.frontendModelParams().select, this.frontendModelClass().getModelName())
   }
 
   /**
@@ -2097,7 +2097,7 @@ export default class FrontendModelController extends Controller {
 
     if (!select) return null
 
-    return select[modelClass.name] || null
+    return select[modelClass.getModelName()] || null
   }
 
   /**
@@ -2224,7 +2224,7 @@ export default class FrontendModelController extends Controller {
     // Try to find a resource for this model class from backendProjects
     const configuration = this.getConfiguration()
     const backendProjects = configuration.getBackendProjects?.() || []
-    const modelClassName = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor).name
+    const modelClassName = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor).getModelName()
 
     for (const backendProject of backendProjects) {
       const resources = frontendModelResourcesForBackendProject(backendProject)

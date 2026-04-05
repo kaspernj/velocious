@@ -69,7 +69,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
         const foundTargetModels = await query.toArray()
 
         targetModels.push(...foundTargetModels)
-        targetModelsByClassName[targetModelClass.name] = foundTargetModels
+        targetModelsByClassName[targetModelClass.getModelName()] = foundTargetModels
         targetModelsByTypeAndId[targetType] = {}
 
         for (const targetModel of foundTargetModels) {

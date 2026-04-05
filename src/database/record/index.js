@@ -63,6 +63,21 @@ class ValidationError extends Error {
 }
 
 class VelociousDatabaseRecord {
+  /** @type {string | undefined} */
+  static modelName
+
+  /**
+   * Returns the model name, preferring an explicit `static modelName` declaration
+   * over the JavaScript class `.name` property. This allows minified builds to
+   * preserve correct model names without relying on `keep_classnames`.
+   * @returns {string} - The model name.
+   */
+  static getModelName() {
+    if (typeof this.modelName === "string" && this.modelName.length > 0) return this.modelName
+
+    return this.name
+  }
+
   static getAttributeNameToColumnNameMap() {
     if (!this._attributeNameToColumnName) {
       /** @type {Record<string, string>} */
@@ -684,7 +699,7 @@ class VelociousDatabaseRecord {
    * @returns {string} - The human attribute name.
    */
   static humanAttributeName(attributeName) {
-    const modelNameKey = inflection.underscore(this.name)
+    const modelNameKey = inflection.underscore(this.getModelName())
 
     return this._getConfiguration().getTranslator()(`velocious.database.record.attributes.${modelNameKey}.${attributeName}`, {defaultValue: inflection.camelize(attributeName)})
   }
@@ -1564,7 +1579,7 @@ class VelociousDatabaseRecord {
    * @returns {string} - The table name.
    */
   static tableName() {
-    if (!this._tableName) this._tableName = inflection.underscore(inflection.pluralize(this.name))
+    if (!this._tableName) this._tableName = inflection.underscore(inflection.pluralize(this.getModelName()))
 
     return this._tableName
   }
@@ -1616,7 +1631,7 @@ class VelociousDatabaseRecord {
     if (this._translationClass) return this._translationClass
     if (this.tableName().endsWith("_translations")) throw new Error("Trying to define a translations class for a translation class")
 
-    const className = `${this.name}Translation`
+    const className = `${this.getModelName()}Translation`
     const TranslationClass = class Translation extends VelociousDatabaseRecord {}
     const belongsTo = singularizeModelName(inflection.camelize(this.tableName(), true))
 

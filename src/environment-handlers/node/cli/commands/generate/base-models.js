@@ -182,9 +182,9 @@ export default class DbGenerateModel extends BaseCommand {
         } else {
           const targetModelClass = relationship.getTargetModelClass()
 
-          if (!targetModelClass) throw new Error(`Relationship '${relationship.getRelationshipName()}' on '${modelClass.name}' has no target model class`)
+          if (!targetModelClass) throw new Error(`Relationship '${relationship.getRelationshipName()}' on '${modelClass.getModelName()}' has no target model class`)
 
-          fileName = inflection.dasherize(inflection.underscore(targetModelClass.name))
+          fileName = inflection.dasherize(inflection.underscore(targetModelClass.getModelName()))
           fullFilePath = `src/models/${fileName}.js`
           baseFilePath = `../model-bases/${fileName}.js`
           baseFullFilePath = `src/model-bases/${fileName}.js`

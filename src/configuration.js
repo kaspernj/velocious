@@ -660,7 +660,7 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   registerModelClass(modelClass) {
-    this.modelClasses[modelClass.name] = modelClass
+    this.modelClasses[modelClass.getModelName()] = modelClass
   }
 
   /** @returns {void} - No return value.  */
