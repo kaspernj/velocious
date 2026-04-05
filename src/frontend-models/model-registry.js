@@ -5,11 +5,14 @@ const frontendModelRegistry = new Map()
 
 /**
  * Register a frontend model class so it can be resolved by name in relationship lookups.
+ * Uses resourceConfig().modelName when available to support minified builds where class names are mangled.
  * @param {any} modelClass - Model class to register.
  * @returns {void}
  */
 export function registerFrontendModel(modelClass) {
-  frontendModelRegistry.set(modelClass.name, modelClass)
+  const modelName = (typeof modelClass.resourceConfig === "function" && modelClass.resourceConfig()?.modelName) || modelClass.name
+
+  frontendModelRegistry.set(modelName, modelClass)
 }
 
 /**
