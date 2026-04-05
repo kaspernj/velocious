@@ -35,16 +35,47 @@ export default class VelociousAuthorizationAbility {
    * @param {Record<string, any>} [args.locals] - Ability locals.
    * @param {Array<typeof BaseResource>} [args.resources] - Resource classes.
    */
-  constructor({context = {}, locals = {}, resources = []} = {}) {
+  constructor({context = {}, locals = {}, resources} = {}) {
     this.context = context
     this.locals = locals
-    this.resources = resources
+    this.resources = resources || this._resolveResourcesFromConfiguration()
 
     /** @type {AbilityRuleType[]} */
     this.rules = []
 
     /** @type {Record<string, boolean>} */
     this.loadedModelClassAbilities = {}
+  }
+
+  /**
+   * Auto-resolves resource classes from the configuration's backendProjects when no explicit resources are provided.
+   *
+   * @returns {Array<typeof BaseResource>}
+   */
+  _resolveResourcesFromConfiguration() {
+    const configuration = this.context?.configuration
+
+    if (!configuration || typeof configuration.getBackendProjects !== "function") {
+      return []
+    }
+
+    /** @type {Array<typeof BaseResource>} */
+    const resolved = []
+    const backendProjects = configuration.getBackendProjects()
+
+    for (const backendProject of backendProjects) {
+      const frontendModels = backendProject.frontendModels
+
+      if (!frontendModels || typeof frontendModels !== "object") continue
+
+      for (const resourceDefinition of Object.values(frontendModels)) {
+        if (typeof resourceDefinition === "function" && resourceDefinition.prototype instanceof BaseResource) {
+          resolved.push(resourceDefinition)
+        }
+      }
+    }
+
+    return resolved
   }
 
   /** @returns {Record<string, any>} - Context. */
