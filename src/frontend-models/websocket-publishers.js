@@ -106,7 +106,7 @@ export function ensureFrontendModelWebsocketPublishersRegistered(configuration) 
       void model.getModelClass().connection().afterCommit(async () => {
         configuration.getWebsocketEvents()?.publish(frontendModelBroadcastChannelName(modelName), {
           action,
-          id: String(model.id()),
+          id: model.id(),
           record: model.attributes(),
           modelName
         })
@@ -118,7 +118,7 @@ export function ensureFrontendModelWebsocketPublishersRegistered(configuration) 
       void model.getModelClass().connection().afterCommit(async () => {
         configuration.getWebsocketEvents()?.publish(frontendModelBroadcastChannelName(modelName), {
           action: "destroy",
-          id: String(model.id()),
+          id: model.id(),
           modelName
         })
       })
