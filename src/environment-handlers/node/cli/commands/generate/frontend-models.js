@@ -726,7 +726,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       throw new Error(`Model '${className}' relationship '${relationshipName}' has no target model class`)
     }
 
-    const targetClassName = targetModelClass.name
+    const targetClassName = targetModelClass.getModelName()
 
     return {
       relationshipName,

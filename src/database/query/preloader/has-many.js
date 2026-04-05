@@ -51,7 +51,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     if (this.relationship.getPolymorphic()) {
       const typeColumn = this.relationship.getPolymorphicTypeColumn()
 
-      whereArgs[typeColumn] = this.relationship.getModelClass().name
+      whereArgs[typeColumn] = this.relationship.getModelClass().getModelName()
     }
 
     const targetModelClass = this.relationship.getTargetModelClass()

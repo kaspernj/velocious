@@ -132,7 +132,7 @@ export default class VelociousAuthorizationAbility {
    * @returns {void} - No return value.
    */
   loadAbilitiesForModelClass(modelClass) {
-    const key = modelClass.name
+    const key = modelClass.getModelName()
 
     if (this.loadedModelClassAbilities[key]) return
 

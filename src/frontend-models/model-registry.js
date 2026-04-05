@@ -10,7 +10,7 @@ const frontendModelRegistry = new Map()
  * @returns {void}
  */
 export function registerFrontendModel(modelClass) {
-  const modelName = (typeof modelClass.resourceConfig === "function" && modelClass.resourceConfig()?.modelName) || modelClass.name
+  const modelName = (typeof modelClass.getModelName === "function" && modelClass.getModelName()) || modelClass.name
 
   frontendModelRegistry.set(modelName, modelClass)
 }

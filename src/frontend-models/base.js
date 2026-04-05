@@ -36,7 +36,7 @@ let sharedFrontendModelFlushScheduled = false
  * @returns {string} - Default resource path for the model class.
  */
 function defaultFrontendModelResourcePath(modelClass) {
-  return `/${inflection.dasherize(inflection.pluralize(inflection.underscore(modelClass.name)))}`
+  return `/${inflection.dasherize(inflection.pluralize(inflection.underscore(modelClass.getModelName())))}`
 }
 
 /** Error raised when reading an attribute that was not selected in query payloads. */
@@ -663,7 +663,7 @@ async function flushPendingSharedFrontendModelRequests() {
         return {
           commandType: request.commandType,
           customPath: request.customPath,
-          model: request.modelClass.modelNameForRequest(),
+          model: request.modelClass.getModelName(),
           payload: request.payload,
           requestId: request.requestId
         }
@@ -677,7 +677,7 @@ async function flushPendingSharedFrontendModelRequests() {
       return {
         commandType: isCustomCommandRoute ? request.commandName : request.commandType,
         customPath,
-        model: request.modelClass.modelNameForRequest(),
+        model: request.modelClass.getModelName(),
         payload: request.payload,
         requestId: request.requestId
       }
@@ -905,6 +905,9 @@ function assertFindByConditionSerializationPreservesValue(originalValue, normali
 
 /** Base class for generated frontend model classes. */
 export default class FrontendModelBase {
+  /** @type {string | undefined} */
+  static modelName
+
   /** @type {Record<string, any>} */
   _attributes
   /** @type {Record<string, FrontendModelHasManyRelationship<any, any> | FrontendModelSingularRelationship<any, any>>} */
@@ -1272,7 +1275,7 @@ export default class FrontendModelBase {
     const path = this.resourceConfig().path || defaultFrontendModelResourcePath(this)
 
     return validateFrontendModelResourcePath({
-      modelName: this.name,
+      modelName: this.getModelName(),
       resourcePath: path
     })
   }
@@ -1292,7 +1295,7 @@ export default class FrontendModelBase {
     return validateFrontendModelResourceCommandName({
       commandName,
       commandType,
-      modelName: this.name
+      modelName: this.getModelName()
     })
   }
 
@@ -1327,15 +1330,17 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Returns the model name, preferring an explicit `static modelName` declaration
+   * over the JavaScript class `.name` property. This allows minified builds to
+   * preserve correct model names without relying on `keep_classnames`.
    * @this {typeof FrontendModelBase}
-   * @returns {string} - Backend model name used by frontend model API requests.
+   * @returns {string} - The model name.
    */
-  static modelNameForRequest() {
-    const modelName = this.resourceConfig().modelName
+  static getModelName() {
+    const resourceConfig = typeof this.resourceConfig === "function" ? this.resourceConfig() : null
+    const modelName = resourceConfig?.modelName
 
-    if (typeof modelName === "string" && modelName.length > 0) return modelName
-
-    return this.name
+    return (typeof modelName === "string" && modelName.length > 0) ? modelName : this.name
   }
 
   /**
@@ -1607,12 +1612,12 @@ export default class FrontendModelBase {
       ? websocketClient.subscribeAndWait.bind(websocketClient)
       : websocketClient.subscribe.bind(websocketClient)
 
-    return await subscribeMethod(frontendModelSubscriptionChannelName(this.name), {
-      params: {model: this.name}
+    return await subscribeMethod(frontendModelSubscriptionChannelName(this.getModelName()), {
+      params: {model: this.getModelName()}
     }, (rawPayload) => {
       const payload = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(rawPayload))
 
-      if (payload.model !== this.name) return
+      if (payload.model !== this.getModelName()) return
       if (payload.action !== "create" && payload.action !== "destroy" && payload.action !== "update") return
 
       const model = payload.record && typeof payload.record === "object"
@@ -1623,7 +1628,7 @@ export default class FrontendModelBase {
         action: payload.action,
         id: String(payload.id),
         model,
-        modelName: this.name
+        modelName: this.getModelName()
       })
     })
   }
@@ -2131,7 +2136,7 @@ export default class FrontendModelBase {
     const customPath = frontendModelCustomCommandPath({
       commandName,
       memberId,
-      modelName: this.modelNameForRequest(),
+      modelName: this.getModelName(),
       resourcePath
     })
 

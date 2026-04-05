@@ -58,7 +58,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     this.controller = "controller" in args ? args.controller : undefined
     this.modelClassValue = "modelClass" in args ? args.modelClass : /** @type {typeof import("../database/record/index.js").default | undefined} */ (/** @type {typeof FrontendModelBaseResource} */ (this.constructor).modelClass())
-    this.modelNameValue = "modelName" in args ? args.modelName : this.modelClassValue?.name || ""
+    this.modelNameValue = "modelName" in args ? args.modelName : (this.modelClassValue?.getModelName ? this.modelClassValue.getModelName() : this.modelClassValue?.name || "")
     this.paramsValue = "params" in args ? args.params : undefined
     this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */ ({abilities: {}, attributes: []})
   }
