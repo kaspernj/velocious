@@ -55,15 +55,21 @@ export function ensureFrontendModelWebsocketPublishersRegistered(configuration) 
 
   /** @type {Record<string, typeof FrontendModelBaseResource>} */
   let allFrontendModels = {}
+  let hasExplicitConfig = false
 
   for (const backendProject of configuration.getBackendProjects()) {
+    if (backendProject.frontendModels !== undefined || backendProject.frontendModelsRequireContext !== undefined) {
+      hasExplicitConfig = true
+    }
+
     const projectResources = frontendModelResourcesForBackendProject(backendProject)
 
     allFrontendModels = {...allFrontendModels, ...projectResources}
   }
 
-  // Auto-discover from ability resources when backend projects don't define frontendModels
-  if (Object.keys(allFrontendModels).length === 0) {
+  // Auto-discover from ability resources only when no backend project
+  // explicitly defines frontendModels or frontendModelsRequireContext
+  if (!hasExplicitConfig) {
     allFrontendModels = frontendModelResourcesFromAbilityResources(configuration)
   }
 
