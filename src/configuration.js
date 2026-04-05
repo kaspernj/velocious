@@ -643,7 +643,11 @@ export default class VelociousConfiguration {
 
         const existingRelationships = modelClass.getRelationshipsMap()
 
-        for (const relationshipName of Object.keys(resourceConfig.relationships)) {
+        const relationshipNames = Array.isArray(resourceConfig.relationships)
+          ? resourceConfig.relationships
+          : Object.keys(resourceConfig.relationships)
+
+        for (const relationshipName of relationshipNames) {
           if (!(relationshipName in existingRelationships)) {
             throw new Error(
               `Resource for ${modelName} defines relationship "${relationshipName}" but ${modelName} model does not. ` +
