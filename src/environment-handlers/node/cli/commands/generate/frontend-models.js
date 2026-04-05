@@ -647,58 +647,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       return []
     }
 
-    if (Array.isArray(relationships)) {
-      return relationships.map((relationshipName) => this.inferredRelationshipDefinition({className, relationshipName}))
+    if (!Array.isArray(relationships)) {
+      throw new Error(`Model '${className}' has invalid relationships config — must be an array of relationship names, got ${typeof relationships}`)
     }
 
-    if (typeof relationships !== "object") {
-      throw new Error(`Model '${className}' has invalid relationships config`)
-    }
-
-    /** @type {Array<{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}>} */
-    const normalized = []
-
-    for (const relationshipName in relationships) {
-      const relationship = relationships[relationshipName]
-
-      if (relationship === true) {
-        normalized.push(this.inferredRelationshipDefinition({className, relationshipName}))
-        continue
-      }
-
-      if (!relationship || typeof relationship !== "object" || Array.isArray(relationship)) {
-        throw new Error(`Model '${className}' relationship '${relationshipName}' must be an object or true`)
-      }
-
-      const relationshipModelName = relationship.modelClassName || relationship.className || relationship.model
-      const hasExplicitType = typeof relationship.type === "string" && relationship.type.length > 0
-      const hasExplicitModel = typeof relationshipModelName === "string" && relationshipModelName.length > 0
-      const inferredRelationship = hasExplicitType && hasExplicitModel
-        ? null
-        : this.inferredRelationshipDefinition({className, relationshipName})
-      const relationshipType = relationship.type || inferredRelationship?.type
-
-      if (relationshipType !== "belongsTo" && relationshipType !== "hasOne" && relationshipType !== "hasMany") {
-        throw new Error(`Model '${className}' relationship '${relationshipName}' has invalid type '${relationshipType}'`)
-      }
-
-      const targetClassName = hasExplicitModel
-        ? inflection.camelize(String(relationshipModelName).replaceAll("-", "_"))
-        : inferredRelationship?.targetClassName
-
-      if (!targetClassName) {
-        throw new Error(`Model '${className}' relationship '${relationshipName}' has no target model class`)
-      }
-
-      normalized.push({
-        relationshipName,
-        targetClassName,
-        targetFileName: inflection.dasherize(inflection.underscore(targetClassName)),
-        type: relationshipType
-      })
-    }
-
-    return normalized
+    return relationships.map((relationshipName) => this.inferredRelationshipDefinition({className, relationshipName}))
   }
 
   /**

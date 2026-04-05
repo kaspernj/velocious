@@ -409,11 +409,12 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   async findBy(conditions) {
     /** @type {{[key: string]: number | string}} */
     const newConditions = {}
+    const attributeNameToColumnName = this.modelClass.getAttributeNameToColumnNameMap()
 
     for (const key in conditions) {
-      const keyUnderscore = inflection.underscore(key)
+      const columnName = attributeNameToColumnName[key] || inflection.underscore(key)
 
-      newConditions[keyUnderscore] = conditions[key]
+      newConditions[columnName] = conditions[key]
     }
 
     const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
@@ -443,26 +444,13 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
   async findByOrFail(conditions) {
-    /** @type {{[key: string]: number | string}} */
-    const newConditions = {}
+    const record = await this.findBy(conditions)
 
-    for (const key in conditions) {
-      const keyUnderscore = inflection.underscore(key)
-
-      newConditions[keyUnderscore] = conditions[key]
-    }
-
-    const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
-
-    newQuery.where(newConditions)
-
-    const model = await newQuery.first()
-
-    if (!model) {
+    if (!record) {
       throw new Error("Record not found")
     }
 
-    return model
+    return record
   }
 
   /**

@@ -637,17 +637,17 @@ export default class VelociousConfiguration {
 
         if (!resourceConfig?.relationships) continue
 
+        if (!Array.isArray(resourceConfig.relationships)) {
+          throw new Error(`Resource for ${modelName} defines relationships as an object. Use an array instead: static relationships = ${JSON.stringify(Object.keys(resourceConfig.relationships))}`)
+        }
+
         const modelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
 
         if (!modelClass) continue
 
         const existingRelationships = modelClass.getRelationshipsMap()
 
-        const relationshipNames = Array.isArray(resourceConfig.relationships)
-          ? resourceConfig.relationships
-          : Object.keys(resourceConfig.relationships)
-
-        for (const relationshipName of relationshipNames) {
+        for (const relationshipName of resourceConfig.relationships) {
           if (!(relationshipName in existingRelationships)) {
             throw new Error(
               `Resource for ${modelName} defines relationship "${relationshipName}" but ${modelName} model does not. ` +
