@@ -95,6 +95,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {Set<string>} args.availableFrontendModelClassNames - Available frontend model class names in backend project.
    * @param {string} args.className - Model class name.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
+   * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} [args.resourceClass]
    * @returns {void} - No return value.
    */
   validateModelConfig({availableFrontendModelClassNames, className, modelConfig, resourceClass}) {
@@ -180,6 +181,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {string} args.importPath - Base class import path.
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
+   * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} [args.resourceClass]
    * @returns {string} - Generated file content.
    */
   buildModelFileContent({className, importPath, modelClass, modelConfig, resourceClass}) {
@@ -639,6 +641,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {object} args - Arguments.
    * @param {string} args.className - Model class name.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
+   * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} [args.resourceClass]
    * @returns {Array<{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationships.
    */
   relationshipsForModel({className, modelConfig, resourceClass}) {
@@ -659,6 +662,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {object} args - Arguments.
    * @param {string} args.className - Model class name.
    * @param {string} args.relationshipName - Relationship name.
+   * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} [args.resourceClass]
    * @returns {{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}} Inferred relationship definition.
    */
   inferredRelationshipDefinition({className, relationshipName, resourceClass}) {
