@@ -80,11 +80,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     if (attributeMap[key]) return attributeMap[key]
 
-    const underscored = inflection.underscore(key)
-
-    if (attributeMap[underscored]) return attributeMap[underscored]
-
     const columnMap = modelClass.getColumnNameToAttributeNameMap()
+    const underscored = inflection.underscore(key)
 
     if (columnMap[key]) return key
     if (columnMap[underscored]) return underscored
