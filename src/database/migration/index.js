@@ -136,14 +136,15 @@ export default class VelociousDatabaseMigration {
    */
   /**
    * @param {string} tableName - Table name.
-   * @param {Array<string | import("../table-data/table-column.js").default>} columns - Column names.
+   * @param {string | Array<string | import("../table-data/table-column.js").default>} columns - Column name or array of column names.
    * @param {AddIndexArgsType} [args] - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async addIndex(tableName, columns, args) {
+    const normalizedColumns = typeof columns === "string" ? [columns] : columns
     const createIndexArgs = Object.assign(
       {
-        columns,
+        columns: normalizedColumns,
         tableName
       },
       args
