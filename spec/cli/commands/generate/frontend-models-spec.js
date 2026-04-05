@@ -40,18 +40,18 @@ class MissingAbilitiesTaskFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class MissingRelationshipTargetTask extends DatabaseRecord {}
+MissingRelationshipTargetTask.belongsTo("project")
+
 class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = MissingRelationshipTargetTask
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
       attributes: ["id", "name"],
       path: "/tasks",
-      relationships: {
-        project: {
-          model: "Project",
-          type: "belongsTo"
-        }
-      }
+      relationships: ["project"]
     }
   }
 }
