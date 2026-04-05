@@ -26,6 +26,25 @@ describe("Record - find", {tags: ["dummy"]}, () => {
     }
   })
 
+  it("resolves camelCase attribute names to column names in findBy", async () => {
+    const project = await Project.create()
+    const task = await Task.create({name: "findBy column resolve", project})
+
+    const found = await Task.findBy({projectId: project.id()})
+
+    expect(found).toBeTruthy()
+    expect(found?.id()).toEqual(task.id())
+  })
+
+  it("resolves camelCase attribute names to column names in findByOrFail", async () => {
+    const project = await Project.create()
+    const task = await Task.create({name: "findByOrFail column resolve", project})
+
+    const found = await Task.findByOrFail({projectId: project.id()})
+
+    expect(found.id()).toEqual(task.id())
+  })
+
   it("treats numeric ids as strings for uuid primary keys", async () => {
     try {
       await UuidItem.find(1)
