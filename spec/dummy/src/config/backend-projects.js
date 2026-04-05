@@ -26,16 +26,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
         find: "find",
         update: "update"
       },
-      relationships: {
-        project: {
-          model: "Project",
-          type: "belongsTo"
-        },
-        comments: {
-          model: "Comment",
-          type: "hasMany"
-        }
-      },
+      relationships: ["project", "comments"],
       primaryKey: "id"
     }
   }
@@ -66,12 +57,7 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
       attributes: ["id"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      relationships: {
-        tasks: {
-          model: "Task",
-          type: "hasMany"
-        }
-      }
+      relationships: ["tasks"]
     }
   }
 }

@@ -407,18 +407,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   async findBy(conditions) {
-    /** @type {{[key: string]: number | string}} */
-    const newConditions = {}
-
-    for (const key in conditions) {
-      const keyUnderscore = inflection.underscore(key)
-
-      newConditions[keyUnderscore] = conditions[key]
-    }
-
     const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
-    newQuery.where(newConditions)
+    newQuery.where(conditions)
 
     return await newQuery.first()
   }
@@ -443,26 +434,13 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
   async findByOrFail(conditions) {
-    /** @type {{[key: string]: number | string}} */
-    const newConditions = {}
+    const record = await this.findBy(conditions)
 
-    for (const key in conditions) {
-      const keyUnderscore = inflection.underscore(key)
-
-      newConditions[keyUnderscore] = conditions[key]
-    }
-
-    const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
-
-    newQuery.where(newConditions)
-
-    const model = await newQuery.first()
-
-    if (!model) {
+    if (!record) {
       throw new Error("Record not found")
     }
 
-    return model
+    return record
   }
 
   /**
@@ -789,11 +767,13 @@ function getRelationshipByName(modelClass, relationshipName) {
  */
 function resolveColumnName(modelClass, key) {
   const attributeMap = modelClass.getAttributeNameToColumnNameMap()
-  const columnName = attributeMap[key]
 
-  if (columnName) return columnName
+  if (attributeMap[key]) return attributeMap[key]
 
-  return undefined
+  const columnMap = modelClass.getColumnNameToAttributeNameMap()
+  const underscored = inflection.underscore(key)
+
+  return columnMap[key] || columnMap[underscored] || undefined
 }
 
 /**
