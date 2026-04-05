@@ -407,19 +407,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   async findBy(conditions) {
-    /** @type {{[key: string]: number | string}} */
-    const newConditions = {}
-    const attributeNameToColumnName = this.modelClass.getAttributeNameToColumnNameMap()
-
-    for (const key in conditions) {
-      const columnName = attributeNameToColumnName[key] || inflection.underscore(key)
-
-      newConditions[columnName] = conditions[key]
-    }
-
     const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
-    newQuery.where(newConditions)
+    newQuery.where(conditions)
 
     return await newQuery.first()
   }
