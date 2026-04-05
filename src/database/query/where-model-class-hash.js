@@ -1,5 +1,6 @@
 // @ts-check
 
+import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
 import WhereBase from "./where-base.js"
 
@@ -76,9 +77,17 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    */
   _resolveColumnName(modelClass, key) {
     const attributeMap = modelClass.getAttributeNameToColumnNameMap()
-    const columnName = attributeMap[key]
 
-    if (columnName) return columnName
+    if (attributeMap[key]) return attributeMap[key]
+
+    const underscored = inflection.underscore(key)
+
+    if (attributeMap[underscored]) return attributeMap[underscored]
+
+    const columnMap = modelClass.getColumnNameToAttributeNameMap()
+
+    if (columnMap[key]) return key
+    if (columnMap[underscored]) return underscored
 
     return undefined
   }

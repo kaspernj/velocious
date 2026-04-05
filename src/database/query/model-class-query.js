@@ -767,11 +767,10 @@ function getRelationshipByName(modelClass, relationshipName) {
  */
 function resolveColumnName(modelClass, key) {
   const attributeMap = modelClass.getAttributeNameToColumnNameMap()
-  const columnName = attributeMap[key]
+  const columnMap = modelClass.getColumnNameToAttributeNameMap()
+  const underscored = inflection.underscore(key)
 
-  if (columnName) return columnName
-
-  return undefined
+  return attributeMap[key] || attributeMap[underscored] || columnMap[key] || columnMap[underscored] || undefined
 }
 
 /**
