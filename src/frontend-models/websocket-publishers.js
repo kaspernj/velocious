@@ -36,25 +36,25 @@ function frontendModelResourcesFromAbilityResources(configuration) {
       throw new Error(`Expected ability resource to be a class but got: ${typeof resourceClass}`)
     }
 
-    if (!(resourceClass.prototype instanceof AuthorizationBaseResource)) {
-      throw new Error(`Expected ability resource to extend AuthorizationBaseResource but got: ${resourceClass.name}`)
+    if (resourceClass.prototype instanceof FrontendModelBaseResource) {
+      const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
+
+      if (!modelClass) {
+        throw new Error(`Resource class ${resourceClass.name} is missing a static ModelClass property`)
+      }
+
+      const modelName = modelClass.getModelName()
+
+      if (!modelName) {
+        throw new Error(`Model class ${modelClass.name} returned empty model name from getModelName()`)
+      }
+
+      resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
+    } else if (resourceClass.prototype instanceof AuthorizationBaseResource) {
+      // Authorization-only resource — valid but not relevant for WebSocket publishing
+    } else {
+      throw new Error(`Unexpected ability resource class: ${resourceClass.name}. Expected AuthorizationBaseResource or FrontendModelBaseResource subclass.`)
     }
-
-    if (!(resourceClass.prototype instanceof FrontendModelBaseResource)) continue
-
-    const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
-
-    if (!modelClass) {
-      throw new Error(`Resource class ${resourceClass.name} is missing a static ModelClass property`)
-    }
-
-    const modelName = modelClass.getModelName()
-
-    if (!modelName) {
-      throw new Error(`Model class ${modelClass.name} returned empty model name from getModelName()`)
-    }
-
-    resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
   }
 
   return resources
