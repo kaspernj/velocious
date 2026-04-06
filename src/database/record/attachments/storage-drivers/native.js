@@ -83,7 +83,7 @@ export default class NativeAttachmentStorageDriver {
     }
 
     const result = await this.options.read({
-      attachmentId: row.id ? String(row.id) : "",
+      attachmentId: row.id || "",
       attachmentName: name,
       model,
       row,
@@ -105,7 +105,7 @@ export default class NativeAttachmentStorageDriver {
     if (typeof this.options.delete !== "function") return
 
     await this.options.delete({
-      attachmentId: row.id ? String(row.id) : "",
+      attachmentId: row.id || "",
       attachmentName: name,
       model,
       row,
@@ -125,7 +125,7 @@ export default class NativeAttachmentStorageDriver {
     if (typeof this.options.url !== "function") return null
 
     const value = await this.options.url({
-      attachmentId: row.id ? String(row.id) : "",
+      attachmentId: row.id || "",
       attachmentName: name,
       model,
       row,
