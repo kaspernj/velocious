@@ -64,7 +64,7 @@ describe("Frontend models - websocket publishers", () => {
     expect(publishedChannels).toEqual([])
   })
 
-  it("falls back gracefully when ability resolver requires request context", async () => {
+  it("throws when ability resolver requires request context", async () => {
     const mockConfiguration = {
       getAbilityResources: () => [],
       getAbilityResolver: () => async (/** @type {any} */ {request}) => {
@@ -78,8 +78,9 @@ describe("Frontend models - websocket publishers", () => {
       getWebsocketEvents: () => null
     }
 
-    // Should not throw — catches the resolver error gracefully
-    await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
+    await expect(async () => {
+      await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
+    }).toThrow(/Cannot read properties of undefined/)
   })
 
   it("throws when ability resources contain non-function entries", async () => {
