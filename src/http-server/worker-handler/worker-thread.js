@@ -156,6 +156,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    */
   async broadcastWebsocketEvent({channel, payload}) {
     const sendTasks = []
+    const isDebug = this.configuration?.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")
     let clientCount = 0
     let sessionCount = 0
     let matchCount = 0
@@ -163,21 +164,23 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     for (const clientKey of Object.keys(this.clients)) {
       const client = this.clients[Number(clientKey)]
       if (!client) continue
-      clientCount++
+      if (isDebug) clientCount++
       const session = client.websocketSession
 
       if (!session) continue
-      sessionCount++
+      if (isDebug) sessionCount++
 
-      const hasSubscription = session.hasSubscription(channel)
-      const hasHandlers = session.subscriptionHandlers?.has(channel)
+      if (isDebug) {
+        const hasSubscription = session.hasSubscription(channel)
+        const hasHandlers = session.subscriptionHandlers?.has(channel)
 
-      if (hasSubscription || hasHandlers) matchCount++
+        if (hasSubscription || hasHandlers) matchCount++
+      }
 
       sendTasks.push(session.sendEvent(channel, payload))
     }
 
-    if (this.configuration?.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")) {
+    if (isDebug) {
       console.log(`[ws-debug] broadcastWebsocketEvent channel=${channel} clients=${clientCount} sessions=${sessionCount} matches=${matchCount}`)
     }
 
