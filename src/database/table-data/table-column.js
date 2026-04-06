@@ -16,6 +16,7 @@ import TableForeignKey from "./table-foreign-key.js"
  * @property {boolean|object} [foreignKey] - Foreign key options or flag.
  * @property {boolean|IndexArgType} [index] - Whether the column should be indexed.
  * @property {boolean} [isNewColumn] - Whether this column is being added in a migration.
+ * @property {number} [limit] - Alias for maxLength (varchar length limit).
  * @property {number} [maxLength] - Maximum length for the column value.
  * @property {string} [notes] - Column notes or comment.
  * @property {boolean} [null] - Whether the column allows null values.
@@ -33,13 +34,22 @@ export default class TableColumn {
    */
   constructor(name, args) {
     if (args) {
-      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, maxLength, notes, null: argsNull, polymorphic, precision, primaryKey, scale, type, ...restArgs} = args // eslint-disable-line no-unused-vars
+      const {autoIncrement, default: columnDefault, dropColumn, foreignKey, index, isNewColumn, limit, maxLength, notes, null: argsNull, polymorphic, precision, primaryKey, scale, type, ...restArgs} = args // eslint-disable-line no-unused-vars
 
       if (Object.keys(args).length == 0) {
         throw new Error("Empty args given")
       }
 
       restArgsError(restArgs)
+
+      // Normalize limit → maxLength for string-like types only.
+      if (limit !== undefined && maxLength === undefined) {
+        const normalizedType = typeof type === "string" ? type.toLowerCase() : ""
+
+        if (normalizedType === "string" || normalizedType === "text" || normalizedType === "varchar" || normalizedType === "nvarchar" || normalizedType === "char") {
+          args.maxLength = limit
+        }
+      }
     }
 
     this.args = args || {}
