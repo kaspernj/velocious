@@ -295,6 +295,7 @@ class VelociousDatabaseRecord {
   /**
    * @typedef {object} RelationshipDataArgumentType
    * @property {string} [className] - Model class name for the related record.
+   * @property {string} [dependent] - Dependent action when parent is destroyed (e.g. "destroy").
    * @property {typeof VelociousDatabaseRecord} [klass] - Model class for the related record.
    * @property {RelationshipScopeCallback} [scope] - Optional scope callback for the relationship.
    * @property {string} [type] - Relationship type (e.g. "hasMany", "belongsTo").
