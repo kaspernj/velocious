@@ -190,6 +190,7 @@
  * @property {string} [sqlType] - Alias for column type name.
  * @property {string} [dataType] - Alias for column type name.
  * @property {boolean} [null] - Whether value can be null.
+ * @property {boolean} [selectedByDefault] - Whether included in default serialization. Defaults to true.
  */
 
 /**
