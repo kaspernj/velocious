@@ -28,6 +28,24 @@ describe("Record - destroy", {tags: ["dummy"]}, () => {
     expect(foundTask2).toBeDefined()
   })
 
+  it("destroys dependent translations when destroying a record", async () => {
+    const project = await Project.create()
+    const TranslationClass = Project.getTranslationClass()
+
+    await TranslationClass.create({projectId: project.id(), locale: "en", name: "English name"})
+    await TranslationClass.create({projectId: project.id(), locale: "da", name: "Danish name"})
+
+    const translationsBefore = await TranslationClass.where({projectId: project.id()}).toArray()
+
+    expect(translationsBefore.length).toEqual(2)
+
+    await project.destroy()
+
+    const translationsAfter = await TranslationClass.where({projectId: project.id()}).toArray()
+
+    expect(translationsAfter.length).toEqual(0)
+  })
+
   it("runs lifecycle callbacks around destroy", async () => {
     const previousLifecycleCallbacks = Task._lifecycleCallbacks
     /** @type {string[]} */
