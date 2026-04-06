@@ -255,10 +255,7 @@
  * @typedef {object} BackendProjectConfiguration
  * @property {string} path - Path to the backend project.
  * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
- * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Frontend model definitions keyed by model class name.
- * @property {{(id: string): {default?: unknown}, keys: () => string[]}} [frontendModelsRequireContext] - Webpack-style require context for frontend model resource files.
- * @property {Record<string, FrontendModelResourceDefinition>} [resources] - Alias for `frontendModels`.
- * @property {{(id: string): {default?: unknown}, keys: () => string[]}} [resourcesRequireContext] - Alias for `frontendModelsRequireContext`.
+ * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Auto-discovered frontend model definitions keyed by model class name. Set internally by the environment handler — do not set manually.
  */
 
 /**

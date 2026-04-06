@@ -30,22 +30,15 @@ async function resolveAbilityResourcesList(configuration) {
 
   if (explicit && explicit.length > 0) return explicit
 
-  // Try to resolve from the ability resolver by calling it with a synthetic
-  // context. The resolver may access request/response methods which aren't
-  // available during initialization — catch and return empty in that case.
+  // Resolve from the ability resolver by calling it with a synthetic context.
+  // The resolver must handle undefined request/response gracefully.
   const resolver = configuration.getAbilityResolver?.()
 
   if (typeof resolver === "function") {
-    try {
-      const ability = await resolver({configuration, params: {}, request: /** @type {any} */ (undefined), response: /** @type {any} */ (undefined)})
+    const ability = await resolver({configuration, params: {}, request: /** @type {any} */ (undefined), response: /** @type {any} */ (undefined)})
 
-      if (ability?.resources && Array.isArray(ability.resources)) {
-        return ability.resources
-      }
-    } catch {
-      // Resolver requires request context (e.g. reads request.path()) which is
-      // unavailable during initialization. Use configuration.setAbilityResources()
-      // or backendProjects.frontendModels for explicit registration instead.
+    if (ability?.resources && Array.isArray(ability.resources)) {
+      return ability.resources
     }
   }
 
@@ -104,21 +97,15 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
   /** @type {Record<string, typeof FrontendModelBaseResource>} */
   let allFrontendModels = {}
-  let hasExplicitConfig = false
 
   for (const backendProject of configuration.getBackendProjects()) {
-    if (backendProject.frontendModels !== undefined || backendProject.frontendModelsRequireContext !== undefined) {
-      hasExplicitConfig = true
-    }
-
     const projectResources = frontendModelResourcesForBackendProject(backendProject)
 
     allFrontendModels = {...allFrontendModels, ...projectResources}
   }
 
-  // Auto-discover from ability resources only when no backend project
-  // explicitly defines frontendModels or frontendModelsRequireContext
-  if (!hasExplicitConfig) {
+  // Auto-discover from ability resources when backend projects didn't provide any
+  if (Object.keys(allFrontendModels).length === 0) {
     const abilityResources = await resolveAbilityResourcesList(configuration)
 
     allFrontendModels = frontendModelResourcesFromAbilityResourcesList(abilityResources)

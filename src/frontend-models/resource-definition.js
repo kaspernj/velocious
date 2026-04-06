@@ -20,35 +20,7 @@ export function frontendModelResourcesForBackendProject(backendProject) {
     return resources
   }
 
-  const resourcesRequireContext = backendProject.frontendModelsRequireContext
-
-  if (resourcesRequireContext === undefined) {
-    return {}
-  }
-
-  if (typeof resourcesRequireContext !== "function" || typeof resourcesRequireContext.keys !== "function") {
-    throw new Error("Expected backend project frontendModelsRequireContext to be a webpack-style require context")
-  }
-
-  /** @type {Record<string, typeof FrontendModelBaseResource>} */
-  const resolvedResources = {}
-
-  for (const resourcePath of resourcesRequireContext.keys()) {
-    const importedModule = resourcesRequireContext(resourcePath)
-    const resourceDefinition = importedModule?.default
-
-    if (!frontendModelResourceDefinitionIsClass(resourceDefinition)) continue
-
-    const modelName = frontendModelModelNameFromResourcePath(resourcePath, resourceDefinition)
-
-    if (resolvedResources[modelName]) {
-      throw new Error(`Duplicate frontend model resource definition for '${modelName}' from '${resourcePath}'`)
-    }
-
-    resolvedResources[modelName] = resourceDefinition
-  }
-
-  return resolvedResources
+  return {}
 }
 
 /**
@@ -405,28 +377,6 @@ export function frontendModelCustomCommandForPath({backendProjects, currentPath}
   }
 
   return null
-}
-
-/**
- * Infer frontend model names from an `index.js`-aware require-context path heuristic so layouts like `./users/index.js` still resolve to `User`.
- * @param {string} resourcePath - Require-context resource path.
- * @param {typeof FrontendModelBaseResource} resourceDefinition - Frontend-model resource class.
- * @returns {string} - Backing model class name.
- */
-function frontendModelModelNameFromResourcePath(resourcePath, resourceDefinition) {
-  void resourceDefinition
-
-  const pathWithoutPrefix = resourcePath.replace(/^\.\//, "")
-  const pathWithoutExtension = pathWithoutPrefix.replace(/\.[^.]+$/, "")
-  const pathSegments = pathWithoutExtension.split("/").filter(Boolean)
-  const lastSegment = pathSegments.at(-1)
-  const modelSegment = lastSegment === "index" ? pathSegments.at(-2) : lastSegment
-
-  if (!modelSegment) {
-    throw new Error(`Could not infer frontend model name from resource path '${resourcePath}'`)
-  }
-
-  return inflection.camelize(inflection.singularize(modelSegment))
 }
 
 /**

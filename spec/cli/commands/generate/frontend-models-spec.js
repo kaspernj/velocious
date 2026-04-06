@@ -10,7 +10,6 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import fs from "fs/promises"
 import path from "node:path"
-import {buildRequireContext} from "../../../helpers/require-context-test-helper.js"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
 
 class CallFrontendResource extends FrontendModelBaseResource {
@@ -293,32 +292,6 @@ describe("Cli - generate - frontend-models", () => {
     })
 
     await cli.execute()
-  })
-
-  it("generates frontend models from backend project frontendModelsRequireContext", async () => {
-    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
-
-    const cli = new Cli({
-      configuration: buildConfiguration({
-        backendProjectsList: [{
-          path: "/tmp/backend",
-          frontendModelsRequireContext: buildRequireContext({
-            "./call.js": {default: CallFrontendResource},
-            "./helper.js": {default: {not: "a resource"}}
-          })
-        }]
-      }),
-      directory: dummyDirectory(),
-      environmentHandler: new EnvironmentHandlerNode(),
-      processArgs: ["g:frontend-models"],
-      testing: true
-    })
-
-    await cli.execute()
-
-    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
-
-    expect(callContents).toContain("class Call extends FrontendModelBase")
   })
 
   it("fails when a relationship target has no frontend model resource", async () => {
