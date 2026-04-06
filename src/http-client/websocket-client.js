@@ -25,9 +25,7 @@ export default class VelociousWebsocketClient {
     if (!globalThis.WebSocket) throw new Error("WebSocket global is not available")
 
     /** @type {boolean} */
-    this.autoReconnect = false
-    /** @type {boolean} */
-    this.autoReconnectEnabled = autoReconnect
+    this.autoReconnect = autoReconnect
     this.debug = debug
     /** @type {number | null} */
     this.disconnectedSince = null
@@ -99,6 +97,12 @@ export default class VelociousWebsocketClient {
    */
   async close() {
     if (!this.socket) return
+
+    if (this.socket.readyState === this.socket.CLOSED) {
+      this.socket = undefined
+      this.connectPromise = undefined
+      return
+    }
 
     await new Promise((resolve) => {
       this.socket?.addEventListener("close", () => resolve(undefined))
