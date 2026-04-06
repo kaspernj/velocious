@@ -1776,12 +1776,19 @@ class VelociousDatabaseRecord {
   _setTranslatedAttribute(name, locale, newValue) {
     /** @type {VelociousDatabaseRecord | TranslationBase | undefined} */
     let translation
+    const instanceRelationship = this.getRelationshipByName("translations")
 
-    translation = this.translationsLoaded()?.find((translation) => translation.locale() == locale)
+    if (this.isNewRecord()) {
+      const loaded = instanceRelationship.loaded()
+
+      if (Array.isArray(loaded)) {
+        translation = loaded.find((/** @type {Record<string, any>} */ t) => t.locale() == locale)
+      }
+    } else {
+      translation = this.translationsLoaded().find((t) => /** @type {Record<string, any>} */ (t).locale() == locale)
+    }
 
     if (!translation) {
-      const instanceRelationship = this.getRelationshipByName("translations")
-
       translation = instanceRelationship.build({locale})
     }
 
