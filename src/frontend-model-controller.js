@@ -1515,6 +1515,8 @@ export default class FrontendModelController extends Controller {
       }
     }
 
+    query = this.applyFrontendModelTranslatedAttributePreloads({query})
+
     if (query._distinct && query.driver.getType() === "mssql") {
       return this.frontendModelMssqlDistinctByPrimaryKeyQuery({query})
     }
@@ -2002,6 +2004,44 @@ export default class FrontendModelController extends Controller {
     query.group(columnSql)
     groupedColumns.add(columnSql)
     queryMetadata[frontendModelGroupedColumnsSymbol] = groupedColumns
+  }
+
+  /**
+   * @param {object} args - Args.
+   * @param {import("./database/query/model-class-query.js").default<any>} args.query - Query instance.
+   * @returns {import("./database/query/model-class-query.js").default<any>} - Query with translations preloaded if needed.
+   */
+  applyFrontendModelTranslatedAttributePreloads({query}) {
+    const modelClass = this.frontendModelClass()
+    const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+
+    if (!selectedAttributes) return query
+
+    const resource = this.frontendModelResourceInstance()
+    const resourceClass = /** @type {typeof import("./frontend-model-resource/base-resource.js").default} */ (resource.constructor)
+    const translatedSet = new Set(resourceClass.translatedAttributes || [])
+    let needsTranslations = false
+
+    for (const attributeName of selectedAttributes) {
+      const hookName = `${attributeName}AttributeSelected`
+      const dynamicResource = /** @type {Record<string, any>} */ (/** @type {unknown} */ (resource))
+
+      if (typeof dynamicResource[hookName] === "function") {
+        const result = dynamicResource[hookName]({query})
+
+        if (result) {
+          query = result
+        }
+      } else if (translatedSet.has(attributeName)) {
+        needsTranslations = true
+      }
+    }
+
+    if (needsTranslations) {
+      query = query.preload({translations: {}})
+    }
+
+    return query
   }
 
   /**

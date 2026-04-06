@@ -194,6 +194,25 @@ async function withTaskReadDistinctAbilityScope(callback) {
 }
 
 /**
+ * @param {"create" | "destroy" | "find" | "index" | "update"} commandType - Command.
+ * @param {Record<string, any>} payload - Command payload.
+ * @returns {Promise<Record<string, any>>} - Command response payload.
+ */
+async function postSharedProjectFrontendModelCommand(commandType, payload) {
+  const response = await postFrontendModel("/frontend-models", {
+    modelName: "Project",
+    requests: [{
+      commandType,
+      model: "Project",
+      payload,
+      requestId: "request-1"
+    }]
+  })
+
+  return /** @type {Record<string, any>} */ (response.responses?.[0]?.response || response)
+}
+
+/**
  * @param {string} name - Task name.
  * @returns {Promise<Task>} - Created task.
  */
@@ -1083,6 +1102,70 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.models.map((model) => model.name)).toEqual(["Owner Task B"])
+    })
+  })
+
+  it("creates a model with translatedAttributes through the shared frontend-model API", async () => {
+    await Dummy.run(async () => {
+      const payload = await postSharedProjectFrontendModelCommand("create", {
+        attributes: {name: "Translated create project"}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.id).toBeDefined()
+
+      const persisted = await Project.preload({translations: {}}).findBy({id: payload.model.id})
+
+      expect(persisted).toBeDefined()
+      expect(persisted.name()).toEqual("Translated create project")
+    })
+  })
+
+  it("updates a model with translatedAttributes through the shared frontend-model API", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Original project name"})
+
+      const payload = await postSharedProjectFrontendModelCommand("update", {
+        attributes: {name: "Updated project name"},
+        id: project.id()
+      })
+
+      expect(payload.status).toEqual("success")
+
+      const persisted = await Project.preload({translations: {}}).findBy({id: project.id()})
+
+      expect(persisted).toBeDefined()
+      expect(persisted.name()).toEqual("Updated project name")
+    })
+  })
+
+  it("auto-preloads translations when selecting a translated attribute", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Select test project"})
+
+      const payload = await postSharedProjectFrontendModelCommand("index", {
+        select: {Project: ["id", "name"]},
+        where: {id: project.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0].name).toEqual("Select test project")
+    })
+  })
+
+  it("excludes name from default serialization when selectedByDefault is false", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Hidden name project"})
+
+      const payload = await postSharedProjectFrontendModelCommand("index", {
+        where: {id: project.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.length).toEqual(1)
+      expect(payload.models[0].id).toEqual(project.id())
+      expect(payload.models[0].name).toEqual(undefined)
     })
   })
 })

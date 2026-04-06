@@ -46,15 +46,18 @@ class TaskFrontendResource extends FrontendModelBaseResource {
 
 class ProjectFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Project
+  static translatedAttributes = ["name"]
 
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
       abilities: {
+        create: "create",
         find: "read",
-        index: "read"
+        index: "read",
+        update: "update"
       },
-      attributes: ["id"],
+      attributes: ["id", {name: "name", selectedByDefault: false}],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       relationships: ["tasks"]
