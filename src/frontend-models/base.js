@@ -21,6 +21,7 @@ import VelociousWebsocketClient from "../http-client/websocket-client.js"
  * @property {boolean} [shared] - When true, route built-in commands for path-based models through the shared frontend-model API envelope instead of direct per-command endpoints.
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
  * @property {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
+ * @property {((args: {commandName: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, url: string}) => Promise<Record<string, any>>)} [request] - Optional custom transport handler.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -1397,6 +1398,10 @@ export default class FrontendModelBase {
       // Reset cached internal client so the new URL takes effect on next subscribe
       internalWebsocketClient = null
     }
+
+    if (Object.prototype.hasOwnProperty.call(config, "request")) {
+      frontendModelTransportConfig.request = config.request
+    }
   }
 
   /**
@@ -2104,6 +2109,10 @@ export default class FrontendModelBase {
     const useSharedTransport = !containsAttachmentUpload
     const url = useSharedTransport ? frontendModelApiUrl() : frontendModelCommandUrl(resourcePath || "", commandName)
 
+    if (frontendModelTransportConfig.request) {
+      return await this.performTransportRequest({commandName, commandType, payload: serializedPayload, url})
+    }
+
     if (useSharedTransport) {
       const batchResponse = await new Promise((resolve, reject) => {
         pendingSharedFrontendModelRequests.push({
@@ -2174,6 +2183,16 @@ export default class FrontendModelBase {
       resourcePath
     })
 
+    if (frontendModelTransportConfig.request) {
+      return await this.performTransportRequest({
+        commandName,
+        commandType,
+        customPath,
+        payload: serializedPayload,
+        url: frontendModelApiUrl()
+      })
+    }
+
     const batchResponse = await new Promise((resolve, reject) => {
       pendingSharedFrontendModelRequests.push({
         commandType,
@@ -2196,6 +2215,41 @@ export default class FrontendModelBase {
     })
 
     return decodedBatchResponse
+  }
+
+  /**
+   * @this {typeof FrontendModelBase}
+   * @param {object} args - Request arguments.
+   * @param {string} args.commandName - Transport command name.
+   * @param {FrontendModelRequestCommandType} args.commandType - Logical command type.
+   * @param {string} [args.customPath] - Custom backend route path when bypassing built-in resource commands.
+   * @param {Record<string, any>} args.payload - Serialized payload.
+   * @param {string} args.url - Request URL.
+   * @returns {Promise<Record<string, any>>} - Decoded response payload.
+   */
+  static async performTransportRequest({commandName, commandType, customPath, payload, url}) {
+    const request = frontendModelTransportConfig.request
+
+    if (!request) {
+      throw new Error("Frontend model transport request handler is not configured")
+    }
+
+    const customResponse = await request({
+      commandName,
+      commandType,
+      customPath,
+      modelClass: this,
+      payload,
+      url
+    })
+    const decodedResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(customResponse))
+
+    this.throwOnErrorFrontendModelResponse({
+      commandType,
+      response: decodedResponse
+    })
+
+    return decodedResponse
   }
 
   /**

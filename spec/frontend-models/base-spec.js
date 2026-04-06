@@ -2322,4 +2322,36 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("supports custom request transport handlers", async () => {
+    const User = buildTestModelClass()
+    /** @type {Array<Record<string, any>>} */
+    const requestCalls = []
+    const originalFetch = globalThis.fetch
+
+    FrontendModelBase.configureTransport({
+      request: async (args) => {
+        requestCalls.push(args)
+
+        return {models: []}
+      }
+    })
+    globalThis.fetch = /** @type {typeof fetch} */ (async () => {
+      throw new Error("Expected custom request transport to bypass fetch.")
+    })
+
+    try {
+      await User.toArray()
+
+      expect(requestCalls.length).toEqual(1)
+      expect(requestCalls[0].commandName).toEqual("index")
+      expect(requestCalls[0].commandType).toEqual("index")
+      expect(requestCalls[0].modelClass.name).toEqual(User.name)
+      expect(JSON.stringify(requestCalls[0].payload)).toEqual("{}")
+      expect(requestCalls[0].url).toEqual("/frontend-models")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
 })
