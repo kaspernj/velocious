@@ -1,5 +1,6 @@
 // @ts-check
 
+import AuthorizationBaseResource from "../authorization/base-resource.js"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
 import {frontendModelResourcesForBackendProject} from "./resource-definition.js"
 
@@ -33,6 +34,10 @@ function frontendModelResourcesFromAbilityResources(configuration) {
   for (const resourceClass of abilityResources) {
     if (typeof resourceClass !== "function") {
       throw new Error(`Expected ability resource to be a class but got: ${typeof resourceClass}`)
+    }
+
+    if (!(resourceClass.prototype instanceof AuthorizationBaseResource)) {
+      throw new Error(`Expected ability resource to extend AuthorizationBaseResource but got: ${resourceClass.name}`)
     }
 
     if (!(resourceClass.prototype instanceof FrontendModelBaseResource)) continue
