@@ -156,15 +156,29 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    */
   async broadcastWebsocketEvent({channel, payload}) {
     const sendTasks = []
+    let clientCount = 0
+    let sessionCount = 0
+    let matchCount = 0
 
     for (const clientKey of Object.keys(this.clients)) {
       const client = this.clients[Number(clientKey)]
       if (!client) continue
+      clientCount++
       const session = client.websocketSession
 
       if (!session) continue
+      sessionCount++
+
+      const hasSubscription = session.hasSubscription(channel)
+      const hasHandlers = session.subscriptionHandlers?.has(channel)
+
+      if (hasSubscription || hasHandlers) matchCount++
 
       sendTasks.push(session.sendEvent(channel, payload))
+    }
+
+    if (this.configuration?.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")) {
+      console.log(`[ws-debug] broadcastWebsocketEvent channel=${channel} clients=${clientCount} sessions=${sessionCount} matches=${matchCount}`)
     }
 
     await Promise.all(sendTasks)
