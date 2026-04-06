@@ -53,6 +53,26 @@ async function withDeniedTaskAbilityAction(deniedAbilityAction, callback) {
 }
 
 /**
+ * @param {string} userReference - Scoped user reference for the subquery condition.
+ * @param {() => Promise<void>} callback - Callback.
+ * @returns {Promise<void>}
+ */
+async function withSubqueryAbilityScope(userReference, callback) {
+  const previous = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE
+
+  try {
+    process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE = userReference
+    await callback()
+  } finally {
+    if (previous === undefined) {
+      delete process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE
+    } else {
+      process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE = previous
+    }
+  }
+}
+
+/**
  * @returns {void}
  */
 function resetFrontendModelTransport() {
@@ -342,6 +362,69 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
       } finally {
         resetFrontendModelTransport()
       }
+    })
+  })
+
+  it("finds a record when ability uses a subquery callback condition", async () => {
+    const userRef = `subquery-find-test-${Date.now()}`
+
+    await withSubqueryAbilityScope(userRef, async () => {
+      await Dummy.run(async () => {
+        configureNodeTransport()
+
+        try {
+          await User.create({
+            email: `${userRef}@example.com`,
+            encryptedPassword: "secret",
+            reference: userRef
+          })
+          const task = await createTaskWithProject({
+            creatingUserReference: userRef,
+            projectName: `Subquery project ${userRef}`,
+            taskName: `Subquery task ${userRef}`
+          })
+
+          const foundTask = await Task.find(task.id())
+
+          expect(foundTask).toBeDefined()
+          expect(foundTask.name()).toEqual(`Subquery task ${userRef}`)
+        } finally {
+          resetFrontendModelTransport()
+        }
+      })
+    })
+  })
+
+  it("destroys a record when ability uses a subquery callback condition", async () => {
+    const userRef = `subquery-destroy-test-${Date.now()}`
+
+    await withSubqueryAbilityScope(userRef, async () => {
+      await Dummy.run(async () => {
+        configureNodeTransport()
+
+        try {
+          await User.create({
+            email: `${userRef}@example.com`,
+            encryptedPassword: "secret",
+            reference: userRef
+          })
+          const task = await createTaskWithProject({
+            creatingUserReference: userRef,
+            projectName: `Destroy project ${userRef}`,
+            taskName: `Destroy task ${userRef}`
+          })
+
+          const frontendTask = await Task.find(task.id())
+
+          await frontendTask.destroy()
+
+          const persistedTask = await TaskModel.findBy({id: task.id()})
+
+          expect(persistedTask).toEqual(undefined)
+        } finally {
+          resetFrontendModelTransport()
+        }
+      })
     })
   })
 
