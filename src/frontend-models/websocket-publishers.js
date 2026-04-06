@@ -24,7 +24,11 @@ function frontendModelResourcesFromAbilityResources(configuration) {
   const resources = {}
   const abilityResources = configuration.getAbilityResources()
 
-  if (!abilityResources) return resources
+  if (abilityResources === undefined || abilityResources === null) return resources
+
+  if (!Array.isArray(abilityResources)) {
+    throw new Error(`Expected getAbilityResources() to return an array but got: ${typeof abilityResources}`)
+  }
 
   for (const resourceClass of abilityResources) {
     if (typeof resourceClass !== "function" || !(resourceClass.prototype instanceof FrontendModelBaseResource)) continue
