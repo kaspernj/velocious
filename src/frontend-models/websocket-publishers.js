@@ -22,29 +22,26 @@ export function frontendModelBroadcastChannelName(modelName) {
 function frontendModelResourcesFromAbilityResources(configuration) {
   /** @type {Record<string, typeof FrontendModelBaseResource>} */
   const resources = {}
+  const abilityResources = configuration.getAbilityResources()
 
-  /** @type {import("../configuration-types.js").AbilityResourceClassType[]} */
-  let abilityResources
-
-  try {
-    abilityResources = configuration.getAbilityResources()
-  } catch {
-    // Ability resources not configured — getAbilityResources throws when unset
-    return resources
-  }
+  if (!abilityResources) return resources
 
   for (const resourceClass of abilityResources) {
-    if (typeof resourceClass === "function" && resourceClass.prototype instanceof FrontendModelBaseResource) {
-      const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
+    if (typeof resourceClass !== "function" || !(resourceClass.prototype instanceof FrontendModelBaseResource)) continue
 
-      if (modelClass) {
-        const modelName = modelClass.getModelName?.() || modelClass.name
+    const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
 
-        if (modelName) {
-          resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
-        }
-      }
+    if (!modelClass) {
+      throw new Error(`Resource class ${resourceClass.name} is missing a static ModelClass property`)
     }
+
+    const modelName = modelClass.getModelName()
+
+    if (!modelName) {
+      throw new Error(`Model class ${modelClass.name} returned empty model name from getModelName()`)
+    }
+
+    resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
   }
 
   return resources
