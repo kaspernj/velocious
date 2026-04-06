@@ -384,10 +384,20 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
             taskName: `Subquery task ${userRef}`
           })
 
+          const outOfScopeTask = await createTaskWithProject({
+            creatingUserReference: "other-user-not-in-scope",
+            projectName: `Out of scope project ${userRef}`,
+            taskName: `Out of scope task ${userRef}`
+          })
+
           const foundTask = await Task.find(task.id())
 
           expect(foundTask).toBeDefined()
           expect(foundTask.name()).toEqual(`Subquery task ${userRef}`)
+
+          await expect(async () => {
+            await Task.find(outOfScopeTask.id())
+          }).toThrow(/not found/)
         } finally {
           resetFrontendModelTransport()
         }
@@ -413,6 +423,11 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
             projectName: `Destroy project ${userRef}`,
             taskName: `Destroy task ${userRef}`
           })
+          const outOfScopeTask = await createTaskWithProject({
+            creatingUserReference: "other-user-not-in-scope",
+            projectName: `No destroy project ${userRef}`,
+            taskName: `No destroy task ${userRef}`
+          })
 
           const frontendTask = await Task.find(task.id())
 
@@ -421,6 +436,16 @@ describe("Frontend models - authorization http integration", {databaseCleaning: 
           const persistedTask = await TaskModel.findBy({id: task.id()})
 
           expect(persistedTask).toEqual(undefined)
+
+          await expect(async () => {
+            const outOfScopeFrontendTask = await Task.find(outOfScopeTask.id())
+
+            await outOfScopeFrontendTask.destroy()
+          }).toThrow(/not found/)
+
+          const persistedOutOfScopeTask = await TaskModel.findBy({id: outOfScopeTask.id()})
+
+          expect(persistedOutOfScopeTask).toBeDefined()
         } finally {
           resetFrontendModelTransport()
         }
