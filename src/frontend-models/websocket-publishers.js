@@ -31,7 +31,11 @@ function frontendModelResourcesFromAbilityResources(configuration) {
   }
 
   for (const resourceClass of abilityResources) {
-    if (typeof resourceClass !== "function" || !(resourceClass.prototype instanceof FrontendModelBaseResource)) continue
+    if (typeof resourceClass !== "function") {
+      throw new Error(`Expected ability resource to be a class but got: ${typeof resourceClass}`)
+    }
+
+    if (!(resourceClass.prototype instanceof FrontendModelBaseResource)) continue
 
     const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
 
