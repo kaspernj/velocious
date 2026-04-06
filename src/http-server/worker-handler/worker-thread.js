@@ -74,7 +74,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     this.application = new Application({configuration, type: "worker-handler"})
 
-    if (configuration.isInitialized()) {
+    if (!configuration.isInitialized()) {
       await configuration.initialize({type: "worker-handler"})
     }
   }
