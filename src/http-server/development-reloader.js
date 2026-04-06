@@ -118,7 +118,7 @@ export default class VelociousHttpServerDevelopmentReloader {
 
     await this.watchPotentialDirectory(changedPath)
 
-    if (!this.shouldReloadPath(changedPath)) return
+    if (!this.shouldReloadPath({changedPath, fileName})) return
 
     this.scheduleReload(changedPath)
 
@@ -126,10 +126,14 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
-   * @param {string} changedPath - Changed path.
+   * @param {object} args - Options object.
+   * @param {string} args.changedPath - Changed path.
+   * @param {string | Buffer | null} args.fileName - Raw filename from fs.watch.
    * @returns {boolean} - Whether the path should trigger reload.
    */
-  shouldReloadPath(changedPath) {
+  shouldReloadPath({changedPath, fileName}) {
+    if (!fileName) return true
+
     const extension = path.extname(changedPath).toLowerCase()
 
     return RELOADABLE_EXTENSIONS.has(extension)

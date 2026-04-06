@@ -87,4 +87,44 @@ describe("HttpServer development reloader", () => {
       path.resolve("/app/src/tasks")
     ]))
   })
+
+  it("reloads when fs.watch omits the changed filename", async () => {
+    const reloads = []
+    const callbacks = new Map()
+
+    const reloader = new DevelopmentReloader({
+      configuration: {
+        getBackendProjects: () => [],
+        getDirectory: () => "/app"
+      },
+      debounceMs: 0,
+      onReload: async ({changedPath}) => {
+        reloads.push(changedPath)
+      },
+      readdir: async () => [],
+      stat: async () => ({isDirectory: () => true}),
+      watchFactory: (directoryPath, callback) => {
+        callbacks.set(path.resolve(directoryPath), callback)
+
+        return {
+          close: () => {},
+          on: () => {}
+        }
+      }
+    })
+
+    await reloader.start()
+
+    const rootCallback = callbacks.get(path.resolve("/app/src"))
+
+    if (!rootCallback) throw new Error("Expected root callback")
+
+    rootCallback("change", null)
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(reloads).toEqual([path.resolve("/app/src")])
+
+    await reloader.stop()
+  })
 })
