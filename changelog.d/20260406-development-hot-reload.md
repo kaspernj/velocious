@@ -1,0 +1,1 @@
+Development HTTP servers now watch application `src/` trees and recycle workers on source/template changes so edited controllers, models, resources, routes, and views are picked up without manually restarting the server process.
