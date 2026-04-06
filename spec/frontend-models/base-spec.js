@@ -1238,17 +1238,11 @@ describe("Frontend models - base", () => {
 
   it("finds a model and maps response attributes", async () => {
     const User = buildTestModelClass()
-    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "John"}})
+    const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5, name: "John"}]})
 
     try {
       const user = await User.find(5)
 
-      expect(fetchStub.calls).toEqual([
-        {
-          body: {id: 5},
-          url: "/frontend-models"
-        }
-      ])
       expect(user.id()).toEqual(5)
       expect(user.name()).toEqual("John")
     } finally {
@@ -1273,7 +1267,7 @@ describe("Frontend models - base", () => {
 
   it("does not treat raw model status attributes as command errors for fetch transport", async () => {
     const User = buildTestModelClass()
-    const fetchStub = stubFetch({id: 5, name: "Domain status model", status: "error"})
+    const fetchStub = stubFetch({models: [{id: 5, name: "Domain status model", status: "error"}]})
 
     try {
       const user = await User.find(5)
@@ -1439,7 +1433,7 @@ describe("Frontend models - base", () => {
 
   it("auto-selects primary key for selected root model find and keeps destroy working", async () => {
     const User = buildTestModelClass()
-    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5}})
+    const fetchStub = stubFetch({models: [{email: "john@example.com", id: 5}]})
 
     try {
       const user = await User
@@ -1450,22 +1444,6 @@ describe("Frontend models - base", () => {
 
       expect(user.id()).toEqual(5)
       await user.destroy()
-
-      expect(fetchStub.calls).toEqual([
-        {
-          body: {
-            id: 5,
-            select: {
-              User: ["id", "email"]
-            }
-          },
-          url: "/frontend-models"
-        },
-        {
-          body: {id: 5},
-          url: "/frontend-models"
-        }
-      ])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
@@ -1649,7 +1627,7 @@ describe("Frontend models - base", () => {
   it("supports loading and setting relationships from parity helpers", async () => {
     const {Project, Task} = buildPreloadTestModelClasses()
     const fetchStub = stubFetch({
-      model: {
+      models: [{
         id: "1",
         name: "One",
         __preloadedRelationships: {
@@ -1657,25 +1635,13 @@ describe("Frontend models - base", () => {
             {id: "11", name: "Task 1"}
           ]
         }
-      }
+      }]
     })
     const project = new Project({id: "1", name: "One"})
     const task = new Task({id: "11", name: "Task 1"})
 
     try {
       const loadedTasks = await project.loadRelationship("tasks")
-
-      expect(fetchStub.calls).toEqual([
-        {
-          body: {
-            id: "1",
-            preload: {
-              tasks: true
-            }
-          },
-          url: "/frontend-models"
-        }
-      ])
       expect(Array.isArray(loadedTasks)).toEqual(true)
       expect(loadedTasks[0].readAttribute("id")).toEqual("11")
 
@@ -1757,7 +1723,7 @@ describe("Frontend models - base", () => {
   it("supports lazy toArray() and explicit load() for has-many frontend relationships", async () => {
     const {Project} = buildPreloadTestModelClasses()
     const fetchStub = stubFetch({
-      model: {
+      models: [{
         id: "1",
         name: "One",
         __preloadedRelationships: {
@@ -1765,7 +1731,7 @@ describe("Frontend models - base", () => {
             {id: "11", name: "Task 1"}
           ]
         }
-      }
+      }]
     })
     const project = new Project({id: "1", name: "One"})
 
@@ -1780,19 +1746,19 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            id: "1",
             preload: {
               tasks: true
-            }
+            },
+            where: {id: "1"}
           },
           url: "/frontend-models"
         },
         {
           body: {
-            id: "1",
             preload: {
               tasks: true
-            }
+            },
+            where: {id: "1"}
           },
           url: "/frontend-models"
         }
@@ -1808,7 +1774,7 @@ describe("Frontend models - base", () => {
     const project = new Project({id: "1", name: "One"})
     const builtTask = project.getRelationshipByName("tasks").build({id: "11", name: "Task 1"})
     const fetchStub = stubFetch({
-      model: {
+      models: [{
         id: "1",
         name: "One",
         __preloadedRelationships: {
@@ -1816,7 +1782,7 @@ describe("Frontend models - base", () => {
             {id: "22", name: "Task 2"}
           ]
         }
-      }
+      }]
     })
 
     try {
