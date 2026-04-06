@@ -33,7 +33,13 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
     const action = payload?.action
     const id = payload?.id
 
-    if ((action !== "create" && action !== "destroy" && action !== "update") || typeof id !== "string") return
+    if (action !== "create" && action !== "destroy" && action !== "update") {
+      throw new Error(`Unknown frontend model broadcast action: ${action}`)
+    }
+
+    if (id === undefined || id === null) {
+      throw new Error(`Frontend model broadcast missing id for action: ${action}`)
+    }
 
     if (action === "destroy") {
       this.websocketSession.sendJson({
@@ -74,7 +80,7 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
   }
 
   /**
-   * @param {string} id - Model id.
+   * @param {string | number} id - Model id.
    * @returns {Promise<import("../database/record/index.js").default | null>} - Authorized model or null.
    */
   async findAuthorizedModelById(id) {

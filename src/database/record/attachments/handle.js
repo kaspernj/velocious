@@ -16,9 +16,9 @@ function downloadFromRow({content, row, url}) {
   return new RecordAttachmentDownload({
     byteSize: Number.isFinite(byteSize) ? byteSize : content.length,
     content,
-    contentType: row.content_type ? String(row.content_type) : null,
-    filename: row.filename ? String(row.filename) : "attachment.bin",
-    id: String(row.id),
+    contentType: row.content_type || null,
+    filename: row.filename || "attachment.bin",
+    id: row.id,
     url
   })
 }
