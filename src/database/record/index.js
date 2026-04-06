@@ -1619,7 +1619,7 @@ class VelociousDatabaseRecord {
       translations[name] = {}
 
       if (!this._relationshipExists("translations")) {
-        this._defineRelationship("translations", {klass: this.getTranslationClass(), type: "hasMany"})
+        this._defineRelationship("translations", {dependent: "destroy", klass: this.getTranslationClass(), type: "hasMany"})
       }
     }
   }
