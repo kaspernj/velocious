@@ -30,14 +30,22 @@ async function resolveAbilityResourcesList(configuration) {
 
   if (explicit && explicit.length > 0) return explicit
 
-  // Try to resolve from the ability resolver by calling it with a minimal context
+  // Try to resolve from the ability resolver by calling it with a synthetic
+  // context. The resolver may access request/response methods which aren't
+  // available during initialization — catch and return empty in that case.
   const resolver = configuration.getAbilityResolver?.()
 
   if (typeof resolver === "function") {
-    const ability = await resolver({configuration, params: {}, request: /** @type {any} */ (null), response: /** @type {any} */ (null)})
+    try {
+      const ability = await resolver({configuration, params: {}, request: /** @type {any} */ (undefined), response: /** @type {any} */ (undefined)})
 
-    if (ability?.resources && Array.isArray(ability.resources)) {
-      return ability.resources
+      if (ability?.resources && Array.isArray(ability.resources)) {
+        return ability.resources
+      }
+    } catch {
+      // Resolver requires request context (e.g. reads request.path()) which is
+      // unavailable during initialization. Use configuration.setAbilityResources()
+      // or backendProjects.frontendModels for explicit registration instead.
     }
   }
 
