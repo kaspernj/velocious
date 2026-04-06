@@ -574,7 +574,7 @@ export default class VelociousConfiguration {
         await this._initializeModels({configuration: this, type: args.type})
       }
 
-      ensureFrontendModelWebsocketPublishersRegistered(this)
+      await ensureFrontendModelWebsocketPublishersRegistered(this)
     }
   }
 

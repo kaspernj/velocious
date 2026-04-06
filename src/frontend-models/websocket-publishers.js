@@ -20,15 +20,42 @@ export function frontendModelBroadcastChannelName(modelName) {
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
  */
-function frontendModelResourcesFromAbilityResources(configuration) {
+/**
+ * @param {import("../configuration.js").default} configuration - Configuration instance.
+ * @returns {Promise<import("../configuration-types.js").AbilityResourceClassType[]>} - Resolved ability resources.
+ */
+async function resolveAbilityResourcesList(configuration) {
+  // First check explicitly set ability resources
+  const explicit = configuration.getAbilityResources()
+
+  if (explicit && explicit.length > 0) return explicit
+
+  // Try to resolve from the ability resolver by calling it with a minimal context
+  const resolver = configuration.getAbilityResolver?.()
+
+  if (typeof resolver === "function") {
+    const ability = await resolver({configuration, params: {}, request: /** @type {any} */ (null), response: /** @type {any} */ (null)})
+
+    if (ability?.resources && Array.isArray(ability.resources)) {
+      return ability.resources
+    }
+  }
+
+  return []
+}
+
+/**
+ * @param {import("../configuration-types.js").AbilityResourceClassType[]} abilityResources - Ability resource classes.
+ * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
+ */
+function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
   /** @type {Record<string, typeof FrontendModelBaseResource>} */
   const resources = {}
-  const abilityResources = configuration.getAbilityResources()
 
-  if (abilityResources === undefined || abilityResources === null) return resources
+  if (!abilityResources || abilityResources.length === 0) return resources
 
   if (!Array.isArray(abilityResources)) {
-    throw new Error(`Expected getAbilityResources() to return an array but got: ${typeof abilityResources}`)
+    throw new Error(`Expected ability resources to be an array but got: ${typeof abilityResources}`)
   }
 
   for (const resourceClass of abilityResources) {
@@ -62,9 +89,9 @@ function frontendModelResourcesFromAbilityResources(configuration) {
 
 /**
  * @param {import("../configuration.js").default} configuration - Configuration instance.
- * @returns {void}
+ * @returns {Promise<void>}
  */
-export function ensureFrontendModelWebsocketPublishersRegistered(configuration) {
+export async function ensureFrontendModelWebsocketPublishersRegistered(configuration) {
   const modelClasses = configuration.getModelClasses()
 
   /** @type {Record<string, typeof FrontendModelBaseResource>} */
@@ -84,7 +111,9 @@ export function ensureFrontendModelWebsocketPublishersRegistered(configuration) 
   // Auto-discover from ability resources only when no backend project
   // explicitly defines frontendModels or frontendModelsRequireContext
   if (!hasExplicitConfig) {
-    allFrontendModels = frontendModelResourcesFromAbilityResources(configuration)
+    const abilityResources = await resolveAbilityResourcesList(configuration)
+
+    allFrontendModels = frontendModelResourcesFromAbilityResourcesList(abilityResources)
   }
 
   for (const modelName of Object.keys(allFrontendModels)) {
