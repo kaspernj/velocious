@@ -33,16 +33,20 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
     const action = payload?.action
     const id = payload?.id
 
-    if ((action !== "create" && action !== "destroy" && action !== "update") || id === undefined || id === null) return
+    if (action !== "create" && action !== "destroy" && action !== "update") {
+      throw new Error(`Unknown frontend model broadcast action: ${action}`)
+    }
 
-    const stringId = String(id)
+    if (id === undefined || id === null) {
+      throw new Error(`Frontend model broadcast missing id for action: ${action}`)
+    }
 
     if (action === "destroy") {
       this.websocketSession.sendJson({
         channel: "frontend-models",
         payload: serializeFrontendModelTransportValue({
           action,
-          id: stringId,
+          id,
           model: this.modelName()
         }),
         type: "event"
@@ -54,7 +58,7 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
       ? /** @type {Record<string, any>} */ (payload.record)
       : null
     const serializedModel = serializedModelFromPayload || await (async () => {
-      const model = await this.findAuthorizedModelById(stringId)
+      const model = await this.findAuthorizedModelById(id)
 
       if (!model) return null
 
@@ -67,7 +71,7 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
       channel: "frontend-models",
       payload: serializeFrontendModelTransportValue({
         action,
-        id: stringId,
+        id,
         model: this.modelName(),
         record: serializedModel
       }),
@@ -76,7 +80,7 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
   }
 
   /**
-   * @param {string} id - Model id.
+   * @param {string | number} id - Model id.
    * @returns {Promise<import("../database/record/index.js").default | null>} - Authorized model or null.
    */
   async findAuthorizedModelById(id) {
