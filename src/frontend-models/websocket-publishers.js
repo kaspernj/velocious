@@ -1,5 +1,6 @@
 // @ts-check
 
+import AuthorizationBaseResource from "../authorization/base-resource.js"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
 import {frontendModelResourcesForBackendProject} from "./resource-definition.js"
 
@@ -22,25 +23,38 @@ export function frontendModelBroadcastChannelName(modelName) {
 function frontendModelResourcesFromAbilityResources(configuration) {
   /** @type {Record<string, typeof FrontendModelBaseResource>} */
   const resources = {}
+  const abilityResources = configuration.getAbilityResources()
 
-  try {
-    const abilityResources = configuration.getAbilityResources()
+  if (abilityResources === undefined || abilityResources === null) return resources
 
-    for (const resourceClass of abilityResources) {
-      if (typeof resourceClass === "function" && resourceClass.prototype instanceof FrontendModelBaseResource) {
-        const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
+  if (!Array.isArray(abilityResources)) {
+    throw new Error(`Expected getAbilityResources() to return an array but got: ${typeof abilityResources}`)
+  }
 
-        if (modelClass) {
-          const modelName = modelClass.getModelName?.() || modelClass.name
-
-          if (modelName) {
-            resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
-          }
-        }
-      }
+  for (const resourceClass of abilityResources) {
+    if (typeof resourceClass !== "function") {
+      throw new Error(`Expected ability resource to be a class but got: ${typeof resourceClass}`)
     }
-  } catch {
-    // Ability resources not configured — no auto-discovery
+
+    if (resourceClass.prototype instanceof FrontendModelBaseResource) {
+      const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
+
+      if (!modelClass) {
+        throw new Error(`Resource class ${resourceClass.name} is missing a static ModelClass property`)
+      }
+
+      const modelName = modelClass.getModelName()
+
+      if (!modelName) {
+        throw new Error(`Model class ${modelClass.name} returned empty model name from getModelName()`)
+      }
+
+      resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
+    } else if (resourceClass.prototype instanceof AuthorizationBaseResource) {
+      // Authorization-only resource — valid but not relevant for WebSocket publishing
+    } else {
+      throw new Error(`Unexpected ability resource class: ${resourceClass.name}. Expected AuthorizationBaseResource or FrontendModelBaseResource subclass.`)
+    }
   }
 
   return resources
