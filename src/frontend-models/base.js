@@ -6,6 +6,7 @@ import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
+import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
 
 /** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
 /** @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
@@ -54,9 +55,35 @@ function resolveInternalWebsocketClient() {
 
   if (!resolvedUrl) return null
 
-  internalWebsocketClient = new VelociousWebsocketClient({url: resolvedUrl})
+  internalWebsocketClient = new VelociousWebsocketClient({autoReconnect: true, url: resolvedUrl})
+  internalWebsocketClient.onReconnect = flushBufferedOutgoingEventsAfterReconnect
 
   return internalWebsocketClient
+}
+
+/** @returns {Promise<void>} */
+async function flushBufferedOutgoingEventsAfterReconnect() {
+  if (!internalWebsocketClient) return
+
+  const events = drainBufferedOutgoingEvents()
+
+  for (let index = 0; index < events.length; index += 1) {
+    try {
+      await internalWebsocketClient.post(events[index].customPath, events[index].payload)
+    } catch {
+      const socketOpen = internalWebsocketClient.socket?.readyState === internalWebsocketClient.socket?.OPEN
+
+      if (socketOpen) {
+        continue
+      }
+
+      for (let remaining = index; remaining < events.length; remaining += 1) {
+        bufferOutgoingEvent(events[remaining])
+      }
+
+      return
+    }
+  }
 }
 
 /**
@@ -1396,6 +1423,72 @@ export default class FrontendModelBase {
       frontendModelTransportConfig.websocketUrl = config.websocketUrl
       // Reset cached internal client so the new URL takes effect on next subscribe
       internalWebsocketClient = null
+    }
+  }
+
+  /**
+   * Connect the internal WebSocket and enable auto-reconnect.
+   * @returns {Promise<void>} - Resolves when connected.
+   */
+  static async connectWebsocket() {
+    const client = resolveInternalWebsocketClient()
+
+    if (!client) {
+      throw new Error("connectWebsocket requires configureTransport({websocketUrl})")
+    }
+
+    await client.connectWithReconnect()
+  }
+
+  /**
+   * Disconnect the internal WebSocket and disable auto-reconnect.
+   * @returns {Promise<void>} - Resolves when closed.
+   */
+  static async disconnectWebsocket() {
+    if (!internalWebsocketClient) return
+
+    await internalWebsocketClient.disconnectAndStopReconnect()
+  }
+
+  /**
+   * Returns the current WebSocket connection state.
+   * @returns {{disconnectedSince: number | null, hasClient: boolean, isOpen: boolean, listenerCount: number}}
+   */
+  static websocketState() {
+    if (!internalWebsocketClient) {
+      return {disconnectedSince: null, hasClient: false, isOpen: false, listenerCount: 0}
+    }
+
+    return {
+      ...internalWebsocketClient.state(),
+      hasClient: true
+    }
+  }
+
+  /**
+   * Close the raw WebSocket without disabling auto-reconnect. Used by tests to
+   * simulate an unexpected network drop and verify reconnection behavior.
+   * @returns {Promise<void>} - Resolves when the socket has closed.
+   */
+  static async dropWebsocket() {
+    if (!internalWebsocketClient) return
+
+    await internalWebsocketClient.dropConnection()
+  }
+
+  /**
+   * Installs WebSocket lifecycle hooks on globalThis for system test access.
+   * Tests can call `globalThis.__velocious_websocket_hooks.connect()` etc.
+   * @returns {void}
+   */
+  static installWebsocketTestHooks() {
+    if (typeof globalThis === "undefined") return
+
+    /** @type {any} */ (globalThis).__velocious_websocket_hooks = {
+      connect: () => this.connectWebsocket(),
+      disconnect: () => this.disconnectWebsocket(),
+      drop: () => this.dropWebsocket(),
+      state: () => this.websocketState()
     }
   }
 
