@@ -180,14 +180,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       query = query.preload(preload)
     }
 
-    if (action !== "find") {
-      const translationsMap = this.modelClass().getTranslationsMap()
-
-      if (Object.keys(translationsMap).length > 0) {
-        query = query.preload({translations: {}})
-      }
-    }
-
     return await query.findBy({[this.primaryKey()]: id})
   }
 
@@ -196,14 +188,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes) {
-    const model = await this.modelClass().create(filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes))
-    const translationsMap = this.modelClass().getTranslationsMap()
-
-    if (Object.keys(translationsMap).length > 0) {
-      model.getRelationshipByName("translations").setPreloaded(true)
-    }
-
-    return model
+    return await this.modelClass().create(filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes))
   }
 
   /**

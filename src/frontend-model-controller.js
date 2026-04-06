@@ -1400,17 +1400,7 @@ export default class FrontendModelController extends Controller {
    * @returns {import("./database/query/index.js").NestedPreloadRecord | null} - Frontend preload data.
    */
   frontendModelPreload() {
-    let preload = normalizeFrontendModelPreload(this.frontendModelParams().preload)
-    const modelClass = this.frontendModelClass()
-    const translationsMap = modelClass.getTranslationsMap()
-
-    if (Object.keys(translationsMap).length > 0) {
-      if (!preload) preload = {}
-
-      mergeNormalizedPreload(preload, {translations: {}})
-    }
-
-    return preload
+    return normalizeFrontendModelPreload(this.frontendModelParams().preload)
   }
 
   /**
