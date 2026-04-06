@@ -30,9 +30,8 @@ async function resolveAbilityResourcesList(configuration) {
 
   if (explicit && explicit.length > 0) return explicit
 
-  // Try to resolve from the ability resolver by calling it with a synthetic
-  // context. The resolver may access request/response methods which aren't
-  // available during initialization — catch and return empty in that case.
+  // Resolve from the ability resolver by calling it with a synthetic context.
+  // The resolver must handle undefined request/response gracefully.
   const resolver = configuration.getAbilityResolver?.()
 
   if (typeof resolver === "function") {

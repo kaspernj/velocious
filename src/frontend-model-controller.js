@@ -1086,7 +1086,7 @@ export default class FrontendModelController extends Controller {
 
     if (frontendModelClass) return frontendModelClass
 
-    throw new Error(`No frontend model configured for model '${modelName || "unknown"}' and controller '${controllerName || "unknown"}'. Configure backendProjects.frontendModels.`)
+    throw new Error(`No frontend model configured for model '${modelName || "unknown"}' and controller '${controllerName || "unknown"}'. Ensure a FrontendModelBaseResource subclass exists in src/resources/ or is listed in the ability resolver.`)
   }
 
   /**

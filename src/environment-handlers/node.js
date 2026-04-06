@@ -68,7 +68,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     const backendProjects = configuration.getBackendProjects()
 
     for (const backendProject of backendProjects) {
-      if (backendProject.frontendModels || backendProject.frontendModelsRequireContext) continue
+      if (backendProject.frontendModels) continue
 
       const resourcesDir = path.join(backendProject.path, "src", "resources")
       let files

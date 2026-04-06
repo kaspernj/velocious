@@ -92,30 +92,6 @@ class EmptyCommandFrontendModelResource extends FrontendModelBaseResource {
 }
 
 /**
- * @param {Record<string, {default?: unknown}>} modules - Modules keyed by require-context path.
- * @returns {{(id: string): {default?: unknown}, keys: () => string[]}} - Webpack-style require context.
- */
-function buildRequireContext(modules) {
-  /**
-   * @param {string} id - Module id.
-   * @returns {{default?: unknown}} - Imported module.
-   */
-  function requireContext(id) {
-    const loadedModule = modules[id]
-
-    if (!loadedModule) {
-      throw new Error(`Missing module in require context: ${id}`)
-    }
-
-    return loadedModule
-  }
-
-  requireContext.keys = () => Object.keys(modules)
-
-  return requireContext
-}
-
-/**
  * @param {string} path - Request path.
  * @returns {string} - Raw HTTP request lines.
  */
@@ -137,56 +113,6 @@ describe("routes - resolver frontend model autoroute", async () => {
         frontendModels: {
           FrontendModel: ClassBasedFrontendModelResource
         }
-      }],
-      database: {test: {}},
-      directory: dummyDirectory(),
-      environment: "test",
-      environmentHandler: new EnvironmentHandlerNode(),
-      initializeModels: async () => {},
-      locale: "en",
-      localeFallbacks: {en: ["en"]},
-      locales: ["en"],
-      logging: {console: true, file: false, levels: ["info", "warn", "error"]}
-    })
-
-    let previousConfiguration
-    try {
-      previousConfiguration = Configuration.current()
-    } catch {
-      // Ignore missing configuration
-    }
-
-    configuration.setCurrent()
-    configuration.setRoutes(dummyRoutes.routes)
-
-    const client = {remoteAddress: "127.0.0.1"}
-    const request = new Request({client, configuration})
-    const response = new Response({configuration})
-    const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
-
-    try {
-      request.feed(Buffer.from(requestLines, "utf8"))
-      await donePromise
-
-      const resolver = new RoutesResolver({configuration, request, response})
-
-      await resolver.resolve()
-    } finally {
-      if (previousConfiguration) previousConfiguration.setCurrent()
-    }
-
-    expect(response.statusCode).not.toEqual(404)
-  })
-
-  it("resolves frontend model commands from backendProjects.frontendModelsRequireContext", async () => {
-    const configuration = new Configuration({
-      backendProjects: [{
-        path: "/tmp/backend",
-        frontendModelsRequireContext: buildRequireContext({
-          "./frontend-model.js": {default: ClassBasedFrontendModelResource},
-          "./shared-access.js": {default: {not: "a resource"}}
-        })
       }],
       database: {test: {}},
       directory: dummyDirectory(),
