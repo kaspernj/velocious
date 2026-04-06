@@ -1394,6 +1394,8 @@ export default class FrontendModelBase {
 
     if (Object.prototype.hasOwnProperty.call(config, "websocketUrl")) {
       frontendModelTransportConfig.websocketUrl = config.websocketUrl
+      // Reset cached internal client so the new URL takes effect on next subscribe
+      internalWebsocketClient = null
     }
   }
 
