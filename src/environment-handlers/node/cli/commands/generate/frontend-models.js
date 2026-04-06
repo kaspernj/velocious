@@ -538,12 +538,16 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     if (Array.isArray(attributes)) {
-      return attributes.map((attributeName) => ({
-        jsDocType: this.jsDocTypeForFrontendAttribute({
-          attributeConfig: this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
-        }),
-        name: attributeName
-      }))
+      return attributes.map((entry) => {
+        const attributeName = typeof entry === "string" ? entry : entry.name
+
+        return {
+          jsDocType: this.jsDocTypeForFrontendAttribute({
+            attributeConfig: this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
+          }),
+          name: attributeName
+        }
+      })
     }
 
     if (!attributes || typeof attributes !== "object") {

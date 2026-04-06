@@ -2109,10 +2109,61 @@ export default class FrontendModelController extends Controller {
     const attributes = frontendModelResource?.resourceConfiguration.attributes
 
     if (!attributes) return null
-    if (Array.isArray(attributes)) return attributes
-    if (typeof attributes === "object") return Object.keys(attributes)
+
+    if (Array.isArray(attributes)) {
+      return attributes
+        .filter((entry) => {
+          if (typeof entry === "string") return true
+
+          const config = /** @type {Record<string, any>} */ (entry)
+
+          if (config && config.selectedByDefault === false) return false
+
+          return true
+        })
+        .map((entry) => typeof entry === "string" ? entry : /** @type {Record<string, any>} */ (entry).name)
+    }
+
+    if (typeof attributes === "object") {
+      return Object.entries(attributes)
+        .filter(([, config]) => {
+          if (!config || typeof config !== "object") return true
+
+          return /** @type {Record<string, any>} */ (config).selectedByDefault !== false
+        })
+        .map(([name]) => name)
+    }
 
     return null
+  }
+
+  /**
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {string[]} - Attribute names explicitly marked selectedByDefault: false.
+   */
+  frontendModelNonDefaultAttributesForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfigurationForModelClass(modelClass)
+    const attributes = frontendModelResource?.resourceConfiguration.attributes
+
+    if (!attributes) return []
+
+    if (Array.isArray(attributes)) {
+      return attributes
+        .filter((entry) => {
+          if (typeof entry !== "object" || !entry) return false
+
+          return /** @type {Record<string, any>} */ (entry).selectedByDefault === false
+        })
+        .map((entry) => /** @type {Record<string, any>} */ (/** @type {unknown} */ (entry)).name)
+    }
+
+    if (typeof attributes === "object") {
+      return Object.entries(attributes)
+        .filter(([, config]) => typeof config === "object" && config && /** @type {Record<string, any>} */ (config).selectedByDefault === false)
+        .map(([name]) => name)
+    }
+
+    return []
   }
 
   /**
@@ -2184,7 +2235,12 @@ export default class FrontendModelController extends Controller {
         return modelAttributes
       }
 
+      const excludedAttributes = this.frontendModelNonDefaultAttributesForModelClass(modelClass)
       const serializedAttributes = {...modelAttributes}
+
+      for (const excludedName of excludedAttributes) {
+        delete serializedAttributes[excludedName]
+      }
 
       for (const attributeName of defaultAttributes) {
         if (!attributeExists(attributeName)) continue
