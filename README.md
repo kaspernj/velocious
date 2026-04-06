@@ -1610,6 +1610,8 @@ If a handed-off job does not report back within 2 hours, it is marked orphaned a
 npx velocious server --host 0.0.0.0 --port 8082
 ```
 
+When the server runs in the `development` environment, Velocious watches application `src/` trees and hot-reloads by recycling HTTP workers after `.js`/`.mjs`/`.cjs`/`.json`/`.ejs` changes. That picks up edited controllers, models, resources, routes, and views without a manual server restart while keeping production/test behavior unchanged.
+
 # Authorization (CanCan-style)
 
 Define resource classes with an `abilities()` method and use `can` / `cannot` rules to constrain model access.

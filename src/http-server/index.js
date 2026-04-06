@@ -1,6 +1,7 @@
 // @ts-check
 
 import {digg} from "diggerize"
+import DevelopmentReloader from "./development-reloader.js"
 import EventEmitter from "../utils/event-emitter.js"
 import InProcessHandler from "./worker-handler/in-process.js"
 import Logger from "../logger.js"
@@ -27,9 +28,11 @@ export default class VelociousHttpServer {
    * @param {boolean} [args.inProcess] - Run HTTP handlers in the main thread instead of worker threads.
    * @param {number} [args.port] - Port.
    * @param {number} [args.maxWorkers] - Max workers.
+   * @param {function({configuration: import("../configuration.js").default, onReload: function({changedPath: string}) : Promise<void>}) : {start: () => Promise<void>, stop: () => Promise<void>}} [args.developmentReloaderFactory] - Development reloader factory.
    */
-  constructor({configuration, host, inProcess, maxWorkers, port}) {
+  constructor({configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port}) {
     this.configuration = configuration
+    this.developmentReloaderFactory = developmentReloaderFactory
     this.inProcess = inProcess || false
     this.logger = new Logger(this)
     this.host = host || "0.0.0.0"
@@ -40,6 +43,7 @@ export default class VelociousHttpServer {
   /** @returns {Promise<void>} - Resolves when complete.  */
   async start() {
     await this._ensureAtLeastOneWorker()
+    await this._startDevelopmentReloader()
     this.netServer = new Net.Server()
     this.netServer.on("close", this.onClose)
     this.netServer.on("connection", this.onConnection)
@@ -112,6 +116,9 @@ export default class VelociousHttpServer {
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async stop() {
+    this._stopping = true
+    await this.developmentReloader?.stop()
+    this.developmentReloader = undefined
     await this.stopClients()
     await this.stopServer()
 
@@ -186,6 +193,13 @@ export default class VelociousHttpServer {
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async spawnWorker() {
+    const workerHandler = await this._buildWorkerHandler()
+
+    this.workerHandlers.push(workerHandler)
+  }
+
+  /** @returns {Promise<WorkerHandler | InProcessHandler>} - Started worker handler. */
+  async _buildWorkerHandler() {
     const workerCount = this.workerCount
 
     this.workerCount++
@@ -197,7 +211,8 @@ export default class VelociousHttpServer {
     })
 
     await workerHandler.start()
-    this.workerHandlers.push(workerHandler)
+
+    return workerHandler
   }
 
   /** @returns {WorkerHandler | InProcessHandler} - The worker handler to use. */
@@ -212,5 +227,56 @@ export default class VelociousHttpServer {
     }
 
     return workerHandler
+  }
+
+  /** @returns {boolean} - Whether development worker hot reload should run. */
+  shouldUseDevelopmentHotReload() {
+    return !this.inProcess && this.configuration.getEnvironment() === "development"
+  }
+
+  /** @returns {Promise<void>} - Resolves when watcher setup finishes. */
+  async _startDevelopmentReloader() {
+    if (!this.shouldUseDevelopmentHotReload()) return
+    if (this.developmentReloader) return
+
+    const createDevelopmentReloader = this.developmentReloaderFactory
+      || ((args) => new DevelopmentReloader(args))
+
+    this.developmentReloader = createDevelopmentReloader({
+      configuration: this.configuration,
+      onReload: async ({changedPath}) => {
+        await this.logger.info(`Development hot reload detected change in ${changedPath}`)
+        await this.reloadWorkersForDevelopment()
+      }
+    })
+
+    await this.developmentReloader.start()
+  }
+
+  /** @returns {Promise<void>} - Resolves when workers have been refreshed. */
+  async reloadWorkersForDevelopment() {
+    if (this._stopping) return
+
+    if (this._reloadingWorkersForDevelopment) {
+      this._reloadWorkersForDevelopmentQueued = true
+      return
+    }
+
+    this._reloadingWorkersForDevelopment = true
+
+    try {
+      do {
+        this._reloadWorkersForDevelopmentQueued = false
+
+        const oldWorkerHandlers = [...this.workerHandlers]
+        const newWorkerHandler = await this._buildWorkerHandler()
+
+        this.workerHandlers = [newWorkerHandler]
+
+        await Promise.all(oldWorkerHandlers.map((workerHandler) => workerHandler.stop()))
+      } while (this._reloadWorkersForDevelopmentQueued && !this._stopping)
+    } finally {
+      this._reloadingWorkersForDevelopment = false
+    }
   }
 }
