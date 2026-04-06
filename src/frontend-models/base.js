@@ -5,6 +5,7 @@ import FrontendModelQuery from "./query.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import VelociousWebsocketClient from "../http-client/websocket-client.js"
 
 /** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
 /** @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
@@ -18,6 +19,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. For shared-endpoint models this should be the full shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`). For legacy direct-resource models this can be the backend origin/prefix.
  * @property {boolean} [shared] - When true, route built-in commands for path-based models through the shared frontend-model API envelope instead of direct per-command endpoints.
+ * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
  * @property {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
  */
 
@@ -30,6 +32,32 @@ const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
+
+/** @type {VelociousWebsocketClient | null} */
+let internalWebsocketClient = null
+
+/**
+ * Resolve the internal websocket client from websocketUrl config.
+ * Creates the client lazily on first call. Returns null if WebSocket
+ * is not available or websocketUrl is not configured.
+ * @returns {VelociousWebsocketClient | null} Websocket client or null.
+ */
+function resolveInternalWebsocketClient() {
+  if (internalWebsocketClient) return internalWebsocketClient
+
+  const websocketUrl = frontendModelTransportConfig.websocketUrl
+
+  if (!websocketUrl) return null
+  if (typeof globalThis.WebSocket === "undefined") return null
+
+  const resolvedUrl = typeof websocketUrl === "function" ? websocketUrl() : websocketUrl
+
+  if (!resolvedUrl) return null
+
+  internalWebsocketClient = new VelociousWebsocketClient({url: resolvedUrl})
+
+  return internalWebsocketClient
+}
 
 /**
  * @param {typeof FrontendModelBase} modelClass - Frontend model class.
@@ -1363,6 +1391,12 @@ export default class FrontendModelBase {
     if (Object.prototype.hasOwnProperty.call(config, "websocketClient")) {
       frontendModelTransportConfig.websocketClient = config.websocketClient
     }
+
+    if (Object.prototype.hasOwnProperty.call(config, "websocketUrl")) {
+      frontendModelTransportConfig.websocketUrl = config.websocketUrl
+      // Reset cached internal client so the new URL takes effect on next subscribe
+      internalWebsocketClient = null
+    }
   }
 
   /**
@@ -1602,10 +1636,10 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback once the subscription is active.
    */
   static async subscribeToEvents(callback) {
-    const websocketClient = frontendModelTransportConfig.websocketClient
+    const websocketClient = frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient()
 
     if (!websocketClient || typeof websocketClient.subscribe !== "function") {
-      throw new Error("Frontend model websocket subscriptions require configureTransport({websocketClient})")
+      throw new Error("Frontend model websocket subscriptions require configureTransport({websocketUrl}) or configureTransport({websocketClient})")
     }
 
     const subscribeMethod = typeof websocketClient.subscribeAndWait === "function"
