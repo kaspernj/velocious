@@ -77,4 +77,31 @@ describe("database - migration - column types", {tags: ["dummy"]}, () => {
       await migration.dropTable("all_column_types")
     })
   })
+
+  it("supports limit as an alias for maxLength on string columns", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const migration = new Migration({
+        configuration,
+        databaseIdentifier: "default",
+        db: dbs.default
+      })
+
+      await migration.createTable("limit_test", (table) => {
+        table.string("short_name", {limit: 50})
+        table.string("long_description", {maxLength: 200})
+        table.string("default_length")
+      })
+
+      const limitTable = await dbs.default.getTableByName("limit_test")
+      const shortColumn = await limitTable.getColumnByName("short_name")
+      const longColumn = await limitTable.getColumnByName("long_description")
+
+      expect(shortColumn.getMaxLength()).toEqual(50)
+      expect(longColumn.getMaxLength()).toEqual(200)
+
+      await migration.dropTable("limit_test")
+    })
+  })
 })
