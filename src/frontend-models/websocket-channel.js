@@ -33,14 +33,16 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
     const action = payload?.action
     const id = payload?.id
 
-    if ((action !== "create" && action !== "destroy" && action !== "update") || typeof id !== "string") return
+    if ((action !== "create" && action !== "destroy" && action !== "update") || id === undefined || id === null) return
+
+    const stringId = String(id)
 
     if (action === "destroy") {
       this.websocketSession.sendJson({
         channel: "frontend-models",
         payload: serializeFrontendModelTransportValue({
           action,
-          id,
+          id: stringId,
           model: this.modelName()
         }),
         type: "event"
@@ -52,7 +54,7 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
       ? /** @type {Record<string, any>} */ (payload.record)
       : null
     const serializedModel = serializedModelFromPayload || await (async () => {
-      const model = await this.findAuthorizedModelById(id)
+      const model = await this.findAuthorizedModelById(stringId)
 
       if (!model) return null
 
@@ -65,7 +67,7 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
       channel: "frontend-models",
       payload: serializeFrontendModelTransportValue({
         action,
-        id,
+        id: stringId,
         model: this.modelName(),
         record: serializedModel
       }),
