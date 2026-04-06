@@ -23,24 +23,28 @@ function frontendModelResourcesFromAbilityResources(configuration) {
   /** @type {Record<string, typeof FrontendModelBaseResource>} */
   const resources = {}
 
+  /** @type {import("../configuration-types.js").AbilityResourceClassType[]} */
+  let abilityResources
+
   try {
-    const abilityResources = configuration.getAbilityResources()
+    abilityResources = configuration.getAbilityResources()
+  } catch {
+    // Ability resources not configured — getAbilityResources throws when unset
+    return resources
+  }
 
-    for (const resourceClass of abilityResources) {
-      if (typeof resourceClass === "function" && resourceClass.prototype instanceof FrontendModelBaseResource) {
-        const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
+  for (const resourceClass of abilityResources) {
+    if (typeof resourceClass === "function" && resourceClass.prototype instanceof FrontendModelBaseResource) {
+      const modelClass = /** @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
 
-        if (modelClass) {
-          const modelName = modelClass.getModelName?.() || modelClass.name
+      if (modelClass) {
+        const modelName = modelClass.getModelName?.() || modelClass.name
 
-          if (modelName) {
-            resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
-          }
+        if (modelName) {
+          resources[modelName] = /** @type {typeof FrontendModelBaseResource} */ (resourceClass)
         }
       }
     }
-  } catch {
-    // Ability resources not configured — no auto-discovery
   }
 
   return resources

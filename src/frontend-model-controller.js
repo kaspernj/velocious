@@ -2218,7 +2218,7 @@ export default class FrontendModelController extends Controller {
         return resource
       }
     } catch {
-      // No resource available (e.g., serializing a preloaded relationship model)
+      // Expected when serializing a preloaded relationship model without a matching resource
     }
 
     // Try to find a resource for this model class from backendProjects
@@ -2243,7 +2243,7 @@ export default class FrontendModelController extends Controller {
             resourceConfiguration: /** @type {import("./configuration-types.js").FrontendModelResourceConfiguration | undefined} */ (typeof resourceClass.resourceConfig === "function" ? resourceClass.resourceConfig() : undefined)
           })
         } catch {
-          // Resource instantiation failed
+          // Expected when resource class doesn't support the current context
         }
       }
     }
