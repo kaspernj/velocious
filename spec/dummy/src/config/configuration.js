@@ -101,7 +101,7 @@ class ProjectFrontendModelAbilityResource extends BaseResource {
 
   /** @returns {void} */
   abilities() {
-    this.can("read")
+    this.can(["create", "read", "update"])
   }
 }
 

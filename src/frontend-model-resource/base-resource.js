@@ -45,6 +45,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static path = undefined
   /** @type {string[] | undefined} */
   static relationships = undefined
+  /** @type {string[] | undefined} */
+  static translatedAttributes = undefined
 
   /**
    * @param {FrontendModelResourceAbilityArgs | FrontendModelResourceControllerArgs} args - Resource args.
@@ -188,7 +190,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes) {
-    return await this.modelClass().create(filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes))
+    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes, this)
+    const model = new (this.modelClass())()
+
+    await this._assignWithVirtualSetters(model, filtered)
+    await model.save()
+
+    return model
   }
 
   /**
@@ -205,10 +213,85 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Updated model.
    */
   async update(model, attributes) {
-    model.assign(filterWritableFrontendModelAttributes(model, attributes))
+    const filtered = filterWritableFrontendModelAttributes(model, attributes, this)
+
+    await this._assignWithVirtualSetters(model, filtered)
     await model.save()
 
     return model
+  }
+
+  /**
+   * Assigns attributes to a model, using virtual setters on the resource when available.
+   *
+   * @param {import("../database/record/index.js").default} model - Model instance.
+   * @param {Record<string, any>} attributes - Attributes to assign.
+   * @returns {Promise<void>}
+   */
+  async _assignWithVirtualSetters(model, attributes) {
+    /** @type {Record<string, any>} */
+    const directAttributes = {}
+    const translatedSet = new Set(/** @type {typeof FrontendModelBaseResource} */ (this.constructor).translatedAttributes || [])
+
+    for (const [name, value] of Object.entries(attributes)) {
+      const resourceSetterName = `set${inflection.camelize(name)}Attribute`
+
+      if (typeof /** @type {Record<string, any>} */ (/** @type {unknown} */ (this))[resourceSetterName] === "function") {
+        await /** @type {Record<string, any>} */ (/** @type {unknown} */ (this))[resourceSetterName](model, value)
+      } else if (translatedSet.has(name)) {
+        await this._setTranslatedAttributeOnModel(model, name, value)
+      } else {
+        directAttributes[name] = value
+      }
+    }
+
+    if (Object.keys(directAttributes).length > 0) {
+      model.assign(directAttributes)
+    }
+  }
+
+  /**
+   * Sets a translated attribute on a model via the translations relationship.
+   *
+   * @param {import("../database/record/index.js").default} model - Model instance.
+   * @param {string} name - Attribute name.
+   * @param {any} value - Attribute value.
+   * @returns {Promise<void>}
+   */
+  async _setTranslatedAttributeOnModel(model, name, value) {
+    const locale = this.context?.configuration?.getLocale?.() || "en"
+    const instanceRelationship = model.getRelationshipByName("translations")
+
+    /** @type {import("../database/record/index.js").default | undefined} */
+    let translation
+
+    if (model.isNewRecord()) {
+      const loaded = instanceRelationship.loaded()
+
+      if (Array.isArray(loaded)) {
+        translation = loaded.find((/** @type {Record<string, any>} */ t) => t.locale() === locale)
+      }
+    } else {
+      if (!instanceRelationship.getPreloaded()) {
+        await model.loadRelationship("translations")
+      }
+
+      const loaded = instanceRelationship.loaded()
+
+      if (Array.isArray(loaded)) {
+        translation = loaded.find((/** @type {Record<string, any>} */ t) => t.locale() === locale)
+      }
+    }
+
+    if (!translation) {
+      translation = instanceRelationship.build({locale})
+    }
+
+    /** @type {Record<string, any>} */
+    const assignments = {}
+
+    assignments[name] = value
+    translation.assign(assignments)
   }
 
   /**
@@ -236,7 +319,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
  * @param {Record<string, any>} attributes - Incoming frontend-model attributes.
  * @returns {Record<string, any>} - Writable attributes only.
  */
-function filterWritableFrontendModelAttributes(receiver, attributes) {
+function filterWritableFrontendModelAttributes(receiver, attributes, resource = /** @type {FrontendModelBaseResource | null} */ (null)) {
   // Frontend-model writes should fail fast when callers submit read-only or unknown attrs.
   // Silent drops hide contract mistakes in generated models and app-side wrapper code.
   /** @type {Record<string, any>} */
@@ -244,10 +327,17 @@ function filterWritableFrontendModelAttributes(receiver, attributes) {
   /** @type {string[]} */
   const invalidAttributes = []
 
+  const translatedSet = resource ? new Set(/** @type {typeof FrontendModelBaseResource} */ (resource.constructor).translatedAttributes || []) : new Set()
+
   for (const [attributeName, value] of Object.entries(attributes)) {
     const setterName = `set${inflection.camelize(attributeName)}`
+    const resourceSetterName = `${setterName}Attribute`
 
     if (setterName in receiver) {
+      writableAttributes[attributeName] = value
+    } else if (resource && typeof /** @type {Record<string, any>} */ (/** @type {unknown} */ (resource))[resourceSetterName] === "function") {
+      writableAttributes[attributeName] = value
+    } else if (translatedSet.has(attributeName)) {
       writableAttributes[attributeName] = value
     } else {
       invalidAttributes.push(attributeName)
