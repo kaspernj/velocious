@@ -42,9 +42,13 @@ export default class TableColumn {
 
       restArgsError(restArgs)
 
-      // Normalize limit → maxLength so callers can use either name.
+      // Normalize limit → maxLength for string-like types only.
       if (limit !== undefined && maxLength === undefined) {
-        args.maxLength = limit
+        const normalizedType = typeof type === "string" ? type.toLowerCase() : ""
+
+        if (normalizedType === "string" || normalizedType === "text" || normalizedType === "varchar" || normalizedType === "nvarchar" || normalizedType === "char") {
+          args.maxLength = limit
+        }
       }
     }
 
