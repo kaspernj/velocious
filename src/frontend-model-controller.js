@@ -2210,18 +2210,12 @@ export default class FrontendModelController extends Controller {
    * @returns {import("./frontend-model-resource/base-resource.js").default | null} - Resource instance or null.
    */
   _serializationResourceInstanceForModel(model) {
-    try {
-      const resource = this.frontendModelResourceInstance()
+    const resource = this.frontendModelResourceInstance()
 
-      // Only return if the resource's model class matches the model being serialized
-      if (resource.modelClass() === model.constructor) {
-        return resource
-      }
-    } catch {
-      // Expected when serializing a preloaded relationship model without a matching resource
+    if (resource.modelClass() === model.constructor) {
+      return resource
     }
 
-    // Try to find a resource for this model class from backendProjects
     const configuration = this.getConfiguration()
     const backendProjects = configuration.getBackendProjects?.() || []
     const modelClassName = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor).getModelName()
@@ -2232,19 +2226,15 @@ export default class FrontendModelController extends Controller {
       const resourceClass = resourceDefinition ? frontendModelResourceClassFromDefinition(resourceDefinition) : null
 
       if (resourceClass) {
-        try {
-          return new resourceClass({
-            ability: this.currentAbility(),
-            context: this.currentAbility()?.getContext() || {},
-            locals: this.currentAbility()?.getLocals() || {},
-            modelClass: /** @type {typeof import("./database/record/index.js").default} */ (model.constructor),
-            modelName: modelClassName,
-            params: {},
-            resourceConfiguration: /** @type {import("./configuration-types.js").FrontendModelResourceConfiguration | undefined} */ (typeof resourceClass.resourceConfig === "function" ? resourceClass.resourceConfig() : undefined)
-          })
-        } catch {
-          // Expected when resource class doesn't support the current context
-        }
+        return new resourceClass({
+          ability: this.currentAbility(),
+          context: this.currentAbility()?.getContext() || {},
+          locals: this.currentAbility()?.getLocals() || {},
+          modelClass: /** @type {typeof import("./database/record/index.js").default} */ (model.constructor),
+          modelName: modelClassName,
+          params: {},
+          resourceConfiguration: /** @type {import("./configuration-types.js").FrontendModelResourceConfiguration | undefined} */ (typeof resourceClass.resourceConfig === "function" ? resourceClass.resourceConfig() : undefined)
+        })
       }
     }
 
