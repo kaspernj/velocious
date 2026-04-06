@@ -36,6 +36,9 @@ describe("Frontend models - websocket publishers", () => {
       }
     }
 
+    /** @type {string[]} */
+    const publishedChannels = []
+
     const mockConfiguration = {
       getAbilityResources: () => [],
       getAbilityResolver: () => async () => new Ability({
@@ -47,16 +50,18 @@ describe("Frontend models - websocket publishers", () => {
       getModelClasses: () => ({
         Task,
         User
+      }),
+      getWebsocketEvents: () => ({
+        publish: (/** @type {string} */ channel) => {
+          publishedChannels.push(channel)
+        }
       })
     }
 
     await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
 
-    // Verify lifecycle callbacks were registered by checking the model class
-    // has beforeCreate/afterSave hooks (they are registered as side effects)
-    const taskBefore = Task.create ? true : true // Model class exists and was processed
-
-    expect(taskBefore).toEqual(true)
+    // The function completed without throwing — both model classes were processed
+    expect(publishedChannels).toEqual([])
   })
 
   it("falls back gracefully when ability resolver requires request context", async () => {
@@ -69,7 +74,8 @@ describe("Frontend models - websocket publishers", () => {
       getBackendProjects: () => [
         {path: "/tmp/test-project"}
       ],
-      getModelClasses: () => ({})
+      getModelClasses: () => ({}),
+      getWebsocketEvents: () => null
     }
 
     // Should not throw — catches the resolver error gracefully
@@ -83,7 +89,8 @@ describe("Frontend models - websocket publishers", () => {
       getBackendProjects: () => [
         {path: "/tmp/test-project"}
       ],
-      getModelClasses: () => ({})
+      getModelClasses: () => ({}),
+      getWebsocketEvents: () => null
     }
 
     await expect(async () => {
@@ -100,7 +107,8 @@ describe("Frontend models - websocket publishers", () => {
       getBackendProjects: () => [
         {path: "/tmp/test-project"}
       ],
-      getModelClasses: () => ({})
+      getModelClasses: () => ({}),
+      getWebsocketEvents: () => null
     }
 
     await expect(async () => {
@@ -132,6 +140,9 @@ describe("Frontend models - websocket publishers", () => {
       ],
       getModelClasses: () => ({
         Task
+      }),
+      getWebsocketEvents: () => ({
+        publish: () => {}
       })
     }
 
