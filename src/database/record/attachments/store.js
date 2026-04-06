@@ -144,7 +144,7 @@ export default class RecordAttachmentsStore {
     const attachmentDriverName = this._attachmentDriverNameFor({model, name})
     const now = Date.now()
     const recordType = model.getModelClass().getModelName()
-    const recordId = model.id()
+    const recordId = String(model.id())
     const attachmentId = generateUUID()
     const {storageKey} = await attachmentDriver.write({
       attachmentId,
@@ -301,7 +301,7 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = model.id()
+      const recordId = String(model.id())
       let query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
@@ -331,7 +331,7 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = model.id()
+      const recordId = String(model.id())
       const query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
@@ -514,7 +514,7 @@ export default class RecordAttachmentsStore {
    * @param {object} args - Options.
    * @param {import("../../../database/drivers/base.js").default} args.db - DB connection.
    * @param {string} args.name - Attachment name.
-   * @param {string | number} args.recordId - Record id.
+   * @param {string} args.recordId - Record id.
    * @param {string} args.recordType - Record type.
    * @returns {Promise<number>} - Next position.
    */
