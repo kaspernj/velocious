@@ -1718,12 +1718,28 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Returns loaded translations or null if the relationship isn't preloaded.
+   *
+   * @returns {import("./index.js").default[] | null} - Loaded translations or null.
+   */
+  _translationsLoadedOrNull() {
+    if (!this._instanceRelationships?.translations) return null
+    if (!this._instanceRelationships.translations.getPreloaded() && this.isPersisted()) return null
+
+    return this.translationsLoaded()
+  }
+
+  /**
    * @param {string} name - Name.
    * @param {string} locale - Locale.
    * @returns {string | undefined} - The translated attribute, if found.
    */
   _getTranslatedAttribute(name, locale) {
-    const translation = this.translationsLoaded().find((translation) => translation.locale() == locale)
+    const translations = this._translationsLoadedOrNull()
+
+    if (!translations) return undefined
+
+    const translation = translations.find((translation) => translation.locale() == locale)
 
     if (translation) {
       /** @type {Record<string, any>} */
