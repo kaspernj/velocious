@@ -1410,13 +1410,14 @@ export default class FrontendModelQuery {
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
   async find(id) {
-    const response = await this.modelClass.executeCommand("find", {
-      id,
-      ...this.preloadPayload(),
-      ...this.selectPayload()
-    })
+    const pk = this.modelClass.primaryKey()
+    const model = await this.findBy({[pk]: id})
 
-    return this.modelClass.instantiateFromResponse(response)
+    if (!model) {
+      throw new Error(`${this.modelClass.getModelName()} not found with ${pk}=${id}`)
+    }
+
+    return model
   }
 
   /**
