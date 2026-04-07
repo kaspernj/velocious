@@ -60,7 +60,7 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
       attributes: ["id", {name: "name", selectedByDefault: false}],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      relationships: ["tasks"]
+      relationships: ["creatingUser", "tasks"]
     }
   }
 }
