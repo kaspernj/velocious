@@ -70,9 +70,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._metadata = {}
   }
 
-  /** @returns {Record<string, any>} - Client-provided metadata. */
+  /** @returns {Record<string, any>} - Client-provided metadata (defensive copy). */
   getMetadata() {
-    return this._metadata
+    return {...this._metadata}
   }
 
   /**
@@ -249,7 +249,13 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       for (const channel of this.channels) {
         if (typeof channel.onMetadataChanged === "function") {
-          await channel.onMetadataChanged(this._metadata)
+          const tenant = this.channelTenants.get(channel)
+
+          await this.configuration.runWithTenant(tenant, async () => {
+            await this._withConnections(async () => {
+              await channel.onMetadataChanged(this._metadata)
+            })
+          })
         }
       }
 

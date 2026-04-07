@@ -1484,9 +1484,9 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   static setWebsocketMetadata(key, value) {
-    const client = resolveInternalWebsocketClient()
+    const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
-    if (!client) return
+    if (!client || typeof client.setMetadata !== "function") return
 
     client.setMetadata(key, value)
   }
