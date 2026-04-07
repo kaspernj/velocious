@@ -781,6 +781,33 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("preloads with mixed array of strings and nested objects via shared transport", async () => {
+    await Dummy.run(async () => {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        url: "http://127.0.0.1:3006"
+      })
+
+      try {
+        const {project, task} = await seedHttpPreloadModels()
+        const loadedTask = await Task.preload(["project", {comments: true}]).find(task.id())
+
+        expect(loadedTask.name()).toEqual("HTTP preload task")
+
+        const loadedProject = loadedTask.getRelationshipByName("project").loaded()
+
+        expect(loadedProject).toBeDefined()
+        expect(loadedProject.id()).toEqual(project.id())
+
+        const comments = loadedTask.getRelationshipByName("comments").loaded()
+
+        expect(comments.length).toEqual(1)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("serializes virtual resource attributes defined as methods on the resource class", async () => {
     await Dummy.run(async () => {
       FrontendModelBase.configureTransport({

@@ -24,7 +24,7 @@ function isPlainObject(value) {
 }
 
 /**
- * @param {import("../database/query/index.js").NestedPreloadRecord | string | string[] | boolean | undefined | null} preload - Preload shorthand.
+ * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord> | boolean | undefined | null} preload - Preload shorthand.
  * @returns {import("../database/query/index.js").NestedPreloadRecord} - Normalized preload.
  */
 function normalizePreload(preload) {
@@ -970,7 +970,7 @@ export default class FrontendModelQuery {
   }
 
   /**
-   * @param {import("../database/query/index.js").NestedPreloadRecord | string | string[]} preload - Preload to merge.
+   * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} preload - Preload to merge.
    * @returns {this} - Query with merged preloads.
    */
   preload(preload) {
