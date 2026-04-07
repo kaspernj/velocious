@@ -14,7 +14,7 @@ const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
 
 /**
- * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
+ * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | {type: "metadata", data?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
  */
 
 /**
@@ -65,6 +65,14 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.messageHandlerPromise = messageHandlerPromise
     this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
+
+    /** @type {Record<string, any>} */
+    this._metadata = {}
+  }
+
+  /** @returns {Record<string, any>} - Client-provided metadata. */
+  getMetadata() {
+    return this._metadata
   }
 
   /**
@@ -229,6 +237,20 @@ export default class VelociousHttpServerClientWebsocketSession {
         await this._handleChannelSubscription({channel, lastEventId, params})
       } else {
         await this.subscribeToChannel(channel, {acknowledge: true, lastEventId, params})
+      }
+
+      return
+    }
+
+    if (message.type === "metadata") {
+      const metadataPayload = /** @type {{data?: Record<string, any>}} */ (message)
+
+      this._metadata = metadataPayload.data && typeof metadataPayload.data === "object" ? {...metadataPayload.data} : {}
+
+      for (const channel of this.channels) {
+        if (typeof channel.onMetadataChanged === "function") {
+          await channel.onMetadataChanged(this._metadata)
+        }
       }
 
       return
