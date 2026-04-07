@@ -1441,6 +1441,21 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Disconnect and reconnect the WebSocket to re-authenticate with current credentials.
+   * Use after sign-in/sign-out to ensure the server sees the correct user.
+   * @returns {Promise<void>} - Resolves when reconnected.
+   */
+  static async reconnectWebsocket() {
+    const client = resolveInternalWebsocketClient()
+
+    if (!client) {
+      throw new Error("reconnectWebsocket requires configureTransport({websocketUrl})")
+    }
+
+    await client.reconnect()
+  }
+
+  /**
    * Disconnect the internal WebSocket and disable auto-reconnect.
    * @returns {Promise<void>} - Resolves when closed.
    */
