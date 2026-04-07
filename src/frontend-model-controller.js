@@ -1342,7 +1342,7 @@ export default class FrontendModelController extends Controller {
     const ids = models.map((model) => this.frontendModelPrimaryKeyValue(model))
     const authorizedQuery = this.frontendModelAuthorizedQuery(action).where({[primaryKey]: ids})
 
-    const authorizedIdsRaw = await this.frontendModelAuthorizedQuery(action).where({[primaryKey]: ids}).pluck(primaryKey)
+    const authorizedIdsRaw = await authorizedQuery.pluck(primaryKey)
 
     const authorizedIds = new Set(authorizedIdsRaw.map((id) => String(id)))
 
