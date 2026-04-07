@@ -34,6 +34,10 @@ CREATE TABLE `velocious_attachments` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `r
 
 CREATE TABLE `velocious_internal_migrations` (`key` VARCHAR(255) PRIMARY KEY NOT NULL, `scope` VARCHAR(255) NOT NULL, `version` VARCHAR(255) NOT NULL, `applied_at_ms` BIGINT NOT NULL);
 
+CREATE TABLE `websocket_channel_events` (`sequence` INTEGER PRIMARY KEY NOT NULL, `id` VARCHAR(255) NOT NULL, `channel` VARCHAR(255) NOT NULL, `payload_json` TEXT NOT NULL, `created_at` DATETIME NOT NULL);
+
+CREATE TABLE `websocket_replay_channels` (`channel` VARCHAR(255) PRIMARY KEY NOT NULL, `interested_until` DATETIME NOT NULL);
+
 CREATE UNIQUE INDEX `index_on_authentication_tokens_token` ON `authentication_tokens` (`user_token`);
 
 CREATE INDEX `index_on_authentication_tokens_user_id` ON `authentication_tokens` (`user_id`);
@@ -71,3 +75,11 @@ CREATE INDEX `index_on_velocious_attachments_name` ON `velocious_attachments` (`
 CREATE INDEX `index_on_velocious_attachments_record_id` ON `velocious_attachments` (`record_id`);
 
 CREATE INDEX `index_on_velocious_attachments_record_type` ON `velocious_attachments` (`record_type`);
+
+CREATE INDEX `index_on_websocket_channel_events_channel` ON `websocket_channel_events` (`channel`);
+
+CREATE INDEX `index_on_websocket_channel_events_created_at` ON `websocket_channel_events` (`created_at`);
+
+CREATE INDEX `index_on_websocket_channel_events_id` ON `websocket_channel_events` (`id`);
+
+CREATE INDEX `index_on_websocket_replay_channels_interested_until` ON `websocket_replay_channels` (`interested_until`);
