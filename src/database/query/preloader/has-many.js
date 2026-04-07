@@ -36,7 +36,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       throw new Error(`${this.relationship.getModelClass().name}#${this.relationship.getRelationshipName()} doesn't have a primary key`)
     }
 
-    const throughRelationshipName = this.relationship.through
+    const throughRelationshipName = /** @type {string} */ (this.relationship.through)
     const parentModelClass = this.relationship.getModelClass()
     const throughRelationship = parentModelClass.getRelationshipByName(throughRelationshipName)
     const throughModelClass = throughRelationship.getTargetModelClass()
