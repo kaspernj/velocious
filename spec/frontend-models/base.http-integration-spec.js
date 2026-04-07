@@ -189,15 +189,17 @@ class Project extends FrontendModelBase {
    */
   static relationshipModelClasses() {
     return {
+      creatingUser: User,
       tasks: Task
     }
   }
 
   /**
-   * @returns {Record<string, {type: "hasMany"}>}
+   * @returns {Record<string, {type: "belongsTo" | "hasMany"}>}
    */
   static relationshipDefinitions() {
     return {
+      creatingUser: {type: "belongsTo"},
       tasks: {type: "hasMany"}
     }
   }
@@ -754,6 +756,31 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("preloads belongsTo relationships with custom className via shared transport", async () => {
+    await Dummy.run(async () => {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        url: "http://127.0.0.1:3006"
+      })
+
+      try {
+        const user = await UserRecord.create({email: "custom-class-user@example.com", encryptedPassword: "password", reference: "CustomRef-HTTP"})
+        const project = await ProjectRecord.create({creatingUserReference: "CustomRef-HTTP"})
+        const loadedProject = await Project.preload({creatingUser: true}).findBy({id: project.id()})
+
+        expect(loadedProject).toBeDefined()
+
+        const creatingUser = loadedProject.getRelationshipByName("creatingUser").loaded()
+
+        expect(creatingUser).toBeDefined()
+        expect(creatingUser.id()).toEqual(user.id())
+        expect(creatingUser.email()).toEqual("custom-class-user@example.com")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("serializes virtual resource attributes defined as methods on the resource class", async () => {
     await Dummy.run(async () => {
       FrontendModelBase.configureTransport({
@@ -834,5 +861,69 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         resetFrontendModelTransport()
       }
     })
+  })
+
+  it("reconnectWebsocket closes and reopens the internal websocket", async () => {
+    await Dummy.run(async () => {
+      FrontendModelBase.configureTransport({
+        websocketUrl: "ws://127.0.0.1:3006/websocket"
+      })
+
+      try {
+        await FrontendModelBase.connectWebsocket()
+
+        const stateBefore = FrontendModelBase.websocketState()
+
+        expect(stateBefore.isOpen).toEqual(true)
+        expect(stateBefore.hasClient).toEqual(true)
+
+        await FrontendModelBase.reconnectWebsocket()
+
+        const stateAfter = FrontendModelBase.websocketState()
+
+        expect(stateAfter.isOpen).toEqual(true)
+        expect(stateAfter.hasClient).toEqual(true)
+      } finally {
+        await FrontendModelBase.disconnectWebsocket()
+        FrontendModelBase.configureTransport({
+          websocketUrl: undefined
+        })
+      }
+    })
+  })
+
+  it("reconnectWebsocket allows frontend-model queries after reconnection", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await ProjectRecord.create({name: "Reconnect test project"})
+
+      await TaskRecord.create({name: "Reconnect test task", project})
+      configureWebsocketSharedTransport(websocketClient)
+
+      try {
+        const tasksBefore = await Task.toArray()
+
+        expect(tasksBefore.some((task) => task.name() === "Reconnect test task")).toEqual(true)
+
+        await websocketClient.reconnect()
+
+        const tasksAfter = await Task.toArray()
+
+        expect(tasksAfter.some((task) => task.name() === "Reconnect test task")).toEqual(true)
+      } finally {
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("reconnectWebsocket throws when no websocketUrl is configured", async () => {
+    FrontendModelBase.configureTransport({
+      websocketUrl: undefined
+    })
+
+    await expect(async () => {
+      await FrontendModelBase.reconnectWebsocket()
+    }).toThrow(/reconnectWebsocket requires configureTransport/)
   })
 })
