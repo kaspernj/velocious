@@ -42,6 +42,33 @@ export default class VelociousWebsocketClient {
     this.nextID = 1
     /** @type {(() => void | Promise<void>) | null} */
     this.onReconnect = null
+
+    /** @type {Record<string, any>} */
+    this._metadata = {}
+  }
+
+  /**
+   * Sets a global metadata value that is sent to the server.
+   * For WebSocket connections, a metadata update message is sent immediately.
+   * @param {string} key - Metadata key.
+   * @param {any} value - Metadata value (null to clear).
+   * @returns {void}
+   */
+  setMetadata(key, value) {
+    if (value === null || value === undefined) {
+      delete this._metadata[key]
+    } else {
+      this._metadata[key] = value
+    }
+
+    if (this.socket && this.socket.readyState === this.socket.OPEN) {
+      this._sendMessage({type: "metadata", data: {...this._metadata}})
+    }
+  }
+
+  /** @returns {Record<string, any>} - Current metadata. */
+  getMetadata() {
+    return {...this._metadata}
   }
 
   /**
@@ -76,7 +103,11 @@ export default class VelociousWebsocketClient {
       this.socket.addEventListener("close", this.onClose)
     })
 
-    return this.connectPromise
+    await this.connectPromise
+
+    if (Object.keys(this._metadata).length > 0) {
+      this._sendMessage({type: "metadata", data: {...this._metadata}})
+    }
   }
 
   /**

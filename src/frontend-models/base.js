@@ -1477,6 +1477,21 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Sets global metadata on the WebSocket connection. Sent to the server immediately
+   * over WebSocket and included with every HTTP request as headers.
+   * @param {string} key - Metadata key.
+   * @param {any} value - Metadata value (null to clear).
+   * @returns {void}
+   */
+  static setWebsocketMetadata(key, value) {
+    const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+    if (!client || typeof client.setMetadata !== "function") return
+
+    client.setMetadata(key, value)
+  }
+
+  /**
    * Installs WebSocket lifecycle hooks on globalThis for system test access.
    * Tests can call `globalThis.__velocious_websocket_hooks.connect()` etc.
    * @returns {void}
