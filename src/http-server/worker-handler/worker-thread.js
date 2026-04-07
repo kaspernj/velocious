@@ -6,7 +6,9 @@ import {digg} from "diggerize"
 import errorLogger from "../../error-logger.js"
 import Logger from "../../logger.js"
 import toImportSpecifier from "../../utils/to-import-specifier.js"
+import {websocketEventChannelRegistryForConfiguration} from "../websocket-event-channel-registry.js"
 import WebsocketEvents from "../websocket-events.js"
+import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
 /**
  * @param {Buffer | Uint8Array | string} chunk - Client input payload.
@@ -155,6 +157,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async broadcastWebsocketEvent({channel, payload}) {
+    const replayRegistry = websocketEventChannelRegistryForConfiguration(this.configuration)
+    const shouldPersist = replayRegistry.isInterested(channel)
+    const persistedEvent = shouldPersist
+      ? await websocketEventLogStoreForConfiguration(this.configuration).appendEvent({channel, payload})
+      : null
     const sendTasks = []
     const isDebug = this.configuration?.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")
     let clientCount = 0
@@ -177,7 +184,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
         if (hasSubscription || hasHandlers) matchCount++
       }
 
-      sendTasks.push(session.sendEvent(channel, payload))
+      sendTasks.push(session.sendEvent(channel, payload, {
+        createdAt: persistedEvent?.createdAt,
+        eventId: persistedEvent?.id
+      }))
     }
 
     if (isDebug) {
