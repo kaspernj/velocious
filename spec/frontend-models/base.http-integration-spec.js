@@ -209,6 +209,7 @@ class Project extends FrontendModelBase {
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
+    headers: undefined,
     url: undefined,
     websocketClient: undefined
   })
@@ -218,6 +219,19 @@ function resetFrontendModelTransport() {
 function configureNodeTransport() {
   FrontendModelBase.configureTransport({
     url: "http://127.0.0.1:3006"
+  })
+}
+
+/**
+ * @param {string | null} [cookieHeader=null] - Optional cookie header.
+ * @param {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void)}} [websocketClient] - Optional websocket client.
+ * @returns {void}
+ */
+function configureNodeSharedTransport(cookieHeader = null, websocketClient) {
+  FrontendModelBase.configureTransport({
+    headers: () => cookieHeader ? {Cookie: cookieHeader} : {},
+    url: "http://127.0.0.1:3006/frontend-models",
+    websocketClient
   })
 }
 
@@ -303,6 +317,43 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         const user = await MinifiedUserTransportModel.findBy({email: "john@example.com"})
 
         expect(user?.email()).toEqual("john@example.com")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("uses the configured shared frontend-model endpoint URL directly for HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeSharedTransport()
+
+      try {
+        const {john} = await seedHttpFrontendModels()
+
+        const model = await User.findBy({email: "john@example.com"})
+
+        expect(model?.id()).toEqual(john.id())
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("keeps shared HTTP requests on fetch when a websocket subscription client is configured", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = {
+        post: async () => {
+          throw new Error("Expected shared HTTP requests to stay on fetch when url is configured")
+        },
+        subscribe: () => () => {}
+      }
+
+      configureNodeSharedTransport("frontend_model_session=frontend-model-shared-cookie", websocketClient)
+
+      try {
+        const response = await User.currentSessionCookie()
+
+        expect(response.value).toEqual("frontend-model-shared-cookie")
       } finally {
         resetFrontendModelTransport()
       }

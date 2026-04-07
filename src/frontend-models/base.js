@@ -20,6 +20,7 @@ import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. For shared-endpoint models this should be the full shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`). For legacy direct-resource models this can be the backend origin/prefix.
  * @property {boolean} [shared] - When true, route built-in commands for path-based models through the shared frontend-model API envelope instead of direct per-command endpoints.
+ * @property {Record<string, string> | (() => Record<string, string> | undefined | null)} [headers] - Optional HTTP headers for shared and direct frontend-model requests.
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
  * @property {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
  */
@@ -613,6 +614,21 @@ function frontendModelTransportUrl() {
 }
 
 /**
+ * @returns {Record<string, string>} - Resolved frontend-model transport headers.
+ */
+function frontendModelTransportHeaders() {
+  const configuredHeaders = typeof frontendModelTransportConfig.headers === "function"
+    ? frontendModelTransportConfig.headers()
+    : frontendModelTransportConfig.headers
+
+  if (!configuredHeaders || typeof configuredHeaders !== "object") {
+    return {}
+  }
+
+  return /** @type {Record<string, string>} */ (configuredHeaders)
+}
+
+/**
  * @param {Record<string, any>} value - Attributes hash.
  * @returns {Record<string, any>} - Cloned attributes hash.
  */
@@ -636,7 +652,17 @@ function frontendModelCommandUrl(resourcePath, commandName) {
  * @returns {string} - Shared frontend-model API URL.
  */
 function frontendModelApiUrl() {
-  return `${frontendModelTransportUrl()}${SHARED_FRONTEND_MODEL_API_PATH}`
+  const configuredUrl = frontendModelTransportUrl()
+
+  if (!configuredUrl) {
+    return SHARED_FRONTEND_MODEL_API_PATH
+  }
+
+  if (configuredUrl.endsWith(SHARED_FRONTEND_MODEL_API_PATH)) {
+    return configuredUrl
+  }
+
+  return `${configuredUrl}${SHARED_FRONTEND_MODEL_API_PATH}`
 }
 
 /**
@@ -667,12 +693,15 @@ function frontendModelTransportPath(url) {
  */
 async function performSharedFrontendModelApiRequest(requestPayload) {
   const serializedRequestPayload = serializeFrontendModelTransportValue(requestPayload)
+  const configuredUrl = frontendModelTransportUrl()
+  const resolvedHeaders = frontendModelTransportHeaders()
   const websocketClient = frontendModelTransportConfig.websocketClient
   const url = frontendModelApiUrl()
 
-  if (websocketClient) {
+  if (websocketClient && !configuredUrl) {
     const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
       headers: {
+        ...resolvedHeaders,
         "Content-Type": "application/json"
       }
     })
@@ -685,6 +714,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
     body: JSON.stringify(serializedRequestPayload),
     credentials: "include",
     headers: {
+      ...resolvedHeaders,
       "Content-Type": "application/json"
     },
     method: "POST"
@@ -1409,6 +1439,10 @@ export default class FrontendModelBase {
 
     if (Object.prototype.hasOwnProperty.call(config, "url")) {
       frontendModelTransportConfig.url = config.url
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "headers")) {
+      frontendModelTransportConfig.headers = config.headers
     }
 
     if (Object.prototype.hasOwnProperty.call(config, "shared")) {
@@ -2227,6 +2261,7 @@ export default class FrontendModelBase {
       body: JSON.stringify(serializedPayload),
       credentials: "include",
       headers: {
+        ...frontendModelTransportHeaders(),
         "Content-Type": "application/json"
       },
       method: "POST"
