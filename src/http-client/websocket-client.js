@@ -92,15 +92,6 @@ export default class VelociousWebsocketClient {
   }
 
   /**
-   * Disconnect and reconnect the WebSocket to re-authenticate with current credentials.
-   * @returns {Promise<void>} - Resolves when reconnected.
-   */
-  async reconnect() {
-    await this.close()
-    await this.connectWithReconnect()
-  }
-
-  /**
    * Close the websocket and clear pending state.
    * @returns {Promise<void>} - Resolves when complete.
    */
