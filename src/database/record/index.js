@@ -2022,7 +2022,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {import("../query/index.js").NestedPreloadRecord} preload - Preload.
+   * @param {import("../query/index.js").NestedPreloadRecord | string | Array<string | import("../query/index.js").NestedPreloadRecord>} preload - Preload.
    * @returns {ModelClassQuery<MC>} - The preload.
    */
   static preload(preload) {

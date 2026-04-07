@@ -1845,7 +1845,7 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
-   * @param {import("../database/query/index.js").NestedPreloadRecord | string | string[]} preload - Preload graph.
+   * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} preload - Preload graph.
    * @returns {FrontendModelQuery<T>} - Query with preload.
    */
   static preload(preload) {
