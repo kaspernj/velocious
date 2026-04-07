@@ -1321,7 +1321,10 @@ export default class FrontendModelController extends Controller {
    * @returns {string} - Primary key value as string.
    */
   frontendModelPrimaryKeyValue(model) {
-    const value = model.attributes()[this.frontendModelPrimaryKey()]
+    const columnName = this.frontendModelPrimaryKey()
+    const attributeNameMap = model.getModelClass().getColumnNameToAttributeNameMap()
+    const attributeName = attributeNameMap[columnName] || columnName
+    const value = model.readAttribute(attributeName)
 
     return String(value)
   }
