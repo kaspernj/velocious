@@ -189,15 +189,17 @@ class Project extends FrontendModelBase {
    */
   static relationshipModelClasses() {
     return {
+      creatingUser: User,
       tasks: Task
     }
   }
 
   /**
-   * @returns {Record<string, {type: "hasMany"}>}
+   * @returns {Record<string, {type: "belongsTo" | "hasMany"}>}
    */
   static relationshipDefinitions() {
     return {
+      creatingUser: {type: "belongsTo"},
       tasks: {type: "hasMany"}
     }
   }
@@ -748,6 +750,31 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
         expect(loadedProject).toBeDefined()
         expect(loadedProject.id()).toEqual(project.id())
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("preloads belongsTo relationships with custom className via shared transport", async () => {
+    await Dummy.run(async () => {
+      FrontendModelBase.configureTransport({
+        shared: true,
+        url: "http://127.0.0.1:3006"
+      })
+
+      try {
+        const user = await UserRecord.create({email: "custom-class-user@example.com", encryptedPassword: "password", reference: "CustomRef-HTTP"})
+        const project = await ProjectRecord.create({creatingUserReference: "CustomRef-HTTP"})
+        const loadedProject = await Project.preload({creatingUser: true}).findBy({id: project.id()})
+
+        expect(loadedProject).toBeDefined()
+
+        const creatingUser = loadedProject.getRelationshipByName("creatingUser").loaded()
+
+        expect(creatingUser).toBeDefined()
+        expect(creatingUser.id()).toEqual(user.id())
+        expect(creatingUser.email()).toEqual("custom-class-user@example.com")
       } finally {
         resetFrontendModelTransport()
       }
