@@ -17,6 +17,7 @@ import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
 import timeout from "awaitery/build/timeout.js"
+import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
 import UUID from "pure-uuid"
 
@@ -380,6 +381,16 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const update = new Update({conditions, data, driver: this, tableName})
 
     return update.toSql()
+  }
+
+  /**
+   * @param {import("../base.js").UpsertSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
+   */
+  upsertSql(args) {
+    const upsert = new Upsert({...args, driver: this})
+
+    return upsert.toSql()
   }
 
   /**

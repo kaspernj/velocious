@@ -14,6 +14,7 @@ import Options from "./options.js"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
+import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
@@ -326,6 +327,12 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {string} - SQL string.
    */
   updateSql({conditions, data, tableName}) { return new Update({conditions, data, driver: this, tableName}).toSql() }
+
+  /**
+   * @param {import("../base.js").UpsertSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
+   */
+  upsertSql(args) { return new Upsert({...args, driver: this}).toSql() }
 
   /**
    * @returns {Promise<string | null>} - Resolves with SQL string.

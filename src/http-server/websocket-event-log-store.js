@@ -101,28 +101,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     const interestedUntil = new Date(Date.now() + this.retentionMs)
 
     await this._withDb(async (db) => {
-      await db.update({
-        tableName: REPLAY_CHANNELS_TABLE,
-        conditions: {channel},
-        data: {interested_until: interestedUntil}
-      })
-
-      try {
-        await db.insert({
-          tableName: REPLAY_CHANNELS_TABLE,
-          data: {
-            channel,
-            interested_until: interestedUntil
-          }
-        })
-      } catch {
-        // Another subscriber may have inserted the same replay-channel row concurrently.
-        await db.update({
-          tableName: REPLAY_CHANNELS_TABLE,
-          conditions: {channel},
-          data: {interested_until: interestedUntil}
-        })
-      }
+      await this._upsertReplayChannelInterest(db, {channel, interestedUntil})
     })
   }
 
@@ -352,6 +331,25 @@ export default class VelociousHttpServerWebsocketEventLogStore {
       payload: JSON.parse(String(row.payload_json)),
       sequence: Number(row.sequence)
     }
+  }
+
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Options.
+   * @param {string} args.channel - Channel name.
+   * @param {Date} args.interestedUntil - Retention deadline.
+   * @returns {Promise<void>} - Resolves when the replay-channel row was upserted.
+   */
+  async _upsertReplayChannelInterest(db, {channel, interestedUntil}) {
+    await db.upsert({
+      conflictColumns: ["channel"],
+      data: {
+        channel,
+        interested_until: interestedUntil
+      },
+      tableName: REPLAY_CHANNELS_TABLE,
+      updateColumns: ["interested_until"]
+    })
   }
 
   /**
