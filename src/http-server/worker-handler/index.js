@@ -236,13 +236,15 @@ export default class VelociousHttpServerWorker {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
+   * @param {string} [args.createdAt] - Event creation time.
+   * @param {string} [args.eventId] - Event identifier.
    * @param {any} args.payload - Payload data.
    * @returns {void} - No return value.
    */
-  dispatchWebsocketEvent({channel, payload}) {
+  dispatchWebsocketEvent({channel, createdAt, eventId, payload}) {
     // Test and shutdown paths can leave a registered handler without a live worker-thread transport.
     if (!this.worker || typeof this.worker.postMessage !== "function") return
 
-    this.worker.postMessage({channel, command: "websocketEvent", payload})
+    this.worker.postMessage({channel, command: "websocketEvent", createdAt, eventId, payload})
   }
 }

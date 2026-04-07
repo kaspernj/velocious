@@ -228,7 +228,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (resolver) {
         await this._handleChannelSubscription({channel, lastEventId, params})
       } else {
-        await this.subscribeToChannel(channel, {acknowledge: true, lastEventId})
+        await this.subscribeToChannel(channel, {acknowledge: true, lastEventId, params})
       }
 
       return
@@ -398,13 +398,18 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default, lastEventId?: string}} [options] - Subscribe options.
+   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default, lastEventId?: string, params?: Record<string, any>, subscriptionChannel?: string}} [options] - Subscribe options.
    * @returns {Promise<boolean>} - Whether the subscription was added.
    */
-  async subscribeToChannel(channel, {acknowledge = true, channelHandler, lastEventId} = {}) {
+  async subscribeToChannel(channel, {acknowledge = true, channelHandler, lastEventId, params, subscriptionChannel} = {}) {
     await websocketEventLogStoreForConfiguration(this.configuration).markChannelInterested(channel)
 
-    const replayState = await this._prepareReplayState({channel, lastEventId})
+    const replayState = await this._prepareReplayState({
+      channel,
+      lastEventId,
+      subscriptionChannel: subscriptionChannel || channel,
+      subscriptionParams: params
+    })
 
     if (replayState === false) return false
     if (replayState) {
@@ -548,6 +553,7 @@ export default class VelociousHttpServerClientWebsocketSession {
           configuration: this.configuration,
           lastEventId,
           request: this.upgradeRequest,
+          subscriptionChannel: channel,
           subscriptionParams: params,
           websocketSession: this
         })
@@ -566,18 +572,20 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {object} args - Options.
-   * @param {string} args.channel - Channel name.
+   * @param {string} args.channel - Internal channel name.
    * @param {string | undefined} args.lastEventId - Last received event id.
+   * @param {string} args.subscriptionChannel - Client-facing channel name.
+   * @param {Record<string, any> | undefined} args.subscriptionParams - Client-facing params.
    * @returns {Promise<false | {buffered: boolean, ceilingSequence: number, checkpointSequence: number, replaying: boolean} | null>} - Replay state.
    */
-  async _prepareReplayState({channel, lastEventId}) {
+  async _prepareReplayState({channel, lastEventId, subscriptionChannel, subscriptionParams}) {
     if (!lastEventId) return null
 
     const store = websocketEventLogStoreForConfiguration(this.configuration)
     const checkpoint = await store.getEventById({channel, id: lastEventId})
 
     if (!checkpoint) {
-      this.sendJson({channel, lastEventId, type: "replay-gap"})
+      this.sendJson({channel: subscriptionChannel, lastEventId, params: subscriptionParams, type: "replay-gap"})
       return false
     }
 

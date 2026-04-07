@@ -263,14 +263,12 @@ export default class VelociousWebsocketClient {
         })
       }
     } else if (type === "replay-gap") {
-      for (const [subscriptionKey, pendingSubscription] of this.pendingSubscriptions.entries()) {
-        const listenerEntry = this.listeners.get(subscriptionKey)
+      const subscriptionKey = this._subscriptionKey(message.channel, message.params)
+      const pendingSubscription = this.pendingSubscriptions.get(subscriptionKey)
 
-        if (listenerEntry?.channel !== message.channel) continue
-
+      if (pendingSubscription) {
         this.pendingSubscriptions.delete(subscriptionKey)
         pendingSubscription.reject(new Error(`Replay gap for ${message.channel}`))
-        break
       }
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)

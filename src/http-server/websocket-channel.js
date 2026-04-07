@@ -7,14 +7,16 @@ export default class VelociousHttpServerWebsocketChannel {
    * @param {import("./client/request.js").default | import("./client/websocket-request.js").default | undefined} args.request - Request instance.
    * @param {import("./client/index.js").default} args.client - Client instance.
    * @param {string} [args.lastEventId] - Last received event id.
+   * @param {string} [args.subscriptionChannel] - Client-facing subscription channel.
    * @param {import("./client/websocket-session.js").default} args.websocketSession - Websocket session.
    * @param {Record<string, unknown>} [args.subscriptionParams] - Params from subscribe message.
    */
-  constructor({configuration, request, client, lastEventId, websocketSession, subscriptionParams}) {
+  constructor({configuration, request, client, lastEventId, subscriptionChannel, websocketSession, subscriptionParams}) {
     this.configuration = configuration
     this.request = request
     this.client = client
     this.lastEventId = lastEventId
+    this.subscriptionChannel = subscriptionChannel
     this.websocketSession = websocketSession
     this.subscriptionParams = subscriptionParams
     this._params = this._buildParams()
@@ -47,7 +49,9 @@ export default class VelociousHttpServerWebsocketChannel {
     return await this.websocketSession.subscribeToChannel(channel, {
       acknowledge: options.acknowledge ?? true,
       channelHandler: this,
-      lastEventId: options.lastEventId ?? this.lastEventId
+      lastEventId: options.lastEventId ?? this.lastEventId,
+      params: this.subscriptionParams,
+      subscriptionChannel: this.subscriptionChannel
     })
   }
 

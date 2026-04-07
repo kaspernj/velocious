@@ -101,14 +101,28 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     const interestedUntil = new Date(Date.now() + this.retentionMs)
 
     await this._withDb(async (db) => {
-      await db.query(`DELETE FROM ${db.quoteTable(REPLAY_CHANNELS_TABLE)} WHERE channel = ${db.quote(channel)}`)
-      await db.insert({
+      await db.update({
         tableName: REPLAY_CHANNELS_TABLE,
-        data: {
-          channel,
-          interested_until: interestedUntil
-        }
+        conditions: {channel},
+        data: {interested_until: interestedUntil}
       })
+
+      try {
+        await db.insert({
+          tableName: REPLAY_CHANNELS_TABLE,
+          data: {
+            channel,
+            interested_until: interestedUntil
+          }
+        })
+      } catch {
+        // Another subscriber may have inserted the same replay-channel row concurrently.
+        await db.update({
+          tableName: REPLAY_CHANNELS_TABLE,
+          conditions: {channel},
+          data: {interested_until: interestedUntil}
+        })
+      }
     })
   }
 

@@ -1,9 +1,12 @@
 // @ts-check
 
+import {websocketEventLogStoreForConfiguration} from "./websocket-event-log-store.js"
+
 export class VelociousHttpServerWebsocketEventsHost {
   constructor() {
     /** @type {Set<import("./worker-handler/index.js").default>} */
     this.handlers = new Set()
+    this.publishQueue = Promise.resolve()
   }
 
   /**
@@ -28,8 +31,45 @@ export class VelociousHttpServerWebsocketEventsHost {
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 
-    for (const handler of this.handlers) {
-      handler.dispatchWebsocketEvent({channel, payload})
+    this.publishQueue = this.publishQueue
+      .then(async () => {
+        const persistedEvent = await this._persistEventIfNeeded({channel, payload})
+
+        for (const handler of this.handlers) {
+          handler.dispatchWebsocketEvent({
+            channel,
+            createdAt: persistedEvent?.createdAt,
+            eventId: persistedEvent?.id,
+            payload
+          })
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to publish websocket event", error)
+      })
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {any} args.payload - Payload data.
+   * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
+   */
+  async _persistEventIfNeeded({channel, payload}) {
+    const handler = this.handlers.values().next().value
+
+    if (!handler?.configuration) return null
+
+    const websocketEventLogStore = websocketEventLogStoreForConfiguration(handler.configuration)
+    const shouldPersist = await websocketEventLogStore.shouldPersistChannel(channel)
+
+    if (!shouldPersist) return null
+
+    const persistedEvent = await websocketEventLogStore.appendEvent({channel, payload})
+
+    return {
+      createdAt: persistedEvent.createdAt,
+      id: persistedEvent.id
     }
   }
 }
