@@ -47,7 +47,7 @@ function parseFromPlainTableReference(fromPlain) {
 }
 
 /**
- * @param {import("./index.js").NestedPreloadRecord | string | string[]} preload - Preload data in shorthand or nested form.
+ * @param {import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} preload - Preload data in shorthand or nested form.
  * @returns {import("./index.js").NestedPreloadRecord} - Normalized preload record.
  */
 function normalizePreloadRecord(preload) {
@@ -481,7 +481,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {import("./index.js").NestedPreloadRecord} data - Data payload.
+   * @param {import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} data - Data payload.
    * @returns {this} - The preload.
    */
   preload(data) {
