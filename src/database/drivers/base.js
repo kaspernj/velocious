@@ -44,6 +44,13 @@
  * @property {object} data - Column/value pairs to update.
  * @property {string} tableName - Table name to update.
  */
+/**
+ * @typedef {object}UpsertSqlArgsType
+ * @property {string[]} conflictColumns - Columns that define a conflict.
+ * @property {object} data - Column/value pairs to insert.
+ * @property {string} tableName - Table name to upsert into.
+ * @property {string[]} updateColumns - Columns to update on conflict.
+ */
 
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
@@ -369,6 +376,17 @@ export default class VelociousDatabaseDriversBase {
    */
   insertSql(args) { // eslint-disable-line no-unused-vars
     throw new Error("'insertSql' not implemented")
+  }
+
+  /**
+   * @param {UpsertSqlArgsType} args - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async upsert(args) {
+    this._assertNotReadOnly()
+    const sql = this.upsertSql(args)
+
+    await this.query(sql)
   }
 
   /**
@@ -966,6 +984,15 @@ export default class VelociousDatabaseDriversBase {
    */
   updateSql(args) { // eslint-disable-line no-unused-vars
     throw new Error("'disableForeignKeys' not implemented")
+  }
+
+  /**
+   * @abstract
+   * @param {UpsertSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
+   */
+  upsertSql(args) { // eslint-disable-line no-unused-vars
+    throw new Error("'upsertSql' not implemented")
   }
 
   /**

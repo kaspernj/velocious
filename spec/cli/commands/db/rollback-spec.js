@@ -5,7 +5,13 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 import uniqunize from "uniqunize"
 
 describe("Cli - Commands - db:rollback", () => {
-  const internalTables = new Set(["background_jobs", "velocious_attachments", "velocious_internal_migrations"])
+  const internalTables = new Set([
+    "background_jobs",
+    "velocious_attachments",
+    "velocious_internal_migrations",
+    "websocket_channel_events",
+    "websocket_replay_channels"
+  ])
   const dropExtraTables = async (configuration) => {
     await configuration.ensureConnections(async (dbs) => {
       const tableNames = ["autoindex_test", "uuid_default_test"]

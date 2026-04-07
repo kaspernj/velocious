@@ -6,13 +6,17 @@ export default class VelociousHttpServerWebsocketChannel {
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {import("./client/request.js").default | import("./client/websocket-request.js").default | undefined} args.request - Request instance.
    * @param {import("./client/index.js").default} args.client - Client instance.
+   * @param {string} [args.lastEventId] - Last received event id.
+   * @param {string} [args.subscriptionChannel] - Client-facing subscription channel.
    * @param {import("./client/websocket-session.js").default} args.websocketSession - Websocket session.
    * @param {Record<string, unknown>} [args.subscriptionParams] - Params from subscribe message.
    */
-  constructor({configuration, request, client, websocketSession, subscriptionParams}) {
+  constructor({configuration, request, client, lastEventId, subscriptionChannel, websocketSession, subscriptionParams}) {
     this.configuration = configuration
     this.request = request
     this.client = client
+    this.lastEventId = lastEventId
+    this.subscriptionChannel = subscriptionChannel
     this.websocketSession = websocketSession
     this.subscriptionParams = subscriptionParams
     this._params = this._buildParams()
@@ -38,13 +42,18 @@ export default class VelociousHttpServerWebsocketChannel {
   /**
    * Subscribe this connection to a broadcast channel.
    * @param {string} channel - Channel name.
-   * @param {{acknowledge?: boolean}} [options] - Subscription options.
+   * @param {{acknowledge?: boolean, lastEventId?: string}} [options] - Subscription options.
    * @returns {Promise<boolean>} - Whether the subscription succeeded.
    */
   async streamFrom(channel, options = {}) {
+    const lastEventId = options.lastEventId ?? this.lastEventId
+
     return await this.websocketSession.subscribeToChannel(channel, {
       acknowledge: options.acknowledge ?? true,
-      channelHandler: this
+      channelHandler: this,
+      lastEventId,
+      params: this.subscriptionParams,
+      subscriptionChannel: this.subscriptionChannel
     })
   }
 
@@ -52,11 +61,15 @@ export default class VelociousHttpServerWebsocketChannel {
    * Called when a broadcast event is delivered for one of this channel instance's subscriptions.
    * @param {object} args - Event args.
    * @param {string} args.channel - Broadcast channel name.
+   * @param {string} [args.createdAt] - Event creation timestamp.
+   * @param {string} [args.eventId] - Event id.
    * @param {any} args.payload - Broadcast payload.
+   * @param {boolean} [args.replayed] - Whether this event was replayed.
+   * @param {number} [args.sequence] - Event sequence.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async receivedBroadcast({channel, payload}) {
-    this.websocketSession.sendJson({channel, payload, type: "event"})
+  async receivedBroadcast({channel, createdAt, eventId, payload, replayed, sequence}) {
+    this.websocketSession.sendJson({channel, createdAt, eventId, payload, replayed, sequence, type: "event"})
   }
 
   /**

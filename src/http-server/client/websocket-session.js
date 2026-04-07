@@ -5,6 +5,7 @@ import Logger from "../../logger.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
 import WebsocketChannel from "../websocket-channel.js"
+import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
 const WEBSOCKET_FINAL_FRAME = 0x80
 const WEBSOCKET_OPCODE_TEXT = 0x1
@@ -13,16 +14,16 @@ const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
 
 /**
- * @typedef {{type: "subscribe", channel: string, params?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
+ * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
  */
 
 /**
  * @param {WebsocketSessionMessage} message - Raw websocket message.
- * @returns {{type: "subscribe", channel: string, params?: Record<string, any>} | null} - Subscribe message when matched.
+ * @returns {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | null} - Subscribe message when matched.
  */
 function subscribeMessage(message) {
   return message.type === "subscribe"
-    ? /** @type {{type: "subscribe", channel: string, params?: Record<string, any>}} */ (message)
+    ? /** @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>}} */ (message)
     : null
 }
 
@@ -43,6 +44,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   subscriptionHandlers = new Map()
   handlerSubscriptions = new Map()
   channelTenants = new Map()
+  channelReplayStates = new Map()
   /** @type {WebsocketSessionMessage[]} */
   messageQueue = []
 
@@ -98,11 +100,18 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * @param {string} channel - Channel name.
    * @param {any} payload - Payload data.
+   * @param {{createdAt?: string, eventId?: string, replayed?: boolean, sequence?: number}} [options] - Event metadata.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async sendEvent(channel, payload) {
+  async sendEvent(channel, payload, options = {}) {
     const channelHandlers = this.subscriptionHandlers.get(channel)
     const hasChannelHandlers = Boolean(channelHandlers && channelHandlers.size > 0)
+    const replayState = this.channelReplayStates.get(channel)
+
+    if (replayState?.replaying && !options.replayed) {
+      replayState.buffered = true
+      return
+    }
 
     if (!this.hasSubscription(channel) && !hasChannelHandlers) return
 
@@ -112,14 +121,29 @@ export default class VelociousHttpServerClientWebsocketSession {
 
         await this.configuration.runWithTenant(tenant, async () => {
           await this._withConnections(async () => {
-            await handler.receivedBroadcast({channel, payload})
+            await handler.receivedBroadcast({
+              channel,
+              createdAt: options.createdAt,
+              eventId: options.eventId,
+              payload,
+              replayed: options.replayed,
+              sequence: options.sequence
+            })
           })
         })
       }))
       return
     }
 
-    this.sendJson({channel, payload, type: "event"})
+    this.sendJson({
+      channel,
+      createdAt: options.createdAt,
+      eventId: options.eventId,
+      payload,
+      replayed: options.replayed,
+      sequence: options.sequence,
+      type: "event"
+    })
   }
 
   /**
@@ -196,15 +220,15 @@ export default class VelociousHttpServerClientWebsocketSession {
     const subscribePayload = subscribeMessage(message)
 
     if (subscribePayload) {
-      const {channel, params} = subscribePayload
+      const {channel, lastEventId, params} = subscribePayload
 
       if (!channel) throw new Error("channel is required for subscribe")
       const resolver = this.configuration.getWebsocketChannelResolver?.()
 
       if (resolver) {
-        await this._handleChannelSubscription({channel, params})
+        await this._handleChannelSubscription({channel, lastEventId, params})
       } else {
-        await this.subscribeToChannel(channel, {acknowledge: true})
+        await this.subscribeToChannel(channel, {acknowledge: true, lastEventId, params})
       }
 
       return
@@ -374,10 +398,24 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default}} [options] - Subscribe options.
+   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default, lastEventId?: string, params?: Record<string, any>, subscriptionChannel?: string}} [options] - Subscribe options.
    * @returns {Promise<boolean>} - Whether the subscription was added.
    */
-  async subscribeToChannel(channel, {acknowledge = true, channelHandler} = {}) {
+  async subscribeToChannel(channel, {acknowledge = true, channelHandler, lastEventId, params, subscriptionChannel} = {}) {
+    await websocketEventLogStoreForConfiguration(this.configuration).markChannelInterested(channel)
+
+    const replayState = await this._prepareReplayState({
+      channel,
+      lastEventId,
+      subscriptionChannel: subscriptionChannel || channel,
+      subscriptionParams: params
+    })
+
+    if (replayState === false) return false
+    if (replayState) {
+      this.channelReplayStates.set(channel, replayState)
+    }
+
     this.addSubscription(channel)
 
     if (channelHandler) {
@@ -392,6 +430,14 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       this.handlerSubscriptions.get(channelHandler)?.add(channel)
+    }
+
+    if (replayState) {
+      try {
+        await this._replayChannelEvents({channel, replayState})
+      } finally {
+        await this._finishReplayState(channel, replayState)
+      }
     }
 
     if (acknowledge) {
@@ -411,6 +457,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       await this._teardownSingleChannel(channel)
     }
     this.channels.clear()
+    this.channelReplayStates.clear()
   }
 
   /**
@@ -475,10 +522,10 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {{channel: string, params?: Record<string, any>}} args - Subscription args.
+   * @param {{channel: string, lastEventId?: string, params?: Record<string, any>}} args - Subscription args.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _handleChannelSubscription({channel, params}) {
+  async _handleChannelSubscription({channel, lastEventId, params}) {
     const resolver = this.configuration.getWebsocketChannelResolver?.()
 
     if (!resolver) return
@@ -504,7 +551,9 @@ export default class VelociousHttpServerClientWebsocketSession {
         ? new resolved({
           client: this.client,
           configuration: this.configuration,
+          lastEventId,
           request: this.upgradeRequest,
+          subscriptionChannel: channel,
           subscriptionParams: params,
           websocketSession: this
         })
@@ -518,6 +567,84 @@ export default class VelociousHttpServerClientWebsocketSession {
     } catch (error) {
       this.logger.warn(() => ["Websocket channel subscription failed", error])
       this.sendJson({channel, error: "Subscription rejected", type: "error"})
+    }
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {string} args.channel - Internal channel name.
+   * @param {string | undefined} args.lastEventId - Last received event id.
+   * @param {string} args.subscriptionChannel - Client-facing channel name.
+   * @param {Record<string, any> | undefined} args.subscriptionParams - Client-facing params.
+   * @returns {Promise<false | {buffered: boolean, ceilingSequence: number, checkpointSequence: number, replaying: boolean} | null>} - Replay state.
+   */
+  async _prepareReplayState({channel, lastEventId, subscriptionChannel, subscriptionParams}) {
+    if (!lastEventId) return null
+
+    const store = websocketEventLogStoreForConfiguration(this.configuration)
+    const checkpoint = await store.getEventById({channel, id: lastEventId})
+
+    if (!checkpoint) {
+      this.sendJson({channel: subscriptionChannel, lastEventId, params: subscriptionParams, type: "replay-gap"})
+      return false
+    }
+
+    return {
+      buffered: false,
+      ceilingSequence: (await store.latestSequence(channel)) || checkpoint.sequence,
+      checkpointSequence: checkpoint.sequence,
+      replaying: true
+    }
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {string} args.channel - Channel name.
+   * @param {{buffered: boolean, ceilingSequence: number, checkpointSequence: number, replaying: boolean}} args.replayState - Replay state.
+   * @returns {Promise<void>} - Resolves when replay completes.
+   */
+  async _replayChannelEvents({channel, replayState}) {
+    const store = websocketEventLogStoreForConfiguration(this.configuration)
+    const events = await store.getEventsAfter({
+      channel,
+      sequence: replayState.checkpointSequence,
+      upToSequence: replayState.ceilingSequence
+    })
+
+    for (const event of events) {
+      await this.sendEvent(channel, event.payload, {
+        createdAt: event.createdAt,
+        eventId: event.id,
+        replayed: true,
+        sequence: event.sequence
+      })
+    }
+  }
+
+  /**
+   * @param {string} channel - Channel name.
+   * @param {{buffered: boolean, ceilingSequence: number, checkpointSequence: number, replaying: boolean}} replayState - Replay state.
+   * @returns {Promise<void>} - Resolves when buffered events are flushed.
+   */
+  async _finishReplayState(channel, replayState) {
+    const store = websocketEventLogStoreForConfiguration(this.configuration)
+
+    replayState.replaying = false
+    this.channelReplayStates.delete(channel)
+
+    if (!replayState.buffered) return
+
+    const liveEvents = await store.getEventsAfter({
+      channel,
+      sequence: replayState.ceilingSequence
+    })
+
+    for (const event of liveEvents) {
+      await this.sendEvent(channel, event.payload, {
+        createdAt: event.createdAt,
+        eventId: event.id,
+        sequence: event.sequence
+      })
     }
   }
 

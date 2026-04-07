@@ -15,6 +15,7 @@ import query from "./query.js"
 import QueryParser from "./query-parser.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
+import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversMysql extends Base{
@@ -305,5 +306,15 @@ export default class VelociousDatabaseDriversMysql extends Base{
     const update = new Update({conditions, data, driver: this, tableName})
 
     return update.toSql()
+  }
+
+  /**
+   * @param {import("../base.js").UpsertSqlArgsType} args - Options object.
+   * @returns {string} - SQL string.
+   */
+  upsertSql(args) {
+    const upsert = new Upsert({...args, driver: this})
+
+    return upsert.toSql()
   }
 }

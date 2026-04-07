@@ -12,8 +12,10 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
   /** @returns {Promise<void>} - Resolves when the websocket subscription is ready. */
   async subscribed() {
     const modelName = this.modelName()
+    const subscribed = await this.streamFrom(frontendModelBroadcastChannelName(modelName), {acknowledge: false})
 
-    await this.streamFrom(frontendModelBroadcastChannelName(modelName), {acknowledge: false})
+    if (!subscribed) return
+
     this.websocketSession.sendJson({
       channel: "frontend-models",
       params: {model: modelName},
@@ -24,10 +26,14 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
   /**
    * @param {object} args - Event args.
    * @param {string} args.channel - Broadcast channel.
+   * @param {string} [args.createdAt] - Event creation timestamp.
+   * @param {string} [args.eventId] - Event id.
    * @param {Record<string, any>} args.payload - Event payload.
+   * @param {boolean} [args.replayed] - Whether this event was replayed.
+   * @param {number} [args.sequence] - Event sequence.
    * @returns {Promise<void>} - Resolves when the event has been authorized and emitted.
    */
-  async receivedBroadcast({channel, payload}) {
+  async receivedBroadcast({channel, createdAt, eventId, payload, replayed, sequence}) {
     void channel
 
     const action = payload?.action
@@ -44,11 +50,15 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
     if (action === "destroy") {
       this.websocketSession.sendJson({
         channel: "frontend-models",
+        createdAt,
+        eventId,
         payload: serializeFrontendModelTransportValue({
           action,
           id,
           model: this.modelName()
         }),
+        replayed,
+        sequence,
         type: "event"
       })
       return
@@ -69,12 +79,16 @@ export default class FrontendModelWebsocketChannel extends WebsocketChannel {
 
     this.websocketSession.sendJson({
       channel: "frontend-models",
+      createdAt,
+      eventId,
       payload: serializeFrontendModelTransportValue({
         action,
         id,
         model: this.modelName(),
         record: serializedModel
       }),
+      replayed,
+      sequence,
       type: "event"
     })
   }

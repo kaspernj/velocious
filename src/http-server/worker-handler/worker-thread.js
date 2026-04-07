@@ -86,6 +86,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.remoteAddress] - Remote address.
    * @param {number} [data.clientCount] - Client count.
    * @param {string} [data.channel] - Channel name.
+   * @param {string} [data.createdAt] - Event creation time.
+   * @param {string} [data.eventId] - Event identifier.
    * @param {any} [data.payload] - Payload data.
    */
   onCommand = async (data) => {
@@ -131,11 +133,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
       client.onWrite(clientChunk)
     } else if (command == "websocketEvent") {
-      const {channel, payload} = data
+      const {channel, createdAt, eventId, payload} = data
 
       if (typeof channel !== "string") throw new Error("No channel given")
 
-      await this.broadcastWebsocketEvent({channel, payload})
+      await this.broadcastWebsocketEvent({channel, createdAt, eventId, payload})
     } else if (command == "shutdown") {
       if (this.configuration?.closeDatabaseConnections) {
         await this.configuration.closeDatabaseConnections()
@@ -151,12 +153,18 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
+   * @param {string | undefined} args.createdAt - Event creation time.
+   * @param {string | undefined} args.eventId - Event identifier.
    * @param {any} args.payload - Payload data.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async broadcastWebsocketEvent({channel, payload}) {
+  async broadcastWebsocketEvent({channel, createdAt, eventId, payload}) {
+    const configuration = this.configuration
+
+    if (!configuration) throw new Error("Configuration not initialized")
+
     const sendTasks = []
-    const isDebug = this.configuration?.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")
+    const isDebug = configuration.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")
     let clientCount = 0
     let sessionCount = 0
     let matchCount = 0
@@ -177,7 +185,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
         if (hasSubscription || hasHandlers) matchCount++
       }
 
-      sendTasks.push(session.sendEvent(channel, payload))
+      sendTasks.push(session.sendEvent(channel, payload, {
+        createdAt,
+        eventId
+      }))
     }
 
     if (isDebug) {

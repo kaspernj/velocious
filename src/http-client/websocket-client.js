@@ -185,12 +185,13 @@ export default class VelociousWebsocketClient {
   /**
    * Subscribe to a channel for server-sent events with optional params.
    * @param {string} channel - Channel name.
-   * @param {{params?: Record<string, any>}} options - Subscription options.
-   * @param {(payload: any) => void} callback - Callback function.
+   * @param {{lastEventId?: string, params?: Record<string, any>}} options - Subscription options.
+   * @param {(payload: any, message?: Record<string, any>) => void} callback - Callback function.
    * @returns {(() => void) & {ready: Promise<void>}} - Unsubscribe function with readiness promise.
    */
   subscribe(channel, options, callback) {
     const params = options?.params
+    const lastEventId = options?.lastEventId
     const subscriptionKey = this._subscriptionKey(channel, params)
 
     if (!this.listeners.has(subscriptionKey)) {
@@ -216,7 +217,7 @@ export default class VelociousWebsocketClient {
       })
 
       void this.connect().then(() => {
-        this._sendMessage({channel, params, type: "subscribe"})
+        this._sendMessage({channel, lastEventId, params, type: "subscribe"})
       }).catch((error) => this._debug("Subscribe failed", error))
     }
 
@@ -242,8 +243,8 @@ export default class VelociousWebsocketClient {
   /**
    * Subscribe to a channel and wait until the server acknowledges the subscription.
    * @param {string} channel - Channel name.
-   * @param {{params?: Record<string, any>}} options - Subscription options.
-   * @param {(payload: any) => void} callback - Callback function.
+   * @param {{lastEventId?: string, params?: Record<string, any>}} options - Subscription options.
+   * @param {(payload: any, message?: Record<string, any>) => void} callback - Callback function.
    * @returns {Promise<(() => void) & {ready: Promise<void>}>} - Ready unsubscribe handle.
    */
   async subscribeAndWait(channel, options, callback) {
@@ -326,13 +327,21 @@ export default class VelociousWebsocketClient {
       for (const listenerEntry of this.listeners.values()) {
         if (listenerEntry.channel !== channel) continue
 
-        listenerEntry.callbacks.forEach((/** @type {(payload: any) => void} */ callback) => {
+        listenerEntry.callbacks.forEach((/** @type {(payload: any, message?: Record<string, any>) => void} */ callback) => {
           try {
-            callback(payload)
+            callback(payload, message)
           } catch (error) {
             this._debug("Listener error", error)
           }
         })
+      }
+    } else if (type === "replay-gap") {
+      const subscriptionKey = this._subscriptionKey(message.channel, message.params)
+      const pendingSubscription = this.pendingSubscriptions.get(subscriptionKey)
+
+      if (pendingSubscription) {
+        this.pendingSubscriptions.delete(subscriptionKey)
+        pendingSubscription.reject(new Error(`Replay gap for ${message.channel}`))
       }
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)

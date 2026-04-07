@@ -1,7 +1,9 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import {websocketEventLogStoreForConfiguration} from "../../src/http-server/websocket-event-log-store.js"
 import Dummy from "../dummy/index.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 
 const getMessageText = (event) => {
@@ -9,6 +11,42 @@ const getMessageText = (event) => {
   if (Buffer.isBuffer(event.data)) return event.data.toString("utf-8")
   if (event.data instanceof ArrayBuffer) return Buffer.from(event.data).toString("utf-8")
   return event.data?.toString?.()
+}
+
+const waitForSocketOpen = async (socket) => {
+  await new Promise((resolve, reject) => {
+    socket.addEventListener("open", () => resolve())
+    socket.addEventListener("error", (event) => {
+      reject(event?.error || new Error("Websocket connection error"))
+    })
+  })
+}
+
+const waitForSocketMessage = async (socket, predicate) => {
+  return await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Timed out waiting for websocket message")), 2000)
+    const listener = (event) => {
+      const raw = getMessageText(event)
+
+      if (!raw) return
+
+      try {
+        const message = JSON.parse(raw)
+
+        if (!predicate(message)) return
+
+        clearTimeout(timeout)
+        socket.removeEventListener("message", listener)
+        resolve(message)
+      } catch (error) {
+        clearTimeout(timeout)
+        socket.removeEventListener("message", listener)
+        reject(error)
+      }
+    }
+
+    socket.addEventListener("message", listener)
+  })
 }
 
 describe("HttpServer - websocket", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
@@ -99,6 +137,221 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
       } finally {
         socket.close()
         await client.close()
+      }
+    })
+  })
+
+  it("replays missed events after reconnect before live streaming continues", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+      const firstSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+
+      try {
+        await waitForSocketOpen(firstSocket)
+        firstSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+        await waitForSocketMessage(firstSocket, (message) => message.type === "subscribed" && message.channel === "news")
+        await client.connect()
+
+        const firstEventPromise = waitForSocketMessage(firstSocket, (message) => {
+          return message.type === "event" && message.channel === "news" && message.payload?.headline === "first"
+        })
+
+        await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "first"}})
+        const firstEvent = await firstEventPromise
+
+        firstSocket.close()
+
+        await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "second"}})
+
+        const secondSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+
+        try {
+          await waitForSocketOpen(secondSocket)
+
+          const seenMessages = []
+          const replayedMessagesPromise = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error("Timed out waiting for replayed websocket messages")), 2000)
+            const listener = (event) => {
+              const raw = getMessageText(event)
+
+              if (!raw) return
+
+              try {
+                const message = JSON.parse(raw)
+
+                seenMessages.push(message)
+
+                if (message.type === "subscribed" && message.channel === "news") {
+                  clearTimeout(timeout)
+                  secondSocket.removeEventListener("message", listener)
+                  resolve(seenMessages)
+                }
+              } catch (error) {
+                clearTimeout(timeout)
+                secondSocket.removeEventListener("message", listener)
+                reject(error)
+              }
+            }
+
+            secondSocket.addEventListener("message", listener)
+          })
+
+          secondSocket.send(JSON.stringify({
+            type: "subscribe",
+            channel: "test",
+            lastEventId: firstEvent.eventId,
+            params: {subscribe: "news", token: "allow"}
+          }))
+
+          const replayedMessages = await replayedMessagesPromise
+          const replayedEvent = replayedMessages.find((message) => {
+            return message.type === "event" && message.channel === "news" && message.payload?.headline === "second"
+          })
+
+          expect(replayedMessages[0]?.type).toEqual("event")
+          expect(replayedMessages[1]?.type).toEqual("subscribed")
+          expect(replayedEvent?.replayed).toEqual(true)
+        } finally {
+          secondSocket.close()
+        }
+
+        await websocketEventLogStoreForConfiguration(dummyConfiguration).cleanupExpired({now: new Date(Date.now() + 11 * 60 * 1000)})
+      } finally {
+        firstSocket.close()
+        await client.close()
+      }
+    })
+  })
+
+  it("persists one replay-log event for one logical publish across multiple subscribers", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+      const firstSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+      const secondSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+
+      try {
+        await waitForSocketOpen(firstSocket)
+        await waitForSocketOpen(secondSocket)
+
+        const firstSubscribedPromise = waitForSocketMessage(firstSocket, (message) => {
+          return message.type === "subscribed" && message.channel === "news"
+        })
+        const secondSubscribedPromise = waitForSocketMessage(secondSocket, (message) => {
+          return message.type === "subscribed" && message.channel === "news"
+        })
+
+        firstSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+        secondSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+
+        await firstSubscribedPromise
+        await secondSubscribedPromise
+        await client.connect()
+
+        const firstEventPromise = waitForSocketMessage(firstSocket, (message) => {
+          return message.type === "event" && message.channel === "news" && message.payload?.headline === "once"
+        })
+        const secondEventPromise = waitForSocketMessage(secondSocket, (message) => {
+          return message.type === "event" && message.channel === "news" && message.payload?.headline === "once"
+        })
+
+        await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "once"}})
+        await Promise.all([firstEventPromise, secondEventPromise])
+
+        const persistedEvents = await websocketEventLogStoreForConfiguration(dummyConfiguration).getEventsAfter({
+          channel: "news",
+          sequence: 0
+        })
+
+        expect(persistedEvents.length).toEqual(1)
+        expect(persistedEvents[0]?.payload?.headline).toEqual("once")
+      } finally {
+        firstSocket.close()
+        secondSocket.close()
+        await client.close()
+      }
+    })
+  })
+
+  it("reports replay gaps when the checkpoint event is no longer retained", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+      const firstSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+
+      try {
+        await waitForSocketOpen(firstSocket)
+        firstSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+        await waitForSocketMessage(firstSocket, (message) => message.type === "subscribed" && message.channel === "news")
+        await client.connect()
+
+        const firstEventPromise = waitForSocketMessage(firstSocket, (message) => {
+          return message.type === "event" && message.channel === "news" && message.payload?.headline === "expire-me"
+        })
+
+        await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "expire-me"}})
+        const firstEvent = await firstEventPromise
+
+        firstSocket.close()
+        await websocketEventLogStoreForConfiguration(dummyConfiguration).cleanupExpired({now: new Date(Date.now() + 11 * 60 * 1000)})
+
+        const secondSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+
+        try {
+          await waitForSocketOpen(secondSocket)
+
+          const replayGapPromise = waitForSocketMessage(secondSocket, (message) => {
+            return message.type === "replay-gap" && message.channel === "test"
+          })
+
+          secondSocket.send(JSON.stringify({
+            type: "subscribe",
+            channel: "test",
+            lastEventId: firstEvent.eventId,
+            params: {subscribe: "news", token: "allow"}
+          }))
+
+          const replayGap = await replayGapPromise
+
+          expect(replayGap.lastEventId).toEqual(firstEvent.eventId)
+        } finally {
+          secondSocket.close()
+        }
+      } finally {
+        firstSocket.close()
+        await client.close()
+      }
+    })
+  })
+
+  it("rejects replay gaps for resolver-backed subscriptions by subscription key", async () => {
+    await Dummy.run(async () => {
+      const rawSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+      const websocketClient = new WebsocketClient()
+
+      try {
+        await waitForSocketOpen(rawSocket)
+        rawSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+        await waitForSocketMessage(rawSocket, (message) => message.type === "subscribed" && message.channel === "news")
+        await websocketClient.connect()
+
+        const firstEventPromise = waitForSocketMessage(rawSocket, (message) => {
+          return message.type === "event" && message.channel === "news" && message.payload?.headline === "checkpoint"
+        })
+
+        await websocketClient.post("/api/broadcast-event", {channel: "news", payload: {headline: "checkpoint"}})
+        const firstEvent = await firstEventPromise
+
+        rawSocket.close()
+        await websocketEventLogStoreForConfiguration(dummyConfiguration).cleanupExpired({now: new Date(Date.now() + 11 * 60 * 1000)})
+
+        await expect(async () => {
+          await websocketClient.subscribeAndWait("test", {
+            lastEventId: firstEvent.eventId,
+            params: {subscribe: "news", token: "allow"}
+          }, () => {})
+        }).toThrow(/Replay gap for test/)
+      } finally {
+        rawSocket.close()
+        await websocketClient.close()
       }
     })
   })

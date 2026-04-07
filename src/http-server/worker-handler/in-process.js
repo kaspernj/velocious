@@ -96,10 +96,18 @@ export default class VelociousHttpServerInProcessHandler {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
+   * @param {string} [args.createdAt] - Event creation time.
+   * @param {string} [args.eventId] - Event identifier.
    * @param {any} args.payload - Payload data.
    * @returns {void}
    */
-  dispatchWebsocketEvent({channel, payload}) {
-    websocketEventsHost.publish({channel, payload})
+  dispatchWebsocketEvent({channel, createdAt, eventId, payload}) {
+    for (const {httpClient} of Object.values(this.clients)) {
+      const session = httpClient.websocketSession
+
+      if (!session) continue
+
+      void session.sendEvent(channel, payload, {createdAt, eventId})
+    }
   }
 }
