@@ -46,10 +46,12 @@ export default class VelociousHttpServerWebsocketChannel {
    * @returns {Promise<boolean>} - Whether the subscription succeeded.
    */
   async streamFrom(channel, options = {}) {
+    const lastEventId = options.lastEventId ?? this.lastEventId
+
     return await this.websocketSession.subscribeToChannel(channel, {
       acknowledge: options.acknowledge ?? true,
       channelHandler: this,
-      lastEventId: options.lastEventId ?? this.lastEventId,
+      lastEventId,
       params: this.subscriptionParams,
       subscriptionChannel: this.subscriptionChannel
     })
