@@ -1340,7 +1340,10 @@ export default class FrontendModelController extends Controller {
 
     const primaryKey = this.frontendModelPrimaryKey()
     const ids = models.map((model) => this.frontendModelPrimaryKeyValue(model))
+    const authorizedQuery = this.frontendModelAuthorizedQuery(action).where({[primaryKey]: ids})
+
     const authorizedIdsRaw = await this.frontendModelAuthorizedQuery(action).where({[primaryKey]: ids}).pluck(primaryKey)
+
     const authorizedIds = new Set(authorizedIdsRaw.map((id) => String(id)))
 
     return models.filter((model) => authorizedIds.has(this.frontendModelPrimaryKeyValue(model)))
@@ -2017,6 +2020,7 @@ export default class FrontendModelController extends Controller {
   applyFrontendModelTranslatedAttributePreloads({query}) {
     const modelClass = this.frontendModelClass()
     const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+      || this.frontendModelDefaultAttributesForModelClass(modelClass)
 
     if (!selectedAttributes) return query
 
