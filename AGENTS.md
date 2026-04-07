@@ -35,8 +35,9 @@ For code that runs in Expo/Metro bundles, avoid non-literal dynamic imports (for
 ### Targeted checks (preferred)
 Run only the relevant, changed, or new linters and tests locally:
 - Always run `npm run lint` after changing any files.
-- Use `npm run typecheck` when changes affect types.
-- Use `npx velocious test <path-or-example>` for focused specs.
+- Always run `npm run typecheck` after changing any files.
+- Run relevant specs (`npx velocious test <path-or-example>`) for changed code.
+- Always run linters, typecheck, and relevant specs **before committing or pushing** — never push blind.
 - Prefer adding or updating tests and running only those.
 - Keep indentation consistent with the surrounding code.
 
