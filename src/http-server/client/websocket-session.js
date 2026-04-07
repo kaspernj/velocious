@@ -4,7 +4,6 @@ import EventEmitter from "../../utils/event-emitter.js"
 import Logger from "../../logger.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
-import {websocketEventChannelRegistryForConfiguration} from "../websocket-event-channel-registry.js"
 import WebsocketChannel from "../websocket-channel.js"
 import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
@@ -399,11 +398,11 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default}} [options] - Subscribe options.
+   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default, lastEventId?: string}} [options] - Subscribe options.
    * @returns {Promise<boolean>} - Whether the subscription was added.
    */
   async subscribeToChannel(channel, {acknowledge = true, channelHandler, lastEventId} = {}) {
-    websocketEventChannelRegistryForConfiguration(this.configuration).markInterested(channel)
+    await websocketEventLogStoreForConfiguration(this.configuration).markChannelInterested(channel)
 
     const replayState = await this._prepareReplayState({channel, lastEventId})
 

@@ -6,8 +6,9 @@ import Logger from "../logger.js"
 
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "websocket_event_log"
-const MIGRATION_VERSION = "20260407000000"
+const MIGRATION_VERSION = "20260407010000"
 const EVENTS_TABLE = "websocket_channel_events"
+const REPLAY_CHANNELS_TABLE = "websocket_replay_channels"
 const DEFAULT_RETENTION_MS = 10 * 60 * 1000
 const stores = new WeakMap()
 
@@ -38,6 +39,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     this.databaseIdentifier = databaseIdentifier
     this.retentionMs = retentionMs
     this.logger = new Logger(this)
+    this._isReady = false
     this._readyPromise = null
   }
 
@@ -45,17 +47,21 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<void>} - Resolves when ready.
    */
   async ensureReady() {
+    if (this._isReady) return
     if (this._readyPromise) return await this._readyPromise
 
     this._readyPromise = (async () => {
       this.configuration.setCurrent()
       await this._ensureSchema()
+      this._isReady = true
     })()
 
     try {
       await this._readyPromise
     } finally {
-      this._readyPromise = null
+      if (!this._isReady) {
+        this._readyPromise = null
+      }
     }
   }
 
@@ -69,7 +75,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     await this.ensureReady()
 
     const id = randomUUID()
-    const createdAt = new Date().toISOString()
+    const createdAt = new Date()
 
     return await this._withDb(async (db) => {
       await db.insert({
@@ -81,7 +87,48 @@ export default class VelociousHttpServerWebsocketEventLogStore {
           payload_json: JSON.stringify(payload)
         }
       })
-      return {channel, createdAt, id, payload}
+      return {channel, createdAt: createdAt.toISOString(), id, payload}
+    })
+  }
+
+  /**
+   * @param {string} channel - Channel name.
+   * @returns {Promise<void>} - Resolves when the channel interest was persisted.
+   */
+  async markChannelInterested(channel) {
+    await this.ensureReady()
+
+    const interestedUntil = new Date(Date.now() + this.retentionMs)
+
+    await this._withDb(async (db) => {
+      await db.query(`DELETE FROM ${db.quoteTable(REPLAY_CHANNELS_TABLE)} WHERE channel = ${db.quote(channel)}`)
+      await db.insert({
+        tableName: REPLAY_CHANNELS_TABLE,
+        data: {
+          channel,
+          interested_until: interestedUntil
+        }
+      })
+    })
+  }
+
+  /**
+   * @param {string} channel - Channel name.
+   * @returns {Promise<boolean>} - Whether the channel should be persisted for replay.
+   */
+  async shouldPersistChannel(channel) {
+    await this.ensureReady()
+
+    return await this._withDb(async (db) => {
+      const rows = await db
+        .newQuery()
+        .from(REPLAY_CHANNELS_TABLE)
+        .where({channel})
+        .where(`interested_until > ${db.quote(new Date())}`)
+        .limit(1)
+        .results()
+
+      return rows.length > 0
     })
   }
 
@@ -114,10 +161,11 @@ export default class VelociousHttpServerWebsocketEventLogStore {
         .order("sequence DESC")
         .limit(1)
         .results()
+      const row = /** @type {Record<string, any> | undefined} */ (rows[0])
 
-      if (!rows[0]) return null
+      if (!row) return null
 
-      return Number(rows[0].sequence)
+      return Number(row.sequence)
     })
   }
 
@@ -157,10 +205,11 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   async cleanupExpired({now = new Date()} = {}) {
     await this.ensureReady()
 
-    const cutoff = new Date(now.getTime() - this.retentionMs).toISOString()
+    const cutoff = new Date(now.getTime() - this.retentionMs)
 
     await this._withDb(async (db) => {
       await db.query(`DELETE FROM ${db.quoteTable(EVENTS_TABLE)} WHERE created_at <= ${db.quote(cutoff)}`)
+      await db.query(`DELETE FROM ${db.quoteTable(REPLAY_CHANNELS_TABLE)} WHERE interested_until <= ${db.quote(now)}`)
     })
   }
 
@@ -224,20 +273,28 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   async _applyMigrations(db) {
     this.logger.info("Applying websocket event-log schema")
 
-    if (await db.tableExists(EVENTS_TABLE)) {
+    if (!(await db.tableExists(EVENTS_TABLE))) {
+      const eventTable = new TableData(EVENTS_TABLE, {ifNotExists: true})
+
+      eventTable.integer("sequence", {autoIncrement: true, null: false, primaryKey: true})
+      eventTable.string("id", {index: true, null: false})
+      eventTable.string("channel", {index: true, null: false})
+      eventTable.text("payload_json", {null: false})
+      eventTable.datetime("created_at", {index: true, null: false})
+
+      await db.createTable(eventTable)
+    } else {
       this.logger.info("Websocket event-log table already exists - skipping create")
-      return
     }
 
-    const table = new TableData(EVENTS_TABLE, {ifNotExists: true})
+    if (!(await db.tableExists(REPLAY_CHANNELS_TABLE))) {
+      const replayChannelTable = new TableData(REPLAY_CHANNELS_TABLE, {ifNotExists: true})
 
-    table.integer("sequence", {autoIncrement: true, null: false, primaryKey: true})
-    table.string("id", {index: true, null: false})
-    table.string("channel", {index: true, null: false})
-    table.text("payload_json", {null: false})
-    table.datetime("created_at", {index: true, null: false})
+      replayChannelTable.string("channel", {null: false, primaryKey: true})
+      replayChannelTable.datetime("interested_until", {index: true, null: false})
 
-    await db.createTable(table)
+      await db.createTable(replayChannelTable)
+    }
   }
 
   /**
@@ -272,9 +329,11 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {{channel: string, createdAt: string, id: string, payload: unknown, sequence: number}} - Normalized row.
    */
   _normalizeEventRow(row) {
+    const createdAtValue = row.created_at
+
     return {
       channel: String(row.channel),
-      createdAt: String(row.created_at),
+      createdAt: createdAtValue instanceof Date ? createdAtValue.toISOString() : new Date(String(createdAtValue)).toISOString(),
       id: String(row.id),
       payload: JSON.parse(String(row.payload_json)),
       sequence: Number(row.sequence)
@@ -286,6 +345,12 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<any>} - Callback result.
    */
   async _withDb(callback) {
+    const currentDb = this.configuration.getCurrentConnections()[this.databaseIdentifier]
+
+    if (currentDb) {
+      return await callback(currentDb)
+    }
+
     return await this.configuration.getDatabasePool(this.databaseIdentifier).withConnection(async (db) => {
       return await callback(db)
     })

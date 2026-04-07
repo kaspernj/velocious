@@ -6,7 +6,6 @@ import {digg} from "diggerize"
 import errorLogger from "../../error-logger.js"
 import Logger from "../../logger.js"
 import toImportSpecifier from "../../utils/to-import-specifier.js"
-import {websocketEventChannelRegistryForConfiguration} from "../websocket-event-channel-registry.js"
 import WebsocketEvents from "../websocket-events.js"
 import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
@@ -157,13 +156,15 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async broadcastWebsocketEvent({channel, payload}) {
-    const replayRegistry = websocketEventChannelRegistryForConfiguration(this.configuration)
-    const shouldPersist = replayRegistry.isInterested(channel)
-    const persistedEvent = shouldPersist
-      ? await websocketEventLogStoreForConfiguration(this.configuration).appendEvent({channel, payload})
-      : null
+    const configuration = this.configuration
+
+    if (!configuration) throw new Error("Configuration not initialized")
+
+    const websocketEventLogStore = websocketEventLogStoreForConfiguration(configuration)
+    const shouldPersist = await websocketEventLogStore.shouldPersistChannel(channel)
+    const persistedEvent = shouldPersist ? await websocketEventLogStore.appendEvent({channel, payload}) : null
     const sendTasks = []
-    const isDebug = this.configuration?.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")
+    const isDebug = configuration.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")
     let clientCount = 0
     let sessionCount = 0
     let matchCount = 0
