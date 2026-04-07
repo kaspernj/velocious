@@ -7,6 +7,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/frontend-model-resources.md`: Resource recipe requirements for generated frontend models.
 - `docs/routing-hooks-and-autoroutes.md`: Route hook support and frontend-model autoroute behavior.
 - `docs/authorization-and-current.md`: Ability usage, `Current`, and `accessible`/`accessibleBy` behavior.
+- `docs/relationships.md`: Relationship types, through (many-to-many) relationships, and preloading behavior.
 - `docs/testing-guidelines.md`: Browser/system test guidance and why end-to-end coverage is preferred.
 
 ## Working Agreement

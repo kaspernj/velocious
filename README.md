@@ -649,6 +649,29 @@ await project.loadTasks()
 const tasks = project.tasks().loaded()
 ```
 
+## Through relationships
+
+Use the `through` option on `hasMany` to define a relationship that traverses an intermediate (join) table:
+
+```js
+Invoice.hasMany("invoiceGroupLinks")
+Invoice.hasMany("invoiceGroups", {through: "invoiceGroupLinks", className: "InvoiceGroup"})
+```
+
+Through relationships work with both instance-level loading and batch preloading:
+
+```js
+// Instance-level loading
+const invoice = await Invoice.find(1)
+const groups = await invoice.invoiceGroups().toArray()
+
+// Batch preloading
+const invoices = await Invoice.preload({invoiceGroups: true}).toArray()
+const groups = invoices[0].invoiceGroupsLoaded()
+```
+
+The intermediate relationship (e.g. `invoiceGroupLinks`) must be defined as a separate `hasMany` on the same model. The `foreignKey` option on the through relationship specifies the column on the target table that points to the intermediate table (defaults to the conventional foreign key).
+
 ## Relationship scopes
 
 You can pass a scope callback to `hasMany`, `hasOne`, or `belongsTo` to add custom filters. The callback receives the query and is also bound as `this`:
