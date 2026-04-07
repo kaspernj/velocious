@@ -159,40 +159,19 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async broadcastWebsocketEvent({channel, createdAt, eventId, payload}) {
-    const configuration = this.configuration
-
-    if (!configuration) throw new Error("Configuration not initialized")
-
     const sendTasks = []
-    const isDebug = configuration.getEnvironment?.() === "test" && channel.startsWith("frontend-models:")
-    let clientCount = 0
-    let sessionCount = 0
-    let matchCount = 0
 
     for (const clientKey of Object.keys(this.clients)) {
       const client = this.clients[Number(clientKey)]
       if (!client) continue
-      if (isDebug) clientCount++
       const session = client.websocketSession
 
       if (!session) continue
-      if (isDebug) sessionCount++
-
-      if (isDebug) {
-        const hasSubscription = session.hasSubscription(channel)
-        const hasHandlers = session.subscriptionHandlers?.has(channel)
-
-        if (hasSubscription || hasHandlers) matchCount++
-      }
 
       sendTasks.push(session.sendEvent(channel, payload, {
         createdAt,
         eventId
       }))
-    }
-
-    if (isDebug) {
-      console.log(`[ws-debug] broadcastWebsocketEvent channel=${channel} clients=${clientCount} sessions=${sessionCount} matches=${matchCount}`)
     }
 
     await Promise.all(sendTasks)
