@@ -616,4 +616,49 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
       }
     })
   })
+
+  it("reconnects by closing and re-opening the websocket", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+
+      try {
+        await client.connect()
+
+        const firstResponse = await client.post("/api/version")
+
+        expect(firstResponse.statusCode).toEqual(200)
+        expect(client.state().isOpen).toEqual(true)
+
+        await client.reconnect()
+
+        expect(client.state().isOpen).toEqual(true)
+
+        const secondResponse = await client.post("/api/version")
+
+        expect(secondResponse.statusCode).toEqual(200)
+      } finally {
+        await client.close()
+      }
+    })
+  })
+
+  it("reconnect re-enables auto-reconnect after close", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient({autoReconnect: true})
+
+      try {
+        await client.connectWithReconnect()
+
+        expect(client.autoReconnect).toEqual(true)
+
+        await client.reconnect()
+
+        expect(client.autoReconnect).toEqual(true)
+        expect(client.reconnectAttempt).toEqual(0)
+        expect(client.state().isOpen).toEqual(true)
+      } finally {
+        await client.close()
+      }
+    })
+  })
 })

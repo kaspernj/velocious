@@ -1270,6 +1270,26 @@ unsubscribe()
 await client.close()
 ```
 
+## Reconnect the WebSocket
+
+Use `reconnect()` on the client (or `FrontendModelBase.reconnectWebsocket()` for the internal client) to close and re-open the WebSocket connection. This is useful after sign-in or sign-out so the server sees the updated credentials:
+
+```js
+// Low-level client
+const client = new WebsocketClient({url: "ws://localhost:3006/websocket"})
+await client.connect()
+// ... user signs in ...
+await client.reconnect() // closes, then reconnects with auto-reconnect enabled
+
+// Frontend model internal client
+import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
+
+FrontendModelBase.configureTransport({websocketUrl: "ws://localhost:3006/websocket"})
+await FrontendModelBase.connectWebsocket()
+// ... user signs in ...
+await FrontendModelBase.reconnectWebsocket() // re-authenticates the connection
+```
+
 ## Subscribe to events
 
 ```js
