@@ -48,7 +48,6 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
     const throughForeignKey = throughRelationship.getForeignKey()
-    const throughPrimaryKey = throughRelationship.getPrimaryKey()
 
     /** @type {Array<number | string>} */
     const modelsPrimaryKeyValues = []
@@ -81,47 +80,52 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     /** @type {Set<string | number>} */
     const allTargetIds = new Set()
 
+    const targetForeignKey = this.relationship.getForeignKey()
+
     for (const throughModel of throughModels) {
       const parentId = /** @type {string | number} */ (throughModel.readColumn(throughForeignKey))
-      const targetId = /** @type {string | number} */ (throughModel.readColumn(throughPrimaryKey))
+      const throughId = /** @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
 
       if (!(parentId in parentToTargetIds)) parentToTargetIds[parentId] = []
 
-      parentToTargetIds[parentId].push(targetId)
-      allTargetIds.add(targetId)
+      parentToTargetIds[parentId].push(throughId)
+      allTargetIds.add(throughId)
     }
 
-    // Step 2: Load target models by their IDs
+    // Step 2: Load target models by the foreign key that points to the through table
     /** @type {import("../../record/index.js").default[]} */
     let targetModels = []
 
     if (allTargetIds.size > 0) {
-      const targetPrimaryKey = targetModelClass.primaryKey()
-      let query = targetModelClass.where({[targetPrimaryKey]: [...allTargetIds]})
+      let query = targetModelClass.where({[targetForeignKey]: [...allTargetIds]})
 
       query = this.relationship.applyScope(query)
       targetModels = await query.toArray()
     }
 
-    // Step 3: Index target models by their primary key
-    /** @type {Record<string | number, import("../../record/index.js").default>} */
-    const targetModelsById = {}
+    // Step 3: Index target models by their foreign key (maps to through model ID)
+    /** @type {Record<string | number, Array<import("../../record/index.js").default>>} */
+    const targetModelsByForeignKey = {}
 
     for (const targetModel of targetModels) {
-      const targetId = /** @type {string | number} */ (targetModel.readColumn(targetModelClass.primaryKey()))
+      const fkValue = /** @type {string | number} */ (targetModel.readColumn(targetForeignKey))
 
-      targetModelsById[targetId] = targetModel
+      if (!(fkValue in targetModelsByForeignKey)) targetModelsByForeignKey[fkValue] = []
+
+      targetModelsByForeignKey[fkValue].push(targetModel)
     }
 
     // Step 4: Map targets to parents via the through mapping
     for (const parentId in parentToTargetIds) {
-      const targetIds = parentToTargetIds[parentId]
+      const throughIds = parentToTargetIds[parentId]
 
-      for (const targetId of targetIds) {
-        const targetModel = targetModelsById[targetId]
+      for (const throughId of throughIds) {
+        const matchingTargets = targetModelsByForeignKey[throughId] || []
 
-        if (targetModel && parentId in preloadCollections) {
-          preloadCollections[parentId].push(targetModel)
+        for (const targetModel of matchingTargets) {
+          if (parentId in preloadCollections) {
+            preloadCollections[parentId].push(targetModel)
+          }
         }
       }
     }
