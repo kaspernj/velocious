@@ -49,6 +49,7 @@ export default class VelociousApplication {
     if (!this.configuration.isDatabasePoolInitialized()) {
       await this.configuration.initializeDatabasePool()
     }
+
   }
 
   /** @returns {boolean} - Whether active.  */
