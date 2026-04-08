@@ -425,7 +425,6 @@ function normalizeRansackArray(value) {
  * @returns {RansackSort[]} - Validated sort definitions.
  */
 export function parseRansackSort(modelClass, sortString) {
-  const entries = attributeEntries(modelClass)
   const segments = sortString.split(",").map((segment) => segment.trim()).filter((segment) => segment.length > 0)
 
   /** @type {RansackSort[]} */
