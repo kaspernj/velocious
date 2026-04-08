@@ -1066,6 +1066,23 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("resolves raw DB column names in where conditions to attribute names", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Column Name Project"})
+
+      await Task.create({name: "Column Name Task A", projectId: project.id()})
+      await Task.create({name: "Column Name Task B", projectId: project.id()})
+
+      // Use the raw DB column name "project_id" instead of the camelCase attribute "projectId".
+      const payload = await postSharedTaskFrontendModelCommand("index", {
+        where: {project_id: project.id()}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((model) => model.name).sort()).toEqual(["Column Name Task A", "Column Name Task B"])
+    })
+  })
+
   it("supports relationship-path search through project creating user", async () => {
     await Dummy.run(async () => {
       await User.create({

@@ -1585,8 +1585,7 @@ export default class FrontendModelController extends Controller {
         modelClass,
         path: pluckEntry.path
       })
-      const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
-      const columnName = attributeNameToColumnNameMap[pluckEntry.column]
+      const columnName = this.resolveFrontendModelColumnName(targetModelClass, pluckEntry.column)
 
       if (!columnName) {
         throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
@@ -1659,7 +1658,7 @@ export default class FrontendModelController extends Controller {
       modelClass,
       path: search.path
     })
-    const columnName = targetModelClass.getAttributeNameToColumnNameMap()[search.column]
+    const columnName = this.resolveFrontendModelColumnName(targetModelClass, search.column)
 
     if (!columnName) {
       throw new Error(`Unknown search column "${search.column}" for ${targetModelClass.name}`)
@@ -1828,6 +1827,29 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Resolves a key that may be either a camelCase attribute name or a raw DB
+   * column name to its canonical column name.  Returns `undefined` when the
+   * key matches neither map.
+   *
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @param {string} key - Attribute name or column name to resolve.
+   * @returns {string | undefined} - Resolved DB column name, or `undefined`.
+   */
+  resolveFrontendModelColumnName(modelClass, key) {
+    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
+    const columnName = attributeNameToColumnNameMap[key]
+
+    if (columnName) return columnName
+
+    // Fall back: check whether the key is already a raw DB column name.
+    const columnNameToAttributeNameMap = modelClass.getColumnNameToAttributeNameMap()
+
+    if (columnNameToAttributeNameMap[key]) return key
+
+    return undefined
+  }
+
+  /**
    * @param {object} args - Where args.
    * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class for current where scope.
    * @param {string[]} args.path - Relationship path from root.
@@ -1836,10 +1858,8 @@ export default class FrontendModelController extends Controller {
    * @returns {void}
    */
   applyFrontendModelWhereForPath({modelClass, path, query, where}) {
-    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
-
     for (const [attributeName, value] of Object.entries(where)) {
-      const columnName = attributeNameToColumnNameMap[attributeName]
+      const columnName = this.resolveFrontendModelColumnName(modelClass, attributeName)
 
       if (columnName) {
         this.ensureFrontendModelJoinPath({path, query})
@@ -1961,8 +1981,7 @@ export default class FrontendModelController extends Controller {
       modelClass,
       path: group.path
     })
-    const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
-    const columnName = attributeNameToColumnNameMap[group.column]
+    const columnName = this.resolveFrontendModelColumnName(targetModelClass, group.column)
 
     if (!columnName) {
       throw new Error(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
@@ -2063,12 +2082,11 @@ export default class FrontendModelController extends Controller {
       modelClass,
       path: sort.path
     })
-    const attributeNameToColumnNameMap = targetModelClass.getAttributeNameToColumnNameMap()
     const translatedAttributesMap = targetModelClass.getTranslationsMap()
     const translatedAttributeNames = Object.keys(translatedAttributesMap)
     const isTranslatedSortAttribute = translatedAttributeNames.includes(sort.column)
 
-    const columnName = attributeNameToColumnNameMap[sort.column]
+    const columnName = this.resolveFrontendModelColumnName(targetModelClass, sort.column)
     const direction = sort.direction.toUpperCase()
 
     if (isTranslatedSortAttribute) {
