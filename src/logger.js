@@ -48,7 +48,11 @@ function messagesToMessage(...messages) {
     if (messagePart instanceof Error) {
       message += `${messagePart.message}\n${messagePart.stack}`
     } else if (typeof messagePart == "object") {
-      message += JSON.stringify(messagePart)
+      try {
+        message += JSON.stringify(messagePart)
+      } catch {
+        message += String(messagePart)
+      }
     } else {
       message += messagePart
     }
