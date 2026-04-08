@@ -1,6 +1,6 @@
 // @ts-check
 
-import {formatValue, minifiedStringify} from "./format-value.js"
+import {formatValue, minifiedStringify} from "../utils/format-value.js"
 import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
 import BaseExpect from "./base-expect.js"
 import ExpectToChange from "./expect-to-change.js"
