@@ -101,11 +101,11 @@ export default class VelociousHttpServerClientWebsocketRequest {
   _parseQueryParams() {
     const query = this._path.split("?")[1]
 
-    if (!query) return {}
+    if (!query) return Object.create(null)
 
     const parsedQuery = querystring.parse(query)
     /** @type {Record<string, string | string[]>} */
-    const params = {}
+    const params = Object.create(null)
 
     for (const key of Object.keys(parsedQuery)) {
       const value = parsedQuery[key]

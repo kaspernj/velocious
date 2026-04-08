@@ -63,11 +63,11 @@ export default class VelociousHttpServerClientRequest {
   queryParams() {
     const query = this.path().split("?")[1]
 
-    if (!query) return {}
+    if (!query) return Object.create(null)
 
     const parsed = querystring.parse(query)
     /** @type {Record<string, string | string[]>} */
-    const params = {}
+    const params = Object.create(null)
 
     for (const [key, value] of Object.entries(parsed)) {
       if (typeof value !== "undefined") {
