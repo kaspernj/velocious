@@ -93,16 +93,19 @@ export default class VelociousHttpServerClientWebsocketRequest {
     return match?.[1]
   }
 
+  /** @returns {Record<string, string | string[]>} - Parsed query parameters from the URL. */
+  queryParams() { return this._parseQueryParams() }
+
   remoteAddress() { return this.remoteAddressValue }
 
   _parseQueryParams() {
     const query = this._path.split("?")[1]
 
-    if (!query) return {}
+    if (!query) return Object.create(null)
 
     const parsedQuery = querystring.parse(query)
     /** @type {Record<string, string | string[]>} */
-    const params = {}
+    const params = Object.create(null)
 
     for (const key of Object.keys(parsedQuery)) {
       const value = parsedQuery[key]

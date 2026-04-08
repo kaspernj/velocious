@@ -1,6 +1,7 @@
 // @ts-check
 
 import {digg} from "diggerize"
+import querystring from "querystring"
 import RequestParser from "./request-parser.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
@@ -57,6 +58,25 @@ export default class VelociousHttpServerClientRequest {
   /** @returns {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} - The request params. */
   params() { return digg(this, "requestParser", "params") }
   port() { return this.requestParser.getPort() }
+
+  /** @returns {Record<string, string | string[]>} - Parsed query parameters from the URL. */
+  queryParams() {
+    const query = this.path().split("?")[1]
+
+    if (!query) return Object.create(null)
+
+    const parsed = querystring.parse(query)
+    /** @type {Record<string, string | string[]>} */
+    const params = Object.create(null)
+
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value !== "undefined") {
+        params[key] = value
+      }
+    }
+
+    return params
+  }
   protocol() { return this.requestParser.getProtocol() }
   remoteAddress() { return this.client?.remoteAddress }
 
