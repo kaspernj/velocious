@@ -3,6 +3,7 @@
 import Configuration from "./configuration.js"
 import LoggerConsoleOutput from "./logger/outputs/console-output.js"
 import LoggerFileOutput from "./logger/outputs/file-output.js"
+import {formatValue} from "./utils/format-value.js"
 import restArgsError from "./utils/rest-args-error.js"
 
 /** @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
@@ -48,11 +49,7 @@ function messagesToMessage(...messages) {
     if (messagePart instanceof Error) {
       message += `${messagePart.message}\n${messagePart.stack}`
     } else if (typeof messagePart == "object") {
-      try {
-        message += JSON.stringify(messagePart)
-      } catch {
-        message += String(messagePart)
-      }
+      message += formatValue(messagePart)
     } else {
       message += messagePart
     }
