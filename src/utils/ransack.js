@@ -412,6 +412,46 @@ function normalizeRansackArray(value) {
 }
 
 /**
+ * @typedef {object} RansackSort
+ * @property {string} attribute - Resolved attribute name.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ */
+
+/**
+ * Parses and validates a ransack `s` sort string against model attributes.
+ *
+ * @param {RansackModelClass} modelClass - Model class for attribute validation.
+ * @param {string} sortString - Ransack sort string (e.g., "name asc" or "name asc, createdAt desc").
+ * @returns {RansackSort[]} - Validated sort definitions.
+ */
+export function parseRansackSort(modelClass, sortString) {
+  const segments = sortString.split(",").map((segment) => segment.trim()).filter((segment) => segment.length > 0)
+
+  /** @type {RansackSort[]} */
+  const sorts = []
+
+  for (const segment of segments) {
+    const parts = segment.split(/\s+/)
+    const columnCandidate = parts[0]
+    const directionCandidate = parts.length > 1 ? parts[1].toLowerCase() : "asc"
+
+    if (directionCandidate !== "asc" && directionCandidate !== "desc") {
+      throw new Error(`Invalid ransack sort direction "${directionCandidate}" in: ${segment}`)
+    }
+
+    const resolvedAttribute = resolveAttributeName({modelClass, value: columnCandidate})
+
+    if (!resolvedAttribute) {
+      throw new Error(`Unknown ransack sort attribute "${columnCandidate}" for ${modelClass.name}`)
+    }
+
+    sorts.push({attribute: resolvedAttribute, direction: directionCandidate})
+  }
+
+  return sorts
+}
+
+/**
  * @param {unknown} value - Candidate object.
  * @returns {value is Record<string, any>} - Whether this is a plain object.
  */

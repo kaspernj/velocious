@@ -23,6 +23,15 @@
 - `findOrCreateBy(conditions, callback)` returns existing model or creates a new model.
 - Date condition values are normalized through JSON serialization to align request and local matching semantics.
 
+## Ransack filtering and sorting
+- `ransack(params)` applies Rails-compatible ransack filters and sorting on both frontend and database model queries.
+- Supported predicates: `eq`, `notEq`, `in`, `notIn`, `gt`, `gteq`, `lt`, `lteq`, `cont`, `start`, `end`, `null`.
+- Keys can be snake_case or camelCase: `nameCont` and `name_cont` are both valid.
+- The `s` key applies sorting: `ransack({s: "name asc"})` sorts by name ascending.
+- Multiple sort columns can be specified: `ransack({s: "name asc, createdAt desc"})`.
+- Relationship paths are resolved automatically: `ransack({projectNameCont: "foo"})` filters through the `project` relationship.
+- Example combining filter and sort: `User.ransack({emailCont: "john", s: "name asc"}).toArray()`.
+
 ## Query parity helpers
 - `all()` returns a query builder (parity with backend `all()`).
 - `order(...)` is available as alias parity with backend `order(...)` (and forwards to frontend sort payloads).

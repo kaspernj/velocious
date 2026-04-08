@@ -8,7 +8,7 @@ import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
 import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
-import {normalizeRansackParams} from "../../utils/ransack.js"
+import {normalizeRansackParams, parseRansackSort} from "../../utils/ransack.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
 
@@ -605,14 +605,23 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {Record<string, any>} params - Ransack-style params hash.
-   * @returns {this} - Query with Ransack filters applied.
+   * @param {Record<string, any>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
+   * @returns {this} - Query with Ransack filters and sort applied.
    */
   ransack(params) {
-    const conditions = normalizeRansackParams(this.getModelClass(), params)
+    const {s, ...filterParams} = params
+    const conditions = normalizeRansackParams(this.getModelClass(), filterParams)
 
     for (const condition of conditions) {
       applyRansackCondition({condition, query: this})
+    }
+
+    if (typeof s === "string" && s.trim().length > 0) {
+      const sorts = parseRansackSort(this.getModelClass(), s)
+
+      for (const sortDef of sorts) {
+        this.order(`${sortDef.attribute} ${sortDef.direction}`)
+      }
     }
 
     return this

@@ -158,6 +158,40 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(kinds).toEqual(["match"])
   })
 
+  it("applies sort from ransack s param", async () => {
+    const project = await Project.create({
+      creatingUserReference: "creator-sort-1",
+      nameEn: "Sort Project",
+      nameDe: "Sortierprojekt"
+    })
+
+    await Task.create({name: "Charlie sort task", project})
+    await Task.create({name: "Alpha sort task", project})
+    await Task.create({name: "Beta sort task", project})
+
+    const names = (await Task.ransack({nameCont: "sort task", s: "name asc"}).toArray())
+      .map((task) => task.name())
+
+    expect(names).toEqual(["Alpha sort task", "Beta sort task", "Charlie sort task"])
+  })
+
+  it("applies descending sort from ransack s param", async () => {
+    const project = await Project.create({
+      creatingUserReference: "creator-sort-2",
+      nameEn: "Desc Sort Project",
+      nameDe: "Absteigend Sortierprojekt"
+    })
+
+    await Task.create({name: "Charlie desc task", project})
+    await Task.create({name: "Alpha desc task", project})
+    await Task.create({name: "Beta desc task", project})
+
+    const names = (await Task.ransack({nameCont: "desc task", s: "name desc"}).toArray())
+      .map((task) => task.name())
+
+    expect(names).toEqual(["Charlie desc task", "Beta desc task", "Alpha desc task"])
+  })
+
   it("filters on deep nested relationship attributes", async () => {
     const projectMatch = await Project.create({
       creatingUserReference: "creator-3",
