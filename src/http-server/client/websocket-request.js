@@ -93,6 +93,9 @@ export default class VelociousHttpServerClientWebsocketRequest {
     return match?.[1]
   }
 
+  /** @returns {Record<string, string | string[]>} - Parsed query parameters from the URL. */
+  queryParams() { return this._parseQueryParams() }
+
   remoteAddress() { return this.remoteAddressValue }
 
   _parseQueryParams() {
