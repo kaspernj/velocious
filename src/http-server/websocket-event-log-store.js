@@ -52,6 +52,8 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     this.logger = new Logger(this)
     this._isReady = false
     this._readyPromise = null
+    /** @type {Set<string>} */
+    this._interestedChannels = new Set()
   }
 
   /**
@@ -109,6 +111,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   async markChannelInterested(channel) {
     await this.ensureReady()
 
+    this._interestedChannels.add(channel)
     const interestedUntil = new Date(Date.now() + this.retentionMs)
 
     await this._withDb(async (db) => {
@@ -121,6 +124,8 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<boolean>} - Whether the channel should be persisted for replay.
    */
   async shouldPersistChannel(channel) {
+    if (this._interestedChannels.size === 0) return false
+
     await this.ensureReady()
 
     return await this._withDb(async (db) => {
