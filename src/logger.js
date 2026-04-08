@@ -1,5 +1,6 @@
 // @ts-check
 
+import {inspect} from "node:util"
 import Configuration from "./configuration.js"
 import LoggerConsoleOutput from "./logger/outputs/console-output.js"
 import LoggerFileOutput from "./logger/outputs/file-output.js"
@@ -45,10 +46,8 @@ function messagesToMessage(...messages) {
       message += " "
     }
 
-    if (messagePart instanceof Error) {
-      message += `${messagePart.message}\n${messagePart.stack}`
-    } else if (typeof messagePart == "object") {
-      message += JSON.stringify(messagePart)
+    if (typeof messagePart == "object") {
+      message += inspect(messagePart, {depth: 4, breakLength: Infinity})
     } else {
       message += messagePart
     }
