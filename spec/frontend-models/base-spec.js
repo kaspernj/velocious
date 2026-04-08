@@ -1170,6 +1170,42 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("supports multi-column ransack sort", async () => {
+    const User = buildCreatedAtTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .ransack({s: "id asc, createdAt desc"})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            sort: [
+              {column: "id", direction: "asc", path: []},
+              {column: "createdAt", direction: "desc", path: []}
+            ]
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("throws for unknown ransack sort attribute", async () => {
+    const User = buildTestModelClass()
+
+    await expect(async () => {
+      await User
+        .ransack({s: "nonexistent asc"})
+        .toArray()
+    }).toThrow('Unknown ransack sort attribute "nonexistent" for User')
+  })
+
   it("sends group payload when using group(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})

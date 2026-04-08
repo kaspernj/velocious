@@ -8,7 +8,7 @@ import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
 import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
-import {normalizeRansackParams} from "../../utils/ransack.js"
+import {normalizeRansackParams, parseRansackSort} from "../../utils/ransack.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
 
@@ -616,8 +616,12 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       applyRansackCondition({condition, query: this})
     }
 
-    if (s !== undefined && s !== null && s !== "") {
-      this.order(s)
+    if (typeof s === "string" && s.trim().length > 0) {
+      const sorts = parseRansackSort(this.getModelClass(), s)
+
+      for (const sortDef of sorts) {
+        this.order(`${sortDef.attribute} ${sortDef.direction}`)
+      }
     }
 
     return this

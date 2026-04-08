@@ -1,7 +1,7 @@
 // @ts-check
 
 import {resolveFrontendModelClass} from "./model-registry.js"
-import {normalizeRansackParams} from "../utils/ransack.js"
+import {normalizeRansackParams, parseRansackSort} from "../utils/ransack.js"
 
 /**
  * @typedef {object} FrontendModelSearch
@@ -946,8 +946,12 @@ export default class FrontendModelQuery {
       applyFrontendRansackCondition({condition, query: this})
     }
 
-    if (s !== undefined && s !== null && s !== "") {
-      this.sort(s)
+    if (typeof s === "string" && s.trim().length > 0) {
+      const sorts = parseRansackSort(this.modelClass, s)
+
+      for (const sortDef of sorts) {
+        this.sort([[sortDef.attribute, sortDef.direction]])
+      }
     }
 
     return this
