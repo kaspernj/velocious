@@ -605,14 +605,19 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {Record<string, any>} params - Ransack-style params hash.
-   * @returns {this} - Query with Ransack filters applied.
+   * @param {Record<string, any>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
+   * @returns {this} - Query with Ransack filters and sort applied.
    */
   ransack(params) {
-    const conditions = normalizeRansackParams(this.getModelClass(), params)
+    const {s, ...filterParams} = params
+    const conditions = normalizeRansackParams(this.getModelClass(), filterParams)
 
     for (const condition of conditions) {
       applyRansackCondition({condition, query: this})
+    }
+
+    if (s !== undefined && s !== null && s !== "") {
+      this.order(s)
     }
 
     return this

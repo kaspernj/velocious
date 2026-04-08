@@ -935,14 +935,19 @@ export default class FrontendModelQuery {
   }
 
   /**
-   * @param {Record<string, any>} params - Ransack-style params hash.
-   * @returns {this} - Query with Ransack filters applied.
+   * @param {Record<string, any>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
+   * @returns {this} - Query with Ransack filters and sort applied.
    */
   ransack(params) {
-    const conditions = normalizeRansackParams(this.modelClass, params)
+    const {s, ...filterParams} = params
+    const conditions = normalizeRansackParams(this.modelClass, filterParams)
 
     for (const condition of conditions) {
       applyFrontendRansackCondition({condition, query: this})
+    }
+
+    if (s !== undefined && s !== null && s !== "") {
+      this.sort(s)
     }
 
     return this

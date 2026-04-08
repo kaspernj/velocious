@@ -1109,6 +1109,67 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("applies sort from ransack s param", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .ransack({s: "name asc", emailCont: "john"})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "email",
+                operator: "like",
+                path: [],
+                value: "%john%"
+              }
+            ],
+            sort: [{column: "name", direction: "asc", path: []}]
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("ignores blank ransack s param", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({models: []})
+
+    try {
+      await User
+        .ransack({s: "", emailCont: "john"})
+        .toArray()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            searches: [
+              {
+                column: "email",
+                operator: "like",
+                path: [],
+                value: "%john%"
+              }
+            ]
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("sends group payload when using group(...).toArray()", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: []})
