@@ -399,4 +399,89 @@ export default class VelociousDatabaseDriversMssql extends Base{
   async structureSql() {
     return await new StructureSql({driver: this}).toSql()
   }
+
+  /**
+   * Blocks until a SQL Server application lock is acquired on this
+   * connection via `sp_getapplock`. The Session lock owner scopes the lock
+   * to the current session, matching the connection-scoped semantics on
+   * MySQL and PostgreSQL.
+   *
+   * `sp_getapplock` returns 0 on immediate grant, 1 after waiting, and
+   * negative values on failure (timeout, deadlock, canceled, parameter
+   * error). We treat 0/1 as success and -1 (timeout) as a clean `false`;
+   * anything else throws.
+   *
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
+   */
+  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+    const timeoutValue = typeof timeoutMs === "number" && timeoutMs >= 0 ? Math.ceil(timeoutMs) : -1
+    const rows = await this.query(
+      `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_getapplock @Resource = ${this.quote(name)}, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = ${timeoutValue}; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
+    )
+    const result = Number(rows?.[0]?.velocious_advisory_lock_result)
+
+    if (result === 0 || result === 1) return true
+    if (result === -1) return false
+
+    throw new Error(`sp_getapplock returned ${result} for advisory lock ${JSON.stringify(name)} (see SQL Server documentation for sp_getapplock return codes)`)
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
+   */
+  async tryAcquireAdvisoryLock(name) {
+    return await this.acquireAdvisoryLock(name, {timeoutMs: 0})
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
+   */
+  async releaseAdvisoryLock(name) {
+    const rows = await this.query(
+      `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_releaseapplock @Resource = ${this.quote(name)}, @LockOwner = 'Session'; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
+    )
+    const result = Number(rows?.[0]?.velocious_advisory_lock_result)
+
+    return result === 0
+  }
+
+  /**
+   * Returns true if any session currently holds the application lock.
+   *
+   * This combines two probes because neither is sufficient on its own:
+   *   - `APPLOCK_MODE(..., 'Session')` only reports locks held by the
+   *     **current** session, so it misses locks held by any other
+   *     session and would return `NoLock` even under cross-session
+   *     contention.
+   *   - `APPLOCK_TEST(..., 'Exclusive', 'Session')` returns whether an
+   *     Exclusive lock could be granted to *this* session right now. A
+   *     return value of 0 means somebody else holds an incompatible
+   *     lock; a value of 1 means it is either free **or** already held
+   *     by us re-entrantly (which the `APPLOCK_MODE` check catches).
+   *
+   * The combined result is "held" iff we hold it ourselves or
+   * `APPLOCK_TEST` reports we cannot acquire it without waiting.
+   *
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if any session currently holds the lock.
+   */
+  async isAdvisoryLockHeld(name) {
+    const rows = await this.query(
+      `SELECT ` +
+        `APPLOCK_MODE('public', ${this.quote(name)}, 'Session') AS velocious_advisory_self_mode, ` +
+        `APPLOCK_TEST('public', ${this.quote(name)}, 'Exclusive', 'Session') AS velocious_advisory_test_result`
+    )
+    const selfMode = rows?.[0]?.velocious_advisory_self_mode
+    const heldBySelf = typeof selfMode === "string" && selfMode.length > 0 && selfMode !== "NoLock"
+
+    if (heldBySelf) return true
+
+    const testResult = Number(rows?.[0]?.velocious_advisory_test_result)
+
+    return testResult === 0
+  }
 }

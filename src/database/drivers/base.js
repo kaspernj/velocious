@@ -1024,4 +1024,55 @@ export default class VelociousDatabaseDriversBase {
       await this.enableForeignKeys()
     }
   }
+
+  /**
+   * Blocks until a named advisory lock is acquired on this connection.
+   * Advisory locks are connection-scoped and do not interact with row or
+   * table locks; they are purely cooperative between callers that use the
+   * same name and let you serialize functionality without blocking readers
+   * or writers that do not participate in the same lock.
+   *
+   * @abstract
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [_args] - Optional timeout in milliseconds; `null` or undefined blocks forever.
+   * @returns {Promise<boolean>} - Resolves to true when the lock has been acquired, false if the timeout elapsed.
+   */
+  acquireAdvisoryLock(name, _args = {}) { // eslint-disable-line no-unused-vars
+    throw new Error(`'acquireAdvisoryLock' not implemented for ${this.constructor.name}`)
+  }
+
+  /**
+   * Attempts to acquire a named advisory lock without blocking.
+   *
+   * @abstract
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Resolves to true if the lock was acquired, false if it was already held.
+   */
+  tryAcquireAdvisoryLock(name) { // eslint-disable-line no-unused-vars
+    throw new Error(`'tryAcquireAdvisoryLock' not implemented for ${this.constructor.name}`)
+  }
+
+  /**
+   * Releases a named advisory lock previously acquired on this connection.
+   *
+   * @abstract
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Resolves to true if the lock was held by this session and has now been released.
+   */
+  releaseAdvisoryLock(name) { // eslint-disable-line no-unused-vars
+    throw new Error(`'releaseAdvisoryLock' not implemented for ${this.constructor.name}`)
+  }
+
+  /**
+   * Checks whether a named advisory lock is currently held by any session.
+   * Intended as an introspection helper; callers who need to act on the
+   * result should prefer `tryAcquireAdvisoryLock` to avoid a TOCTOU race.
+   *
+   * @abstract
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Resolves to true if the lock is held by any session.
+   */
+  isAdvisoryLockHeld(name) { // eslint-disable-line no-unused-vars
+    throw new Error(`'isAdvisoryLockHeld' not implemented for ${this.constructor.name}`)
+  }
 }

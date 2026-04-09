@@ -18,6 +18,16 @@ import StructureSql from "./structure-sql.js"
 import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
 
+/**
+ * Sentinel timeout (in seconds) used as the "block forever" value when a
+ * caller asks for an indefinite advisory lock acquire. MySQL historically
+ * accepted negative timeouts as "infinite", but MariaDB 10+ silently
+ * returns NULL from `GET_LOCK` when the timeout is negative, so the
+ * driver clamps to a comfortably large positive value (1 year ≫ any
+ * realistic critical section) instead.
+ */
+const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
+
 export default class VelociousDatabaseDriversMysql extends Base{
   /**
    * @returns {Promise<void>} - Resolves when complete.
@@ -316,5 +326,72 @@ export default class VelociousDatabaseDriversMysql extends Base{
     const upsert = new Upsert({...args, driver: this})
 
     return upsert.toSql()
+  }
+
+  /**
+   * Blocks until a MySQL/MariaDB user-level lock is acquired on this
+   * connection. Implemented via `GET_LOCK(name, timeout)`, where the
+   * timeout is in seconds.
+   *
+   * MySQL historically documented a negative timeout as "infinite",
+   * but MariaDB 10+ silently rejects negative timeouts and returns
+   * `NULL` from `GET_LOCK`. To make the helper portable across MySQL
+   * and MariaDB the "indefinite" case is encoded as a large positive
+   * timeout (one year), which is comfortably longer than any
+   * realistic critical section and works on every supported version.
+   *
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks for `MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS`.
+   * @returns {Promise<boolean>} - True if acquired, false if the timeout elapsed.
+   */
+  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+    const timeoutSeconds = typeof timeoutMs === "number" && timeoutMs >= 0
+      ? Math.ceil(timeoutMs / 1000)
+      : MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS
+    const rows = await this.query(`SELECT GET_LOCK(${this.quote(name)}, ${timeoutSeconds}) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    if (result === null || result === undefined) {
+      throw new Error(`GET_LOCK returned NULL for advisory lock ${JSON.stringify(name)} (typically an out-of-memory or thread-killed condition)`)
+    }
+
+    return Number(result) === 1
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
+   */
+  async tryAcquireAdvisoryLock(name) {
+    const rows = await this.query(`SELECT GET_LOCK(${this.quote(name)}, 0) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    if (result === null || result === undefined) {
+      throw new Error(`GET_LOCK returned NULL for advisory lock ${JSON.stringify(name)} (typically an out-of-memory or thread-killed condition)`)
+    }
+
+    return Number(result) === 1
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
+   */
+  async releaseAdvisoryLock(name) {
+    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    return Number(result) === 1
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if any session currently holds the lock.
+   */
+  async isAdvisoryLockHeld(name) {
+    const rows = await this.query(`SELECT IS_USED_LOCK(${this.quote(name)}) AS velocious_advisory_lock_holder`)
+    const holder = rows?.[0]?.velocious_advisory_lock_holder
+
+    return holder !== null && holder !== undefined
   }
 }
