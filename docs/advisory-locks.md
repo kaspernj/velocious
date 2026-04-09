@@ -69,7 +69,13 @@ PostgreSQL advisory locks are keyed by `bigint`, not by string, so the driver ha
 
 ### SQLite emulation
 
-SQLite has no native advisory lock primitive, so the SQLite driver ships a process-local emulation backed by a shared `Set<string>` of held names plus a per-name waiter queue. This covers the common case of running SQLite inside a single Node process. It does **not** provide mutual exclusion across multiple processes accessing the same SQLite database; if you need that, pick a different driver for the workloads that require serialization.
+SQLite has no native advisory lock primitive, so the SQLite driver ships a process-local emulation backed by a shared `Set<string>` of held names plus a per-name waiter queue. This is the fast path and handles all intra-process contention; it is also the only implementation available to environments without filesystem access (web/sql.js and Expo native).
+
+On **Node**, the Node SQLite driver layers a filesystem lock on top of the in-process queue so multiple Node processes writing to the same SQLite database file see consistent mutual exclusion. Each named lock maps to a directory next to the database file (`<databaseDir>/<databaseName>.velocious-advisory-locks/<safeName>-<hash>.lock/`) created with `fs.mkdir` for atomicity. Inside the directory the driver writes an `owner.json` metadata file with the holder's PID, hostname, and acquisition timestamp.
+
+Stale lock recovery: if the metadata names a PID on this host that is no longer running (`kill(pid, 0) → ESRCH`), the directory is treated as stale and removed by the next acquirer. Cross-host ownership is treated as live because the PID cannot be reliably probed on another machine; operators running Node against a network-mounted SQLite file should remove stale lock directories by hand if they linger.
+
+Web (sql.js) and Expo native inherit the shared in-process implementation unchanged, because they have no `fs` access.
 
 ## Errors
 
