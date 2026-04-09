@@ -1,5 +1,7 @@
 // @ts-check
 
+import {deserializeFrontendModelTransportValue} from "../frontend-models/transport-serialization.js"
+
 const DEFAULT_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000]
 
 /**
@@ -528,6 +530,6 @@ class VelociousWebsocketResponse {
       throw new Error("Response body is not a string")
     }
 
-    return JSON.parse(this.body)
+    return deserializeFrontendModelTransportValue(JSON.parse(this.body))
   }
 }

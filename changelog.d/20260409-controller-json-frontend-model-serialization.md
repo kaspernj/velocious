@@ -1,0 +1,1 @@
+Controller JSON rendering now auto-serializes Velocious backend model instances with frontend-model transport markers, so transport deserialization can hydrate registered frontend models from ordinary `render({json: ...})` payloads.

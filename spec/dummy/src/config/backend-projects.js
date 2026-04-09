@@ -106,6 +106,29 @@ class UserFrontendResource extends FrontendModelBaseResource {
 
     return {value: cookie ? cookie.value() : null}
   }
+
+  /** @returns {Promise<{users: import("../models/user.js").default[]}>} */
+  async lookupByEmail() {
+    const email = this.params().email
+    let query = this.authorizedQuery("index")
+
+    if (typeof email === "string" && email.length > 0) {
+      query = query.where({email})
+    }
+
+    return {users: await query.toArray()}
+  }
+
+  /** @returns {Promise<{user: import("../models/user.js").default | null}>} */
+  async refreshProfile() {
+    const id = this.params().id
+
+    if (typeof id !== "string" && typeof id !== "number") {
+      return {user: null}
+    }
+
+    return {user: await this.find("find", id)}
+  }
 }
 
 class SystemTestCommentFrontendResource extends FrontendModelBaseResource {

@@ -1469,13 +1469,33 @@ import Controller from "velocious/build/src/controller.js"
 export default class TestingController extends Controller {
   async truncate() {
     await doSomething()
-    this.renderJson({status: "database-truncated"})
+    await this.render({json: {status: "database-truncated"}})
   }
 
   async anotherAction() {
     render("test-view")
   }
 }
+```
+
+When `render({json: ...})` receives Velocious backend model instances, it now auto-serializes them with frontend-model transport markers. After transport deserialization on the client, registered frontend models hydrate automatically:
+
+```js
+import {deserializeFrontendModelTransportValue} from "velocious/build/src/frontend-models/transport-serialization.js"
+
+const tasks = await Task.toArray()
+
+await this.render({
+  json: {
+    tasks
+  }
+})
+
+const response = await fetch("/tasks")
+const result = deserializeFrontendModelTransportValue(await response.json())
+
+result.tasks[0] instanceof Task //=> true
+result.tasks[0].name() //=> frontend model accessor
 ```
 
 ## Cookies

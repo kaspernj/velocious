@@ -9,6 +9,7 @@ import ParamsToObject from "./http-server/client/params-to-object.js"
 import path from "node:path"
 import restArgsError from "./utils/rest-args-error.js"
 import querystring from "querystring"
+import {serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 
 export default class VelociousController {
   /**
@@ -216,7 +217,7 @@ export default class VelociousController {
 
   /** @param {object} json - JSON payload. */
   renderJsonArg(json) {
-    const body = JSON.stringify(json)
+    const body = JSON.stringify(serializeFrontendModelTransportValue(json))
 
     this._response.setHeader("Content-Type", "application/json; charset=UTF-8")
     this._response.setBody(body)
