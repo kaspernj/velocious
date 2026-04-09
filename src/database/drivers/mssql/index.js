@@ -450,15 +450,38 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+   * Returns true if any session currently holds the application lock.
+   *
+   * This combines two probes because neither is sufficient on its own:
+   *   - `APPLOCK_MODE(..., 'Session')` only reports locks held by the
+   *     **current** session, so it misses locks held by any other
+   *     session and would return `NoLock` even under cross-session
+   *     contention.
+   *   - `APPLOCK_TEST(..., 'Exclusive', 'Session')` returns whether an
+   *     Exclusive lock could be granted to *this* session right now. A
+   *     return value of 0 means somebody else holds an incompatible
+   *     lock; a value of 1 means it is either free **or** already held
+   *     by us re-entrantly (which the `APPLOCK_MODE` check catches).
+   *
+   * The combined result is "held" iff we hold it ourselves or
+   * `APPLOCK_TEST` reports we cannot acquire it without waiting.
+   *
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if any session currently holds the lock.
    */
   async isAdvisoryLockHeld(name) {
     const rows = await this.query(
-      `SELECT APPLOCK_MODE('public', ${this.quote(name)}, 'Session') AS velocious_advisory_lock_mode`
+      `SELECT ` +
+        `APPLOCK_MODE('public', ${this.quote(name)}, 'Session') AS velocious_advisory_self_mode, ` +
+        `APPLOCK_TEST('public', ${this.quote(name)}, 'Exclusive', 'Session') AS velocious_advisory_test_result`
     )
-    const mode = rows?.[0]?.velocious_advisory_lock_mode
+    const selfMode = rows?.[0]?.velocious_advisory_self_mode
+    const heldBySelf = typeof selfMode === "string" && selfMode.length > 0 && selfMode !== "NoLock"
 
-    return typeof mode === "string" && mode.length > 0 && mode !== "NoLock"
+    if (heldBySelf) return true
+
+    const testResult = Number(rows?.[0]?.velocious_advisory_test_result)
+
+    return testResult === 0
   }
 }

@@ -349,6 +349,9 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * emulation covers; multi-process SQLite setups should not rely on this
    * for cross-process mutual exclusion.
    *
+   * The owning driver instance is recorded so that `releaseAdvisoryLock`
+   * can refuse to release a lock that was acquired by someone else.
+   *
    * @param {string} name - Lock name.
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
@@ -356,7 +359,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   async acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
 
-    while (state.heldNames.has(name)) {
+    while (state.ownersByName.has(name)) {
       let remainingMs = null
 
       if (typeof timeoutMs === "number" && timeoutMs >= 0) {
@@ -394,12 +397,12 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
         }
       })
 
-      if (typeof timeoutMs === "number" && timeoutMs >= 0 && state.heldNames.has(name)) {
+      if (typeof timeoutMs === "number" && timeoutMs >= 0 && state.ownersByName.has(name)) {
         return false
       }
     }
 
-    state.heldNames.add(name)
+    state.ownersByName.set(name, this)
 
     return true
   }
@@ -411,23 +414,30 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   async tryAcquireAdvisoryLock(name) {
     const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
 
-    if (state.heldNames.has(name)) return false
+    if (state.ownersByName.has(name)) return false
 
-    state.heldNames.add(name)
+    state.ownersByName.set(name, this)
 
     return true
   }
 
   /**
+   * Releases the lock only if **this** driver instance owns it. Calling
+   * release for a lock owned by another driver instance is a no-op that
+   * returns `false`, matching the "you can only release locks you own"
+   * contract of MySQL's `RELEASE_LOCK` and PostgreSQL's
+   * `pg_advisory_unlock`.
+   *
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>} - True if the lock was held and has now been released.
+   * @returns {Promise<boolean>} - True if the lock was held by this driver and has now been released.
    */
   async releaseAdvisoryLock(name) {
     const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
+    const owner = state.ownersByName.get(name)
 
-    if (!state.heldNames.has(name)) return false
+    if (owner !== this) return false
 
-    state.heldNames.delete(name)
+    state.ownersByName.delete(name)
 
     const waiters = state.waitersByName.get(name)
 
@@ -443,10 +453,10 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>} - True if the lock is currently held in this process.
+   * @returns {Promise<boolean>} - True if any driver instance currently holds the lock.
    */
   async isAdvisoryLockHeld(name) {
-    return VelociousDatabaseDriversSqliteBase._advisoryLockState.heldNames.has(name)
+    return VelociousDatabaseDriversSqliteBase._advisoryLockState.ownersByName.has(name)
   }
 }
 
@@ -454,9 +464,14 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
  * Process-wide state for the SQLite advisory lock emulation. Shared across
  * every SQLite driver instance (native, web, sql.js) because there is no
  * concept of "connection" to distinguish them at the SQLite level.
- * @type {{heldNames: Set<string>, waitersByName: Map<string, Array<() => void>>}}
+ *
+ * `ownersByName` maps each held lock name to the driver instance that
+ * acquired it so `releaseAdvisoryLock` can reject releases from drivers
+ * that do not own the lock.
+ *
+ * @type {{ownersByName: Map<string, VelociousDatabaseDriversSqliteBase>, waitersByName: Map<string, Array<() => void>>}}
  */
 VelociousDatabaseDriversSqliteBase._advisoryLockState = {
-  heldNames: new Set(),
+  ownersByName: new Map(),
   waitersByName: new Map()
 }

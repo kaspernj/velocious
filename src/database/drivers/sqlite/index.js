@@ -138,17 +138,24 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+   * Releases the lock only if **this** driver instance acquired it, both
+   * in the shared in-process owner table and in the on-disk lock
+   * directory. A caller that tries to release a lock it never acquired
+   * (or that was already released by another driver) gets `false` back
+   * and the filesystem state is left alone so we never delete somebody
+   * else's lock directory.
+   *
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>}
    */
   async releaseAdvisoryLock(name) {
-    try {
+    const inProcessReleased = await super.releaseAdvisoryLock(name)
+
+    if (inProcessReleased) {
       await this._releaseAdvisoryLockFile(name)
-    } finally {
-      await super.releaseAdvisoryLock(name)
     }
 
-    return true
+    return inProcessReleased
   }
 
   /**

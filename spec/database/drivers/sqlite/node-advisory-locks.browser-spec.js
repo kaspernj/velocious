@@ -139,4 +139,59 @@ describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, (
       expect(await driver.isAdvisoryLockHeld(lockName)).toBe(false)
     })
   })
+
+  it("refuses releaseAdvisoryLock from a driver instance that does not own the lock", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const ownerDriver = /** @type {VelociousDatabaseDriversSqliteNode} */ (dbs.default)
+      const lockName = "velocious-node-file-lock-ownership"
+      const lockPath = lockPathFor(ownerDriver, lockName)
+
+      // Build a sibling driver instance that shares the process-wide
+      // in-memory state and the same on-disk lock directory. It does
+      // not need its own SQLite connection — the advisory lock methods
+      // on the Node driver only touch the in-memory owner table and
+      // the lock directory, both of which are keyed off the
+      // configuration directory + database name.
+      const siblingDriver = new VelociousDatabaseDriversSqliteNode(ownerDriver.getArgs(), ownerDriver.getConfiguration())
+      // @ts-expect-error: populating the private field to match the
+      // configured path the owner driver computed in connect().
+      siblingDriver._advisoryLockDirectory = ownerDriver._resolveAdvisoryLockDirectory()
+
+      const acquired = await ownerDriver.tryAcquireAdvisoryLock(lockName)
+
+      expect(acquired).toBe(true)
+
+      try {
+        // Sibling does not own the lock — release must be a no-op
+        // that returns false and leaves the on-disk directory alone.
+        const siblingReleased = await siblingDriver.releaseAdvisoryLock(lockName)
+
+        expect(siblingReleased).toBe(false)
+        expect(await ownerDriver.isAdvisoryLockHeld(lockName)).toBe(true)
+
+        const stat = await fs.stat(lockPath)
+
+        expect(stat.isDirectory()).toBe(true)
+      } finally {
+        // Real owner can still release.
+        const ownerReleased = await ownerDriver.releaseAdvisoryLock(lockName)
+
+        expect(ownerReleased).toBe(true)
+      }
+
+      expect(await ownerDriver.isAdvisoryLockHeld(lockName)).toBe(false)
+
+      /** @type {boolean} */
+      let lockDirStillThere
+
+      try {
+        await fs.stat(lockPath)
+        lockDirStillThere = true
+      } catch {
+        lockDirStillThere = false
+      }
+
+      expect(lockDirStillThere).toBe(false)
+    })
+  })
 })
