@@ -1,7 +1,29 @@
 // @ts-check
 
+import FrontendModelBase from "../../src/frontend-models/base.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
+
+/** Test frontend model for transport serialization specs. */
+class TransportTask extends FrontendModelBase {
+  /** @returns {{attributes: string[], modelName: string, path: string, primaryKey: string}} - Resource config. */
+  static resourceConfig() {
+    return {
+      attributes: ["id", "name"],
+      modelName: "TransportTask",
+      path: "/transport-tasks",
+      primaryKey: "id"
+    }
+  }
+
+  /** @returns {number} - Task id. */
+  id() { return this.readAttribute("id") }
+
+  /** @returns {string} - Task name. */
+  name() { return this.readAttribute("name") }
+}
+
+FrontendModelBase.registerModel(TransportTask)
 
 describe("Frontend models - transport serialization", () => {
   it("does not prototype-pollute during deserialize for __proto__ keys", () => {
@@ -32,5 +54,35 @@ describe("Frontend models - transport serialization", () => {
     } finally {
       delete Object.prototype.polluted
     }
+  })
+
+  it("hydrates serialized backend models into registered frontend models", () => {
+    const backendTask = {
+      attributes: () => ({
+        id: 42,
+        name: "Transport task"
+      }),
+      constructor: {
+        getModelName: () => "TransportTask"
+      },
+      getModelClass: () => ({
+        getRelationshipsMap: () => ({})
+      }),
+      getRelationshipByName: () => {
+        throw new Error("No relationships should be read in this spec")
+      }
+    }
+
+    const payload = serializeFrontendModelTransportValue({
+      task: backendTask,
+      tasks: [backendTask]
+    })
+    const deserialized = /** @type {{task: TransportTask, tasks: TransportTask[]}} */ (deserializeFrontendModelTransportValue(payload))
+
+    expect(deserialized.task instanceof TransportTask).toEqual(true)
+    expect(deserialized.task.id()).toEqual(42)
+    expect(deserialized.task.name()).toEqual("Transport task")
+    expect(deserialized.task.isPersisted()).toEqual(true)
+    expect(deserialized.tasks[0] instanceof TransportTask).toEqual(true)
   })
 })
