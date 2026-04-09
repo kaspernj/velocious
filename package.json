@@ -74,7 +74,7 @@
     "@types/strftime": "^0.9.8",
     "chokidar-cli": "^3.0.0",
     "cpy-cli": "^7.0.0",
-    "esbuild": "^0.27.2",
+    "esbuild": "^0.28.0",
     "eslint": "^10.0.1",
     "eslint-plugin-jsdoc": "^62.7.0",
     "globals": "^17.0.0",
