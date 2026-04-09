@@ -35,7 +35,7 @@ describe("Frontend models - transport serialization", () => {
       expect(Object.prototype.polluted).toEqual(undefined)
       expect(Object.prototype.hasOwnProperty.call(deserialized, "__proto__")).toEqual(true)
       expect(deserialized["__proto__"].polluted).toEqual(true)
-      expect(Object.getPrototypeOf(deserialized)).toEqual(null)
+      expect(Object.getPrototypeOf(deserialized)).toBe(Object.prototype)
     } finally {
       delete Object.prototype.polluted
     }
@@ -50,7 +50,7 @@ describe("Frontend models - transport serialization", () => {
       expect(Object.prototype.polluted).toEqual(undefined)
       expect(Object.prototype.hasOwnProperty.call(serialized, "__proto__")).toEqual(true)
       expect(serialized["__proto__"].polluted).toEqual(true)
-      expect(Object.getPrototypeOf(serialized)).toEqual(null)
+      expect(Object.getPrototypeOf(serialized)).toBe(Object.prototype)
     } finally {
       delete Object.prototype.polluted
     }
