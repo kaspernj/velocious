@@ -399,4 +399,66 @@ export default class VelociousDatabaseDriversMssql extends Base{
   async structureSql() {
     return await new StructureSql({driver: this}).toSql()
   }
+
+  /**
+   * Blocks until a SQL Server application lock is acquired on this
+   * connection via `sp_getapplock`. The Session lock owner scopes the lock
+   * to the current session, matching the connection-scoped semantics on
+   * MySQL and PostgreSQL.
+   *
+   * `sp_getapplock` returns 0 on immediate grant, 1 after waiting, and
+   * negative values on failure (timeout, deadlock, canceled, parameter
+   * error). We treat 0/1 as success and -1 (timeout) as a clean `false`;
+   * anything else throws.
+   *
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
+   */
+  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+    const timeoutValue = typeof timeoutMs === "number" && timeoutMs >= 0 ? Math.ceil(timeoutMs) : -1
+    const rows = await this.query(
+      `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_getapplock @Resource = ${this.quote(name)}, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = ${timeoutValue}; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
+    )
+    const result = Number(rows?.[0]?.velocious_advisory_lock_result)
+
+    if (result === 0 || result === 1) return true
+    if (result === -1) return false
+
+    throw new Error(`sp_getapplock returned ${result} for advisory lock ${JSON.stringify(name)} (see SQL Server documentation for sp_getapplock return codes)`)
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
+   */
+  async tryAcquireAdvisoryLock(name) {
+    return await this.acquireAdvisoryLock(name, {timeoutMs: 0})
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
+   */
+  async releaseAdvisoryLock(name) {
+    const rows = await this.query(
+      `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_releaseapplock @Resource = ${this.quote(name)}, @LockOwner = 'Session'; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
+    )
+    const result = Number(rows?.[0]?.velocious_advisory_lock_result)
+
+    return result === 0
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if any session currently holds the lock.
+   */
+  async isAdvisoryLockHeld(name) {
+    const rows = await this.query(
+      `SELECT APPLOCK_MODE('public', ${this.quote(name)}, 'Session') AS velocious_advisory_lock_mode`
+    )
+    const mode = rows?.[0]?.velocious_advisory_lock_mode
+
+    return typeof mode === "string" && mode.length > 0 && mode !== "NoLock"
+  }
 }

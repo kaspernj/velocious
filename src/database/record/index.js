@@ -62,6 +62,38 @@ class ValidationError extends Error {
   }
 }
 
+/**
+ * Thrown by `Record.withAdvisoryLock` when the caller supplied a
+ * `timeoutMs` and the lock was not granted before it elapsed.
+ */
+class AdvisoryLockTimeoutError extends Error {
+  /**
+   * @param {string} message - Error message.
+   * @param {{name: string}} args - The advisory lock name that timed out.
+   */
+  constructor(message, {name}) {
+    super(message)
+    this.name = "AdvisoryLockTimeoutError"
+    this.lockName = name
+  }
+}
+
+/**
+ * Thrown by `Record.withAdvisoryLockOrFail` when the lock is already held
+ * by another session at the moment of the call.
+ */
+class AdvisoryLockBusyError extends Error {
+  /**
+   * @param {string} message - Error message.
+   * @param {{name: string}} args - The advisory lock name that was already held.
+   */
+  constructor(message, {name}) {
+    super(message)
+    this.name = "AdvisoryLockBusyError"
+    this.lockName = name
+  }
+}
+
 class VelociousDatabaseRecord {
   /** @type {string | undefined} */
   static modelName
@@ -1608,6 +1640,80 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Runs the callback while holding a named advisory lock on the current
+   * connection. Advisory locks are cooperative and connection-scoped: they
+   * serialize callers that opt into the same `name`, without touching row
+   * or table locks, so unrelated traffic is free to proceed.
+   *
+   * The lock is acquired before the callback runs and released in a
+   * `finally` block afterwards, so the callback's return value is
+   * propagated and thrown errors still release the lock.
+   *
+   * @template T
+   * @param {string} name - Lock name.
+   * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @param {{timeoutMs?: number | null}} [args] - Options forwarded to the driver; `timeoutMs` caps how long we will wait for the lock.
+   * @returns {Promise<T>} - Resolves with the callback's return value.
+   * @throws {AdvisoryLockTimeoutError} - If `timeoutMs` elapses before the lock is granted.
+   */
+  static async withAdvisoryLock(name, callback, args = {}) {
+    const connection = this.connection()
+    const acquired = await connection.acquireAdvisoryLock(name, args)
+
+    if (!acquired) {
+      throw new AdvisoryLockTimeoutError(`Timed out waiting for advisory lock ${JSON.stringify(name)}`, {name})
+    }
+
+    try {
+      return await callback()
+    } finally {
+      await connection.releaseAdvisoryLock(name)
+    }
+  }
+
+  /**
+   * Runs the callback only if the named advisory lock can be acquired
+   * immediately. If the lock is already held by any session, throws
+   * `AdvisoryLockBusyError` without waiting.
+   *
+   * Use this when contention is a signal that somebody else is already
+   * doing the work and you want to bail out rather than queue up.
+   *
+   * @template T
+   * @param {string} name - Lock name.
+   * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @returns {Promise<T>} - Resolves with the callback's return value.
+   * @throws {AdvisoryLockBusyError} - If the lock is already held.
+   */
+  static async withAdvisoryLockOrFail(name, callback) {
+    const connection = this.connection()
+    const acquired = await connection.tryAcquireAdvisoryLock(name)
+
+    if (!acquired) {
+      throw new AdvisoryLockBusyError(`Advisory lock ${JSON.stringify(name)} is already held`, {name})
+    }
+
+    try {
+      return await callback()
+    } finally {
+      await connection.releaseAdvisoryLock(name)
+    }
+  }
+
+  /**
+   * Returns true if the named advisory lock is currently held by any
+   * session. Primarily useful as a diagnostic; callers that want to act
+   * on the result should prefer `withAdvisoryLockOrFail` to avoid a
+   * TOCTOU window between the check and the action.
+   *
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>}
+   */
+  static async hasAdvisoryLock(name) {
+    return await this.connection().isAdvisoryLockHeld(name)
+  }
+
+  /**
    * @param {...string} names - Names.
    * @returns {void} - No return value.
    */
@@ -2664,5 +2770,5 @@ class TranslationBase extends VelociousDatabaseRecord {
 VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
 VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
 
-export {ValidationError}
+export {AdvisoryLockBusyError, AdvisoryLockTimeoutError, ValidationError}
 export default VelociousDatabaseRecord

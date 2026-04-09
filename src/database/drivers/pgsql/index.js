@@ -283,4 +283,103 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   async structureSql() {
     return await new StructureSql({driver: this}).toSql()
   }
+
+  /**
+   * Deterministically hashes a lock name into a signed 64-bit integer so it
+   * can be passed to `pg_advisory_lock(bigint)`. We use a fast 64-bit FNV-1a
+   * hash — the exact value does not matter, only that the same name always
+   * produces the same key within a process AND across processes that share
+   * the same implementation. Returns the value as a string so the caller
+   * can interpolate it into SQL without losing precision to JS number
+   * coercion.
+   *
+   * @param {string} name - Lock name.
+   * @returns {string} - Signed 64-bit integer as a decimal string.
+   */
+  advisoryLockKey(name) {
+    // FNV-1a 64-bit, computed with BigInt so we don't lose precision.
+    const fnvOffsetBasis = 0xcbf29ce484222325n
+    const fnvPrime = 0x00000100000001b3n
+    const mask64 = 0xffffffffffffffffn
+    let hash = fnvOffsetBasis
+
+    for (let index = 0; index < name.length; index += 1) {
+      hash = BigInt.asUintN(64, (hash ^ BigInt(name.charCodeAt(index))) * fnvPrime & mask64)
+    }
+
+    // Convert unsigned 64-bit into signed by reinterpreting the top bit.
+    const signed = hash >= 0x8000000000000000n ? hash - 0x10000000000000000n : hash
+
+    return signed.toString()
+  }
+
+  /**
+   * Blocks until a PostgreSQL session-level advisory lock is acquired on
+   * this connection. Implemented via `pg_advisory_lock(bigint)`, which has
+   * no native timeout — the `timeoutMs` argument is emulated by racing a
+   * `pg_try_advisory_lock` poll loop so callers on MySQL and Postgres see
+   * the same contract.
+   *
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
+   */
+  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+    const key = this.advisoryLockKey(name)
+
+    if (typeof timeoutMs !== "number" || timeoutMs < 0) {
+      await this.query(`SELECT pg_advisory_lock(${key})`)
+      return true
+    }
+
+    const deadline = Date.now() + timeoutMs
+    const pollIntervalMs = 50
+
+    while (true) {
+      if (await this.tryAcquireAdvisoryLock(name)) return true
+      if (Date.now() >= deadline) return false
+
+      const remaining = deadline - Date.now()
+
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remaining)))
+    }
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
+   */
+  async tryAcquireAdvisoryLock(name) {
+    const key = this.advisoryLockKey(name)
+    const rows = await this.query(`SELECT pg_try_advisory_lock(${key}) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    return result === true || result === "t" || result === 1 || result === "1"
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
+   */
+  async releaseAdvisoryLock(name) {
+    const key = this.advisoryLockKey(name)
+    const rows = await this.query(`SELECT pg_advisory_unlock(${key}) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    return result === true || result === "t" || result === 1 || result === "1"
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if any session currently holds the lock.
+   */
+  async isAdvisoryLockHeld(name) {
+    const key = this.advisoryLockKey(name)
+    const rows = await this.query(
+      `SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND ((classid::bigint << 32) | (objid::bigint & 4294967295)) = ${key}) AS velocious_advisory_lock_held`
+    )
+    const held = rows?.[0]?.velocious_advisory_lock_held
+
+    return held === true || held === "t" || held === 1 || held === "1"
+  }
 }

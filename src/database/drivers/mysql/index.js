@@ -317,4 +317,62 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
     return upsert.toSql()
   }
+
+  /**
+   * Blocks until a MySQL/MariaDB user-level lock is acquired on this
+   * connection. Implemented via `GET_LOCK(name, timeout)`, where the
+   * timeout is in seconds. A negative timeout blocks forever.
+   *
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+   * @returns {Promise<boolean>} - True if acquired, false if the timeout elapsed.
+   */
+  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+    const timeoutSeconds = typeof timeoutMs === "number" && timeoutMs >= 0 ? Math.ceil(timeoutMs / 1000) : -1
+    const rows = await this.query(`SELECT GET_LOCK(${this.quote(name)}, ${timeoutSeconds}) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    if (result === null || result === undefined) {
+      throw new Error(`GET_LOCK returned NULL for advisory lock ${JSON.stringify(name)} (typically an out-of-memory or thread-killed condition)`)
+    }
+
+    return Number(result) === 1
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
+   */
+  async tryAcquireAdvisoryLock(name) {
+    const rows = await this.query(`SELECT GET_LOCK(${this.quote(name)}, 0) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    if (result === null || result === undefined) {
+      throw new Error(`GET_LOCK returned NULL for advisory lock ${JSON.stringify(name)} (typically an out-of-memory or thread-killed condition)`)
+    }
+
+    return Number(result) === 1
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
+   */
+  async releaseAdvisoryLock(name) {
+    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`)
+    const result = rows?.[0]?.velocious_advisory_lock_result
+
+    return Number(result) === 1
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if any session currently holds the lock.
+   */
+  async isAdvisoryLockHeld(name) {
+    const rows = await this.query(`SELECT IS_USED_LOCK(${this.quote(name)}) AS velocious_advisory_lock_holder`)
+    const holder = rows?.[0]?.velocious_advisory_lock_holder
+
+    return holder !== null && holder !== undefined
+  }
 }

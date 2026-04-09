@@ -340,4 +340,123 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   async structureSql() {
     return await new StructureSql({driver: this}).toSql()
   }
+
+  /**
+   * Blocks until an in-process advisory lock with the given name is
+   * acquired. SQLite has no built-in advisory lock primitive, so this is
+   * implemented as a process-local waiter queue. Typical SQLite deployments
+   * run inside a single Node process, which is exactly the scope this
+   * emulation covers; multi-process SQLite setups should not rely on this
+   * for cross-process mutual exclusion.
+   *
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
+   */
+  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+    const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
+
+    while (state.heldNames.has(name)) {
+      let remainingMs = null
+
+      if (typeof timeoutMs === "number" && timeoutMs >= 0) {
+        remainingMs = timeoutMs
+
+        if (remainingMs <= 0) return false
+      }
+
+      await new Promise((resolve) => {
+        const waiters = state.waitersByName.get(name) || []
+        /** @type {NodeJS.Timeout | null} */
+        let timeoutHandle = null
+        /** @type {(() => void) | null} */
+        let removeAndResolve = null
+
+        removeAndResolve = () => {
+          if (timeoutHandle) clearTimeout(timeoutHandle)
+
+          const current = state.waitersByName.get(name) || []
+          const index = current.indexOf(/** @type {() => void} */ (removeAndResolve))
+
+          if (index >= 0) current.splice(index, 1)
+          if (current.length === 0) state.waitersByName.delete(name)
+
+          resolve(undefined)
+        }
+
+        waiters.push(removeAndResolve)
+        state.waitersByName.set(name, waiters)
+
+        if (remainingMs !== null) {
+          timeoutHandle = setTimeout(() => {
+            if (removeAndResolve) removeAndResolve()
+          }, remainingMs)
+        }
+      })
+
+      if (typeof timeoutMs === "number" && timeoutMs >= 0 && state.heldNames.has(name)) {
+        return false
+      }
+    }
+
+    state.heldNames.add(name)
+
+    return true
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
+   */
+  async tryAcquireAdvisoryLock(name) {
+    const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
+
+    if (state.heldNames.has(name)) return false
+
+    state.heldNames.add(name)
+
+    return true
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock was held and has now been released.
+   */
+  async releaseAdvisoryLock(name) {
+    const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
+
+    if (!state.heldNames.has(name)) return false
+
+    state.heldNames.delete(name)
+
+    const waiters = state.waitersByName.get(name)
+
+    if (waiters && waiters.length > 0) {
+      const nextWaiter = waiters.shift()
+
+      if (waiters.length === 0) state.waitersByName.delete(name)
+      if (nextWaiter) nextWaiter()
+    }
+
+    return true
+  }
+
+  /**
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - True if the lock is currently held in this process.
+   */
+  async isAdvisoryLockHeld(name) {
+    return VelociousDatabaseDriversSqliteBase._advisoryLockState.heldNames.has(name)
+  }
+}
+
+/**
+ * Process-wide state for the SQLite advisory lock emulation. Shared across
+ * every SQLite driver instance (native, web, sql.js) because there is no
+ * concept of "connection" to distinguish them at the SQLite level.
+ * @type {{heldNames: Set<string>, waitersByName: Map<string, Array<() => void>>}}
+ */
+VelociousDatabaseDriversSqliteBase._advisoryLockState = {
+  heldNames: new Set(),
+  waitersByName: new Map()
 }
