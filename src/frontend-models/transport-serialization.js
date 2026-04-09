@@ -105,7 +105,8 @@ function isFrontendModelMarker(value) {
   const preloadedRelationships = value.preloadedRelationships
 
   return (
-    value[TYPE_KEY] === TYPE_FRONTEND_MODEL
+    Object.prototype.hasOwnProperty.call(value, TYPE_KEY)
+    && value[TYPE_KEY] === TYPE_FRONTEND_MODEL
     && typeof modelName === "string"
     && modelName.length > 0
     && isPlainObject(attributes)
