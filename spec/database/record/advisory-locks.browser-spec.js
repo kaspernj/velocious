@@ -10,7 +10,17 @@ import {AdvisoryLockBusyError, AdvisoryLockTimeoutError} from "../../../src/data
  * MySQL/PostgreSQL/MSSQL is **session-scoped** and re-entrant within
  * the same session, so the only portable way to test cross-session
  * contention from a single test is to actually open a second physical
- * connection. The sibling driver is closed in `finally`.
+ * connection. The sibling driver is released in `finally`.
+ *
+ * The cleanup is intentionally driver-aware: when the test runner is
+ * sharing a single sql.js Database via `args.getConnection` (the
+ * browser test harness), the spawned driver does **not** own the
+ * underlying connection — calling `close()` on it would tear down the
+ * shared Database used by every other test. In that case the spawned
+ * driver is just a state holder for the static in-process advisory
+ * lock map and can be dropped on the floor. For real physical
+ * connections (MySQL/PostgreSQL/MSSQL/Node SQLite) `close()` releases
+ * the per-spawn resource that `spawnConnection` opened.
  *
  * @template T
  * @param {(driver: import("../../../src/database/drivers/base.js").default) => Promise<T>} callback
@@ -19,14 +29,17 @@ import {AdvisoryLockBusyError, AdvisoryLockTimeoutError} from "../../../src/data
 async function withSecondConnection(callback) {
   const pool = Configuration.current().getDatabasePool()
   const driver = await pool.spawnConnection()
+  const sharesConnection = Boolean(driver.getArgs()?.getConnection)
 
   try {
     return await callback(driver)
   } finally {
-    if (typeof driver.close === "function") {
-      await driver.close()
-    } else if (typeof driver.disconnect === "function") {
-      await driver.disconnect()
+    if (!sharesConnection) {
+      if (typeof driver.close === "function") {
+        await driver.close()
+      } else if (typeof driver.disconnect === "function") {
+        await driver.disconnect()
+      }
     }
   }
 }
