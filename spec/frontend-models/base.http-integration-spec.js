@@ -67,7 +67,38 @@ class User extends FrontendModelBase {
       resourcePath: this.resourcePath()
     })
   }
+
+  /**
+   * @param {Record<string, any>} [payload={}] - Command payload.
+   * @returns {Promise<{users: User[]}>} - Command response.
+   */
+  static async lookupByEmail(payload = {}) {
+    return /** @type {Promise<{users: User[]}>} */ (this.executeCustomCommand({
+      commandName: "lookup-by-email",
+      commandType: "lookup-by-email",
+      payload,
+      resourcePath: this.resourcePath()
+    }))
+  }
+
+  /**
+   * @param {Record<string, any>} [payload={}] - Command payload.
+   * @returns {Promise<{user: User | null}>} - Command response.
+   */
+  async refreshProfile(payload = {}) {
+    const ModelClass = /** @type {typeof User} */ (this.constructor)
+
+    return /** @type {Promise<{user: User | null}>} */ (ModelClass.executeCustomCommand({
+      commandName: "refresh-profile",
+      commandType: "refresh-profile",
+      memberId: this.primaryKeyValue(),
+      payload,
+      resourcePath: ModelClass.resourcePath()
+    }))
+  }
 }
+
+FrontendModelBase.registerModel(User)
 
 /** Frontend model that uses a stable backend model name different from its class name. */
 class MinifiedUserTransportModel extends FrontendModelBase {
@@ -143,6 +174,8 @@ class Task extends FrontendModelBase {
   primaryInteraction() { return this.getRelationshipByName("primaryInteraction").loaded() }
 }
 
+FrontendModelBase.registerModel(Task)
+
 /** Frontend model comment class for preload integration tests. */
 class Comment extends FrontendModelBase {
   /**
@@ -161,6 +194,8 @@ class Comment extends FrontendModelBase {
     }
   }
 }
+
+FrontendModelBase.registerModel(Comment)
 
 /** Frontend model project class for preload integration tests. */
 class Project extends FrontendModelBase {
@@ -207,6 +242,8 @@ class Project extends FrontendModelBase {
   /** @returns {number} */
   id() { return this.readAttribute("id") }
 }
+
+FrontendModelBase.registerModel(Project)
 
 /** @returns {void} */
 function resetFrontendModelTransport() {
@@ -311,6 +348,30 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("hydrates custom collection and member command models over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {jane, john} = await seedHttpFrontendModels()
+        const lookupResponse = await User.lookupByEmail({email: john.email()})
+        const janeModel = await User.findBy({email: jane.email()})
+
+        if (!janeModel) throw new Error("Expected Jane frontend model")
+
+        const refreshResponse = await janeModel.refreshProfile()
+
+        expect(lookupResponse.users).toHaveLength(1)
+        expect(lookupResponse.users[0] instanceof User).toEqual(true)
+        expect(lookupResponse.users[0].email()).toEqual(john.email())
+        expect(refreshResponse.user instanceof User).toEqual(true)
+        expect(refreshResponse.user?.email()).toEqual(jane.email())
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("receives frontend-model lifecycle events through websocket subscriptions", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
@@ -359,6 +420,33 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         expect(events[2].model).toEqual(null)
       } finally {
         unsubscribe()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("hydrates custom collection and member command models over shared websocket requests", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      try {
+        const {jane, john} = await seedHttpFrontendModels()
+        const lookupResponse = await User.lookupByEmail({email: john.email()})
+        const janeModel = await User.findBy({email: jane.email()})
+
+        if (!janeModel) throw new Error("Expected Jane frontend model")
+
+        const refreshResponse = await janeModel.refreshProfile()
+
+        expect(lookupResponse.users).toHaveLength(1)
+        expect(lookupResponse.users[0] instanceof User).toEqual(true)
+        expect(lookupResponse.users[0].email()).toEqual(john.email())
+        expect(refreshResponse.user instanceof User).toEqual(true)
+        expect(refreshResponse.user?.email()).toEqual(jane.email())
+      } finally {
         resetFrontendModelTransport()
         await websocketClient.close()
       }
