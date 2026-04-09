@@ -32,15 +32,31 @@ function lockPathFor(driver, name) {
   return path.join(lockDirectoryFor(driver), `${safeName}-${hash}.lock`)
 }
 
+/**
+ * Returns true when the dummy app is configured for the Node SQLite
+ * driver. The whole spec only makes sense against that driver — every
+ * other build matrix entry (mariadb, mssql, pgsql) returns early.
+ *
+ * @param {import("../../../../src/database/drivers/base.js").default} driver
+ * @returns {boolean}
+ */
+function isNodeSqliteDriver(driver) {
+  return driver.getType() === "sqlite" && driver instanceof VelociousDatabaseDriversSqliteNode
+}
+
 describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, () => {
   it("is only exercised against the Node SQLite driver", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
+      if (!isNodeSqliteDriver(dbs.default)) return // Other database build matrix entries skip this spec.
+
       expect(dbs.default).toBeInstanceOf(VelociousDatabaseDriversSqliteNode)
     })
   })
 
   it("writes and removes an on-disk lock directory around withAdvisoryLock", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
+      if (!isNodeSqliteDriver(dbs.default)) return
+
       const driver = /** @type {VelociousDatabaseDriversSqliteNode} */ (dbs.default)
       const lockName = "velocious-node-file-lock-happy"
       const lockPath = lockPathFor(driver, lockName)
@@ -75,6 +91,8 @@ describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, (
 
   it("reclaims a stale lock directory left behind by a dead PID", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
+      if (!isNodeSqliteDriver(dbs.default)) return
+
       const driver = /** @type {VelociousDatabaseDriversSqliteNode} */ (dbs.default)
       const lockName = "velocious-node-file-lock-stale"
       const lockPath = lockPathFor(driver, lockName)
@@ -111,6 +129,8 @@ describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, (
 
   it("refuses tryAcquireAdvisoryLock while a live lock file is present", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
+      if (!isNodeSqliteDriver(dbs.default)) return
+
       const driver = /** @type {VelociousDatabaseDriversSqliteNode} */ (dbs.default)
       const lockName = "velocious-node-file-lock-live"
       const lockPath = lockPathFor(driver, lockName)
@@ -142,6 +162,8 @@ describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, (
 
   it("refuses releaseAdvisoryLock from a driver instance that does not own the lock", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
+      if (!isNodeSqliteDriver(dbs.default)) return
+
       const ownerDriver = /** @type {VelociousDatabaseDriversSqliteNode} */ (dbs.default)
       const lockName = "velocious-node-file-lock-ownership"
       const lockPath = lockPathFor(ownerDriver, lockName)
