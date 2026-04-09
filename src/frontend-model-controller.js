@@ -3025,7 +3025,9 @@ export default class FrontendModelController extends Controller {
       return {}
     }
 
-    return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(JSON.parse(responseBody)))
+    // Preserve nested transport markers so the outer shared frontend-model API
+    // can return them unchanged and let the client hydrate once at the edge.
+    return /** @type {Record<string, any>} */ (JSON.parse(responseBody))
   }
 
   /** @returns {Promise<void>} - Collection action for frontend model resources. */

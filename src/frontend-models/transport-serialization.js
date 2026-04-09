@@ -14,6 +14,26 @@ const NUMBER_NEGATIVE_INFINITY = "-Infinity"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 
 /**
+ * Assign a key to a plain object without triggering the `__proto__` setter.
+ * Uses `Object.defineProperty` so that keys like `__proto__` are stored as
+ * own data properties instead of mutating the object's prototype chain. This
+ * lets callers receive a regular `{}` object (with `Object.prototype` and a
+ * normal `constructor.name`) while still preventing prototype pollution.
+ * @param {Record<string, unknown>} target - Target object.
+ * @param {string} key - Property key.
+ * @param {unknown} value - Property value.
+ * @returns {void}
+ */
+function assignSafeProperty(target, key, value) {
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  })
+}
+
+/**
  * @param {unknown} value - Candidate value.
  * @returns {value is Record<string, any>} - Whether value is a plain object.
  */
@@ -105,7 +125,8 @@ function isFrontendModelMarker(value) {
   const preloadedRelationships = value.preloadedRelationships
 
   return (
-    value[TYPE_KEY] === TYPE_FRONTEND_MODEL
+    Object.prototype.hasOwnProperty.call(value, TYPE_KEY)
+    && value[TYPE_KEY] === TYPE_FRONTEND_MODEL
     && typeof modelName === "string"
     && modelName.length > 0
     && isPlainObject(attributes)
@@ -195,7 +216,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
     seenModels.add(value)
 
     /** @type {Record<string, unknown>} */
-    const preloadedRelationships = /** @type {Record<string, unknown>} */ (Object.create(null))
+    const preloadedRelationships = {}
     const relationshipsMap = value.getModelClass().getRelationshipsMap()
 
     for (const relationshipName of Object.keys(relationshipsMap)) {
@@ -205,10 +226,10 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
       const loadedRelationship = relationship.loaded()
 
-      preloadedRelationships[relationshipName] = serializeFrontendModelTransportValueInternal(
+      assignSafeProperty(preloadedRelationships, relationshipName, serializeFrontendModelTransportValueInternal(
         loadedRelationship == undefined ? null : loadedRelationship,
         seenModels
-      )
+      ))
     }
 
     seenModels.delete(value)
@@ -222,10 +243,10 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
   if (isPlainObject(value)) {
     /** @type {Record<string, unknown>} */
-    const serialized = /** @type {Record<string, unknown>} */ (Object.create(null))
+    const serialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {
-      serialized[key] = serializeFrontendModelTransportValueInternal(nestedValue, seenModels)
+      assignSafeProperty(serialized, key, serializeFrontendModelTransportValueInternal(nestedValue, seenModels))
     }
 
     return serialized
@@ -318,10 +339,10 @@ export function deserializeFrontendModelTransportValue(value) {
 
   if (isPlainObject(value)) {
     /** @type {Record<string, unknown>} */
-    const deserialized = /** @type {Record<string, unknown>} */ (Object.create(null))
+    const deserialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {
-      deserialized[key] = deserializeFrontendModelTransportValue(nestedValue)
+      assignSafeProperty(deserialized, key, deserializeFrontendModelTransportValue(nestedValue))
     }
 
     return deserialized

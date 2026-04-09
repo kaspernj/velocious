@@ -35,7 +35,7 @@ describe("Frontend models - transport serialization", () => {
       expect(Object.prototype.polluted).toEqual(undefined)
       expect(Object.prototype.hasOwnProperty.call(deserialized, "__proto__")).toEqual(true)
       expect(deserialized["__proto__"].polluted).toEqual(true)
-      expect(Object.getPrototypeOf(deserialized)).toEqual(null)
+      expect(Object.getPrototypeOf(deserialized)).toBe(Object.prototype)
     } finally {
       delete Object.prototype.polluted
     }
@@ -50,7 +50,7 @@ describe("Frontend models - transport serialization", () => {
       expect(Object.prototype.polluted).toEqual(undefined)
       expect(Object.prototype.hasOwnProperty.call(serialized, "__proto__")).toEqual(true)
       expect(serialized["__proto__"].polluted).toEqual(true)
-      expect(Object.getPrototypeOf(serialized)).toEqual(null)
+      expect(Object.getPrototypeOf(serialized)).toBe(Object.prototype)
     } finally {
       delete Object.prototype.polluted
     }
@@ -84,5 +84,33 @@ describe("Frontend models - transport serialization", () => {
     expect(deserialized.task.name()).toEqual("Transport task")
     expect(deserialized.task.isPersisted()).toEqual(true)
     expect(deserialized.tasks[0] instanceof TransportTask).toEqual(true)
+  })
+
+  it("requires an own frontend-model marker key during deserialize", () => {
+    const previousMarker = Object.prototype.__velocious_type
+
+    try {
+      Object.prototype.__velocious_type = "frontend_model"
+
+      const payload = {
+        attributes: {
+          id: 9,
+          name: "Plain task"
+        },
+        modelName: "TransportTask",
+        safe: true
+      }
+      const deserialized = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(payload))
+
+      expect(deserialized instanceof TransportTask).toEqual(false)
+      expect(deserialized.modelName).toEqual("TransportTask")
+      expect(deserialized.safe).toEqual(true)
+    } finally {
+      if (previousMarker === undefined) {
+        delete Object.prototype.__velocious_type
+      } else {
+        Object.prototype.__velocious_type = previousMarker
+      }
+    }
   })
 })
