@@ -111,7 +111,11 @@ export default class VelociousHttpServerInProcessHandler {
     }
 
     if (this.configuration) {
-      void this.configuration.getWebsocketChannelSubscribers().dispatch({channel, createdAt, eventId, payload})
+      void this.configuration.getWebsocketChannelSubscribers()
+        .dispatch({channel, createdAt, eventId, payload})
+        .catch((error) => {
+          this.logger.error(() => [`Channel subscriber dispatch failed for ${channel}`, error])
+        })
     }
   }
 }

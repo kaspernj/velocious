@@ -77,10 +77,13 @@ export default class VelociousWebsocketChannelSubscribers {
 
     if (!set || set.size === 0) return
 
+    // Snapshot the subscribers so callbacks that unsubscribe (themselves or
+    // others) during dispatch do not skip later deliveries for this event.
+    const callbacks = Array.from(set)
     const meta = {channel, createdAt, eventId}
     const tasks = []
 
-    for (const callback of set) {
+    for (const callback of callbacks) {
       try {
         const result = callback(payload, meta)
 

@@ -101,4 +101,24 @@ describe("websocket channel subscribers", () => {
     // @ts-expect-error - intentional bad type for runtime check
     expect(() => subscribers.subscribe("ch", null)).toThrowError("callback must be a function")
   })
+
+  it("dispatches to a snapshot so unsubscribes during dispatch do not skip later callbacks", async () => {
+    const subscribers = new VelociousWebsocketChannelSubscribers()
+    const calls = []
+    /** @type {() => void} */
+    let unsubscribeSecond = () => {}
+
+    subscribers.subscribe("snap", () => {
+      calls.push("first")
+      unsubscribeSecond()
+    })
+    unsubscribeSecond = subscribers.subscribe("snap", () => {
+      calls.push("second")
+    })
+
+    await subscribers.dispatch({channel: "snap", payload: {}})
+
+    expect(calls).toEqual(["first", "second"])
+    expect(subscribers.hasSubscribers("snap")).toEqual(true)
+  })
 })

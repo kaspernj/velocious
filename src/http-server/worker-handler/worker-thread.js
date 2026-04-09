@@ -175,7 +175,15 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
 
     if (this.configuration) {
-      sendTasks.push(this.configuration.getWebsocketChannelSubscribers().dispatch({channel, createdAt, eventId, payload}))
+      // Isolate channel subscriber failures so a buggy in-process callback
+      // cannot reject this command and crash the worker thread.
+      sendTasks.push(
+        this.configuration.getWebsocketChannelSubscribers()
+          .dispatch({channel, createdAt, eventId, payload})
+          .catch((error) => {
+            this.logger.error(() => [`Channel subscriber dispatch failed for ${channel}`, error])
+          })
+      )
     }
 
     await Promise.all(sendTasks)
