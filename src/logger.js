@@ -260,14 +260,10 @@ export default class Logger {
     this._loggingConfiguration = loggingConfiguration
 
     if (typeof object == "string") {
-      this._subject = object
+      this._subject = object || "EmptyString"
     } else {
       this._object = object
-      this._subject = object.constructor.name
-    }
-
-    if (!this._subject) {
-      throw new Error(`No subject given`)
+      this._subject = object.constructor.name || "UnknownClass"
     }
   }
 
