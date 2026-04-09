@@ -1,13 +1,17 @@
 // @ts-check
 
+import {resolveFrontendModelClass} from "./model-registry.js"
+
 const TYPE_KEY = "__velocious_type"
 const TYPE_DATE = "date"
 const TYPE_UNDEFINED = "undefined"
 const TYPE_BIGINT = "bigint"
 const TYPE_NUMBER = "number"
+const TYPE_FRONTEND_MODEL = "frontend_model"
 const NUMBER_NAN = "NaN"
 const NUMBER_POSITIVE_INFINITY = "Infinity"
 const NUMBER_NEGATIVE_INFINITY = "-Infinity"
+const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 
 /**
  * @param {unknown} value - Candidate value.
@@ -90,10 +94,55 @@ function isNonFiniteNumberMarker(value) {
 }
 
 /**
+ * @param {unknown} value - Candidate value.
+ * @returns {value is {__velocious_type: "frontend_model", attributes: Record<string, any>, modelName: string, preloadedRelationships?: Record<string, any>}} - Whether value is encoded frontend-model marker.
+ */
+function isFrontendModelMarker(value) {
+  if (!isPlainObject(value)) return false
+
+  const modelName = value.modelName
+  const attributes = value.attributes
+  const preloadedRelationships = value.preloadedRelationships
+
+  return (
+    value[TYPE_KEY] === TYPE_FRONTEND_MODEL
+    && typeof modelName === "string"
+    && modelName.length > 0
+    && isPlainObject(attributes)
+    && (preloadedRelationships === undefined || isPlainObject(preloadedRelationships))
+  )
+}
+
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {value is {attributes: () => Record<string, any>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => {getRelationshipsMap: () => Record<string, any>}, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => any}}} - Whether value looks like a backend model instance.
+ */
+function isBackendModelInstance(value) {
+  if (!value || typeof value !== "object") return false
+
+  const candidate = /** @type {Record<string, any>} */ (value)
+
+  return (
+    typeof candidate.attributes === "function"
+    && typeof candidate.getModelClass === "function"
+    && typeof candidate.getRelationshipByName === "function"
+  )
+}
+
+/**
+ * @param {Record<string, any>} value - Attributes hash.
+ * @returns {Record<string, any>} - Cloned attributes hash.
+ */
+function cloneFrontendModelAttributes(value) {
+  return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(serializeFrontendModelTransportValue(value)))
+}
+
+/**
  * @param {unknown} value - Value to serialize.
+ * @param {WeakSet<object>} seenModels - Models already visited in the current recursion path.
  * @returns {unknown} - Serialized value with transport markers.
  */
-export function serializeFrontendModelTransportValue(value) {
+function serializeFrontendModelTransportValueInternal(value, seenModels) {
   if (value === undefined) {
     return {[TYPE_KEY]: TYPE_UNDEFINED}
   }
@@ -124,7 +173,51 @@ export function serializeFrontendModelTransportValue(value) {
   }
 
   if (Array.isArray(value)) {
-    return value.map((entry) => serializeFrontendModelTransportValue(entry))
+    return value.map((entry) => serializeFrontendModelTransportValueInternal(entry, seenModels))
+  }
+
+  if (isBackendModelInstance(value)) {
+    const modelAttributes = value.attributes()
+    const modelClass = value.constructor
+    const modelName = typeof modelClass.getModelName === "function" ? modelClass.getModelName() : modelClass.name
+
+    /** @type {Record<string, unknown>} */
+    const serializedModel = {
+      [TYPE_KEY]: TYPE_FRONTEND_MODEL,
+      attributes: /** @type {Record<string, any>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
+      modelName
+    }
+
+    if (seenModels.has(value)) {
+      return serializedModel
+    }
+
+    seenModels.add(value)
+
+    /** @type {Record<string, unknown>} */
+    const preloadedRelationships = /** @type {Record<string, unknown>} */ (Object.create(null))
+    const relationshipsMap = value.getModelClass().getRelationshipsMap()
+
+    for (const relationshipName of Object.keys(relationshipsMap)) {
+      const relationship = value.getRelationshipByName(relationshipName)
+
+      if (!relationship.getPreloaded()) continue
+
+      const loadedRelationship = relationship.loaded()
+
+      preloadedRelationships[relationshipName] = serializeFrontendModelTransportValueInternal(
+        loadedRelationship == undefined ? null : loadedRelationship,
+        seenModels
+      )
+    }
+
+    seenModels.delete(value)
+
+    if (Object.keys(preloadedRelationships).length > 0) {
+      serializedModel.preloadedRelationships = preloadedRelationships
+    }
+
+    return serializedModel
   }
 
   if (isPlainObject(value)) {
@@ -132,13 +225,57 @@ export function serializeFrontendModelTransportValue(value) {
     const serialized = /** @type {Record<string, unknown>} */ (Object.create(null))
 
     for (const [key, nestedValue] of Object.entries(value)) {
-      serialized[key] = serializeFrontendModelTransportValue(nestedValue)
+      serialized[key] = serializeFrontendModelTransportValueInternal(nestedValue, seenModels)
     }
 
     return serialized
   }
 
   return value
+}
+
+/**
+ * @param {{attributes: Record<string, any>, modelName: string, preloadedRelationships?: Record<string, any>}} marker - Encoded frontend-model marker.
+ * @returns {unknown} - Hydrated frontend model or plain object fallback.
+ */
+function deserializeFrontendModelMarker(marker) {
+  const attributes = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(marker.attributes))
+  const preloadedRelationships = isPlainObject(marker.preloadedRelationships)
+    ? /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
+    : {}
+  const modelClass = resolveFrontendModelClass(marker.modelName)
+
+  if (!modelClass || typeof modelClass.instantiateFromResponse !== "function") {
+    if (Object.keys(preloadedRelationships).length < 1) {
+      return attributes
+    }
+
+    return {
+      ...attributes,
+      [PRELOADED_RELATIONSHIPS_KEY]: preloadedRelationships
+    }
+  }
+
+  const model = new modelClass(attributes)
+
+  model._selectedAttributes = new Set(Object.keys(attributes))
+
+  for (const [relationshipName, relationshipValue] of Object.entries(preloadedRelationships)) {
+    model.getRelationshipByName(relationshipName).setLoaded(relationshipValue)
+  }
+
+  model.setIsNewRecord(false)
+  model._persistedAttributes = cloneFrontendModelAttributes(model.attributes())
+
+  return model
+}
+
+/**
+ * @param {unknown} value - Value to serialize.
+ * @returns {unknown} - Serialized value with transport markers.
+ */
+export function serializeFrontendModelTransportValue(value) {
+  return serializeFrontendModelTransportValueInternal(value, new WeakSet())
 }
 
 /**
@@ -169,6 +306,10 @@ export function deserializeFrontendModelTransportValue(value) {
     if (numberValue === NUMBER_POSITIVE_INFINITY) return Number.POSITIVE_INFINITY
 
     return Number.NEGATIVE_INFINITY
+  }
+
+  if (isFrontendModelMarker(value)) {
+    return deserializeFrontendModelMarker(value)
   }
 
   if (Array.isArray(value)) {

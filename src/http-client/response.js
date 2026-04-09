@@ -1,6 +1,7 @@
 // @ts-check
 
 import Header from "./header.js"
+import {deserializeFrontendModelTransportValue} from "../frontend-models/transport-serialization.js"
 
 export default class Response {
   /**
@@ -58,7 +59,7 @@ export default class Response {
     const body = this.response.toString()
     const json = JSON.parse(body)
 
-    return json
+    return deserializeFrontendModelTransportValue(json)
   }
 
   tryToParse() {
