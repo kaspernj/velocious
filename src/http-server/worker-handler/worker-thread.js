@@ -174,6 +174,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       }))
     }
 
+    if (this.configuration) {
+      sendTasks.push(this.configuration.getWebsocketChannelSubscribers().dispatch({channel, createdAt, eventId, payload}))
+    }
+
     await Promise.all(sendTasks)
   }
 }

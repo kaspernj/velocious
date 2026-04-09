@@ -109,5 +109,9 @@ export default class VelociousHttpServerInProcessHandler {
 
       void session.sendEvent(channel, payload, {createdAt, eventId})
     }
+
+    if (this.configuration) {
+      void this.configuration.getWebsocketChannelSubscribers().dispatch({channel, createdAt, eventId, payload})
+    }
   }
 }

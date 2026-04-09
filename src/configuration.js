@@ -10,6 +10,7 @@ import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
+import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
 import {ensureFrontendModelWebsocketPublishersRegistered} from "./frontend-models/websocket-publishers.js"
 import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
@@ -87,6 +88,8 @@ export default class VelociousConfiguration {
     this._tenantDatabaseResolver = tenantDatabaseResolver
     this._tenantResolver = tenantResolver
     this._websocketEvents = undefined
+    /** @type {VelociousWebsocketChannelSubscribers | undefined} */
+    this._websocketChannelSubscribers = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
     this._logging = logging
@@ -776,6 +779,20 @@ export default class VelociousConfiguration {
    */
   setWebsocketEvents(websocketEvents) {
     this._websocketEvents = websocketEvents
+  }
+
+  /**
+   * Per-process registry of channel subscribers used by worker code that
+   * needs to react to events broadcast via `websocketEventsHost.publish(...)`
+   * without holding an actual websocket session.
+   * @returns {import("./http-server/websocket-channel-subscribers.js").default} - The channel subscribers registry.
+   */
+  getWebsocketChannelSubscribers() {
+    if (!this._websocketChannelSubscribers) {
+      this._websocketChannelSubscribers = new VelociousWebsocketChannelSubscribers()
+    }
+
+    return this._websocketChannelSubscribers
   }
 
   /** @returns {import("./configuration-types.js").WebsocketChannelResolverType | undefined} - The websocket channel resolver. */
