@@ -500,4 +500,113 @@ describe("Logger", async () => {
     expect(logs.map((log) => log.level)).toEqual(["debug"])
     expect(logs.map((log) => log.message)).toEqual(["BugReporter Debug"])
   })
+
+  it("returns NaN for %d when the value cannot be coerced to a number", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("App", {configuration})
+
+    // Symbol() would throw if we used Number() directly without a catch.
+    await logger.info("Got %d and %d", Symbol("sym"), "not-a-number")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs[0].message).toEqual("App Got NaN and NaN")
+  })
+
+  it("interpolates printf-style %s and %d format specifiers", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("App", {configuration})
+
+    await logger.info("Forwarding call %s to %s", "CA123", "+491707867531")
+    await logger.info("Loaded %d actions for model %s", 3, "abc")
+    await logger.info("Escaped %% literal")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs[0].message).toEqual("App Forwarding call CA123 to +491707867531")
+    expect(logs[1].message).toEqual("App Loaded 3 actions for model abc")
+    expect(logs[2].message).toEqual("App Escaped % literal")
+  })
+
+  it("appends extra args with a space when there are more args than format specifiers", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("App", {configuration})
+
+    await logger.info("Request to %s", "/twilio/call", "extra", "more")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs[0].message).toEqual("App Request to /twilio/call extra more")
+  })
+
+  it("falls back to space-join when the first part has no format specifiers", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("App", {configuration})
+
+    await logger.info("Plain", "message", "parts")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs[0].message).toEqual("App Plain message parts")
+  })
 })

@@ -32,30 +32,96 @@ function functionOrMessages(...messages) {
 }
 
 /**
- * Converts multiple message parts into a single string.
- * @param {...any} messages - Parts to combine into a message
- * @returns {string} - The messages to message.
+ * Format a single value for inclusion in a log message.
+ * @param {any} value - Value to format.
+ * @returns {string} - String representation.
  */
-function messagesToMessage(...messages) {
+function formatPart(value) {
+  if (value instanceof Error) {
+    return `${value.message}\n${value.stack}`
+  }
+
+  if (typeof value === "object") {
+    return formatValue(value)
+  }
+
+  return String(value)
+}
+
+/**
+ * Formats the user-supplied messages into a single string.
+ *
+ * If the first message is a string containing printf-style format
+ * specifiers (`%s`, `%d`, `%j`, `%o`, `%O`, or `%%`), the remaining
+ * messages are interpolated into it in order (like `console.log` /
+ * `util.format`). Any leftover messages are appended with a space
+ * separator. Otherwise, all parts are joined with spaces.
+ *
+ * @param {Array<any>} messages - User-supplied message parts.
+ * @returns {string} - The formatted user message.
+ */
+function formatUserMessages(messages) {
+  if (messages.length === 0) return ""
+
+  const first = messages[0]
+
+  if (typeof first === "string" && /%[sdjoO%]/.test(first)) {
+    let argIndex = 1
+    const formatted = first.replace(/%[sdjoO%]/g, (match) => {
+      if (match === "%%") return "%"
+      if (argIndex >= messages.length) return match
+
+      const value = messages[argIndex]
+
+      argIndex += 1
+
+      if (match === "%d") {
+        // Match util.format: never throw for non-coercible values — yield "NaN" instead.
+        // Number(Symbol()) throws, so catch and fall back.
+        try {
+          return String(Number(value))
+        } catch {
+          return "NaN"
+        }
+      }
+      if (match === "%j" || match === "%o" || match === "%O") return formatValue(value)
+
+      return formatPart(value)
+    })
+
+    let message = formatted
+
+    for (let index = argIndex; index < messages.length; index += 1) {
+      message += ` ${formatPart(messages[index])}`
+    }
+
+    return message
+  }
+
   let message = ""
 
-  for (const messagePartIndex in messages) {
-    const messagePart = messages[messagePartIndex]
-
-    if (Number(messagePartIndex) > 0) {
-      message += " "
-    }
-
-    if (messagePart instanceof Error) {
-      message += `${messagePart.message}\n${messagePart.stack}`
-    } else if (typeof messagePart == "object") {
-      message += formatValue(messagePart)
-    } else {
-      message += messagePart
-    }
+  for (let index = 0; index < messages.length; index += 1) {
+    if (index > 0) message += " "
+    message += formatPart(messages[index])
   }
 
   return message
+}
+
+/**
+ * Converts a logger subject and message parts into a single log line.
+ *
+ * @param {string} subject - Logger subject / category prefix.
+ * @param {...any} messages - User-supplied message parts (supports printf-style format specifiers on the first part).
+ * @returns {string} - The formatted log line.
+ */
+function messagesToMessage(subject, ...messages) {
+  const userMessage = formatUserMessages(messages)
+
+  if (!subject) return userMessage
+  if (!userMessage) return String(subject)
+
+  return `${subject} ${userMessage}`
 }
 
 /**
@@ -226,6 +292,7 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
     if (!payload) {
       resolvedMessages = functionOrMessages(...messages)
       message = messagesToMessage(subject, ...resolvedMessages)
+      // subject is the first positional arg, then the user messages
       payload = {
         level,
         message,
