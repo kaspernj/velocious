@@ -75,7 +75,15 @@ function formatUserMessages(messages) {
 
       argIndex += 1
 
-      if (match === "%d") return String(Number(value))
+      if (match === "%d") {
+        // Match util.format: never throw for non-coercible values — yield "NaN" instead.
+        // Number(Symbol()) throws, so catch and fall back.
+        try {
+          return String(Number(value))
+        } catch {
+          return "NaN"
+        }
+      }
       if (match === "%j" || match === "%o" || match === "%O") return formatValue(value)
 
       return formatPart(value)

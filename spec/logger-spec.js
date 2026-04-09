@@ -501,6 +501,33 @@ describe("Logger", async () => {
     expect(logs.map((log) => log.message)).toEqual(["BugReporter Debug"])
   })
 
+  it("returns NaN for %d when the value cannot be coerced to a number", async () => {
+    const arrayOutput = new LoggerArrayOutput()
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {
+        outputs: [{output: arrayOutput}]
+      }
+    })
+
+    const logger = new Logger("App", {configuration})
+
+    // Symbol() would throw if we used Number() directly without a catch.
+    await logger.info("Got %d and %d", Symbol("sym"), "not-a-number")
+
+    const logs = arrayOutput.getLogs()
+
+    expect(logs[0].message).toEqual("App Got NaN and NaN")
+  })
+
   it("interpolates printf-style %s and %d format specifiers", async () => {
     const arrayOutput = new LoggerArrayOutput()
     const environmentHandler = new EnvironmentHandlerNode()
