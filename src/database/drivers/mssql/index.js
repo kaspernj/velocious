@@ -378,7 +378,28 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _rollbackSavePointAction(savePointName) {
-    await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
+    try {
+      await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${error}`
+
+      // When XACT_ABORT kills the entire transaction, the savepoint
+      // no longer exists and the ROLLBACK TRANSACTION [name] fails.
+      // Issue a raw IF @@TRANCOUNT > 0 ROLLBACK to clear whatever
+      // session state remains, then let the error propagate so the
+      // outer transaction() call knows the transaction is dead.
+      if (message.includes("Transaction has not begun") || message.includes("Transaction has been aborted")) {
+        this.logger.debug("Savepoint rollback failed; transaction already dead, clearing session state")
+
+        const request = new mssql.Request(this.connection)
+
+        await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
+
+        return
+      }
+
+      throw error
+    }
   }
 
   generateSavePointName() {
