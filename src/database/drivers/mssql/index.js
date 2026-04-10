@@ -339,7 +339,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (this._currentTransaction) {
       try {
         await this._currentTransaction.rollback()
-      } catch {
+      } catch (transactionRollbackError) {
         // When SQL Server has already aborted the transaction (e.g., a
         // stale concurrent request triggered XACT_ABORT), the
         // mssql.Transaction.rollback() call fails because the
@@ -347,16 +347,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
         // underlying connection to clear SQL Server's session-level
         // aborted-transaction state so the connection is usable for the
         // next BEGIN TRANSACTION.
-        try {
-          if (this.connection) {
-            const request = new mssql.Request(this.connection)
+        this.logger.warn("Transaction.rollback() failed, clearing session state with raw ROLLBACK", {
+          error: transactionRollbackError instanceof Error ? transactionRollbackError.message : transactionRollbackError
+        })
 
-            await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
-          }
-        } catch {
-          // Best effort — if the raw rollback also fails, the
-          // connection is genuinely broken and will fail on the next
-          // operation, which is the caller's problem at that point.
+        if (this.connection) {
+          const request = new mssql.Request(this.connection)
+
+          await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
         }
       } finally {
         this._currentTransaction = null
