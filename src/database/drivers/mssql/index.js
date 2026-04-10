@@ -336,31 +336,24 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async _rollbackTransactionAction() {
-    if (this._currentTransaction) {
-      try {
-        await this._currentTransaction.rollback()
-      } catch (transactionRollbackError) {
-        // When SQL Server has already aborted the transaction (e.g., a
-        // stale concurrent request triggered XACT_ABORT), the
-        // mssql.Transaction.rollback() call fails because the
-        // Transaction object is dead.  Issue a raw ROLLBACK on the
-        // underlying connection to clear SQL Server's session-level
-        // aborted-transaction state so the connection is usable for the
-        // next BEGIN TRANSACTION.
-        this.logger.warn("Transaction.rollback() failed, clearing session state with raw ROLLBACK", {
-          error: transactionRollbackError instanceof Error ? transactionRollbackError.message : transactionRollbackError
-        })
-
-        if (this.connection) {
-          const request = new mssql.Request(this.connection)
-
-          await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
-        }
-      } finally {
-        this._currentTransaction = null
-      }
-    } else {
+    if (!this._currentTransaction) {
       this.logger.debug("A transaction isn't running - ignoring because that can happen if something else has failed in the db")
+      return
+    }
+
+    // Issue a raw ROLLBACK on the underlying connection instead of going
+    // through the mssql.Transaction object.  This handles both the
+    // normal case (transaction is alive → ROLLBACK succeeds) and the
+    // aborted case (SQL Server already killed the transaction →
+    // @@TRANCOUNT is 0 → the IF guard makes it a no-op).  Using the
+    // raw connection avoids the TransactionError that the mssql.Transaction
+    // wrapper throws when the server-side transaction is already dead.
+    try {
+      const request = new mssql.Request(this.connection)
+
+      await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
+    } finally {
+      this._currentTransaction = null
     }
   }
 
