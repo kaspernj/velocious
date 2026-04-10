@@ -339,7 +339,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (this._currentTransaction) {
       try {
         await this._currentTransaction.rollback()
-      } catch (rollbackError) {
+      } catch {
         // When SQL Server has already aborted the transaction (e.g., a
         // stale concurrent request triggered XACT_ABORT), the
         // mssql.Transaction.rollback() call fails because the

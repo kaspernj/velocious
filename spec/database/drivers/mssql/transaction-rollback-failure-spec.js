@@ -87,8 +87,7 @@ describe("Database - drivers - mssql transaction recovery", () => {
     }
 
     class FakeRequest {
-      /** @param {unknown} _connection */
-      constructor(_connection) {}
+      constructor() {}
 
       /** @param {string} sql */
       async query(sql) {
