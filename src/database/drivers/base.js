@@ -822,8 +822,11 @@ export default class VelociousDatabaseDriversBase {
    */
   async rollbackTransaction() {
     await this._transactionsActionsMutex.sync(async () => {
-      await this._rollbackTransactionAction()
-      this._transactionsCount--
+      try {
+        await this._rollbackTransactionAction()
+      } finally {
+        this._transactionsCount--
+      }
     })
   }
 

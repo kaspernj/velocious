@@ -337,9 +337,11 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   async _rollbackTransactionAction() {
     if (this._currentTransaction) {
-      await this._currentTransaction.rollback()
-
-      this._currentTransaction = null
+      try {
+        await this._currentTransaction.rollback()
+      } finally {
+        this._currentTransaction = null
+      }
     } else {
       this.logger.debug("A transaction isn't running - ignoring because that can happen if something else has failed in the db")
     }
