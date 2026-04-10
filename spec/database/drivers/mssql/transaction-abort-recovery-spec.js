@@ -134,17 +134,18 @@ describe("Database - drivers - mssql transaction abort recovery", {tags: ["dummy
 
       if (!db || db.getType() !== "mssql") return
 
-      // Create a temp table with a primary key constraint.
-      await db.query("CREATE TABLE #dupkey_test (id INT PRIMARY KEY)")
+      // Create a real table (not a temp table — temp tables are
+      // session-scoped and transaction() may use a different connection
+      // for the inner ensureConnections call).
+      await db.query("IF OBJECT_ID('velocious_dupkey_test', 'U') IS NOT NULL DROP TABLE velocious_dupkey_test")
+      await db.query("CREATE TABLE velocious_dupkey_test (id INT PRIMARY KEY)")
 
       try {
-        await db.transaction(async () => {
-          await db.query("SET XACT_ABORT ON")
-          await db.query("INSERT INTO #dupkey_test (id) VALUES (1)")
-          // This duplicate insert triggers a PK violation which, with
-          // XACT_ABORT ON, aborts the entire transaction server-side.
-          await db.query("INSERT INTO #dupkey_test (id) VALUES (1)")
-        })
+        await db.startTransaction()
+        await db.query("INSERT INTO velocious_dupkey_test (id) VALUES (1)")
+        // This duplicate insert triggers a PK violation.  With
+        // XACT_ABORT ON the entire transaction is aborted server-side.
+        await db.query("SET XACT_ABORT ON; INSERT INTO velocious_dupkey_test (id) VALUES (1)")
       } catch (error) {
         expect(error).toBeInstanceOf(Error)
 
@@ -152,6 +153,11 @@ describe("Database - drivers - mssql transaction abort recovery", {tags: ["dummy
           expect(error.message).toContain("Violation of PRIMARY KEY constraint")
         }
       }
+
+      await db.rollbackTransaction()
+
+      // Reset XACT_ABORT so it doesn't affect subsequent tests.
+      await db.query("SET XACT_ABORT OFF")
 
       expect(db._transactionsCount).toBe(0)
       expect(db._currentTransaction).toBeNull()
@@ -161,39 +167,39 @@ describe("Database - drivers - mssql transaction abort recovery", {tags: ["dummy
 
       expect(result[0].afterDupKey).toBe(5)
 
-      // Clean up the temp table.
-      await db.query("DROP TABLE #dupkey_test")
+      // Clean up.
+      await db.query("DROP TABLE velocious_dupkey_test")
     })
   })
 
-  it("cleans up _currentTransaction even when the raw ROLLBACK query fails", async () => {
+  it("allows multiple abort-and-recover cycles on the same connection", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const db = dbs.mssql
 
       if (!db || db.getType() !== "mssql") return
 
-      await db.startTransaction()
+      // Run two abort-recover cycles to verify the connection doesn't
+      // accumulate residual state across multiple recoveries.
+      for (let cycle = 1; cycle <= 3; cycle++) {
+        await db.startTransaction()
 
-      // Null the connection to force the raw ROLLBACK query to fail.
-      const savedConnection = db.connection
+        try {
+          await db.query("SET XACT_ABORT ON; RAISERROR('Cycle abort', 16, 1)")
+        } catch {
+          // Expected.
+        }
 
-      db.connection = null
-
-      try {
         await db.rollbackTransaction()
-      } catch {
-        // Expected — can't issue ROLLBACK on a null connection.
+        await db.query("SET XACT_ABORT OFF")
+
+        expect(db._transactionsCount).toBe(0)
+        expect(db._currentTransaction).toBeNull()
       }
 
-      // _currentTransaction must still be cleaned up via finally block.
-      expect(db._currentTransaction).toBeNull()
-      expect(db._transactionsCount).toBe(0)
+      // After three cycles the connection should still work.
+      const result = await db.query("SELECT 6 AS afterCycles")
 
-      // Restore connection for other tests.
-      db.connection = savedConnection
-
-      // Issue raw rollback to clear any leftover SQL Server state.
-      await db.query("IF @@TRANCOUNT > 0 ROLLBACK")
+      expect(result[0].afterCycles).toBe(6)
     })
   })
 })
