@@ -336,14 +336,30 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async _rollbackTransactionAction() {
-    if (this._currentTransaction) {
-      try {
-        await this._currentTransaction.rollback()
-      } finally {
-        this._currentTransaction = null
-      }
-    } else {
+    if (!this._currentTransaction) {
       this.logger.debug("A transaction isn't running - ignoring because that can happen if something else has failed in the db")
+      return
+    }
+
+    try {
+      await this._currentTransaction.rollback()
+    } catch (transactionRollbackError) {
+      // When SQL Server has already aborted the transaction (e.g., a
+      // stale concurrent request triggered XACT_ABORT), the
+      // mssql.Transaction.rollback() call fails because the
+      // Transaction object is dead.  Issue a raw ROLLBACK on the
+      // underlying connection to clear SQL Server's session-level
+      // aborted-transaction state so the connection is usable for the
+      // next BEGIN TRANSACTION.
+      this.logger.warn("Transaction.rollback() failed, clearing session state with raw ROLLBACK", {
+        error: transactionRollbackError instanceof Error ? transactionRollbackError.message : transactionRollbackError
+      })
+
+      const request = new mssql.Request(this.connection)
+
+      await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
+    } finally {
+      this._currentTransaction = null
     }
   }
 
@@ -368,7 +384,28 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _rollbackSavePointAction(savePointName) {
-    await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
+    try {
+      await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${error}`
+
+      // When XACT_ABORT kills the entire transaction, the savepoint
+      // no longer exists and the ROLLBACK TRANSACTION [name] fails.
+      // Issue a raw IF @@TRANCOUNT > 0 ROLLBACK to clear whatever
+      // session state remains, then let the error propagate so the
+      // outer transaction() call knows the transaction is dead.
+      if (message.includes("Transaction has not begun") || message.includes("Transaction has been aborted")) {
+        this.logger.debug("Savepoint rollback failed; transaction already dead, clearing session state")
+
+        const request = new mssql.Request(this.connection)
+
+        await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
+
+        return
+      }
+
+      throw error
+    }
   }
 
   generateSavePointName() {
