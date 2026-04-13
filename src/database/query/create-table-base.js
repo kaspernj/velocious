@@ -116,6 +116,10 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
     sql += ")"
 
+    if (databaseType == "mysql") {
+      sql += " DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    }
+
     if (databaseType == "mssql" && ifNotExists) {
       sql += " END"
     }

@@ -258,7 +258,7 @@ export default class TableColumn {
     }
 
     if (type == "STRING") {
-      type = "VARCHAR"
+      type = databaseType == "mssql" ? "NVARCHAR" : "VARCHAR"
       maxlength ||= 255
     }
     if (databaseType == "pgsql" && type == "TINYINT") {
@@ -276,6 +276,9 @@ export default class TableColumn {
         maxlength = undefined
       } else if (type == "BLOB") {
         type = "VARBINARY(MAX)"
+        maxlength = undefined
+      } else if (type == "TEXT") {
+        type = "NVARCHAR(MAX)"
         maxlength = undefined
       }
     }
