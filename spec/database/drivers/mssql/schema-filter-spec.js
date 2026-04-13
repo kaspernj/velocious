@@ -15,7 +15,7 @@ describe("Database - drivers - mssql schema filter", () => {
 
     await driver.getTables()
 
-    expect(lastSql).toContain("[TABLE_SCHEMA] = 'pyt18'")
+    expect(lastSql).toContain("[TABLE_SCHEMA] = N'pyt18'")
   })
 
   it("omits the schema clause when not provided", async () => {
@@ -43,6 +43,6 @@ describe("Database - drivers - mssql schema filter", () => {
 
     await driver.getTableByName("ArtikelKuenstler")
 
-    expect(lastSql).toContain("[TABLE_SCHEMA] = 'pyt18'")
+    expect(lastSql).toContain("[TABLE_SCHEMA] = N'pyt18'")
   })
 })

@@ -206,7 +206,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     if (typeof value == "number") return value
     const stringValue = typeof value == "string" ? value : String(value)
 
-    return escapeString(stringValue, null)
+    return `N${escapeString(stringValue, null)}`
   }
 
   /**

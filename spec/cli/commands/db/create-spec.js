@@ -28,10 +28,10 @@ describe("Cli - Commands - db:create", () => {
         [
           {
             databaseName: 'velocious_test',
-            sql: "IF NOT EXISTS(SELECT * FROM [sys].[databases] WHERE [name] = 'velocious_test') BEGIN CREATE DATABASE [velocious_test] END"
+            sql: "IF NOT EXISTS(SELECT * FROM [sys].[databases] WHERE [name] = N'velocious_test') BEGIN CREATE DATABASE [velocious_test] END"
           },
           {
-            createSchemaMigrationsTableSql: "IF NOT EXISTS(SELECT * FROM [sysobjects] WHERE [name] = 'schema_migrations' AND [xtype] = 'U') BEGIN CREATE TABLE [schema_migrations] ([version] NVARCHAR(255) PRIMARY KEY NOT NULL) END"
+            createSchemaMigrationsTableSql: "IF NOT EXISTS(SELECT * FROM [sysobjects] WHERE [name] = N'schema_migrations' AND [xtype] = 'U') BEGIN CREATE TABLE [schema_migrations] ([version] NVARCHAR(255) PRIMARY KEY NOT NULL) END"
           }
         ]
       )
