@@ -73,10 +73,14 @@ export default class BackgroundJobsScheduler {
     this.intervalIds = []
     /** @type {Array<ReturnType<typeof setTimeout>>} */
     this.timeoutIds = []
+    /** @type {boolean} - True between stop() and the next start(); cron self-rescheduler checks this so a stop() during an in-flight enqueue doesn't immediately re-arm. */
+    this.stopped = false
   }
 
   /** @returns {Promise<void>} */
   async start() {
+    this.stopped = false
+
     const scheduledBackgroundJobsConfig = await this.configuration.getScheduledBackgroundJobsConfig()
 
     if (!scheduledBackgroundJobsConfig?.jobs) {
@@ -96,6 +100,8 @@ export default class BackgroundJobsScheduler {
 
   /** @returns {void} */
   stop() {
+    this.stopped = true
+
     for (const intervalId of this.intervalIds) {
       clearInterval(intervalId)
     }
@@ -117,6 +123,10 @@ export default class BackgroundJobsScheduler {
   scheduleJob({jobConfiguration, jobKey}) {
     if (!jobConfiguration.class || typeof jobConfiguration.class.performLaterWithOptions !== "function") {
       throw new Error(`Scheduled background job ${jobKey} must define a job class.`)
+    }
+
+    if (jobConfiguration.cron !== undefined && jobConfiguration.every !== undefined) {
+      throw new Error(`Scheduled background job ${jobKey} must define either "every" or "cron", not both.`)
     }
 
     if (jobConfiguration.cron !== undefined) {
@@ -181,10 +191,19 @@ export default class BackgroundJobsScheduler {
 
     const parsed = parseCronExpression(cronExpression)
     const scheduleNext = () => {
+      if (this.stopped) return
+
       const nextDate = nextCronFireDate(parsed, new Date())
       const delayMs = Math.max(1, nextDate.getTime() - Date.now())
       const timeoutId = setTimeout(async () => {
+        if (this.stopped) return
+
         await this.enqueueScheduledJob({jobConfiguration, jobKey})
+
+        // The await above can yield to a stop() call. Re-check before
+        // re-arming so we don't keep firing after shutdown.
+        if (this.stopped) return
+
         scheduleNext()
       }, delayMs)
 

@@ -194,6 +194,99 @@ describe("Background jobs - scheduler", () => {
     }
   })
 
+  it("rejects schedules that define both every and cron", async () => {
+    const scheduler = new BackgroundJobsScheduler({
+      configuration: {
+        async getScheduledBackgroundJobsConfig() {
+          return {
+            jobs: {
+              bothScheduleJob: {
+                class: TestJob,
+                cron: "0 * * * *",
+                every: "1h"
+              }
+            }
+          }
+        }
+      },
+      enqueueJob: async () => {}
+    })
+
+    let error = null
+
+    try {
+      await scheduler.start()
+    } catch (newError) {
+      error = newError
+    }
+
+    expect(error).toBeTruthy()
+    expect(error?.message).toEqual('Scheduled background job bothScheduleJob must define either "every" or "cron", not both.')
+  })
+
+  it("does not re-arm a cron schedule when stop() runs during an in-flight enqueue", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const originalSetInterval = globalThis.setInterval
+    const originalClearTimeout = globalThis.clearTimeout
+    const originalClearInterval = globalThis.clearInterval
+    const enqueuedJobs = []
+    const timeoutCallbacks = []
+
+    globalThis.setTimeout = (callback) => {
+      timeoutCallbacks.push(callback)
+      return /** @type {NodeJS.Timeout} */ ({})
+    }
+    globalThis.setInterval = () => /** @type {NodeJS.Timeout} */ ({})
+    globalThis.clearTimeout = () => {}
+    globalThis.clearInterval = () => {}
+
+    try {
+      let resolveEnqueue
+      const enqueueGate = new Promise((resolve) => { resolveEnqueue = resolve })
+      const scheduler = new BackgroundJobsScheduler({
+        configuration: {
+          async getScheduledBackgroundJobsConfig() {
+            return {
+              jobs: {
+                stopRaceJob: {
+                  class: TestJob,
+                  cron: "* * * * *"
+                }
+              }
+            }
+          }
+        },
+        enqueueJob: async (job) => {
+          enqueuedJobs.push(job)
+          await enqueueGate
+        }
+      })
+
+      await scheduler.start()
+
+      const initialCallbackCount = timeoutCallbacks.length
+      // Fire the cron timeout — its callback is async and awaits the
+      // enqueue gate, so it pauses inside the await.
+      const firePromise = timeoutCallbacks[timeoutCallbacks.length - 1]?.()
+
+      // While the enqueue is pending, stop the scheduler.
+      scheduler.stop()
+      // Now release the enqueue. The post-await branch must NOT
+      // schedule another setTimeout because we're stopped.
+      resolveEnqueue?.()
+      await firePromise
+
+      expect(enqueuedJobs.length).toEqual(1)
+      // No new setTimeout queued after the stop+release sequence.
+      expect(timeoutCallbacks.length).toEqual(initialCallbackCount)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.setInterval = originalSetInterval
+      globalThis.clearTimeout = originalClearTimeout
+      globalThis.clearInterval = originalClearInterval
+    }
+  })
+
   it("rejects schedules that have neither every nor cron", async () => {
     const scheduler = new BackgroundJobsScheduler({
       configuration: {

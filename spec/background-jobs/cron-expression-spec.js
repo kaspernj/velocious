@@ -58,6 +58,17 @@ describe("Background jobs - cron expression", () => {
     expect(parseCronExpression("0 0 * * 0").dayOfWeek.has(0)).toBeTrue()
   })
 
+  it("supports day-of-week ranges that span Sunday-as-7 (Fri-Sun)", () => {
+    const parsed = parseCronExpression("0 0 * * 5-7")
+
+    // 5=Fri, 6=Sat, 7→Sun normalizes to 0.
+    expect(parsed.dayOfWeek.has(5)).toBeTrue()
+    expect(parsed.dayOfWeek.has(6)).toBeTrue()
+    expect(parsed.dayOfWeek.has(0)).toBeTrue()
+    expect(parsed.dayOfWeek.has(7)).toBeFalse()
+    expect(parsed.dayOfWeek.size).toEqual(3)
+  })
+
   it("rejects expressions with the wrong field count", () => {
     expect(() => parseCronExpression("* * * *")).toThrow(/expected 5 fields/)
     expect(() => parseCronExpression("* * * * * *")).toThrow(/expected 5 fields/)
@@ -112,5 +123,17 @@ describe("Background jobs - cron expression", () => {
     const parsed = parseCronExpression("0 0 31 2 *")
 
     expect(() => nextCronFireDate(parsed, new Date(2026, 0, 1))).toThrow(/never matches/)
+  })
+
+  it("finds the next leap-year-only fire (Feb 29) even from a non-leap year", () => {
+    const parsed = parseCronExpression("0 0 29 2 *")
+    // 2026 is not a leap year; the next Feb 29 is 2028-02-29.
+    const next = nextCronFireDate(parsed, new Date(2026, 2, 1, 0, 0, 0))
+
+    expect(next.getFullYear()).toEqual(2028)
+    expect(next.getMonth()).toEqual(1)
+    expect(next.getDate()).toEqual(29)
+    expect(next.getHours()).toEqual(0)
+    expect(next.getMinutes()).toEqual(0)
   })
 })

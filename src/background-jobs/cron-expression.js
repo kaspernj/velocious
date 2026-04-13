@@ -31,7 +31,9 @@ const FIELDS = [
   {name: "hour", min: 0, max: 23},
   {name: "dayOfMonth", min: 1, max: 31},
   {name: "month", min: 1, max: 12, names: MONTH_NAMES},
-  {name: "dayOfWeek", min: 0, max: 6, names: DAY_NAMES}
+  // Accept 0-7 so ranges like `5-7` (Fri-Sun) work; we normalize 7
+  // down to 0 after parsing in `normalizeDayOfWeek` below.
+  {name: "dayOfWeek", min: 0, max: 7, names: DAY_NAMES}
 ]
 
 /**
@@ -69,9 +71,10 @@ export function parseCronExpression(expression) {
     hour: parseField(hourField, FIELDS[1], expression),
     dayOfMonth: parseField(dayOfMonthField, FIELDS[2], expression),
     month: parseField(monthField, FIELDS[3], expression),
-    // Cron treats both 0 and 7 as Sunday — normalize 7 down so the
-    // rest of the matcher can use 0-6 exclusively.
-    dayOfWeek: normalizeDayOfWeek(parseField(dayOfWeekField, FIELDS[4], expression, {extraNames: {"7": "0"}})),
+    // Cron treats both 0 and 7 as Sunday. We accept 7 throughout the
+    // parse pass (so `5-7` for Fri-Sun works) and then normalize any
+    // 7s down to 0 so the matcher only deals with 0-6.
+    dayOfWeek: normalizeDayOfWeek(parseField(dayOfWeekField, FIELDS[4], expression)),
     dayOfMonthRestricted: dayOfMonthField !== "*",
     dayOfWeekRestricted: dayOfWeekField !== "*",
     expression
@@ -97,14 +100,13 @@ function normalizeDayOfWeek(dayOfWeek) {
  * @param {string} field - Field expression.
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Whole cron expression for error messages.
- * @param {{extraNames?: Record<string, string>}} [options] - Extra name -> numeric aliases.
  * @returns {Set<number>}
  */
-function parseField(field, fieldSpec, expression, options = {}) {
+function parseField(field, fieldSpec, expression) {
   const result = new Set()
 
   for (const part of field.split(",")) {
-    addPartValues(part, fieldSpec, expression, result, options.extraNames)
+    addPartValues(part, fieldSpec, expression, result)
   }
 
   return result
@@ -115,17 +117,16 @@ function parseField(field, fieldSpec, expression, options = {}) {
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
  * @param {Set<number>} result - Accumulator.
- * @param {Record<string, string>} [extraNames] - Extra raw aliases.
  * @returns {void}
  */
-function addPartValues(part, fieldSpec, expression, result, extraNames) {
+function addPartValues(part, fieldSpec, expression, result) {
   if (!part) {
     throw new Error(`Invalid ${fieldSpec.name} field in cron expression "${expression}"`)
   }
 
   const [rangePart, stepPart] = part.split("/")
   const step = stepPart === undefined ? 1 : parseStep(stepPart, fieldSpec, expression)
-  const [start, end] = parseRange(rangePart, fieldSpec, expression, stepPart !== undefined, extraNames)
+  const [start, end] = parseRange(rangePart, fieldSpec, expression, stepPart !== undefined)
 
   for (let value = start; value <= end; value += step) {
     if (value < fieldSpec.min || value > fieldSpec.max) {
@@ -157,10 +158,9 @@ function parseStep(value, fieldSpec, expression) {
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
  * @param {boolean} hasStep - Whether the part had a `/step` suffix.
- * @param {Record<string, string>} [extraNames] - Extra raw aliases (e.g. `{"7": "0"}`).
  * @returns {[number, number]}
  */
-function parseRange(rangePart, fieldSpec, expression, hasStep, extraNames) {
+function parseRange(rangePart, fieldSpec, expression, hasStep) {
   if (rangePart === "*") {
     return [fieldSpec.min, fieldSpec.max]
   }
@@ -168,14 +168,14 @@ function parseRange(rangePart, fieldSpec, expression, hasStep, extraNames) {
   const dashIndex = rangePart.indexOf("-")
 
   if (dashIndex === -1) {
-    const value = parseValue(rangePart, fieldSpec, expression, extraNames)
+    const value = parseValue(rangePart, fieldSpec, expression)
 
     // `N/step` is shorthand for `N-max/step` (Vixie cron).
     return [value, hasStep ? fieldSpec.max : value]
   }
 
-  const start = parseValue(rangePart.slice(0, dashIndex), fieldSpec, expression, extraNames)
-  const end = parseValue(rangePart.slice(dashIndex + 1), fieldSpec, expression, extraNames)
+  const start = parseValue(rangePart.slice(0, dashIndex), fieldSpec, expression)
+  const end = parseValue(rangePart.slice(dashIndex + 1), fieldSpec, expression)
 
   if (start > end) {
     throw new Error(`Range start ${start} > end ${end} for ${fieldSpec.name} in cron expression "${expression}"`)
@@ -188,22 +188,20 @@ function parseRange(rangePart, fieldSpec, expression, hasStep, extraNames) {
  * @param {string} rawValue - Raw value (may be a name).
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
- * @param {Record<string, string>} [extraNames] - Extra raw aliases.
  * @returns {number}
  */
-function parseValue(rawValue, fieldSpec, expression, extraNames) {
+function parseValue(rawValue, fieldSpec, expression) {
   if (!rawValue) {
     throw new Error(`Invalid ${fieldSpec.name} value in cron expression "${expression}"`)
   }
 
-  const aliased = extraNames?.[rawValue] ?? rawValue
-  const namedIndex = fieldSpec.names?.indexOf(aliased)
+  const namedIndex = fieldSpec.names?.indexOf(rawValue)
 
   if (typeof namedIndex === "number" && namedIndex !== -1) {
     return namedIndex + fieldSpec.min
   }
 
-  const value = Number(aliased)
+  const value = Number(rawValue)
 
   if (!Number.isInteger(value)) {
     throw new Error(`Invalid ${fieldSpec.name} value "${rawValue}" in cron expression "${expression}"`)
@@ -212,13 +210,16 @@ function parseValue(rawValue, fieldSpec, expression, extraNames) {
   return value
 }
 
-const MAX_NEXT_FIRE_ITERATIONS = 366 * 24 * 60
+// 5 years of minutes — covers the worst-case legitimate gap, the
+// `0 0 29 2 *` (Feb 29) leap-year-only schedule, with a one-year
+// buffer so we never report a real cron pattern as "never matches".
+const MAX_NEXT_FIRE_ITERATIONS = 5 * 366 * 24 * 60
 
 /**
  * Returns the next Date strictly after `from` that satisfies `parsed`.
- * Operates at minute granularity. Bails out with an error after a year
- * of search, which only happens if the expression matches no real time
- * (e.g., `0 0 31 2 *` — Feb 31st).
+ * Operates at minute granularity. Bails out with an error after five
+ * years of search, which only happens if the expression matches no
+ * real time (e.g., `0 0 31 2 *` — Feb 31st).
  *
  * @param {ParsedCron} parsed - Parsed cron expression.
  * @param {Date} from - Reference Date — the next match is strictly after this.
