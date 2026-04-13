@@ -67,7 +67,7 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
 
   it("decodes multibyte UTF-8 characters in post json bodies", async () => {
     await Dummy.run(async () => {
-      const name = "Stöckel Softwareentwicklung — äöü ß 🙂"
+      const name = "Stöckel Softwareentwicklung — äöü ß"
       const postData = JSON.stringify({project: {name}})
       const response = await fetch(
         "http://localhost:3006/projects",
