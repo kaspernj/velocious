@@ -65,6 +65,33 @@ describe("HttpServer - post", {databaseCleaning: {transaction: false, truncate: 
     })
   })
 
+  it("decodes multibyte UTF-8 characters in post json bodies", async () => {
+    await Dummy.run(async () => {
+      const name = "Stöckel Softwareentwicklung — äöü ß 🙂"
+      const postData = JSON.stringify({project: {name}})
+      const response = await fetch(
+        "http://localhost:3006/projects",
+        {
+          body: postData,
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(postData).toString()
+          },
+          method: "POST"
+        }
+      )
+      const data = /** @type {Record<string, any>} */ (await response.json())
+
+      expect(data.status).toEqual("success")
+
+      await wait(100)
+
+      const createdProject = /** @type {Project} */ (await Project.preload({translations: true}).last())
+
+      expect(createdProject.name()).toEqual(name)
+    })
+  })
+
   it("handles post form-data requests", async () => {
     await Dummy.run(async () => {
       for (let i = 0; i <= 5; i++) {

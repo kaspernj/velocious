@@ -1,0 +1,1 @@
+- decode HTTP POST bodies (both fixed-length and chunked) as UTF-8 instead of byte-per-char; JSON and form-url-encoded bodies containing multibyte characters (e.g. `ö`, `ß`, `—`) are no longer double-encoded before hitting the controller
