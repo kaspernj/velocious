@@ -1630,6 +1630,37 @@ Supported schedule syntax:
 - `every: ["1h", {first_in: "30s"}]`
 - `every: ["1 day", {firstIn: "5 minutes"}]`
 
+Or a 5-field POSIX crontab expression via `cron`:
+
+```js
+scheduledBackgroundJobs: {
+  jobs: {
+    nightlyDigest: {
+      class: NightlyDigestJob,
+      cron: "0 3 * * *" // every day at 03:00 server-local time
+    },
+    weekdayMornings: {
+      class: WeekdayMorningJob,
+      cron: "0 9 * * 1-5" // 09:00 Mon–Fri
+    },
+    everyHour: {
+      class: HourlyCleanupJob,
+      cron: "@hourly"
+    }
+  }
+}
+```
+
+Cron fields are: `minute hour day-of-month month day-of-week`. Supported syntax:
+
+- `*` (any), single values (`5`), ranges (`1-5`), lists (`1,3,5`).
+- Step expressions: `*/15` (every 15 minutes), `0-30/5` (every 5 between 0 and 30).
+- Month and weekday names: `jan`-`dec`, `sun`-`sat` (case-insensitive). Both `0` and `7` mean Sunday.
+- POSIX shortcuts: `@hourly`, `@daily` / `@midnight`, `@weekly`, `@monthly`, `@yearly` / `@annually`.
+- Day-of-month and day-of-week interaction follows POSIX/Vixie cron: when both are restricted (neither `*`), the job fires when **either** matches.
+
+Each job must define exactly one of `every` or `cron`. Cron times are evaluated in the **server's local timezone**, at minute granularity.
+
 `background-jobs-main` owns the schedule and enqueues the configured jobs into the normal Velocious background-jobs queue. The HTTP server does not run scheduled jobs itself.
 
 ## Persistence and retries

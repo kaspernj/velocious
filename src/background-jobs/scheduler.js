@@ -1,6 +1,7 @@
 // @ts-check
 
 import Logger from "../logger.js"
+import {nextCronFireDate, parseCronExpression} from "./cron-expression.js"
 
 const DURATION_MULTIPLIERS = {
   d: 24 * 60 * 60 * 1000,
@@ -72,10 +73,14 @@ export default class BackgroundJobsScheduler {
     this.intervalIds = []
     /** @type {Array<ReturnType<typeof setTimeout>>} */
     this.timeoutIds = []
+    /** @type {boolean} - True between stop() and the next start(); cron self-rescheduler checks this so a stop() during an in-flight enqueue doesn't immediately re-arm. */
+    this.stopped = false
   }
 
   /** @returns {Promise<void>} */
   async start() {
+    this.stopped = false
+
     const scheduledBackgroundJobsConfig = await this.configuration.getScheduledBackgroundJobsConfig()
 
     if (!scheduledBackgroundJobsConfig?.jobs) {
@@ -95,6 +100,8 @@ export default class BackgroundJobsScheduler {
 
   /** @returns {void} */
   stop() {
+    this.stopped = true
+
     for (const intervalId of this.intervalIds) {
       clearInterval(intervalId)
     }
@@ -114,16 +121,41 @@ export default class BackgroundJobsScheduler {
    * @returns {void}
    */
   scheduleJob({jobConfiguration, jobKey}) {
-    const {everyValue, firstInValue} = this.normalizeEvery(jobConfiguration.every)
+    if (!jobConfiguration.class || typeof jobConfiguration.class.performLaterWithOptions !== "function") {
+      throw new Error(`Scheduled background job ${jobKey} must define a job class.`)
+    }
+
+    if (jobConfiguration.cron !== undefined && jobConfiguration.every !== undefined) {
+      throw new Error(`Scheduled background job ${jobKey} must define either "every" or "cron", not both.`)
+    }
+
+    if (jobConfiguration.cron !== undefined) {
+      this.scheduleCronJob({jobConfiguration, jobKey})
+
+      return
+    }
+
+    if (jobConfiguration.every === undefined) {
+      throw new Error(`Scheduled background job ${jobKey} must define either "every" or "cron".`)
+    }
+
+    this.scheduleEveryJob({jobConfiguration, jobKey})
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("../configuration-types.js").ScheduledBackgroundJobConfiguration} args.jobConfiguration - Job configuration.
+   * @param {string} args.jobKey - Job key.
+   * @returns {void}
+   */
+  scheduleEveryJob({jobConfiguration, jobKey}) {
+    const everyConfig = /** @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
+    const {everyValue, firstInValue} = this.normalizeEvery(everyConfig)
     const intervalMs = parseScheduledDuration(everyValue, `${jobKey}.every`)
     const firstInMs = firstInValue !== undefined ? parseScheduledDuration(firstInValue, `${jobKey}.first_in`) : intervalMs
 
     if (intervalMs < 1) {
       throw new Error(`Scheduled background job ${jobKey}.every must be at least 1 millisecond.`)
-    }
-
-    if (!jobConfiguration.class || typeof jobConfiguration.class.performLaterWithOptions !== "function") {
-      throw new Error(`Scheduled background job ${jobKey} must define a job class.`)
     }
 
     const timeoutId = setTimeout(() => {
@@ -137,6 +169,48 @@ export default class BackgroundJobsScheduler {
     }, firstInMs)
 
     this.timeoutIds.push(timeoutId)
+  }
+
+  /**
+   * Crontab schedules don't have a constant interval (`0 9 * * 1-5`
+   * fires once per weekday at 9 AM, with gaps of varying length), so
+   * we self-reschedule with `setTimeout` after every fire instead of
+   * using `setInterval`.
+   *
+   * @param {object} args - Options.
+   * @param {import("../configuration-types.js").ScheduledBackgroundJobConfiguration} args.jobConfiguration - Job configuration.
+   * @param {string} args.jobKey - Job key.
+   * @returns {void}
+   */
+  scheduleCronJob({jobConfiguration, jobKey}) {
+    const cronExpression = jobConfiguration.cron
+
+    if (typeof cronExpression !== "string") {
+      throw new Error(`Scheduled background job ${jobKey}.cron must be a string.`)
+    }
+
+    const parsed = parseCronExpression(cronExpression)
+    const scheduleNext = () => {
+      if (this.stopped) return
+
+      const nextDate = nextCronFireDate(parsed, new Date())
+      const delayMs = Math.max(1, nextDate.getTime() - Date.now())
+      const timeoutId = setTimeout(async () => {
+        if (this.stopped) return
+
+        await this.enqueueScheduledJob({jobConfiguration, jobKey})
+
+        // The await above can yield to a stop() call. Re-check before
+        // re-arming so we don't keep firing after shutdown.
+        if (this.stopped) return
+
+        scheduleNext()
+      }, delayMs)
+
+      this.timeoutIds.push(timeoutId)
+    }
+
+    scheduleNext()
   }
 
   /**
@@ -159,7 +233,7 @@ export default class BackgroundJobsScheduler {
   }
 
   /**
-   * @param {import("../configuration-types.js").ScheduledBackgroundJobConfiguration["every"]} every - Every config.
+   * @param {NonNullable<import("../configuration-types.js").ScheduledBackgroundJobConfiguration["every"]>} every - Every config (caller must guarantee not undefined).
    * @returns {{everyValue: number | string, firstInValue?: number | string}} - Normalized interval and first-run delay values.
    */
   normalizeEvery(every) {
