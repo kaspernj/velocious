@@ -58,13 +58,14 @@ export default class VelociousDatabaseDriversMysql extends Base{
     const forward = ["database", "host", "password"]
 
     /** @type {Record<string, any>} */
-    const connectArgs = {}
+    const connectArgs = {charset: "utf8mb4"}
 
     for (const forwardValue of forward) {
       if (forwardValue in args) connectArgs[forwardValue] = digg(args, forwardValue)
     }
 
     if ("username" in args) connectArgs["user"] = args["username"]
+    if ("charset" in args) connectArgs["charset"] = args["charset"]
 
     return connectArgs
   }

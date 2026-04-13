@@ -356,7 +356,7 @@ export default class RequestBuffer {
 
   postRequestDone() {
     if (this.postBodyChars) {
-      this.postBody = String.fromCharCode.apply(null, this.postBodyChars)
+      this.postBody = Buffer.from(this.postBodyChars).toString("utf8")
     }
 
     delete this.postBodyChars
@@ -424,7 +424,7 @@ export default class RequestBuffer {
    */
   finishChunkedBody() {
     if (this.chunkedBodyChars) {
-      this.postBody = String.fromCharCode.apply(null, this.chunkedBodyChars)
+      this.postBody = Buffer.from(this.chunkedBodyChars).toString("utf8")
     }
 
     delete this.chunkedBodyChars

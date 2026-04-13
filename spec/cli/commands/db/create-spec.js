@@ -28,10 +28,10 @@ describe("Cli - Commands - db:create", () => {
         [
           {
             databaseName: 'velocious_test',
-            sql: "IF NOT EXISTS(SELECT * FROM [sys].[databases] WHERE [name] = 'velocious_test') BEGIN CREATE DATABASE [velocious_test] END"
+            sql: "IF NOT EXISTS(SELECT * FROM [sys].[databases] WHERE [name] = N'velocious_test') BEGIN CREATE DATABASE [velocious_test] END"
           },
           {
-            createSchemaMigrationsTableSql: "IF NOT EXISTS(SELECT * FROM [sysobjects] WHERE [name] = 'schema_migrations' AND [xtype] = 'U') BEGIN CREATE TABLE [schema_migrations] ([version] VARCHAR(255) PRIMARY KEY NOT NULL) END"
+            createSchemaMigrationsTableSql: "IF NOT EXISTS(SELECT * FROM [sysobjects] WHERE [name] = N'schema_migrations' AND [xtype] = 'U') BEGIN CREATE TABLE [schema_migrations] ([version] NVARCHAR(255) PRIMARY KEY NOT NULL) END"
           }
         ]
       )
@@ -49,7 +49,7 @@ describe("Cli - Commands - db:create", () => {
             sql: 'CREATE DATABASE IF NOT EXISTS `velocious_test`'
           },
           {
-            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL)'
+            createSchemaMigrationsTableSql: 'CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
           }
         ]
       )
