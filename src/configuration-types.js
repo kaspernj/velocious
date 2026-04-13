@@ -136,8 +136,9 @@
  * @typedef {object} ScheduledBackgroundJobConfiguration
  * @property {any[]} [args] - Arguments passed to the job when enqueued.
  * @property {typeof import("./background-jobs/job.js").default} class - Job class to enqueue.
+ * @property {string} [cron] - Crontab expression (5-field POSIX, plus `@hourly`/`@daily`/`@weekly`/`@monthly`/`@yearly`/`@midnight`). Mutually exclusive with `every`.
  * @property {boolean} [enabled] - Whether the schedule is enabled.
- * @property {number | string | [number | string, ScheduledBackgroundJobEveryOptions]} every - Repeat interval.
+ * @property {number | string | [number | string, ScheduledBackgroundJobEveryOptions]} [every] - Repeat interval. Either `every` or `cron` must be set.
  * @property {import("./background-jobs/types.js").BackgroundJobOptions} [options] - Job options.
  */
 

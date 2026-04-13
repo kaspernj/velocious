@@ -108,4 +108,117 @@ describe("Background jobs - scheduler", () => {
       globalThis.clearInterval = originalClearInterval
     }
   })
+
+  it("schedules cron jobs and self-reschedules after each fire", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const originalSetInterval = globalThis.setInterval
+    const originalClearTimeout = globalThis.clearTimeout
+    const originalClearInterval = globalThis.clearInterval
+    const enqueuedJobs = []
+    const timeoutCallbacks = []
+    const timeoutDelays = []
+    const intervalDelays = []
+
+    globalThis.setTimeout = (callback, delay) => {
+      timeoutCallbacks.push(callback)
+      timeoutDelays.push(delay)
+      return /** @type {NodeJS.Timeout} */ ({})
+    }
+    globalThis.setInterval = (callback, delay) => {
+      intervalDelays.push(delay)
+      return /** @type {NodeJS.Timeout} */ ({})
+    }
+    globalThis.clearTimeout = () => {}
+    globalThis.clearInterval = () => {}
+
+    try {
+      const scheduler = new BackgroundJobsScheduler({
+        configuration: {
+          async getScheduledBackgroundJobsConfig() {
+            return {
+              jobs: {
+                cronTestJob: {
+                  args: ["cron"],
+                  class: TestJob,
+                  // Every minute — shortest cadence so we don't have
+                  // to wait long for the test.
+                  cron: "* * * * *",
+                  options: {forked: false}
+                }
+              }
+            }
+          }
+        },
+        enqueueJob: async (job) => {
+          enqueuedJobs.push(job)
+        }
+      })
+
+      await scheduler.start()
+
+      // The cron path schedules a setTimeout with a delay between 1ms
+      // and 60_000ms (the gap to the next minute boundary for
+      // `* * * * *`). The test runner internals can also call
+      // setTimeout during the `await` boundary, so we look at the
+      // most recent timeout instead of asserting an exact count.
+      const lastTimeoutDelay = timeoutDelays[timeoutDelays.length - 1]
+
+      expect(lastTimeoutDelay).toBeGreaterThan(0)
+      expect(lastTimeoutDelay).toBeLessThanOrEqual(60_000)
+
+      const beforeFireTimeoutCount = timeoutDelays.length
+
+      await timeoutCallbacks[timeoutCallbacks.length - 1]?.()
+
+      expect(enqueuedJobs).toEqual([{
+        args: ["cron"],
+        jobClass: TestJob,
+        jobKey: "cronTestJob",
+        options: {forked: false}
+      }])
+
+      // After firing, the cron path uses setTimeout again (NOT
+      // setInterval) so each subsequent run is recomputed against
+      // wall-clock time.
+      expect(intervalDelays).toEqual([])
+      expect(timeoutDelays.length).toBeGreaterThan(beforeFireTimeoutCount)
+
+      await timeoutCallbacks[timeoutCallbacks.length - 1]?.()
+
+      expect(enqueuedJobs.length).toEqual(2)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.setInterval = originalSetInterval
+      globalThis.clearTimeout = originalClearTimeout
+      globalThis.clearInterval = originalClearInterval
+    }
+  })
+
+  it("rejects schedules that have neither every nor cron", async () => {
+    const scheduler = new BackgroundJobsScheduler({
+      configuration: {
+        async getScheduledBackgroundJobsConfig() {
+          return {
+            jobs: {
+              missingScheduleJob: {
+                class: TestJob
+              }
+            }
+          }
+        }
+      },
+      enqueueJob: async () => {}
+    })
+
+    let error = null
+
+    try {
+      await scheduler.start()
+    } catch (newError) {
+      error = newError
+    }
+
+    expect(error).toBeTruthy()
+    expect(error?.message).toEqual('Scheduled background job missingScheduleJob must define either "every" or "cron".')
+  })
 })
