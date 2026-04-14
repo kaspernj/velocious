@@ -146,6 +146,43 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.resourceConfigurationValue
   }
 
+  /**
+   * Returns a Rails-strong-params-style permit spec declaring which attributes
+   * and nested attributes are writable for the current request. Inspired by
+   * api_maker's `permitted_params(arg)` on resources.
+   *
+   * Subclasses override this when:
+   *   - attribute writability depends on the user/role/tenant
+   *   - nested-attribute exposure differs by action
+   *   - nested resources should be whitelisted conditionally
+   *
+   * The default implementation reads the static `attributes` and
+   * `nestedAttributes` on the resource class. Returning `attributes: null`
+   * falls back to setter-existence checks (legacy behavior) — any attribute
+   * the model or resource has a setter for is permitted. An explicit array
+   * restricts writes to that list.
+   * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
+   * @returns {{attributes: string[] | null, nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attrs: Record<string, any>) => boolean}>}} - Permit spec.
+   */
+  permittedParams(arg) {
+    void arg
+
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    /** @type {string[] | null} */
+    let permittedAttributeNames = null
+
+    if (Array.isArray(ResourceClass.attributes)) {
+      permittedAttributeNames = null // an array-of-names means "expose", not "restrict writes" — keep legacy setter-existence behavior
+    } else if (ResourceClass.attributes && typeof ResourceClass.attributes === "object") {
+      permittedAttributeNames = null
+    }
+
+    return {
+      attributes: permittedAttributeNames,
+      nestedAttributes: /** @type {any} */ (ResourceClass).nestedAttributes || {}
+    }
+  }
+
   /** @returns {string} - Primary key. */
   primaryKey() { return this.modelClass().primaryKey() }
 
@@ -206,7 +243,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes, options = {}) {
-    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes, this)
+    const permitSpec = this.permittedParams({action: "create", ability: this.ability, locals: this.locals, params: attributes})
+    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes, this, permitSpec.attributes)
     const ModelClass = this.modelClass()
     const model = new ModelClass()
 
@@ -215,7 +253,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       await model.save()
 
       if (options.nestedAttributes) {
-        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null)
+        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permitSpec)
       }
     })
 
@@ -239,7 +277,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Updated model.
    */
   async update(model, attributes, options = {}) {
-    const filtered = filterWritableFrontendModelAttributes(model, attributes, this)
+    const permitSpec = this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: attributes})
+    const filtered = filterWritableFrontendModelAttributes(model, attributes, this, permitSpec.attributes)
     const ModelClass = this.modelClass()
 
     await ModelClass.transaction(async () => {
@@ -247,7 +286,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       await model.save()
 
       if (options.nestedAttributes) {
-        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null)
+        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permitSpec)
       }
     })
 
@@ -359,16 +398,19 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {import("../database/record/index.js").default} parent - Parent model instance.
    * @param {Record<string, any>} nestedAttributes - Nested-attribute payload keyed by relationship name.
    * @param {any} controller - Controller instance for resource resolution and authorization.
+   * @param {{attributes: string[] | null, nestedAttributes: Record<string, any>} | null} [parentPermitSpec] - Optional pre-computed parent permit spec. Recomputed when not provided.
    * @returns {Promise<void>}
    */
-  async _applyNestedAttributes(parent, nestedAttributes, controller) {
-    const declared = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).nestedAttributes || {}
+  async _applyNestedAttributes(parent, nestedAttributes, controller, parentPermitSpec = null) {
+    const declared = parentPermitSpec?.nestedAttributes
+      || this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: {}}).nestedAttributes
+      || {}
 
     for (const relationshipName of Object.keys(nestedAttributes)) {
       const policy = declared[relationshipName]
 
       if (!policy) {
-        throw new Error(`Nested attributes for '${relationshipName}' are not declared on ${this.constructor.name}. Add it to 'static nestedAttributes'.`)
+        throw new Error(`Nested attributes for '${relationshipName}' are not permitted by ${this.constructor.name}.permittedParams(). Include it in the returned nestedAttributes.`)
       }
 
       const entries = nestedAttributes[relationshipName]
@@ -493,7 +535,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
         const child = parentRelationship.build({...childAttributes, [foreignKey]: parent.id()})
 
-        const filtered = filterWritableFrontendModelAttributes(child, childAttributes, childResource)
+        const childPermitSpec = /** @type {any} */ (childResource).permittedParams({
+          action: "create",
+          ability,
+          locals: childResource.locals,
+          params: childAttributes
+        })
+        const filtered = filterWritableFrontendModelAttributes(child, childAttributes, childResource, childPermitSpec.attributes)
 
         await /** @type {any} */ (childResource)._assignWithVirtualSetters(child, filtered)
         await child.save()
@@ -507,7 +555,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         })
 
         if (entry.nestedAttributes) {
-          await childResource._applyNestedAttributes(child, entry.nestedAttributes, controller)
+          await childResource._applyNestedAttributes(child, entry.nestedAttributes, controller, childPermitSpec)
         }
       }
     }
@@ -640,19 +688,29 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 /**
  * @param {Record<string, any>} receiver - Model instance or prototype.
  * @param {Record<string, any>} attributes - Incoming frontend-model attributes.
+ * @param {FrontendModelBaseResource | null} [resource] - Resource instance for virtual-setter detection.
+ * @param {string[] | null} [permittedAttributeNames] - Optional explicit permit list. `null` falls back to setter-existence checks only.
  * @returns {Record<string, any>} - Writable attributes only.
  */
-function filterWritableFrontendModelAttributes(receiver, attributes, resource = /** @type {FrontendModelBaseResource | null} */ (null)) {
+function filterWritableFrontendModelAttributes(receiver, attributes, resource = /** @type {FrontendModelBaseResource | null} */ (null), permittedAttributeNames = null) {
   // Frontend-model writes should fail fast when callers submit read-only or unknown attrs.
   // Silent drops hide contract mistakes in generated models and app-side wrapper code.
   /** @type {Record<string, any>} */
   const writableAttributes = {}
   /** @type {string[]} */
   const invalidAttributes = []
+  /** @type {string[]} */
+  const notPermittedAttributes = []
 
+  const permitSet = Array.isArray(permittedAttributeNames) ? new Set(permittedAttributeNames) : null
   const translatedSet = resource ? new Set(/** @type {typeof FrontendModelBaseResource} */ (resource.constructor).translatedAttributes || []) : new Set()
 
   for (const [attributeName, value] of Object.entries(attributes)) {
+    if (permitSet && !permitSet.has(attributeName)) {
+      notPermittedAttributes.push(attributeName)
+      continue
+    }
+
     const setterName = `set${inflection.camelize(attributeName)}`
     const resourceSetterName = `${setterName}Attribute`
 
@@ -665,6 +723,10 @@ function filterWritableFrontendModelAttributes(receiver, attributes, resource = 
     } else {
       invalidAttributes.push(attributeName)
     }
+  }
+
+  if (notPermittedAttributes.length > 0) {
+    throw new Error(`Frontend model write attributes not permitted by permittedParams(): ${notPermittedAttributes.join(", ")}`)
   }
 
   if (invalidAttributes.length > 0) {
