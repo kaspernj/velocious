@@ -2587,7 +2587,7 @@ describe("Frontend models - base", () => {
     })
 
     it("recurses into grandchildren with nested attributes on the child resource", async () => {
-      const {Project, Task} = buildNestedTestClasses()
+      const {Project} = buildNestedTestClasses()
       const fetchStub = stubFetch({model: {id: 5, name: "Launch"}})
 
       try {
