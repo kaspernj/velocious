@@ -210,7 +210,6 @@
  * @property {Record<string, string> | string[]} [builtInCollectionCommands] - Built-in collection command names keyed by action (`index`, `create`) or shorthand command list using default names.
  * @property {Record<string, string> | string[]} [builtInMemberCommands] - Built-in member command names keyed by action (`find`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
  * @property {string[]} [relationships] - Relationship names to expose in frontend models. Type and target model are inferred from the backend model's registered relationships.
- * @property {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}>} [nestedAttributes] - Relationships that accept nested writes through `save()`. Keys are relationship names; values declare the policy (whether `_destroy` entries are allowed, an optional per-request limit, and an optional `rejectIf` predicate that skips entries without raising).
  * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
  */

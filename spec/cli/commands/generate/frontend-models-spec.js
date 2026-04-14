@@ -373,9 +373,12 @@ describe("Cli - generate - frontend-models", () => {
 
     /** Resource that opts in to nested writes for two relationships with different policies. */
     class ProjectWithNestedResource extends FrontendModelBaseResource {
-      static nestedAttributes = {
-        tasks: {allowDestroy: true, limit: 50},
-        comments: {}
+      /** @returns {Record<string, {allowDestroy?: boolean, limit?: number}>} */
+      nestedAttributes() {
+        return {
+          tasks: {allowDestroy: true, limit: 50},
+          comments: {}
+        }
       }
 
       /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */

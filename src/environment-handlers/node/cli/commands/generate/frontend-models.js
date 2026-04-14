@@ -295,8 +295,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (modelClass && modelClass.primaryKey() !== "id") {
       fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
     }
-    const nestedAttributesConfig = /** @type {any} */ (resourceClass)?.nestedAttributes
-    if (nestedAttributesConfig && typeof nestedAttributesConfig === "object" && Object.keys(nestedAttributesConfig).length > 0) {
+    const nestedAttributesConfig = this.invokeNestedAttributesForGenerator(resourceClass || null)
+    if (nestedAttributesConfig && Object.keys(nestedAttributesConfig).length > 0) {
       fileContent += "      nestedAttributes: {\n"
       for (const [relationshipName, policy] of Object.entries(nestedAttributesConfig)) {
         const serializablePolicy = /** @type {Record<string, any>} */ ({})
@@ -462,6 +462,43 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return content
+  }
+
+  /**
+   * Invokes a backend resource's `nestedAttributes()` instance method at
+   * generation time so the static permit set can be emitted into the
+   * generated frontend model. Constructed with no controller/ability so
+   * resource overrides must support being called without a request context
+   * for the generator to read their default policy.
+   * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} resourceClass - Resource class.
+   * @returns {Record<string, any> | null} - Nested-attribute policy or null.
+   */
+  invokeNestedAttributesForGenerator(resourceClass) {
+    if (!resourceClass || typeof resourceClass !== "function") return null
+    if (typeof resourceClass.prototype?.nestedAttributes !== "function") return null
+
+    try {
+      const instance = /** @type {any} */ (new resourceClass({
+        ability: undefined,
+        context: {},
+        locals: {},
+        modelClass: resourceClass.ModelClass,
+        modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
+        params: {},
+        resourceConfiguration: /** @type {any} */ ({abilities: {}, attributes: []})
+      }))
+      const result = instance.nestedAttributes()
+
+      if (result && typeof result === "object" && Object.keys(result).length > 0) return result
+    } catch (error) {
+      // A resource that throws when called without a request context can't
+      // surface a static permit set to the generator. Surface the error so
+      // the resource author either guards against missing arg or keeps the
+      // generator-time permit empty by default.
+      throw new Error(`Failed to invoke ${resourceClass.name}.nestedAttributes() while generating frontend models: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
+    }
+
+    return null
   }
 
   /**

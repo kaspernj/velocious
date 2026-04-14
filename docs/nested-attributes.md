@@ -19,8 +19,10 @@ Task.belongsTo("project")
 class ProjectResource extends FrontendModelBaseResource {
   static attributes = ["id", "name"]
   static relationships = ["tasks"]
-  static nestedAttributes = {
-    tasks: {allowDestroy: true}
+
+  /** @returns {Record<string, {allowDestroy?: boolean, limit?: number}>} */
+  nestedAttributes() {
+    return {tasks: {allowDestroy: true}}
   }
 }
 
@@ -60,23 +62,26 @@ Project.acceptsNestedAttributesFor("tasks", {
 
 Resource-level policy can **restrict** but never **loosen** what the model declared. If the model does not declare `allowDestroy`, no resource can enable destroys for that relationship.
 
-### 2. Resource — `static nestedAttributes` (simple form)
+### 2. Resource — `nestedAttributes(arg)` instance method
 
-Declared on the frontend-model resource class. Lists which relationships are writable through this resource. The policy options mirror the model-level options.
+Declared as an instance method on the frontend-model resource class. Returns the policy for each writable relationship. The policy options mirror the model-level options. Method form (instead of a static field) lets the policy be request-aware — for example, only admins can nested-destroy.
 
 ```js
 class ProjectResource extends FrontendModelBaseResource {
-  static nestedAttributes = {
-    tasks: {allowDestroy: true}
+  /** @param {{action?: string, ability, locals}} arg */
+  nestedAttributes(arg) {
+    return {
+      tasks: {allowDestroy: arg?.locals?.isAdmin === true}
+    }
   }
 }
 ```
 
-Deeper nesting is discovered via each child resource's own declaration — parents do **not** inline the full tree. If `Task` has nested `subtasks`, `TaskResource` declares it. Authorization and policy stay on the child resource that actually owns the records being written.
+Deeper nesting is discovered via each child resource's own `nestedAttributes(arg)` — parents do **not** inline the full tree. If `Task` has nested `subtasks`, `TaskResource` declares it. Authorization and policy stay on the child resource that actually owns the records being written.
 
-### 3. Resource — `permittedParams(arg)` (api_maker-style, request-aware)
+### 3. Resource — `permittedParams(arg)` (api_maker-style, full permit)
 
-When the simple static declaration isn't enough — for example, admin users may write more attributes than members, or a relationship is only writable on `update` but not `create` — override `permittedParams`. This is the api_maker-style hook.
+`permittedParams(arg)` is the comprehensive Rails-strong-params / api_maker-style hook. It returns a permit spec covering both attributes and nested attributes for the current request:
 
 ```js
 class ProjectResource extends FrontendModelBaseResource {
@@ -98,14 +103,16 @@ class ProjectResource extends FrontendModelBaseResource {
 }
 ```
 
+**Strict by default.** Submitting an attribute that is not in the permit's `attributes` array — or a nested key that is not in `nestedAttributes` — raises an error and fails the write. There is no silent drop and no "permit all writable" fallback.
+
 The returned spec:
 
 | Key | Type | Meaning |
 |---|---|---|
-| `attributes` | `string[] \| null` | Whitelist of writable attribute names. `null` (default) falls back to setter-existence checks — any attribute the model or resource has a setter for is permitted. An explicit array turns on Rails-strong-params-style strict filtering: writes to unlisted attributes throw. |
+| `attributes` | `string[]` | Whitelist of writable attribute names. Submitting an unlisted attribute throws. |
 | `nestedAttributes` | `Record<string, {allowDestroy?, limit?, rejectIf?}>` | Whitelist of writable nested relationships. The framework further filters child attributes through that child resource's own `permittedParams`. |
 
-The default `permittedParams` implementation reads static `nestedAttributes` and leaves `attributes: null`, so existing resources keep working unchanged.
+The default `permittedParams` implementation derives `attributes` from `static attributes` minus the conventional auto-managed columns (`id`, `createdAt`, `updatedAt`) and delegates the nested set to `this.nestedAttributes(arg)`. Override it for finer-grained control.
 
 ## Wire payload
 

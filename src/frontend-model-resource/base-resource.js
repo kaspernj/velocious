@@ -45,23 +45,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static relationships = undefined
   /** @type {string[] | undefined} */
   static translatedAttributes = undefined
-  /**
-   * Declares relationships on this resource that accept nested writes through `save()`.
-   * Keys are relationship names (matching the model's relationship definitions).
-   * Values describe the policy for each relationship.
-   *
-   * Example:
-   *   static nestedAttributes = {
-   *     aiActions: {allowDestroy: true, limit: 100}
-   *   }
-   *
-   * Recursion into deeper levels follows each child resource's own `nestedAttributes`
-   * declaration — parents do NOT inline the full tree, so authorization and policy
-   * stay on the child resource that actually owns the records being written.
-   *
-   * @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}> | undefined}
-   */
-  static nestedAttributes = undefined
 
   /**
    * @param {FrontendModelResourceAbilityArgs | FrontendModelResourceControllerArgs} args - Resource args.
@@ -107,7 +90,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (this.builtInMemberCommands) config.builtInMemberCommands = this.builtInMemberCommands
     if (this.collectionCommands) config.collectionCommands = this.collectionCommands
     if (this.memberCommands) config.memberCommands = this.memberCommands
-    if (this.nestedAttributes) config.nestedAttributes = this.nestedAttributes
     if (this.relationships) config.relationships = this.relationships
 
     return config
@@ -147,39 +129,66 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * Returns a Rails-strong-params-style permit spec declaring which attributes
-   * and nested attributes are writable for the current request. Inspired by
-   * api_maker's `permitted_params(arg)` on resources.
+   * Returns the nested-relationship policy for this resource. Override on
+   * subclasses to declare which relationships accept nested writes via
+   * frontend-model `save()` and what policy applies (allowDestroy, limit,
+   * rejectIf). Default returns an empty object — no nested writes permitted.
    *
-   * Subclasses override this when:
-   *   - attribute writability depends on the user/role/tenant
-   *   - nested-attribute exposure differs by action
-   *   - nested resources should be whitelisted conditionally
+   * Method form (instead of a static field) lets the policy be request-aware,
+   * e.g. only admins can nested-destroy.
    *
-   * The default implementation reads the static `attributes` and
-   * `nestedAttributes` on the resource class. Returning `attributes: null`
-   * falls back to setter-existence checks (legacy behavior) — any attribute
-   * the model or resource has a setter for is permitted. An explicit array
-   * restricts writes to that list.
+   *   class ProjectResource extends FrontendModelBaseResource {
+   *     nestedAttributes(arg) {
+   *       return {
+   *         tasks: {allowDestroy: arg?.locals?.isAdmin === true, limit: 100}
+   *       }
+   *     }
+   *   }
+   *
+   * Recursion into deeper levels follows each child resource's own
+   * `nestedAttributes(arg)` — parents do NOT inline the full tree, so
+   * authorization and policy stay on the child resource that owns the records.
    * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
-   * @returns {{attributes: string[] | null, nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attrs: Record<string, any>) => boolean}>}} - Permit spec.
+   * @returns {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}>} - Nested-attribute policy keyed by relationship name.
    */
-  permittedParams(arg) {
+  nestedAttributes(arg) {
     void arg
 
-    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
-    /** @type {string[] | null} */
-    let permittedAttributeNames = null
+    return {}
+  }
 
-    if (Array.isArray(ResourceClass.attributes)) {
-      permittedAttributeNames = null // an array-of-names means "expose", not "restrict writes" — keep legacy setter-existence behavior
-    } else if (ResourceClass.attributes && typeof ResourceClass.attributes === "object") {
-      permittedAttributeNames = null
+  /**
+   * Returns a Rails-strong-params / api_maker-style permit spec declaring
+   * which attributes and nested attributes are writable for the current
+   * request. Submitting an attribute or nested relationship that is not
+   * permitted raises an error and fails the write.
+   *
+   * Default implementation reads `static attributes` (filtering out the
+   * conventional auto-managed columns: `id`, `createdAt`, `updatedAt`) and
+   * delegates nested policy to `this.nestedAttributes(arg)`.
+   *
+   * Override on subclasses when attribute writability depends on the user,
+   * role, tenant, or action.
+   * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
+   * @returns {{attributes: string[], nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attrs: Record<string, any>) => boolean}>}} - Permit spec.
+   */
+  permittedParams(arg) {
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    const attributesDecl = ResourceClass.attributes
+    const autoManaged = new Set(["id", "createdAt", "updatedAt"])
+
+    /** @type {string[]} */
+    let permittedAttributeNames = []
+
+    if (Array.isArray(attributesDecl)) {
+      permittedAttributeNames = attributesDecl.filter((name) => !autoManaged.has(name))
+    } else if (attributesDecl && typeof attributesDecl === "object") {
+      permittedAttributeNames = Object.keys(attributesDecl).filter((name) => !autoManaged.has(name))
     }
 
     return {
       attributes: permittedAttributeNames,
-      nestedAttributes: /** @type {any} */ (ResourceClass).nestedAttributes || {}
+      nestedAttributes: this.nestedAttributes(arg)
     }
   }
 
@@ -410,7 +419,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       const policy = declared[relationshipName]
 
       if (!policy) {
-        throw new Error(`Nested attributes for '${relationshipName}' are not permitted by ${this.constructor.name}.permittedParams(). Include it in the returned nestedAttributes.`)
+        throw new Error(`Nested attributes for '${relationshipName}' are not permitted by ${this.constructor.name}.nestedAttributes(). Override that method to include this relationship in the returned policy.`)
       }
 
       const entries = nestedAttributes[relationshipName]
@@ -666,16 +675,17 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * After nested writes, preload every relationship declared in `nestedAttributes`
-   * so the post-save serialize step emits them and the client can reconcile ids.
+   * After nested writes, preload every relationship declared by
+   * `nestedAttributes(arg)` so the post-save serialize step emits them and
+   * the client can reconcile ids.
    *
    * @param {import("../database/record/index.js").default} model - Saved parent model.
    * @returns {Promise<void>}
    */
   async _preloadNestedWritableRelationships(model) {
-    const declared = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).nestedAttributes
+    const declared = this.nestedAttributes()
 
-    if (!declared) return
+    if (!declared || Object.keys(declared).length === 0) return
 
     for (const relationshipName of Object.keys(declared)) {
       if (typeof /** @type {any} */ (model).loadRelationship === "function") {
