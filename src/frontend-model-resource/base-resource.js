@@ -412,6 +412,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         resourceConfiguration: childResourceConfig.resourceConfiguration
       })
 
+      const foreignKey = definition.foreignKey || this._inferForeignKey(parent, definition)
+      const ability = controller?.currentAbility?.()
+
       const destroyEntries = []
       const updateEntries = []
       const createEntries = []
@@ -435,20 +438,31 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       }
 
       for (const entry of destroyEntries) {
-        const existing = await childResource.find("destroy", entry.id)
+        const existing = await this._findScopedChild({
+          ability,
+          action: "destroy",
+          childResourceConfiguration: childResourceConfig.resourceConfiguration,
+          foreignKey,
+          id: entry.id,
+          parent,
+          relationshipName,
+          targetModelClass
+        })
 
-        if (!existing) throw new Error(`Cannot destroy ${relationshipName}[id=${entry.id}]: record not found or not authorized.`)
-
-        await this._authorizeNestedChild(targetModelClass, existing, "destroy", controller)
         await childResource.destroy(existing)
       }
 
       for (const entry of updateEntries) {
-        const existing = await childResource.find("update", entry.id)
-
-        if (!existing) throw new Error(`Cannot update ${relationshipName}[id=${entry.id}]: record not found or not authorized.`)
-
-        await this._authorizeNestedChild(targetModelClass, existing, "update", controller)
+        const existing = await this._findScopedChild({
+          ability,
+          action: "update",
+          childResourceConfiguration: childResourceConfig.resourceConfiguration,
+          foreignKey,
+          id: entry.id,
+          parent,
+          relationshipName,
+          targetModelClass
+        })
 
         if (entry.attributes && typeof entry.attributes === "object") {
           await childResource.update(existing, entry.attributes, {nestedAttributes: entry.nestedAttributes, controller})
@@ -460,14 +474,20 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       for (const entry of createEntries) {
         const childAttributes = entry?.attributes && typeof entry.attributes === "object" ? entry.attributes : {}
 
-        const child = parentRelationship.build({...childAttributes, [definition.foreignKey || this._inferForeignKey(parent, definition)]: parent.id()})
+        const child = parentRelationship.build({...childAttributes, [foreignKey]: parent.id()})
 
         const filtered = filterWritableFrontendModelAttributes(child, childAttributes, childResource)
 
         await /** @type {any} */ (childResource)._assignWithVirtualSetters(child, filtered)
         await child.save()
 
-        await this._authorizeNestedChild(targetModelClass, child, "create", controller)
+        await this._authorizeCreatedChild({
+          ability,
+          child,
+          childResourceConfiguration: childResourceConfig.resourceConfiguration,
+          relationshipName,
+          targetModelClass
+        })
 
         if (entry.nestedAttributes) {
           await childResource._applyNestedAttributes(child, entry.nestedAttributes, controller)
@@ -477,28 +497,90 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * Re-authorizes a nested child against its own resource class abilities.
-   * Throws when the child fails authorization, so the outer transaction rolls back.
+   * Resolves the ability action for a child resource using the child's own
+   * `abilities` mapping — never the parent controller's. This preserves
+   * custom mappings like `{update: "manage"}` and catches unmapped actions
+   * instead of silently defaulting to the raw action name.
    *
-   * @param {typeof import("../database/record/index.js").default} childModelClass - Child model class.
-   * @param {import("../database/record/index.js").default} childModel - Child model instance.
-   * @param {"create" | "update" | "destroy"} action - Ability action.
-   * @param {any} controller - Controller for ability lookup.
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} childResourceConfiguration - Child resource configuration.
+   * @param {"create" | "update" | "destroy"} action - Frontend action.
+   * @returns {string} - Ability action for the child resource.
+   */
+  _resolveChildAbilityAction(childResourceConfiguration, action) {
+    const abilities = childResourceConfiguration?.abilities
+
+    if (!abilities || typeof abilities !== "object" || Array.isArray(abilities)) {
+      throw new Error(`Nested child resource must define an 'abilities' object to authorize nested ${action}.`)
+    }
+
+    const abilityAction = /** @type {Record<string, string>} */ (abilities)[action]
+
+    if (typeof abilityAction !== "string" || abilityAction.length < 1) {
+      throw new Error(`Nested child resource must define abilities.${action}.`)
+    }
+
+    return abilityAction
+  }
+
+  /**
+   * Finds an existing child for a nested update/destroy, scoped to the
+   * child's own model class, the parent's foreign key, AND the child
+   * resource's ability mapping for the requested action. Throws when the
+   * child does not exist, does not belong to the current parent, or is
+   * not authorized — all of which must roll the transaction back.
+   *
+   * @param {object} args - Arguments.
+   * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
+   * @param {"update" | "destroy"} args.action - Frontend action.
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
+   * @param {string} args.foreignKey - Foreign-key attribute on the child pointing to the parent.
+   * @param {string | number} args.id - Child id from the payload.
+   * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
+   * @param {string} args.relationshipName - Parent's relationship name (for error messages).
+   * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
+   * @returns {Promise<import("../database/record/index.js").default>} - Authorized, parent-linked child model.
+   */
+  async _findScopedChild({ability, action, childResourceConfiguration, foreignKey, id, parent, relationshipName, targetModelClass}) {
+    const primaryKey = targetModelClass.primaryKey()
+    const lookup = {[primaryKey]: id, [foreignKey]: parent.id()}
+    const query = ability
+      ? /** @type {any} */ (targetModelClass).accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
+      : /** @type {any} */ (targetModelClass).where({})
+
+    const existing = await query.findBy(lookup)
+
+    if (!existing) {
+      throw new Error(`Cannot ${action} nested ${relationshipName}[id=${id}]: record not found, does not belong to parent ${parent.getModelClass().name}[id=${parent.id()}], or is not authorized.`)
+    }
+
+    return existing
+  }
+
+  /**
+   * Verifies an already-saved nested child is authorized under the child
+   * resource's own `create` ability. Rolls back via thrown error when not
+   * authorized so the outer transaction destroys the insert.
+   *
+   * @param {object} args - Arguments.
+   * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
+   * @param {import("../database/record/index.js").default} args.child - Child model instance just created.
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
+   * @param {string} args.relationshipName - Parent's relationship name (for error messages).
+   * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
    * @returns {Promise<void>}
    */
-  async _authorizeNestedChild(childModelClass, childModel, action, controller) {
-    const ability = controller?.currentAbility?.()
-
+  async _authorizeCreatedChild({ability, child, childResourceConfiguration, relationshipName, targetModelClass}) {
     if (!ability) return
 
-    const abilityAction = action === "destroy" ? "destroy" : action
-
-    const authorizedQuery = /** @type {any} */ (childModelClass).accessibleFor(abilityAction, ability)
-    const primaryKey = childModelClass.primaryKey()
-    const authorizedIds = await authorizedQuery.where({[primaryKey]: childModel.readAttribute(primaryKey)}).pluck(primaryKey)
+    const abilityAction = this._resolveChildAbilityAction(childResourceConfiguration, "create")
+    const primaryKey = targetModelClass.primaryKey()
+    const authorizedIds = await /** @type {any} */ (targetModelClass)
+      .accessibleFor(abilityAction, ability)
+      .where({[primaryKey]: child.readAttribute(primaryKey)})
+      .pluck(primaryKey)
 
     if (authorizedIds.length === 0) {
-      throw new Error(`Nested ${action} on ${childModelClass.name} not authorized.`)
+      throw new Error(`Nested create on ${relationshipName}[${targetModelClass.name}] not authorized.`)
     }
   }
 
