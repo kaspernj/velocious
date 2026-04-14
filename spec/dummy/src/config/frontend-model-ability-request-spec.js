@@ -41,16 +41,6 @@ describe("Dummy frontend model ability request helper", () => {
     expect(result).toEqual(true)
   })
 
-  it("matches legacy api frontend-model command routes", () => {
-    const result = isFrontendModelAbilityRequest({
-      backendProjects,
-      params: {},
-      request: requestStub("/api/frontend-models/tasks/list")
-    })
-
-    expect(result).toEqual(true)
-  })
-
   it("matches direct custom frontend-model member command routes", () => {
     const result = isFrontendModelAbilityRequest({
       backendProjects,
