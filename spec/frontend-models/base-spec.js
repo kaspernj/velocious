@@ -342,6 +342,78 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("keeps built-in command aliases as built-in command types in shared requests", async () => {
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    /** Shared API task model with aliased index command. */
+    class SharedApiTask extends FrontendModelBase {
+      /**
+       * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
+       */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          commands: {
+            index: "list"
+          },
+          primaryKey: "id"
+        }
+      }
+    }
+
+    globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+      const bodyString = typeof options?.body === "string" ? options.body : "{}"
+      const body = JSON.parse(bodyString)
+
+      calls.push({
+        body,
+        url: `${url}`
+      })
+
+      return {
+        ok: true,
+        status: 200,
+        /** @returns {Promise<string>} */
+        text: async () => JSON.stringify({
+          responses: [{
+            requestId: body.requests[0].requestId,
+            response: {
+              models: [{id: "1", name: "One"}],
+              status: "success"
+            }
+          }],
+          status: "success"
+        }),
+        /** @returns {Promise<Record<string, any>>} */
+        json: async () => ({
+          responses: [{
+            requestId: body.requests[0].requestId,
+            response: {
+              models: [{id: "1", name: "One"}],
+              status: "success"
+            }
+          }],
+          status: "success"
+        })
+      }
+    })
+
+    try {
+      await SharedApiTask.toArray()
+
+      expect(calls).toHaveLength(1)
+      expect(calls[0].url).toEqual("/frontend-models")
+      expect(calls[0].body.requests[0].commandType).toEqual("index")
+      expect(calls[0].body.requests[0].customPath).toEqual(undefined)
+      expect(calls[0].body.requests[0].model).toEqual("SharedApiTask")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("batches custom commands through the shared frontend-model API", async () => {
     const User = buildTestModelClass()
     const originalFetch = globalThis.fetch

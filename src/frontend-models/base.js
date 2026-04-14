@@ -724,14 +724,8 @@ async function flushPendingSharedFrontendModelRequests() {
         }
       }
 
-      const isCustomCommandRoute = request.commandName && request.commandName !== request.commandType && request.resourcePath
-      const customPath = isCustomCommandRoute
-        ? `${request.resourcePath}/${request.commandName}`
-        : undefined
-
       return {
-        commandType: isCustomCommandRoute ? request.commandName : request.commandType,
-        customPath,
+        commandType: request.commandType,
         model: request.modelClass.getModelName(),
         payload: request.payload,
         requestId: request.requestId
