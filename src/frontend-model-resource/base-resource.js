@@ -381,8 +381,25 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         throw new Error(`nestedAttributes['${relationshipName}'] exceeds declared limit of ${policy.limit}.`)
       }
 
+      const parentModelClass = /** @type {any} */ (parent.getModelClass())
+      const modelAcceptance = parentModelClass.acceptedNestedAttributesFor?.(relationshipName)
+
+      if (!modelAcceptance) {
+        throw new Error(`Model ${parentModelClass.name} does not accept nested attributes for '${relationshipName}'. Declare it via ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}'${policy.allowDestroy ? ", {allowDestroy: true}" : ""}).`)
+      }
+
+      // Model-level policy bounds the resource policy — the resource may be more restrictive
+      // but cannot loosen what the model declared.
+      if (policy.allowDestroy && !modelAcceptance.allowDestroy) {
+        throw new Error(`Resource permits destroy on nestedAttributes['${relationshipName}'] but the model ${parentModelClass.name} does not allow destroy for that relationship. Set {allowDestroy: true} on ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}', ...).`)
+      }
+
+      if (typeof modelAcceptance.limit === "number" && entries.length > modelAcceptance.limit) {
+        throw new Error(`nestedAttributes['${relationshipName}'] exceeds model-declared limit of ${modelAcceptance.limit}.`)
+      }
+
       const parentRelationship = parent.getRelationshipByName(relationshipName)
-      const relationshipDefinitions = /** @type {any} */ (parent.getModelClass()).relationships?.() || {}
+      const relationshipDefinitions = parentModelClass.relationships?.() || {}
       const definition = relationshipDefinitions[relationshipName]
 
       if (!definition || definition.type !== "hasMany") {
