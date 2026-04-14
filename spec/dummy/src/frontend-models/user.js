@@ -1,5 +1,7 @@
 import FrontendModelBase from "../../../../src/frontend-models/base.js"
 
+/** @typedef {import("../../../../src/frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
+
 /**
  * @typedef {object} UserAttributes
  * @property {any} reference - Attribute value.
@@ -7,11 +9,10 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /** Frontend model for User. */
 export default class User extends FrontendModelBase {
-  /** @returns {{attachments?: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, primaryKey?: string}} - Resource config. */
+  /** @returns {FrontendModelResourceConfig} - Resource config. */
   static resourceConfig() {
     return {
       modelName: "User",
-      path: "/users",
       attributes: [
         "reference",
         "email",

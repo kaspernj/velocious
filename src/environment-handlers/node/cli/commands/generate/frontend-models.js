@@ -225,6 +225,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += `import FrontendModelBase from "${importPath}"\n`
 
     fileContent += "\n"
+    fileContent += `/** @typedef {import("${importPath}").FrontendModelResourceConfig} FrontendModelResourceConfig */\n`
+    fileContent += "\n"
     fileContent += "/**\n"
     fileContent += ` * @typedef {object} ${attributesTypeName}\n`
     for (const attribute of attributes) {
@@ -233,13 +235,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /** @returns {{attachments?: Record<string, {type: \"hasOne\" | \"hasMany\"}>, attributes: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, memberCommands?: Record<string, string>, primaryKey?: string}} - Resource config. */\n"
+    fileContent += "  /** @returns {FrontendModelResourceConfig} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     fileContent += `      modelName: ${JSON.stringify(className)},\n`
-    if (modelConfig.path) {
-      fileContent += `      path: ${JSON.stringify(modelConfig.path)},\n`
-    }
     if (Object.keys(attachments).length > 0) {
       fileContent += "      attachments: {\n"
       for (const [attachmentName, attachmentConfig] of Object.entries(attachments)) {

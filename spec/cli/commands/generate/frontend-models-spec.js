@@ -23,8 +23,7 @@ class CallFrontendResource extends FrontendModelBaseResource {
         metadata: {sqlType: "json", null: true},
         active: {type: "boolean"},
         endedAt: {type: "timestamp without time zone", null: true}
-      },
-      path: "/calls"
+      }
     }
   }
 }
@@ -33,8 +32,7 @@ class MissingAbilitiesTaskFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      attributes: ["id", "name"],
-      path: "/tasks"
+      attributes: ["id", "name"]
     }
   }
 }
@@ -49,7 +47,6 @@ class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseRes
   static resourceConfig() {
     return {
       attributes: ["id", "name"],
-      path: "/tasks",
       relationships: ["project"]
     }
   }
@@ -59,8 +56,7 @@ class NullableIdCallFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      attributes: {id: {type: "uuid", null: true}},
-      path: "/calls"
+      attributes: {id: {type: "uuid", null: true}}
     }
   }
 }
@@ -69,8 +65,7 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      attributes: ["reference", "email"],
-      path: "/users"
+      attributes: ["reference", "email"]
     }
   }
 }
@@ -122,10 +117,8 @@ describe("Cli - generate - frontend-models", () => {
     const userContents = await fs.readFile(userPath, "utf8")
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
-    expect(taskContents).toContain("builtInCollectionCommands?: Record<string, string>")
-    expect(taskContents).toContain("builtInMemberCommands?: Record<string, string>")
-    expect(taskContents).toContain("collectionCommands?: Record<string, string>")
-    expect(taskContents).toContain("memberCommands?: Record<string, string>")
+    expect(taskContents).toContain("@typedef {import(\"../../../../src/frontend-models/base.js\").FrontendModelResourceConfig} FrontendModelResourceConfig")
+    expect(taskContents).toContain("/** @returns {FrontendModelResourceConfig} - Resource config. */")
     expect(taskContents.includes("path:")).toEqual(false)
     expect(taskContents).toContain("attributes: [\n")
     expect(taskContents).toContain("      \"id\",\n")

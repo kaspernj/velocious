@@ -11,12 +11,11 @@ import {deserializeFrontendModelTransportValue} from "../../src/frontend-models/
 
 /** Test frontend model for controller render specs. */
 class RenderTask extends FrontendModelBase {
-  /** @returns {{attributes: string[], modelName: string, path: string, primaryKey: string}} - Resource config. */
+  /** @returns {{attributes: string[], modelName: string, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: ["id", "name"],
       modelName: "RenderTask",
-      path: "/render-tasks",
       primaryKey: "id"
     }
   }

@@ -1,0 +1,1 @@
+Frontend models now derive their resource path from `modelName` only and reject `resourceConfig().path` on both backend resources and generated frontend models. Shared frontend-model commands continue to use the single `/frontend-models` endpoint, while attachment/member helper URLs keep using the derived model path.

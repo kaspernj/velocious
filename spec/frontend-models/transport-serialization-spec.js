@@ -6,12 +6,11 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
 
 /** Test frontend model for transport serialization specs. */
 class TransportTask extends FrontendModelBase {
-  /** @returns {{attributes: string[], modelName: string, path: string, primaryKey: string}} - Resource config. */
+  /** @returns {{attributes: string[], modelName: string, primaryKey: string}} - Resource config. */
   static resourceConfig() {
     return {
       attributes: ["id", "name"],
       modelName: "TransportTask",
-      path: "/transport-tasks",
       primaryKey: "id"
     }
   }
