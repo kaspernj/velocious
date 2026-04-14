@@ -76,7 +76,7 @@ function buildAttachmentTestModelClass() {
   /** Test frontend model with attachment definitions. */
   class Task extends FrontendModelBase {
     /**
-     * @returns {{attachments: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], commands: {attach: string, download: string, update: string, url?: string}, primaryKey: string}}
+     * @returns {{attachments: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], commands: {attach: string, download: string, update: string, url?: string}, primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
@@ -137,7 +137,7 @@ function buildPreloadTestModelClasses() {
   /** Frontend model comment test class. */
   class Comment extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
@@ -151,7 +151,7 @@ function buildPreloadTestModelClasses() {
   /** Frontend model task test class. */
   class Task extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
@@ -190,7 +190,7 @@ function buildPreloadTestModelClasses() {
   /** Frontend model project test class. */
   class Project extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
