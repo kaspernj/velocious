@@ -670,6 +670,46 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Rails-style declaration that this model accepts nested-attribute writes
+   * for a relationship when saved through a parent. Required — Velocious
+   * will refuse nested writes for any relationship not listed here, even
+   * if a frontend-model resource permits them.
+   *
+   * Options:
+   *   - allowDestroy: whether `_destroy: true` entries are allowed. Default false.
+   *   - limit: optional upper bound on the number of nested entries per request.
+   *   - rejectIf: optional predicate `(attributes) => boolean` that silently skips entries.
+   *
+   * Usage:
+   *   class Project extends Record {}
+   *   Project.hasMany("tasks")
+   *   Project.acceptsNestedAttributesFor("tasks", {allowDestroy: true})
+   * @param {string} relationshipName - Relationship name on this model.
+   * @param {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}} [options] - Policy options.
+   * @returns {void}
+   */
+  static acceptsNestedAttributesFor(relationshipName, options = {}) {
+    if (!relationshipName || typeof relationshipName !== "string") {
+      throw new Error(`Invalid relationshipName passed to acceptsNestedAttributesFor: ${relationshipName}`)
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(this, "_acceptedNestedAttributes")) {
+      /** @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}>} */
+      this._acceptedNestedAttributes = {}
+    }
+
+    /** @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}>} */ (this._acceptedNestedAttributes)[relationshipName] = {...options}
+  }
+
+  /**
+   * @param {string} relationshipName - Relationship name.
+   * @returns {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean} | null} - Policy declared via `acceptsNestedAttributesFor`, or null when not accepted.
+   */
+  static acceptedNestedAttributesFor(relationshipName) {
+    return this._acceptedNestedAttributes?.[relationshipName] || null
+  }
+
+  /**
    * Adds a has-one-relationship to the model class.
    * @param {string} relationshipName The name of the relationship (e.g. "post")
    * @param {RelationshipScopeCallback | object} [scopeOrOptions] The scope callback or options for the relationship.

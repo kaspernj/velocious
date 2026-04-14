@@ -1391,11 +1391,12 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {Record<string, any>} attributes - Create attributes.
+   * @param {Record<string, any> | null} [nestedAttributes] - Optional nested-attribute payload for cascading writes.
    * @returns {Promise<import("./database/record/index.js").default | null>} - Created model when authorized.
    */
-  async frontendModelCreateRecord(attributes) {
+  async frontendModelCreateRecord(attributes, nestedAttributes = null) {
     const resource = this.frontendModelResourceInstance()
-    const model = await resource.create(attributes)
+    const model = await resource.create(attributes, {nestedAttributes, controller: this})
 
     const authorizedModels = await this.frontendModelFilterAuthorizedModels({action: "create", models: [model]})
 
@@ -2730,7 +2731,11 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload("Expected model attributes.")
       }
 
-      const model = await this.frontendModelCreateRecord(attributes)
+      const nestedAttributes = params.nestedAttributes && typeof params.nestedAttributes === "object"
+        ? /** @type {Record<string, any>} */ (params.nestedAttributes)
+        : null
+
+      const model = await this.frontendModelCreateRecord(attributes, nestedAttributes)
 
       if (!model) {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
@@ -2856,13 +2861,17 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload("Expected model attributes.")
       }
 
+      const nestedAttributes = params.nestedAttributes && typeof params.nestedAttributes === "object"
+        ? /** @type {Record<string, any>} */ (params.nestedAttributes)
+        : null
+
       const model = await this.frontendModelFindRecord("update", id)
 
       if (!model) {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      const updatedModel = await resource.update(model, attributes)
+      const updatedModel = await resource.update(model, attributes, {nestedAttributes, controller: this})
       const serializedModel = await resource.serialize(updatedModel, "update")
 
       return {

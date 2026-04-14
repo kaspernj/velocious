@@ -45,6 +45,23 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static relationships = undefined
   /** @type {string[] | undefined} */
   static translatedAttributes = undefined
+  /**
+   * Declares relationships on this resource that accept nested writes through `save()`.
+   * Keys are relationship names (matching the model's relationship definitions).
+   * Values describe the policy for each relationship.
+   *
+   * Example:
+   *   static nestedAttributes = {
+   *     aiActions: {allowDestroy: true, limit: 100}
+   *   }
+   *
+   * Recursion into deeper levels follows each child resource's own `nestedAttributes`
+   * declaration — parents do NOT inline the full tree, so authorization and policy
+   * stay on the child resource that actually owns the records being written.
+   *
+   * @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}> | undefined}
+   */
+  static nestedAttributes = undefined
 
   /**
    * @param {FrontendModelResourceAbilityArgs | FrontendModelResourceControllerArgs} args - Resource args.
@@ -90,6 +107,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (this.builtInMemberCommands) config.builtInMemberCommands = this.builtInMemberCommands
     if (this.collectionCommands) config.collectionCommands = this.collectionCommands
     if (this.memberCommands) config.memberCommands = this.memberCommands
+    if (this.nestedAttributes) config.nestedAttributes = this.nestedAttributes
     if (this.relationships) config.relationships = this.relationships
 
     return config
@@ -126,6 +144,43 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (!this.resourceConfigurationValue) throw new Error(`${this.constructor.name} requires a resource configuration.`)
 
     return this.resourceConfigurationValue
+  }
+
+  /**
+   * Returns a Rails-strong-params-style permit spec declaring which attributes
+   * and nested attributes are writable for the current request. Inspired by
+   * api_maker's `permitted_params(arg)` on resources.
+   *
+   * Subclasses override this when:
+   *   - attribute writability depends on the user/role/tenant
+   *   - nested-attribute exposure differs by action
+   *   - nested resources should be whitelisted conditionally
+   *
+   * The default implementation reads the static `attributes` and
+   * `nestedAttributes` on the resource class. Returning `attributes: null`
+   * falls back to setter-existence checks (legacy behavior) — any attribute
+   * the model or resource has a setter for is permitted. An explicit array
+   * restricts writes to that list.
+   * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
+   * @returns {{attributes: string[] | null, nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attrs: Record<string, any>) => boolean}>}} - Permit spec.
+   */
+  permittedParams(arg) {
+    void arg
+
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    /** @type {string[] | null} */
+    let permittedAttributeNames = null
+
+    if (Array.isArray(ResourceClass.attributes)) {
+      permittedAttributeNames = null // an array-of-names means "expose", not "restrict writes" — keep legacy setter-existence behavior
+    } else if (ResourceClass.attributes && typeof ResourceClass.attributes === "object") {
+      permittedAttributeNames = null
+    }
+
+    return {
+      attributes: permittedAttributeNames,
+      nestedAttributes: /** @type {any} */ (ResourceClass).nestedAttributes || {}
+    }
   }
 
   /** @returns {string} - Primary key. */
@@ -184,14 +239,25 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * @param {Record<string, any>} attributes - Create attributes.
+   * @param {{controller?: any, nestedAttributes?: Record<string, any> | null}} [options] - Save options.
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
-  async create(attributes) {
-    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes, this)
-    const model = new (this.modelClass())()
+  async create(attributes, options = {}) {
+    const permitSpec = this.permittedParams({action: "create", ability: this.ability, locals: this.locals, params: attributes})
+    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes, this, permitSpec.attributes)
+    const ModelClass = this.modelClass()
+    const model = new ModelClass()
 
-    await this._assignWithVirtualSetters(model, filtered)
-    await model.save()
+    await ModelClass.transaction(async () => {
+      await this._assignWithVirtualSetters(model, filtered)
+      await model.save()
+
+      if (options.nestedAttributes) {
+        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permitSpec)
+      }
+    })
+
+    await this._preloadNestedWritableRelationships(model)
 
     return model
   }
@@ -207,13 +273,24 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * @param {import("../database/record/index.js").default} model - Existing model.
    * @param {Record<string, any>} attributes - Update attributes.
+   * @param {{controller?: any, nestedAttributes?: Record<string, any> | null}} [options] - Save options.
    * @returns {Promise<import("../database/record/index.js").default>} - Updated model.
    */
-  async update(model, attributes) {
-    const filtered = filterWritableFrontendModelAttributes(model, attributes, this)
+  async update(model, attributes, options = {}) {
+    const permitSpec = this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: attributes})
+    const filtered = filterWritableFrontendModelAttributes(model, attributes, this, permitSpec.attributes)
+    const ModelClass = this.modelClass()
 
-    await this._assignWithVirtualSetters(model, filtered)
-    await model.save()
+    await ModelClass.transaction(async () => {
+      await this._assignWithVirtualSetters(model, filtered)
+      await model.save()
+
+      if (options.nestedAttributes) {
+        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permitSpec)
+      }
+    })
+
+    await this._preloadNestedWritableRelationships(model)
 
     return model
   }
@@ -309,24 +386,331 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     return await this.typedControllerInstance().serializeFrontendModel(model)
   }
+
+  /**
+   * Applies a `nestedAttributes` payload to a freshly-saved parent model,
+   * cascading create/update/destroy writes across the declared relationships.
+   *
+   * Each child is authorized against its own resource's abilities (never the
+   * parent's). Destroys run before updates, updates before creates, to avoid
+   * unique-constraint conflicts when replacing a child at the same natural key.
+   *
+   * @param {import("../database/record/index.js").default} parent - Parent model instance.
+   * @param {Record<string, any>} nestedAttributes - Nested-attribute payload keyed by relationship name.
+   * @param {any} controller - Controller instance for resource resolution and authorization.
+   * @param {{attributes: string[] | null, nestedAttributes: Record<string, any>} | null} [parentPermitSpec] - Optional pre-computed parent permit spec. Recomputed when not provided.
+   * @returns {Promise<void>}
+   */
+  async _applyNestedAttributes(parent, nestedAttributes, controller, parentPermitSpec = null) {
+    const declared = parentPermitSpec?.nestedAttributes
+      || this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: {}}).nestedAttributes
+      || {}
+
+    for (const relationshipName of Object.keys(nestedAttributes)) {
+      const policy = declared[relationshipName]
+
+      if (!policy) {
+        throw new Error(`Nested attributes for '${relationshipName}' are not permitted by ${this.constructor.name}.permittedParams(). Include it in the returned nestedAttributes.`)
+      }
+
+      const entries = nestedAttributes[relationshipName]
+
+      if (!Array.isArray(entries)) {
+        throw new Error(`Expected array for nestedAttributes['${relationshipName}'] but got: ${typeof entries}`)
+      }
+
+      if (typeof policy.limit === "number" && entries.length > policy.limit) {
+        throw new Error(`nestedAttributes['${relationshipName}'] exceeds declared limit of ${policy.limit}.`)
+      }
+
+      const parentModelClass = /** @type {any} */ (parent.getModelClass())
+      const modelAcceptance = parentModelClass.acceptedNestedAttributesFor?.(relationshipName)
+
+      if (!modelAcceptance) {
+        throw new Error(`Model ${parentModelClass.name} does not accept nested attributes for '${relationshipName}'. Declare it via ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}'${policy.allowDestroy ? ", {allowDestroy: true}" : ""}).`)
+      }
+
+      // Model-level policy bounds the resource policy — the resource may be more restrictive
+      // but cannot loosen what the model declared.
+      if (policy.allowDestroy && !modelAcceptance.allowDestroy) {
+        throw new Error(`Resource permits destroy on nestedAttributes['${relationshipName}'] but the model ${parentModelClass.name} does not allow destroy for that relationship. Set {allowDestroy: true} on ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}', ...).`)
+      }
+
+      if (typeof modelAcceptance.limit === "number" && entries.length > modelAcceptance.limit) {
+        throw new Error(`nestedAttributes['${relationshipName}'] exceeds model-declared limit of ${modelAcceptance.limit}.`)
+      }
+
+      const parentRelationship = parent.getRelationshipByName(relationshipName)
+      const relationshipDefinitions = parentModelClass.relationships?.() || {}
+      const definition = relationshipDefinitions[relationshipName]
+
+      if (!definition || definition.type !== "hasMany") {
+        throw new Error(`Nested attributes for '${relationshipName}' require a hasMany relationship. v1 does not support '${definition?.type}'.`)
+      }
+
+      const targetModelClass = /** @type {any} */ (parent.getModelClass()).relationshipModelClass?.(relationshipName)
+
+      if (!targetModelClass) {
+        throw new Error(`No target model class resolved for relationship '${relationshipName}' on ${parent.getModelClass().name}.`)
+      }
+
+      const childResourceConfig = controller?.frontendModelResourceConfigurationForModelClass?.(targetModelClass)
+
+      if (!childResourceConfig) {
+        throw new Error(`No frontend-model resource registered for child model '${targetModelClass.getModelName?.() || targetModelClass.name}' under relationship '${relationshipName}'.`)
+      }
+
+      const childResource = new childResourceConfig.resourceClass({
+        ability: this.ability,
+        controller,
+        context: this.context || {},
+        locals: this.locals || {},
+        modelClass: targetModelClass,
+        modelName: childResourceConfig.modelName,
+        params: controller?.frontendModelParams?.() || {},
+        resourceConfiguration: childResourceConfig.resourceConfiguration
+      })
+
+      const foreignKey = definition.foreignKey || this._inferForeignKey(parent, definition)
+      const ability = controller?.currentAbility?.()
+
+      const destroyEntries = []
+      const updateEntries = []
+      const createEntries = []
+
+      for (const entry of entries) {
+        if (typeof policy.rejectIf === "function" && policy.rejectIf(entry?.attributes || {})) continue
+
+        if (entry?._destroy) {
+          if (!policy.allowDestroy) {
+            throw new Error(`nestedAttributes['${relationshipName}'] entry requested _destroy but allowDestroy is not enabled on this resource.`)
+          }
+          if (!entry.id) {
+            throw new Error(`nestedAttributes['${relationshipName}'] _destroy entry is missing an id.`)
+          }
+          destroyEntries.push(entry)
+        } else if (entry?.id) {
+          updateEntries.push(entry)
+        } else {
+          createEntries.push(entry)
+        }
+      }
+
+      for (const entry of destroyEntries) {
+        const existing = await this._findScopedChild({
+          ability,
+          action: "destroy",
+          childResourceConfiguration: childResourceConfig.resourceConfiguration,
+          foreignKey,
+          id: entry.id,
+          parent,
+          relationshipName,
+          targetModelClass
+        })
+
+        await childResource.destroy(existing)
+      }
+
+      for (const entry of updateEntries) {
+        const existing = await this._findScopedChild({
+          ability,
+          action: "update",
+          childResourceConfiguration: childResourceConfig.resourceConfiguration,
+          foreignKey,
+          id: entry.id,
+          parent,
+          relationshipName,
+          targetModelClass
+        })
+
+        if (entry.attributes && typeof entry.attributes === "object") {
+          await childResource.update(existing, entry.attributes, {nestedAttributes: entry.nestedAttributes, controller})
+        } else if (entry.nestedAttributes) {
+          await childResource._applyNestedAttributes(existing, entry.nestedAttributes, controller)
+        }
+      }
+
+      for (const entry of createEntries) {
+        const childAttributes = entry?.attributes && typeof entry.attributes === "object" ? entry.attributes : {}
+
+        const child = parentRelationship.build({...childAttributes, [foreignKey]: parent.id()})
+
+        const childPermitSpec = /** @type {any} */ (childResource).permittedParams({
+          action: "create",
+          ability,
+          locals: childResource.locals,
+          params: childAttributes
+        })
+        const filtered = filterWritableFrontendModelAttributes(child, childAttributes, childResource, childPermitSpec.attributes)
+
+        await /** @type {any} */ (childResource)._assignWithVirtualSetters(child, filtered)
+        await child.save()
+
+        await this._authorizeCreatedChild({
+          ability,
+          child,
+          childResourceConfiguration: childResourceConfig.resourceConfiguration,
+          relationshipName,
+          targetModelClass
+        })
+
+        if (entry.nestedAttributes) {
+          await childResource._applyNestedAttributes(child, entry.nestedAttributes, controller, childPermitSpec)
+        }
+      }
+    }
+  }
+
+  /**
+   * Resolves the ability action for a child resource using the child's own
+   * `abilities` mapping — never the parent controller's. This preserves
+   * custom mappings like `{update: "manage"}` and catches unmapped actions
+   * instead of silently defaulting to the raw action name.
+   *
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} childResourceConfiguration - Child resource configuration.
+   * @param {"create" | "update" | "destroy"} action - Frontend action.
+   * @returns {string} - Ability action for the child resource.
+   */
+  _resolveChildAbilityAction(childResourceConfiguration, action) {
+    const abilities = childResourceConfiguration?.abilities
+
+    if (!abilities || typeof abilities !== "object" || Array.isArray(abilities)) {
+      throw new Error(`Nested child resource must define an 'abilities' object to authorize nested ${action}.`)
+    }
+
+    const abilityAction = /** @type {Record<string, string>} */ (abilities)[action]
+
+    if (typeof abilityAction !== "string" || abilityAction.length < 1) {
+      throw new Error(`Nested child resource must define abilities.${action}.`)
+    }
+
+    return abilityAction
+  }
+
+  /**
+   * Finds an existing child for a nested update/destroy, scoped to the
+   * child's own model class, the parent's foreign key, AND the child
+   * resource's ability mapping for the requested action. Throws when the
+   * child does not exist, does not belong to the current parent, or is
+   * not authorized — all of which must roll the transaction back.
+   *
+   * @param {object} args - Arguments.
+   * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
+   * @param {"update" | "destroy"} args.action - Frontend action.
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
+   * @param {string} args.foreignKey - Foreign-key attribute on the child pointing to the parent.
+   * @param {string | number} args.id - Child id from the payload.
+   * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
+   * @param {string} args.relationshipName - Parent's relationship name (for error messages).
+   * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
+   * @returns {Promise<import("../database/record/index.js").default>} - Authorized, parent-linked child model.
+   */
+  async _findScopedChild({ability, action, childResourceConfiguration, foreignKey, id, parent, relationshipName, targetModelClass}) {
+    const primaryKey = targetModelClass.primaryKey()
+    const lookup = {[primaryKey]: id, [foreignKey]: parent.id()}
+    const query = ability
+      ? /** @type {any} */ (targetModelClass).accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
+      : /** @type {any} */ (targetModelClass).where({})
+
+    const existing = await query.findBy(lookup)
+
+    if (!existing) {
+      throw new Error(`Cannot ${action} nested ${relationshipName}[id=${id}]: record not found, does not belong to parent ${parent.getModelClass().name}[id=${parent.id()}], or is not authorized.`)
+    }
+
+    return existing
+  }
+
+  /**
+   * Verifies an already-saved nested child is authorized under the child
+   * resource's own `create` ability. Rolls back via thrown error when not
+   * authorized so the outer transaction destroys the insert.
+   *
+   * @param {object} args - Arguments.
+   * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
+   * @param {import("../database/record/index.js").default} args.child - Child model instance just created.
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
+   * @param {string} args.relationshipName - Parent's relationship name (for error messages).
+   * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
+   * @returns {Promise<void>}
+   */
+  async _authorizeCreatedChild({ability, child, childResourceConfiguration, relationshipName, targetModelClass}) {
+    if (!ability) return
+
+    const abilityAction = this._resolveChildAbilityAction(childResourceConfiguration, "create")
+    const primaryKey = targetModelClass.primaryKey()
+    const authorizedIds = await /** @type {any} */ (targetModelClass)
+      .accessibleFor(abilityAction, ability)
+      .where({[primaryKey]: child.readAttribute(primaryKey)})
+      .pluck(primaryKey)
+
+    if (authorizedIds.length === 0) {
+      throw new Error(`Nested create on ${relationshipName}[${targetModelClass.name}] not authorized.`)
+    }
+  }
+
+  /**
+   * Best-effort foreign-key inference for relationships that don't declare it.
+   *
+   * @param {import("../database/record/index.js").default} parent - Parent model.
+   * @param {{foreignKey?: string}} definition - Relationship definition.
+   * @returns {string} - Foreign-key attribute name.
+   */
+  _inferForeignKey(parent, definition) {
+    if (definition.foreignKey) return definition.foreignKey
+
+    const parentModelName = parent.getModelClass().name || ""
+    const underscored = parentModelName.replace(/([A-Z])/g, (match, letter, index) => (index === 0 ? letter.toLowerCase() : `_${letter.toLowerCase()}`))
+
+    return `${inflection.camelize(underscored, true)}Id`
+  }
+
+  /**
+   * After nested writes, preload every relationship declared in `nestedAttributes`
+   * so the post-save serialize step emits them and the client can reconcile ids.
+   *
+   * @param {import("../database/record/index.js").default} model - Saved parent model.
+   * @returns {Promise<void>}
+   */
+  async _preloadNestedWritableRelationships(model) {
+    const declared = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).nestedAttributes
+
+    if (!declared) return
+
+    for (const relationshipName of Object.keys(declared)) {
+      if (typeof /** @type {any} */ (model).loadRelationship === "function") {
+        await /** @type {any} */ (model).loadRelationship(relationshipName)
+      }
+    }
+  }
 }
 
 /**
  * @param {Record<string, any>} receiver - Model instance or prototype.
  * @param {Record<string, any>} attributes - Incoming frontend-model attributes.
+ * @param {FrontendModelBaseResource | null} [resource] - Resource instance for virtual-setter detection.
+ * @param {string[] | null} [permittedAttributeNames] - Optional explicit permit list. `null` falls back to setter-existence checks only.
  * @returns {Record<string, any>} - Writable attributes only.
  */
-function filterWritableFrontendModelAttributes(receiver, attributes, resource = /** @type {FrontendModelBaseResource | null} */ (null)) {
+function filterWritableFrontendModelAttributes(receiver, attributes, resource = /** @type {FrontendModelBaseResource | null} */ (null), permittedAttributeNames = null) {
   // Frontend-model writes should fail fast when callers submit read-only or unknown attrs.
   // Silent drops hide contract mistakes in generated models and app-side wrapper code.
   /** @type {Record<string, any>} */
   const writableAttributes = {}
   /** @type {string[]} */
   const invalidAttributes = []
+  /** @type {string[]} */
+  const notPermittedAttributes = []
 
+  const permitSet = Array.isArray(permittedAttributeNames) ? new Set(permittedAttributeNames) : null
   const translatedSet = resource ? new Set(/** @type {typeof FrontendModelBaseResource} */ (resource.constructor).translatedAttributes || []) : new Set()
 
   for (const [attributeName, value] of Object.entries(attributes)) {
+    if (permitSet && !permitSet.has(attributeName)) {
+      notPermittedAttributes.push(attributeName)
+      continue
+    }
+
     const setterName = `set${inflection.camelize(attributeName)}`
     const resourceSetterName = `${setterName}Attribute`
 
@@ -339,6 +723,10 @@ function filterWritableFrontendModelAttributes(receiver, attributes, resource = 
     } else {
       invalidAttributes.push(attributeName)
     }
+  }
+
+  if (notPermittedAttributes.length > 0) {
+    throw new Error(`Frontend model write attributes not permitted by permittedParams(): ${notPermittedAttributes.join(", ")}`)
   }
 
   if (invalidAttributes.length > 0) {

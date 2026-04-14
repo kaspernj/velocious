@@ -7,6 +7,7 @@
 * Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes
 * Controllers and views for HTTP endpoints
+* Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 
 # Setup
 
@@ -353,8 +354,9 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
   `.select({Project: ["id", "createdAt"], Task: ["updatedAt"]})`
   `.toArray()`
 - `await user.update({...})`
-- `await user.save()` (persists new records and updates existing records)
+- `await user.save()` (persists new records and updates existing records; also carries dirty nested children through the single request when the parent opts in — see [docs/nested-attributes.md](docs/nested-attributes.md))
 - `await user.destroy()`
+- `user.markForDestruction()` to queue a loaded child for destruction on the next parent save (see [docs/nested-attributes.md](docs/nested-attributes.md))
 - State helpers like `user.isNewRecord()`, `user.isPersisted()`, `user.isChanged()`, and `user.changes()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `await task.projectOrLoad()`, `await project.tasks().toArray()`, `await project.tasks().load()`, and `project.tasks().build({...})`

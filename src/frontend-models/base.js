@@ -14,7 +14,7 @@ import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
- * @typedef {{builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, commands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, primaryKey?: string}} FrontendModelResourceConfig
+ * @typedef {{attributes?: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, commands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
  */
 /**
  * @typedef {object} FrontendModelTransportConfig
@@ -967,6 +967,8 @@ export default class FrontendModelBase {
   _selectedAttributes
   /** @type {boolean} */
   _isNewRecord
+  /** @type {boolean} */
+  _markedForDestruction
   /** @type {Record<string, any>} */
   _persistedAttributes
 
@@ -982,6 +984,7 @@ export default class FrontendModelBase {
     this._attachments = {}
     this._selectedAttributes = null
     this._isNewRecord = true
+    this._markedForDestruction = false
     this._persistedAttributes = {}
     this.assignAttributes(attributes)
   }
@@ -1117,6 +1120,24 @@ export default class FrontendModelBase {
    */
   setIsNewRecord(newIsNewRecord) {
     this._isNewRecord = newIsNewRecord
+  }
+
+  /**
+   * Marks this record for destruction when its parent is next saved through
+   * nested-attribute support. The record is not removed from the parent's
+   * relationship collection until the server confirms the delete.
+   *
+   * @returns {void}
+   */
+  markForDestruction() {
+    this._markedForDestruction = true
+  }
+
+  /**
+   * @returns {boolean} - Whether this record is queued for nested destruction on next parent save.
+   */
+  markedForDestruction() {
+    return this._markedForDestruction
   }
 
   /**
@@ -1309,11 +1330,46 @@ export default class FrontendModelBase {
       this._selectedAttributes.add(attributeName)
     }
 
+    // Only invalidate relationship cache entries whose foreign key matches the changed attribute.
+    // Blanket-clearing all relationships on any attribute change destroys nested-save state
+    // and preloaded children the caller never asked to invalidate.
     if (!Object.is(previousValue, newValue)) {
-      this.clearRelationshipCache()
+      this._invalidateRelationshipsForAttribute(attributeName)
     }
 
     return newValue
+  }
+
+  /**
+   * Invalidates any cached belongsTo relationship whose foreign key matches the
+   * changed attribute. HasMany / hasOne relationships are left untouched because
+   * their foreign key lives on the child, not on this model, and blanket-clearing
+   * them would destroy nested-save state and preloaded children the caller never
+   * asked to invalidate.
+   *
+   * Foreign keys are inferred when not declared: for belongsTo `projectId` is
+   * inferred from relationship name `project`. Explicit `foreignKey` on the
+   * relationship definition takes precedence.
+   * @param {string} attributeName - Attribute name that changed.
+   * @returns {void}
+   */
+  _invalidateRelationshipsForAttribute(attributeName) {
+    if (!this._relationships || Object.keys(this._relationships).length === 0) return
+
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const definitions = typeof ModelClass.relationshipDefinitions === "function" ? ModelClass.relationshipDefinitions() : {}
+
+    for (const relationshipName of Object.keys(this._relationships)) {
+      const definition = /** @type {any} */ (definitions[relationshipName])
+
+      if (!definition || definition.type !== "belongsTo") continue
+
+      const foreignKey = definition.foreignKey || `${relationshipName}Id`
+
+      if (foreignKey === attributeName) {
+        delete this._relationships[relationshipName]
+      }
+    }
   }
 
   /**
@@ -2169,11 +2225,19 @@ export default class FrontendModelBase {
       payload.id = this.primaryKeyValue()
     }
 
+    const nestedAttributes = this._buildNestedAttributesPayload()
+
+    if (nestedAttributes && Object.keys(nestedAttributes).length > 0) {
+      payload.nestedAttributes = nestedAttributes
+    }
+
     const response = await ModelClass.executeCommand(commandType, payload)
 
     this.assignAttributes(ModelClass.attributesFromResponse(response))
     this.setIsNewRecord(false)
     this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
+
+    this._reconcileNestedAttributesFromResponse(response)
 
     return this
   }
@@ -2187,6 +2251,121 @@ export default class FrontendModelBase {
     await ModelClass.executeCommand("destroy", {
       id: this.primaryKeyValue()
     })
+  }
+
+  /**
+   * Walks relationships declared in this resource's `nestedAttributes` config
+   * and builds the per-relationship payload of dirty children for a parent save.
+   *
+   * Included children:
+   *   - new records (isNewRecord()) → create entry with attributes
+   *   - records marked for destruction (markedForDestruction()) → destroy entry
+   *   - records with changed attributes (isChanged()) → update entry with attributes
+   *   - records with dirty descendants in their own nestedAttributes → recurse
+   *
+   * Loaded but untouched records are omitted so nested save preserves Rails-style
+   * "children not referenced in payload are left alone" semantics.
+   * @returns {Record<string, Array<Record<string, any>>>} - Per-relationship list of nested-attribute entries.
+   */
+  _buildNestedAttributesPayload() {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
+    const nestedAttributesConfig = resourceConfig?.nestedAttributes
+
+    if (!nestedAttributesConfig) return {}
+
+    /** @type {Record<string, Array<Record<string, any>>>} */
+    const payload = {}
+
+    for (const relationshipName of Object.keys(nestedAttributesConfig)) {
+      const relationship = this._relationships[relationshipName]
+
+      if (!relationship || !(relationship instanceof FrontendModelHasManyRelationship)) continue
+      if (!Array.isArray(relationship._loadedValue) || relationship._loadedValue.length === 0) continue
+
+      /** @type {Array<Record<string, any>>} */
+      const entries = []
+
+      for (const child of relationship._loadedValue) {
+        const childEntry = child._nestedAttributesEntryForParentSave()
+
+        if (childEntry) entries.push(childEntry)
+      }
+
+      if (entries.length > 0) {
+        payload[relationshipName] = entries
+      }
+    }
+
+    return payload
+  }
+
+  /**
+   * Builds the payload entry for this child when walked by a parent's
+   * `_buildNestedAttributesPayload`. Returns `null` when the child has no
+   * dirty state and no dirty descendants, so the parent can omit it.
+   * @returns {Record<string, any> | null} - Nested-attribute entry or null if clean.
+   */
+  _nestedAttributesEntryForParentSave() {
+    if (this.markedForDestruction()) {
+      if (this.isNewRecord()) return null
+      return {id: this.primaryKeyValue(), _destroy: true}
+    }
+
+    const nestedAttributes = this._buildNestedAttributesPayload()
+    const hasNestedDirty = Object.keys(nestedAttributes).length > 0
+
+    if (this.isNewRecord()) {
+      /** @type {Record<string, any>} */
+      const entry = {attributes: this.attributes()}
+
+      if (hasNestedDirty) entry.nestedAttributes = nestedAttributes
+
+      return entry
+    }
+
+    if (!this.isChanged() && !hasNestedDirty) return null
+
+    /** @type {Record<string, any>} */
+    const entry = {id: this.primaryKeyValue()}
+
+    if (this.isChanged()) entry.attributes = this.attributes()
+    if (hasNestedDirty) entry.nestedAttributes = nestedAttributes
+
+    return entry
+  }
+
+  /**
+   * After a parent save with `nestedAttributes`, the server response includes
+   * preloaded versions of the affected relationships. This replaces the local
+   * `_loadedValue` for each nested-writable relationship with the server's
+   * authoritative set, so destroyed children are dropped and newly-created
+   * children get their server-assigned ids + persisted state.
+   * @param {Record<string, any>} response - Command response payload.
+   * @returns {void}
+   */
+  _reconcileNestedAttributesFromResponse(response) {
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
+    const nestedAttributesConfig = resourceConfig?.nestedAttributes
+
+    if (!nestedAttributesConfig) return
+
+    const modelData = ModelClass.modelDataFromResponse(response)
+    const preloadedRelationships = modelData.preloadedRelationships
+
+    /** @type {Record<string, any>} */
+    const relevantPreloads = {}
+
+    for (const relationshipName of Object.keys(nestedAttributesConfig)) {
+      if (relationshipName in preloadedRelationships) {
+        relevantPreloads[relationshipName] = preloadedRelationships[relationshipName]
+      }
+    }
+
+    if (Object.keys(relevantPreloads).length > 0) {
+      ModelClass.applyPreloadedRelationships(this, relevantPreloads)
+    }
   }
 
   /**

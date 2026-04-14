@@ -2465,4 +2465,171 @@ describe("Frontend models - base", () => {
     }
   })
 
+  describe("nested attributes", () => {
+    /**
+     * Build a two-level nested test graph: Project hasMany Tasks, Task hasMany Comments.
+     *
+     * Project declares `nestedAttributes: {tasks: {allowDestroy: true}}` and
+     * Task declares `nestedAttributes: {comments: {allowDestroy: true}}` so we can
+     * exercise recursive payload collection.
+     * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes.
+     */
+    function buildNestedTestClasses() {
+      /** Comment frontend-model. */
+      class Comment extends FrontendModelBase {
+        /** @returns {{attributes: string[], primaryKey: string}} */
+        static resourceConfig() {
+          return {attributes: ["id", "taskId", "body"], primaryKey: "id"}
+        }
+        /** @returns {any} */
+        id() { return this.readAttribute("id") }
+        /** @returns {any} */
+        body() { return this.readAttribute("body") }
+        /** @param {any} v @returns {any} */
+        setBody(v) { return this.setAttribute("body", v) }
+      }
+      /** Task frontend-model with nested comments. */
+      class Task extends FrontendModelBase {
+        /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} */
+        static resourceConfig() {
+          return {
+            attributes: ["id", "projectId", "name"],
+            nestedAttributes: {comments: {allowDestroy: true}},
+            primaryKey: "id"
+          }
+        }
+        /** @returns {Record<string, typeof FrontendModelBase>} */
+        static relationshipModelClasses() { return {comments: Comment} }
+        /** @returns {Record<string, {type: "hasMany"}>} */
+        static relationshipDefinitions() { return {comments: {type: "hasMany"}} }
+        /** @returns {any} */
+        id() { return this.readAttribute("id") }
+        /** @returns {any} */
+        name() { return this.readAttribute("name") }
+        /** @param {any} v @returns {any} */
+        setName(v) { return this.setAttribute("name", v) }
+      }
+      /** Project frontend-model with nested tasks. */
+      class Project extends FrontendModelBase {
+        /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} */
+        static resourceConfig() {
+          return {
+            attributes: ["id", "name"],
+            nestedAttributes: {tasks: {allowDestroy: true}},
+            primaryKey: "id"
+          }
+        }
+        /** @returns {Record<string, typeof FrontendModelBase>} */
+        static relationshipModelClasses() { return {tasks: Task} }
+        /** @returns {Record<string, {type: "hasMany"}>} */
+        static relationshipDefinitions() { return {tasks: {type: "hasMany"}} }
+        /** @returns {any} */
+        id() { return this.readAttribute("id") }
+        /** @returns {any} */
+        name() { return this.readAttribute("name") }
+        /** @param {any} v @returns {any} */
+        setName(v) { return this.setAttribute("name", v) }
+      }
+      return {Comment, Project, Task}
+    }
+
+    it("emits nestedAttributes entries for built (new) children on save", async () => {
+      const {Project} = buildNestedTestClasses()
+      const fetchStub = stubFetch({model: {id: 42, name: "Launch"}})
+
+      try {
+        const project = new Project({name: "Launch"})
+        project.getRelationshipByName("tasks").build({name: "Design"})
+        project.getRelationshipByName("tasks").build({name: "Implement"})
+
+        await project.save()
+
+        expect(fetchStub.calls.length).toEqual(1)
+        const sent = fetchStub.calls[0].body
+        expect(sent.nestedAttributes).toEqual({
+          tasks: [
+            {attributes: {name: "Design"}},
+            {attributes: {name: "Implement"}}
+          ]
+        })
+      } finally {
+        resetFrontendModelTransport()
+        fetchStub.restore()
+      }
+    })
+
+    it("emits _destroy entries for children marked for destruction and skips unchanged preloaded children", async () => {
+      const {Project, Task} = buildNestedTestClasses()
+      const fetchStub = stubFetch({model: {id: 5, name: "Launch"}})
+
+      try {
+        const project = /** @type {any} */ (Project).instantiateFromResponse({model: {id: 5, name: "Launch"}})
+
+        const existingTask = /** @type {any} */ (Task).instantiateFromResponse({model: {id: 11, name: "Design", projectId: 5}})
+        const doomedTask = /** @type {any} */ (Task).instantiateFromResponse({model: {id: 12, name: "Deprecated", projectId: 5}})
+
+        project.getRelationshipByName("tasks").setLoaded([existingTask, doomedTask])
+
+        doomedTask.markForDestruction()
+        project.setName("Launch v2")
+
+        await project.save()
+
+        expect(fetchStub.calls.length).toEqual(1)
+        const sent = fetchStub.calls[0].body
+        expect(sent.nestedAttributes).toEqual({
+          tasks: [{id: 12, _destroy: true}]
+        })
+      } finally {
+        resetFrontendModelTransport()
+        fetchStub.restore()
+      }
+    })
+
+    it("recurses into grandchildren with nested attributes on the child resource", async () => {
+      const {Project} = buildNestedTestClasses()
+      const fetchStub = stubFetch({model: {id: 5, name: "Launch"}})
+
+      try {
+        const project = new Project({name: "Launch"})
+        const task = project.getRelationshipByName("tasks").build({name: "Design"})
+        task.getRelationshipByName("comments").build({body: "first!"})
+
+        await project.save()
+
+        expect(fetchStub.calls.length).toEqual(1)
+        const sent = fetchStub.calls[0].body
+        expect(sent.nestedAttributes).toEqual({
+          tasks: [
+            {
+              attributes: {name: "Design"},
+              nestedAttributes: {
+                comments: [{attributes: {body: "first!"}}]
+              }
+            }
+          ]
+        })
+      } finally {
+        resetFrontendModelTransport()
+        fetchStub.restore()
+      }
+    })
+
+    it("omits nestedAttributes from payload when no children are dirty", async () => {
+      const {Project} = buildNestedTestClasses()
+      const fetchStub = stubFetch({model: {id: 5, name: "Launch"}})
+
+      try {
+        const project = new Project({name: "Launch"})
+
+        await project.save()
+
+        expect(fetchStub.calls.length).toEqual(1)
+        expect(fetchStub.calls[0].body.nestedAttributes).toEqual(undefined)
+      } finally {
+        resetFrontendModelTransport()
+        fetchStub.restore()
+      }
+    })
+  })
 })
