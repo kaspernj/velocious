@@ -3,6 +3,16 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
 
+/**
+ * @typedef {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}} NestedAttributesPolicy
+ */
+/**
+ * @typedef {Record<string, NestedAttributesPolicy>} NestedAttributesConfig
+ */
+/**
+ * @typedef {{allowDestroy?: boolean, limit?: number}} SerializableNestedAttributesPolicy
+ */
+
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
   /** @returns {Promise<void>} - Resolves when files are generated. */
@@ -299,13 +309,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (nestedAttributesConfig && Object.keys(nestedAttributesConfig).length > 0) {
       fileContent += "      nestedAttributes: {\n"
       for (const [relationshipName, policy] of Object.entries(nestedAttributesConfig)) {
-        const serializablePolicy = /** @type {Record<string, any>} */ ({})
-
-        for (const [key, value] of Object.entries(/** @type {Record<string, any>} */ (policy))) {
-          // rejectIf is a function — runtime-only, never serialized to the generated frontend model
-          if (typeof value === "function") continue
-          serializablePolicy[key] = value
-        }
+        const serializablePolicy = this.serializableNestedAttributesPolicy(policy)
 
         fileContent += `        ${relationshipName}: ${JSON.stringify(serializablePolicy)},\n`
       }
@@ -471,22 +475,25 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * resource overrides must support being called without a request context
    * for the generator to read their default policy.
    * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} resourceClass - Resource class.
-   * @returns {Record<string, any> | null} - Nested-attribute policy or null.
+   * @returns {NestedAttributesConfig | null} - Nested-attribute policy or null.
    */
   invokeNestedAttributesForGenerator(resourceClass) {
     if (!resourceClass || typeof resourceClass !== "function") return null
-    if (typeof resourceClass.prototype?.nestedAttributes !== "function") return null
+
+    const prototypeWithMethod = /** @type {{nestedAttributes?: (arg?: object) => NestedAttributesConfig}} */ (resourceClass.prototype)
+
+    if (typeof prototypeWithMethod?.nestedAttributes !== "function") return null
 
     try {
-      const instance = /** @type {any} */ (new resourceClass({
+      const instance = new resourceClass({
         ability: undefined,
         context: {},
         locals: {},
         modelClass: resourceClass.ModelClass,
         modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
         params: {},
-        resourceConfiguration: /** @type {any} */ ({abilities: {}, attributes: []})
-      }))
+        resourceConfiguration: /** @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration} */ ({abilities: {}, attributes: []})
+      })
       const result = instance.nestedAttributes()
 
       if (result && typeof result === "object" && Object.keys(result).length > 0) return result
@@ -499,6 +506,24 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return null
+  }
+
+  /**
+   * Strips function-valued options (e.g. `rejectIf`) from a nested-attributes
+   * policy so the remainder is safe to JSON.stringify into a generated
+   * frontend-model file. Functions are server-only runtime policy and have
+   * no meaning on the client.
+   * @param {NestedAttributesPolicy} policy - Server-side policy.
+   * @returns {SerializableNestedAttributesPolicy} - JSON-safe subset.
+   */
+  serializableNestedAttributesPolicy(policy) {
+    /** @type {SerializableNestedAttributesPolicy} */
+    const serializable = {}
+
+    if (typeof policy.allowDestroy === "boolean") serializable.allowDestroy = policy.allowDestroy
+    if (typeof policy.limit === "number") serializable.limit = policy.limit
+
+    return serializable
   }
 
   /**
