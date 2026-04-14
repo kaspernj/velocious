@@ -10,6 +10,17 @@ Project.hasMany("tasks")
 Project.hasOne("projectDetail")
 ```
 
+## Accepting nested attribute writes
+
+Models can opt into Rails-style nested-attribute writes so a parent's frontend-model `save()` cascades into its `hasMany` children in a single transaction. Each parent model must explicitly declare which relationships accept nested writes:
+
+```js
+Project.hasMany("tasks")
+Project.acceptsNestedAttributesFor("tasks", {allowDestroy: true, limit: 100})
+```
+
+Resource-level configuration (`static nestedAttributes` or `permittedParams(arg)`) is also required before the framework will apply nested writes. See [nested-attributes.md](nested-attributes.md) for the full feature doc, wire payload, and backend cascade semantics.
+
 Each accepts an optional scope callback and/or options object:
 
 ```js

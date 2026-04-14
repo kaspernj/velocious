@@ -38,8 +38,14 @@
 - `first()` and `last()` are available on frontend query/model classes.
 - `search(path, column, operator, value)` supports both named operators (`gt`, `lt`, `gteq`, `lteq`) and symbolic aliases (`>`, `<`, `>=`, `<=`).
 
+## Nested attributes on `save()`
+- Parents can save dirty `hasMany` children in the same request via Rails-style nested-attribute writes. See [nested-attributes.md](nested-attributes.md) for the full feature doc.
+- Requires a three-layer opt-in: `Model.acceptsNestedAttributesFor(name, options)` on the backend `Record` subclass, `static nestedAttributes` on the resource, and/or an overridden `permittedParams(arg)` method for request-aware filtering.
+- `markForDestruction()` / `markedForDestruction()` on any frontend-model instance flags a loaded child for destruction on the next parent `save()`.
+- The `save()` walker includes only dirty children (new / changed / marked-for-destruction / with dirty descendants); loaded-but-untouched children are omitted.
+
 ## Record parity helpers
-- `save()` is available for create/update flows (`create` when new record, `update` when persisted).
+- `save()` is available for create/update flows (`create` when new record, `update` when persisted). With nested attributes enabled, it also carries dirty children in the same request.
 - `create(attributes)` is available on frontend model classes.
 - `isNewRecord()`, `isPersisted()`, `changes()`, and `isChanged()` are available on frontend model instances.
 - Relationship parity helpers are available via `loadRelationship(name)` / `relationshipOrLoad(name)` / `setRelationship(name, value)` and generated `loadXxx` / `xxxOrLoad` / `setXxx` methods where applicable.
