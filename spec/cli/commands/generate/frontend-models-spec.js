@@ -126,6 +126,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("builtInMemberCommands?: Record<string, string>")
     expect(taskContents).toContain("collectionCommands?: Record<string, string>")
     expect(taskContents).toContain("memberCommands?: Record<string, string>")
+    expect(taskContents).toContain("modelName?: string")
+    expect(taskContents).toContain("path?: string")
     expect(taskContents.includes("path:")).toEqual(false)
     expect(taskContents).toContain("attributes: [\n")
     expect(taskContents).toContain("      \"id\",\n")
