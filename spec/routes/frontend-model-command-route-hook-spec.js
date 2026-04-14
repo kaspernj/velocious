@@ -208,6 +208,22 @@ describe("routes - frontend model command route hook", () => {
     }).toThrow("Unknown arguments: capabilities")
   })
 
+  it("throws when resourceConfig includes the removed path key", () => {
+    class PathUserFrontendResource extends FrontendModelBaseResource {
+      /** @returns {Record<string, any>} */
+      static resourceConfig() {
+        return {
+          attributes: ["id"],
+          path: "/users"
+        }
+      }
+    }
+
+    expect(() => {
+      frontendModelResourceConfigurationFromDefinition(PathUserFrontendResource)
+    }).toThrow("Unknown arguments: path")
+  })
+
   it("separates built-in and custom command normalization for opted-in resources", () => {
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(UserFrontendResource)
 
