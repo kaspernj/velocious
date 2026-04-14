@@ -1010,6 +1010,8 @@ export default class FrontendModelController extends Controller {
   _frontendModelParams = undefined
   /** @type {Record<string, any> | undefined} */
   _frontendModelParamsOverride = undefined
+  /** @type {import("./authorization/ability.js").default | undefined} */
+  _frontendModelAbilityOverride = undefined
 
   /**
    * @returns {Record<string, any>} - Decoded request params.
@@ -1067,12 +1069,25 @@ export default class FrontendModelController extends Controller {
           request: this.request(),
           response
         })
+        /** @type {import("./authorization/ability.js").default | undefined} */
+        const previousAbilityOverride = this._frontendModelAbilityOverride
 
-        return await configuration.runWithAbility(ability, async () => {
-          return await callback()
-        })
+        this._frontendModelAbilityOverride = ability
+
+        try {
+          return await configuration.runWithAbility(ability, async () => {
+            return await callback()
+          })
+        } finally {
+          this._frontendModelAbilityOverride = previousAbilityOverride
+        }
       })
     })
+  }
+
+  /** @returns {import("./authorization/ability.js").default | undefined} - Current ability for frontend-model request scope. */
+  currentAbility() {
+    return this._frontendModelAbilityOverride || super.currentAbility()
   }
 
   /**
@@ -1313,7 +1328,7 @@ export default class FrontendModelController extends Controller {
   frontendModelAuthorizedQuery(action) {
     const abilityAction = this.frontendModelAbilityAction(action)
 
-    return this.frontendModelClass().accessibleFor(abilityAction)
+    return this.frontendModelClass().accessibleFor(abilityAction, this.currentAbility())
   }
 
   /**

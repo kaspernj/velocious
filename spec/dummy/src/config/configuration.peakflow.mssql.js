@@ -6,6 +6,7 @@ import Configuration from "../../../../src/configuration.js"
 import FilesystemAttachmentStorageDriver from "../../../../src/database/record/attachments/storage-drivers/filesystem.js"
 import dummyDirectory from "../../dummy-directory.js"
 import fs from "fs/promises"
+import isFrontendModelAbilityRequest from "./frontend-model-ability-request.js"
 import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
 import MssqlDriver from "../../../../src/database/drivers/mssql/index.js"
 import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js"
@@ -66,13 +67,7 @@ async function websocketMessageHandlerResolver({request}) {
  * @returns {Ability | undefined}
  */
 function resolveTaskFrontendModelAbility({configuration, params, request, response}) {
-  const requestPath = request.path().split("?")[0]
-  const isFrontendModelCommand = requestPath.startsWith("/api/frontend-models/")
-  const isSharedFrontendModelApi = requestPath === "/velocious/api" || requestPath === "/frontend-models" || requestPath === "/frontend-models/request"
-  const frontendModelRequests = Array.isArray(params.requests) ? params.requests : [params]
-  const includesFrontendModelRequest = frontendModelRequests.some((requestEntry) => typeof requestEntry?.model === "string")
-
-  if (!isFrontendModelCommand && !(isSharedFrontendModelApi && includesFrontendModelRequest)) return
+  if (!isFrontendModelAbilityRequest({backendProjects, params, request})) return
 
   return new Ability({
     context: {configuration, params, request, response},
