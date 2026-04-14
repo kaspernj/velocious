@@ -13,25 +13,31 @@ import {
  */
 function isDirectFrontendModelCommandPath({backendProjects, currentPath}) {
   const normalizedCurrentPath = currentPath.startsWith("/") ? currentPath : `/${currentPath}`
+  const legacyApiPath = normalizedCurrentPath.startsWith("/api/frontend-models/")
+    ? normalizedCurrentPath.replace("/api/frontend-models", "")
+    : null
+  const candidatePaths = legacyApiPath ? [normalizedCurrentPath, legacyApiPath] : [normalizedCurrentPath]
 
-  if (frontendModelCustomCommandForPath({backendProjects, currentPath: normalizedCurrentPath})) {
-    return true
-  }
+  for (const candidatePath of candidatePaths) {
+    if (frontendModelCustomCommandForPath({backendProjects, currentPath: candidatePath})) {
+      return true
+    }
 
-  for (const backendProject of backendProjects) {
-    const resources = frontendModelResourcesForBackendProject(backendProject)
+    for (const backendProject of backendProjects) {
+      const resources = frontendModelResourcesForBackendProject(backendProject)
 
-    for (const modelName in resources) {
-      const resourceDefinition = resources[modelName]
-      const resourcePath = frontendModelResourcePath(modelName, resourceDefinition)
-      const expectedPrefix = `${resourcePath}/`
+      for (const modelName in resources) {
+        const resourceDefinition = resources[modelName]
+        const resourcePath = frontendModelResourcePath(modelName, resourceDefinition)
+        const expectedPrefix = `${resourcePath}/`
 
-      if (!normalizedCurrentPath.startsWith(expectedPrefix)) continue
+        if (!candidatePath.startsWith(expectedPrefix)) continue
 
-      const commandName = normalizedCurrentPath.slice(expectedPrefix.length)
+        const commandName = candidatePath.slice(expectedPrefix.length)
 
-      if (!commandName.includes("/") && frontendModelActionForCommand({commandName, modelName, resourceDefinition})) {
-        return true
+        if (!commandName.includes("/") && frontendModelActionForCommand({commandName, modelName, resourceDefinition})) {
+          return true
+        }
       }
     }
   }
