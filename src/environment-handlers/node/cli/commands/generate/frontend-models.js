@@ -295,6 +295,22 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (modelClass && modelClass.primaryKey() !== "id") {
       fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
     }
+    const nestedAttributesConfig = /** @type {any} */ (resourceClass)?.nestedAttributes
+    if (nestedAttributesConfig && typeof nestedAttributesConfig === "object" && Object.keys(nestedAttributesConfig).length > 0) {
+      fileContent += "      nestedAttributes: {\n"
+      for (const [relationshipName, policy] of Object.entries(nestedAttributesConfig)) {
+        const serializablePolicy = /** @type {Record<string, any>} */ ({})
+
+        for (const [key, value] of Object.entries(/** @type {Record<string, any>} */ (policy))) {
+          // rejectIf is a function — runtime-only, never serialized to the generated frontend model
+          if (typeof value === "function") continue
+          serializablePolicy[key] = value
+        }
+
+        fileContent += `        ${relationshipName}: ${JSON.stringify(serializablePolicy)},\n`
+      }
+      fileContent += "      },\n"
+    }
     fileContent += "    }\n"
     fileContent += "  }\n"
 

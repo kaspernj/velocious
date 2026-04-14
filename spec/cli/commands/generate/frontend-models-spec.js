@@ -368,6 +368,74 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("primaryKey: \"reference\"")
   })
 
+  it("emits nestedAttributes from the resource into the generated frontend-model resourceConfig", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    /** Resource that opts in to nested writes for two relationships with different policies. */
+    class ProjectWithNestedResource extends FrontendModelBaseResource {
+      static nestedAttributes = {
+        tasks: {allowDestroy: true, limit: 50},
+        comments: {}
+      }
+
+      /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {attributes: ["id", "name"]}
+      }
+    }
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            Project: ProjectWithNestedResource
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const projectContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/project.js`, "utf8")
+
+    expect(projectContents).toContain("nestedAttributes: {")
+    expect(projectContents).toContain("tasks: {\"allowDestroy\":true,\"limit\":50}")
+    expect(projectContents).toContain("comments: {}")
+  })
+
+  it("omits nestedAttributes block when the resource declares none", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            User: ReferenceUserFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(User)
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
+
+    expect(userContents.includes("nestedAttributes:")).toEqual(false)
+  })
+
   it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {
     const outputDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-output")
     await fs.rm(outputDirectory, {force: true, recursive: true})
