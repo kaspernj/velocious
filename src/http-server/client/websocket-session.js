@@ -279,9 +279,24 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (!method) throw new Error("method is required")
     if (!path) throw new Error("path is required")
 
+    // Merge session metadata into request headers under the `x-` prefix
+    // so downstream controllers/resources can read `locale`, tenant
+    // identifiers, etc. from the standard request.header(name) API
+    // without plumbing a separate metadata channel through every
+    // request-scoped code path. Session values take precedence over
+    // matching keys the client already sent as headers — metadata is
+    // explicitly a session-wide override.
+    const mergedHeaders = Object.assign({}, headers || {})
+
+    for (const [key, value] of Object.entries(this._metadata || {})) {
+      if (value === null || value === undefined) continue
+
+      mergedHeaders[`x-${key.toLowerCase()}`] = typeof value === "string" ? value : JSON.stringify(value)
+    }
+
     const request = new WebsocketRequest({
       body,
-      headers,
+      headers: mergedHeaders,
       method,
       path,
       remoteAddress: this.client.remoteAddress
