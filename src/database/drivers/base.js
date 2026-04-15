@@ -166,6 +166,15 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifExists] - Whether if exists.
+   * @returns {string[]} - SQL statements.
+   */
+  dropDatabaseSql(databaseName, args) { throw new Error("'dropDatabaseSql' not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
    * @param {CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */

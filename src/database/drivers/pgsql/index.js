@@ -8,6 +8,7 @@ import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
 import Delete from "./sql/delete.js"
 import {digg} from "diggerize"
+import DropDatabase from "./sql/drop-database.js"
 import DropTable from "./sql/drop-table.js"
 import Insert from "./sql/insert.js"
 import Options from "./options.js"
@@ -85,6 +86,19 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     const createDatabase = new CreateDatabase(createArgs)
 
     return createDatabase.toSql()
+  }
+
+  /**
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifExists] - Whether if exists.
+   * @returns {string[]} - SQL statements.
+   */
+  dropDatabaseSql(databaseName, args) {
+    const dropArgs = Object.assign({databaseName, driver: this}, args)
+    const dropDatabase = new DropDatabase(dropArgs)
+
+    return dropDatabase.toSql()
   }
 
   /**

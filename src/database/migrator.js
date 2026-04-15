@@ -64,10 +64,6 @@ export default class VelociousDatabaseMigrator {
     }
   }
 
-  async dropDatabase() {
-    throw new Error("Not implemented yet")
-  }
-
   /**
    * @param {string} dbIdentifier - Db identifier.
    * @param {number} version - Version.
