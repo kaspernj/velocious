@@ -29,8 +29,8 @@ export default class VelociousDatabaseConnectionDriversMysqlSqlCreateDatabase ex
 
     sql += ` ${options.quoteDatabaseName(this.databaseName)}`
 
-    if (this.charset) sql += ` CHARACTER SET ${validateCharsetOrCollation("charset", this.charset)}`
-    if (this.collation) sql += ` COLLATE ${validateCharsetOrCollation("collation", this.collation)}`
+    if (this.databaseCharset) sql += ` CHARACTER SET ${validateCharsetOrCollation("databaseCharset", this.databaseCharset)}`
+    if (this.databaseCollation) sql += ` COLLATE ${validateCharsetOrCollation("databaseCollation", this.databaseCollation)}`
 
     return [sql]
   }

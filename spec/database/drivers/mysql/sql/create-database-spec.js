@@ -23,10 +23,10 @@ describe("database/drivers/mysql/sql/create-database", () => {
     expect(createDatabase.toSql()).toEqual(["CREATE DATABASE IF NOT EXISTS `awesome_tasks_test`"])
   })
 
-  it("emits CHARACTER SET when charset is provided", () => {
+  it("emits CHARACTER SET when databaseCharset is provided", () => {
     const driver = buildDriver()
     const createDatabase = new CreateDatabase({
-      charset: "utf8mb4",
+      databaseCharset: "utf8mb4",
       databaseName: "awesome_tasks_test",
       driver,
       ifNotExists: true
@@ -37,10 +37,10 @@ describe("database/drivers/mysql/sql/create-database", () => {
     ])
   })
 
-  it("emits COLLATE when collation is provided", () => {
+  it("emits COLLATE when databaseCollation is provided", () => {
     const driver = buildDriver()
     const createDatabase = new CreateDatabase({
-      collation: "utf8mb4_unicode_ci",
+      databaseCollation: "utf8mb4_unicode_ci",
       databaseName: "awesome_tasks_test",
       driver,
       ifNotExists: true
@@ -54,8 +54,8 @@ describe("database/drivers/mysql/sql/create-database", () => {
   it("emits both CHARACTER SET and COLLATE when both are provided", () => {
     const driver = buildDriver()
     const createDatabase = new CreateDatabase({
-      charset: "utf8mb4",
-      collation: "utf8mb4_unicode_ci",
+      databaseCharset: "utf8mb4",
+      databaseCollation: "utf8mb4_unicode_ci",
       databaseName: "awesome_tasks_test",
       driver,
       ifNotExists: true
@@ -66,10 +66,10 @@ describe("database/drivers/mysql/sql/create-database", () => {
     ])
   })
 
-  it("rejects charset values that don't match [A-Za-z0-9_]+", () => {
+  it("rejects databaseCharset values that don't match [A-Za-z0-9_]+", () => {
     const driver = buildDriver()
     const createDatabase = new CreateDatabase({
-      charset: "utf8mb4; DROP TABLE users",
+      databaseCharset: "utf8mb4; DROP TABLE users",
       databaseName: "awesome_tasks_test",
       driver,
       ifNotExists: true
@@ -84,13 +84,13 @@ describe("database/drivers/mysql/sql/create-database", () => {
     }
 
     expect(thrown).toBeDefined()
-    expect(thrown.message).toContain("Invalid charset value")
+    expect(thrown.message).toContain("Invalid databaseCharset value")
   })
 
-  it("rejects collation values that don't match [A-Za-z0-9_]+", () => {
+  it("rejects databaseCollation values that don't match [A-Za-z0-9_]+", () => {
     const driver = buildDriver()
     const createDatabase = new CreateDatabase({
-      collation: "utf8mb4_unicode_ci; DROP TABLE users",
+      databaseCollation: "utf8mb4_unicode_ci; DROP TABLE users",
       databaseName: "awesome_tasks_test",
       driver,
       ifNotExists: true
@@ -105,6 +105,6 @@ describe("database/drivers/mysql/sql/create-database", () => {
     }
 
     expect(thrown).toBeDefined()
-    expect(thrown.message).toContain("Invalid collation value")
+    expect(thrown.message).toContain("Invalid databaseCollation value")
   })
 })

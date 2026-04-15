@@ -5,8 +5,8 @@
  * @property {import("../drivers/base.js").default} driver - Database driver used to generate SQL.
  * @property {string} databaseName - Name of the database to create.
  * @property {boolean} [ifNotExists] - Skip creation if the database already exists.
- * @property {string} [charset] - Default character set (driver-specific; currently used by mysql).
- * @property {string} [collation] - Default collation (driver-specific; currently used by mysql).
+ * @property {string} [databaseCharset] - Database-default character set (driver-specific; currently used by mysql).
+ * @property {string} [databaseCollation] - Database-default collation (driver-specific; currently used by mysql).
  */
 
 import QueryBase from "./base.js"
@@ -15,12 +15,12 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
   /**
    * @param {CreateDatabaseArgsType} args - Options object.
    */
-  constructor({driver, databaseName, ifNotExists, charset, collation}) {
+  constructor({driver, databaseName, ifNotExists, databaseCharset, databaseCollation}) {
     super({driver})
     this.databaseName = databaseName
     this.ifNotExists = ifNotExists
-    this.charset = charset
-    this.collation = collation
+    this.databaseCharset = databaseCharset
+    this.databaseCollation = databaseCollation
   }
 
   /**
