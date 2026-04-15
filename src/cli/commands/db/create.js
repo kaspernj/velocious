@@ -52,8 +52,10 @@ export default class DbCreate extends BaseCommand{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async createDatabase(databaseIdentifier) {
-    const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
-    const sqls = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true})
+    const databaseConfiguration = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier)
+    const databaseName = digg(databaseConfiguration, "database")
+    const {databaseCharset, databaseCollation} = databaseConfiguration
+    const sqls = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true, databaseCharset, databaseCollation})
     if (this.args.testing && !this.result) {
       throw new Error("Expected test result collection to be initialized")
     }

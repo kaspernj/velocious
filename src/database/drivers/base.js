@@ -160,6 +160,8 @@ export default class VelociousDatabaseDriversBase {
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.ifNotExists] - Whether if not exists.
+   * @param {string} [args.databaseCharset] - Database-default character set (driver-specific; mysql/mariadb).
+   * @param {string} [args.databaseCollation] - Database-default collation (driver-specific; mysql/mariadb).
    * @returns {string[]} - SQL statements.
    */
   createDatabaseSql(databaseName, args) { throw new Error("'createDatabaseSql' not implemented") } // eslint-disable-line no-unused-vars
