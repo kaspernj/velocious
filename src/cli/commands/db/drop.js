@@ -25,10 +25,19 @@ export default class DbDrop extends BaseCommand {
         const databasePool = this.getConfiguration().getDatabasePool(databaseIdentifier)
         const newConfiguration = incorporate({}, databasePool.getConfiguration())
         const DriverClass = digg(newConfiguration, "driver")
+        const targetDatabaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
 
-        // Connect to a known-existing database since the target may be the only
-        // one configured and will be dropped.
-        newConfiguration.database = newConfiguration.useDatabase || "mysql"
+        // Connect to a known-existing system database: the target is about to
+        // be dropped (so we can't be connected to it), Postgres rejects
+        // DROP DATABASE while connected to it, and configured `useDatabase`
+        // may happen to equal the target — in that case fall through to the
+        // driver's system default.
+        const configuredFallback = newConfiguration.useDatabase
+        const useConfiguredFallback = typeof configuredFallback == "string" && configuredFallback.length > 0 && configuredFallback != targetDatabaseName
+
+        newConfiguration.database = useConfiguredFallback
+          ? configuredFallback
+          : this.systemFallbackDatabaseName(databaseType)
 
         if (databaseType == "mssql" && newConfiguration.sqlConfig?.database) {
           delete newConfiguration.sqlConfig.database
@@ -49,6 +58,17 @@ export default class DbDrop extends BaseCommand {
 
       if (this.args.testing) return this.result
     }
+  }
+
+  /**
+   * @param {string} databaseType - Database type.
+   * @returns {string} - System/maintenance database name for that driver.
+   */
+  systemFallbackDatabaseName(databaseType) {
+    if (databaseType == "pgsql") return "postgres"
+    if (databaseType == "mssql") return "master"
+
+    return "mysql"
   }
 
   /**
