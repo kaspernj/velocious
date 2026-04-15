@@ -27,7 +27,8 @@ Without a resource definition, frontend models should not silently work.
 - Avoid duplicating hand-maintained frontend-model code under backend.
 
 ## Nested-attribute writes
-- Resources opt in to nested writes by overriding the `nestedAttributes(arg)` instance method (or the broader `permittedParams(arg)` hook) to return per-relationship policy `{allowDestroy?, limit?, rejectIf?}`.
-- Model-level `Model.acceptsNestedAttributesFor(name, options)` is **required** in addition to the resource declaration. Without it, nested writes are rejected regardless of resource configuration.
-- `permittedParams(arg)` returns `{attributes: string[], nestedAttributes: Record<string, policy>}` and is **strict by default** — submitting an attribute (nested or not) that is not in the permit raises an error. The default implementation reads `static attributes` minus the conventional auto-managed columns (`id`, `createdAt`, `updatedAt`).
+- Resources opt in to nested writes by overriding `permittedParams(arg)` to return a Rails-style flat array mixing attribute-name strings with `{<relationshipName>Attributes: [...]}` objects.
+- Model-level `Model.acceptsNestedAttributesFor(name, options)` is **required** in addition to the resource declaration. Policy options like `allowDestroy`/`limit`/`rejectIf` live on the model, not in the permit array.
+- `permittedParams(arg)` is **strict by default** — the default returns `[]`, permitting nothing. Submitting an attribute or nested key that is not in the permit raises an error.
+- Include `"_destroy"` inside a nested permit to allow `{_destroy: true}` entries for that relationship; the model must also declare `allowDestroy: true`.
 - Nested children are authorized against their own resource's abilities, not the parent's. Full doc: [nested-attributes.md](nested-attributes.md).

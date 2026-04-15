@@ -2,7 +2,7 @@
 
 Velocious supports Rails-style nested-attribute writes on frontend-model `save()`. A parent record can carry dirty `hasMany` children in a single HTTP round-trip with full **create / update / destroy** semantics, per-child authorization, and a single DB transaction around the whole cascade.
 
-A nested write has to pass three independent gates before it is applied. This is deliberate — the model decides what it structurally accepts, the resource decides what the current request is allowed to touch, and the request-aware permit hook lets you tailor that further per user or action.
+A nested write has to pass two independent gates before it is applied. This is deliberate — the model decides what it structurally accepts, and the resource decides what the current request is allowed to touch.
 
 ## Quick example
 
@@ -20,9 +20,12 @@ class ProjectResource extends FrontendModelBaseResource {
   static attributes = ["id", "name"]
   static relationships = ["tasks"]
 
-  /** @returns {Record<string, {allowDestroy?: boolean, limit?: number}>} */
-  nestedAttributes() {
-    return {tasks: {allowDestroy: true}}
+  /** @returns {Array<string | Record<string, any>>} */
+  permittedParams() {
+    return [
+      "name",
+      {tasksAttributes: ["id", "_destroy", "name"]}
+    ]
   }
 }
 
@@ -45,7 +48,7 @@ await project.save()
 // → single request, creates newTask, destroys the obsolete ones, updates the parent
 ```
 
-## Three-layer opt-in
+## Two-layer opt-in
 
 ### 1. Model — `acceptsNestedAttributesFor` (Rails-style)
 
@@ -62,64 +65,42 @@ Project.acceptsNestedAttributesFor("tasks", {
 
 Resource-level policy can **restrict** but never **loosen** what the model declared. If the model does not declare `allowDestroy`, no resource can enable destroys for that relationship.
 
-### 2. Resource — `nestedAttributes(arg)` instance method
+### 2. Resource — `permittedParams(arg)`
 
-Declared as an instance method on the frontend-model resource class. Returns the policy for each writable relationship. The policy options mirror the model-level options. Method form (instead of a static field) lets the policy be request-aware — for example, only admins can nested-destroy.
-
-```js
-class ProjectResource extends FrontendModelBaseResource {
-  /** @param {{action?: string, ability, locals}} arg */
-  nestedAttributes(arg) {
-    return {
-      tasks: {allowDestroy: arg?.locals?.isAdmin === true}
-    }
-  }
-}
-```
-
-Deeper nesting is discovered via each child resource's own `nestedAttributes(arg)` — parents do **not** inline the full tree. If `Task` has nested `subtasks`, `TaskResource` declares it. Authorization and policy stay on the child resource that actually owns the records being written.
-
-### 3. Resource — `permittedParams(arg)` (api_maker-style, full permit)
-
-`permittedParams(arg)` is the comprehensive Rails-strong-params / api_maker-style hook. It returns a permit spec covering both attributes and nested attributes for the current request:
+Declared as an instance method on the frontend-model resource class. Returns a Rails/api_maker-style **flat array** that mixes attribute-name strings with `{<relationshipName>Attributes: [...]}` objects for nested permits:
 
 ```js
 class ProjectResource extends FrontendModelBaseResource {
-  /**
-   * @param {{action: "create" | "update", params: Record<string, any>, ability, locals}} arg
-   */
+  /** @param {{action?: string, ability, locals}} [arg] */
   permittedParams(arg) {
-    const attrs = ["name", "description"]
-
-    if (arg.locals.isAdmin) attrs.push("internalNotes")
-
-    return {
-      attributes: attrs,
-      nestedAttributes: arg.action === "update"
-        ? {tasks: {allowDestroy: true}}
-        : {}
-    }
+    return [
+      "name",
+      "description",
+      {tasksAttributes: ["id", "_destroy", "name",
+        {subtasksAttributes: ["id", "_destroy", "name"]}
+      ]}
+    ]
   }
 }
 ```
 
-**Strict by default.** Submitting an attribute that is not in the permit's `attributes` array — or a nested key that is not in `nestedAttributes` — raises an error and fails the write. There is no silent drop and no "permit all writable" fallback.
+This matches Ruby on Rails strong_params (`permit(:first_name, :last_name, contact_attributes: [:email, details_attributes: [:detail]])`) and the api_maker sister project.
 
-The returned spec:
+**Strict by default.** Submitting an attribute or nested-relationship key that is not in the permit raises an error and fails the write. There is no silent drop. The default implementation returns `[]` — nothing is permitted. A resource that doesn't override `permittedParams` cannot accept any write.
 
-| Key | Type | Meaning |
-|---|---|---|
-| `attributes` | `string[]` | Whitelist of writable attribute names. Submitting an unlisted attribute throws. |
-| `nestedAttributes` | `Record<string, {allowDestroy?, limit?, rejectIf?}>` | Whitelist of writable nested relationships. The framework further filters child attributes through that child resource's own `permittedParams`. |
+**Policy options** (`allowDestroy`, `limit`, `rejectIf`) live on the **model** side via `acceptsNestedAttributesFor`. The permit array only lists which attributes and nested relationships are writable. To allow destroys for a relationship, include `"_destroy"` in its nested permit **and** set `allowDestroy: true` on the model's `acceptsNestedAttributesFor`.
 
-The default `permittedParams` implementation returns `{attributes: [], nestedAttributes: {}}` — **nothing is permitted** until a subclass overrides it. This matches api_maker's behavior: a resource that doesn't declare `permitted_params` cannot accept writes. When overriding, you can delegate the nested permit to `this.nestedAttributes(arg)` if you'd rather keep that declaration in one method:
+**Deeper nesting** lives inline in the parent's permit (Rails-style): `{tasksAttributes: ["id", "name", {subtasksAttributes: ["id"]}]}`. The parent's permit governs what attributes can be written on nested children; child-resource `permittedParams` only applies to direct writes on that child.
+
+**Request-aware permits** are straightforward because `permittedParams(arg)` is a method with access to `arg.action`, `arg.ability`, `arg.locals`. For example:
 
 ```js
 permittedParams(arg) {
-  return {
-    attributes: ["name", "description"],
-    nestedAttributes: this.nestedAttributes(arg)
-  }
+  const attrs = ["name", "description"]
+
+  if (arg?.locals?.isAdmin) attrs.push("internalNotes")
+
+  return [...attrs, {tasksAttributes: ["id", "_destroy", "name"]}]
 }
 ```
 

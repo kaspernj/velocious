@@ -129,52 +129,47 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * Returns the nested-relationship policy for this resource. Override on
-   * subclasses to declare which relationships accept nested writes via
-   * frontend-model `save()` and what policy applies (allowDestroy, limit,
-   * rejectIf). Default returns an empty object — no nested writes permitted.
+   * Returns a Rails-strong-params / api_maker-style permit spec declaring
+   * which attributes and nested attributes are writable for the current
+   * request. Submitting an attribute or nested-relationship key that is
+   * not permitted raises an error and fails the write.
    *
-   * Method form (instead of a static field) lets the policy be request-aware,
-   * e.g. only admins can nested-destroy.
+   * The returned value is a flat array that mixes:
+   *   - `"attributeName"` strings for plain attribute writes
+   *   - `{<relationshipName>Attributes: [...]}` objects where the value
+   *     is itself a permit spec for the nested relationship
+   *
+   * This matches Rails strong_params (`permit(:first_name, :last_name,
+   * contact_attributes: [:email, details_attributes: [:detail]])`) and
+   * the api_maker sister project. Include `"_destroy"` inside a nested
+   * permit to allow `_destroy: true` entries for that relationship —
+   * the model must also declare `acceptsNestedAttributesFor(name,
+   * {allowDestroy: true})` for the destroy to be applied.
+   *
+   * Example:
    *
    *   class ProjectResource extends FrontendModelBaseResource {
-   *     nestedAttributes(arg) {
-   *       return {
-   *         tasks: {allowDestroy: arg?.locals?.isAdmin === true, limit: 100}
-   *       }
+   *     permittedParams(arg) {
+   *       return [
+   *         "name",
+   *         "description",
+   *         {tasksAttributes: ["id", "_destroy", "name",
+   *           {subtasksAttributes: ["id", "_destroy", "name"]}
+   *         ]}
+   *       ]
    *     }
    *   }
    *
-   * Recursion into deeper levels follows each child resource's own
-   * `nestedAttributes(arg)` — parents do NOT inline the full tree, so
-   * authorization and policy stay on the child resource that owns the records.
+   * Default implementation returns `[]` — nothing permitted. Subclasses
+   * must override to enable writes. A resource that does not declare
+   * `permittedParams` cannot accept any write.
    * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
-   * @returns {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}>} - Nested-attribute policy keyed by relationship name.
-   */
-  nestedAttributes(arg) {
-    void arg
-
-    return {}
-  }
-
-  /**
-   * Returns a Rails-strong-params / api_maker-style permit spec declaring
-   * which attributes and nested attributes are writable for the current
-   * request. Submitting an attribute or nested relationship that is not
-   * permitted raises an error and fails the write.
-   *
-   * Default implementation permits **nothing** — subclasses must
-   * override to enable any writes, matching api_maker's
-   * `permitted_params(arg)` model. This keeps the permit contract
-   * entirely explicit: no writes succeed unless the resource author has
-   * declared them.
-   * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
-   * @returns {{attributes: string[], nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attrs: Record<string, any>) => boolean}>}} - Permit spec.
+   * @returns {Array<string | Record<string, any>>} - Permit spec.
    */
   permittedParams(arg) {
     void arg
 
-    return {attributes: [], nestedAttributes: {}}
+    return []
   }
 
   /** @returns {string} - Primary key. */
@@ -237,8 +232,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes, options = {}) {
-    const permitSpec = this.permittedParams({action: "create", ability: this.ability, locals: this.locals, params: attributes})
-    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes, this, permitSpec.attributes)
+    const permit = parsePermittedParams(this.permittedParams({action: "create", ability: this.ability, locals: this.locals, params: attributes}))
+    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attributes, this, permit.attributes)
     const ModelClass = this.modelClass()
     const model = new ModelClass()
 
@@ -247,11 +242,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       await model.save()
 
       if (options.nestedAttributes) {
-        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permitSpec)
+        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permit)
       }
     })
 
-    await this._preloadNestedWritableRelationships(model)
+    await this._preloadNestedWritableRelationships(model, permit)
 
     return model
   }
@@ -271,8 +266,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Updated model.
    */
   async update(model, attributes, options = {}) {
-    const permitSpec = this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: attributes})
-    const filtered = filterWritableFrontendModelAttributes(model, attributes, this, permitSpec.attributes)
+    const permit = parsePermittedParams(this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: attributes}))
+    const filtered = filterWritableFrontendModelAttributes(model, attributes, this, permit.attributes)
     const ModelClass = this.modelClass()
 
     await ModelClass.transaction(async () => {
@@ -280,11 +275,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       await model.save()
 
       if (options.nestedAttributes) {
-        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permitSpec)
+        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permit)
       }
     })
 
-    await this._preloadNestedWritableRelationships(model)
+    await this._preloadNestedWritableRelationships(model, permit)
 
     return model
   }
@@ -389,22 +384,25 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * parent's). Destroys run before updates, updates before creates, to avoid
    * unique-constraint conflicts when replacing a child at the same natural key.
    *
+   * Attribute filtering for nested children uses the parent resource's
+   * permit spec for that relationship — api_maker-style. Policy options
+   * (allowDestroy, limit, rejectIf) come from the MODEL's
+   * `acceptedNestedAttributesFor(name)` declaration.
    * @param {import("../database/record/index.js").default} parent - Parent model instance.
    * @param {Record<string, any>} nestedAttributes - Nested-attribute payload keyed by relationship name.
    * @param {any} controller - Controller instance for resource resolution and authorization.
-   * @param {{attributes: string[] | null, nestedAttributes: Record<string, any>} | null} [parentPermitSpec] - Optional pre-computed parent permit spec. Recomputed when not provided.
+   * @param {{attributes: string[], nested: Record<string, any>} | null} [parentPermit] - Parsed parent permit spec.
    * @returns {Promise<void>}
    */
-  async _applyNestedAttributes(parent, nestedAttributes, controller, parentPermitSpec = null) {
-    const declared = parentPermitSpec?.nestedAttributes
-      || this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: {}}).nestedAttributes
-      || {}
+  async _applyNestedAttributes(parent, nestedAttributes, controller, parentPermit = null) {
+    const resolvedParent = parentPermit
+      || parsePermittedParams(this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: {}}))
 
     for (const relationshipName of Object.keys(nestedAttributes)) {
-      const policy = declared[relationshipName]
+      const childPermit = resolvedParent.nested[relationshipName]
 
-      if (!policy) {
-        throw new Error(`Nested attributes for '${relationshipName}' are not permitted by ${this.constructor.name}.nestedAttributes(). Override that method to include this relationship in the returned policy.`)
+      if (!childPermit) {
+        throw new Error(`Nested attributes for '${relationshipName}' are not permitted by ${this.constructor.name}.permittedParams(). Include {${relationshipName}Attributes: [...]} in the returned permit.`)
       }
 
       const entries = nestedAttributes[relationshipName]
@@ -413,21 +411,17 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         throw new Error(`Expected array for nestedAttributes['${relationshipName}'] but got: ${typeof entries}`)
       }
 
-      if (typeof policy.limit === "number" && entries.length > policy.limit) {
-        throw new Error(`nestedAttributes['${relationshipName}'] exceeds declared limit of ${policy.limit}.`)
-      }
-
       const parentModelClass = /** @type {any} */ (parent.getModelClass())
       const modelAcceptance = parentModelClass.acceptedNestedAttributesFor?.(relationshipName)
 
       if (!modelAcceptance) {
-        throw new Error(`Model ${parentModelClass.name} does not accept nested attributes for '${relationshipName}'. Declare it via ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}'${policy.allowDestroy ? ", {allowDestroy: true}" : ""}).`)
+        throw new Error(`Model ${parentModelClass.name} does not accept nested attributes for '${relationshipName}'. Declare it via ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}').`)
       }
 
-      // Model-level policy bounds the resource policy — the resource may be more restrictive
-      // but cannot loosen what the model declared.
-      if (policy.allowDestroy && !modelAcceptance.allowDestroy) {
-        throw new Error(`Resource permits destroy on nestedAttributes['${relationshipName}'] but the model ${parentModelClass.name} does not allow destroy for that relationship. Set {allowDestroy: true} on ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}', ...).`)
+      const destroyPermitted = childPermit.attributes.includes("_destroy")
+
+      if (destroyPermitted && !modelAcceptance.allowDestroy) {
+        throw new Error(`Resource permits _destroy on nestedAttributes['${relationshipName}'] but the model ${parentModelClass.name} does not allow destroy for that relationship. Set {allowDestroy: true} on ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}', ...).`)
       }
 
       if (typeof modelAcceptance.limit === "number" && entries.length > modelAcceptance.limit) {
@@ -473,11 +467,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       const createEntries = []
 
       for (const entry of entries) {
-        if (typeof policy.rejectIf === "function" && policy.rejectIf(entry?.attributes || {})) continue
+        if (typeof modelAcceptance.rejectIf === "function" && modelAcceptance.rejectIf(entry?.attributes || {})) continue
 
         if (entry?._destroy) {
-          if (!policy.allowDestroy) {
-            throw new Error(`nestedAttributes['${relationshipName}'] entry requested _destroy but allowDestroy is not enabled on this resource.`)
+          if (!destroyPermitted) {
+            throw new Error(`nestedAttributes['${relationshipName}'] entry requested _destroy but "_destroy" is not in the permit for this relationship.`)
           }
           if (!entry.id) {
             throw new Error(`nestedAttributes['${relationshipName}'] _destroy entry is missing an id.`)
@@ -489,6 +483,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           createEntries.push(entry)
         }
       }
+
+      // The permit's attribute list governs what child fields can be written.
+      // Exclude `_destroy` from the writable set since it's a control flag,
+      // not an attribute on the record.
+      const childWritableAttributes = /** @type {string[]} */ (childPermit.attributes).filter((name) => name !== "_destroy")
 
       for (const entry of destroyEntries) {
         const existing = await this._findScopedChild({
@@ -518,9 +517,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         })
 
         if (entry.attributes && typeof entry.attributes === "object") {
-          await childResource.update(existing, entry.attributes, {nestedAttributes: entry.nestedAttributes, controller})
-        } else if (entry.nestedAttributes) {
-          await childResource._applyNestedAttributes(existing, entry.nestedAttributes, controller)
+          const filtered = filterWritableFrontendModelAttributes(existing, entry.attributes, childResource, childWritableAttributes)
+          await /** @type {any} */ (childResource)._assignWithVirtualSetters(existing, filtered)
+          await existing.save()
+        }
+
+        if (entry.nestedAttributes) {
+          await /** @type {any} */ (childResource)._applyNestedAttributes(existing, entry.nestedAttributes, controller, childPermit)
         }
       }
 
@@ -529,13 +532,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
         const child = parentRelationship.build({...childAttributes, [foreignKey]: parent.id()})
 
-        const childPermitSpec = /** @type {any} */ (childResource).permittedParams({
-          action: "create",
-          ability,
-          locals: childResource.locals,
-          params: childAttributes
-        })
-        const filtered = filterWritableFrontendModelAttributes(child, childAttributes, childResource, childPermitSpec.attributes)
+        const filtered = filterWritableFrontendModelAttributes(child, childAttributes, childResource, childWritableAttributes)
 
         await /** @type {any} */ (childResource)._assignWithVirtualSetters(child, filtered)
         await child.save()
@@ -549,7 +546,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         })
 
         if (entry.nestedAttributes) {
-          await childResource._applyNestedAttributes(child, entry.nestedAttributes, controller, childPermitSpec)
+          await /** @type {any} */ (childResource)._applyNestedAttributes(child, entry.nestedAttributes, controller, childPermit)
         }
       }
     }
@@ -660,24 +657,79 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * After nested writes, preload every relationship declared by
-   * `nestedAttributes(arg)` so the post-save serialize step emits them and
-   * the client can reconcile ids.
+   * After nested writes, preload every relationship declared in the
+   * parent's permit so the post-save serialize step emits them and the
+   * client can reconcile ids.
    *
    * @param {import("../database/record/index.js").default} model - Saved parent model.
+   * @param {{attributes: string[], nested: Record<string, any>}} permit - Parsed parent permit.
    * @returns {Promise<void>}
    */
-  async _preloadNestedWritableRelationships(model) {
-    const declared = this.nestedAttributes()
+  async _preloadNestedWritableRelationships(model, permit) {
+    const relationshipNames = Object.keys(permit.nested)
 
-    if (!declared || Object.keys(declared).length === 0) return
+    if (relationshipNames.length === 0) return
 
-    for (const relationshipName of Object.keys(declared)) {
+    for (const relationshipName of relationshipNames) {
       if (typeof /** @type {any} */ (model).loadRelationship === "function") {
         await /** @type {any} */ (model).loadRelationship(relationshipName)
       }
     }
   }
+}
+
+/**
+ * Parses the Rails/api_maker-style flat permit spec returned from
+ * `permittedParams(arg)` into a structured shape used internally by the
+ * write pipeline. Strings become attribute permits; objects whose keys
+ * end in `Attributes` become nested permits (the key prefix names the
+ * relationship).
+ *
+ *   parsePermittedParams(["firstName", "lastName",
+ *     {tasksAttributes: ["id", "_destroy", "name"]}
+ *   ])
+ *   // → {
+ *   //   attributes: ["firstName", "lastName"],
+ *   //   nested: {
+ *   //     tasks: {attributes: ["id", "_destroy", "name"], nested: {}}
+ *   //   }
+ *   // }
+ * @param {Array<string | Record<string, any>> | undefined} permitSpec - Flat permit spec.
+ * @returns {{attributes: string[], nested: Record<string, {attributes: string[], nested: Record<string, any>}>}} - Parsed structure.
+ */
+function parsePermittedParams(permitSpec) {
+  /** @type {string[]} */
+  const attributes = []
+  /** @type {Record<string, {attributes: string[], nested: Record<string, any>}>} */
+  const nested = {}
+
+  if (!Array.isArray(permitSpec)) return {attributes, nested}
+
+  for (const entry of permitSpec) {
+    if (typeof entry === "string") {
+      attributes.push(entry)
+    } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      for (const [key, value] of Object.entries(entry)) {
+        if (!key.endsWith("Attributes")) {
+          throw new Error(`Invalid permittedParams entry: nested relationship keys must end in "Attributes" (got "${key}"). Use "${key}Attributes" instead.`)
+        }
+        const relationshipName = key.slice(0, -"Attributes".length)
+
+        if (!relationshipName) {
+          throw new Error(`Invalid permittedParams entry: empty relationship name in key "${key}".`)
+        }
+        if (!Array.isArray(value)) {
+          throw new Error(`Invalid permittedParams entry for "${key}": expected array permit spec, got ${typeof value}.`)
+        }
+
+        nested[relationshipName] = parsePermittedParams(value)
+      }
+    } else {
+      throw new Error(`Invalid permittedParams entry: expected string or nested-attributes object, got ${typeof entry}.`)
+    }
+  }
+
+  return {attributes, nested}
 }
 
 /**

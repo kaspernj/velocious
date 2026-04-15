@@ -368,17 +368,18 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("primaryKey: \"reference\"")
   })
 
-  it("emits nestedAttributes from the resource into the generated frontend-model resourceConfig", async () => {
+  it("emits nestedAttributes relationship names extracted from permittedParams into the generated frontend-model resourceConfig", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
-    /** Resource that opts in to nested writes for two relationships with different policies. */
+    /** Resource that opts in to nested writes for two relationships through permittedParams. */
     class ProjectWithNestedResource extends FrontendModelBaseResource {
-      /** @returns {Record<string, {allowDestroy?: boolean, limit?: number}>} */
-      nestedAttributes() {
-        return {
-          tasks: {allowDestroy: true, limit: 50},
-          comments: {}
-        }
+      /** @returns {Array<string | Record<string, any>>} */
+      permittedParams() {
+        return [
+          "name",
+          {tasksAttributes: ["id", "_destroy", "name"]},
+          {commentsAttributes: ["body"]}
+        ]
       }
 
       /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
@@ -407,7 +408,7 @@ describe("Cli - generate - frontend-models", () => {
     const projectContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/project.js`, "utf8")
 
     expect(projectContents).toContain("nestedAttributes: {")
-    expect(projectContents).toContain("tasks: {\"allowDestroy\":true,\"limit\":50}")
+    expect(projectContents).toContain("tasks: {}")
     expect(projectContents).toContain("comments: {}")
   })
 

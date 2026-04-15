@@ -3,15 +3,6 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
 
-/**
- * @typedef {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}} NestedAttributesPolicy
- */
-/**
- * @typedef {Record<string, NestedAttributesPolicy>} NestedAttributesConfig
- */
-/**
- * @typedef {{allowDestroy?: boolean, limit?: number}} SerializableNestedAttributesPolicy
- */
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
@@ -305,13 +296,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (modelClass && modelClass.primaryKey() !== "id") {
       fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
     }
-    const nestedAttributesConfig = this.invokeNestedAttributesForGenerator(resourceClass || null)
-    if (nestedAttributesConfig && Object.keys(nestedAttributesConfig).length > 0) {
+    const nestedRelationshipNames = this.nestedRelationshipNamesForGenerator(resourceClass || null)
+    if (nestedRelationshipNames.length > 0) {
       fileContent += "      nestedAttributes: {\n"
-      for (const [relationshipName, policy] of Object.entries(nestedAttributesConfig)) {
-        const serializablePolicy = this.serializableNestedAttributesPolicy(policy)
-
-        fileContent += `        ${relationshipName}: ${JSON.stringify(serializablePolicy)},\n`
+      for (const relationshipName of nestedRelationshipNames) {
+        fileContent += `        ${relationshipName}: {},\n`
       }
       fileContent += "      },\n"
     }
@@ -469,20 +458,25 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * Invokes a backend resource's `nestedAttributes()` instance method at
-   * generation time so the static permit set can be emitted into the
-   * generated frontend model. Constructed with no controller/ability so
-   * resource overrides must support being called without a request context
-   * for the generator to read their default policy.
+   * Invokes a backend resource's `permittedParams()` instance method at
+   * generation time and extracts the relationship names that accept
+   * nested writes (`{fooAttributes: [...]}` entries). The generator
+   * emits those names into the frontend model's `resourceConfig()` so
+   * the client `save()` walker knows which relationships to ship.
+   *
+   * Constructed with no controller/ability so resource overrides must
+   * support being called without a request context.
    * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} resourceClass - Resource class.
-   * @returns {NestedAttributesConfig | null} - Nested-attribute policy or null.
+   * @returns {string[]} - Relationship names that accept nested writes (empty when none).
    */
-  invokeNestedAttributesForGenerator(resourceClass) {
-    if (!resourceClass || typeof resourceClass !== "function") return null
+  nestedRelationshipNamesForGenerator(resourceClass) {
+    if (!resourceClass || typeof resourceClass !== "function") return []
 
-    const prototypeWithMethod = /** @type {{nestedAttributes?: (arg?: object) => NestedAttributesConfig}} */ (resourceClass.prototype)
+    const prototypeWithMethod = /** @type {{permittedParams?: (arg?: object) => Array<string | Record<string, any>>}} */ (resourceClass.prototype)
 
-    if (typeof prototypeWithMethod?.nestedAttributes !== "function") return null
+    if (typeof prototypeWithMethod?.permittedParams !== "function") return []
+
+    let spec
 
     try {
       const instance = new resourceClass({
@@ -494,36 +488,27 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         params: {},
         resourceConfiguration: /** @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration} */ ({abilities: {}, attributes: []})
       })
-      const result = instance.nestedAttributes()
-
-      if (result && typeof result === "object" && Object.keys(result).length > 0) return result
+      spec = instance.permittedParams()
     } catch (error) {
-      // A resource that throws when called without a request context can't
-      // surface a static permit set to the generator. Surface the error so
-      // the resource author either guards against missing arg or keeps the
-      // generator-time permit empty by default.
-      throw new Error(`Failed to invoke ${resourceClass.name}.nestedAttributes() while generating frontend models: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
+      throw new Error(`Failed to invoke ${resourceClass.name}.permittedParams() while generating frontend models: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
     }
 
-    return null
-  }
+    if (!Array.isArray(spec)) return []
 
-  /**
-   * Strips function-valued options (e.g. `rejectIf`) from a nested-attributes
-   * policy so the remainder is safe to JSON.stringify into a generated
-   * frontend-model file. Functions are server-only runtime policy and have
-   * no meaning on the client.
-   * @param {NestedAttributesPolicy} policy - Server-side policy.
-   * @returns {SerializableNestedAttributesPolicy} - JSON-safe subset.
-   */
-  serializableNestedAttributesPolicy(policy) {
-    /** @type {SerializableNestedAttributesPolicy} */
-    const serializable = {}
+    /** @type {string[]} */
+    const relationshipNames = []
 
-    if (typeof policy.allowDestroy === "boolean") serializable.allowDestroy = policy.allowDestroy
-    if (typeof policy.limit === "number") serializable.limit = policy.limit
+    for (const entry of spec) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
 
-    return serializable
+      for (const key of Object.keys(entry)) {
+        if (!key.endsWith("Attributes")) continue
+        const name = key.slice(0, -"Attributes".length)
+        if (name) relationshipNames.push(name)
+      }
+    }
+
+    return relationshipNames
   }
 
   /**
