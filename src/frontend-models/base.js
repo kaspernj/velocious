@@ -2215,13 +2215,18 @@ export default class FrontendModelBase {
    */
   async save() {
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
-    const commandType = this.isNewRecord() ? "create" : "update"
+    const isNew = this.isNewRecord()
+    const commandType = isNew ? "create" : "update"
     /** @type {Record<string, any>} */
     const payload = {
-      attributes: this.attributes()
+      // For creates, send all assigned attributes — the user-set hash typically
+      // only contains writable fields. For updates, send only changed
+      // attributes so server-side strict permits don't reject framework-managed
+      // fields like `id`/`createdAt`/`updatedAt` that the resource never lists.
+      attributes: isNew ? this.attributes() : this._changedAttributesForSave()
     }
 
-    if (!this.isNewRecord()) {
+    if (!isNew) {
       payload.id = this.primaryKeyValue()
     }
 
@@ -2240,6 +2245,25 @@ export default class FrontendModelBase {
     this._reconcileNestedAttributesFromResponse(response)
 
     return this
+  }
+
+  /**
+   * Returns the subset of `_attributes` whose value has diverged from
+   * `_persistedAttributes`. Used by `save()` on the update path so the server
+   * receives only the fields the caller actually changed — avoiding strict
+   * permit rejections on framework-managed fields like `id`, `createdAt`,
+   * `updatedAt` that the resource never lists in `permittedParams`.
+   * @returns {Record<string, any>} - Changed attributes hash.
+   */
+  _changedAttributesForSave() {
+    /** @type {Record<string, any>} */
+    const changedAttributes = {}
+
+    for (const [attributeName, [, currentValue]] of Object.entries(this.changes())) {
+      changedAttributes[attributeName] = currentValue
+    }
+
+    return changedAttributes
   }
 
   /**
