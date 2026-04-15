@@ -19,7 +19,7 @@ Project.hasMany("tasks")
 Project.acceptsNestedAttributesFor("tasks", {allowDestroy: true, limit: 100})
 ```
 
-Resource-level configuration (`static nestedAttributes` or `permittedParams(arg)`) is also required before the framework will apply nested writes. See [nested-attributes.md](nested-attributes.md) for the full feature doc, wire payload, and backend cascade semantics.
+Resource-level configuration via `permittedParams(arg)` is also required before the framework will apply nested writes. The permit is a Rails-style flat array that declares attribute names as strings and nested relationships inline with `{<relationshipName>Attributes: [...]}` objects. See [nested-attributes.md](nested-attributes.md) for the full feature doc, wire payload, and backend cascade semantics.
 
 Each accepts an optional scope callback and/or options object:
 

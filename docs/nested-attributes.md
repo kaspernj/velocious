@@ -169,12 +169,12 @@ The server response includes preloaded versions of the affected relationships. T
 For each nested entry:
 
 1. **Model gate** — throws if the parent model hasn't declared `acceptsNestedAttributesFor` for the relationship.
-2. **Resource gate** — throws if the parent's permit spec doesn't include the relationship.
+2. **Resource gate** — throws if the parent's `permittedParams` doesn't include `{<relationshipName>Attributes: [...]}` for that relationship.
 3. **Non-hasMany guard** — throws for `belongsTo` / `hasOne` / polymorphic / through (out of scope for v1).
 4. **Lookup** (updates and destroys only): queries the **child model class** directly (never through the parent controller's scoping), filters by `{[primaryKey]: entry.id, [foreignKey]: parent.id()}`, and applies the child resource's own ability mapping for the requested action. Missing-or-foreign-parent-or-not-authorized collapses to a single clear error that rolls the transaction back.
 5. **Authorization**: always via the **child resource's** own `abilities` mapping — never the parent's. Custom mappings like `{update: "manage"}` are honored.
-6. **Attribute filtering**: runs through the child resource's own `permittedParams(arg)` so the parent doesn't have to know what the child allows.
-7. **Recursion**: if the entry has its own `nestedAttributes`, recurse into the child resource's `_applyNestedAttributes`.
+6. **Attribute filtering**: runs through the **parent's** permit for that relationship (api_maker semantics), so the parent's `permittedParams` is the single source of truth for what attributes can be written on a nested child.
+7. **Recursion**: if the entry has its own `nestedAttributes`, recurse with the child-level permit extracted from the parent's permit spec.
 
 If any step in the cascade fails — unauthorized child, unknown key, nested validation — the whole transaction rolls back. The parent is left unchanged and no children are created or destroyed.
 
@@ -182,8 +182,8 @@ If any step in the cascade fails — unauthorized child, unknown key, nested val
 
 Before nested attributes, the idiomatic way to update a parent with children was a custom controller endpoint that took a bespoke envelope. Migration is:
 
-1. Declare `acceptsNestedAttributesFor` on each parent model.
-2. Declare `nestedAttributes` (or `permittedParams`) on each resource.
+1. Declare `acceptsNestedAttributesFor` on each parent model (include `allowDestroy: true` when destroys are needed).
+2. Declare `permittedParams(arg)` on each resource, returning a Rails-style flat array with `{<relationshipName>Attributes: [...]}` for each nested relationship. Include `"_destroy"` inside the nested permit when destroys are allowed.
 3. Replace the client-side custom POST with `model.save()` after mutating children via `build(...)` and `markForDestruction()`.
 4. Delete the bespoke controller action.
 
