@@ -2,7 +2,7 @@
 
 Velocious supports Rails-style nested-attribute writes on frontend-model `save()`. A parent record can carry dirty `hasMany` children in a single HTTP round-trip with full **create / update / destroy** semantics, per-child authorization, and a single DB transaction around the whole cascade.
 
-A nested write has to pass three independent gates before it is applied. This is deliberate — the model decides what it structurally accepts, the resource decides what the current request is allowed to touch, and the request-aware permit hook lets you tailor that further per user or action.
+A nested write has to pass two independent gates before it is applied. This is deliberate — the model decides what it structurally accepts, and the resource decides what the current request is allowed to touch.
 
 ## Quick example
 
@@ -19,8 +19,13 @@ Task.belongsTo("project")
 class ProjectResource extends FrontendModelBaseResource {
   static attributes = ["id", "name"]
   static relationships = ["tasks"]
-  static nestedAttributes = {
-    tasks: {allowDestroy: true}
+
+  /** @returns {Array<string | Record<string, any>>} */
+  permittedParams() {
+    return [
+      "name",
+      {tasksAttributes: ["id", "_destroy", "name"]}
+    ]
   }
 }
 
@@ -43,7 +48,7 @@ await project.save()
 // → single request, creates newTask, destroys the obsolete ones, updates the parent
 ```
 
-## Three-layer opt-in
+## Two-layer opt-in
 
 ### 1. Model — `acceptsNestedAttributesFor` (Rails-style)
 
@@ -60,52 +65,44 @@ Project.acceptsNestedAttributesFor("tasks", {
 
 Resource-level policy can **restrict** but never **loosen** what the model declared. If the model does not declare `allowDestroy`, no resource can enable destroys for that relationship.
 
-### 2. Resource — `static nestedAttributes` (simple form)
+### 2. Resource — `permittedParams(arg)`
 
-Declared on the frontend-model resource class. Lists which relationships are writable through this resource. The policy options mirror the model-level options.
-
-```js
-class ProjectResource extends FrontendModelBaseResource {
-  static nestedAttributes = {
-    tasks: {allowDestroy: true}
-  }
-}
-```
-
-Deeper nesting is discovered via each child resource's own declaration — parents do **not** inline the full tree. If `Task` has nested `subtasks`, `TaskResource` declares it. Authorization and policy stay on the child resource that actually owns the records being written.
-
-### 3. Resource — `permittedParams(arg)` (api_maker-style, request-aware)
-
-When the simple static declaration isn't enough — for example, admin users may write more attributes than members, or a relationship is only writable on `update` but not `create` — override `permittedParams`. This is the api_maker-style hook.
+Declared as an instance method on the frontend-model resource class. Returns a Rails/api_maker-style **flat array** that mixes attribute-name strings with `{<relationshipName>Attributes: [...]}` objects for nested permits:
 
 ```js
 class ProjectResource extends FrontendModelBaseResource {
-  /**
-   * @param {{action: "create" | "update", params: Record<string, any>, ability, locals}} arg
-   */
+  /** @param {{action?: string, ability, locals}} [arg] */
   permittedParams(arg) {
-    const attrs = ["name", "description"]
-
-    if (arg.locals.isAdmin) attrs.push("internalNotes")
-
-    return {
-      attributes: attrs,
-      nestedAttributes: arg.action === "update"
-        ? {tasks: {allowDestroy: true}}
-        : {}
-    }
+    return [
+      "name",
+      "description",
+      {tasksAttributes: ["id", "_destroy", "name",
+        {subtasksAttributes: ["id", "_destroy", "name"]}
+      ]}
+    ]
   }
 }
 ```
 
-The returned spec:
+This matches Ruby on Rails strong_params (`permit(:first_name, :last_name, contact_attributes: [:email, details_attributes: [:detail]])`) and the api_maker sister project.
 
-| Key | Type | Meaning |
-|---|---|---|
-| `attributes` | `string[] \| null` | Whitelist of writable attribute names. `null` (default) falls back to setter-existence checks — any attribute the model or resource has a setter for is permitted. An explicit array turns on Rails-strong-params-style strict filtering: writes to unlisted attributes throw. |
-| `nestedAttributes` | `Record<string, {allowDestroy?, limit?, rejectIf?}>` | Whitelist of writable nested relationships. The framework further filters child attributes through that child resource's own `permittedParams`. |
+**Strict by default.** Submitting an attribute or nested-relationship key that is not in the permit raises an error and fails the write. There is no silent drop. The default implementation returns `[]` — nothing is permitted. A resource that doesn't override `permittedParams` cannot accept any write.
 
-The default `permittedParams` implementation reads static `nestedAttributes` and leaves `attributes: null`, so existing resources keep working unchanged.
+**Policy options** (`allowDestroy`, `limit`, `rejectIf`) live on the **model** side via `acceptsNestedAttributesFor`. The permit array only lists which attributes and nested relationships are writable. To allow destroys for a relationship, include `"_destroy"` in its nested permit **and** set `allowDestroy: true` on the model's `acceptsNestedAttributesFor`.
+
+**Deeper nesting** lives inline in the parent's permit (Rails-style): `{tasksAttributes: ["id", "name", {subtasksAttributes: ["id"]}]}`. The parent's permit governs what attributes can be written on nested children; child-resource `permittedParams` only applies to direct writes on that child.
+
+**Request-aware permits** are straightforward because `permittedParams(arg)` is a method with access to `arg.action`, `arg.ability`, `arg.locals`. For example:
+
+```js
+permittedParams(arg) {
+  const attrs = ["name", "description"]
+
+  if (arg?.locals?.isAdmin) attrs.push("internalNotes")
+
+  return [...attrs, {tasksAttributes: ["id", "_destroy", "name"]}]
+}
+```
 
 ## Wire payload
 
@@ -172,12 +169,12 @@ The server response includes preloaded versions of the affected relationships. T
 For each nested entry:
 
 1. **Model gate** — throws if the parent model hasn't declared `acceptsNestedAttributesFor` for the relationship.
-2. **Resource gate** — throws if the parent's permit spec doesn't include the relationship.
+2. **Resource gate** — throws if the parent's `permittedParams` doesn't include `{<relationshipName>Attributes: [...]}` for that relationship.
 3. **Non-hasMany guard** — throws for `belongsTo` / `hasOne` / polymorphic / through (out of scope for v1).
 4. **Lookup** (updates and destroys only): queries the **child model class** directly (never through the parent controller's scoping), filters by `{[primaryKey]: entry.id, [foreignKey]: parent.id()}`, and applies the child resource's own ability mapping for the requested action. Missing-or-foreign-parent-or-not-authorized collapses to a single clear error that rolls the transaction back.
 5. **Authorization**: always via the **child resource's** own `abilities` mapping — never the parent's. Custom mappings like `{update: "manage"}` are honored.
-6. **Attribute filtering**: runs through the child resource's own `permittedParams(arg)` so the parent doesn't have to know what the child allows.
-7. **Recursion**: if the entry has its own `nestedAttributes`, recurse into the child resource's `_applyNestedAttributes`.
+6. **Attribute filtering**: runs through the **parent's** permit for that relationship (api_maker semantics), so the parent's `permittedParams` is the single source of truth for what attributes can be written on a nested child.
+7. **Recursion**: if the entry has its own `nestedAttributes`, recurse with the child-level permit extracted from the parent's permit spec.
 
 If any step in the cascade fails — unauthorized child, unknown key, nested validation — the whole transaction rolls back. The parent is left unchanged and no children are created or destroyed.
 
@@ -185,8 +182,8 @@ If any step in the cascade fails — unauthorized child, unknown key, nested val
 
 Before nested attributes, the idiomatic way to update a parent with children was a custom controller endpoint that took a bespoke envelope. Migration is:
 
-1. Declare `acceptsNestedAttributesFor` on each parent model.
-2. Declare `nestedAttributes` (or `permittedParams`) on each resource.
+1. Declare `acceptsNestedAttributesFor` on each parent model (include `allowDestroy: true` when destroys are needed).
+2. Declare `permittedParams(arg)` on each resource, returning a Rails-style flat array with `{<relationshipName>Attributes: [...]}` for each nested relationship. Include `"_destroy"` inside the nested permit when destroys are allowed.
 3. Replace the client-side custom POST with `model.save()` after mutating children via `build(...)` and `markForDestruction()`.
 4. Delete the bespoke controller action.
 

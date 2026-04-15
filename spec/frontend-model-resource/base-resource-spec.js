@@ -5,49 +5,59 @@ import FrontendModelBaseResource from "../../src/frontend-model-resource/base-re
 import DatabaseRecord from "../../src/database/record/index.js"
 
 describe("FrontendModelBaseResource.permittedParams", () => {
-  it("defaults to null attributes and empty nestedAttributes when no statics are set", () => {
-    class ProjectResource extends FrontendModelBaseResource {}
-
-    const resource = new ProjectResource({
-      modelClass: class extends DatabaseRecord {},
-      modelName: "Project",
-      params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
-    })
-
-    const spec = resource.permittedParams({action: "create"})
-    expect(spec.attributes).toEqual(null)
-    expect(spec.nestedAttributes).toEqual({})
-  })
-
-  it("defaults nestedAttributes from static nestedAttributes on the resource class", () => {
+  it("defaults to permitting nothing — subclasses must override to enable writes", () => {
     class ProjectResource extends FrontendModelBaseResource {
-      static nestedAttributes = {tasks: {allowDestroy: true}}
+      static attributes = ["id", "name", "description"]
     }
 
     const resource = new ProjectResource({
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
 
-    const spec = resource.permittedParams({action: "update"})
-    expect(spec.nestedAttributes).toEqual({tasks: {allowDestroy: true}})
+    expect(resource.permittedParams({action: "create"})).toEqual([])
   })
 
-  it("supports subclass overrides that inspect action and ability", () => {
+  it("supports Rails-style flat arrays mixing strings and nested-attributes keys", () => {
     class ProjectResource extends FrontendModelBaseResource {
-      /** @param {{action?: string, locals?: {isAdmin?: boolean}}} arg */
+      permittedParams() {
+        return [
+          "name",
+          "description",
+          {tasksAttributes: ["id", "_destroy", "name"]}
+        ]
+      }
+    }
+
+    const resource = new ProjectResource({
+      modelClass: class extends DatabaseRecord {},
+      modelName: "Project",
+      params: {},
+      resourceConfiguration: /** @type {any} */ (undefined)
+    })
+
+    expect(resource.permittedParams()).toEqual([
+      "name",
+      "description",
+      {tasksAttributes: ["id", "_destroy", "name"]}
+    ])
+  })
+
+  it("supports subclass overrides that vary by action and locals", () => {
+    class ProjectResource extends FrontendModelBaseResource {
+      /** @param {{action?: string, locals?: {isAdmin?: boolean}}} [arg] */
       permittedParams(arg) {
-        const baseAttributes = ["name", "description"]
+        const attrs = ["name", "description"]
 
-        if (arg?.locals?.isAdmin) baseAttributes.push("internalNotes")
+        if (arg?.locals?.isAdmin) attrs.push("internalNotes")
 
-        return {
-          attributes: baseAttributes,
-          nestedAttributes: arg?.action === "create" ? {tasks: {allowDestroy: true}} : {}
+        if (arg?.action === "create") {
+          return [...attrs, {tasksAttributes: ["name"]}]
         }
+
+        return attrs
       }
     }
 
@@ -56,18 +66,25 @@ describe("FrontendModelBaseResource.permittedParams", () => {
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
     const memberResource = new ProjectResource({
       locals: {isAdmin: false},
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
 
-    expect(adminResource.permittedParams({action: "create", locals: {isAdmin: true}}).attributes).toEqual(["name", "description", "internalNotes"])
-    expect(memberResource.permittedParams({action: "create", locals: {isAdmin: false}}).attributes).toEqual(["name", "description"])
-    expect(memberResource.permittedParams({action: "update", locals: {isAdmin: false}}).nestedAttributes).toEqual({})
+    expect(adminResource.permittedParams({action: "create", locals: {isAdmin: true}})).toEqual([
+      "name",
+      "description",
+      "internalNotes",
+      {tasksAttributes: ["name"]}
+    ])
+    expect(memberResource.permittedParams({action: "update", locals: {isAdmin: false}})).toEqual([
+      "name",
+      "description"
+    ])
   })
 })

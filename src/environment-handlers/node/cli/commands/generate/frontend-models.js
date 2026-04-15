@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
 
+
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
   /** @returns {Promise<void>} - Resolves when files are generated. */
@@ -295,6 +296,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (modelClass && modelClass.primaryKey() !== "id") {
       fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
     }
+    const nestedRelationshipNames = this.nestedRelationshipNamesForGenerator(resourceClass || null)
+    if (nestedRelationshipNames.length > 0) {
+      fileContent += "      nestedAttributes: {\n"
+      for (const relationshipName of nestedRelationshipNames) {
+        fileContent += `        ${relationshipName}: {},\n`
+      }
+      fileContent += "      },\n"
+    }
     fileContent += "    }\n"
     fileContent += "  }\n"
 
@@ -446,6 +455,60 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return content
+  }
+
+  /**
+   * Invokes a backend resource's `permittedParams()` instance method at
+   * generation time and extracts the relationship names that accept
+   * nested writes (`{fooAttributes: [...]}` entries). The generator
+   * emits those names into the frontend model's `resourceConfig()` so
+   * the client `save()` walker knows which relationships to ship.
+   *
+   * Constructed with no controller/ability so resource overrides must
+   * support being called without a request context.
+   * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} resourceClass - Resource class.
+   * @returns {string[]} - Relationship names that accept nested writes (empty when none).
+   */
+  nestedRelationshipNamesForGenerator(resourceClass) {
+    if (!resourceClass || typeof resourceClass !== "function") return []
+
+    const prototypeWithMethod = /** @type {{permittedParams?: (arg?: object) => Array<string | Record<string, any>>}} */ (resourceClass.prototype)
+
+    if (typeof prototypeWithMethod?.permittedParams !== "function") return []
+
+    let spec
+
+    try {
+      const instance = new resourceClass({
+        ability: undefined,
+        context: {},
+        locals: {},
+        modelClass: resourceClass.ModelClass,
+        modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
+        params: {},
+        resourceConfiguration: /** @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration} */ ({abilities: {}, attributes: []})
+      })
+      spec = instance.permittedParams()
+    } catch (error) {
+      throw new Error(`Failed to invoke ${resourceClass.name}.permittedParams() while generating frontend models: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
+    }
+
+    if (!Array.isArray(spec)) return []
+
+    /** @type {string[]} */
+    const relationshipNames = []
+
+    for (const entry of spec) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
+
+      for (const key of Object.keys(entry)) {
+        if (!key.endsWith("Attributes")) continue
+        const name = key.slice(0, -"Attributes".length)
+        if (name) relationshipNames.push(name)
+      }
+    }
+
+    return relationshipNames
   }
 
   /**

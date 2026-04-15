@@ -40,8 +40,8 @@
 
 ## Nested attributes on `save()`
 - Parents can save dirty `hasMany` children in the same request via Rails-style nested-attribute writes. See [nested-attributes.md](nested-attributes.md) for the full feature doc.
-- Requires a three-layer opt-in: `Model.acceptsNestedAttributesFor(name, options)` on the backend `Record` subclass, `static nestedAttributes` on the resource, and/or an overridden `permittedParams(arg)` method for request-aware filtering.
-- `markForDestruction()` / `markedForDestruction()` on any frontend-model instance flags a loaded child for destruction on the next parent `save()`.
+- Requires a two-layer opt-in: `Model.acceptsNestedAttributesFor(name, options)` on the backend `Record` subclass (policy: `allowDestroy`, `limit`, `rejectIf`) and an overridden `permittedParams(arg)` method on the resource (flat Rails-style array mixing attribute names with `{<relationshipName>Attributes: [...]}` objects).
+- `markForDestruction()` / `markedForDestruction()` on any frontend-model instance flags a loaded child for destruction on the next parent `save()`. To actually destroy, include `"_destroy"` in the nested permit AND set `allowDestroy: true` on the model.
 - The `save()` walker includes only dirty children (new / changed / marked-for-destruction / with dirty descendants); loaded-but-untouched children are omitted.
 
 ## Record parity helpers

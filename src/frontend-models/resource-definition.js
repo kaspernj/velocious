@@ -66,7 +66,6 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     "commands",
     "memberCommands",
     "modelName",
-    "nestedAttributes",
     "primaryKey",
     "relationships",
     "server"
