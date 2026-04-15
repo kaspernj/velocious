@@ -112,7 +112,16 @@ The returned spec:
 | `attributes` | `string[]` | Whitelist of writable attribute names. Submitting an unlisted attribute throws. |
 | `nestedAttributes` | `Record<string, {allowDestroy?, limit?, rejectIf?}>` | Whitelist of writable nested relationships. The framework further filters child attributes through that child resource's own `permittedParams`. |
 
-The default `permittedParams` implementation derives `attributes` from `static attributes` minus the conventional auto-managed columns (`id`, `createdAt`, `updatedAt`) and delegates the nested set to `this.nestedAttributes(arg)`. Override it for finer-grained control.
+The default `permittedParams` implementation returns `{attributes: [], nestedAttributes: {}}` — **nothing is permitted** until a subclass overrides it. This matches api_maker's behavior: a resource that doesn't declare `permitted_params` cannot accept writes. When overriding, you can delegate the nested permit to `this.nestedAttributes(arg)` if you'd rather keep that declaration in one method:
+
+```js
+permittedParams(arg) {
+  return {
+    attributes: ["name", "description"],
+    nestedAttributes: this.nestedAttributes(arg)
+  }
+}
+```
 
 ## Wire payload
 

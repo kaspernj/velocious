@@ -42,6 +42,14 @@ class TaskFrontendResource extends FrontendModelBaseResource {
 
     return typeof name === "string" ? name.toUpperCase() : null
   }
+
+  /** @returns {{attributes: string[], nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number}>}} - Permit spec for Task writes. */
+  permittedParams() {
+    return {
+      attributes: ["name", "isDone", "descriptionFile"],
+      nestedAttributes: {}
+    }
+  }
 }
 
 class ProjectFrontendResource extends FrontendModelBaseResource {
@@ -61,6 +69,14 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       relationships: ["creatingUser", "tasks"]
+    }
+  }
+
+  /** @returns {{attributes: string[], nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number}>}} - Permit spec for Project writes (name is translated). */
+  permittedParams() {
+    return {
+      attributes: ["name"],
+      nestedAttributes: {}
     }
   }
 }
