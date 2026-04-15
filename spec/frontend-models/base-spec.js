@@ -2330,6 +2330,150 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("save() on the update path sends only changed attributes, never framework-managed fields", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "John Changed"}})
+    const user = User.instantiateFromResponse({createdAt: "2026-01-01T00:00:00.000Z", email: "john@example.com", id: 5, name: "John", updatedAt: "2026-01-02T00:00:00.000Z"})
+
+    try {
+      user.setName("John Changed")
+
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {name: "John Changed"},
+            id: 5
+          },
+          url: "/frontend-models"
+        }
+      ])
+      expect(user.isChanged()).toEqual(false)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("save() on the update path with no changes sends an empty attributes hash", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "John"}})
+    const user = User.instantiateFromResponse({createdAt: "2026-01-01T00:00:00.000Z", email: "john@example.com", id: 5, name: "John", updatedAt: "2026-01-02T00:00:00.000Z"})
+
+    try {
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {},
+            id: 5
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("save() on the update path sends only the subset of attributes touched by setters", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "renamed@example.com", id: 5, name: "Renamed"}})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
+
+    try {
+      user.setName("Renamed")
+      user.setAttribute("email", "renamed@example.com")
+
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "renamed@example.com", name: "Renamed"},
+            id: 5
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("save() on the create path still sends every assigned attribute", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "draft@example.com", id: 9, name: "Draft"}})
+    const user = new User({email: "draft@example.com", name: "Draft"})
+
+    try {
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "draft@example.com", name: "Draft"}
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("save() resets dirty tracking after a successful update so the next save sends nothing extra", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "Renamed"}})
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
+
+    try {
+      user.setName("Renamed")
+      await user.save()
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {name: "Renamed"},
+            id: 5
+          },
+          url: "/frontend-models"
+        },
+        {
+          body: {
+            attributes: {},
+            id: 5
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("_changedAttributesForSave returns the dirty subset only", () => {
+    const User = buildTestModelClass()
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
+
+    expect(user._changedAttributesForSave()).toEqual({})
+
+    user.setName("Renamed")
+
+    expect(user._changedAttributesForSave()).toEqual({name: "Renamed"})
+
+    user.setAttribute("email", "renamed@example.com")
+
+    expect(user._changedAttributesForSave()).toEqual({email: "renamed@example.com", name: "Renamed"})
+  })
+
   it("tracks changes and supports findOrInitializeBy/findOrCreateBy", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
