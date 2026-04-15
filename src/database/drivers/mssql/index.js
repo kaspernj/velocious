@@ -6,6 +6,7 @@ import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
 import Delete from "./sql/delete.js"
+import DropDatabase from "./sql/drop-database.js"
 import DropTable from "./sql/drop-table.js"
 import {digg} from "diggerize"
 import escapeString from "sql-escape-string"
@@ -76,6 +77,19 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const createDatabase = new CreateDatabase(createArgs)
 
     return createDatabase.toSql()
+  }
+
+  /**
+   * @param {string} databaseName - Database name.
+   * @param {object} [args] - Options object.
+   * @param {boolean} [args.ifExists] - Whether if exists.
+   * @returns {string[]} - SQL statements.
+   */
+  dropDatabaseSql(databaseName, args) {
+    const dropArgs = Object.assign({databaseName, driver: this}, args)
+    const dropDatabase = new DropDatabase(dropArgs)
+
+    return dropDatabase.toSql()
   }
 
   /**
