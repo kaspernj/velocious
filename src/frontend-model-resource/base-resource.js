@@ -163,31 +163,68 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * request. Submitting an attribute or nested relationship that is not
    * permitted raises an error and fails the write.
    *
-   * Default implementation reads `static attributes` (filtering out the
-   * conventional auto-managed columns: `id`, `createdAt`, `updatedAt`) and
-   * delegates nested policy to `this.nestedAttributes(arg)`.
+   * Default implementation derives the attribute permit from the
+   * resource's declared shape:
+   *   - `resourceConfig().attributes` (minus conventional auto-managed
+   *     columns: `id`, `createdAt`, `updatedAt`)
+   *   - `static translatedAttributes` on the resource class
+   *   - attachment attribute names from `resourceConfig().attachments`
+   *     (attachment writes land on `attributes.<attachmentName>` in the
+   *     payload, so they must be permitted by name)
    *
-   * Override on subclasses when attribute writability depends on the user,
-   * role, tenant, or action.
+   * Nested-relationship policy delegates to `this.nestedAttributes(arg)`.
+   * Override on subclasses when attribute writability depends on the
+   * user, role, tenant, or action.
    * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
    * @returns {{attributes: string[], nestedAttributes: Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attrs: Record<string, any>) => boolean}>}} - Permit spec.
    */
   permittedParams(arg) {
     const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
-    const attributesDecl = ResourceClass.attributes
+    const resourceConfig = this.resourceConfigurationValue || ResourceClass.resourceConfig()
     const autoManaged = new Set(["id", "createdAt", "updatedAt"])
+    const permittedSet = new Set()
 
-    /** @type {string[]} */
-    let permittedAttributeNames = []
+    const attributesDecl = resourceConfig?.attributes
 
     if (Array.isArray(attributesDecl)) {
-      permittedAttributeNames = attributesDecl.filter((name) => !autoManaged.has(name))
+      for (const entry of attributesDecl) {
+        const name = typeof entry === "string" ? entry : /** @type {any} */ (entry)?.name
+        if (typeof name === "string" && !autoManaged.has(name)) permittedSet.add(name)
+      }
     } else if (attributesDecl && typeof attributesDecl === "object") {
-      permittedAttributeNames = Object.keys(attributesDecl).filter((name) => !autoManaged.has(name))
+      for (const name of Object.keys(attributesDecl)) {
+        if (!autoManaged.has(name)) permittedSet.add(name)
+      }
+    }
+
+    const translatedAttributes = ResourceClass.translatedAttributes
+
+    if (Array.isArray(translatedAttributes)) {
+      for (const name of translatedAttributes) {
+        if (typeof name === "string") permittedSet.add(name)
+      }
+    }
+
+    const attachments = resourceConfig?.attachments
+
+    if (attachments && typeof attachments === "object") {
+      for (const name of Object.keys(attachments)) permittedSet.add(name)
+    }
+
+    // Models can declare attachments directly via `Model.hasOneAttachment()` /
+    // `Model.hasManyAttachments()` without mirroring them in the resource
+    // config. The frontend sends attachment writes as `attributes.<name>`, so
+    // include attachment names from the model class too — otherwise strict
+    // permitting would reject every attachment update.
+    const modelClass = /** @type {any} */ (this.modelClassValue)
+    const modelAttachments = typeof modelClass?.getAttachmentsMap === "function" ? modelClass.getAttachmentsMap() : null
+
+    if (modelAttachments && typeof modelAttachments === "object") {
+      for (const name of Object.keys(modelAttachments)) permittedSet.add(name)
     }
 
     return {
-      attributes: permittedAttributeNames,
+      attributes: Array.from(permittedSet),
       nestedAttributes: this.nestedAttributes(arg)
     }
   }

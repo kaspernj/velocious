@@ -12,7 +12,7 @@ describe("FrontendModelBaseResource.nestedAttributes", () => {
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
 
     expect(resource.nestedAttributes()).toEqual({})
@@ -33,14 +33,14 @@ describe("FrontendModelBaseResource.nestedAttributes", () => {
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
     const memberResource = new ProjectResource({
       locals: {isAdmin: false},
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
 
     expect(adminResource.nestedAttributes({locals: {isAdmin: true}})).toEqual({tasks: {allowDestroy: true, limit: 100}})
@@ -58,7 +58,7 @@ describe("FrontendModelBaseResource.permittedParams", () => {
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
 
     const spec = resource.permittedParams({action: "create"})
@@ -79,7 +79,7 @@ describe("FrontendModelBaseResource.permittedParams", () => {
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
 
     const spec = resource.permittedParams({action: "update"})
@@ -108,14 +108,14 @@ describe("FrontendModelBaseResource.permittedParams", () => {
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
     const memberResource = new ProjectResource({
       locals: {isAdmin: false},
       modelClass: class extends DatabaseRecord {},
       modelName: "Project",
       params: {},
-      resourceConfiguration: /** @type {any} */ ({attributes: [], abilities: {}})
+      resourceConfiguration: /** @type {any} */ (undefined)
     })
 
     expect(adminResource.permittedParams({action: "create", locals: {isAdmin: true}}).attributes).toEqual(["name", "description", "internalNotes"])
