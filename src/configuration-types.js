@@ -53,6 +53,8 @@
 
 /**
  * @typedef {object} DatabaseConfigurationType
+ * @property {string} [charset] - Default character set applied when Velocious creates the database (mysql/mariadb `CHARACTER SET`).
+ * @property {string} [collation] - Default collation applied when Velocious creates the database (mysql/mariadb `COLLATE`).
  * @property {string} [database] - Database name for this connection.
  * @property {typeof import("./database/drivers/base.js").default} [driver] - Driver class to use for this database.
  * @property {typeof import("./database/pool/base.js").default} [poolType] - Pool class to use for this database.
