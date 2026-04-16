@@ -152,6 +152,126 @@ describe("WebsocketSession resumption (Phase 2)", () => {
     })
   })
 
+  it("persists sessionId via sessionStore so a fresh client can resume across simulated page reloads", async () => {
+    await Dummy.run(async () => {
+      // In-memory "persistence" stands in for localStorage / cookie /
+      // SQLite. A real app would hand velocious the actual store.
+      /** @type {{value: string | null}} */
+      const storage = {value: null}
+      /** @type {import("../../src/http-client/websocket-client.js").default[]} */
+      const trackedClients = []
+
+      const sessionStore = {
+        get: () => storage.value,
+        set: (/** @type {string} */ id) => { storage.value = id },
+        clear: () => { storage.value = null }
+      }
+
+      try {
+        // First "page load": open, establish sessionId, drop the
+        // socket WITHOUT calling close() so the server pauses and
+        // holds resumable state.
+        const firstClient = new WebsocketClient({sessionStore})
+
+        trackedClients.push(firstClient)
+        await firstClient.connect()
+
+        /** @type {any[]} */
+        const firstReceived = []
+        const firstConnection = firstClient.openConnection("Echo", {
+          params: {name: "reload"},
+          onMessage: (body) => firstReceived.push(body)
+        })
+
+        await firstConnection.ready
+        await waitFor(() => firstReceived.length >= 1) // welcome
+        await waitFor(() => storage.value !== null, 2000)
+        const originalSessionId = storage.value
+
+        expect(typeof originalSessionId).toBe("string")
+
+        // Simulate page unload: close the socket but keep the stored
+        // sessionId. The server moves the session to paused; grace
+        // timer starts (default 300s so plenty of time for step 2).
+        firstClient.socket?.close()
+        await waitFor(() => !firstClient.isOpen(), 2000)
+
+        // Second "page load": construct a brand-new client with the
+        // same sessionStore. Its `_sessionId` starts null; on first
+        // connect it should read from the store and resume.
+        const secondClient = new WebsocketClient({sessionStore})
+
+        trackedClients.push(secondClient)
+        await secondClient.connect()
+
+        await waitFor(() => secondClient._sessionId === originalSessionId, 3000)
+        expect(secondClient._sessionId).toEqual(originalSessionId)
+      } finally {
+        for (const client of trackedClients) {
+          try { await client.close() } catch { /* already closed */ }
+        }
+      }
+    })
+  })
+
+  it("rejects resume with session-gone when the identity resolver reports a different user", async () => {
+    /** @type {{identity: string | null}} */
+    const authState = {identity: "alice"}
+
+    dummyConfiguration.setWebsocketSessionIdentityResolver(() => authState.identity)
+
+    try {
+      await Dummy.run(async () => {
+        const client = new WebsocketClient({autoReconnect: true, reconnectDelays: [50]})
+
+        try {
+          await client.connect()
+
+          /** @type {string[]} */
+          const events = []
+          client.openConnection("Echo", {
+            onConnect: () => events.push("connect"),
+            onResume: () => events.push("resume"),
+            onClose: (reason) => events.push(`close:${reason}`)
+          })
+
+          await waitFor(() => events.includes("connect"))
+
+          // Drop the socket to trigger pause — identity captured as "alice".
+          client.socket?.close()
+          // Wait until the SERVER sees the session as paused AND its
+          // identity capture promise resolves, so we don't race the
+          // authState change against the pause.
+          await waitFor(() => {
+            const paused = /** @type {any} */ (dummyConfiguration)._pausedWebsocketSessions
+            if (!paused || paused.size === 0) return false
+            for (const entry of paused.values()) {
+              if (entry.session?._resumeIdentityPromise) return true
+            }
+            return false
+          }, 3000)
+
+          // Yield past the microtask that resolves the identity-capture promise.
+          await new Promise((resolve) => setTimeout(resolve, 20))
+
+          // Simulate sign-out / different user before the auto-
+          // reconnect fires.
+          authState.identity = "bob"
+
+          // Reconnect will send session-resume with the stored id.
+          // Server should reject and send session-gone, which tears
+          // down live handles with reason `session_gone`.
+          await waitFor(() => events.some((e) => e === "close:session_gone"), 5000)
+          expect(events).not.toContain("resume")
+        } finally {
+          await client.close()
+        }
+      })
+    } finally {
+      dummyConfiguration.setWebsocketSessionIdentityResolver(null)
+    }
+  })
+
   it("tears down live handles with grace_expired when no resume arrives in time", async () => {
     // Override grace window to 100ms for the test.
     const originalGrace = dummyConfiguration.getWebsocketSessionGraceSeconds()

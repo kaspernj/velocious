@@ -23,6 +23,7 @@ import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
  * @property {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
  * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
+ * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -56,7 +57,11 @@ function resolveInternalWebsocketClient() {
 
   if (!resolvedUrl) return null
 
-  internalWebsocketClient = new VelociousWebsocketClient({autoReconnect: true, url: resolvedUrl})
+  internalWebsocketClient = new VelociousWebsocketClient({
+    autoReconnect: true,
+    sessionStore: frontendModelTransportConfig.sessionStore,
+    url: resolvedUrl
+  })
   internalWebsocketClient.onReconnect = flushBufferedOutgoingEventsAfterReconnect
 
   return internalWebsocketClient
@@ -1637,6 +1642,12 @@ export default class FrontendModelBase {
 
     if (Object.prototype.hasOwnProperty.call(config, "requestHeaders")) {
       frontendModelTransportConfig.requestHeaders = config.requestHeaders
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "sessionStore")) {
+      frontendModelTransportConfig.sessionStore = config.sessionStore
+      // Reset cached internal client so the new sessionStore is picked up.
+      internalWebsocketClient = null
     }
   }
 

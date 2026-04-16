@@ -42,6 +42,28 @@ function requestMessage(message) {
   return /** @type {{type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string}} */ (message)
 }
 
+/**
+ * Compares two identity values from `getWebsocketSessionIdentityResolver`.
+ * Nullish values compare equal to each other but not to a real identity.
+ * Plain objects are compared via JSON round-trip so apps can return a
+ * `{userId, tenantId}`-style object without building their own equality.
+ *
+ * @param {any} a - Paused-time identity.
+ * @param {any} b - Resume-time identity.
+ * @returns {boolean} - True when the two identities are considered the same caller.
+ */
+function identitiesMatch(a, b) {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  if (typeof a !== "object" || typeof b !== "object") return false
+
+  try {
+    return JSON.stringify(a) === JSON.stringify(b)
+  } catch {
+    return false
+  }
+}
+
 export default class VelociousHttpServerClientWebsocketSession {
   events = new EventEmitter()
   subscriptions = new Set()
@@ -115,6 +137,15 @@ export default class VelociousHttpServerClientWebsocketSession {
      * @type {Promise<void>}
      */
     this._messageChain = Promise.resolve()
+
+    /**
+     * Promise that resolves to the auth identity captured at pause
+     * time by `getWebsocketSessionIdentityResolver`. Awaited at resume
+     * time to compare against the fresh caller's identity. Undefined
+     * on a live (non-paused) session.
+     * @type {Promise<any> | undefined}
+     */
+    this._resumeIdentityPromise = undefined
   }
 
   /**
@@ -661,6 +692,12 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (hasResumableState && !this._paused) {
       this._paused = true
       this.socket = null
+      // Kick off auth-identity capture for resume verification. Runs
+      // in the background — `_handleSessionResume` awaits
+      // `_resumeIdentityPromise` before comparing. Pause registration
+      // is synchronous so a resume arriving immediately still finds
+      // the session.
+      this._resumeIdentityPromise = this._captureResumeIdentity()
       void this._fireOnDisconnect()
       this.configuration._pauseWebsocketSession(this)
       this.events.emit("close")
@@ -687,6 +724,27 @@ export default class VelociousHttpServerClientWebsocketSession {
     void this._teardownConnections("grace_expired")
     void this._teardownChannelV2Subscriptions()
     this.events.emit("close")
+  }
+
+  /**
+   * Runs the configured identity resolver against this session.
+   * The returned promise is stored at pause time and awaited at
+   * resume time so we can reject resume attempts from a different
+   * authenticated caller (signed out, swapped user, expired cookie).
+   *
+   * @returns {Promise<any>}
+   */
+  async _captureResumeIdentity() {
+    const resolver = this.configuration.getWebsocketSessionIdentityResolver?.()
+
+    if (typeof resolver !== "function") return undefined
+
+    try {
+      return await resolver(this)
+    } catch (error) {
+      this.logger.error(() => ["Websocket session identity resolver failed at pause", error])
+      return undefined
+    }
   }
 
   /**
@@ -761,6 +819,31 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (!paused) {
       this.sendJson({type: "session-gone"})
       return
+    }
+
+    // Auth re-verify: compare the fresh caller's identity against the
+    // one captured at pause. Mismatch means a different user (or a
+    // signed-out session) is trying to reclaim state that isn't
+    // theirs — destroy the paused session outright.
+    const resolver = this.configuration.getWebsocketSessionIdentityResolver?.()
+
+    if (typeof resolver === "function") {
+      const pausedIdentity = await paused._resumeIdentityPromise
+      let freshIdentity
+
+      try {
+        freshIdentity = await resolver(this)
+      } catch (error) {
+        this.logger.error(() => ["Websocket session identity resolver failed at resume", error])
+        freshIdentity = undefined
+      }
+
+      if (!identitiesMatch(pausedIdentity, freshIdentity)) {
+        this.configuration._clearPausedWebsocketSession(resumeSessionId)
+        paused._finalizeGraceExpiry()
+        this.sendJson({type: "session-gone"})
+        return
+      }
     }
 
     this.configuration._clearPausedWebsocketSession(resumeSessionId)

@@ -101,6 +101,31 @@ export default class VelociousHttpServerInProcessHandler {
    * @param {any} args.payload - Payload data.
    * @returns {void}
    */
+  /**
+   * In-process handler path for V2 channel broadcasts. No worker
+   * boundary to cross — dispatch directly to any matching live
+   * subscriptions on the shared configuration.
+   *
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {Record<string, any>} args.broadcastParams - Routing filter params.
+   * @param {any} args.body - Message body.
+   * @returns {void}
+   */
+  dispatchWebsocketV2Broadcast({body, broadcastParams, channel}) {
+    if (!this.configuration) return
+
+    /** @type {any} */ (this.configuration)._broadcastToChannelLocal(channel, broadcastParams, body)
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {string} [args.createdAt] - Event creation time.
+   * @param {string} [args.eventId] - Event identifier.
+   * @param {any} args.payload - Payload data.
+   * @returns {void}
+   */
   dispatchWebsocketEvent({channel, createdAt, eventId, payload}) {
     for (const {httpClient} of Object.values(this.clients)) {
       const session = httpClient.websocketSession

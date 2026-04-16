@@ -118,6 +118,9 @@ export default class VelociousConfiguration {
 
     /** @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
     this._aroundAction = null
+
+    /** @type {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} */
+    this._websocketSessionIdentityResolver = null
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
@@ -963,6 +966,32 @@ export default class VelociousConfiguration {
    */
   getAroundAction() {
     return this._aroundAction
+  }
+
+  /**
+   * Registers an identity resolver called once at pause time and once
+   * at resume time. The resolver receives the session and returns any
+   * value that identifies the authenticated caller — typically a
+   * `userId` read from the session's upgrade-request cookie. Velocious
+   * captures the pause-time value on the paused session and compares
+   * it via `===` (or deep-equality for plain objects) to the fresh
+   * resume-time value. If they differ, the resume is rejected with
+   * `session-gone` and the paused session is destroyed so a signed-out
+   * or re-authenticated client cannot reclaim another user's state.
+   *
+   * Return `null`/`undefined` to mean "no identity" — resumes still
+   * succeed if pause and resume both resolve to a nullish value.
+   *
+   * @param {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} resolver
+   * @returns {void}
+   */
+  setWebsocketSessionIdentityResolver(resolver) {
+    this._websocketSessionIdentityResolver = resolver
+  }
+
+  /** @returns {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} */
+  getWebsocketSessionIdentityResolver() {
+    return this._websocketSessionIdentityResolver
   }
 
   /**

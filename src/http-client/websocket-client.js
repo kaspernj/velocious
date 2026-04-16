@@ -23,9 +23,10 @@ export default class VelociousWebsocketClient {
    * @param {boolean} [args.autoReconnect] - Enable auto-reconnect with exponential backoff.
    * @param {boolean} [args.debug] - Whether debug.
    * @param {number[]} [args.reconnectDelays] - Backoff delays in ms (default: [1000, 2000, 4000, 8000, 15000]).
+   * @param {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [args.sessionStore] - Optional sessionId persistence hook. When provided, the client writes every `session-established` / `session-resumed` id via `store.set(id)` and clears it on `session-gone`. Before the first `connect()`, the client reads any persisted id via `store.get()` and attempts resumption. Apps should back this by whatever persistence layer survives page reloads (localStorage, a cookie, SQLite, etc.).
    * @param {string} [args.url] Full websocket URL (default: ws://127.0.0.1:3006/websocket)
    */
-  constructor({autoReconnect = false, debug = false, reconnectDelays, url} = {}) {
+  constructor({autoReconnect = false, debug = false, reconnectDelays, sessionStore, url} = {}) {
     if (!globalThis.WebSocket) throw new Error("WebSocket global is not available")
 
     /** @type {boolean} */
@@ -64,6 +65,11 @@ export default class VelociousWebsocketClient {
 
     /** @type {boolean} - true between a reconnect and the session-resumed / session-gone reply. */
     this._awaitingResume = false
+
+    /** @type {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>} | undefined} */
+    this._sessionStore = sessionStore
+    /** @type {boolean} - true once the sessionStore has been consulted for a restored id. */
+    this._sessionStoreRestored = false
   }
 
   /** @returns {boolean} */
@@ -218,6 +224,24 @@ export default class VelociousWebsocketClient {
     })
 
     await this.connectPromise
+
+    // Cold restore from external persistence (sessionStore) on the
+    // very first connect: apps wire this up to survive a full page
+    // reload. After the first restore attempt the in-memory cache
+    // takes over.
+    if (!this._sessionId && !this._sessionStoreRestored && this._sessionStore) {
+      this._sessionStoreRestored = true
+
+      try {
+        const storedId = await this._sessionStore.get()
+
+        if (typeof storedId === "string" && storedId.length > 0) {
+          this._sessionId = storedId
+        }
+      } catch (error) {
+        this._debug("sessionStore.get failed", error)
+      }
+    }
 
     // If we have a cached sessionId from a prior connect, ask the
     // server to resume it. The server replies with either
@@ -550,10 +574,12 @@ export default class VelociousWebsocketClient {
       // First connect: cache sessionId for future resume attempts.
       if (!this._awaitingResume) {
         this._sessionId = message.sessionId
+        this._persistSessionId(message.sessionId)
       }
     } else if (type === "session-resumed") {
       this._awaitingResume = false
       this._sessionId = message.sessionId
+      this._persistSessionId(message.sessionId)
       // Fire onResume on every live handle so user code knows the
       // session came back with state intact.
       for (const connection of this._connections.values()) connection._handleResumed()
@@ -561,6 +587,7 @@ export default class VelociousWebsocketClient {
     } else if (type === "session-gone") {
       this._awaitingResume = false
       this._sessionId = null
+      this._clearPersistedSessionId()
       // Tear down every live handle — their server-side counterparts
       // are gone and nothing can bring them back.
       const connections = [...this._connections.values()]
@@ -722,6 +749,43 @@ export default class VelociousWebsocketClient {
     if (!this.debug) return
 
     console.debug("[VelociousWebsocketClient]", ...args)
+  }
+
+  /**
+   * @private
+   * @param {string} sessionId - Id to persist through the configured sessionStore.
+   * @returns {void}
+   */
+  _persistSessionId(sessionId) {
+    if (!this._sessionStore) return
+
+    try {
+      const result = this._sessionStore.set(sessionId)
+
+      if (result && typeof result.then === "function") {
+        result.catch((/** @type {unknown} */ error) => this._debug("sessionStore.set failed", error))
+      }
+    } catch (error) {
+      this._debug("sessionStore.set failed", error)
+    }
+  }
+
+  /**
+   * @private
+   * @returns {void}
+   */
+  _clearPersistedSessionId() {
+    if (!this._sessionStore) return
+
+    try {
+      const result = this._sessionStore.clear()
+
+      if (result && typeof result.then === "function") {
+        result.catch((/** @type {unknown} */ error) => this._debug("sessionStore.clear failed", error))
+      }
+    } catch (error) {
+      this._debug("sessionStore.clear failed", error)
+    }
   }
 }
 
