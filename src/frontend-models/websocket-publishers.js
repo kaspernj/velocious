@@ -2,7 +2,6 @@
 
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
-import FrontendModelWebsocketChannelV2 from "./websocket-channel-v2.js"
 import {frontendModelResourcesForBackendProject} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
@@ -119,8 +118,13 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
   // Phase 3: register the V2 channel class once per configuration so
   // `subscribeChannel("frontend-models", {params: {model}})` finds it.
+  // Dynamic import keeps server-only WebsocketRequest + Node utilities
+  // out of browser bundles that transitively pull in this module via
+  // configuration → logger.
   if (!channelClassRegisteredConfigurations.has(configuration)) {
     channelClassRegisteredConfigurations.add(configuration)
+    const {default: FrontendModelWebsocketChannelV2} = await import("./websocket-channel-v2.js")
+
     configuration.registerWebsocketChannel?.(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannelV2)
   }
 

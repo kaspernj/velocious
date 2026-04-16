@@ -2,7 +2,6 @@
 
 import VelociousWebsocketChannelV2 from "../http-server/websocket-channel-v2.js"
 import Response from "../http-server/client/response.js"
-import WebsocketRequest from "../http-server/client/websocket-request.js"
 
 /**
  * Per-session channel subscription for frontend-model lifecycle events.
@@ -35,7 +34,7 @@ export default class FrontendModelWebsocketChannelV2 extends VelociousWebsocketC
 
     const ability = await configuration.resolveAbility?.({
       params: {model: modelName},
-      request: this._syntheticRequest(),
+      request: /** @type {any} */ (this._syntheticRequest()),
       response: new Response({configuration})
     })
 
@@ -70,18 +69,27 @@ export default class FrontendModelWebsocketChannelV2 extends VelociousWebsocketC
       : null
   }
 
-  /** @returns {WebsocketRequest} - Synthetic request for ability resolution. */
+  /**
+   * Minimal Request-like stub used only for ability resolution. Avoids
+   * importing `WebsocketRequest` here because its `node:querystring`
+   * dependency would pull server-only code into browser bundles via
+   * the `configuration → logger → websocket-publishers` import chain.
+   *
+   * @returns {{headers: () => Record<string, any>, header: (name: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}}
+   */
   _syntheticRequest() {
     const upgradeRequest = /** @type {any} */ (this.session.upgradeRequest)
     const headers = typeof upgradeRequest?.headers === "function" ? upgradeRequest.headers() : {}
     const remoteAddress = typeof upgradeRequest?.remoteAddress === "function" ? upgradeRequest.remoteAddress() : undefined
+    const headerMap = headers || {}
 
-    return new WebsocketRequest({
-      headers,
-      method: "POST",
-      params: {model: this._modelName() || ""},
-      path: "/frontend-models",
-      remoteAddress
-    })
+    return {
+      headers: () => headerMap,
+      header: (name) => headerMap[String(name).toLowerCase()],
+      path: () => "/frontend-models",
+      httpMethod: () => "POST",
+      remoteAddress: () => remoteAddress,
+      origin: () => headerMap.origin
+    }
   }
 }
