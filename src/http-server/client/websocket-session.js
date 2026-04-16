@@ -813,7 +813,9 @@ export default class VelociousHttpServerClientWebsocketSession {
       connection._closed = true
 
       try {
-        await connection.onClose(reason)
+        await this._withConnections(async () => {
+          await connection.onClose(reason)
+        })
       } catch (error) {
         this.logger.error(() => [`Failed to tear down connection ${connection.connectionId}`, error])
       }
@@ -916,7 +918,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     connection._closed = true
 
     try {
-      await connection.onClose("client_close")
+      await this._withConnections(async () => {
+        await connection.onClose("client_close")
+      })
     } catch (error) {
       this.logger.error(() => [`Failed to tear down connection ${connectionId}`, error])
     }

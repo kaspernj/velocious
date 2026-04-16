@@ -75,13 +75,22 @@ export default class FrontendModelWebsocketChannelV2 extends VelociousWebsocketC
    * dependency would pull server-only code into browser bundles via
    * the `configuration → logger → websocket-publishers` import chain.
    *
+   * Header names are normalized to lowercase so `header("cookie")`
+   * finds a value regardless of whether the upgrade-request headers
+   * map uses `"Cookie"` or `"cookie"`.
+   *
    * @returns {{headers: () => Record<string, any>, header: (name: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}}
    */
   _syntheticRequest() {
     const upgradeRequest = /** @type {any} */ (this.session.upgradeRequest)
-    const headers = typeof upgradeRequest?.headers === "function" ? upgradeRequest.headers() : {}
+    const rawHeaders = typeof upgradeRequest?.headers === "function" ? upgradeRequest.headers() : {}
     const remoteAddress = typeof upgradeRequest?.remoteAddress === "function" ? upgradeRequest.remoteAddress() : undefined
-    const headerMap = headers || {}
+    /** @type {Record<string, any>} */
+    const headerMap = {}
+
+    for (const key of Object.keys(rawHeaders || {})) {
+      headerMap[key.toLowerCase()] = rawHeaders[key]
+    }
 
     return {
       headers: () => headerMap,
