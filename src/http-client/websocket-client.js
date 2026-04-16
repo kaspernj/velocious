@@ -1,5 +1,6 @@
 // @ts-check
 
+import VelociousWebsocketClientConnection from "./websocket-connection.js"
 import {deserializeFrontendModelTransportValue} from "../frontend-models/transport-serialization.js"
 
 const DEFAULT_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000]
@@ -47,6 +48,62 @@ export default class VelociousWebsocketClient {
 
     /** @type {Record<string, any>} */
     this._metadata = {}
+
+    /** @type {Map<string, VelociousWebsocketClientConnection>} */
+    this._connections = new Map()
+
+    this._nextConnectionIdSeq = 1
+  }
+
+  /** @returns {boolean} */
+  isOpen() {
+    return Boolean(this.socket && this.socket.readyState === this.socket.OPEN)
+  }
+
+  /**
+   * Opens a 1:1 `WebsocketConnection` of the given type against the
+   * server. Requires the socket to already be connected (call
+   * `connect()` first).
+   *
+   * @param {string} connectionType - Name the server registered the class under.
+   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onClose?: (reason: string) => void}} [options]
+   * @returns {VelociousWebsocketClientConnection}
+   */
+  openConnection(connectionType, options = {}) {
+    if (!this.isOpen()) throw new Error("Websocket is not open; call connect() first")
+
+    const connectionId = `c${this._nextConnectionIdSeq++}`
+    const connection = new VelociousWebsocketClientConnection({
+      client: this,
+      connectionId,
+      connectionType,
+      params: options.params,
+      onConnect: options.onConnect,
+      onMessage: options.onMessage,
+      onClose: options.onClose
+    })
+
+    this._connections.set(connectionId, connection)
+    this._sendMessage({
+      type: "connection-open",
+      connectionId,
+      connectionType,
+      params: options.params || {}
+    })
+
+    return connection
+  }
+
+  /**
+   * Drops a connection handle from the registry. Called by
+   * `VelociousWebsocketClientConnection.close()` after it notifies
+   * the server, and by the session-destroyed cleanup path.
+   *
+   * @param {string} connectionId
+   * @returns {void}
+   */
+  _removeConnection(connectionId) {
+    this._connections.delete(connectionId)
   }
 
   /**
@@ -376,6 +433,28 @@ export default class VelociousWebsocketClient {
         this.pendingSubscriptions.delete(subscriptionKey)
         pendingSubscription.reject(new Error(`Replay gap for ${message.channel}`))
       }
+    } else if (type === "connection-opened") {
+      const connection = this._connections.get(message.connectionId)
+
+      connection?._handleOpened()
+    } else if (type === "connection-message") {
+      const connection = this._connections.get(message.connectionId)
+
+      connection?._handleMessage(message.body)
+    } else if (type === "connection-closed") {
+      const connection = this._connections.get(message.connectionId)
+
+      if (connection) {
+        this._connections.delete(message.connectionId)
+        connection._handleClosed(message.reason || "server_close")
+      }
+    } else if (type === "connection-error") {
+      const connection = this._connections.get(message.connectionId)
+
+      if (connection) {
+        this._connections.delete(message.connectionId)
+        connection._handleClosed(`error: ${message.message || "connection-error"}`)
+      }
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)
 
@@ -411,6 +490,15 @@ export default class VelociousWebsocketClient {
       reject(new Error("Websocket closed before subscription acknowledgement"))
     }
 
+    // Fire onClose("session_destroyed") on every live Connection —
+    // Phase 1A has no grace-period resumption, so the underlying
+    // socket going away is final.
+    const connections = [...this._connections.values()]
+    this._connections.clear()
+    for (const connection of connections) {
+      connection._handleClosed("session_destroyed")
+    }
+
     this.pendingRequests.clear()
     this.pendingSubscriptions.clear()
     this.connectPromise = undefined
@@ -421,8 +509,8 @@ export default class VelociousWebsocketClient {
   }
 
   /**
-   * @private
    * @param {Record<string, any>} payload - Payload data.
+   * @returns {void}
    */
   _sendMessage(payload) {
     if (!this.socket || this.socket.readyState !== this.socket.OPEN) {
