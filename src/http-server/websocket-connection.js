@@ -1,0 +1,100 @@
+// @ts-check
+
+/**
+ * Base class for app-defined 1:1 WebSocket connections. Subclasses
+ * override `onConnect`, `onMessage`, and `onClose` to handle the
+ * session lifecycle. Use `this.sendMessage(body)` to push messages to
+ * the client side of this connection.
+ *
+ * See `docs/websocket-connections.md` for the wire protocol and full
+ * lifecycle semantics.
+ */
+export default class VelociousWebsocketConnection {
+  /**
+   * @param {object} args
+   * @param {string} args.connectionId - Client-assigned id, unique within the session.
+   * @param {Record<string, any>} args.params - Opaque params from the `connection-open` message.
+   * @param {import("./client/websocket-session.js").default} args.session - Owning session.
+   */
+  constructor({connectionId, params, session}) {
+    this.connectionId = connectionId
+    this.params = params || {}
+    this.session = session
+    this._closed = false
+  }
+
+  /**
+   * Called once after the session registers this connection and before
+   * any `onMessage` fires. Returning a Promise defers the first
+   * `connection-opened` message to the client until it resolves.
+   *
+   * @returns {void | Promise<void>}
+   */
+  onConnect() {}
+
+  /**
+   * Called for each `connection-message` the client sends to this
+   * specific connection. Messages arriving before `onConnect` has
+   * resolved are queued and delivered in order once it finishes.
+   *
+   * @param {any} body
+   * @returns {void | Promise<void>}
+   */
+  onMessage(body) { void body }
+
+  /**
+   * Called exactly once when the connection is torn down. In
+   * Phase 1A this is final — there is no resumption after a WS drop.
+   *
+   * @param {"client_close" | "server_close" | "session_destroyed" | "error"} reason
+   * @returns {void | Promise<void>}
+   */
+  onClose(reason) { void reason }
+
+  /**
+   * Sends a `connection-message` frame to the client side of this
+   * connection. Throws if the connection has already been closed.
+   *
+   * @param {any} body
+   * @returns {void}
+   */
+  sendMessage(body) {
+    if (this._closed) {
+      throw new Error(`Cannot sendMessage on closed connection ${this.connectionId}`)
+    }
+
+    this.session.sendJson({
+      type: "connection-message",
+      connectionId: this.connectionId,
+      body
+    })
+  }
+
+  /**
+   * Closes this connection from the server side. Fires `onClose`
+   * locally and notifies the client with `{type: "connection-closed"}`.
+   *
+   * @param {"server_close" | "error"} [reason]
+   * @returns {Promise<void>}
+   */
+  async close(reason = "server_close") {
+    if (this._closed) return
+    this._closed = true
+
+    try {
+      await this.onClose(reason)
+    } finally {
+      this.session.sendJson({
+        type: "connection-closed",
+        connectionId: this.connectionId,
+        reason
+      })
+      this.session._removeConnection(this.connectionId)
+    }
+  }
+
+  /** @returns {boolean} */
+  isClosed() {
+    return this._closed
+  }
+}

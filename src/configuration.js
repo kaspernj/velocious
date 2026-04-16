@@ -92,6 +92,8 @@ export default class VelociousConfiguration {
     this._websocketChannelSubscribers = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
+    /** @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
+    this._websocketConnectionClasses = new Map()
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
@@ -798,6 +800,29 @@ export default class VelociousConfiguration {
   /** @returns {import("./configuration-types.js").WebsocketChannelResolverType | undefined} - The websocket channel resolver. */
   getWebsocketChannelResolver() {
     return this._websocketChannelResolver
+  }
+
+  /**
+   * Registers a `VelociousWebsocketConnection` subclass under a name.
+   * Clients that send `{type: "connection-open", connectionType: name}`
+   * will have this class instantiated for their connection.
+   *
+   * @param {string} name
+   * @param {typeof import("./http-server/websocket-connection.js").default} ConnectionClass
+   * @returns {void}
+   */
+  registerWebsocketConnection(name, ConnectionClass) {
+    if (!name) throw new Error("Connection name is required")
+    if (!ConnectionClass) throw new Error("ConnectionClass is required")
+    this._websocketConnectionClasses.set(name, ConnectionClass)
+  }
+
+  /**
+   * @param {string} name
+   * @returns {typeof import("./http-server/websocket-connection.js").default | undefined}
+   */
+  getWebsocketConnectionClass(name) {
+    return this._websocketConnectionClasses.get(name)
   }
 
   /** @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver. */

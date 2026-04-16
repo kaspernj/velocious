@@ -68,6 +68,29 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     /** @type {Record<string, any>} */
     this._metadata = {}
+
+    /**
+     * Long-lived per-session state bag. Stable across reconnects once
+     * grace-period resumption lands in Phase 2; today it just lives
+     * for the duration of the underlying socket.
+     * @type {Record<string, any>}
+     */
+    this.data = {}
+
+    /** @type {Map<string, import("../websocket-connection.js").default>} */
+    this._connections = new Map()
+  }
+
+  /**
+   * Removes a closed connection from the session registry. Called by
+   * `VelociousWebsocketConnection.close()` after it sends the final
+   * `connection-closed` frame.
+   *
+   * @param {string} connectionId
+   * @returns {void}
+   */
+  _removeConnection(connectionId) {
+    this._connections.delete(connectionId)
   }
 
   /** @returns {Record<string, any>} - Client-provided metadata (defensive copy). */
@@ -259,6 +282,21 @@ export default class VelociousHttpServerClientWebsocketSession {
         }
       }
 
+      return
+    }
+
+    if (message.type === "connection-open") {
+      await this._handleConnectionOpen(message)
+      return
+    }
+
+    if (message.type === "connection-message") {
+      await this._handleConnectionMessage(message)
+      return
+    }
+
+    if (message.type === "connection-close") {
+      await this._handleConnectionClose(message)
       return
     }
 
@@ -477,7 +515,131 @@ export default class VelociousHttpServerClientWebsocketSession {
   _handleClose() {
     void this._runMessageHandlerClose()
     void this._teardownChannel()
+    void this._teardownConnections("session_destroyed")
     this.events.emit("close")
+  }
+
+  /**
+   * Fires `onClose(reason)` on every live app-defined connection, then
+   * drops them from the registry. No network frame is sent — the
+   * socket is already going away.
+   *
+   * @param {"session_destroyed" | "error"} reason
+   * @returns {Promise<void>}
+   */
+  async _teardownConnections(reason) {
+    const connections = [...this._connections.values()]
+
+    this._connections.clear()
+
+    for (const connection of connections) {
+      try {
+        await connection.onClose(reason)
+      } catch (error) {
+        this.logger.error(() => [`Failed to tear down connection ${connection.connectionId}`, error])
+      }
+    }
+  }
+
+  /**
+   * Handles a `{type: "connection-open"}` message — instantiates the
+   * registered connection class, stores it on `_connections`, and
+   * fires `onConnect()`. Sends `connection-opened` on success or
+   * `connection-error` on failure.
+   *
+   * @param {Record<string, any>} message
+   * @returns {Promise<void>}
+   */
+  async _handleConnectionOpen(message) {
+    const connectionId = message.connectionId
+    const connectionType = message.connectionType
+    const params = message.params || {}
+
+    if (typeof connectionId !== "string" || !connectionId) {
+      this.sendJson({type: "error", error: "connection-open requires connectionId"})
+      return
+    }
+
+    if (typeof connectionType !== "string" || !connectionType) {
+      this.sendJson({type: "connection-error", connectionId, message: "connectionType is required"})
+      return
+    }
+
+    if (this._connections.has(connectionId)) {
+      this.sendJson({type: "connection-error", connectionId, message: "Connection id already in use"})
+      return
+    }
+
+    const ConnectionClass = this.configuration.getWebsocketConnectionClass?.(connectionType)
+
+    if (!ConnectionClass) {
+      this.sendJson({type: "connection-error", connectionId, message: `Unknown connection type: ${connectionType}`})
+      return
+    }
+
+    const connection = new ConnectionClass({connectionId, params, session: this})
+
+    this._connections.set(connectionId, connection)
+
+    try {
+      await this._withConnections(async () => {
+        await connection.onConnect()
+      })
+      this.sendJson({type: "connection-opened", connectionId})
+    } catch (error) {
+      this._connections.delete(connectionId)
+      this.logger.error(() => [`Failed to open connection ${connectionType}:${connectionId}`, error])
+      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to open connection"})
+    }
+  }
+
+  /**
+   * Handles a `{type: "connection-message"}` from the client.
+   *
+   * @param {Record<string, any>} message
+   * @returns {Promise<void>}
+   */
+  async _handleConnectionMessage(message) {
+    const connectionId = message.connectionId
+    const connection = typeof connectionId === "string" ? this._connections.get(connectionId) : null
+
+    if (!connection) {
+      this.sendJson({type: "connection-error", connectionId, message: "Unknown connection id"})
+      return
+    }
+
+    try {
+      await this._withConnections(async () => {
+        await connection.onMessage(message.body)
+      })
+    } catch (error) {
+      this.logger.error(() => [`Failed to handle connection-message for ${connectionId}`, error])
+      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to handle message"})
+    }
+  }
+
+  /**
+   * Handles a `{type: "connection-close"}` from the client — fires
+   * `onClose("client_close")` and confirms with `connection-closed`.
+   *
+   * @param {Record<string, any>} message
+   * @returns {Promise<void>}
+   */
+  async _handleConnectionClose(message) {
+    const connectionId = message.connectionId
+    const connection = typeof connectionId === "string" ? this._connections.get(connectionId) : null
+
+    if (!connection) return
+
+    this._connections.delete(connectionId)
+
+    try {
+      await connection.onClose("client_close")
+    } catch (error) {
+      this.logger.error(() => [`Failed to tear down connection ${connectionId}`, error])
+    }
+
+    this.sendJson({type: "connection-closed", connectionId, reason: "client_close"})
   }
 
   async _teardownChannel() {
