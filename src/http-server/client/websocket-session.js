@@ -105,6 +105,16 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     /** @type {import("./index.js").default | null} */
     this.socket = null
+
+    /**
+     * Tail of a per-session promise chain that serializes message
+     * handling. Prevents races where message B reads `session.data`
+     * before message A's handler finishes writing it (e.g. a
+     * connection-message setting the locale vs. a subsequent request
+     * whose aroundRequest wrapper reads it).
+     * @type {Promise<void>}
+     */
+    this._messageChain = Promise.resolve()
   }
 
   /**
@@ -283,6 +293,22 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
+    // Serialize per-session: chain onto `_messageChain` so messages
+    // are processed one at a time. Without this, fire-and-forget
+    // dispatch from `_processBuffer` lets message B read
+    // `session.data` before A has finished writing it.
+    const previous = this._messageChain
+    const next = previous.then(() => this._dispatchMessage(message))
+
+    this._messageChain = next.catch(() => {})
+    await next
+  }
+
+  /**
+   * @param {WebsocketSessionMessage} message - Message text.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _dispatchMessage(message) {
     const wrapper = this.configuration.getWebsocketAroundRequest?.()
 
     if (wrapper) {

@@ -22,6 +22,7 @@ import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event
  * @property {boolean} [shared] - Deprecated shared-endpoint flag retained for compatibility. Frontend-model CRUD/custom commands use the shared frontend-model API envelope by default.
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
  * @property {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
+ * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -669,12 +670,14 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const serializedRequestPayload = serializeFrontendModelTransportValue(requestPayload)
   const websocketClient = frontendModelTransportConfig.websocketClient
   const url = frontendModelApiUrl()
+  const dynamicHeaders = typeof frontendModelTransportConfig.requestHeaders === "function"
+    ? (frontendModelTransportConfig.requestHeaders() || {})
+    : (frontendModelTransportConfig.requestHeaders || {})
+  const mergedHeaders = {"Content-Type": "application/json", ...dynamicHeaders}
 
   if (websocketClient) {
     const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
-      headers: {
-        "Content-Type": "application/json"
-      }
+      headers: mergedHeaders
     })
     const responseJson = response.json()
 
@@ -684,9 +687,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const response = await fetch(url, {
     body: JSON.stringify(serializedRequestPayload),
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: mergedHeaders,
     method: "POST"
   })
 
@@ -1472,6 +1473,10 @@ export default class FrontendModelBase {
       // Reset cached internal client so the new URL takes effect on next subscribe
       internalWebsocketClient = null
     }
+
+    if (Object.prototype.hasOwnProperty.call(config, "requestHeaders")) {
+      frontendModelTransportConfig.requestHeaders = config.requestHeaders
+    }
   }
 
   /**
@@ -1537,6 +1542,44 @@ export default class FrontendModelBase {
     if (!client || typeof client.setMetadata !== "function") return
 
     client.setMetadata(key, value)
+  }
+
+  /**
+   * Opens a 1:1 `WebsocketConnection` of the given type. Thin
+   * convenience wrapper around the internal WS client's
+   * `openConnection`. Apps use this for per-session state/messaging
+   * that doesn't fit the pub/sub Channel model (locale, presence).
+   *
+   * @param {string} connectionType - Name the server registered the class under.
+   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @returns {any} - VelociousWebsocketClientConnection handle (typed loosely to avoid a cross-module import cycle).
+   */
+  static openWebsocketConnection(connectionType, options) {
+    const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+    if (!client || typeof client.openConnection !== "function") {
+      throw new Error("openWebsocketConnection requires configureTransport({websocketUrl})")
+    }
+
+    return client.openConnection(connectionType, options || {})
+  }
+
+  /**
+   * Subscribes to a pub/sub `WebsocketChannel`. Thin wrapper around
+   * the internal client's `subscribeChannel`.
+   *
+   * @param {string} channelType
+   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @returns {any}
+   */
+  static subscribeWebsocketChannel(channelType, options) {
+    const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+    if (!client || typeof client.subscribeChannel !== "function") {
+      throw new Error("subscribeWebsocketChannel requires configureTransport({websocketUrl})")
+    }
+
+    return client.subscribeChannel(channelType, options || {})
   }
 
   /**

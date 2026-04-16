@@ -115,6 +115,9 @@ export default class VelociousConfiguration {
      * @type {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null}
      */
     this._websocketAroundRequest = null
+
+    /** @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
+    this._aroundAction = null
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
@@ -940,6 +943,26 @@ export default class VelociousConfiguration {
    */
   getWebsocketAroundRequest() {
     return this._websocketAroundRequest
+  }
+
+  /**
+   * Registers a wrapper invoked around every controller action — both
+   * HTTP and WS-borne. Receives `{request, response, next}` and must
+   * call `next()` to run the action. Use it for per-request context
+   * like AsyncLocalStorage-scoped locale or tracing.
+   *
+   * @param {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} wrapper
+   * @returns {void}
+   */
+  setAroundAction(wrapper) {
+    this._aroundAction = wrapper
+  }
+
+  /**
+   * @returns {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null}
+   */
+  getAroundAction() {
+    return this._aroundAction
   }
 
   /**
