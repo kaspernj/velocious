@@ -14,6 +14,9 @@ export default defineConfig([
     extends: ["js/recommended"],
     languageOptions: {
       globals: {...globals.browser, ...globals.node}
+    },
+    rules: {
+      "no-unused-vars": ["error", {argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_"}]
     }
   },
   jsdoc({

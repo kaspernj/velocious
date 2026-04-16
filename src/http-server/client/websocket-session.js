@@ -810,6 +810,8 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._connections.clear()
 
     for (const connection of connections) {
+      connection._closed = true
+
       try {
         await connection.onClose(reason)
       } catch (error) {
@@ -856,15 +858,15 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     const connection = new ConnectionClass({connectionId, params, session: this})
 
-    this._connections.set(connectionId, connection)
-
     try {
       await this._withConnections(async () => {
         await connection.onConnect()
       })
+      // Register only after onConnect resolves so a connection-message
+      // can never be routed to a partially initialized connection.
+      this._connections.set(connectionId, connection)
       this.sendJson({type: "connection-opened", connectionId})
     } catch (error) {
-      this._connections.delete(connectionId)
       this.logger.error(() => [`Failed to open connection ${connectionType}:${connectionId}`, error])
       this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to open connection"})
     }
@@ -909,6 +911,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (!connection) return
 
     this._connections.delete(connectionId)
+    // Mark closed before firing onClose so app code holding the
+    // handle sees `isClosed() === true` and can't re-enter sendMessage.
+    connection._closed = true
 
     try {
       await connection.onClose("client_close")

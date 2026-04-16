@@ -80,10 +80,10 @@ export default class VelociousWebsocketChannelV2 {
    * `sendMessage`. Default matches all broadcasts regardless of
    * params; override for per-subscriber filtering.
    *
-   * @param {Record<string, any>} _broadcastParams
-   * @returns {boolean}
+   * @param {...any} _broadcastArgs - Params forwarded from `broadcastToChannel` (ignored by default).
+   * @returns {boolean} - True to deliver the broadcast to this subscriber.
    */
-  matches(_broadcastParams) { return true }
+  matches(..._broadcastArgs) { return true }
 
   /**
    * Sends a `channel-message` frame to THIS subscriber only.
