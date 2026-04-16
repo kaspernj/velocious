@@ -89,6 +89,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.createdAt] - Event creation time.
    * @param {string} [data.eventId] - Event identifier.
    * @param {any} [data.payload] - Payload data.
+   * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {any} [data.body] - V2 broadcast body.
    */
   onCommand = async (data) => {
     await this.logger.debugLowLevel(() => [`Worker ${this.workerCount} received command`, data])
@@ -138,6 +140,16 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       if (typeof channel !== "string") throw new Error("No channel given")
 
       await this.broadcastWebsocketEvent({channel, createdAt, eventId, payload})
+    } else if (command == "websocketV2Broadcast") {
+      const {body, broadcastParams, channel} = data
+
+      if (typeof channel !== "string") throw new Error("No channel given")
+      if (!this.configuration) throw new Error("Configuration not initialized")
+
+      // Dispatch to any V2 subscriptions registered in this worker.
+      // Main process fan-out guarantees a publisher on any worker
+      // reaches subscribers on every worker.
+      this.configuration._broadcastToChannelLocal(channel, broadcastParams || {}, body)
     } else if (command == "shutdown") {
       if (this.configuration?.closeDatabaseConnections) {
         await this.configuration.closeDatabaseConnections()

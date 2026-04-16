@@ -663,29 +663,40 @@ class FrontendModelEventSubscription {
       return
     }
 
+    // Serialize parallel calls (e.g. Promise.all([onCreate, onUpdate,
+    // onDestroy])) so we open exactly one subscription per model class
+    // instead of racing three concurrent subscribeChannel calls.
+    if (this.readyPromise) {
+      await this.readyPromise
+      return
+    }
+
     const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.subscribeChannel !== "function") {
       throw new Error("Frontend model event subscriptions require configureTransport({websocketUrl}) or configureTransport({websocketClient})")
     }
 
-    if (typeof client.connect === "function") await client.connect()
+    this.readyPromise = (async () => {
+      if (typeof client.connect === "function") await client.connect()
 
-    this.channelHandle = client.subscribeChannel(FRONTEND_MODELS_CHANNEL_NAME, {
-      params: {model: this.ModelClass.getModelName()},
-      onMessage: (/** @type {any} */ body) => this._dispatchEvent(body),
-      onClose: () => {
-        this.channelHandle = null
-        this.readyPromise = null
-        // Session is gone — drop all registered listeners so we don't
-        // dispatch to stale instances on a future re-subscribe.
-        this.classCreateCallbacks.clear()
-        this.classUpdateCallbacks.clear()
-        this.classDestroyCallbacks.clear()
-        this.instanceListeners.clear()
-      }
-    })
-    this.readyPromise = this.channelHandle.ready
+      this.channelHandle = client.subscribeChannel(FRONTEND_MODELS_CHANNEL_NAME, {
+        params: {model: this.ModelClass.getModelName()},
+        onMessage: (/** @type {any} */ body) => this._dispatchEvent(body),
+        onClose: () => {
+          this.channelHandle = null
+          this.readyPromise = null
+          // Session is gone — drop all registered listeners so we don't
+          // dispatch to stale instances on a future re-subscribe.
+          this.classCreateCallbacks.clear()
+          this.classUpdateCallbacks.clear()
+          this.classDestroyCallbacks.clear()
+          this.instanceListeners.clear()
+        }
+      })
+      await this.channelHandle.ready
+    })()
+
     await this.readyPromise
   }
 

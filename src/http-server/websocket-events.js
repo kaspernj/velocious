@@ -22,4 +22,28 @@ export default class VelociousHttpServerWebsocketEvents {
 
     this.parentPort.postMessage({channel, command: "websocketPublish", payload, workerCount: this.workerCount})
   }
+
+  /**
+   * Fan-out entry point for `configuration.broadcastToChannel` on V2
+   * channels. The worker posts to the main process, which fans out to
+   * every worker so subscribers on any worker receive the broadcast.
+   *
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {Record<string, any>} args.broadcastParams - Filter params forwarded to `matches()`.
+   * @param {any} args.body - Message body delivered via `sendMessage()`.
+   * @returns {void}
+   */
+  publishV2Broadcast({channel, broadcastParams, body}) {
+    if (!channel) throw new Error("channel is required")
+    if (!this.parentPort) throw new Error("parentPort is required")
+
+    this.parentPort.postMessage({
+      body,
+      broadcastParams,
+      channel,
+      command: "websocketV2Broadcast",
+      workerCount: this.workerCount
+    })
+  }
 }

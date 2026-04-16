@@ -50,6 +50,23 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Fan a V2 channel broadcast out to every registered worker handler.
+   * V2 broadcasts are ephemeral (no replay log) and carry opaque
+   * `broadcastParams` used only for per-subscriber `matches()` routing.
+   *
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {Record<string, any>} args.broadcastParams - Routing filter params.
+   * @param {any} args.body - Message body.
+   * @returns {void}
+   */
+  broadcastV2({body, broadcastParams, channel}) {
+    for (const handler of this.handlers) {
+      handler.dispatchWebsocketV2Broadcast({body, broadcastParams, channel})
+    }
+  }
+
+  /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {any} args.payload - Payload data.

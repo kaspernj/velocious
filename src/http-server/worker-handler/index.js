@@ -144,6 +144,8 @@ export default class VelociousHttpServerWorker {
    * @param {string | Uint8Array} [data.output] - Output.
    * @param {string} [data.channel] - Channel name.
    * @param {any} [data.payload] - Payload data.
+   * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {any} [data.body] - V2 broadcast body.
    * @returns {void} - No return value.
    */
   onWorkerMessage = (data) => {
@@ -210,6 +212,14 @@ export default class VelociousHttpServerWorker {
       }
 
       websocketEventsHost.publish({channel, payload})
+    } else if (command == "websocketV2Broadcast") {
+      const {body, broadcastParams, channel} = data
+
+      if (typeof channel !== "string") {
+        throw new Error("Worker websocket v2-broadcast channel must be a string")
+      }
+
+      websocketEventsHost.broadcastV2({body, broadcastParams: broadcastParams || {}, channel})
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
@@ -246,5 +256,21 @@ export default class VelociousHttpServerWorker {
     if (!this.worker || typeof this.worker.postMessage !== "function") return
 
     this.worker.postMessage({channel, command: "websocketEvent", createdAt, eventId, payload})
+  }
+
+  /**
+   * Forwards a V2 channel broadcast to this worker's thread so it can
+   * dispatch to any locally-registered V2 subscriptions.
+   *
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {Record<string, any>} args.broadcastParams - Routing filter params.
+   * @param {any} args.body - Message body.
+   * @returns {void}
+   */
+  dispatchWebsocketV2Broadcast({body, broadcastParams, channel}) {
+    if (!this.worker || typeof this.worker.postMessage !== "function") return
+
+    this.worker.postMessage({body, broadcastParams, channel, command: "websocketV2Broadcast"})
   }
 }

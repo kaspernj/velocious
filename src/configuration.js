@@ -1055,6 +1055,44 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   broadcastToChannel(name, broadcastParams, body) {
+    // V2 subscriptions live per worker-thread. When running in
+    // worker-thread mode, the publisher runs either in the main
+    // process (host) or in one of the workers:
+    //
+    //  - Main process: `_websocketEvents` is the host singleton and
+    //    `broadcastV2` fans out to every worker directly.
+    //  - Worker: `_websocketEvents` has `publishV2Broadcast` that
+    //    posts to main, which then fans out to every worker.
+    //
+    // In-process mode doesn't install a websocket-events transport,
+    // so fall through to the local dispatch.
+    /** @type {any} */
+    const websocketEvents = this._websocketEvents
+
+    if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
+      websocketEvents.broadcastV2({channel: name, broadcastParams, body})
+      return
+    }
+
+    if (websocketEvents && typeof websocketEvents.publishV2Broadcast === "function" && websocketEvents.parentPort) {
+      websocketEvents.publishV2Broadcast({channel: name, broadcastParams, body})
+      return
+    }
+
+    this._broadcastToChannelLocal(name, broadcastParams, body)
+  }
+
+  /**
+   * Local (per-worker) channel broadcast dispatch. Called either
+   * directly (in-process mode) or by the worker thread after the
+   * main-process fan-out.
+   *
+   * @param {string} name - Channel name.
+   * @param {Record<string, any>} broadcastParams - Params passed to each subscription's `matches()`.
+   * @param {any} body - Message body delivered via `sendMessage()`.
+   * @returns {void}
+   */
+  _broadcastToChannelLocal(name, broadcastParams, body) {
     const bucket = this._websocketChannelSubscriptions.get(name)
 
     if (!bucket) return
