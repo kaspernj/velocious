@@ -208,8 +208,13 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
             return message.type === "event" && message.channel === "news" && message.payload?.headline === "second"
           })
 
-          expect(replayedMessages[0]?.type).toEqual("event")
-          expect(replayedMessages[1]?.type).toEqual("subscribed")
+          // Phase 2 adds a `session-established` frame ahead of any
+          // app-visible messages; skip framework frames when asserting
+          // the replay order.
+          const appMessages = replayedMessages.filter((message) => !message.type?.startsWith("session-"))
+
+          expect(appMessages[0]?.type).toEqual("event")
+          expect(appMessages[1]?.type).toEqual("subscribed")
           expect(replayedEvent?.replayed).toEqual(true)
         } finally {
           secondSocket.close()

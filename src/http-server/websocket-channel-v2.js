@@ -57,6 +57,24 @@ export default class VelociousWebsocketChannelV2 {
   unsubscribed() {}
 
   /**
+   * Called when the underlying socket drops and the session is
+   * moved into the paused/grace registry. Either `onResume` fires
+   * on successful client reconnect, or `unsubscribed()` fires when
+   * the grace window expires.
+   *
+   * @returns {void | Promise<void>}
+   */
+  onDisconnect() {}
+
+  /**
+   * Called after a client reconnect + `session-resume` rebinds this
+   * subscription to a new socket.
+   *
+   * @returns {void | Promise<void>}
+   */
+  onResume() {}
+
+  /**
    * Broadcast routing filter. Called by `broadcastToChannel` for
    * each live subscription — returning true delivers the body via
    * `sendMessage`. Default matches all broadcasts regardless of

@@ -16,14 +16,18 @@ export default class VelociousWebsocketClientSubscription {
    * @param {string} args.channelType
    * @param {Record<string, any>} [args.params]
    * @param {(body: any) => void} [args.onMessage]
+   * @param {() => void} [args.onDisconnect]
+   * @param {() => void} [args.onResume]
    * @param {(reason: string) => void} [args.onClose]
    */
-  constructor({client, subscriptionId, channelType, params, onMessage, onClose}) {
+  constructor({client, subscriptionId, channelType, params, onMessage, onDisconnect, onResume, onClose}) {
     this.client = client
     this.subscriptionId = subscriptionId
     this.channelType = channelType
     this.params = params || {}
     this._onMessage = onMessage
+    this._onDisconnect = onDisconnect
+    this._onResume = onResume
     this._onClose = onClose
     this._subscribed = false
     this._closed = false
@@ -49,6 +53,18 @@ export default class VelociousWebsocketClientSubscription {
   _handleMessage(body) {
     if (this._closed) return
     this._onMessage?.(body)
+  }
+
+  /** @returns {void} */
+  _handleDisconnected() {
+    if (this._closed) return
+    this._onDisconnect?.()
+  }
+
+  /** @returns {void} */
+  _handleResumed() {
+    if (this._closed) return
+    this._onResume?.()
   }
 
   /**

@@ -100,6 +100,12 @@ export default class VelociousConfiguration {
 
     /** @type {Map<string, Set<import("./http-server/websocket-channel-v2.js").default>>} - channelType → live subscriptions across all sessions. */
     this._websocketChannelSubscriptions = new Map()
+
+    /** @type {Map<string, {session: import("./http-server/client/websocket-session.js").default, graceTimer: ReturnType<typeof setTimeout>, pausedAt: number}>} - sessionId → paused session awaiting resume. */
+    this._pausedWebsocketSessions = new Map()
+
+    /** Grace period for paused WebSocket sessions before permanent teardown. */
+    this._websocketSessionGraceSeconds = 300
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
@@ -897,6 +903,100 @@ export default class VelociousConfiguration {
    * `canSubscribe()` continue to receive broadcasts until they
    * unsubscribe or the session ends.
    *
+   * @param {string} name
+   * @param {Record<string, any>} broadcastParams
+   * @param {any} body
+   * @returns {void}
+   */
+  /**
+   * @returns {number} - Grace period (seconds) before a paused WS session is torn down.
+   */
+  getWebsocketSessionGraceSeconds() { return this._websocketSessionGraceSeconds }
+
+  /**
+   * @param {number} seconds
+   * @returns {void}
+   */
+  setWebsocketSessionGraceSeconds(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`Invalid grace seconds: ${seconds}`)
+    this._websocketSessionGraceSeconds = seconds
+  }
+
+  /**
+   * Moves a session into the paused registry and starts the grace
+   * timer. When the timer fires, the session's permanent teardown
+   * hook is invoked. Called by the session itself from `_handleClose`
+   * when there is resumable state (live Connections / Channel subs).
+   *
+   * @param {import("./http-server/client/websocket-session.js").default} session
+   * @returns {void}
+   */
+  _pauseWebsocketSession(session) {
+    const sessionId = session.sessionId
+
+    if (!sessionId) throw new Error("Session must have a sessionId to be paused")
+    if (this._pausedWebsocketSessions.has(sessionId)) return
+
+    const graceMs = this._websocketSessionGraceSeconds * 1000
+    const graceTimer = setTimeout(() => {
+      this._expireWebsocketSession(sessionId)
+    }, graceMs)
+
+    // Don't keep the process alive purely for a paused session timer.
+    if (typeof graceTimer.unref === "function") graceTimer.unref()
+
+    this._pausedWebsocketSessions.set(sessionId, {session, graceTimer, pausedAt: Date.now()})
+  }
+
+  /**
+   * Looks up a paused session by id (does NOT remove it — caller is
+   * expected to call `_resumeWebsocketSession` to complete the handoff).
+   *
+   * @param {string} sessionId
+   * @returns {import("./http-server/client/websocket-session.js").default | null}
+   */
+  _findPausedWebsocketSession(sessionId) {
+    return this._pausedWebsocketSessions.get(sessionId)?.session || null
+  }
+
+  /**
+   * Removes a paused session from the registry and cancels its grace
+   * timer. Called on successful resume handoff and on explicit
+   * expiry.
+   *
+   * @param {string} sessionId
+   * @returns {void}
+   */
+  _clearPausedWebsocketSession(sessionId) {
+    const entry = this._pausedWebsocketSessions.get(sessionId)
+
+    if (!entry) return
+
+    clearTimeout(entry.graceTimer)
+    this._pausedWebsocketSessions.delete(sessionId)
+  }
+
+  /**
+   * Grace-timer callback. Calls the session's permanent-teardown
+   * hook and drops it from the registry.
+   *
+   * @param {string} sessionId
+   * @returns {void}
+   */
+  _expireWebsocketSession(sessionId) {
+    const entry = this._pausedWebsocketSessions.get(sessionId)
+
+    if (!entry) return
+
+    this._pausedWebsocketSessions.delete(sessionId)
+    try {
+      entry.session._finalizeGraceExpiry()
+    } catch (error) {
+      console.error(`Failed to finalize expired WS session ${sessionId}`, error)
+    }
+  }
+
+  /**
    * @param {string} name
    * @param {Record<string, any>} broadcastParams
    * @param {any} body

@@ -58,6 +58,12 @@ export default class VelociousWebsocketClient {
 
     this._nextConnectionIdSeq = 1
     this._nextSubscriptionIdSeq = 1
+
+    /** @type {string | null} - sessionId received from `session-established`; sent on reconnect for resumption. */
+    this._sessionId = null
+
+    /** @type {boolean} - true between a reconnect and the session-resumed / session-gone reply. */
+    this._awaitingResume = false
   }
 
   /** @returns {boolean} */
@@ -71,7 +77,7 @@ export default class VelociousWebsocketClient {
    * `connect()` first).
    *
    * @param {string} connectionType - Name the server registered the class under.
-   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onClose?: (reason: string) => void}} [options]
+   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
    * @returns {VelociousWebsocketClientConnection}
    */
   openConnection(connectionType, options = {}) {
@@ -85,6 +91,8 @@ export default class VelociousWebsocketClient {
       params: options.params,
       onConnect: options.onConnect,
       onMessage: options.onMessage,
+      onDisconnect: options.onDisconnect,
+      onResume: options.onResume,
       onClose: options.onClose
     })
 
@@ -116,7 +124,7 @@ export default class VelociousWebsocketClient {
    * to already be connected.
    *
    * @param {string} channelType - Name the server registered the channel under.
-   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onClose?: (reason: string) => void}} [options]
+   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
    * @returns {VelociousWebsocketClientSubscription}
    */
   subscribeChannel(channelType, options = {}) {
@@ -129,6 +137,8 @@ export default class VelociousWebsocketClient {
       channelType,
       params: options.params,
       onMessage: options.onMessage,
+      onDisconnect: options.onDisconnect,
+      onResume: options.onResume,
       onClose: options.onClose
     })
 
@@ -208,6 +218,20 @@ export default class VelociousWebsocketClient {
     })
 
     await this.connectPromise
+
+    // If we have a cached sessionId from a prior connect, ask the
+    // server to resume it. The server replies with either
+    // `session-resumed` (state preserved) or `session-gone` (client
+    // must start fresh); the message dispatcher fires the appropriate
+    // lifecycle hooks on live Connection / Channel handles.
+    if (this._sessionId) {
+      this._awaitingResume = true
+      this._sendMessage({type: "session-resume", sessionId: this._sessionId})
+      // Fire onDisconnect on live handles so apps can pause UI work
+      // until session-resumed / session-gone arrives.
+      for (const connection of this._connections.values()) connection._handleDisconnected()
+      for (const subscription of this._channelSubscriptions.values()) subscription._handleDisconnected()
+    }
 
     if (Object.keys(this._metadata).length > 0) {
       this._sendMessage({type: "metadata", data: {...this._metadata}})
@@ -522,6 +546,30 @@ export default class VelociousWebsocketClient {
         this._channelSubscriptions.delete(message.subscriptionId)
         sub._handleClosed(`error: ${message.message || "channel-error"}`)
       }
+    } else if (type === "session-established") {
+      // First connect: cache sessionId for future resume attempts.
+      if (!this._awaitingResume) {
+        this._sessionId = message.sessionId
+      }
+    } else if (type === "session-resumed") {
+      this._awaitingResume = false
+      this._sessionId = message.sessionId
+      // Fire onResume on every live handle so user code knows the
+      // session came back with state intact.
+      for (const connection of this._connections.values()) connection._handleResumed()
+      for (const subscription of this._channelSubscriptions.values()) subscription._handleResumed()
+    } else if (type === "session-gone") {
+      this._awaitingResume = false
+      this._sessionId = null
+      // Tear down every live handle — their server-side counterparts
+      // are gone and nothing can bring them back.
+      const connections = [...this._connections.values()]
+      this._connections.clear()
+      for (const connection of connections) connection._handleClosed("session_gone")
+
+      const subs = [...this._channelSubscriptions.values()]
+      this._channelSubscriptions.clear()
+      for (const subscription of subs) subscription._handleClosed("session_gone")
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)
 
@@ -557,22 +605,26 @@ export default class VelociousWebsocketClient {
       reject(new Error("Websocket closed before subscription acknowledgement"))
     }
 
-    // Fire onClose("session_destroyed") on every live Connection —
-    // Phase 1A has no grace-period resumption, so the underlying
-    // socket going away is final.
-    const connections = [...this._connections.values()]
-    this._connections.clear()
-    for (const connection of connections) {
-      connection._handleClosed("session_destroyed")
-    }
+    if (this._sessionId && this.autoReconnect) {
+      // Session may resume when we reconnect — keep the handles alive
+      // and fire onDisconnect so user code can pause UI work.
+      for (const connection of this._connections.values()) connection._handleDisconnected()
+      for (const subscription of this._channelSubscriptions.values()) subscription._handleDisconnected()
+    } else {
+      // No resume path: tear down every live Connection / Channel sub.
+      const connections = [...this._connections.values()]
+      this._connections.clear()
+      for (const connection of connections) {
+        connection._handleClosed("session_destroyed")
+      }
 
-    // Same for channel subscriptions — they're torn down by the
-    // session teardown on the server side, we mirror here so
-    // user callbacks get onClose.
-    const channelSubs = [...this._channelSubscriptions.values()]
-    this._channelSubscriptions.clear()
-    for (const subscription of channelSubs) {
-      subscription._handleClosed("session_destroyed")
+      const channelSubs = [...this._channelSubscriptions.values()]
+      this._channelSubscriptions.clear()
+      for (const subscription of channelSubs) {
+        subscription._handleClosed("session_destroyed")
+      }
+
+      this._sessionId = null
     }
 
     this.pendingRequests.clear()

@@ -43,10 +43,32 @@ export default class VelociousWebsocketConnection {
   onMessage(body) { void body }
 
   /**
-   * Called exactly once when the connection is torn down. In
-   * Phase 1A this is final — there is no resumption after a WS drop.
+   * Called when the underlying socket drops and the session is
+   * moved into the paused/grace registry. The connection instance
+   * itself survives; either `onResume` fires on a successful
+   * client reconnect, or `onClose("grace_expired")` fires when the
+   * grace window expires.
    *
-   * @param {"client_close" | "server_close" | "session_destroyed" | "error"} reason
+   * @returns {void | Promise<void>}
+   */
+  onDisconnect() {}
+
+  /**
+   * Called after a client reconnect + `session-resume` rebinds this
+   * connection to a new socket.
+   *
+   * @returns {void | Promise<void>}
+   */
+  onResume() {}
+
+  /**
+   * Called exactly once when the connection is permanently torn
+   * down. Reasons: `client_close` (client unsubscribed), `server_close`
+   * (server-initiated `close()`), `session_destroyed` (socket dropped
+   * and nothing to resume; grace path did not apply), `grace_expired`
+   * (paused session's grace window ran out without resume), `error`.
+   *
+   * @param {"client_close" | "server_close" | "session_destroyed" | "grace_expired" | "error"} reason
    * @returns {void | Promise<void>}
    */
   onClose(reason) { void reason }

@@ -277,13 +277,19 @@ export default class VeoliciousHttpServerClient {
       messageHandlerPromise: messageHandlerPromise
     })
     this.websocketSession.events.on("close", () => {
-      this.websocketSession?.destroy()
+      // Paused sessions survive the socket close; don't destroy().
+      // The grace-expiry path (_finalizeGraceExpiry) will destroy
+      // them permanently if resume doesn't happen in time.
+      if (!this.websocketSession?.isPaused()) {
+        this.websocketSession?.destroy()
+      }
       this.websocketSession = undefined
       this.events.emit("close")
     })
     this.state = "websocket"
     this.events.emit("output", response)
     void this.websocketSession.initializeChannel()
+    this.websocketSession.sendSessionEstablished()
   }
 
   requestDone = () => {

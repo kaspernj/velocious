@@ -17,15 +17,19 @@ export default class VelociousWebsocketClientConnection {
    * @param {Record<string, any>} [args.params] - Opaque params forwarded to the server.
    * @param {() => void} [args.onConnect] - Fired after the server confirms `connection-opened`.
    * @param {(body: any) => void} [args.onMessage] - Fired on each `connection-message` from the server.
-   * @param {(reason: string) => void} [args.onClose] - Fired exactly once when the handle closes.
+   * @param {() => void} [args.onDisconnect] - Fired when the socket drops; connection is preserved pending resume.
+   * @param {() => void} [args.onResume] - Fired when the session successfully resumes after a drop.
+   * @param {(reason: string) => void} [args.onClose] - Fired exactly once when the handle closes permanently.
    */
-  constructor({client, connectionId, connectionType, params, onConnect, onMessage, onClose}) {
+  constructor({client, connectionId, connectionType, params, onConnect, onMessage, onDisconnect, onResume, onClose}) {
     this.client = client
     this.connectionId = connectionId
     this.connectionType = connectionType
     this.params = params || {}
     this._onConnect = onConnect
     this._onMessage = onMessage
+    this._onDisconnect = onDisconnect
+    this._onResume = onResume
     this._onClose = onClose
     this._connected = false
     this._closed = false
@@ -64,6 +68,29 @@ export default class VelociousWebsocketClientConnection {
   _handleMessage(body) {
     if (this._closed) return
     this._onMessage?.(body)
+  }
+
+  /**
+   * Called by the client when the underlying socket drops. The
+   * connection stays alive pending session resume; user handler
+   * decides whether to pause UI / outbound work.
+   *
+   * @returns {void}
+   */
+  _handleDisconnected() {
+    if (this._closed) return
+    this._onDisconnect?.()
+  }
+
+  /**
+   * Called by the client after `session-resumed` confirms the
+   * server still has this connection.
+   *
+   * @returns {void}
+   */
+  _handleResumed() {
+    if (this._closed) return
+    this._onResume?.()
   }
 
   /**

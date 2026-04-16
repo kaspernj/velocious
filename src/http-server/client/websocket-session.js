@@ -1,5 +1,7 @@
 // @ts-check
 
+import {randomUUID} from "node:crypto"
+
 import EventEmitter from "../../utils/event-emitter.js"
 import Logger from "../../logger.js"
 import RequestRunner from "./request-runner.js"
@@ -12,6 +14,9 @@ const WEBSOCKET_OPCODE_TEXT = 0x1
 const WEBSOCKET_OPCODE_CLOSE = 0x8
 const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
+
+/** Cap on the paused outbound queue; oldest frames drop on overflow. */
+const WEBSOCKET_PAUSED_QUEUE_CAP = 1000
 
 /**
  * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | {type: "metadata", data?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
@@ -82,6 +87,38 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     /** @type {Map<string, {channelType: string, subscription: import("../websocket-channel-v2.js").default}>} */
     this._channelSubscriptions = new Map()
+
+    /**
+     * Unique id assigned to this session on first connect. Sent to the
+     * client via `session-established`; the client echoes it back via
+     * `session-resume` after a WS drop to reattach to this session
+     * within the grace period.
+     * @type {string}
+     */
+    this.sessionId = randomUUID()
+
+    /** @type {boolean} - true after `_handleClose` pauses instead of tearing down. */
+    this._paused = false
+
+    /** @type {any[]} - frames produced while paused; flushed on resume. */
+    this._outboundQueue = []
+
+    /** @type {import("./index.js").default | null} */
+    this.socket = null
+  }
+
+  /**
+   * Sends the client its sessionId + grace window. Called by
+   * `VelociousHttpServerClient` after the WS upgrade completes.
+   *
+   * @returns {void}
+   */
+  sendSessionEstablished() {
+    this.sendJson({
+      type: "session-established",
+      sessionId: this.sessionId,
+      graceSeconds: this.configuration.getWebsocketSessionGraceSeconds?.() || 300
+    })
   }
 
   /**
@@ -99,6 +136,11 @@ export default class VelociousHttpServerClientWebsocketSession {
   /** @returns {Record<string, any>} - Client-provided metadata (defensive copy). */
   getMetadata() {
     return {...this._metadata}
+  }
+
+  /** @returns {boolean} - true while the session is in the paused/grace registry. */
+  isPaused() {
+    return this._paused
   }
 
   /**
@@ -288,6 +330,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       return
     }
 
+    if (message.type === "session-resume") {
+      await this._handleSessionResume(message)
+      return
+    }
+
     if (message.type === "connection-open") {
       await this._handleConnectionOpen(message)
       return
@@ -453,6 +500,23 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {void} - No return value.
    */
   sendJson(body) {
+    // While paused (waiting for a resume), stash frames in an
+    // outbound queue and flush them in order on resume. Capped to
+    // prevent runaway memory use while the client is offline.
+    if (this._paused) {
+      this._outboundQueue ||= []
+
+      if (this._outboundQueue.length >= WEBSOCKET_PAUSED_QUEUE_CAP) {
+        // Drop oldest so the most recent activity wins on resume.
+        this._outboundQueue.shift()
+      }
+
+      this._outboundQueue.push(body)
+      return
+    }
+
+    if (!this.client?.events) return
+
     const json = JSON.stringify(body)
     const payload = Buffer.from(json, "utf-8")
     let header
@@ -473,6 +537,23 @@ export default class VelociousHttpServerClientWebsocketSession {
     header[0] = WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_TEXT
 
     this.client.events.emit("output", Buffer.concat([header, payload]))
+  }
+
+  /**
+   * Flushes the paused outbound queue over the current socket.
+   * Called during resume after `session-resumed` has been sent on
+   * the NEW session's socket (not this session's).
+   *
+   * @returns {void}
+   */
+  _flushOutboundQueue() {
+    const queue = this._outboundQueue || []
+
+    this._outboundQueue = []
+
+    for (const body of queue) {
+      this.sendJson(body)
+    }
   }
 
   /**
@@ -526,6 +607,21 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   _handleClose() {
+    // If the session has resumable state (live Connection or
+    // ChannelV2 subscription), move it into the paused registry
+    // instead of tearing down; a new socket presenting the sessionId
+    // via `session-resume` within the grace window will reattach.
+    const hasResumableState = this._connections.size > 0 || this._channelSubscriptions.size > 0
+
+    if (hasResumableState && !this._paused) {
+      this._paused = true
+      this.socket = null
+      void this._fireOnDisconnect()
+      this.configuration._pauseWebsocketSession(this)
+      this.events.emit("close")
+      return
+    }
+
     void this._runMessageHandlerClose()
     void this._teardownChannel()
     void this._teardownConnections("session_destroyed")
@@ -534,11 +630,133 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+   * Called by the grace timer when the paused period expires without
+   * a resume. Tears down all live Connections + Channel subs and
+   * drops the session.
+   *
+   * @returns {void}
+   */
+  _finalizeGraceExpiry() {
+    void this._runMessageHandlerClose()
+    void this._teardownChannel()
+    void this._teardownConnections("grace_expired")
+    void this._teardownChannelV2Subscriptions()
+    this.events.emit("close")
+  }
+
+  /**
+   * Fires `onDisconnect` on every live Connection and Channel sub so
+   * apps can pause per-instance work while the session is paused.
+   * Errors are logged, not rethrown — one broken handler must not
+   * block the rest.
+   *
+   * @returns {Promise<void>}
+   */
+  async _fireOnDisconnect() {
+    for (const connection of this._connections.values()) {
+      try {
+        await connection.onDisconnect?.()
+      } catch (error) {
+        this.logger.error(() => [`onDisconnect failed for ${connection.connectionId}`, error])
+      }
+    }
+
+    for (const {subscription} of this._channelSubscriptions.values()) {
+      try {
+        await subscription.onDisconnect?.()
+      } catch (error) {
+        this.logger.error(() => [`onDisconnect failed for channel sub ${subscription.subscriptionId}`, error])
+      }
+    }
+  }
+
+  /**
+   * Fires `onResume` on every live Connection and Channel sub after
+   * a successful `session-resume` handoff.
+   *
+   * @returns {Promise<void>}
+   */
+  async _fireOnResume() {
+    for (const connection of this._connections.values()) {
+      try {
+        await connection.onResume?.()
+      } catch (error) {
+        this.logger.error(() => [`onResume failed for ${connection.connectionId}`, error])
+      }
+    }
+
+    for (const {subscription} of this._channelSubscriptions.values()) {
+      try {
+        await subscription.onResume?.()
+      } catch (error) {
+        this.logger.error(() => [`onResume failed for channel sub ${subscription.subscriptionId}`, error])
+      }
+    }
+  }
+
+  /**
+   * Handles `{type: "session-resume"}`. This session (the newly-
+   * created one whose socket just connected) transfers state from
+   * the paused session and instructs the client via
+   * `session-resumed` or `session-gone`.
+   *
+   * @param {Record<string, any>} message
+   * @returns {Promise<void>}
+   */
+  async _handleSessionResume(message) {
+    const resumeSessionId = message.sessionId
+
+    if (typeof resumeSessionId !== "string" || !resumeSessionId) {
+      this.sendJson({type: "session-gone"})
+      return
+    }
+
+    const paused = this.configuration._findPausedWebsocketSession(resumeSessionId)
+
+    if (!paused) {
+      this.sendJson({type: "session-gone"})
+      return
+    }
+
+    this.configuration._clearPausedWebsocketSession(resumeSessionId)
+
+    // Transfer resumable state onto this (live) session. The paused
+    // session shell is discarded after the transfer.
+    for (const [connectionId, connection] of paused._connections) {
+      connection.session = this
+      this._connections.set(connectionId, connection)
+    }
+
+    for (const [subId, entry] of paused._channelSubscriptions) {
+      entry.subscription.session = this
+      this._channelSubscriptions.set(subId, entry)
+    }
+
+    this._metadata = {...paused._metadata}
+    this.data = paused.data
+    this.sessionId = resumeSessionId
+
+    // Transfer any frames queued while the paused session had no
+    // socket. They flush AFTER session-resumed so the client knows
+    // which session they belong to.
+    const queued = paused._outboundQueue || []
+
+    paused._outboundQueue = []
+    paused._connections.clear()
+    paused._channelSubscriptions.clear()
+    paused._paused = false
+
+    this.sendJson({type: "session-resumed", sessionId: resumeSessionId})
+    for (const body of queued) this.sendJson(body)
+    await this._fireOnResume()
+  }
+
+  /**
    * Fires `onClose(reason)` on every live app-defined connection, then
    * drops them from the registry. No network frame is sent — the
    * socket is already going away.
    *
-   * @param {"session_destroyed" | "error"} reason
+   * @param {"session_destroyed" | "grace_expired" | "error"} reason
    * @returns {Promise<void>}
    */
   async _teardownConnections(reason) {
