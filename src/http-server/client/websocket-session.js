@@ -283,6 +283,25 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
+    const wrapper = this.configuration.getWebsocketAroundRequest?.()
+
+    if (wrapper) {
+      await wrapper(this, () => this._handleMessageInner(message))
+      return
+    }
+
+    await this._handleMessageInner(message)
+  }
+
+  /**
+   * The actual message dispatch, extracted so
+   * `configuration.getWebsocketAroundRequest()` can wrap it in any
+   * per-request context (AsyncLocalStorage, tracing, etc.).
+   *
+   * @param {WebsocketSessionMessage} message
+   * @returns {Promise<void>}
+   */
+  async _handleMessageInner(message) {
     if (this.pendingMessageHandler) {
       this.messageQueue.push(message)
       return

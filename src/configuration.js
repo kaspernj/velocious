@@ -106,6 +106,15 @@ export default class VelociousConfiguration {
 
     /** Grace period for paused WebSocket sessions before permanent teardown. */
     this._websocketSessionGraceSeconds = 300
+
+    /**
+     * Optional wrapper called around every WebSocket-borne request /
+     * connection message / channel dispatch. Apps register it here
+     * to set up per-request context (e.g. AsyncLocalStorage for
+     * locale, tenant, tracing) that downstream handlers read.
+     * @type {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null}
+     */
+    this._websocketAroundRequest = null
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
@@ -912,6 +921,26 @@ export default class VelociousConfiguration {
    * @returns {number} - Grace period (seconds) before a paused WS session is torn down.
    */
   getWebsocketSessionGraceSeconds() { return this._websocketSessionGraceSeconds }
+
+  /**
+   * Registers a wrapper invoked around every WS-borne request /
+   * connection message / channel dispatch. The wrapper receives the
+   * session and a `next` callback; it must call `next()` to run the
+   * handler. Use it to set up AsyncLocalStorage per request.
+   *
+   * @param {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null} wrapper
+   * @returns {void}
+   */
+  setWebsocketAroundRequest(wrapper) {
+    this._websocketAroundRequest = wrapper
+  }
+
+  /**
+   * @returns {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null}
+   */
+  getWebsocketAroundRequest() {
+    return this._websocketAroundRequest
+  }
 
   /**
    * @param {number} seconds
