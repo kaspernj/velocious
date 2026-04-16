@@ -79,6 +79,9 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     /** @type {Map<string, import("../websocket-connection.js").default>} */
     this._connections = new Map()
+
+    /** @type {Map<string, {channelType: string, subscription: import("../websocket-channel-v2.js").default}>} */
+    this._channelSubscriptions = new Map()
   }
 
   /**
@@ -300,6 +303,16 @@ export default class VelociousHttpServerClientWebsocketSession {
       return
     }
 
+    if (message.type === "channel-subscribe") {
+      await this._handleChannelV2Subscribe(message)
+      return
+    }
+
+    if (message.type === "channel-unsubscribe") {
+      await this._handleChannelV2Unsubscribe(message)
+      return
+    }
+
     if (message.type && message.type !== "request") {
       this.sendJson({error: `Unknown message type: ${message.type}`, type: "error"})
       return
@@ -516,6 +529,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     void this._runMessageHandlerClose()
     void this._teardownChannel()
     void this._teardownConnections("session_destroyed")
+    void this._teardownChannelV2Subscriptions()
     this.events.emit("close")
   }
 
@@ -640,6 +654,122 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     this.sendJson({type: "connection-closed", connectionId, reason: "client_close"})
+  }
+
+  /**
+   * Handles `{type: "channel-subscribe"}` — runs `canSubscribe()`,
+   * registers with the Configuration's global routing registry on
+   * success, and sends `channel-subscribed` or `channel-error`.
+   *
+   * @param {Record<string, any>} message
+   * @returns {Promise<void>}
+   */
+  async _handleChannelV2Subscribe(message) {
+    const subscriptionId = message.subscriptionId
+    const channelType = message.channelType
+    const params = message.params || {}
+
+    if (typeof subscriptionId !== "string" || !subscriptionId) {
+      this.sendJson({type: "error", error: "channel-subscribe requires subscriptionId"})
+      return
+    }
+
+    if (typeof channelType !== "string" || !channelType) {
+      this.sendJson({type: "channel-error", subscriptionId, message: "channelType is required"})
+      return
+    }
+
+    if (this._channelSubscriptions.has(subscriptionId)) {
+      this.sendJson({type: "channel-error", subscriptionId, message: "Subscription id already in use"})
+      return
+    }
+
+    const ChannelClass = this.configuration.getWebsocketChannelClass?.(channelType)
+
+    if (!ChannelClass) {
+      this.sendJson({type: "channel-error", subscriptionId, message: `Unknown channel type: ${channelType}`})
+      return
+    }
+
+    const subscription = new ChannelClass({subscriptionId, params, session: this})
+
+    try {
+      let allowed = false
+
+      await this._withConnections(async () => {
+        allowed = Boolean(await subscription.canSubscribe())
+      })
+
+      if (!allowed) {
+        this.sendJson({type: "channel-error", subscriptionId, message: "Subscription not authorized"})
+        return
+      }
+
+      this._channelSubscriptions.set(subscriptionId, {channelType, subscription})
+      this.configuration._registerWebsocketChannelSubscription(channelType, subscription)
+
+      await this._withConnections(async () => await subscription.subscribed())
+      this.sendJson({type: "channel-subscribed", subscriptionId})
+    } catch (error) {
+      this._channelSubscriptions.delete(subscriptionId)
+      this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
+      this.logger.error(() => [`Failed to subscribe channel ${channelType}:${subscriptionId}`, error])
+      this.sendJson({type: "channel-error", subscriptionId, message: /** @type {Error} */ (error).message || "Failed to subscribe"})
+    }
+  }
+
+  /**
+   * Handles `{type: "channel-unsubscribe"}` from the client — calls
+   * `unsubscribed()` and sends `channel-unsubscribed`.
+   *
+   * @param {Record<string, any>} message
+   * @returns {Promise<void>}
+   */
+  async _handleChannelV2Unsubscribe(message) {
+    const subscriptionId = message.subscriptionId
+
+    if (typeof subscriptionId !== "string") return
+
+    const entry = this._channelSubscriptions.get(subscriptionId)
+
+    if (!entry) return
+
+    this._channelSubscriptions.delete(subscriptionId)
+    this.configuration._unregisterWebsocketChannelSubscription(entry.channelType, entry.subscription)
+    entry.subscription._closed = true
+
+    try {
+      await this._withConnections(async () => await entry.subscription.unsubscribed())
+    } catch (error) {
+      this.logger.error(() => [`Failed to unsubscribe channel ${entry.channelType}:${subscriptionId}`, error])
+    }
+
+    this.sendJson({type: "channel-unsubscribed", subscriptionId})
+  }
+
+  /**
+   * Fires `unsubscribed()` on every live channel-v2 subscription,
+   * removes them from the Configuration's global registry, and
+   * drops the session's own map. No network frames — the socket
+   * is already going away.
+   *
+   * @returns {Promise<void>}
+   */
+  async _teardownChannelV2Subscriptions() {
+    const entries = [...this._channelSubscriptions.values()]
+
+    this._channelSubscriptions.clear()
+
+    for (const {channelType, subscription} of entries) {
+      this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
+      subscription._closed = true
+
+      try {
+        await subscription.unsubscribed()
+      } catch (error) {
+        this.logger.error(() => [`Failed to tear down channel-v2 ${channelType}:${subscription.subscriptionId}`, error])
+      }
+    }
   }
 
   async _teardownChannel() {

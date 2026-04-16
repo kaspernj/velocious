@@ -18,6 +18,7 @@ import CommentFrontendModelAbilityResource from "../resources/comment-frontend-m
 import ProjectFrontendModelAbilityResource from "../resources/project-frontend-model-ability-resource.js"
 import TaskFrontendModelAbilityResource from "../resources/task-frontend-model-ability-resource.js"
 import UserFrontendModelAbilityResource from "../resources/user-frontend-model-ability-resource.js"
+import CounterChannel from "../channels/counter-channel.js"
 import EchoConnection from "../connections/echo-connection.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
 
@@ -176,5 +177,8 @@ installSqlJsWasmRoute({configuration})
 
 // Register test websocket connections (Phase 1A).
 configuration.registerWebsocketConnection("Echo", EchoConnection)
+
+// Register test websocket channels (Phase 1B).
+configuration.registerWebsocketChannel("Counter", CounterChannel)
 
 export default configuration

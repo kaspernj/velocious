@@ -94,6 +94,12 @@ export default class VelociousConfiguration {
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
     /** @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
     this._websocketConnectionClasses = new Map()
+
+    /** @type {Map<string, typeof import("./http-server/websocket-channel-v2.js").default>} */
+    this._websocketChannelClasses = new Map()
+
+    /** @type {Map<string, Set<import("./http-server/websocket-channel-v2.js").default>>} - channelType → live subscriptions across all sessions. */
+    this._websocketChannelSubscriptions = new Map()
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
@@ -823,6 +829,106 @@ export default class VelociousConfiguration {
    */
   getWebsocketConnectionClass(name) {
     return this._websocketConnectionClasses.get(name)
+  }
+
+  /**
+   * Registers a `VelociousWebsocketChannelV2` subclass under a name.
+   * Clients subscribe via `{type: "channel-subscribe", channelType: name, ...}`.
+   *
+   * @param {string} name
+   * @param {typeof import("./http-server/websocket-channel-v2.js").default} ChannelClass
+   * @returns {void}
+   */
+  registerWebsocketChannel(name, ChannelClass) {
+    if (!name) throw new Error("Channel name is required")
+    if (!ChannelClass) throw new Error("ChannelClass is required")
+    this._websocketChannelClasses.set(name, ChannelClass)
+  }
+
+  /**
+   * @param {string} name
+   * @returns {typeof import("./http-server/websocket-channel-v2.js").default | undefined}
+   */
+  getWebsocketChannelClass(name) {
+    return this._websocketChannelClasses.get(name)
+  }
+
+  /**
+   * Tracks a live channel subscription in the global routing registry.
+   * Called by the session when `canSubscribe()` resolves truthy; the
+   * session calls `_unregisterWebsocketChannelSubscription` on unsubscribe.
+   *
+   * @param {string} name
+   * @param {import("./http-server/websocket-channel-v2.js").default} subscription
+   * @returns {void}
+   */
+  _registerWebsocketChannelSubscription(name, subscription) {
+    let bucket = this._websocketChannelSubscriptions.get(name)
+
+    if (!bucket) {
+      bucket = new Set()
+      this._websocketChannelSubscriptions.set(name, bucket)
+    }
+
+    bucket.add(subscription)
+  }
+
+  /**
+   * @param {string} name
+   * @param {import("./http-server/websocket-channel-v2.js").default} subscription
+   * @returns {void}
+   */
+  _unregisterWebsocketChannelSubscription(name, subscription) {
+    const bucket = this._websocketChannelSubscriptions.get(name)
+
+    if (!bucket) return
+
+    bucket.delete(subscription)
+
+    if (bucket.size === 0) {
+      this._websocketChannelSubscriptions.delete(name)
+    }
+  }
+
+  /**
+   * Delivers `body` to every live subscriber of `name` whose
+   * `matches(broadcastParams)` returns true. Pure routing — no auth
+   * re-check, no persistence. Subscribers who were admitted by
+   * `canSubscribe()` continue to receive broadcasts until they
+   * unsubscribe or the session ends.
+   *
+   * @param {string} name
+   * @param {Record<string, any>} broadcastParams
+   * @param {any} body
+   * @returns {void}
+   */
+  broadcastToChannel(name, broadcastParams, body) {
+    const bucket = this._websocketChannelSubscriptions.get(name)
+
+    if (!bucket) return
+
+    for (const subscription of bucket) {
+      if (subscription.isClosed()) continue
+
+      let matches
+
+      try {
+        matches = subscription.matches(broadcastParams || {})
+      } catch (error) {
+        // A broken `matches()` on one subscriber must not poison the
+        // broadcast to other subscribers. Skip and continue.
+        console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} matches() threw`, error)
+        continue
+      }
+
+      if (!matches) continue
+
+      try {
+        subscription.sendMessage(body)
+      } catch (error) {
+        console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} sendMessage threw`, error)
+      }
+    }
   }
 
   /** @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver. */

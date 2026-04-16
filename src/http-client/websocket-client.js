@@ -1,6 +1,7 @@
 // @ts-check
 
 import VelociousWebsocketClientConnection from "./websocket-connection.js"
+import VelociousWebsocketClientSubscription from "./websocket-channel.js"
 import {deserializeFrontendModelTransportValue} from "../frontend-models/transport-serialization.js"
 
 const DEFAULT_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000]
@@ -52,7 +53,11 @@ export default class VelociousWebsocketClient {
     /** @type {Map<string, VelociousWebsocketClientConnection>} */
     this._connections = new Map()
 
+    /** @type {Map<string, VelociousWebsocketClientSubscription>} */
+    this._channelSubscriptions = new Map()
+
     this._nextConnectionIdSeq = 1
+    this._nextSubscriptionIdSeq = 1
   }
 
   /** @returns {boolean} */
@@ -104,6 +109,46 @@ export default class VelociousWebsocketClient {
    */
   _removeConnection(connectionId) {
     this._connections.delete(connectionId)
+  }
+
+  /**
+   * Subscribes to a named `WebsocketChannelV2`. Requires the socket
+   * to already be connected.
+   *
+   * @param {string} channelType - Name the server registered the channel under.
+   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onClose?: (reason: string) => void}} [options]
+   * @returns {VelociousWebsocketClientSubscription}
+   */
+  subscribeChannel(channelType, options = {}) {
+    if (!this.isOpen()) throw new Error("Websocket is not open; call connect() first")
+
+    const subscriptionId = `s${this._nextSubscriptionIdSeq++}`
+    const subscription = new VelociousWebsocketClientSubscription({
+      client: this,
+      subscriptionId,
+      channelType,
+      params: options.params,
+      onMessage: options.onMessage,
+      onClose: options.onClose
+    })
+
+    this._channelSubscriptions.set(subscriptionId, subscription)
+    this._sendMessage({
+      type: "channel-subscribe",
+      subscriptionId,
+      channelType,
+      params: options.params || {}
+    })
+
+    return subscription
+  }
+
+  /**
+   * @param {string} subscriptionId
+   * @returns {void}
+   */
+  _removeChannelSubscription(subscriptionId) {
+    this._channelSubscriptions.delete(subscriptionId)
   }
 
   /**
@@ -455,6 +500,28 @@ export default class VelociousWebsocketClient {
         this._connections.delete(message.connectionId)
         connection._handleClosed(`error: ${message.message || "connection-error"}`)
       }
+    } else if (type === "channel-subscribed") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      sub?._handleSubscribed()
+    } else if (type === "channel-message") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      sub?._handleMessage(message.body)
+    } else if (type === "channel-unsubscribed") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      if (sub) {
+        this._channelSubscriptions.delete(message.subscriptionId)
+        sub._handleClosed("server_unsubscribe")
+      }
+    } else if (type === "channel-error") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      if (sub) {
+        this._channelSubscriptions.delete(message.subscriptionId)
+        sub._handleClosed(`error: ${message.message || "channel-error"}`)
+      }
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)
 
@@ -497,6 +564,15 @@ export default class VelociousWebsocketClient {
     this._connections.clear()
     for (const connection of connections) {
       connection._handleClosed("session_destroyed")
+    }
+
+    // Same for channel subscriptions — they're torn down by the
+    // session teardown on the server side, we mirror here so
+    // user callbacks get onClose.
+    const channelSubs = [...this._channelSubscriptions.values()]
+    this._channelSubscriptions.clear()
+    for (const subscription of channelSubs) {
+      subscription._handleClosed("session_destroyed")
     }
 
     this.pendingRequests.clear()

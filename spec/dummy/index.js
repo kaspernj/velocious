@@ -64,6 +64,7 @@ export default class Dummy {
     this.application = new Application({
       configuration: dummyConfiguration,
       httpServer: {
+        inProcess: true,
         maxWorkers: 1,
         port: 3006
       },
