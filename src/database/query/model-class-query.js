@@ -11,6 +11,7 @@ import RecordNotFoundError from "../record/record-not-found-error.js"
 import {normalizeRansackParams, parseRansackSort} from "../../utils/ransack.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
+import WhereParser from "../query-parser/where-parser.js"
 
 /**
  * @param {string} value - Potentially quoted SQL identifier.
@@ -377,6 +378,37 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     for (const record of records) {
       await record.destroy()
     }
+  }
+
+  /**
+   * Executes a bulk UPDATE on all rows matching the query's WHERE
+   * clause. Bypasses model lifecycle callbacks — use this for
+   * efficient batch updates where per-row hooks aren't needed.
+   *
+   * @param {Record<string, any>} data - camelCase attribute names → values.
+   * @returns {Promise<void>}
+   */
+  async updateAll(data) {
+    const driver = this.driver
+    const tableName = this.getModelClass().tableName()
+    const entries = Object.entries(data)
+
+    if (entries.length === 0) return
+
+    let sql = `UPDATE ${driver.quoteTable(tableName)} SET `
+
+    sql += entries.map(([key, value]) => {
+      const columnName = inflection.underscore(key)
+      const quoted = value === null ? "NULL" : driver.quote(value)
+
+      return `${driver.quoteColumn(columnName)} = ${quoted}`
+    }).join(", ")
+
+    const whereSql = new WhereParser({pretty: false, query: this}).toSql()
+
+    sql += whereSql
+
+    await driver.query(sql)
   }
 
   /**
