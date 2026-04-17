@@ -1064,18 +1064,15 @@ export default class VelociousHttpServerClientWebsocketSession {
         this.configuration._registerWebsocketChannelSubscription(channelType, subscription)
 
         await this._withConnections(async () => await subscription.subscribed())
-        this.sendJson({type: "channel-subscribed", subscriptionId})
 
-        // Replay missed events from the persistent event log if the
-        // client provided a checkpoint. Events that arrive between
-        // the subscribe and the end of replay are delivered normally
-        // (the subscription is already registered so broadcastToChannel
-        // reaches it). The client uses the eventId on each
-        // channel-message to track its own checkpoint for the next
-        // subscribe.
+        // Replay missed events BEFORE sending channel-subscribed so
+        // the client knows: everything before the confirmation is
+        // replayed, everything after is live.
         if (typeof lastEventId === "string" && lastEventId.length > 0) {
           await this._replayChannelEventsForSubscription({channelType, lastEventId, subscription})
         }
+
+        this.sendJson({type: "channel-subscribed", subscriptionId})
       })
     } catch (error) {
       this._channelSubscriptions.delete(subscriptionId)
@@ -1098,6 +1095,12 @@ export default class VelociousHttpServerClientWebsocketSession {
    */
   async _replayChannelEventsForSubscription({channelType, lastEventId, subscription}) {
     const store = websocketEventLogStoreForConfiguration(this.configuration)
+
+    await this.configuration.awaitPendingBroadcasts()
+
+    const allEvents = await store.getEventsAfter({channel: channelType, sequence: 0})
+
+
     const checkpoint = await store.getEventById({channel: channelType, id: lastEventId})
 
     if (!checkpoint) {

@@ -159,6 +159,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "first"}})
         const firstEvent = await firstEventPromise
 
+
         firstSocket.close()
 
         await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "second"}})
@@ -205,6 +206,8 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           }))
 
           const replayedMessages = await replayedMessagesPromise
+
+
           const replayedEvent = replayedMessages.find((message) => {
             return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "second"
           })

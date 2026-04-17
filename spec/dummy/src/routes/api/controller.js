@@ -7,11 +7,12 @@ export default class ApiController extends Controller {
     })
   }
 
-  broadcastEvent() {
+  async broadcastEvent() {
     const channel = this.getParams().channel
     const payload = this.getParams().payload
 
     this.getConfiguration().broadcastToChannel("test", {channel}, payload)
+    await this.getConfiguration().awaitPendingBroadcasts()
     this.renderJsonArg({status: "published"})
   }
 }

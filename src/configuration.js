@@ -1112,6 +1112,23 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Awaits all pending broadcast operations (including event-log
+   * persistence). Call this after `broadcastToChannel` when you need
+   * the event to be persisted before continuing (e.g. before
+   * responding to an HTTP request).
+   *
+   * @returns {Promise<void>}
+   */
+  async awaitPendingBroadcasts() {
+    /** @type {any} */
+    const websocketEvents = this._websocketEvents
+
+    if (websocketEvents && typeof websocketEvents.awaitPendingBroadcasts === "function") {
+      await websocketEvents.awaitPendingBroadcasts()
+    }
+  }
+
+  /**
    * Local (per-worker) channel broadcast dispatch. Called either
    * directly (in-process mode) or by the worker thread after the
    * main-process fan-out.

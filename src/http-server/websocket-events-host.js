@@ -10,6 +10,19 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Returns a promise that resolves when all pending publish/broadcast
+   * operations have completed (including event-log persistence). Useful
+   * when a request handler needs to guarantee its broadcast is persisted
+   * before responding — without this, the HTTP response can return before
+   * the async event-log write finishes.
+   *
+   * @returns {Promise<void>}
+   */
+  async awaitPendingBroadcasts() {
+    await this.publishQueue
+  }
+
+  /**
    * @param {import("./worker-handler/index.js").default} handler - Handler instance.
    * @returns {() => void} - The register.
    */
