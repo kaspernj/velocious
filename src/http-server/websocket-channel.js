@@ -89,11 +89,14 @@ export default class VelociousWebsocketChannel {
 
   /**
    * Sends a `channel-message` frame to THIS subscriber only.
+   * When `meta.eventId` is provided, the client receives it so it
+   * can track its checkpoint for `lastEventId` replay on reconnect.
    *
    * @param {any} body
+   * @param {{eventId?: string}} [meta] - Optional event metadata.
    * @returns {void}
    */
-  sendMessage(body) {
+  sendMessage(body, meta) {
     if (this._closed) {
       throw new Error(`Cannot sendMessage on closed subscription ${this.subscriptionId}`)
     }
@@ -101,7 +104,8 @@ export default class VelociousWebsocketChannel {
     this.session.sendJson({
       type: "channel-message",
       subscriptionId: this.subscriptionId,
-      body
+      body,
+      ...(meta?.eventId ? {eventId: meta.eventId} : {})
     })
   }
 

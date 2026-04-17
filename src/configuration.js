@@ -1119,9 +1119,10 @@ export default class VelociousConfiguration {
    * @param {string} name - Channel name.
    * @param {Record<string, any>} broadcastParams - Params passed to each subscription's `matches()`.
    * @param {any} body - Message body delivered via `sendMessage()`.
+   * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
    * @returns {void}
    */
-  _broadcastToChannelLocal(name, broadcastParams, body) {
+  _broadcastToChannelLocal(name, broadcastParams, body, meta) {
     const bucket = this._websocketChannelSubscriptions.get(name)
 
     if (!bucket) return
@@ -1143,7 +1144,7 @@ export default class VelociousConfiguration {
       if (!matches) continue
 
       try {
-        subscription.sendMessage(body)
+        subscription.sendMessage(body, {eventId: meta?.eventId})
       } catch (error) {
         console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} sendMessage threw`, error)
       }

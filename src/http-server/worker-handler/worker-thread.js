@@ -141,15 +141,12 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
       await this.broadcastWebsocketEvent({channel, createdAt, eventId, payload})
     } else if (command == "websocketV2Broadcast") {
-      const {body, broadcastParams, channel} = data
+      const {body, broadcastParams, channel, eventId} = data
 
       if (typeof channel !== "string") throw new Error("No channel given")
       if (!this.configuration) throw new Error("Configuration not initialized")
 
-      // Dispatch to any V2 subscriptions registered in this worker.
-      // Main process fan-out guarantees a publisher on any worker
-      // reaches subscribers on every worker.
-      this.configuration._broadcastToChannelLocal(channel, broadcastParams || {}, body)
+      this.configuration._broadcastToChannelLocal(channel, broadcastParams || {}, body, {eventId})
     } else if (command == "shutdown") {
       if (this.configuration?.closeDatabaseConnections) {
         await this.configuration.closeDatabaseConnections()

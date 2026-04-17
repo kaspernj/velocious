@@ -266,11 +266,13 @@ export default class VelociousHttpServerWorker {
    * @param {string} args.channel - Channel name.
    * @param {Record<string, any>} args.broadcastParams - Routing filter params.
    * @param {any} args.body - Message body.
+   * @param {string} [args.eventId] - Persisted event id for replay.
+   * @param {string} [args.createdAt] - Event creation timestamp.
    * @returns {void}
    */
-  dispatchWebsocketV2Broadcast({body, broadcastParams, channel}) {
+  dispatchWebsocketV2Broadcast({body, broadcastParams, channel, eventId, createdAt}) {
     if (!this.worker || typeof this.worker.postMessage !== "function") return
 
-    this.worker.postMessage({body, broadcastParams, channel, command: "websocketV2Broadcast"})
+    this.worker.postMessage({body, broadcastParams, channel, command: "websocketV2Broadcast", eventId, createdAt})
   }
 }

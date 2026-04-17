@@ -51,8 +51,8 @@ export class VelociousHttpServerWebsocketEventsHost {
 
   /**
    * Fan a V2 channel broadcast out to every registered worker handler.
-   * V2 broadcasts are ephemeral (no replay log) and carry opaque
-   * `broadcastParams` used only for per-subscriber `matches()` routing.
+   * Persists the event to the event-log store (if the channel is marked
+   * interested) so clients can resume from a `lastEventId` checkpoint.
    *
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
@@ -61,9 +61,38 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @returns {void}
    */
   broadcastV2({body, broadcastParams, channel}) {
-    for (const handler of this.handlers) {
-      handler.dispatchWebsocketV2Broadcast({body, broadcastParams, channel})
-    }
+    void this._persistV2EventIfNeeded({body, channel}).then((persistedEvent) => {
+      for (const handler of this.handlers) {
+        handler.dispatchWebsocketV2Broadcast({
+          body,
+          broadcastParams,
+          channel,
+          eventId: persistedEvent?.id,
+          createdAt: persistedEvent?.createdAt
+        })
+      }
+    }).catch((error) => {
+      console.error("Failed to persist/broadcast V2 event", error)
+    })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {any} args.body - Event body.
+   * @param {string} args.channel - Channel name.
+   * @returns {Promise<{createdAt: string, id: string} | null>}
+   */
+  async _persistV2EventIfNeeded({body, channel}) {
+    const handler = this.handlers.values().next().value
+
+    if (!handler?.configuration) return null
+
+    const websocketEventLogStore = websocketEventLogStoreForConfiguration(handler.configuration)
+    const shouldPersist = await websocketEventLogStore.shouldPersistChannel(channel)
+
+    if (!shouldPersist) return null
+
+    return await websocketEventLogStore.appendEvent({channel, payload: body})
   }
 
   /**

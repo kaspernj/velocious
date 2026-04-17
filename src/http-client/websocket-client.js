@@ -126,11 +126,11 @@ export default class VelociousWebsocketClient {
   }
 
   /**
-   * Subscribes to a named `WebsocketChannelV2`. Requires the socket
-   * to already be connected.
+   * Subscribes to a named WebsocketChannel. Requires the socket to
+   * already be connected.
    *
    * @param {string} channelType - Name the server registered the channel under.
-   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @param {{params?: Record<string, any>, lastEventId?: string, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
    * @returns {VelociousWebsocketClientSubscription}
    */
   subscribeChannel(channelType, options = {}) {
@@ -153,7 +153,8 @@ export default class VelociousWebsocketClient {
       type: "channel-subscribe",
       subscriptionId,
       channelType,
-      params: options.params || {}
+      params: options.params || {},
+      ...(options.lastEventId ? {lastEventId: options.lastEventId} : {})
     })
 
     return subscription

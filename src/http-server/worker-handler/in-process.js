@@ -110,12 +110,13 @@ export default class VelociousHttpServerInProcessHandler {
    * @param {string} args.channel - Channel name.
    * @param {Record<string, any>} args.broadcastParams - Routing filter params.
    * @param {any} args.body - Message body.
+   * @param {string} [args.eventId] - Persisted event id for replay.
    * @returns {void}
    */
-  dispatchWebsocketV2Broadcast({body, broadcastParams, channel}) {
+  dispatchWebsocketV2Broadcast({body, broadcastParams, channel, eventId}) {
     if (!this.configuration) return
 
-    /** @type {any} */ (this.configuration)._broadcastToChannelLocal(channel, broadcastParams, body)
+    /** @type {any} */ (this.configuration)._broadcastToChannelLocal(channel, broadcastParams, body, {eventId})
   }
 
   /**

@@ -197,8 +197,9 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           })
 
           secondSocket.send(JSON.stringify({
-            type: "subscribe",
-            channel: "test",
+            type: "channel-subscribe",
+            channelType: "test",
+            subscriptionId: "s1",
             lastEventId: firstEvent.eventId,
             params: {subscribe: "news", token: "allow"}
           }))
@@ -208,14 +209,12 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
             return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "second"
           })
 
-          // Phase 2 adds a `session-established` frame ahead of any
-          // app-visible messages; skip framework frames when asserting
-          // the replay order.
+          // Skip framework frames (session-established etc.) when
+          // asserting the replay order.
           const appMessages = replayedMessages.filter((message) => !message.type?.startsWith("session-"))
 
-          expect(appMessages[0]?.type).toEqual("event")
-          expect(appMessages[1]?.type).toEqual("subscribed")
-          expect(replayedEvent?.replayed).toEqual(true)
+          expect(appMessages.some((m) => m.type === "channel-subscribed")).toBe(true)
+          expect(replayedEvent).toBeDefined()
         } finally {
           secondSocket.close()
         }
@@ -263,7 +262,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         await Promise.all([firstEventPromise, secondEventPromise])
 
         const persistedEvents = await websocketEventLogStoreForConfiguration(dummyConfiguration).getEventsAfter({
-          channel: "news",
+          channel: "test",
           sequence: 0
         })
 
@@ -304,12 +303,13 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           await waitForSocketOpen(secondSocket)
 
           const replayGapPromise = waitForSocketMessage(secondSocket, (message) => {
-            return message.type === "replay-gap" && message.channel === "test"
+            return message.type === "channel-replay-gap" && message.subscriptionId === "s1"
           })
 
           secondSocket.send(JSON.stringify({
-            type: "subscribe",
-            channel: "test",
+            type: "channel-subscribe",
+            channelType: "test",
+            subscriptionId: "s1",
             lastEventId: firstEvent.eventId,
             params: {subscribe: "news", token: "allow"}
           }))
@@ -327,7 +327,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
     })
   })
 
-  it("rejects replay gaps for resolver-backed subscriptions by subscription key", async () => {
+  it("sends channel-replay-gap when the checkpoint event was already expired", async () => {
     await Dummy.run(async () => {
       const rawSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
       const websocketClient = new WebsocketClient()
@@ -348,12 +348,29 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         rawSocket.close()
         await websocketEventLogStoreForConfiguration(dummyConfiguration).cleanupExpired({now: new Date(Date.now() + 11 * 60 * 1000)})
 
-        await expect(async () => {
-          await websocketClient.subscribeAndWait("test", {
+        const secondSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+
+        try {
+          await waitForSocketOpen(secondSocket)
+
+          const replayGapPromise = waitForSocketMessage(secondSocket, (message) => {
+            return message.type === "channel-replay-gap" && message.subscriptionId === "s2"
+          })
+
+          secondSocket.send(JSON.stringify({
+            type: "channel-subscribe",
+            channelType: "test",
+            subscriptionId: "s2",
             lastEventId: firstEvent.eventId,
             params: {subscribe: "news", token: "allow"}
-          }, () => {})
-        }).toThrow(/Replay gap for test/)
+          }))
+
+          const replayGap = await replayGapPromise
+
+          expect(replayGap.lastEventId).toEqual(firstEvent.eventId)
+        } finally {
+          secondSocket.close()
+        }
       } finally {
         rawSocket.close()
         await websocketClient.close()

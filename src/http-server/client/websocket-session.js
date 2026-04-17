@@ -1019,6 +1019,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     const subscriptionId = message.subscriptionId
     const channelType = message.channelType
     const params = message.params || {}
+    const lastEventId = message.lastEventId
 
     if (typeof subscriptionId !== "string" || !subscriptionId) {
       this.sendJson({type: "error", error: "channel-subscribe requires subscriptionId"})
@@ -1064,12 +1065,64 @@ export default class VelociousHttpServerClientWebsocketSession {
 
         await this._withConnections(async () => await subscription.subscribed())
         this.sendJson({type: "channel-subscribed", subscriptionId})
+
+        // Replay missed events from the persistent event log if the
+        // client provided a checkpoint. Events that arrive between
+        // the subscribe and the end of replay are delivered normally
+        // (the subscription is already registered so broadcastToChannel
+        // reaches it). The client uses the eventId on each
+        // channel-message to track its own checkpoint for the next
+        // subscribe.
+        if (typeof lastEventId === "string" && lastEventId.length > 0) {
+          await this._replayChannelEventsForSubscription({channelType, lastEventId, subscription})
+        }
       })
     } catch (error) {
       this._channelSubscriptions.delete(subscriptionId)
       this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
       this.logger.error(() => [`Failed to subscribe channel ${channelType}:${subscriptionId}`, error])
       this.sendJson({type: "channel-error", subscriptionId, message: /** @type {Error} */ (error).message || "Failed to subscribe"})
+    }
+  }
+
+  /**
+   * Replays missed events from the persistent event-log store for a
+   * channel subscription that provided `lastEventId`. Sends each
+   * missed event as a `channel-message` with `replayed: true`.
+   *
+   * @param {object} args - Options.
+   * @param {string} args.channelType - Channel type name (event-log key).
+   * @param {string} args.lastEventId - Client's last-seen event id.
+   * @param {import("../websocket-channel.js").default} args.subscription - Live subscription.
+   * @returns {Promise<void>}
+   */
+  async _replayChannelEventsForSubscription({channelType, lastEventId, subscription}) {
+    const store = websocketEventLogStoreForConfiguration(this.configuration)
+    const checkpoint = await store.getEventById({channel: channelType, id: lastEventId})
+
+    if (!checkpoint) {
+      this.sendJson({
+        type: "channel-replay-gap",
+        subscriptionId: subscription.subscriptionId,
+        lastEventId
+      })
+      return
+    }
+
+    const ceiling = await store.latestSequence(channelType)
+
+    if (!ceiling || ceiling <= checkpoint.sequence) return
+
+    const events = await store.getEventsAfter({
+      channel: channelType,
+      sequence: checkpoint.sequence,
+      upToSequence: ceiling
+    })
+
+    for (const event of events) {
+      if (subscription.isClosed()) break
+
+      subscription.sendMessage(event.payload)
     }
   }
 
