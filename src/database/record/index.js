@@ -2304,6 +2304,17 @@ class VelociousDatabaseRecord {
     await this._runLifecycleCallbacks("beforeDestroy")
 
     for (const relationship of this.getModelClass().getRelationships()) {
+      if (relationship.getDependent() == "restrict") {
+        const instanceRelationship = /** @type {any} */ (this.getRelationshipByName(relationship.getRelationshipName()))
+        const count = await instanceRelationship.query().count()
+
+        if (count > 0) {
+          throw new Error(`Cannot delete record because dependent ${relationship.getRelationshipName()} exist`)
+        }
+
+        continue
+      }
+
       if (relationship.getDependent() != "destroy") {
         continue
       }

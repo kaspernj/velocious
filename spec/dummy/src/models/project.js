@@ -4,7 +4,7 @@ class Project extends ProjectBase {
 }
 
 Project.belongsTo("creatingUser", {className: "User", foreignKey: "creating_user_reference", primaryKey: "reference"})
-Project.hasMany("tasks")
+Project.hasMany("tasks", {dependent: "restrict"})
 Project.hasMany("doneTasks", (scope) => scope.where({isDone: true}), {className: "Task"})
 Project.hasOne("projectDetail")
 Project.hasOne("activeProjectDetail", function() { return this.where({isActive: true}) }, {className: "ProjectDetail"})

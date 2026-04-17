@@ -46,6 +46,27 @@ describe("Record - destroy", {tags: ["dummy"]}, () => {
     expect(translationsAfter.length).toEqual(0)
   })
 
+  it("blocks destroy when dependent restrict records exist", async () => {
+    const project = await Project.create()
+    await Task.create({name: "Blocking task", project})
+
+    await expect(async () => project.destroy()).toThrowError("Cannot delete record because dependent tasks exist")
+
+    const foundProject = await Project.where({id: project.id()}).first()
+
+    expect(foundProject).toBeDefined()
+  })
+
+  it("allows destroy when no dependent restrict records exist", async () => {
+    const project = await Project.create()
+
+    await project.destroy()
+
+    const foundProject = await Project.where({id: project.id()}).first()
+
+    expect(foundProject).toEqual(undefined)
+  })
+
   it("runs lifecycle callbacks around destroy", async () => {
     const previousLifecycleCallbacks = Task._lifecycleCallbacks
     /** @type {string[]} */
