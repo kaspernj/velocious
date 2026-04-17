@@ -30,15 +30,17 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
     for (const scopeColumn of scopeColumns) {
       const scopeUnderscore = inflection.underscore(scopeColumn)
-      const scopeValue = model.readAttribute(scopeColumn)
+      let scopeValue = model.readAttribute(scopeColumn)
 
-      // When the scope value is not yet available (e.g. a belongsTo FK
-      // that hasn't been flushed from the relationship object onto the
-      // attribute store), the uniqueness check cannot be evaluated — the
-      // DB would receive `column = N'undefined'` and reject it. Bail
-      // out and let the DB-level unique constraint catch it at INSERT
-      // time instead.
-      if (scopeValue == null || scopeValue === undefined) return
+      // When the FK hasn't been flushed from the relationship object
+      // onto the attribute store yet (e.g. `new Task({project})` where
+      // `projectId` is still undefined), try resolving it from the
+      // loaded belongsTo relationship instead.
+      if (scopeValue == null) {
+        scopeValue = this._resolveScopeValueFromRelationship(model, scopeColumn)
+      }
+
+      if (scopeValue == null) return
 
       whereArgs[scopeUnderscore] = /** @type {string | number} */ (scopeValue)
     }
@@ -58,6 +60,41 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
       model._validationErrors[attributeName].push({type: "uniqueness", message: "has already been taken"})
     }
+  }
+
+  /**
+   * Try to resolve a scope column value from a loaded belongsTo
+   * relationship on the model. When a Task is created via
+   * `new Task({project})`, the FK (`projectId`) is only flushed onto
+   * the attribute store during save — but the relationship object is
+   * already loaded and carries the id we need for the WHERE clause.
+   *
+   * @param {import("../index.js").default} model
+   * @param {string} scopeColumn - camelCase attribute name (e.g. `"projectId"`).
+   * @returns {string | number | null}
+   */
+  _resolveScopeValueFromRelationship(model, scopeColumn) {
+    const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
+    const relationships = modelClass.getRelationshipsMap()
+
+    for (const relationshipName in relationships) {
+      const relationship = relationships[relationshipName]
+
+      if (relationship.getType?.() !== "belongsTo") continue
+
+      const foreignKey = inflection.camelize(relationship.getForeignKey(), true)
+
+      if (foreignKey !== scopeColumn) continue
+
+      const instanceRelationship = model.getRelationshipByName(relationshipName)
+      const loaded = instanceRelationship.loaded()
+
+      if (loaded && typeof loaded.id === "function") {
+        return loaded.id()
+      }
+    }
+
+    return null
   }
 
   /**
