@@ -30,9 +30,17 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
     for (const scopeColumn of scopeColumns) {
       const scopeUnderscore = inflection.underscore(scopeColumn)
-      const scopeValue = /** @type {string | number} */ (model.readAttribute(scopeColumn))
+      const scopeValue = model.readAttribute(scopeColumn)
 
-      whereArgs[scopeUnderscore] = scopeValue
+      // When the scope value is not yet available (e.g. a belongsTo FK
+      // that hasn't been flushed from the relationship object onto the
+      // attribute store), the uniqueness check cannot be evaluated — the
+      // DB would receive `column = N'undefined'` and reject it. Bail
+      // out and let the DB-level unique constraint catch it at INSERT
+      // time instead.
+      if (scopeValue == null || scopeValue === undefined) return
+
+      whereArgs[scopeUnderscore] = /** @type {string | number} */ (scopeValue)
     }
 
     let existingRecordQuery = modelClass
