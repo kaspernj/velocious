@@ -1098,9 +1098,6 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     await this.configuration.awaitPendingBroadcasts()
 
-    const allEvents = await store.getEventsAfter({channel: channelType, sequence: 0})
-
-
     const checkpoint = await store.getEventById({channel: channelType, id: lastEventId})
 
     if (!checkpoint) {
