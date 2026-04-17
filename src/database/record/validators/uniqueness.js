@@ -89,7 +89,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
       const instanceRelationship = model.getRelationshipByName(relationshipName)
       const loaded = instanceRelationship.loaded()
 
-      if (loaded && typeof loaded.id === "function") {
+      if (loaded && !Array.isArray(loaded) && typeof loaded.id === "function") {
         return loaded.id()
       }
     }
