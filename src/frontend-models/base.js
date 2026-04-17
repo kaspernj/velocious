@@ -22,6 +22,8 @@ import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event
  * @property {boolean} [shared] - Deprecated shared-endpoint flag retained for compatibility. Frontend-model CRUD/custom commands use the shared frontend-model API envelope by default.
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
  * @property {{post: (path: string, body?: any, options?: {headers?: Record<string, string>}) => Promise<{json: () => any}>, subscribe: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, any>}, callback: (payload: any) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
+ * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
+ * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
  */
 
 /** @type {FrontendModelTransportConfig} */
@@ -55,7 +57,11 @@ function resolveInternalWebsocketClient() {
 
   if (!resolvedUrl) return null
 
-  internalWebsocketClient = new VelociousWebsocketClient({autoReconnect: true, url: resolvedUrl})
+  internalWebsocketClient = new VelociousWebsocketClient({
+    autoReconnect: true,
+    sessionStore: frontendModelTransportConfig.sessionStore,
+    url: resolvedUrl
+  })
   internalWebsocketClient.onReconnect = flushBufferedOutgoingEventsAfterReconnect
 
   return internalWebsocketClient
@@ -621,6 +627,177 @@ function cloneFrontendModelAttributes(value) {
 }
 
 /**
+ * Shared channel name for model lifecycle events (Phase 3).
+ * Matches the backend `FRONTEND_MODELS_CHANNEL_NAME`.
+ */
+const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
+
+/**
+ * Per-model class singleton that multiplexes all registered onCreate /
+ * onUpdate / onDestroy callbacks — class-level + instance-level —
+ * over one WebsocketChannelV2 subscription. Subscription opens on the
+ * first listener and closes when the last one unsubscribes.
+ *
+ * Instance-level listeners also receive auto-merge: when an `update`
+ * event arrives for a registered instance id, the instance's
+ * attributes are updated in place before the callback fires, so
+ * callers can read fresh values from the same instance handle.
+ */
+class FrontendModelEventSubscription {
+  /** @param {typeof FrontendModelBase} ModelClass */
+  constructor(ModelClass) {
+    this.ModelClass = ModelClass
+    /** @type {Set<(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void>} */
+    this.classCreateCallbacks = new Set()
+    /** @type {Set<(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void>} */
+    this.classUpdateCallbacks = new Set()
+    /** @type {Set<(payload: {id: string}) => void>} */
+    this.classDestroyCallbacks = new Set()
+    /** @type {Map<string, {instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void>, destroyCallbacks: Set<(payload: {id: string}) => void>}>} */
+    this.instanceListeners = new Map()
+    /** @type {any} */
+    this.channelHandle = null
+    /** @type {Promise<void> | null} */
+    this.readyPromise = null
+  }
+
+  /** @returns {Promise<void>} */
+  async ensureSubscribed() {
+    if (this.channelHandle && !this.channelHandle.isClosed()) {
+      if (this.readyPromise) await this.readyPromise
+      return
+    }
+
+    // Serialize parallel calls (e.g. Promise.all([onCreate, onUpdate,
+    // onDestroy])) so we open exactly one subscription per model class
+    // instead of racing three concurrent subscribeChannel calls.
+    if (this.readyPromise) {
+      await this.readyPromise
+      return
+    }
+
+    const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+    if (!client || typeof client.subscribeChannel !== "function") {
+      throw new Error("Frontend model event subscriptions require configureTransport({websocketUrl}) or configureTransport({websocketClient})")
+    }
+
+    this.readyPromise = (async () => {
+      if (typeof client.connect === "function") await client.connect()
+
+      this.channelHandle = client.subscribeChannel(FRONTEND_MODELS_CHANNEL_NAME, {
+        params: {model: this.ModelClass.getModelName()},
+        onMessage: (/** @type {any} */ body) => this._dispatchEvent(body),
+        onClose: () => {
+          this.channelHandle = null
+          this.readyPromise = null
+          // Session is gone — drop all registered listeners so we don't
+          // dispatch to stale instances on a future re-subscribe.
+          this.classCreateCallbacks.clear()
+          this.classUpdateCallbacks.clear()
+          this.classDestroyCallbacks.clear()
+          this.instanceListeners.clear()
+        }
+      })
+      await this.channelHandle.ready
+    })()
+
+    await this.readyPromise
+  }
+
+  /** @param {any} body */
+  _dispatchEvent(body) {
+    if (!body || typeof body !== "object") return
+
+    const action = body.action
+    const rawId = body.id
+
+    if (action !== "create" && action !== "update" && action !== "destroy") return
+    if (rawId === undefined || rawId === null) return
+
+    const id = String(rawId)
+
+    if (action === "destroy") {
+      const listener = this.instanceListeners.get(id)
+
+      if (listener) {
+        for (const cb of listener.destroyCallbacks) {
+          try { cb({id}) } catch (error) { console.error(error) }
+        }
+        this.instanceListeners.delete(id)
+      }
+      for (const cb of this.classDestroyCallbacks) {
+        try { cb({id}) } catch (error) { console.error(error) }
+      }
+      return
+    }
+
+    if (!body.record || typeof body.record !== "object") return
+
+    const deserializedRecord = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(body.record))
+    const freshModel = /** @type {any} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
+    const listener = this.instanceListeners.get(id)
+
+    if (action === "update" && listener) {
+      // Auto-merge into the registered instance so callers reading
+      // through the same handle see fresh attributes.
+      const instanceAny = /** @type {any} */ (listener.instance)
+
+      instanceAny.assignAttributes(freshModel.attributes())
+      instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
+
+      for (const cb of listener.updateCallbacks) {
+        try { cb({id, model: listener.instance}) } catch (error) { console.error(error) }
+      }
+    }
+
+    const classCallbacks = action === "create" ? this.classCreateCallbacks : this.classUpdateCallbacks
+
+    for (const cb of classCallbacks) {
+      try { cb({id, model: freshModel}) } catch (error) { console.error(error) }
+    }
+  }
+
+  /** @returns {void} */
+  maybeTeardown() {
+    const hasAnyListener = this.classCreateCallbacks.size > 0
+      || this.classUpdateCallbacks.size > 0
+      || this.classDestroyCallbacks.size > 0
+      || this.instanceListeners.size > 0
+
+    if (hasAnyListener) return
+    if (!this.channelHandle) return
+
+    try {
+      this.channelHandle.close()
+    } catch (error) {
+      console.error(error)
+    }
+
+    this.channelHandle = null
+    this.readyPromise = null
+  }
+}
+
+/** @type {WeakMap<typeof FrontendModelBase, FrontendModelEventSubscription>} */
+const frontendModelEventSubscriptions = new WeakMap()
+
+/**
+ * @param {typeof FrontendModelBase} ModelClass - Model class.
+ * @returns {FrontendModelEventSubscription} - Per-class subscription helper.
+ */
+function ensureFrontendModelEventSubscription(ModelClass) {
+  let sub = frontendModelEventSubscriptions.get(ModelClass)
+
+  if (!sub) {
+    sub = new FrontendModelEventSubscription(ModelClass)
+    frontendModelEventSubscriptions.set(ModelClass, sub)
+  }
+
+  return sub
+}
+
+/**
  * @param {string} resourcePath - Resource path prefix.
  * @param {string} commandName - Command path segment.
  * @returns {string} - Frontend model API URL.
@@ -669,12 +846,14 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const serializedRequestPayload = serializeFrontendModelTransportValue(requestPayload)
   const websocketClient = frontendModelTransportConfig.websocketClient
   const url = frontendModelApiUrl()
+  const dynamicHeaders = typeof frontendModelTransportConfig.requestHeaders === "function"
+    ? (frontendModelTransportConfig.requestHeaders() || {})
+    : (frontendModelTransportConfig.requestHeaders || {})
+  const mergedHeaders = {"Content-Type": "application/json", ...dynamicHeaders}
 
   if (websocketClient) {
     const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
-      headers: {
-        "Content-Type": "application/json"
-      }
+      headers: mergedHeaders
     })
     const responseJson = response.json()
 
@@ -684,9 +863,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const response = await fetch(url, {
     body: JSON.stringify(serializedRequestPayload),
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: mergedHeaders,
     method: "POST"
   })
 
@@ -764,16 +941,6 @@ function scheduleSharedFrontendModelRequestFlush() {
   queueMicrotask(() => {
     void flushPendingSharedFrontendModelRequests()
   })
-}
-
-/**
- * @param {string} modelName - Model class name.
- * @returns {string} - Frontend-model websocket subscription channel.
- */
-function frontendModelSubscriptionChannelName(modelName) {
-  void modelName
-
-  return "frontend-models"
 }
 
 /**
@@ -1472,6 +1639,16 @@ export default class FrontendModelBase {
       // Reset cached internal client so the new URL takes effect on next subscribe
       internalWebsocketClient = null
     }
+
+    if (Object.prototype.hasOwnProperty.call(config, "requestHeaders")) {
+      frontendModelTransportConfig.requestHeaders = config.requestHeaders
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "sessionStore")) {
+      frontendModelTransportConfig.sessionStore = config.sessionStore
+      // Reset cached internal client so the new sessionStore is picked up.
+      internalWebsocketClient = null
+    }
   }
 
   /**
@@ -1537,6 +1714,44 @@ export default class FrontendModelBase {
     if (!client || typeof client.setMetadata !== "function") return
 
     client.setMetadata(key, value)
+  }
+
+  /**
+   * Opens a 1:1 `WebsocketConnection` of the given type. Thin
+   * convenience wrapper around the internal WS client's
+   * `openConnection`. Apps use this for per-session state/messaging
+   * that doesn't fit the pub/sub Channel model (locale, presence).
+   *
+   * @param {string} connectionType - Name the server registered the class under.
+   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @returns {any} - VelociousWebsocketClientConnection handle (typed loosely to avoid a cross-module import cycle).
+   */
+  static openWebsocketConnection(connectionType, options) {
+    const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+    if (!client || typeof client.openConnection !== "function") {
+      throw new Error("openWebsocketConnection requires configureTransport({websocketUrl})")
+    }
+
+    return client.openConnection(connectionType, options || {})
+  }
+
+  /**
+   * Subscribes to a pub/sub `WebsocketChannel`. Thin wrapper around
+   * the internal client's `subscribeChannel`.
+   *
+   * @param {string} channelType
+   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @returns {any}
+   */
+  static subscribeWebsocketChannel(channelType, options) {
+    const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+    if (!client || typeof client.subscribeChannel !== "function") {
+      throw new Error("subscribeWebsocketChannel requires configureTransport({websocketUrl})")
+    }
+
+    return client.subscribeChannel(channelType, options || {})
   }
 
   /**
@@ -1787,40 +2002,138 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Class-level hook fired when any record of this model is created.
+   * Subscribe-time authorization only — once a subscription is
+   * accepted, every future `create` event for this model is delivered
+   * without re-checking per-record visibility.
+   *
    * @this {typeof FrontendModelBase}
-   * @param {(payload: {action: "create" | "destroy" | "update", id: string, model: InstanceType<typeof FrontendModelBase> | null, modelName: string}) => void} callback - Event callback.
-   * @returns {Promise<() => void>} - Unsubscribe callback once the subscription is active.
+   * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  static async subscribeToEvents(callback) {
-    const websocketClient = frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient()
+  static async onCreate(callback) {
+    const sub = ensureFrontendModelEventSubscription(this)
 
-    if (!websocketClient || typeof websocketClient.subscribe !== "function") {
-      throw new Error("Frontend model websocket subscriptions require configureTransport({websocketUrl}) or configureTransport({websocketClient})")
+    sub.classCreateCallbacks.add(callback)
+    await sub.ensureSubscribed()
+
+    return () => {
+      sub.classCreateCallbacks.delete(callback)
+      sub.maybeTeardown()
+    }
+  }
+
+  /**
+   * Class-level hook fired when any record of this model is updated.
+   *
+   * @this {typeof FrontendModelBase}
+   * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  static async onUpdate(callback) {
+    const sub = ensureFrontendModelEventSubscription(this)
+
+    sub.classUpdateCallbacks.add(callback)
+    await sub.ensureSubscribed()
+
+    return () => {
+      sub.classUpdateCallbacks.delete(callback)
+      sub.maybeTeardown()
+    }
+  }
+
+  /**
+   * Class-level hook fired when any record of this model is destroyed.
+   *
+   * @this {typeof FrontendModelBase}
+   * @param {(payload: {id: string}) => void} callback - Event callback.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  static async onDestroy(callback) {
+    const sub = ensureFrontendModelEventSubscription(this)
+
+    sub.classDestroyCallbacks.add(callback)
+    await sub.ensureSubscribed()
+
+    return () => {
+      sub.classDestroyCallbacks.delete(callback)
+      sub.maybeTeardown()
+    }
+  }
+
+  /**
+   * Instance-level hook fired when THIS record is updated. The
+   * instance's attributes are auto-merged with the broadcast payload
+   * before the callback runs, so callers can read fresh values via
+   * `this.someAttr()` without re-fetching.
+   *
+   * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  async onUpdate(callback) {
+    const self = /** @type {any} */ (this)
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const sub = ensureFrontendModelEventSubscription(ModelClass)
+    const id = String(self.id())
+    let listener = sub.instanceListeners.get(id)
+
+    if (!listener) {
+      listener = {instance: this, updateCallbacks: new Set(), destroyCallbacks: new Set()}
+      sub.instanceListeners.set(id, listener)
+    } else {
+      listener.instance = this
     }
 
-    const subscribeMethod = typeof websocketClient.subscribeAndWait === "function"
-      ? websocketClient.subscribeAndWait.bind(websocketClient)
-      : websocketClient.subscribe.bind(websocketClient)
+    listener.updateCallbacks.add(callback)
+    await sub.ensureSubscribed()
 
-    return await subscribeMethod(frontendModelSubscriptionChannelName(this.getModelName()), {
-      params: {model: this.getModelName()}
-    }, (rawPayload) => {
-      const payload = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(rawPayload))
+    return () => {
+      const current = sub.instanceListeners.get(id)
 
-      if (payload.model !== this.getModelName()) return
-      if (payload.action !== "create" && payload.action !== "destroy" && payload.action !== "update") return
+      if (!current) return
+      current.updateCallbacks.delete(callback)
 
-      const model = payload.record && typeof payload.record === "object"
-        ? this.instantiateFromResponse(/** @type {Record<string, any>} */ (payload.record))
-        : null
+      if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
+        sub.instanceListeners.delete(id)
+      }
+      sub.maybeTeardown()
+    }
+  }
 
-      callback({
-        action: payload.action,
-        id: String(payload.id),
-        model,
-        modelName: this.getModelName()
-      })
-    })
+  /**
+   * Instance-level hook fired when THIS record is destroyed.
+   *
+   * @param {(payload: {id: string}) => void} callback - Event callback.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  async onDestroy(callback) {
+    const self = /** @type {any} */ (this)
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const sub = ensureFrontendModelEventSubscription(ModelClass)
+    const id = String(self.id())
+    let listener = sub.instanceListeners.get(id)
+
+    if (!listener) {
+      listener = {instance: this, updateCallbacks: new Set(), destroyCallbacks: new Set()}
+      sub.instanceListeners.set(id, listener)
+    } else {
+      listener.instance = this
+    }
+
+    listener.destroyCallbacks.add(callback)
+    await sub.ensureSubscribed()
+
+    return () => {
+      const current = sub.instanceListeners.get(id)
+
+      if (!current) return
+      current.destroyCallbacks.delete(callback)
+
+      if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
+        sub.instanceListeners.delete(id)
+      }
+      sub.maybeTeardown()
+    }
   }
 
   /**

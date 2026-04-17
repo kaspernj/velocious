@@ -190,20 +190,30 @@ export default class VelociousRoutesResolver {
         response: this.response
       })
 
-      await this.configuration.runWithTenant(tenant, async () => {
-        await this.configuration.ensureConnections(async () => {
-          const ability = await this.configuration.resolveAbility({
-            params: this.params,
-            request: this.request,
-            response: this.response
-          })
+      const runAction = async () => {
+        await this.configuration.runWithTenant(tenant, async () => {
+          await this.configuration.ensureConnections(async () => {
+            const ability = await this.configuration.resolveAbility({
+              params: this.params,
+              request: this.request,
+              response: this.response
+            })
 
-          await this.configuration.runWithAbility(ability, async () => {
-            await controllerInstance._runBeforeCallbacks()
-            await actionHandlers[action]()
+            await this.configuration.runWithAbility(ability, async () => {
+              await controllerInstance._runBeforeCallbacks()
+              await actionHandlers[action]()
+            })
           })
         })
-      })
+      }
+
+      const aroundAction = this.configuration.getAroundAction?.()
+
+      if (aroundAction) {
+        await aroundAction({request: this.request, response: this.response, next: runAction})
+      } else {
+        await runAction()
+      }
     } catch (error) {
       const ensuredError = ensureError(error)
       const errorContext = {

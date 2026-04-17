@@ -10,16 +10,18 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import {createTenantTestConfiguration, seedTenantValue} from "../helpers/tenant-test-helpers.js"
 
 class TenantChannel extends WebsocketChannel {
+  /** @returns {boolean} */
+  canSubscribe() { return true }
+
   /** @returns {Promise<void>} */
   async subscribed() {
-    await this.streamFrom("tenant-events")
-
     const tenant = /** @type {{slug?: string} | undefined} */ (Current.tenant())
-    const dbs = this.configuration.getCurrentConnections()
+    const configuration = this.session.configuration
+    const dbs = configuration.getCurrentConnections()
     const defaultRows = await dbs.default.query("SELECT value FROM tenant_values LIMIT 1")
     const analyticsRows = await dbs.analytics.query("SELECT value FROM tenant_values LIMIT 1")
 
-    this.websocketSession.sendJson({
+    this.session.sendJson({
       analyticsValue: analyticsRows[0]?.value,
       tenantSlug: tenant?.slug,
       type: "tenant-ready",
@@ -28,21 +30,11 @@ class TenantChannel extends WebsocketChannel {
   }
 
   /**
-   * @param {{channel: string, payload: any}} args - Event args.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @param {Record<string, any>} broadcastParams
+   * @returns {boolean}
    */
-  async receivedBroadcast({channel, payload}) {
-    const tenant = /** @type {{slug?: string} | undefined} */ (Current.tenant())
-    const dbs = this.configuration.getCurrentConnections()
-    const defaultRows = await dbs.default.query("SELECT value FROM tenant_values LIMIT 1")
-
-    this.websocketSession.sendJson({
-      channel,
-      payload,
-      tenantSlug: tenant?.slug,
-      type: "tenant-event",
-      value: defaultRows[0]?.value
-    })
+  matches(broadcastParams) {
+    return broadcastParams?.channel === "tenant-events"
   }
 }
 
@@ -59,46 +51,43 @@ describe("HttpServer - websocket tenant", {databaseCleaning: {transaction: false
       }
 
       configuration.setCurrent()
-      configuration.setWebsocketChannelResolver(async ({subscription}) => {
-        if (subscription?.channel === "tenant-channel") {
-          return TenantChannel
-        }
-      })
+      configuration.registerWebsocketChannel("tenant-channel", TenantChannel)
 
       await seedTenantValue(configuration, "default", "alpha", "alpha-default")
       await seedTenantValue(configuration, "analytics", "alpha", "alpha-analytics")
+      /** @type {Record<string, any>[]} */
       const messages = []
       const session = new WebsocketSession({
-        client: {events: new EventEmitter(), remoteAddress: "127.0.0.1"},
+        client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
         configuration,
         upgradeRequest: new WebsocketRequest({method: "GET", path: "/websocket", remoteAddress: "127.0.0.1"})
       })
 
-      session.sendJson = (body) => {
+      session.sendJson = (/** @type {Record<string, any>} */ body) => {
         messages.push(body)
       }
 
-      await session._handleChannelSubscription({channel: "tenant-channel", params: {project_slug: "alpha"}})
-      await session.sendEvent("tenant-events", {kind: "ping"})
+      // Subscribe via the new channel-subscribe message handler.
+      await session._handleChannelSubscribe({
+        type: "channel-subscribe",
+        channelType: "tenant-channel",
+        subscriptionId: "s1",
+        params: {project_slug: "alpha"}
+      })
 
-      expect(messages).toEqual([
-        {channel: "tenant-events", type: "subscribed"},
-        {
-          analyticsValue: "alpha-analytics",
-          tenantSlug: "alpha",
-          type: "tenant-ready",
-          value: "alpha-default"
-        },
-        {
-          channel: "tenant-events",
-          payload: {kind: "ping"},
-          tenantSlug: "alpha",
-          type: "tenant-event",
-          value: "alpha-default"
-        }
-      ])
+      expect(messages.some((m) => m.type === "channel-subscribed")).toBe(true)
+      expect(messages.some((m) => m.type === "tenant-ready")).toBe(true)
+
+      const readyMessage = messages.find((m) => m.type === "tenant-ready")
+
+      expect(readyMessage?.tenantSlug).toEqual("alpha")
+      expect(readyMessage?.value).toEqual("alpha-default")
+      expect(readyMessage?.analyticsValue).toEqual("alpha-analytics")
     } finally {
-      previousConfiguration?.setCurrent()
+      if (previousConfiguration) {
+        previousConfiguration.setCurrent()
+      }
+
       await cleanup()
     }
   })

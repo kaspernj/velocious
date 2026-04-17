@@ -1,5 +1,7 @@
 // @ts-check
 
+import VelociousWebsocketClientConnection from "./websocket-connection.js"
+import VelociousWebsocketClientSubscription from "./websocket-channel.js"
 import {deserializeFrontendModelTransportValue} from "../frontend-models/transport-serialization.js"
 
 const DEFAULT_RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000]
@@ -21,9 +23,10 @@ export default class VelociousWebsocketClient {
    * @param {boolean} [args.autoReconnect] - Enable auto-reconnect with exponential backoff.
    * @param {boolean} [args.debug] - Whether debug.
    * @param {number[]} [args.reconnectDelays] - Backoff delays in ms (default: [1000, 2000, 4000, 8000, 15000]).
+   * @param {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [args.sessionStore] - Optional sessionId persistence hook. When provided, the client writes every `session-established` / `session-resumed` id via `store.set(id)` and clears it on `session-gone`. Before the first `connect()`, the client reads any persisted id via `store.get()` and attempts resumption. Apps should back this by whatever persistence layer survives page reloads (localStorage, a cookie, SQLite, etc.).
    * @param {string} [args.url] Full websocket URL (default: ws://127.0.0.1:3006/websocket)
    */
-  constructor({autoReconnect = false, debug = false, reconnectDelays, url} = {}) {
+  constructor({autoReconnect = false, debug = false, reconnectDelays, sessionStore, url} = {}) {
     if (!globalThis.WebSocket) throw new Error("WebSocket global is not available")
 
     /** @type {boolean} */
@@ -47,6 +50,122 @@ export default class VelociousWebsocketClient {
 
     /** @type {Record<string, any>} */
     this._metadata = {}
+
+    /** @type {Map<string, VelociousWebsocketClientConnection>} */
+    this._connections = new Map()
+
+    /** @type {Map<string, VelociousWebsocketClientSubscription>} */
+    this._channelSubscriptions = new Map()
+
+    this._nextConnectionIdSeq = 1
+    this._nextSubscriptionIdSeq = 1
+
+    /** @type {string | null} - sessionId received from `session-established`; sent on reconnect for resumption. */
+    this._sessionId = null
+
+    /** @type {boolean} - true between a reconnect and the session-resumed / session-gone reply. */
+    this._awaitingResume = false
+
+    /** @type {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>} | undefined} */
+    this._sessionStore = sessionStore
+    /** @type {boolean} - true once the sessionStore has been consulted for a restored id. */
+    this._sessionStoreRestored = false
+  }
+
+  /** @returns {boolean} */
+  isOpen() {
+    return Boolean(this.socket && this.socket.readyState === this.socket.OPEN)
+  }
+
+  /**
+   * Opens a 1:1 `WebsocketConnection` of the given type against the
+   * server. Requires the socket to already be connected (call
+   * `connect()` first).
+   *
+   * @param {string} connectionType - Name the server registered the class under.
+   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @returns {VelociousWebsocketClientConnection}
+   */
+  openConnection(connectionType, options = {}) {
+    if (!this.isOpen()) throw new Error("Websocket is not open; call connect() first")
+
+    const connectionId = `c${this._nextConnectionIdSeq++}`
+    const connection = new VelociousWebsocketClientConnection({
+      client: this,
+      connectionId,
+      connectionType,
+      params: options.params,
+      onConnect: options.onConnect,
+      onMessage: options.onMessage,
+      onDisconnect: options.onDisconnect,
+      onResume: options.onResume,
+      onClose: options.onClose
+    })
+
+    this._connections.set(connectionId, connection)
+    this._sendMessage({
+      type: "connection-open",
+      connectionId,
+      connectionType,
+      params: options.params || {}
+    })
+
+    return connection
+  }
+
+  /**
+   * Drops a connection handle from the registry. Called by
+   * `VelociousWebsocketClientConnection.close()` after it notifies
+   * the server, and by the session-destroyed cleanup path.
+   *
+   * @param {string} connectionId
+   * @returns {void}
+   */
+  _removeConnection(connectionId) {
+    this._connections.delete(connectionId)
+  }
+
+  /**
+   * Subscribes to a named WebsocketChannel. Requires the socket to
+   * already be connected.
+   *
+   * @param {string} channelType - Name the server registered the channel under.
+   * @param {{params?: Record<string, any>, lastEventId?: string, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @returns {VelociousWebsocketClientSubscription}
+   */
+  subscribeChannel(channelType, options = {}) {
+    if (!this.isOpen()) throw new Error("Websocket is not open; call connect() first")
+
+    const subscriptionId = `s${this._nextSubscriptionIdSeq++}`
+    const subscription = new VelociousWebsocketClientSubscription({
+      client: this,
+      subscriptionId,
+      channelType,
+      params: options.params,
+      onMessage: options.onMessage,
+      onDisconnect: options.onDisconnect,
+      onResume: options.onResume,
+      onClose: options.onClose
+    })
+
+    this._channelSubscriptions.set(subscriptionId, subscription)
+    this._sendMessage({
+      type: "channel-subscribe",
+      subscriptionId,
+      channelType,
+      params: options.params || {},
+      ...(options.lastEventId ? {lastEventId: options.lastEventId} : {})
+    })
+
+    return subscription
+  }
+
+  /**
+   * @param {string} subscriptionId
+   * @returns {void}
+   */
+  _removeChannelSubscription(subscriptionId) {
+    this._channelSubscriptions.delete(subscriptionId)
   }
 
   /**
@@ -106,6 +225,38 @@ export default class VelociousWebsocketClient {
     })
 
     await this.connectPromise
+
+    // Cold restore from external persistence (sessionStore) on the
+    // very first connect: apps wire this up to survive a full page
+    // reload. After the first restore attempt the in-memory cache
+    // takes over.
+    if (!this._sessionId && !this._sessionStoreRestored && this._sessionStore) {
+      this._sessionStoreRestored = true
+
+      try {
+        const storedId = await this._sessionStore.get()
+
+        if (typeof storedId === "string" && storedId.length > 0) {
+          this._sessionId = storedId
+        }
+      } catch (error) {
+        this._debug("sessionStore.get failed", error)
+      }
+    }
+
+    // If we have a cached sessionId from a prior connect, ask the
+    // server to resume it. The server replies with either
+    // `session-resumed` (state preserved) or `session-gone` (client
+    // must start fresh); the message dispatcher fires the appropriate
+    // lifecycle hooks on live Connection / Channel handles.
+    if (this._sessionId) {
+      this._awaitingResume = true
+      this._sendMessage({type: "session-resume", sessionId: this._sessionId})
+      // Fire onDisconnect on live handles so apps can pause UI work
+      // until session-resumed / session-gone arrives.
+      for (const connection of this._connections.values()) connection._handleDisconnected()
+      for (const subscription of this._channelSubscriptions.values()) subscription._handleDisconnected()
+    }
 
     if (Object.keys(this._metadata).length > 0) {
       this._sendMessage({type: "metadata", data: {...this._metadata}})
@@ -376,6 +527,77 @@ export default class VelociousWebsocketClient {
         this.pendingSubscriptions.delete(subscriptionKey)
         pendingSubscription.reject(new Error(`Replay gap for ${message.channel}`))
       }
+    } else if (type === "connection-opened") {
+      const connection = this._connections.get(message.connectionId)
+
+      connection?._handleOpened()
+    } else if (type === "connection-message") {
+      const connection = this._connections.get(message.connectionId)
+
+      connection?._handleMessage(message.body)
+    } else if (type === "connection-closed") {
+      const connection = this._connections.get(message.connectionId)
+
+      if (connection) {
+        this._connections.delete(message.connectionId)
+        connection._handleClosed(message.reason || "server_close")
+      }
+    } else if (type === "connection-error") {
+      const connection = this._connections.get(message.connectionId)
+
+      if (connection) {
+        this._connections.delete(message.connectionId)
+        connection._handleClosed(`error: ${message.message || "connection-error"}`)
+      }
+    } else if (type === "channel-subscribed") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      sub?._handleSubscribed()
+    } else if (type === "channel-message") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      sub?._handleMessage(message.body)
+    } else if (type === "channel-unsubscribed") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      if (sub) {
+        this._channelSubscriptions.delete(message.subscriptionId)
+        sub._handleClosed("server_unsubscribe")
+      }
+    } else if (type === "channel-error") {
+      const sub = this._channelSubscriptions.get(message.subscriptionId)
+
+      if (sub) {
+        this._channelSubscriptions.delete(message.subscriptionId)
+        sub._handleClosed(`error: ${message.message || "channel-error"}`)
+      }
+    } else if (type === "session-established") {
+      // First connect: cache sessionId for future resume attempts.
+      if (!this._awaitingResume) {
+        this._sessionId = message.sessionId
+        this._persistSessionId(message.sessionId)
+      }
+    } else if (type === "session-resumed") {
+      this._awaitingResume = false
+      this._sessionId = message.sessionId
+      this._persistSessionId(message.sessionId)
+      // Fire onResume on every live handle so user code knows the
+      // session came back with state intact.
+      for (const connection of this._connections.values()) connection._handleResumed()
+      for (const subscription of this._channelSubscriptions.values()) subscription._handleResumed()
+    } else if (type === "session-gone") {
+      this._awaitingResume = false
+      this._sessionId = null
+      this._clearPersistedSessionId()
+      // Tear down every live handle — their server-side counterparts
+      // are gone and nothing can bring them back.
+      const connections = [...this._connections.values()]
+      this._connections.clear()
+      for (const connection of connections) connection._handleClosed("session_gone")
+
+      const subs = [...this._channelSubscriptions.values()]
+      this._channelSubscriptions.clear()
+      for (const subscription of subs) subscription._handleClosed("session_gone")
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)
 
@@ -411,6 +633,28 @@ export default class VelociousWebsocketClient {
       reject(new Error("Websocket closed before subscription acknowledgement"))
     }
 
+    if (this._sessionId && this.autoReconnect) {
+      // Session may resume when we reconnect — keep the handles alive
+      // and fire onDisconnect so user code can pause UI work.
+      for (const connection of this._connections.values()) connection._handleDisconnected()
+      for (const subscription of this._channelSubscriptions.values()) subscription._handleDisconnected()
+    } else {
+      // No resume path: tear down every live Connection / Channel sub.
+      const connections = [...this._connections.values()]
+      this._connections.clear()
+      for (const connection of connections) {
+        connection._handleClosed("session_destroyed")
+      }
+
+      const channelSubs = [...this._channelSubscriptions.values()]
+      this._channelSubscriptions.clear()
+      for (const subscription of channelSubs) {
+        subscription._handleClosed("session_destroyed")
+      }
+
+      this._sessionId = null
+    }
+
     this.pendingRequests.clear()
     this.pendingSubscriptions.clear()
     this.connectPromise = undefined
@@ -421,8 +665,8 @@ export default class VelociousWebsocketClient {
   }
 
   /**
-   * @private
    * @param {Record<string, any>} payload - Payload data.
+   * @returns {void}
    */
   _sendMessage(payload) {
     if (!this.socket || this.socket.readyState !== this.socket.OPEN) {
@@ -506,6 +750,43 @@ export default class VelociousWebsocketClient {
     if (!this.debug) return
 
     console.debug("[VelociousWebsocketClient]", ...args)
+  }
+
+  /**
+   * @private
+   * @param {string} sessionId - Id to persist through the configured sessionStore.
+   * @returns {void}
+   */
+  _persistSessionId(sessionId) {
+    if (!this._sessionStore) return
+
+    try {
+      const result = this._sessionStore.set(sessionId)
+
+      if (result && typeof result.then === "function") {
+        result.catch((/** @type {unknown} */ error) => this._debug("sessionStore.set failed", error))
+      }
+    } catch (error) {
+      this._debug("sessionStore.set failed", error)
+    }
+  }
+
+  /**
+   * @private
+   * @returns {void}
+   */
+  _clearPersistedSessionId() {
+    if (!this._sessionStore) return
+
+    try {
+      const result = this._sessionStore.clear()
+
+      if (result && typeof result.then === "function") {
+        result.catch((/** @type {unknown} */ error) => this._debug("sessionStore.clear failed", error))
+      }
+    } catch (error) {
+      this._debug("sessionStore.clear failed", error)
+    }
   }
 }
 

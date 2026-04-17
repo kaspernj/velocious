@@ -17,16 +17,10 @@ import CommentFrontendModelAbilityResource from "../resources/comment-frontend-m
 import ProjectFrontendModelAbilityResource from "../resources/project-frontend-model-ability-resource.js"
 import TaskFrontendModelAbilityResource from "../resources/task-frontend-model-ability-resource.js"
 import UserFrontendModelAbilityResource from "../resources/user-frontend-model-ability-resource.js"
+import CounterChannel from "../channels/counter-channel.js"
+import EchoConnection from "../connections/echo-connection.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
 
-const queryParam = (request, key) => {
-  const pathValue = request?.path?.()
-  const query = pathValue?.split("?")[1]
-
-  if (!query) return
-
-  return new URLSearchParams(query).get(key) || undefined
-}
 
 async function websocketMessageHandlerResolver({request}) {
   if (!request) return
@@ -150,13 +144,15 @@ const configuration = new Configuration({
   locales: ["de", "en"],
   testing: `${dummyDirectory()}/src/config/testing.js`,
   websocketMessageHandlerResolver,
-  websocketChannelResolver: ({request, subscription}) => {
-    const channel = subscription?.channel || queryParam(request, "channel")
-
-    if (channel === "test") return TestWebsocketChannel
-  }
 })
 
 installSqlJsWasmRoute({configuration})
+
+// Register test websocket connections (Phase 1A).
+configuration.registerWebsocketConnection("Echo", EchoConnection)
+
+// Register test websocket channels (Phase 1B).
+configuration.registerWebsocketChannel("Counter", CounterChannel)
+configuration.registerWebsocketChannel("test", TestWebsocketChannel)
 
 export default configuration

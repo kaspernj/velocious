@@ -115,7 +115,7 @@ export default class DbGenerateModel extends BaseCommand {
         methodsCount++
       }
 
-      if (modelClass._translations) {
+      if (Object.prototype.hasOwnProperty.call(modelClass, "_translations") && modelClass._translations && Object.keys(modelClass._translations).length > 0) {
         const TranslationClass = modelClass.getTranslationClass()
         const translationColumns = TranslationClass.getColumns()
 

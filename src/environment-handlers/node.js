@@ -19,7 +19,6 @@ import CliCommandsDbSchemaLoad from "./node/cli/commands/db/schema/load.js"
 import CliCommandsDbSeed from "./node/cli/commands/db/seed.js"
 import CliCommandsRunner from "./node/cli/commands/runner.js"
 import CliCommandsRunScript from "./node/cli/commands/run-script.js"
-import FrontendModelWebsocketChannel from "../frontend-models/websocket-channel.js"
 import frontendModelCommandRouteHook from "../routes/hooks/frontend-model-command-route-hook.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
@@ -113,25 +112,9 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   setConfiguration(newConfiguration) {
     super.setConfiguration(newConfiguration)
-    const configurationWithFrontendModelWebsocketResolverState = /** @type {import("../configuration.js").default & {_frontendModelWebsocketResolverWrapped?: boolean}} */ (newConfiguration)
 
     if (!newConfiguration.getRouteResolverHooks().includes(frontendModelCommandRouteHook)) {
       newConfiguration.addRouteResolverHook(frontendModelCommandRouteHook)
-    }
-
-    if (!configurationWithFrontendModelWebsocketResolverState._frontendModelWebsocketResolverWrapped) {
-      const existingResolver = newConfiguration.getWebsocketChannelResolver()
-
-      newConfiguration.setWebsocketChannelResolver(async (args) => {
-        if (args.subscription?.channel === "frontend-models") {
-          return FrontendModelWebsocketChannel
-        }
-
-        if (existingResolver) {
-          return await existingResolver(args)
-        }
-      })
-      configurationWithFrontendModelWebsocketResolverState._frontendModelWebsocketResolverWrapped = true
     }
   }
 

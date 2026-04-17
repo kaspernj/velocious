@@ -1,188 +1,104 @@
 // @ts-check
 
-import FrontendModelController from "../frontend-model-controller.js"
+import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
 import Response from "../http-server/client/response.js"
-import WebsocketRequest from "../http-server/client/websocket-request.js"
-import WebsocketChannel from "../http-server/websocket-channel.js"
-import {frontendModelBroadcastChannelName} from "./websocket-publishers.js"
-import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
-/** Built-in websocket channel for frontend-model lifecycle events. */
-export default class FrontendModelWebsocketChannel extends WebsocketChannel {
-  /** @returns {Promise<void>} - Resolves when the websocket subscription is ready. */
-  async subscribed() {
-    const modelName = this.modelName()
-    const subscribed = await this.streamFrom(frontendModelBroadcastChannelName(modelName), {acknowledge: false})
+/**
+ * Per-session channel subscription for frontend-model lifecycle events.
+ * Replaces the legacy `FrontendModelWebsocketChannel` (Phase 3).
+ *
+ * Auth model: subscribe-time only. `canSubscribe` resolves the caller's
+ * ability once, checks that at least one `allow` rule exists for
+ * `read` on the requested model class, and then delivers every future
+ * lifecycle broadcast for that model without re-authorizing per event.
+ * This matches the explicit design decision in Phase 3 to trade
+ * per-record visibility guarantees for massively cheaper broadcast fan-out.
+ *
+ * Wire: subscribe with `subscribeChannel("frontend-models", {params: {model: ModelName}})`.
+ * Backend publishes `{action, id, record}` via
+ * `configuration.broadcastToChannel("frontend-models", {model: ModelName}, body)`;
+ * `matches()` routes by model name.
+ */
+export default class FrontendModelWebsocketChannel extends VelociousWebsocketChannel {
+  /** @returns {Promise<boolean>} */
+  async canSubscribe() {
+    const modelName = this._modelName()
 
-    if (!subscribed) return
+    if (!modelName) return false
 
-    this.websocketSession.sendJson({
-      channel: "frontend-models",
+    const configuration = this.session.configuration
+    const modelClasses = configuration.getModelClasses?.() || {}
+    const ModelClass = modelClasses[modelName]
+
+    if (!ModelClass) return false
+
+    const ability = await configuration.resolveAbility?.({
       params: {model: modelName},
-      type: "subscribed"
+      request: /** @type {any} */ (this._syntheticRequest()),
+      response: new Response({configuration})
     })
+
+    if (!ability) return false
+
+    // Load resource-declared rules for this model class before checking,
+    // otherwise `rulesFor` returns empty for abilities whose resources
+    // register rules lazily via `abilities()`.
+    if (typeof ability.loadAbilitiesForModelClass === "function") {
+      ability.loadAbilitiesForModelClass(ModelClass)
+    }
+
+    const readRules = typeof ability.rulesFor === "function"
+      ? ability.rulesFor({action: "read", modelClass: ModelClass})
+      : []
+
+    return readRules.some((/** @type {{effect: string}} */ rule) => rule.effect === "allow")
   }
 
   /**
-   * @param {object} args - Event args.
-   * @param {string} args.channel - Broadcast channel.
-   * @param {string} [args.createdAt] - Event creation timestamp.
-   * @param {string} [args.eventId] - Event id.
-   * @param {Record<string, any>} args.payload - Event payload.
-   * @param {boolean} [args.replayed] - Whether this event was replayed.
-   * @param {number} [args.sequence] - Event sequence.
-   * @returns {Promise<void>} - Resolves when the event has been authorized and emitted.
+   * @param {Record<string, any>} broadcastParams - Params from `broadcastToChannel`.
+   * @returns {boolean}
    */
-  async receivedBroadcast({channel, createdAt, eventId, payload, replayed, sequence}) {
-    void channel
+  matches(broadcastParams) {
+    return broadcastParams?.model === this._modelName()
+  }
 
-    const action = payload?.action
-    const id = payload?.id
-
-    if (action !== "create" && action !== "destroy" && action !== "update") {
-      throw new Error(`Unknown frontend model broadcast action: ${action}`)
-    }
-
-    if (id === undefined || id === null) {
-      throw new Error(`Frontend model broadcast missing id for action: ${action}`)
-    }
-
-    if (action === "destroy") {
-      this.websocketSession.sendJson({
-        channel: "frontend-models",
-        createdAt,
-        eventId,
-        payload: serializeFrontendModelTransportValue({
-          action,
-          id,
-          model: this.modelName()
-        }),
-        replayed,
-        sequence,
-        type: "event"
-      })
-      return
-    }
-
-    const serializedModelFromPayload = payload?.record && typeof payload.record === "object"
-      ? /** @type {Record<string, any>} */ (payload.record)
+  /** @returns {string | null} - Requested frontend-model name or null. */
+  _modelName() {
+    return typeof this.params?.model === "string" && this.params.model.length > 0
+      ? this.params.model
       : null
-    const serializedModel = serializedModelFromPayload || await (async () => {
-      const model = await this.findAuthorizedModelById(id)
-
-      if (!model) return null
-
-      return await this.serializeModel(model)
-    })()
-
-    if (!serializedModel) return
-
-    this.websocketSession.sendJson({
-      channel: "frontend-models",
-      createdAt,
-      eventId,
-      payload: serializeFrontendModelTransportValue({
-        action,
-        id,
-        model: this.modelName(),
-        record: serializedModel
-      }),
-      replayed,
-      sequence,
-      type: "event"
-    })
   }
 
   /**
-   * @param {string | number} id - Model id.
-   * @returns {Promise<import("../database/record/index.js").default | null>} - Authorized model or null.
+   * Minimal Request-like stub used only for ability resolution. Avoids
+   * importing `WebsocketRequest` here because its `node:querystring`
+   * dependency would pull server-only code into browser bundles via
+   * the `configuration → logger → websocket-publishers` import chain.
+   *
+   * Header names are normalized to lowercase so `header("cookie")`
+   * finds a value regardless of whether the upgrade-request headers
+   * map uses `"Cookie"` or `"cookie"`.
+   *
+   * @returns {{headers: () => Record<string, any>, header: (name: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}}
    */
-  async findAuthorizedModelById(id) {
-    const controller = this.frontendModelController()
+  _syntheticRequest() {
+    const upgradeRequest = /** @type {any} */ (this.session.upgradeRequest)
+    const rawHeaders = typeof upgradeRequest?.headers === "function" ? upgradeRequest.headers() : {}
+    const remoteAddress = typeof upgradeRequest?.remoteAddress === "function" ? upgradeRequest.remoteAddress() : undefined
+    /** @type {Record<string, any>} */
+    const headerMap = {}
 
-    return await this.configuration.ensureConnections(async () => {
-      const ability = await this.configuration.resolveAbility({
-        params: this.syntheticParams(),
-        request: this.syntheticRequest(),
-        response: new Response({configuration: this.configuration})
-      })
-
-      return await this.configuration.runWithAbility(ability, async () => {
-        return await controller.frontendModelAuthorizedQuery("find").findBy({[controller.frontendModelPrimaryKey()]: id})
-      })
-    })
-  }
-
-  /**
-   * @param {import("../database/record/index.js").default} model - Model instance.
-   * @returns {Promise<Record<string, any>>} - Serialized model payload.
-   */
-  async serializeModel(model) {
-    const controller = this.frontendModelController()
-
-    return await this.configuration.ensureConnections(async () => {
-      const ability = await this.configuration.resolveAbility({
-        params: this.syntheticParams(),
-        request: this.syntheticRequest(),
-        response: new Response({configuration: this.configuration})
-      })
-
-      return await this.configuration.runWithAbility(ability, async () => {
-        return await controller.frontendModelResourceInstance().serialize(model, "find")
-      })
-    })
-  }
-
-  /**
-   * @returns {FrontendModelController} - Synthetic frontend-model controller.
-   */
-  frontendModelController() {
-    return new FrontendModelController({
-      action: "frontendApi",
-      configuration: this.configuration,
-      controller: "frontend-models",
-      params: this.syntheticParams(),
-      request: /** @type {any} */ (this.syntheticRequest()),
-      response: new Response({configuration: this.configuration}),
-      viewPath: `${this.configuration.getDirectory()}/src/routes/frontend-models`
-    })
-  }
-
-  /**
-   * @returns {string} - Requested frontend-model name.
-   */
-  modelName() {
-    const model = this.params().model
-
-    if (typeof model !== "string" || model.length < 1) {
-      throw new Error("Expected frontend-model websocket subscription param 'model'")
+    for (const key of Object.keys(rawHeaders || {})) {
+      headerMap[key.toLowerCase()] = rawHeaders[key]
     }
 
-    return model
-  }
-
-  /**
-   * @returns {Record<string, any>} - Synthetic params for authorization and serialization.
-   */
-  syntheticParams() {
     return {
-      model: this.modelName(),
-      requests: [{
-        model: this.modelName()
-      }]
+      headers: () => headerMap,
+      header: (name) => headerMap[String(name).toLowerCase()],
+      path: () => "/frontend-models",
+      httpMethod: () => "POST",
+      remoteAddress: () => remoteAddress,
+      origin: () => headerMap.origin
     }
-  }
-
-  /**
-   * @returns {WebsocketRequest} - Synthetic shared frontend-model request.
-   */
-  syntheticRequest() {
-    return new WebsocketRequest({
-      headers: this.request?.headers?.() || {},
-      method: "POST",
-      params: this.syntheticParams(),
-      path: "/frontend-models",
-      remoteAddress: this.request?.remoteAddress?.()
-    })
   }
 }

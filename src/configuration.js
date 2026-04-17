@@ -92,6 +92,35 @@ export default class VelociousConfiguration {
     this._websocketChannelSubscribers = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
+    /** @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
+    this._websocketConnectionClasses = new Map()
+
+    /** @type {Map<string, typeof import("./http-server/websocket-channel.js").default>} */
+    this._websocketChannelClasses = new Map()
+
+    /** @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions. */
+    this._websocketChannelSubscriptions = new Map()
+
+    /** @type {Map<string, {session: import("./http-server/client/websocket-session.js").default, graceTimer: ReturnType<typeof setTimeout>, pausedAt: number}>} - sessionId → paused session awaiting resume. */
+    this._pausedWebsocketSessions = new Map()
+
+    /** Grace period for paused WebSocket sessions before permanent teardown. */
+    this._websocketSessionGraceSeconds = 300
+
+    /**
+     * Optional wrapper called around every WebSocket-borne request /
+     * connection message / channel dispatch. Apps register it here
+     * to set up per-request context (e.g. AsyncLocalStorage for
+     * locale, tenant, tracing) that downstream handlers read.
+     * @type {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null}
+     */
+    this._websocketAroundRequest = null
+
+    /** @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
+    this._aroundAction = null
+
+    /** @type {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} */
+    this._websocketSessionIdentityResolver = null
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
@@ -798,6 +827,345 @@ export default class VelociousConfiguration {
   /** @returns {import("./configuration-types.js").WebsocketChannelResolverType | undefined} - The websocket channel resolver. */
   getWebsocketChannelResolver() {
     return this._websocketChannelResolver
+  }
+
+  /**
+   * Registers a `VelociousWebsocketConnection` subclass under a name.
+   * Clients that send `{type: "connection-open", connectionType: name}`
+   * will have this class instantiated for their connection.
+   *
+   * @param {string} name
+   * @param {typeof import("./http-server/websocket-connection.js").default} ConnectionClass
+   * @returns {void}
+   */
+  registerWebsocketConnection(name, ConnectionClass) {
+    if (!name) throw new Error("Connection name is required")
+    if (!ConnectionClass) throw new Error("ConnectionClass is required")
+    this._websocketConnectionClasses.set(name, ConnectionClass)
+  }
+
+  /**
+   * @param {string} name
+   * @returns {typeof import("./http-server/websocket-connection.js").default | undefined}
+   */
+  getWebsocketConnectionClass(name) {
+    return this._websocketConnectionClasses.get(name)
+  }
+
+  /**
+   * Registers a `VelociousWebsocketChannel` subclass under a name.
+   * Clients subscribe via `{type: "channel-subscribe", channelType: name, ...}`.
+   *
+   * @param {string} name
+   * @param {typeof import("./http-server/websocket-channel.js").default} ChannelClass
+   * @returns {void}
+   */
+  registerWebsocketChannel(name, ChannelClass) {
+    if (!name) throw new Error("Channel name is required")
+    if (!ChannelClass) throw new Error("ChannelClass is required")
+    this._websocketChannelClasses.set(name, ChannelClass)
+  }
+
+  /**
+   * @param {string} name
+   * @returns {typeof import("./http-server/websocket-channel.js").default | undefined}
+   */
+  getWebsocketChannelClass(name) {
+    return this._websocketChannelClasses.get(name)
+  }
+
+  /**
+   * Tracks a live channel subscription in the global routing registry.
+   * Called by the session when `canSubscribe()` resolves truthy; the
+   * session calls `_unregisterWebsocketChannelSubscription` on unsubscribe.
+   *
+   * @param {string} name
+   * @param {import("./http-server/websocket-channel.js").default} subscription
+   * @returns {void}
+   */
+  _registerWebsocketChannelSubscription(name, subscription) {
+    let bucket = this._websocketChannelSubscriptions.get(name)
+
+    if (!bucket) {
+      bucket = new Set()
+      this._websocketChannelSubscriptions.set(name, bucket)
+    }
+
+    bucket.add(subscription)
+  }
+
+  /**
+   * @param {string} name
+   * @param {import("./http-server/websocket-channel.js").default} subscription
+   * @returns {void}
+   */
+  _unregisterWebsocketChannelSubscription(name, subscription) {
+    const bucket = this._websocketChannelSubscriptions.get(name)
+
+    if (!bucket) return
+
+    bucket.delete(subscription)
+
+    if (bucket.size === 0) {
+      this._websocketChannelSubscriptions.delete(name)
+    }
+  }
+
+  /**
+   * Delivers `body` to every live subscriber of `name` whose
+   * `matches(broadcastParams)` returns true. Pure routing — no auth
+   * re-check, no persistence. Subscribers who were admitted by
+   * `canSubscribe()` continue to receive broadcasts until they
+   * unsubscribe or the session ends.
+   *
+   * @param {string} name
+   * @param {Record<string, any>} broadcastParams
+   * @param {any} body
+   * @returns {void}
+   */
+  /**
+   * @returns {number} - Grace period (seconds) before a paused WS session is torn down.
+   */
+  getWebsocketSessionGraceSeconds() { return this._websocketSessionGraceSeconds }
+
+  /**
+   * Registers a wrapper invoked around every WS-borne request /
+   * connection message / channel dispatch. The wrapper receives the
+   * session and a `next` callback; it must call `next()` to run the
+   * handler. Use it to set up AsyncLocalStorage per request.
+   *
+   * @param {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null} wrapper
+   * @returns {void}
+   */
+  setWebsocketAroundRequest(wrapper) {
+    this._websocketAroundRequest = wrapper
+  }
+
+  /**
+   * @returns {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null}
+   */
+  getWebsocketAroundRequest() {
+    return this._websocketAroundRequest
+  }
+
+  /**
+   * Registers a wrapper invoked around every controller action — both
+   * HTTP and WS-borne. Receives `{request, response, next}` and must
+   * call `next()` to run the action. Use it for per-request context
+   * like AsyncLocalStorage-scoped locale or tracing.
+   *
+   * @param {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} wrapper
+   * @returns {void}
+   */
+  setAroundAction(wrapper) {
+    this._aroundAction = wrapper
+  }
+
+  /**
+   * @returns {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null}
+   */
+  getAroundAction() {
+    return this._aroundAction
+  }
+
+  /**
+   * Registers an identity resolver called once at pause time and once
+   * at resume time. The resolver receives the session and returns any
+   * value that identifies the authenticated caller — typically a
+   * `userId` read from the session's upgrade-request cookie. Velocious
+   * captures the pause-time value on the paused session and compares
+   * it via `===` (or deep-equality for plain objects) to the fresh
+   * resume-time value. If they differ, the resume is rejected with
+   * `session-gone` and the paused session is destroyed so a signed-out
+   * or re-authenticated client cannot reclaim another user's state.
+   *
+   * Return `null`/`undefined` to mean "no identity" — resumes still
+   * succeed if pause and resume both resolve to a nullish value.
+   *
+   * @param {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} resolver
+   * @returns {void}
+   */
+  setWebsocketSessionIdentityResolver(resolver) {
+    this._websocketSessionIdentityResolver = resolver
+  }
+
+  /** @returns {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} */
+  getWebsocketSessionIdentityResolver() {
+    return this._websocketSessionIdentityResolver
+  }
+
+  /**
+   * @param {number} seconds
+   * @returns {void}
+   */
+  setWebsocketSessionGraceSeconds(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`Invalid grace seconds: ${seconds}`)
+    this._websocketSessionGraceSeconds = seconds
+  }
+
+  /**
+   * Moves a session into the paused registry and starts the grace
+   * timer. When the timer fires, the session's permanent teardown
+   * hook is invoked. Called by the session itself from `_handleClose`
+   * when there is resumable state (live Connections / Channel subs).
+   *
+   * @param {import("./http-server/client/websocket-session.js").default} session
+   * @returns {void}
+   */
+  _pauseWebsocketSession(session) {
+    const sessionId = session.sessionId
+
+    if (!sessionId) throw new Error("Session must have a sessionId to be paused")
+    if (this._pausedWebsocketSessions.has(sessionId)) return
+
+    const graceMs = this._websocketSessionGraceSeconds * 1000
+    const graceTimer = setTimeout(() => {
+      this._expireWebsocketSession(sessionId)
+    }, graceMs)
+
+    // Don't keep the process alive purely for a paused session timer.
+    if (typeof graceTimer.unref === "function") graceTimer.unref()
+
+    this._pausedWebsocketSessions.set(sessionId, {session, graceTimer, pausedAt: Date.now()})
+  }
+
+  /**
+   * Looks up a paused session by id (does NOT remove it — caller is
+   * expected to call `_resumeWebsocketSession` to complete the handoff).
+   *
+   * @param {string} sessionId
+   * @returns {import("./http-server/client/websocket-session.js").default | null}
+   */
+  _findPausedWebsocketSession(sessionId) {
+    return this._pausedWebsocketSessions.get(sessionId)?.session || null
+  }
+
+  /**
+   * Removes a paused session from the registry and cancels its grace
+   * timer. Called on successful resume handoff and on explicit
+   * expiry.
+   *
+   * @param {string} sessionId
+   * @returns {void}
+   */
+  _clearPausedWebsocketSession(sessionId) {
+    const entry = this._pausedWebsocketSessions.get(sessionId)
+
+    if (!entry) return
+
+    clearTimeout(entry.graceTimer)
+    this._pausedWebsocketSessions.delete(sessionId)
+  }
+
+  /**
+   * Grace-timer callback. Calls the session's permanent-teardown
+   * hook and drops it from the registry.
+   *
+   * @param {string} sessionId
+   * @returns {void}
+   */
+  _expireWebsocketSession(sessionId) {
+    const entry = this._pausedWebsocketSessions.get(sessionId)
+
+    if (!entry) return
+
+    this._pausedWebsocketSessions.delete(sessionId)
+    try {
+      entry.session._finalizeGraceExpiry()
+    } catch (error) {
+      console.error(`Failed to finalize expired WS session ${sessionId}`, error)
+    }
+  }
+
+  /**
+   * @param {string} name
+   * @param {Record<string, any>} broadcastParams
+   * @param {any} body
+   * @returns {void}
+   */
+  broadcastToChannel(name, broadcastParams, body) {
+    // V2 subscriptions live per worker-thread. When running in
+    // worker-thread mode, the publisher runs either in the main
+    // process (host) or in one of the workers:
+    //
+    //  - Main process: `_websocketEvents` is the host singleton and
+    //    `broadcastV2` fans out to every worker directly.
+    //  - Worker: `_websocketEvents` has `publishV2Broadcast` that
+    //    posts to main, which then fans out to every worker.
+    //
+    // In-process mode doesn't install a websocket-events transport,
+    // so fall through to the local dispatch.
+    /** @type {any} */
+    const websocketEvents = this._websocketEvents
+
+    if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
+      websocketEvents.broadcastV2({channel: name, broadcastParams, body})
+      return
+    }
+
+    if (websocketEvents && typeof websocketEvents.publishV2Broadcast === "function" && websocketEvents.parentPort) {
+      websocketEvents.publishV2Broadcast({channel: name, broadcastParams, body})
+      return
+    }
+
+    this._broadcastToChannelLocal(name, broadcastParams, body)
+  }
+
+  /**
+   * Awaits all pending broadcast operations (including event-log
+   * persistence). Call this after `broadcastToChannel` when you need
+   * the event to be persisted before continuing (e.g. before
+   * responding to an HTTP request).
+   *
+   * @returns {Promise<void>}
+   */
+  async awaitPendingBroadcasts() {
+    /** @type {any} */
+    const websocketEvents = this._websocketEvents
+
+    if (websocketEvents && typeof websocketEvents.awaitPendingBroadcasts === "function") {
+      await websocketEvents.awaitPendingBroadcasts()
+    }
+  }
+
+  /**
+   * Local (per-worker) channel broadcast dispatch. Called either
+   * directly (in-process mode) or by the worker thread after the
+   * main-process fan-out.
+   *
+   * @param {string} name - Channel name.
+   * @param {Record<string, any>} broadcastParams - Params passed to each subscription's `matches()`.
+   * @param {any} body - Message body delivered via `sendMessage()`.
+   * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
+   * @returns {void}
+   */
+  _broadcastToChannelLocal(name, broadcastParams, body, meta) {
+    const bucket = this._websocketChannelSubscriptions.get(name)
+
+    if (!bucket) return
+
+    for (const subscription of bucket) {
+      if (subscription.isClosed()) continue
+
+      let matches
+
+      try {
+        matches = subscription.matches(broadcastParams || {})
+      } catch (error) {
+        // A broken `matches()` on one subscriber must not poison the
+        // broadcast to other subscribers. Skip and continue.
+        console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} matches() threw`, error)
+        continue
+      }
+
+      if (!matches) continue
+
+      try {
+        subscription.sendMessage(body, {eventId: meta?.eventId})
+      } catch (error) {
+        console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} sendMessage threw`, error)
+      }
+    }
   }
 
   /** @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver. */

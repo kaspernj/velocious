@@ -3,12 +3,17 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
 import {frontendModelResourcesForBackendProject} from "./resource-definition.js"
+import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
 const registeredConfigurationsByModelClass = new WeakMap()
+const channelClassRegisteredConfigurations = new WeakSet()
+
+/** Shared channel name for all frontend-model lifecycle subscriptions. */
+export const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
  * @param {string} modelName - Model class name.
- * @returns {string} - Broadcast channel name.
+ * @returns {string} - Broadcast channel name (legacy, retained for migration compatibility).
  */
 export function frontendModelBroadcastChannelName(modelName) {
   return `frontend-models:${modelName}`
@@ -111,6 +116,18 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     allFrontendModels = frontendModelResourcesFromAbilityResourcesList(abilityResources)
   }
 
+  // Phase 3: register the V2 channel class once per configuration so
+  // `subscribeChannel("frontend-models", {params: {model}})` finds it.
+  // Dynamic import keeps server-only WebsocketRequest + Node utilities
+  // out of browser bundles that transitively pull in this module via
+  // configuration → logger.
+  if (!channelClassRegisteredConfigurations.has(configuration)) {
+    channelClassRegisteredConfigurations.add(configuration)
+    const {default: FrontendModelWebsocketChannel} = await import("./websocket-channel.js")
+
+    configuration.registerWebsocketChannel?.(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannel)
+  }
+
   for (const modelName of Object.keys(allFrontendModels)) {
     const modelClass = modelClasses[modelName]
 
@@ -142,11 +159,10 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       if (action !== "create" && action !== "update") return
 
       void model.getModelClass().connection().afterCommit(async () => {
-        configuration.getWebsocketEvents()?.publish(frontendModelBroadcastChannelName(modelName), {
+        broadcastFrontendModelEvent(configuration, modelName, {
           action,
           id: model.id(),
-          record: model.attributes(),
-          modelName
+          record: model.attributes()
         })
       })
       delete modelWithWebsocketAction.__frontendModelWebsocketAction
@@ -154,12 +170,34 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
     modelClass.afterDestroy((model) => {
       void model.getModelClass().connection().afterCommit(async () => {
-        configuration.getWebsocketEvents()?.publish(frontendModelBroadcastChannelName(modelName), {
+        broadcastFrontendModelEvent(configuration, modelName, {
           action: "destroy",
-          id: model.id(),
-          modelName
+          id: model.id()
         })
       })
     })
   }
+}
+
+/**
+ * Fans a lifecycle event out to all V2 "frontend-models" subscribers
+ * whose `params.model` matches. Record attributes go through the
+ * transport serializer so Date/undefined/etc. survive the JSON hop.
+ *
+ * @param {import("../configuration.js").default} configuration - Configuration instance.
+ * @param {string} modelName - Model class name.
+ * @param {{action: "create" | "update" | "destroy", id: any, record?: Record<string, any>}} event - Lifecycle event.
+ * @returns {void}
+ */
+function broadcastFrontendModelEvent(configuration, modelName, event) {
+  if (typeof configuration.broadcastToChannel !== "function") return
+
+  const body = {
+    action: event.action,
+    id: event.id,
+    model: modelName,
+    ...(event.record ? {record: serializeFrontendModelTransportValue(event.record)} : {})
+  }
+
+  configuration.broadcastToChannel(FRONTEND_MODELS_CHANNEL_NAME, {model: modelName}, body)
 }

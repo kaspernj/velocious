@@ -372,54 +372,103 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
-  it("receives frontend-model lifecycle events through websocket subscriptions", async () => {
+  it("delivers Phase 3 model lifecycle events via onCreate/onUpdate/onDestroy", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
-      const project = await ProjectRecord.create({name: "Websocket subscription project"})
-      /** @type {Array<{action: "create" | "destroy" | "update", id: string, model: Task | null, modelName: string}>} */
-      const events = []
+      const project = await ProjectRecord.create({name: "Phase 3 project"})
 
       configureWebsocketSharedTransport(websocketClient)
 
-      const unsubscribe = await Task.subscribeToEvents((event) => {
-        events.push(event)
-      })
+      /** @type {Array<{id: string, model: Task}>} */
+      const creates = []
+      /** @type {Array<{id: string, model: Task}>} */
+      const updates = []
+      /** @type {Array<{id: string}>} */
+      const destroys = []
+
+      const offCreate = await Task.onCreate((event) => { creates.push(/** @type {any} */ (event)) })
+      const offUpdate = await Task.onUpdate((event) => { updates.push(/** @type {any} */ (event)) })
+      const offDestroy = await Task.onDestroy((event) => { destroys.push(event) })
 
       try {
-        const task = await TaskRecord.create({name: "Created websocket task", project})
+        const task = await TaskRecord.create({name: "Phase 3 task", project})
 
         await waitFor(() => {
-          if (events.length < 1) {
-            throw new Error(`Expected at least one websocket frontend-model event but got ${events.length}`)
-          }
+          if (creates.length < 1) throw new Error(`Expected onCreate but got ${creates.length}`)
         })
+        expect(creates[0].model.name()).toEqual("Phase 3 task")
 
-        task.setName("Updated websocket task")
+        task.setName("Phase 3 task renamed")
         await task.save()
 
         await waitFor(() => {
-          if (events.length < 2) {
-            throw new Error(`Expected at least two websocket frontend-model events but got ${events.length}`)
-          }
+          if (updates.length < 1) throw new Error(`Expected onUpdate but got ${updates.length}`)
         })
+        expect(updates[0].model.name()).toEqual("Phase 3 task renamed")
 
         await task.destroy()
 
         await waitFor(() => {
-          if (events.length < 3) {
-            throw new Error(`Expected at least three websocket frontend-model events but got ${events.length}`)
-          }
+          if (destroys.length < 1) throw new Error(`Expected onDestroy but got ${destroys.length}`)
         })
-
-        expect(events[0].action).toEqual("create")
-        expect(events[0].model?.name()).toEqual("Created websocket task")
-        expect(events[1].action).toEqual("update")
-        expect(events[1].model?.name()).toEqual("Updated websocket task")
-        expect(events[2].action).toEqual("destroy")
-        expect(events[2].id).toEqual(task.id())
-        expect(events[2].model).toEqual(null)
+        expect(destroys[0].id).toEqual(String(task.id()))
       } finally {
-        unsubscribe()
+        offCreate()
+        offUpdate()
+        offDestroy()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("auto-merges attributes on instance-level onUpdate and fires onDestroy once", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await ProjectRecord.create({name: "Phase 3 merge project"})
+      const backend = await TaskRecord.create({name: "Original", project})
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      const task = /** @type {Task} */ (await Task.findBy({id: backend.id()}))
+
+      if (!task) throw new Error("Expected Phase 3 frontend Task")
+
+      /** @type {string[]} */
+      const updateNames = []
+      const destroyEvents = /** @type {Array<{id: string}>} */ ([])
+
+      const offUpdate = await task.onUpdate(() => { updateNames.push(task.name()) })
+      const offDestroy = await task.onDestroy((event) => { destroyEvents.push(event) })
+
+      try {
+        backend.setName("Merged once")
+        await backend.save()
+
+        await waitFor(() => {
+          if (updateNames.length < 1) throw new Error(`Expected one update but got ${updateNames.length}`)
+        })
+        expect(updateNames[0]).toEqual("Merged once")
+        expect(task.name()).toEqual("Merged once")
+
+        backend.setName("Merged twice")
+        await backend.save()
+
+        await waitFor(() => {
+          if (updateNames.length < 2) throw new Error(`Expected two updates but got ${updateNames.length}`)
+        })
+        expect(updateNames[1]).toEqual("Merged twice")
+        expect(task.name()).toEqual("Merged twice")
+
+        await backend.destroy()
+
+        await waitFor(() => {
+          if (destroyEvents.length < 1) throw new Error(`Expected one destroy but got ${destroyEvents.length}`)
+        })
+        expect(destroyEvents[0].id).toEqual(String(backend.id()))
+      } finally {
+        offUpdate()
+        offDestroy()
         resetFrontendModelTransport()
         await websocketClient.close()
       }

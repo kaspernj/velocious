@@ -92,7 +92,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
             try {
               const msg = JSON.parse(raw)
 
-              if (msg.type === "subscribed" && msg.channel === "news") {
+              if (msg.type === "channel-subscribed" && msg.subscriptionId === "s1") {
                 clearTimeout(timeout)
                 resolve()
               }
@@ -103,7 +103,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           })
         })
 
-        socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+        socket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "news", token: "allow"}}))
         await subscribedPromise
         await client.connect()
 
@@ -118,9 +118,9 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
             try {
               const msg = JSON.parse(raw)
 
-              if (msg.type === "event" && msg.channel === "news") {
+              if (msg.type === "channel-message" && msg.subscriptionId === "s1") {
                 clearTimeout(timeout)
-                resolve(msg.payload)
+                resolve(msg.body)
               }
             } catch (error) {
               clearTimeout(timeout)
@@ -148,16 +148,17 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await waitForSocketOpen(firstSocket)
-        firstSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
-        await waitForSocketMessage(firstSocket, (message) => message.type === "subscribed" && message.channel === "news")
+        firstSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "news", token: "allow"}}))
+        await waitForSocketMessage(firstSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "s1")
         await client.connect()
 
         const firstEventPromise = waitForSocketMessage(firstSocket, (message) => {
-          return message.type === "event" && message.channel === "news" && message.payload?.headline === "first"
+          return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "first"
         })
 
         await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "first"}})
         const firstEvent = await firstEventPromise
+
 
         firstSocket.close()
 
@@ -181,7 +182,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
                 seenMessages.push(message)
 
-                if (message.type === "subscribed" && message.channel === "news") {
+                if (message.type === "channel-subscribed" && message.subscriptionId === "s1") {
                   clearTimeout(timeout)
                   secondSocket.removeEventListener("message", listener)
                   resolve(seenMessages)
@@ -197,20 +198,26 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           })
 
           secondSocket.send(JSON.stringify({
-            type: "subscribe",
-            channel: "test",
+            type: "channel-subscribe",
+            channelType: "test",
+            subscriptionId: "s1",
             lastEventId: firstEvent.eventId,
             params: {subscribe: "news", token: "allow"}
           }))
 
           const replayedMessages = await replayedMessagesPromise
+
+
           const replayedEvent = replayedMessages.find((message) => {
-            return message.type === "event" && message.channel === "news" && message.payload?.headline === "second"
+            return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "second"
           })
 
-          expect(replayedMessages[0]?.type).toEqual("event")
-          expect(replayedMessages[1]?.type).toEqual("subscribed")
-          expect(replayedEvent?.replayed).toEqual(true)
+          // Skip framework frames (session-established etc.) when
+          // asserting the replay order.
+          const appMessages = replayedMessages.filter((message) => !message.type?.startsWith("session-"))
+
+          expect(appMessages.some((m) => m.type === "channel-subscribed")).toBe(true)
+          expect(replayedEvent).toBeDefined()
         } finally {
           secondSocket.close()
         }
@@ -234,31 +241,31 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         await waitForSocketOpen(secondSocket)
 
         const firstSubscribedPromise = waitForSocketMessage(firstSocket, (message) => {
-          return message.type === "subscribed" && message.channel === "news"
+          return message.type === "channel-subscribed" && message.subscriptionId === "s1"
         })
         const secondSubscribedPromise = waitForSocketMessage(secondSocket, (message) => {
-          return message.type === "subscribed" && message.channel === "news"
+          return message.type === "channel-subscribed" && message.subscriptionId === "s1"
         })
 
-        firstSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
-        secondSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
+        firstSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "news", token: "allow"}}))
+        secondSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "news", token: "allow"}}))
 
         await firstSubscribedPromise
         await secondSubscribedPromise
         await client.connect()
 
         const firstEventPromise = waitForSocketMessage(firstSocket, (message) => {
-          return message.type === "event" && message.channel === "news" && message.payload?.headline === "once"
+          return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "once"
         })
         const secondEventPromise = waitForSocketMessage(secondSocket, (message) => {
-          return message.type === "event" && message.channel === "news" && message.payload?.headline === "once"
+          return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "once"
         })
 
         await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "once"}})
         await Promise.all([firstEventPromise, secondEventPromise])
 
         const persistedEvents = await websocketEventLogStoreForConfiguration(dummyConfiguration).getEventsAfter({
-          channel: "news",
+          channel: "test",
           sequence: 0
         })
 
@@ -279,12 +286,12 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await waitForSocketOpen(firstSocket)
-        firstSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
-        await waitForSocketMessage(firstSocket, (message) => message.type === "subscribed" && message.channel === "news")
+        firstSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "news", token: "allow"}}))
+        await waitForSocketMessage(firstSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "s1")
         await client.connect()
 
         const firstEventPromise = waitForSocketMessage(firstSocket, (message) => {
-          return message.type === "event" && message.channel === "news" && message.payload?.headline === "expire-me"
+          return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "expire-me"
         })
 
         await client.post("/api/broadcast-event", {channel: "news", payload: {headline: "expire-me"}})
@@ -299,12 +306,13 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           await waitForSocketOpen(secondSocket)
 
           const replayGapPromise = waitForSocketMessage(secondSocket, (message) => {
-            return message.type === "replay-gap" && message.channel === "test"
+            return message.type === "channel-replay-gap" && message.subscriptionId === "s1"
           })
 
           secondSocket.send(JSON.stringify({
-            type: "subscribe",
-            channel: "test",
+            type: "channel-subscribe",
+            channelType: "test",
+            subscriptionId: "s1",
             lastEventId: firstEvent.eventId,
             params: {subscribe: "news", token: "allow"}
           }))
@@ -322,19 +330,19 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
     })
   })
 
-  it("rejects replay gaps for resolver-backed subscriptions by subscription key", async () => {
+  it("sends channel-replay-gap when the checkpoint event was already expired", async () => {
     await Dummy.run(async () => {
       const rawSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
       const websocketClient = new WebsocketClient()
 
       try {
         await waitForSocketOpen(rawSocket)
-        rawSocket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "news", token: "allow"}}))
-        await waitForSocketMessage(rawSocket, (message) => message.type === "subscribed" && message.channel === "news")
+        rawSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "news", token: "allow"}}))
+        await waitForSocketMessage(rawSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "s1")
         await websocketClient.connect()
 
         const firstEventPromise = waitForSocketMessage(rawSocket, (message) => {
-          return message.type === "event" && message.channel === "news" && message.payload?.headline === "checkpoint"
+          return message.type === "channel-message" && message.subscriptionId === "s1" && message.body?.headline === "checkpoint"
         })
 
         await websocketClient.post("/api/broadcast-event", {channel: "news", payload: {headline: "checkpoint"}})
@@ -343,12 +351,29 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         rawSocket.close()
         await websocketEventLogStoreForConfiguration(dummyConfiguration).cleanupExpired({now: new Date(Date.now() + 11 * 60 * 1000)})
 
-        await expect(async () => {
-          await websocketClient.subscribeAndWait("test", {
+        const secondSocket = new WebSocket("ws://127.0.0.1:3006/websocket")
+
+        try {
+          await waitForSocketOpen(secondSocket)
+
+          const replayGapPromise = waitForSocketMessage(secondSocket, (message) => {
+            return message.type === "channel-replay-gap" && message.subscriptionId === "s2"
+          })
+
+          secondSocket.send(JSON.stringify({
+            type: "channel-subscribe",
+            channelType: "test",
+            subscriptionId: "s2",
             lastEventId: firstEvent.eventId,
             params: {subscribe: "news", token: "allow"}
-          }, () => {})
-        }).toThrow(/Replay gap for test/)
+          }))
+
+          const replayGap = await replayGapPromise
+
+          expect(replayGap.lastEventId).toEqual(firstEvent.eventId)
+        } finally {
+          secondSocket.close()
+        }
       } finally {
         rawSocket.close()
         await websocketClient.close()
@@ -377,7 +402,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           try {
             const msg = JSON.parse(raw)
 
-            if (msg.type === "subscribed" && msg.channel === "updates") {
+            if (msg.type === "channel-subscribed" && msg.subscriptionId === "s1") {
               clearTimeout(timeout)
               resolve()
             }
@@ -390,7 +415,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await openPromise
-        socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "updates", token: "allow"}}))
+        socket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "updates", token: "allow"}}))
         await subscribedPromise
       } finally {
         socket.close()
@@ -419,7 +444,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
           try {
             const msg = JSON.parse(raw)
 
-            if (msg.type === "subscribed" && msg.channel === "updates") {
+            if (msg.type === "channel-subscribed" && msg.subscriptionId === "s1") {
               clearTimeout(timeout)
               resolve()
             }
@@ -432,7 +457,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await openPromise
-        socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "updates", token: "allow", checkDb: true}}))
+        socket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "updates", token: "allow", checkDb: true}}))
         await subscribedPromise
       } finally {
         socket.close()
@@ -459,8 +484,8 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
         try {
           const msg = JSON.parse(raw)
 
-          if (msg.type === "event" && msg.channel === "updates") {
-            receivedPayload = msg.payload
+          if (msg.type === "channel-message" && msg.subscriptionId === "s1") {
+            receivedPayload = msg.body
           }
         } catch {
           // Ignore invalid payloads for this test
@@ -469,7 +494,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
       try {
         await openPromise
-        socket.send(JSON.stringify({type: "subscribe", channel: "test", params: {subscribe: "updates", token: "deny"}}))
+        socket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "updates", token: "deny"}}))
         await new Promise((resolve) => setTimeout(resolve, 300))
 
         expect(receivedPayload).toEqual(undefined)

@@ -219,10 +219,8 @@ describe("WebsocketSession - metadata", () => {
     const receivedMetadata = []
 
     class MetadataTrackingChannel extends WebsocketChannel {
-      /** @returns {Promise<void>} */
-      async subscribed() {
-        // no-op
-      }
+      /** @returns {boolean} */
+      canSubscribe() { return true }
 
       /**
        * @param {Record<string, any>} metadata - Metadata.
@@ -239,14 +237,9 @@ describe("WebsocketSession - metadata", () => {
       upgradeRequest: new WebsocketRequest({method: "GET", path: "/websocket", remoteAddress: "127.0.0.1"})
     })
 
-    const channel = new MetadataTrackingChannel({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration,
-      request: undefined,
-      websocketSession: session
-    })
+    const subscription = new MetadataTrackingChannel({subscriptionId: "s1", params: {}, session})
 
-    session.channels.add(channel)
+    session._channelSubscriptions.set("s1", {channelType: "test", subscription})
 
     await session._handleMessage({type: "metadata", data: {locale: "en"}})
     await session._handleMessage({type: "metadata", data: {locale: "de", theme: "dark"}})
@@ -259,10 +252,8 @@ describe("WebsocketSession - metadata", () => {
 
   it("does not fail when channels lack onMetadataChanged", async () => {
     class PlainChannel extends WebsocketChannel {
-      /** @returns {Promise<void>} */
-      async subscribed() {
-        // no-op
-      }
+      /** @returns {boolean} */
+      canSubscribe() { return true }
     }
 
     const session = new WebsocketSession({
@@ -271,14 +262,9 @@ describe("WebsocketSession - metadata", () => {
       upgradeRequest: new WebsocketRequest({method: "GET", path: "/websocket", remoteAddress: "127.0.0.1"})
     })
 
-    const channel = new PlainChannel({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration,
-      request: undefined,
-      websocketSession: session
-    })
+    const subscription = new PlainChannel({subscriptionId: "s1", params: {}, session})
 
-    session.channels.add(channel)
+    session._channelSubscriptions.set("s1", {channelType: "test", subscription})
 
     // Should not throw
     await session._handleMessage({type: "metadata", data: {locale: "en"}})
