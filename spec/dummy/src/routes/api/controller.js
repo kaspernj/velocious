@@ -11,7 +11,7 @@ export default class ApiController extends Controller {
     const channel = this.getParams().channel
     const payload = this.getParams().payload
 
-    this.getConfiguration().getWebsocketEvents()?.publish(channel, payload)
+    this.getConfiguration().broadcastToChannel("test", {channel}, payload)
     this.renderJsonArg({status: "published"})
   }
 }

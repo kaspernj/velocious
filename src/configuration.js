@@ -95,10 +95,10 @@ export default class VelociousConfiguration {
     /** @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
     this._websocketConnectionClasses = new Map()
 
-    /** @type {Map<string, typeof import("./http-server/websocket-channel-v2.js").default>} */
+    /** @type {Map<string, typeof import("./http-server/websocket-channel.js").default>} */
     this._websocketChannelClasses = new Map()
 
-    /** @type {Map<string, Set<import("./http-server/websocket-channel-v2.js").default>>} - channelType → live subscriptions across all sessions. */
+    /** @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions. */
     this._websocketChannelSubscriptions = new Map()
 
     /** @type {Map<string, {session: import("./http-server/client/websocket-session.js").default, graceTimer: ReturnType<typeof setTimeout>, pausedAt: number}>} - sessionId → paused session awaiting resume. */
@@ -853,11 +853,11 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * Registers a `VelociousWebsocketChannelV2` subclass under a name.
+   * Registers a `VelociousWebsocketChannel` subclass under a name.
    * Clients subscribe via `{type: "channel-subscribe", channelType: name, ...}`.
    *
    * @param {string} name
-   * @param {typeof import("./http-server/websocket-channel-v2.js").default} ChannelClass
+   * @param {typeof import("./http-server/websocket-channel.js").default} ChannelClass
    * @returns {void}
    */
   registerWebsocketChannel(name, ChannelClass) {
@@ -868,7 +868,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} name
-   * @returns {typeof import("./http-server/websocket-channel-v2.js").default | undefined}
+   * @returns {typeof import("./http-server/websocket-channel.js").default | undefined}
    */
   getWebsocketChannelClass(name) {
     return this._websocketChannelClasses.get(name)
@@ -880,7 +880,7 @@ export default class VelociousConfiguration {
    * session calls `_unregisterWebsocketChannelSubscription` on unsubscribe.
    *
    * @param {string} name
-   * @param {import("./http-server/websocket-channel-v2.js").default} subscription
+   * @param {import("./http-server/websocket-channel.js").default} subscription
    * @returns {void}
    */
   _registerWebsocketChannelSubscription(name, subscription) {
@@ -896,7 +896,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} name
-   * @param {import("./http-server/websocket-channel-v2.js").default} subscription
+   * @param {import("./http-server/websocket-channel.js").default} subscription
    * @returns {void}
    */
   _unregisterWebsocketChannelSubscription(name, subscription) {

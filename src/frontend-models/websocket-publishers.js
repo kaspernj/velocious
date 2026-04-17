@@ -123,9 +123,9 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
   // configuration → logger.
   if (!channelClassRegisteredConfigurations.has(configuration)) {
     channelClassRegisteredConfigurations.add(configuration)
-    const {default: FrontendModelWebsocketChannelV2} = await import("./websocket-channel-v2.js")
+    const {default: FrontendModelWebsocketChannel} = await import("./websocket-channel.js")
 
-    configuration.registerWebsocketChannel?.(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannelV2)
+    configuration.registerWebsocketChannel?.(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannel)
   }
 
   for (const modelName of Object.keys(allFrontendModels)) {

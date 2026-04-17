@@ -29,7 +29,7 @@ async function waitFor(predicate, timeoutMs = 2000) {
   throw new Error(`waitFor timeout after ${timeoutMs}ms`)
 }
 
-describe("WebsocketChannelV2 (Phase 1B)", () => {
+describe("WebsocketChannelV2 ()", () => {
   it("rejects subscribe when canSubscribe returns false (default deny)", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()

@@ -1,6 +1,6 @@
 // @ts-check
 
-import VelociousWebsocketChannelV2 from "../../../../src/http-server/websocket-channel-v2.js"
+import VelociousWebsocketChannel from "../../../../src/http-server/websocket-channel.js"
 
 /**
  * Test-only channel used by the Phase 1B spec.
@@ -16,7 +16,7 @@ import VelociousWebsocketChannelV2 from "../../../../src/http-server/websocket-c
  * On `subscribed()` it fires a welcome message with the subscribed
  * params so the client can confirm the bidirectional wiring.
  */
-export default class CounterChannel extends VelociousWebsocketChannelV2 {
+export default class CounterChannel extends VelociousWebsocketChannel {
   /** @returns {boolean} */
   canSubscribe() {
     return Boolean(this.params?.allow)

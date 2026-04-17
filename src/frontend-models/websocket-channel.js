@@ -1,6 +1,6 @@
 // @ts-check
 
-import VelociousWebsocketChannelV2 from "../http-server/websocket-channel-v2.js"
+import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
 import Response from "../http-server/client/response.js"
 
 /**
@@ -19,7 +19,7 @@ import Response from "../http-server/client/response.js"
  * `configuration.broadcastToChannel("frontend-models", {model: ModelName}, body)`;
  * `matches()` routes by model name.
  */
-export default class FrontendModelWebsocketChannelV2 extends VelociousWebsocketChannelV2 {
+export default class FrontendModelWebsocketChannel extends VelociousWebsocketChannel {
   /** @returns {Promise<boolean>} */
   async canSubscribe() {
     const modelName = this._modelName()

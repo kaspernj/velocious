@@ -107,7 +107,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     /** @type {Map<string, import("../websocket-connection.js").default>} */
     this._connections = new Map()
 
-    /** @type {Map<string, {channelType: string, subscription: import("../websocket-channel-v2.js").default}>} */
+    /** @type {Map<string, {channelType: string, subscription: import("../websocket-channel.js").default}>} */
     this._channelSubscriptions = new Map()
 
     /**
@@ -427,12 +427,12 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     if (message.type === "channel-subscribe") {
-      await this._handleChannelV2Subscribe(message)
+      await this._handleChannelSubscribe(message)
       return
     }
 
     if (message.type === "channel-unsubscribe") {
-      await this._handleChannelV2Unsubscribe(message)
+      await this._handleChannelUnsubscribe(message)
       return
     }
 
@@ -707,7 +707,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     void this._runMessageHandlerClose()
     void this._teardownChannel()
     void this._teardownConnections("session_destroyed")
-    void this._teardownChannelV2Subscriptions()
+    void this._teardownChannelSubscriptions()
     this.events.emit("close")
   }
 
@@ -722,7 +722,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     void this._runMessageHandlerClose()
     void this._teardownChannel()
     void this._teardownConnections("grace_expired")
-    void this._teardownChannelV2Subscriptions()
+    void this._teardownChannelSubscriptions()
     this.events.emit("close")
   }
 
@@ -1019,7 +1019,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {Record<string, any>} message
    * @returns {Promise<void>}
    */
-  async _handleChannelV2Subscribe(message) {
+  async _handleChannelSubscribe(message) {
     const subscriptionId = message.subscriptionId
     const channelType = message.channelType
     const params = message.params || {}
@@ -1080,7 +1080,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {Record<string, any>} message
    * @returns {Promise<void>}
    */
-  async _handleChannelV2Unsubscribe(message) {
+  async _handleChannelUnsubscribe(message) {
     const subscriptionId = message.subscriptionId
 
     if (typeof subscriptionId !== "string") return
@@ -1110,7 +1110,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    *
    * @returns {Promise<void>}
    */
-  async _teardownChannelV2Subscriptions() {
+  async _teardownChannelSubscriptions() {
     const entries = [...this._channelSubscriptions.values()]
 
     this._channelSubscriptions.clear()
