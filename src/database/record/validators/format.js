@@ -34,6 +34,10 @@ export default class VelociousDatabaseRecordValidatorsFormat extends Base {
 
     const stringValue = String(value)
 
+    // Reset lastIndex so stateful flags (g, y) on a shared RegExp
+    // instance don't cause nondeterministic pass/fail across calls.
+    pattern.lastIndex = 0
+
     if (!pattern.test(stringValue)) {
       const message = typeof this.args?.message === "string" ? this.args.message : "is invalid"
 
