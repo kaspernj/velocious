@@ -691,12 +691,15 @@ class FrontendModelEventSubscription {
         onClose: () => {
           this.channelHandle = null
           this.readyPromise = null
-          // Session is gone — drop all registered listeners so we don't
-          // dispatch to stale instances on a future re-subscribe.
-          this.classCreateCallbacks.clear()
-          this.classUpdateCallbacks.clear()
-          this.classDestroyCallbacks.clear()
           this.instanceListeners.clear()
+
+          const hasCallbacks = this.classCreateCallbacks.size > 0
+            || this.classUpdateCallbacks.size > 0
+            || this.classDestroyCallbacks.size > 0
+
+          if (hasCallbacks && client.autoReconnect) {
+            void this.ensureSubscribed()
+          }
         }
       })
       await this.channelHandle.ready
@@ -1714,6 +1717,96 @@ export default class FrontendModelBase {
     if (!client || typeof client.setMetadata !== "function") return
 
     client.setMetadata(key, value)
+  }
+
+  /**
+   * Opens a managed connection that auto-opens, auto-closes, and
+   * auto-reconnects based on `shouldConnect()` and `params()`.
+   * Call `handle.sync()` whenever the inputs that drive those
+   * functions change (e.g. current-user sign-in/out). The handle
+   * retries when the WS client isn't ready and reopens on close.
+   *
+   * @param {string} connectionType
+   * @param {{shouldConnect: () => boolean, params: () => Record<string, any>, onMessage?: (body: any) => void}} options
+   * @returns {{sync: () => void, close: () => void}}
+   */
+  static openManagedConnection(connectionType, options) {
+    /** @type {any} */
+    let connection = null
+    let closed = false
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let retryTimer = null
+    let lastParamsJson = ""
+
+    const sync = () => {
+      if (closed) return
+
+      if (!options.shouldConnect()) {
+        if (connection && !connection.isClosed()) connection.close()
+        connection = null
+        lastParamsJson = ""
+        return
+      }
+
+      const nextParams = options.params()
+      const nextParamsJson = JSON.stringify(nextParams)
+
+      // Already connected with same params — nothing to do.
+      if (connection && !connection.isClosed() && nextParamsJson === lastParamsJson) return
+
+      // Connected but params changed — send update message.
+      // Guard with try/catch: the connection handle stays live during
+      // reconnect but the underlying socket may be closed.
+      if (connection && !connection.isClosed()) {
+        try {
+          connection.sendMessage(nextParams)
+          lastParamsJson = nextParamsJson
+          return
+        } catch {
+          connection = null
+          lastParamsJson = ""
+        }
+      }
+
+      // WS client not ready — retry. Check the actual client (which
+      // may be an injected websocketClient) instead of websocketState()
+      // which only reflects the internal client.
+      const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+      if (!client || !client.isOpen()) {
+        if (retryTimer === null) {
+          retryTimer = globalThis.setTimeout(() => {
+            retryTimer = null
+            sync()
+          }, 250)
+        }
+        return
+      }
+
+      lastParamsJson = nextParamsJson
+      connection = FrontendModelBase.openWebsocketConnection(connectionType, {
+        params: nextParams,
+        onMessage: options.onMessage,
+        onClose: () => {
+          if (connection?.isClosed()) {
+            connection = null
+            lastParamsJson = ""
+            sync()
+          }
+        }
+      })
+    }
+
+    const close = () => {
+      closed = true
+      if (retryTimer !== null) globalThis.clearTimeout(retryTimer)
+      if (connection && !connection.isClosed()) connection.close()
+      connection = null
+    }
+
+    sync()
+
+    return {sync, close}
   }
 
   /**

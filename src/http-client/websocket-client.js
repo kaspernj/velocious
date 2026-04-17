@@ -362,7 +362,7 @@ export default class VelociousWebsocketClient {
     return {
       disconnectedSince: this.disconnectedSince,
       isOpen: !!this.socket && this.socket.readyState === this.socket.OPEN,
-      listenerCount: this.listeners.size
+      listenerCount: this.listeners.size + this._channelSubscriptions.size
     }
   }
 
