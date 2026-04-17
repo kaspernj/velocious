@@ -67,6 +67,16 @@ export default class VelociousWebsocketChannel {
   onResume() {}
 
   /**
+   * Called when the client sends updated metadata (e.g. after
+   * sign-in / locale change). Override to react to session-level
+   * metadata updates.
+   *
+   * @param {Record<string, any>} _metadata - Updated metadata.
+   * @returns {void | Promise<void>}
+   */
+  onMetadataChanged(_metadata) {}
+
+  /**
    * Broadcast routing filter. Called by `broadcastToChannel` for
    * each live subscription — returning true delivers the body via
    * `sendMessage`. Default matches all broadcasts regardless of

@@ -391,14 +391,10 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       this._metadata = metadataPayload.data && typeof metadataPayload.data === "object" ? {...metadataPayload.data} : {}
 
-      for (const channel of this.channels) {
-        if (typeof channel.onMetadataChanged === "function") {
-          const tenant = this.channelTenants.get(channel)
-
-          await this.configuration.runWithTenant(tenant, async () => {
-            await this._withConnections(async () => {
-              await channel.onMetadataChanged(this._metadata)
-            })
+      for (const {subscription} of this._channelSubscriptions.values()) {
+        if (typeof subscription.onMetadataChanged === "function") {
+          await this._withConnections(async () => {
+            await subscription.onMetadataChanged(this._metadata)
           })
         }
       }
