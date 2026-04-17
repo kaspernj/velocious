@@ -2305,15 +2305,11 @@ class VelociousDatabaseRecord {
 
     for (const relationship of this.getModelClass().getRelationships()) {
       if (relationship.getDependent() == "restrict") {
-        const TargetClass = relationship.getTargetModelClass()
+        const instanceRelationship = /** @type {any} */ (this.getRelationshipByName(relationship.getRelationshipName()))
+        const count = await instanceRelationship.query().count()
 
-        if (TargetClass) {
-          const fk = relationship.getForeignKey()
-          const count = await TargetClass.where({[fk]: this.id()}).count()
-
-          if (count > 0) {
-            throw new Error(`Cannot delete record because dependent ${relationship.getRelationshipName()} exist`)
-          }
+        if (count > 0) {
+          throw new Error(`Cannot delete record because dependent ${relationship.getRelationshipName()} exist`)
         }
 
         continue
