@@ -23,6 +23,7 @@ import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
+import ValidatorsFormat from "./validators/format.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 import UUID from "pure-uuid"
@@ -2807,6 +2808,7 @@ class TranslationBase extends VelociousDatabaseRecord {
   }
 }
 
+VelociousDatabaseRecord.registerValidatorType("format", ValidatorsFormat)
 VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
 VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
 

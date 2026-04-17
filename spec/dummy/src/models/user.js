@@ -9,6 +9,8 @@ User.hasOne("createdProject", {className: "Project", foreignKey: "creating_user_
 User.hasMany("authenticationTokens" , {dependent: "destroy"})
 User.hasMany("createdProjects", {className: "Project", foreignKey: "creating_user_reference", primaryKey: "reference"})
 
+User.validates("email", {format: {with: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, allowBlank: true}})
+
 const userModule = new UserModule({
   secretKey: "02e383b7-aad1-437c-b1e1-17c0240ad851"
 })
