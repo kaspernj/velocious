@@ -533,7 +533,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
               if (msg.type === "echo") {
                 clearTimeout(timeout)
-                resolve(msg.body)
+                resolve(msg.payload)
               }
             } catch (error) {
               clearTimeout(timeout)
@@ -602,7 +602,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
               if (msg.type === "echo") {
                 clearTimeout(timeout)
-                resolve(msg.body)
+                resolve(msg.payload)
               }
             } catch (error) {
               clearTimeout(timeout)

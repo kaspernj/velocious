@@ -1045,22 +1045,26 @@ export default class VelociousHttpServerClientWebsocketSession {
     const subscription = new ChannelClass({subscriptionId, params, session: this})
 
     try {
-      let allowed = false
+      const tenant = await this._resolveTenant({channel: channelType, params})
 
-      await this._withConnections(async () => {
-        allowed = Boolean(await subscription.canSubscribe())
+      await this.configuration.runWithTenant(tenant, async () => {
+        let allowed = false
+
+        await this._withConnections(async () => {
+          allowed = Boolean(await subscription.canSubscribe())
+        })
+
+        if (!allowed) {
+          this.sendJson({type: "channel-error", subscriptionId, message: "Subscription not authorized"})
+          return
+        }
+
+        this._channelSubscriptions.set(subscriptionId, {channelType, subscription})
+        this.configuration._registerWebsocketChannelSubscription(channelType, subscription)
+
+        await this._withConnections(async () => await subscription.subscribed())
+        this.sendJson({type: "channel-subscribed", subscriptionId})
       })
-
-      if (!allowed) {
-        this.sendJson({type: "channel-error", subscriptionId, message: "Subscription not authorized"})
-        return
-      }
-
-      this._channelSubscriptions.set(subscriptionId, {channelType, subscription})
-      this.configuration._registerWebsocketChannelSubscription(channelType, subscription)
-
-      await this._withConnections(async () => await subscription.subscribed())
-      this.sendJson({type: "channel-subscribed", subscriptionId})
     } catch (error) {
       this._channelSubscriptions.delete(subscriptionId)
       this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
