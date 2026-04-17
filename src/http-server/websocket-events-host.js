@@ -46,6 +46,7 @@ export class VelociousHttpServerWebsocketEventsHost {
       })
       .catch((error) => {
         console.error("Failed to publish websocket event", error)
+        throw error
       })
   }
 
@@ -61,19 +62,28 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @returns {void}
    */
   broadcastV2({body, broadcastParams, channel}) {
-    void this._persistV2EventIfNeeded({body, channel}).then((persistedEvent) => {
-      for (const handler of this.handlers) {
-        handler.dispatchWebsocketV2Broadcast({
-          body,
-          broadcastParams,
-          channel,
-          eventId: persistedEvent?.id,
-          createdAt: persistedEvent?.createdAt
-        })
-      }
-    }).catch((error) => {
-      console.error("Failed to persist/broadcast V2 event", error)
-    })
+    // Chain onto publishQueue so persistence completes before
+    // the next broadcast — without this, a subscriber that connects
+    // immediately after a broadcast could miss the just-persisted
+    // event when replaying from lastEventId on a slow DB.
+    this.publishQueue = this.publishQueue
+      .then(async () => {
+        const persistedEvent = await this._persistV2EventIfNeeded({body, channel})
+
+        for (const handler of this.handlers) {
+          handler.dispatchWebsocketV2Broadcast({
+            body,
+            broadcastParams,
+            channel,
+            eventId: persistedEvent?.id,
+            createdAt: persistedEvent?.createdAt
+          })
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to persist/broadcast V2 event", error)
+        throw error
+      })
   }
 
   /**
