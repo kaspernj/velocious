@@ -1755,14 +1755,25 @@ export default class FrontendModelBase {
       if (connection && !connection.isClosed() && nextParamsJson === lastParamsJson) return
 
       // Connected but params changed — send update message.
+      // Guard with try/catch: the connection handle stays live during
+      // reconnect but the underlying socket may be closed.
       if (connection && !connection.isClosed()) {
-        connection.sendMessage(nextParams)
-        lastParamsJson = nextParamsJson
-        return
+        try {
+          connection.sendMessage(nextParams)
+          lastParamsJson = nextParamsJson
+          return
+        } catch {
+          connection = null
+          lastParamsJson = ""
+        }
       }
 
-      // WS client not ready — retry.
-      if (!FrontendModelBase.websocketState().isOpen) {
+      // WS client not ready — retry. Check the actual client (which
+      // may be an injected websocketClient) instead of websocketState()
+      // which only reflects the internal client.
+      const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+
+      if (!client || !client.isOpen()) {
         if (retryTimer === null) {
           retryTimer = globalThis.setTimeout(() => {
             retryTimer = null
