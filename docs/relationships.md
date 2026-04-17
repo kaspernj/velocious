@@ -34,10 +34,27 @@ Comment.belongsTo("acceptedTask", (scope) => scope.where({state: "accepted"}), {
 | Option | Description |
 |---|---|
 | `className` | Target model class name (inferred from relationship name by default) |
+| `dependent` | Action on parent destroy: `"destroy"` or `"restrict"` (hasMany/hasOne only) |
 | `foreignKey` | Explicit foreign key column (inferred by default) |
 | `primaryKey` | Primary key on the parent model (defaults to `"id"`) |
 | `polymorphic` | Enable polymorphic lookup via type+id columns |
 | `through` | Name of an intermediate `hasMany` relationship for many-to-many |
+
+## Dependent option
+
+The `dependent` option controls what happens to associated records when the parent is destroyed:
+
+```js
+User.hasMany("authenticationTokens", {dependent: "destroy"})
+Project.hasMany("tasks", {dependent: "restrict"})
+```
+
+| Value | Behavior |
+|---|---|
+| `"destroy"` | Loads and destroys all dependent records before destroying the parent |
+| `"restrict"` | Blocks destroy with an error when any dependent records exist (uses a COUNT query, does not load records) |
+
+The restrict error message follows the pattern `"Cannot delete record because dependent <relationship> exist"`.
 
 ## Through relationships (many-to-many)
 
