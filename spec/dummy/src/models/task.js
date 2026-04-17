@@ -27,6 +27,6 @@ Task.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "subjec
 Task.hasMany("comments")
 Task.hasManyAttachments("files")
 Task.hasOneAttachment("descriptionFile")
-Task.validates("name", {presence: true, uniqueness: true})
+Task.validates("name", {presence: true, uniqueness: {scope: "projectId"}})
 
 export default Task

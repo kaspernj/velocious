@@ -32,4 +32,28 @@ describe("Record - validations", {tags: ["dummy"]}, () => {
       expect(error.message).toEqual("Name has already been taken")
     }
   })
+
+  it("allows the same name on different projects when uniqueness is scoped to projectId", async () => {
+    const projectA = await Project.create()
+    const projectB = await Project.create()
+
+    await Task.create({name: "Shared Name", project: projectA})
+    const taskOnB = await Task.create({name: "Shared Name", project: projectB})
+
+    expect(taskOnB.id()).toBeDefined()
+  })
+
+  it("rejects the same name on the same project when uniqueness is scoped to projectId", async () => {
+    const project = await Project.create()
+    await Task.create({name: "Duplicate", project})
+
+    try {
+      await Task.create({name: "Duplicate", project})
+
+      throw new Error("Duplicate task on same project didn't fail")
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError)
+      expect(error.message).toEqual("Name has already been taken")
+    }
+  })
 })
