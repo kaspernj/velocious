@@ -23,6 +23,18 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
     whereArgs[attributeNameUnderscore] = attributeValue
 
+    // Rails parity: `validates :attr, uniqueness: {scope: :other}` adds
+    // the scoped column(s) to the WHERE clause so uniqueness is checked
+    // within the given scope (e.g. `role` unique per `userId`).
+    const scopeColumns = this._normalizeScopeColumns()
+
+    for (const scopeColumn of scopeColumns) {
+      const scopeUnderscore = inflection.underscore(scopeColumn)
+      const scopeValue = /** @type {string | number} */ (model.readAttribute(scopeColumn))
+
+      whereArgs[scopeUnderscore] = scopeValue
+    }
+
     let existingRecordQuery = modelClass
       .select(modelClass.primaryKey())
       .where(whereArgs)
@@ -38,5 +50,21 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
       model._validationErrors[attributeName].push({type: "uniqueness", message: "has already been taken"})
     }
+  }
+
+  /**
+   * Normalize the `scope` option into an array of attribute names.
+   * Supports string (`"userId"`), array of strings (`["userId", "projectId"]`),
+   * or absent (empty array — no scope, original single-column behavior).
+   *
+   * @returns {string[]}
+   */
+  _normalizeScopeColumns() {
+    const scope = this.args?.scope
+
+    if (!scope) return []
+    if (Array.isArray(scope)) return scope
+
+    return [String(scope)]
   }
 }
