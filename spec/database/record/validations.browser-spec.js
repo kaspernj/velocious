@@ -1,4 +1,5 @@
 import Task from "../../dummy/src/models/task.js"
+import User from "../../dummy/src/models/user.js"
 import {ValidationError} from "../../../src/database/record/index.js"
 import Project from "../../dummy/src/models/project.js"
 
@@ -55,5 +56,23 @@ describe("Record - validations", {tags: ["dummy"]}, () => {
       expect(error).toBeInstanceOf(ValidationError)
       expect(error.message).toEqual("Name has already been taken")
     }
+  })
+
+  it("rejects a malformed email with a format validation", async () => {
+    const user = new User({email: "not-an-email", encryptedPassword: "test"})
+
+    await expect(async () => user.save()).toThrowError(new ValidationError("Email is invalid"))
+  })
+
+  it("allows a valid email with a format validation", async () => {
+    const user = await User.create({email: "valid@example.com", encryptedPassword: "test"})
+
+    expect(user.email()).toEqual("valid@example.com")
+  })
+
+  it("allows a blank email when format validation has allowBlank", async () => {
+    const user = await User.create({email: "", encryptedPassword: "test"})
+
+    expect(user.id()).toBeDefined()
   })
 })
