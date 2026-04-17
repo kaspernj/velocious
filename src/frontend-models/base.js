@@ -691,12 +691,15 @@ class FrontendModelEventSubscription {
         onClose: () => {
           this.channelHandle = null
           this.readyPromise = null
-          // Session is gone — drop all registered listeners so we don't
-          // dispatch to stale instances on a future re-subscribe.
-          this.classCreateCallbacks.clear()
-          this.classUpdateCallbacks.clear()
-          this.classDestroyCallbacks.clear()
           this.instanceListeners.clear()
+
+          const hasCallbacks = this.classCreateCallbacks.size > 0
+            || this.classUpdateCallbacks.size > 0
+            || this.classDestroyCallbacks.size > 0
+
+          if (hasCallbacks && client.autoReconnect) {
+            void this.ensureSubscribed()
+          }
         }
       })
       await this.channelHandle.ready
