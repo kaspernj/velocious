@@ -13,4 +13,10 @@ Project.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "sub
 Project.hasMany("comments", {className: "Comment", through: "tasks", foreignKey: "task_id"})
 Project.translates("name")
 
+Project.beforeValidation((record) => {
+  if (record.readAttribute("tasksCount") == null) {
+    record.setAttribute("tasksCount", 0)
+  }
+})
+
 export default Project

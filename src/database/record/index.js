@@ -472,6 +472,93 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Registers afterCreate, afterSave, and afterDestroy callbacks to sync
+   * a counter cache column on the parent model. The column name follows
+   * the convention `<childModelPluralCamelCase>Count`.
+   *
+   * @param {string} relationshipName - The belongsTo relationship name.
+   */
+  static _registerCounterCacheCallbacks(relationshipName) {
+    const ChildModel = this
+
+    /**
+     * Atomically recomputes the counter cache column on the parent via a
+     * single UPDATE ... SET col = (SELECT COUNT(*)) so concurrent
+     * creates/destroys cannot race into a stale count.
+     *
+     * @param {number | string | null} parentId
+     * @returns {Promise<void>}
+     */
+    async function syncCounter(parentId) {
+      if (!parentId) return
+
+      const relationship = ChildModel.getRelationshipByName(relationshipName)
+      const ParentModel = relationship.getTargetModelClass()
+
+      if (!ParentModel) return
+
+      const primaryKey = relationship.getPrimaryKey()
+      const fk = relationship.getForeignKey()
+      const childModelName = ChildModel.getModelName()
+      const counterColumn = inflection.underscore(`${inflection.pluralize(childModelName)}Count`)
+      const parentTable = ParentModel.tableName()
+      const childTable = ChildModel.tableName()
+      const pkColumn = inflection.underscore(primaryKey)
+      const connection = ParentModel.connection()
+      const quoted = connection.quote(parentId)
+
+      const sql = `UPDATE ${connection.quoteTable(parentTable)} SET ${connection.quoteColumn(counterColumn)} = (SELECT COUNT(*) FROM ${connection.quoteTable(childTable)} WHERE ${connection.quoteColumn(fk)} = ${quoted}) WHERE ${connection.quoteColumn(pkColumn)} = ${quoted}`
+
+      await connection.query(sql)
+    }
+
+    /** @param {any} record @returns {any} */
+    function readFkAttribute(record) {
+      const relationship = ChildModel.getRelationshipByName(relationshipName)
+      const fkAttribute = inflection.camelize(relationship.getForeignKey().replace(/_id$/, "Id"), true)
+
+      return record.readAttribute(fkAttribute)
+    }
+
+    ChildModel.afterCreate(async (record) => {
+      await syncCounter(readFkAttribute(record))
+    })
+
+    ChildModel.afterDestroy(async (record) => {
+      await syncCounter(readFkAttribute(record))
+    })
+
+    ChildModel.beforeSave(async (record) => {
+      const model = /** @type {any} */ (record)
+
+      if (model.isNewRecord()) return
+
+      const relationship = ChildModel.getRelationshipByName(relationshipName)
+      const fkColumn = relationship.getForeignKey()
+
+      // Detect FK change via direct attribute assignment or relationship setter.
+      const directChange = fkColumn in model._changes
+      const belongsToChange = model._instanceRelationships?.[relationshipName]?.getDirty?.()
+
+      if (directChange || belongsToChange) {
+        model[`_counterCachePrev_${relationshipName}`] = model._attributes[fkColumn]
+      }
+    })
+
+    ChildModel.afterSave(async (record) => {
+      const model = /** @type {any} */ (record)
+      const prevKey = `_counterCachePrev_${relationshipName}`
+      const previousParentId = model[prevKey]
+
+      if (previousParentId !== undefined) {
+        delete model[prevKey]
+        await syncCounter(previousParentId)
+        await syncCounter(readFkAttribute(model))
+      }
+    })
+  }
+
+  /**
    * @param {string} relationshipName - Relationship name.
    * @returns {import("./relationships/base.js").default} - The relationship by name.
    */
@@ -607,6 +694,10 @@ class VelociousDatabaseRecord {
     const {scope, relationshipOptions} = this._normalizeRelationshipArgs(scopeOrOptions, options)
 
     this._defineRelationship(relationshipName, Object.assign({type: "belongsTo", scope}, relationshipOptions))
+
+    if (/** @type {any} */ (relationshipOptions)?.counterCache) {
+      this._registerCounterCacheCallbacks(relationshipName)
+    }
   }
 
   /**
