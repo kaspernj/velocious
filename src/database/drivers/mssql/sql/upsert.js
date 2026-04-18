@@ -16,6 +16,8 @@ export default class VelociousDatabaseConnectionDriversMssqlSqlUpsert extends Up
     const insertColumnsSql = this.dataColumns().map((columnName) => this.quotedColumn(columnName)).join(", ")
     const insertValuesSql = this.dataColumns().map((columnName) => `source.${this.quotedColumn(columnName)}`).join(", ")
 
-    return `MERGE ${this.quotedTableName()} AS target USING (SELECT ${sourceColumnsSql}) AS source ON ${conflictSql} WHEN MATCHED THEN UPDATE SET ${updateSql} WHEN NOT MATCHED THEN INSERT (${insertColumnsSql}) VALUES (${insertValuesSql});`
+    // HOLDLOCK prevents the race where two concurrent MERGEs both
+    // see NOT MATCHED and both try to INSERT, causing a PK violation.
+    return `MERGE ${this.quotedTableName()} WITH (HOLDLOCK) AS target USING (SELECT ${sourceColumnsSql}) AS source ON ${conflictSql} WHEN MATCHED THEN UPDATE SET ${updateSql} WHEN NOT MATCHED THEN INSERT (${insertColumnsSql}) VALUES (${insertValuesSql});`
   }
 }

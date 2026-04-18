@@ -87,6 +87,6 @@ describe("database - drivers - upsert sql", () => {
       updateColumns: ["interested_until"]
     }).toSql()
 
-    expect(sql).toEqual("MERGE [websocket_replay_channels] AS target USING (SELECT 'news' AS [channel], '2026-04-07 08:00:00.000' AS [interested_until]) AS source ON target.[channel] = source.[channel] WHEN MATCHED THEN UPDATE SET [interested_until] = source.[interested_until] WHEN NOT MATCHED THEN INSERT ([channel], [interested_until]) VALUES (source.[channel], source.[interested_until]);")
+    expect(sql).toEqual("MERGE [websocket_replay_channels] WITH (HOLDLOCK) AS target USING (SELECT 'news' AS [channel], '2026-04-07 08:00:00.000' AS [interested_until]) AS source ON target.[channel] = source.[channel] WHEN MATCHED THEN UPDATE SET [interested_until] = source.[interested_until] WHEN NOT MATCHED THEN INSERT ([channel], [interested_until]) VALUES (source.[channel], source.[interested_until]);")
   })
 })
