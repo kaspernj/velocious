@@ -27,6 +27,7 @@ await Task.where({id: taskId}).updateAll({description: null})
 
 - Executes one SQL statement regardless of how many rows match.
 - Uses the query's existing WHERE clause (built via `.where()`, `.whereNot()`, etc.).
+- Supports relationship-aware `where()` calls with JOINs (e.g., `Task.where({project: {status: "archived"}})`). When JOINs are present, uses a subquery (`WHERE pk IN (SELECT pk FROM table JOIN ... WHERE ...)`) for cross-driver compatibility.
 - No-ops when `data` is empty (no query is sent).
 - Does **not** fire model lifecycle callbacks — `beforeUpdate`, `afterUpdate`, `beforeSave`, `afterSave`, and validations are all skipped.
 - Does **not** update `updated_at` automatically — include it in `data` if needed:

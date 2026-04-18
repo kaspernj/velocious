@@ -32,6 +32,23 @@ describe("Query - updateAll", {tags: ["dummy"]}, () => {
     expect(reloaded.description()).toEqual(null)
   })
 
+  it("updates through a relationship-aware where with joins", async () => {
+    const runId = Date.now()
+    const targetRef = `updateAll-join-target-${runId}`
+    const targetProject = await Project.create({nameEn: `proj-${runId}`, creatingUserReference: targetRef})
+    const otherProject = await Project.create({nameEn: `proj-other-${runId}`, creatingUserReference: `updateAll-join-other-${runId}`})
+    const task1 = await Task.create({name: `updateAll-join-a-${runId}`, project: targetProject})
+    const task2 = await Task.create({name: `updateAll-join-b-${runId}`, project: otherProject})
+
+    await Task.where({project: {creatingUserReference: targetRef}}).updateAll({description: "joined-update"})
+
+    const reloaded1 = await Task.find(task1.id())
+    const reloaded2 = await Task.find(task2.id())
+
+    expect(reloaded1.description()).toEqual("joined-update")
+    expect(reloaded2.description()).toEqual(null)
+  })
+
   it("does nothing when the data object is empty", async () => {
     const runId = Date.now()
     const project = await Project.create({nameEn: `updateAll-empty-${runId}`})

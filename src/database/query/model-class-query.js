@@ -11,6 +11,7 @@ import RecordNotFoundError from "../record/record-not-found-error.js"
 import {normalizeRansackParams, parseRansackSort} from "../../utils/ransack.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
+import JoinsParser from "../query-parser/joins-parser.js"
 import WhereParser from "../query-parser/where-parser.js"
 
 /**
@@ -395,18 +396,27 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     if (entries.length === 0) return
 
-    let sql = `UPDATE ${driver.quoteTable(tableName)} SET `
-
-    sql += entries.map(([key, value]) => {
+    const setCols = entries.map(([key, value]) => {
       const columnName = inflection.underscore(key)
       const quoted = value === null ? "NULL" : driver.quote(value)
 
       return `${driver.quoteColumn(columnName)} = ${quoted}`
     }).join(", ")
 
+    const joinsSql = new JoinsParser({pretty: false, query: this}).toSql()
     const whereSql = new WhereParser({pretty: false, query: this}).toSql()
+    let sql
 
-    sql += whereSql
+    if (joinsSql.length > 0) {
+      // Use a subquery for cross-driver compatibility (SQLite
+      // doesn't support UPDATE ... JOIN).
+      const pk = driver.quoteColumn(this.getModelClass().primaryKey())
+      const qt = driver.quoteTable(tableName)
+
+      sql = `UPDATE ${qt} SET ${setCols} WHERE ${pk} IN (SELECT ${qt}.${pk} FROM ${qt}${joinsSql}${whereSql})`
+    } else {
+      sql = `UPDATE ${driver.quoteTable(tableName)} SET ${setCols}${whereSql}`
+    }
 
     await driver.query(sql)
   }
