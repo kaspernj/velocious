@@ -117,12 +117,12 @@ export default class StringSubjectInteractionBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   loadSubject() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   subjectOrLoad() { return this.relationshipOrLoad("subject") }
 

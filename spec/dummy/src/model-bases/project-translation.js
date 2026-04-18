@@ -117,12 +117,12 @@ export default class ProjectTranslationBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("../models/project.js").default>}
+   * @returns {Promise<import("../models/project.js").default | undefined>}
    */
   loadProject() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("../models/project.js").default>}
+   * @returns {Promise<import("../models/project.js").default | undefined>}
    */
   ProjectOrLoad() { return this.relationshipOrLoad("Project") }
 

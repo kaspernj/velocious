@@ -134,12 +134,12 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("../models/user.js").default>}
+   * @returns {Promise<import("../models/user.js").default | undefined>}
    */
   loadCreatingUser() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("../models/user.js").default>}
+   * @returns {Promise<import("../models/user.js").default | undefined>}
    */
   creatingUserOrLoad() { return this.relationshipOrLoad("creatingUser") }
 
@@ -210,12 +210,12 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("../models/project-detail.js").default>}
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
   loadProjectDetail() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("../models/project-detail.js").default>}
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
   projectDetailOrLoad() { return this.relationshipOrLoad("projectDetail") }
 
@@ -240,12 +240,12 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("../models/project-detail.js").default>}
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
   loadActiveProjectDetail() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("../models/project-detail.js").default>}
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
   activeProjectDetailOrLoad() { return this.relationshipOrLoad("activeProjectDetail") }
 
@@ -293,12 +293,12 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   loadPrimaryInteraction() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   primaryInteractionOrLoad() { return this.relationshipOrLoad("primaryInteraction") }
 

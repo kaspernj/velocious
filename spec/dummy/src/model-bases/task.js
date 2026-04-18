@@ -133,12 +133,12 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("../models/project.js").default>}
+   * @returns {Promise<import("../models/project.js").default | undefined>}
    */
   loadProject() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("../models/project.js").default>}
+   * @returns {Promise<import("../models/project.js").default | undefined>}
    */
   projectOrLoad() { return this.relationshipOrLoad("project") }
 
@@ -186,12 +186,12 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   loadPrimaryInteraction() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   primaryInteractionOrLoad() { return this.relationshipOrLoad("primaryInteraction") }
 
