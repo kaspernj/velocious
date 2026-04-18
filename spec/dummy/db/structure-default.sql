@@ -1,7 +1,5 @@
 CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT REFERENCES `users`(`id`), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE autoindex_test(id INTEGER PRIMARY KEY, name TEXT UNIQUE);
-
 CREATE TABLE `background_jobs` (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `forked` BOOLEAN NOT NULL, `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT);
 
 CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
@@ -12,7 +10,7 @@ CREATE TABLE "project_details" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` 
 
 CREATE TABLE `project_translations` (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL REFERENCES `projects`(`id`), `locale` VARCHAR(255) NOT NULL, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE "projects" (`id` INTEGER PRIMARY KEY NOT NULL, `creating_user_reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME, `tasks_count` INTEGER NOT NULL);
+CREATE TABLE "projects" (`id` INTEGER PRIMARY KEY NOT NULL, `creating_user_reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME, `tasks_count` INTEGER);
 
 CREATE TABLE `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL);
 
