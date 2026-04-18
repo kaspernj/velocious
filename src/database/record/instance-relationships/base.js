@@ -118,14 +118,18 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     /** @type {Array<import("../index.js").default>} */
     const batch = []
 
-    // Exact same class, persisted, relationship not yet preloaded for that sibling.
+    // Exact same class, persisted, no existing in-memory relationship state.
+    // Skip siblings where `_loaded` is already set — they may have been
+    // preloaded (preserve cache) OR locally manipulated via `build...` /
+    // `set...` (preserve unsaved edits). Either way the preloader would
+    // overwrite that state.
     for (const sibling of cohort) {
       if (sibling.constructor !== OwnerModelClass) continue
       if (!sibling.isPersisted()) continue
 
       const siblingInstanceRelationship = sibling.getRelationshipByName(relationshipName)
 
-      if (siblingInstanceRelationship.getPreloaded()) continue
+      if (siblingInstanceRelationship.getLoadedOrUndefined() !== undefined) continue
 
       batch.push(sibling)
     }
