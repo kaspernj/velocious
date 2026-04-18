@@ -34,6 +34,7 @@ Comment.belongsTo("acceptedTask", (scope) => scope.where({state: "accepted"}), {
 | Option | Description |
 |---|---|
 | `className` | Target model class name (inferred from relationship name by default) |
+| `counterCache` | Auto-sync parent count column on child create/update/destroy (belongsTo only) |
 | `dependent` | Action on parent destroy: `"destroy"` or `"restrict"` (hasMany/hasOne only) |
 | `foreignKey` | Explicit foreign key column (inferred by default) |
 | `primaryKey` | Primary key on the parent model (defaults to `"id"`) |
@@ -55,6 +56,21 @@ Project.hasMany("tasks", {dependent: "restrict"})
 | `"restrict"` | Blocks destroy with an error when any dependent records exist (uses a COUNT query, does not load records) |
 
 The restrict error message follows the pattern `"Cannot delete record because dependent <relationship> exist"`.
+
+## Counter cache
+
+The `counterCache` option on `belongsTo` automatically syncs a count column on the parent model when child records are created, destroyed, or reparented:
+
+```js
+Comment.belongsTo("task", {counterCache: true})
+```
+
+The parent column name follows the convention `<childModelPluralCamelCase>Count` (e.g. `commentsCount` on Task). The parent model must have a setter for this column (e.g. `setCommentsCount`).
+
+Counter cache handles three cases:
+- **Create**: increments the parent count
+- **Destroy**: decrements the parent count
+- **FK change**: decrements the old parent and increments the new parent
 
 ## Through relationships (many-to-many)
 

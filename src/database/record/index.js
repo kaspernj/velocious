@@ -472,6 +472,85 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Registers afterCreate, afterSave, and afterDestroy callbacks to sync
+   * a counter cache column on the parent model. The column name follows
+   * the convention `<childModelPluralCamelCase>Count`.
+   *
+   * @param {string} relationshipName - The belongsTo relationship name.
+   */
+  static _registerCounterCacheCallbacks(relationshipName) {
+    const ChildModel = this
+
+    /**
+     * @param {number | string | null} parentId
+     * @returns {Promise<void>}
+     */
+    async function syncCounter(parentId) {
+      if (!parentId) return
+
+      const relationship = ChildModel.getRelationshipByName(relationshipName)
+      const ParentModel = relationship.getTargetModelClass()
+
+      if (!ParentModel) return
+
+      const parent = await ParentModel.findBy({id: parentId})
+
+      if (!parent) return
+
+      const fkAttribute = inflection.camelize(relationship.getForeignKey().replace(/_id$/, "Id"), true)
+      const childModelName = ChildModel.getModelName()
+      const counterColumn = `${inflection.camelize(inflection.pluralize(childModelName), true)}Count`
+      const count = await ChildModel.where({[fkAttribute]: parentId}).count()
+      const setter = `set${inflection.camelize(counterColumn)}`
+
+      if (typeof /** @type {any} */ (parent)[setter] !== "function") {
+        throw new Error(`${ParentModel.name} has no setter '${setter}' for counter cache column '${counterColumn}'`)
+      }
+
+      /** @type {any} */ (parent)[setter](count)
+      await parent.save()
+    }
+
+    /** @param {any} record @returns {any} */
+    function readFkAttribute(record) {
+      const relationship = ChildModel.getRelationshipByName(relationshipName)
+      const fkAttribute = inflection.camelize(relationship.getForeignKey().replace(/_id$/, "Id"), true)
+
+      return record.readAttribute(fkAttribute)
+    }
+
+    ChildModel.afterCreate(async (record) => {
+      await syncCounter(readFkAttribute(record))
+    })
+
+    ChildModel.afterDestroy(async (record) => {
+      await syncCounter(readFkAttribute(record))
+    })
+
+    ChildModel.beforeSave(async (record) => {
+      const model = /** @type {any} */ (record)
+      const relationship = ChildModel.getRelationshipByName(relationshipName)
+      const fkColumn = relationship.getForeignKey()
+
+      if (!model.isNewRecord() && fkColumn in model._changes) {
+        model[`_counterCachePrev_${relationshipName}`] = model._attributes[fkColumn]
+      }
+    })
+
+    ChildModel.afterSave(async (record) => {
+      const model = /** @type {any} */ (record)
+      const prevKey = `_counterCachePrev_${relationshipName}`
+      const previousParentId = model[prevKey]
+
+      if (previousParentId !== undefined) {
+        delete model[prevKey]
+        await syncCounter(previousParentId)
+        await syncCounter(readFkAttribute(model))
+      }
+    })
+  }
+
+  /**
    * @param {string} relationshipName - Relationship name.
    * @returns {import("./relationships/base.js").default} - The relationship by name.
    */
@@ -607,6 +686,10 @@ class VelociousDatabaseRecord {
     const {scope, relationshipOptions} = this._normalizeRelationshipArgs(scopeOrOptions, options)
 
     this._defineRelationship(relationshipName, Object.assign({type: "belongsTo", scope}, relationshipOptions))
+
+    if (/** @type {any} */ (relationshipOptions)?.counterCache) {
+      this._registerCounterCacheCallbacks(relationshipName)
+    }
   }
 
   /**
