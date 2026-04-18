@@ -8,6 +8,7 @@ import * as inflection from "inflection"
  */
 /**
  * @typedef {object} RelationshipBaseArgsType
+ * @property {boolean} [autoload] - Whether to auto-batch-preload siblings when this relationship is lazy-loaded. Default true.
  * @property {string} [className] - Name of the related model class.
  * @property {boolean} [counterCache] - Auto-sync parent count column on create/update/destroy.
  * @property {string} [dependent] - Dependent action when parent is destroyed.
@@ -25,7 +26,7 @@ import * as inflection from "inflection"
 
 export default class VelociousDatabaseRecordBaseRelationship {
   /** @param {RelationshipBaseArgsType} args - Relationship definition arguments. */
-  constructor({className, counterCache, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, scope, through, type, ...restArgs}) {
+  constructor({autoload, className, counterCache, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, scope, through, type, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
@@ -35,6 +36,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
       throw new Error(`Invalid model name: ${className}`)
     }
 
+    this._autoload = autoload !== false
     this.className = className
     this._counterCache = counterCache || false
     this._dependent = dependent
@@ -49,6 +51,9 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this.through = through
     this.type = type
   }
+
+  /** @returns {boolean} Whether this relationship auto-batch-preloads siblings on lazy access. */
+  getAutoload() { return this._autoload }
 
   getConfiguration() { return this.modelClass._getConfiguration() }
 

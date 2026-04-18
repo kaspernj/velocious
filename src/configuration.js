@@ -59,11 +59,12 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
     this._abilityResources = abilityResources || []
+    this._autoload = autoload
     this._backgroundJobs = backgroundJobs
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
@@ -134,6 +135,15 @@ export default class VelociousConfiguration {
 
     this.getEnvironmentHandler().setConfiguration(this)
   }
+
+  /** @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally. */
+  getAutoload() { return this._autoload }
+
+  /**
+   * @param {boolean} newValue - Whether auto-batch-preload of relationships is enabled.
+   * @returns {void}
+   */
+  setAutoload(newValue) { this._autoload = newValue }
 
   /** @returns {import("./configuration-types.js").CorsType | undefined} - The cors.  */
   getCors() {

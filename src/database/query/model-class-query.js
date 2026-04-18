@@ -548,6 +548,12 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       models.push(model)
     }
 
+    // Share a single cohort reference across every sibling record so that
+    // auto-preload can batch lazy relationship access later.
+    for (const model of models) {
+      model._loadCohort = models
+    }
+
     if (Object.keys(this._preload).length > 0 && models.length > 0) {
       const preloader = new Preloader({
         modelClass: this.modelClass,

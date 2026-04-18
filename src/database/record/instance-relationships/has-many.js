@@ -87,6 +87,20 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /** @returns {Promise<InstanceType<TMC>[]>} - Resolves with loaded models. */
   async load() {
+    // Force-reload: discard the cached value and fetch fresh. When the parent
+    // record was loaded as part of a batch, route through the cohort preloader
+    // so siblings that have not preloaded this relationship get batched too.
+    // The scoped query path (`instance.query().where(...).load()`) bypasses
+    // this and stays a single-record load by design.
+    this._preloaded = false
+    this._loaded = undefined
+
+    const batched = await this._tryCohortPreload()
+
+    if (batched) {
+      return /** @type {InstanceType<TMC>[]} */ (Array.isArray(this._loaded) ? this._loaded : [])
+    }
+
     const foreignModels = /** @type {InstanceType<TMC>[]} */ (await this.query().load())
 
     this.setLoaded(foreignModels)
@@ -98,13 +112,11 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /** @returns {Promise<InstanceType<TMC>[]>} - Resolves with the array. */
   async toArray() {
-    const loadedValue = this.getLoadedOrUndefined()
+    const loadedValue = await this.autoloadOrLoad()
 
-    if (loadedValue !== undefined) {
-      return Array.isArray(loadedValue) ? loadedValue : []
-    }
+    if (loadedValue === undefined) return []
 
-    return await this.load()
+    return Array.isArray(loadedValue) ? loadedValue : [loadedValue]
   }
 
   /**

@@ -195,6 +195,9 @@ class VelociousDatabaseRecord {
   /** @type {Record<string, RecordAttachmentHandle>} */
   _attachments = {}
 
+  /** @type {Array<VelociousDatabaseRecord> | undefined} - Shared reference to sibling records loaded in the same batch. Used by auto-preload. */
+  _loadCohort = undefined
+
   /** @type {string | undefined} */
   __tableName = undefined
 
@@ -327,6 +330,7 @@ class VelociousDatabaseRecord {
    */
   /**
    * @typedef {object} RelationshipDataArgumentType
+   * @property {boolean} [autoload] - Disable auto-batch-preload for this relationship by passing false. Default true.
    * @property {string} [className] - Model class name for the related record.
    * @property {string} [dependent] - Dependent action when parent is destroyed (e.g. "destroy").
    * @property {typeof VelociousDatabaseRecord} [klass] - Model class for the related record.
@@ -415,6 +419,10 @@ class VelociousDatabaseRecord {
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
         return await this.loadRelationship(relationshipName)
+      }
+
+      prototype[`${relationshipName}OrLoad`] = async function() {
+        return await this.relationshipOrLoad(relationshipName)
       }
     } else if (actualData.type == "hasOne") {
       relationship = new HasOneRelationship(actualData)
@@ -657,13 +665,8 @@ class VelociousDatabaseRecord {
    */
   async relationshipOrLoad(relationshipName) {
     const relationship = this.getRelationshipByName(relationshipName)
-    const loadedValue = relationship.getLoadedOrUndefined()
 
-    if (loadedValue !== undefined) {
-      return loadedValue
-    }
-
-    return await this.loadRelationship(relationshipName)
+    return await relationship.autoloadOrLoad()
   }
 
   /**

@@ -36,6 +36,16 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   }
 
   async load() {
+    // Force-reload: discard the cached value and fetch fresh. When the parent
+    // record was loaded as part of a batch, batch the has-one lookup across
+    // cohort siblings that have not preloaded this relationship yet.
+    this._preloaded = false
+    this._loaded = undefined
+
+    const batched = await this._tryCohortPreload()
+
+    if (batched) return this.loaded()
+
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = /** @type {string | number} */ (this.getModel().readColumn(primaryKey))
