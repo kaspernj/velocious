@@ -304,6 +304,7 @@
 
 /**
  * @typedef {object} ConfigurationArgsType
+ * @property {boolean} [autoload] - Globally enable auto-batch-preload of relationships on lazy access. Default true.
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
  * @property {string} [cookieSecret] - Secret for encrypting cookies.
  * @property {AbilityResourceClassType[]} [abilityResources] - Resource classes used to define abilities per model.

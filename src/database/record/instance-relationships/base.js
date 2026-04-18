@@ -1,5 +1,9 @@
 // @ts-check
 
+import BelongsToPreloader from "../../query/preloader/belongs-to.js"
+import HasManyPreloader from "../../query/preloader/has-many.js"
+import HasOnePreloader from "../../query/preloader/has-one.js"
+
 /**
  * @template {typeof import("../index.js").default} [MC=typeof import("../index.js").default]
  * @template {typeof import("../index.js").default} [TMC=typeof import("../index.js").default]
@@ -72,6 +76,73 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
    */
   load() {
     throw new Error("'load' not implemented")
+  }
+
+  /**
+   * Loads the relationship if not already loaded. When the parent record was
+   * loaded as part of a batch (cohort) and autoload is enabled, siblings in
+   * the cohort that share this relationship and have not preloaded it yet
+   * are batched into a single query via the existing preloader path.
+   *
+   * @returns {Promise<InstanceType<TMC> | Array<InstanceType<TMC>> | undefined>} - Resolves with loaded relationship value.
+   */
+  async autoloadOrLoad() {
+    if (this._loaded !== undefined) return this._loaded
+
+    const relationshipDef = this.getRelationship()
+    const configuration = relationshipDef.getConfiguration()
+    const cohort = /** @type {Array<import("../index.js").default> | undefined} */ (/** @type {any} */ (this.model)._loadCohort)
+
+    // No cohort, or autoload disabled globally or per-relationship — fall back to single-record load.
+    if (!configuration.getAutoload() || !relationshipDef.getAutoload() || !cohort || cohort.length <= 1) {
+      await this.load()
+      return this._loaded
+    }
+
+    const relationshipName = relationshipDef.getRelationshipName()
+    const OwnerModelClass = /** @type {any} */ (this.model).constructor
+    /** @type {Array<import("../index.js").default>} */
+    const batch = []
+
+    // Exact same class, persisted, relationship not yet preloaded for that sibling.
+    for (const sibling of cohort) {
+      if (sibling.constructor !== OwnerModelClass) continue
+      if (!sibling.isPersisted()) continue
+
+      const siblingInstanceRelationship = sibling.getRelationshipByName(relationshipName)
+
+      if (siblingInstanceRelationship.getPreloaded()) continue
+
+      batch.push(sibling)
+    }
+
+    if (batch.length === 0) {
+      await this.load()
+      return this._loaded
+    }
+
+    const type = relationshipDef.getType()
+
+    if (type == "belongsTo") {
+      const belongsToRelationship = /** @type {import("../relationships/belongs-to.js").default} */ (relationshipDef)
+      const preloader = new BelongsToPreloader({models: batch, relationship: belongsToRelationship})
+
+      await preloader.run()
+    } else if (type == "hasMany") {
+      const hasManyRelationship = /** @type {import("../relationships/has-many.js").default} */ (relationshipDef)
+      const preloader = new HasManyPreloader({models: batch, relationship: hasManyRelationship})
+
+      await preloader.run()
+    } else if (type == "hasOne") {
+      const hasOneRelationship = /** @type {import("../relationships/has-one.js").default} */ (relationshipDef)
+      const preloader = new HasOnePreloader({models: batch, relationship: hasOneRelationship})
+
+      await preloader.run()
+    } else {
+      throw new Error(`Unknown relationship type: ${type}`)
+    }
+
+    return this._loaded
   }
 
   /**  @returns {boolean} Whether the relationship has been preloaded */

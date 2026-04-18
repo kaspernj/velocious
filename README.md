@@ -651,6 +651,39 @@ await project.loadTasks()
 const tasks = project.tasks().loaded()
 ```
 
+## Auto-batch-preload (cohort loading)
+
+When records are loaded as part of a batch (e.g. `Task.where(...).toArray()`), the first lazy access to a relationship on any sibling batch-loads that relationship for every sibling record in one query — avoiding the classic N+1.
+
+```js
+const tasks = await Task.where({state: "open"}).toArray()
+
+// First call issues ONE query to load the project for every task in the batch.
+const firstProject = await tasks[0].projectOrLoad()
+
+// Subsequent sibling accesses hit the preloaded cache — no extra query.
+const secondProject = tasks[1].project()
+```
+
+Auto-load is triggered by the async access paths that already exist: `model.${name}OrLoad()`, `model.relationshipOrLoad("...")`, and `model.relationship().toArray()` for hasMany. The synchronous accessor `model.relationship()` still throws when the relationship has not been loaded — call the async form if you want the lazy-load behavior.
+
+Disable auto-load per relationship:
+
+```js
+Task.belongsTo("project", {autoload: false})
+```
+
+Disable auto-load globally via the framework configuration:
+
+```js
+new Configuration({
+  autoload: false,
+  // ...
+})
+```
+
+Both flags default to `true`. When disabled, lazy access falls back to a per-record load.
+
 ## Through relationships
 
 Use the `through` option on `hasMany` to define a relationship that traverses an intermediate (join) table:
