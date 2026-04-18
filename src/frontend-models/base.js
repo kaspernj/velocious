@@ -1513,6 +1513,12 @@ export default class FrontendModelBase {
       sibling.getRelationshipByName(relationshipName).setLoaded(reloadedValue)
     }
 
+    // If the caller itself was not populated (record deleted/filtered between
+    // the list fetch and this preload request), fall back to per-record load
+    // so the caller gets a real not-found error instead of a misleading
+    // "hasn't been preloaded" throw from loaded().
+    if (!this.getRelationshipByName(relationshipName).getPreloaded()) return false
+
     return true
   }
 

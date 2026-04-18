@@ -342,6 +342,62 @@ describe("Frontend models - autoload", () => {
     }
   })
 
+  it("falls back to per-record load when the caller record is missing from the cohort preload response", async () => {
+    const {Task} = buildAutoloadTestModelClasses()
+
+    const fetchStub = stubFetchWith([
+      {
+        match: (body) => !body.preload && !body.where,
+        response: {
+          models: [
+            {id: "1", name: "Task one"},
+            {id: "2", name: "Task two"}
+          ]
+        }
+      },
+      {
+        // Cohort preload request — server only returns the other sibling, not the caller.
+        match: (body) => Boolean(body.preload?.project) && Array.isArray(body.where?.id),
+        response: {
+          models: [
+            {id: "2", name: "Task two", __preloadedRelationships: {project: {id: "102", name: "P2"}}}
+          ]
+        }
+      },
+      {
+        // Per-record fallback — the record was deleted so the backend returns an empty list.
+        match: (body) => Boolean(body.preload?.project) && (typeof body.where?.id === "string" || typeof body.where?.id === "number"),
+        response: {models: []}
+      }
+    ])
+
+    try {
+      const tasks = await Task.toArray()
+      let thrown = null
+
+      try {
+        await tasks[0].relationshipOrLoad("project")
+      } catch (error) {
+        thrown = error
+      }
+
+      // The caller must fall through to per-record load rather than throw
+      // "hasn't been preloaded". The per-record path will throw a real
+      // not-found error instead, which is the desired outcome.
+      expect(thrown).toBeTruthy()
+      expect(String(thrown?.message || "")).not.toContain("hasn't been preloaded")
+
+      // The populated sibling still benefited from the batch attempt.
+      const siblingRelationship = tasks[1].getRelationshipByName("project")
+
+      expect(siblingRelationship.getPreloaded()).toEqual(true)
+      expect(siblingRelationship.loaded().readAttribute("id")).toEqual("102")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("preserves locally set singular relationship state on siblings during cohort preload", async () => {
     const {Project, Task} = buildAutoloadTestModelClasses()
 
