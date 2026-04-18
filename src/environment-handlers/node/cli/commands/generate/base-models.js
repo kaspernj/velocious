@@ -139,6 +139,8 @@ export default class DbGenerateModel extends BaseCommand {
           methodsCount++
 
           const hasName = `has${inflection.camelize(name)}`
+          const setterName = `set${inflection.camelize(name)}`
+          const setterParamType = translationJsdocType || "any"
 
           fileContent += `\n`
           fileContent += "  /**\n"
@@ -146,6 +148,14 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `   * @returns {boolean}\n`
           fileContent += "   */\n"
           fileContent += `  ${hasName}() { throw new Error("${hasName} not implemented") }\n`
+          methodsCount++
+
+          fileContent += `\n`
+          fileContent += "  /**\n"
+          fileContent += `   * @param {${setterParamType}} newValue\n`
+          fileContent += `   * @returns {void}\n`
+          fileContent += "   */\n"
+          fileContent += `  ${setterName}(newValue) { return this._setTranslatedAttribute("${name}", this._getConfiguration().getLocale(), newValue) } // eslint-disable-line no-unused-vars\n`
           methodsCount++
 
           for (const locale of this.getConfiguration().getLocales()) {
@@ -159,6 +169,16 @@ export default class DbGenerateModel extends BaseCommand {
             }
 
             fileContent += `  ${localeMethodName}() { return this._getTranslatedAttributeWithFallback("${name}", "${locale}") ?? null }\n`
+            methodsCount++
+
+            const localeSetterName = `${setterName}${inflection.camelize(locale)}`
+
+            fileContent += `\n`
+            fileContent += "  /**\n"
+            fileContent += `   * @param {${setterParamType}} newValue\n`
+            fileContent += `   * @returns {void}\n`
+            fileContent += "   */\n"
+            fileContent += `  ${localeSetterName}(newValue) { return this._setTranslatedAttribute("${name}", "${locale}", newValue) } // eslint-disable-line no-unused-vars\n`
             methodsCount++
 
             const localeHasName = `has${inflection.camelize(localeMethodName)}`

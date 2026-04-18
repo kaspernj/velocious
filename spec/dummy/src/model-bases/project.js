@@ -99,9 +99,21 @@ export default class ProjectBase extends DatabaseRecord {
   hasName() { throw new Error("hasName not implemented") }
 
   /**
+   * @param {string} newValue
+   * @returns {void}
+   */
+  setName(newValue) { return this._setTranslatedAttribute("name", this._getConfiguration().getLocale(), newValue) } // eslint-disable-line no-unused-vars
+
+  /**
    * @returns {string | null}
    */
   nameDe() { return this._getTranslatedAttributeWithFallback("name", "de") ?? null }
+
+  /**
+   * @param {string} newValue
+   * @returns {void}
+   */
+  setNameDe(newValue) { return this._setTranslatedAttribute("name", "de", newValue) } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
@@ -113,6 +125,12 @@ export default class ProjectBase extends DatabaseRecord {
    * @returns {string | null}
    */
   nameEn() { return this._getTranslatedAttributeWithFallback("name", "en") ?? null }
+
+  /**
+   * @param {string} newValue
+   * @returns {void}
+   */
+  setNameEn(newValue) { return this._setTranslatedAttribute("name", "en", newValue) } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
