@@ -482,6 +482,10 @@ class VelociousDatabaseRecord {
     const ChildModel = this
 
     /**
+     * Atomically recomputes the counter cache column on the parent via a
+     * single UPDATE ... SET col = (SELECT COUNT(*)) so concurrent
+     * creates/destroys cannot race into a stale count.
+     *
      * @param {number | string | null} parentId
      * @returns {Promise<void>}
      */
@@ -494,22 +498,18 @@ class VelociousDatabaseRecord {
       if (!ParentModel) return
 
       const primaryKey = relationship.getPrimaryKey()
-      const parent = await ParentModel.findBy({[primaryKey]: parentId})
-
-      if (!parent) return
-
-      const fkAttribute = inflection.camelize(relationship.getForeignKey().replace(/_id$/, "Id"), true)
+      const fk = relationship.getForeignKey()
       const childModelName = ChildModel.getModelName()
-      const counterColumn = `${inflection.camelize(inflection.pluralize(childModelName), true)}Count`
-      const count = await ChildModel.where({[fkAttribute]: parentId}).count()
-      const setter = `set${inflection.camelize(counterColumn)}`
+      const counterColumn = inflection.underscore(`${inflection.pluralize(childModelName)}Count`)
+      const parentTable = ParentModel.tableName()
+      const childTable = ChildModel.tableName()
+      const pkColumn = inflection.underscore(primaryKey)
+      const connection = ParentModel.connection()
+      const quoted = connection.quote(parentId)
 
-      if (typeof /** @type {any} */ (parent)[setter] !== "function") {
-        throw new Error(`${ParentModel.name} has no setter '${setter}' for counter cache column '${counterColumn}'`)
-      }
+      const sql = `UPDATE ${connection.quoteTable(parentTable)} SET ${connection.quoteColumn(counterColumn)} = (SELECT COUNT(*) FROM ${connection.quoteTable(childTable)} WHERE ${connection.quoteColumn(fk)} = ${quoted}) WHERE ${connection.quoteColumn(pkColumn)} = ${quoted}`
 
-      /** @type {any} */ (parent)[setter](count)
-      await parent.save()
+      await connection.query(sql)
     }
 
     /** @param {any} record @returns {any} */
