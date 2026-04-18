@@ -13,6 +13,9 @@ function getPool() {
   return pool
 }
 
+// Each test mutates pool internals (global fallback, `pool.connections`) and
+// asserts on the "created when missing" path, so run against a freshly
+// restarted Dummy to avoid state leaking across examples.
 describe("database - pool - async tracked multi connection", () => {
   it("returns a global fallback connection when no async context has been set", async () => {
     await Dummy.run(async () => {
@@ -24,7 +27,7 @@ describe("database - pool - async tracked multi connection", () => {
       const currentConnection = await pool.asyncLocalStorage.run(undefined, async () => pool.getCurrentConnection())
 
       expect(currentConnection).toBe(fallbackConnection)
-    })
+    }, {fresh: true})
   })
 
   it("prefers the async-context connection and falls back to the global connection outside the context", async () => {
@@ -47,7 +50,7 @@ describe("database - pool - async tracked multi connection", () => {
       const outsideConnection = await pool.asyncLocalStorage.run(undefined, async () => pool.getCurrentConnection())
 
       expect(outsideConnection).toBe(fallbackConnection)
-    })
+    }, {fresh: true})
   })
 
   it("ensures a global connection is created when missing", async () => {
@@ -61,7 +64,7 @@ describe("database - pool - async tracked multi connection", () => {
 
       expect(connection).toBe(pool.getGlobalConnection())
       expect(outsideConnection).toBe(connection)
-    })
+    }, {fresh: true})
   })
 
   it("does not replace an existing global connection when ensuring", async () => {
@@ -79,6 +82,6 @@ describe("database - pool - async tracked multi connection", () => {
 
       expect(connection).toBe(existing)
       expect(outsideConnection).toBe(existing)
-    })
+    }, {fresh: true})
   })
 })

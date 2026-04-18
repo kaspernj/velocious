@@ -1,3 +1,4 @@
+import Dummy from "../../index.js"
 import dummyConfiguration from "./configuration.js"
 
 export default async function configureTesting() {
@@ -45,5 +46,11 @@ export default async function configureTesting() {
         }
       }
     })
+  })
+
+  // Tear the shared Dummy down once at suite end so the HTTP server stops
+  // and DB pools close cleanly. Dummy.teardown is a no-op when nothing was started.
+  afterAll(async () => {
+    await Dummy.teardown()
   })
 }

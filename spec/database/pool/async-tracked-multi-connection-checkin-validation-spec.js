@@ -14,6 +14,8 @@ function getPool() {
   return pool
 }
 
+// Mutates `pool.connections` directly, so start from a freshly restarted Dummy
+// to avoid leaking that replacement into unrelated tests sharing the pool.
 describe("database - pool - checkin with open transaction", () => {
   it("preserves connections with an open transaction so they can be rolled back later", async () => {
     await Dummy.run(async () => {
@@ -45,6 +47,6 @@ describe("database - pool - checkin with open transaction", () => {
         await connection.rollbackTransaction()
         expect(connection._transactionsCount).toBe(0)
       })
-    })
+    }, {fresh: true})
   })
 })
