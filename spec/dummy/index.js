@@ -90,6 +90,15 @@ export default class Dummy {
   async run(callback, options) {
     if (options?.fresh) await this.teardown()
 
+    // Always re-assert the dummy as the current configuration before running.
+    // Why: other specs (e.g. spec/mailers/mailer-spec.js) call setCurrent on
+    // their own throwaway Configuration and never restore it, so the shared
+    // singleton can point at a dead configuration by the time a dummy-backed
+    // spec runs. Before the shared-lifecycle change, Dummy.prepare() reset
+    // this on every run; that reset now only happens on the first start,
+    // so force it here on every call.
+    dummyConfiguration.setCurrent()
+
     await dummyConfiguration.ensureConnections(async () => {
       await this.start()
       await callback()
