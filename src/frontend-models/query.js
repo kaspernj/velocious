@@ -1309,9 +1309,18 @@ export default class FrontendModelQuery {
       throw new Error(`Expected object response but got: ${response}`)
     }
 
-    const models = Array.isArray(response.models) ? response.models : []
+    const modelsData = Array.isArray(response.models) ? response.models : []
+    /** @type {InstanceType<T>[]} */
+    const models = modelsData.map((model) => this.modelClass.instantiateFromResponse(model))
 
-    return /** @type {InstanceType<T>[]} */ (models.map((model) => this.modelClass.instantiateFromResponse(model)))
+    // Share a single cohort reference across every sibling so auto-batch-preload
+    // can batch lazy relationship access later. Single-record lookups still flow
+    // through here (with a cohort of one) and degrade cleanly to per-record load.
+    for (const model of models) {
+      /** @type {any} */ (model)._loadCohort = models
+    }
+
+    return models
   }
 
   /**

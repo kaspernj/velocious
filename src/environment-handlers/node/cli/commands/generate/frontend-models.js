@@ -309,11 +309,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     if (relationships.length > 0) {
       fileContent += "\n"
-      fileContent += "  /** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions. */\n"
+      fileContent += "  /** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions. */\n"
       fileContent += "  static relationshipDefinitions() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
-        fileContent += `      ${relationship.relationshipName}: {type: ${JSON.stringify(relationship.type)}},\n`
+        const parts = [`type: ${JSON.stringify(relationship.type)}`]
+
+        if (relationship.autoload === false) parts.push("autoload: false")
+
+        fileContent += `      ${relationship.relationshipName}: {${parts.join(", ")}},\n`
       }
       fileContent += "    }\n"
       fileContent += "  }\n"
@@ -730,7 +734,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {string} args.className - Model class name.
    * @param {Record<string, any>} args.modelConfig - Model configuration.
    * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} [args.resourceClass]
-   * @returns {Array<{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationships.
+   * @returns {Array<{autoload: boolean, relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationships.
    */
   relationshipsForModel({className, modelConfig, resourceClass}) {
     const relationships = modelConfig.relationships
@@ -751,7 +755,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {string} args.className - Model class name.
    * @param {string} args.relationshipName - Relationship name.
    * @param {typeof import("../../../../../frontend-model-resource/base-resource.js").default | null} [args.resourceClass]
-   * @returns {{relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}} Inferred relationship definition.
+   * @returns {{autoload: boolean, relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}} Inferred relationship definition.
    */
   inferredRelationshipDefinition({className, relationshipName, resourceClass}) {
     const modelClass = resourceClass?.ModelClass || this.getConfiguration().getModelClass(className)
@@ -786,6 +790,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return {
+      autoload: relationship.getAutoload(),
       relationshipName,
       targetClassName,
       targetFileName: inflection.dasherize(inflection.underscore(targetClassName)),

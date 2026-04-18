@@ -133,7 +133,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("identifier() { return this.readAttribute(\"identifier\") }")
     expect(taskContents).toContain("setIdentifier(newValue) { return this.setAttribute(\"identifier\", newValue) }")
     expect(taskContents.includes("import Project from")).toEqual(false)
-    expect(taskContents).toContain("/** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\"}>} - Relationship definitions. */")
+    expect(taskContents).toContain("/** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions. */")
     expect(taskContents).toContain("static relationshipDefinitions()")
     expect(taskContents).toContain("project: \"Project\",")
     expect(taskContents).toContain("FrontendModelBase.registerModel(Task)")

@@ -263,9 +263,22 @@ export class FrontendModelHasManyRelationship {
   }
 
   /**
+   * Force-reload the relationship. When the parent record was loaded as part
+   * of a batch, siblings that have not preloaded this relationship get
+   * batched into one request via the cohort preloader. The scoped query path
+   * (`Model.where(...).preload([name]).toArray()` directly from user code)
+   * bypasses cohort batching by design.
    * @returns {Promise<Array<InstanceType<T>>>} - Loaded relationship models.
    */
   async load() {
+    // Reset so the cohort preloader (or single-record fallback) repopulates.
+    this._preloaded = false
+    this._loadedValue = []
+
+    const batched = await /** @type {any} */ (this.model)._tryCohortPreload(this.relationshipName)
+
+    if (batched) return this._loadedValue
+
     return /** @type {Promise<Array<InstanceType<T>>>} */ (this.model.loadRelationship(this.relationshipName))
   }
 
@@ -273,7 +286,7 @@ export class FrontendModelHasManyRelationship {
    * @returns {Promise<Array<InstanceType<T>>>} - Loaded relationship models.
    */
   async toArray() {
-    if (this._loadedValue.length > 0 || this.getPreloaded()) {
+    if (this.getPreloaded() || this._loadedValue.length > 0) {
       return this._loadedValue
     }
 
@@ -1127,6 +1140,18 @@ export default class FrontendModelBase {
   /** @type {string | undefined} */
   static modelName
 
+  /** @type {boolean} - Global auto-batch-preload toggle. Apps can opt out via FrontendModelBase.setAutoload(false). */
+  static _autoload = true
+
+  /** @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally. */
+  static getAutoload() { return FrontendModelBase._autoload }
+
+  /**
+   * @param {boolean} newValue - Whether auto-batch-preload of relationships is enabled.
+   * @returns {void}
+   */
+  static setAutoload(newValue) { FrontendModelBase._autoload = newValue }
+
   /** @type {Record<string, any>} */
   _attributes
   /** @type {Record<string, FrontendModelHasManyRelationship<any, any> | FrontendModelSingularRelationship<any, any>>} */
@@ -1141,6 +1166,8 @@ export default class FrontendModelBase {
   _markedForDestruction
   /** @type {Record<string, any>} */
   _persistedAttributes
+  /** @type {Array<FrontendModelBase> | undefined} - Shared reference to sibling records loaded in the same batch. Used by auto-batch-preload. */
+  _loadCohort
 
   /**
    * @param {Record<string, any>} [attributes] - Initial attributes.
@@ -1217,7 +1244,7 @@ export default class FrontendModelBase {
 
   /**
    * @this {typeof FrontendModelBase}
-   * @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany"}>} - Relationship definitions keyed by relationship name.
+   * @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany", autoload?: boolean}>} - Relationship definitions keyed by relationship name.
    */
   static relationshipDefinitions() {
     return {}
@@ -1243,7 +1270,7 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {string} relationshipName - Relationship name.
-   * @returns {{type: "belongsTo" | "hasOne" | "hasMany"} | null} - Relationship definition.
+   * @returns {{type: "belongsTo" | "hasOne" | "hasMany", autoload?: boolean} | null} - Relationship definition.
    */
   static relationshipDefinition(relationshipName) {
     const definitions = this.relationshipDefinitions()
@@ -1406,11 +1433,93 @@ export default class FrontendModelBase {
   async relationshipOrLoad(relationshipName) {
     const relationship = this.getRelationshipByName(relationshipName)
 
-    if ("_loadedValue" in relationship && (relationship.getPreloaded() || relationship._loadedValue !== null)) {
-      return relationship._loadedValue
+    if (relationship.getPreloaded()) {
+      return relationship.loaded()
     }
 
+    const batched = await this._tryCohortPreload(relationshipName)
+
+    if (batched) return relationship.loaded()
+
     return await this.loadRelationship(relationshipName)
+  }
+
+  /**
+   * Attempts to batch-load `relationshipName` across cohort siblings via a
+   * single `preload([name]).where({pk: [ids]}).toArray()` request, then copies
+   * the preloaded relationship state onto each sibling. Returns true when a
+   * batch ran, false when autoload is off, there is no cohort, or no batch
+   * candidates remain. Siblings whose relationship state is already set
+   * (preloaded or locally manipulated via `build` / `setRelationship`) are
+   * skipped so their cached/edited value is preserved.
+   * @param {string} relationshipName - Relationship name.
+   * @returns {Promise<boolean>} - Whether a cohort batch preload ran.
+   */
+  async _tryCohortPreload(relationshipName) {
+    if (!FrontendModelBase.getAutoload()) return false
+
+    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const cohort = this._loadCohort
+
+    if (!cohort || cohort.length <= 1) return false
+
+    const definition = ModelClass.relationshipDefinition(relationshipName)
+
+    if (!definition) return false
+    if (definition.autoload === false) return false
+
+    /** @type {Array<FrontendModelBase>} */
+    const batch = []
+
+    // Exact same class, persisted, no existing in-memory relationship state.
+    // `setLoaded` sets `_preloaded = true` on every mutation path (preload,
+    // setRelationship, build, addToLoaded), so `getPreloaded()` alone is a
+    // reliable "already touched" signal on the frontend.
+    for (const sibling of cohort) {
+      if (sibling.constructor !== ModelClass) continue
+      if (sibling.isNewRecord()) continue
+
+      const siblingRelationship = sibling.getRelationshipByName(relationshipName)
+
+      if (siblingRelationship.getPreloaded()) continue
+
+      batch.push(sibling)
+    }
+
+    if (batch.length === 0) return false
+
+    const primaryKey = ModelClass.primaryKey()
+    const batchIds = batch.map((sibling) => sibling.primaryKeyValue())
+    const reloadedBatch = await ModelClass
+      .preload([relationshipName])
+      .where({[primaryKey]: batchIds})
+      .toArray()
+
+    /** @type {Map<string, FrontendModelBase>} */
+    const reloadedById = new Map()
+
+    for (const reloaded of reloadedBatch) {
+      reloadedById.set(String(reloaded.primaryKeyValue()), reloaded)
+    }
+
+    for (const sibling of batch) {
+      const key = String(sibling.primaryKeyValue())
+      const reloaded = reloadedById.get(key)
+
+      if (!reloaded) continue
+
+      const reloadedValue = reloaded.getRelationshipByName(relationshipName).loaded()
+
+      sibling.getRelationshipByName(relationshipName).setLoaded(reloadedValue)
+    }
+
+    // If the caller itself was not populated (record deleted/filtered between
+    // the list fetch and this preload request), fall back to per-record load
+    // so the caller gets a real not-found error instead of a misleading
+    // "hasn't been preloaded" throw from loaded().
+    if (!this.getRelationshipByName(relationshipName).getPreloaded()) return false
+
+    return true
   }
 
   /**
