@@ -9,6 +9,7 @@ import * as inflection from "inflection"
 /**
  * @typedef {object} RelationshipBaseArgsType
  * @property {string} [className] - Name of the related model class.
+ * @property {boolean} [counterCache] - Auto-sync parent count column on create/update/destroy.
  * @property {string} [dependent] - Dependent action when parent is destroyed.
  * @property {string | undefined} [foreignKey] - Explicit foreign key column name.
  * @property {string} [inverseOf] - Inverse relationship name on the related model.
@@ -24,7 +25,7 @@ import * as inflection from "inflection"
 
 export default class VelociousDatabaseRecordBaseRelationship {
   /** @param {RelationshipBaseArgsType} args - Relationship definition arguments. */
-  constructor({className, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, scope, through, type, ...restArgs}) {
+  constructor({className, counterCache, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, scope, through, type, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!modelClass) throw new Error(`'modelClass' wasn't given for ${relationshipName}`)
@@ -35,6 +36,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
     }
 
     this.className = className
+    this._counterCache = counterCache || false
     this._dependent = dependent
     this.foreignKey = foreignKey
     this._inverseOf = inverseOf
@@ -49,6 +51,9 @@ export default class VelociousDatabaseRecordBaseRelationship {
   }
 
   getConfiguration() { return this.modelClass._getConfiguration() }
+
+  /** @returns {boolean} Whether a counter cache column is synced on the parent. */
+  getCounterCache() { return this._counterCache }
 
   /** @returns {string | undefined} What will be done when the parent record is destroyed. E.g. "destroy", "nullify", "restrict" etc. */
   getDependent() { return this._dependent }
