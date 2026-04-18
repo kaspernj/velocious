@@ -83,9 +83,14 @@ export default class UuidItemBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
   loadUuidInteractions() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   */
+  uuidInteractionsOrLoad() { return this.relationshipOrLoad("uuidInteractions") }
 
   /**
    * @abstract

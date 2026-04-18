@@ -162,9 +162,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/task.js").default>>}
    */
   loadTasks() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  tasksOrLoad() { return this.relationshipOrLoad("tasks") }
 
   /**
    * @abstract
@@ -185,9 +190,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/task.js").default>>}
    */
   loadDoneTasks() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  doneTasksOrLoad() { return this.relationshipOrLoad("doneTasks") }
 
   /**
    * @abstract
@@ -268,9 +278,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
   loadInteractions() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   */
+  interactionsOrLoad() { return this.relationshipOrLoad("interactions") }
 
   /**
    * @abstract
@@ -321,9 +336,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
    */
   loadComments() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
+   */
+  commentsOrLoad() { return this.relationshipOrLoad("comments") }
 
   /**
    * @abstract
@@ -344,9 +364,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../model-bases/project-translation.js").default>>}
    */
   loadTranslations() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../model-bases/project-translation.js").default>>}
+   */
+  translationsOrLoad() { return this.relationshipOrLoad("translations") }
 
   /**
    * @abstract

@@ -145,9 +145,14 @@ export default class UserBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/authentication-token.js").default>>}
    */
   loadAuthenticationTokens() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/authentication-token.js").default>>}
+   */
+  authenticationTokensOrLoad() { return this.relationshipOrLoad("authenticationTokens") }
 
   /**
    * @abstract
@@ -168,9 +173,14 @@ export default class UserBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/project.js").default>>}
    */
   loadCreatedProjects() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/project.js").default>>}
+   */
+  createdProjectsOrLoad() { return this.relationshipOrLoad("createdProjects") }
 
   /**
    * @abstract

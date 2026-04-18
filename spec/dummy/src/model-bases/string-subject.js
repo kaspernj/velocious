@@ -83,9 +83,14 @@ export default class StringSubjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
   loadStringSubjectInteractions() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   */
+  stringSubjectInteractionsOrLoad() { return this.relationshipOrLoad("stringSubjectInteractions") }
 
   /**
    * @abstract
