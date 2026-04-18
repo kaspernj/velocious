@@ -15,6 +15,9 @@ export default class VelociousHttpServer {
   /** @type {Record<string, ServerClient>}  */
   clients = {}
 
+  /** @type {Set<import("net").Socket>} */
+  _activeSockets = new Set()
+
   events = new EventEmitter()
   workerCount = 0
 
@@ -104,6 +107,15 @@ export default class VelociousHttpServer {
         return
       }
 
+      // Force-close lingering sockets (e.g. WebSocket upgrade
+      // connections mid-close-handshake) so the port is released
+      // immediately instead of waiting for graceful drain.
+      for (const socket of this._activeSockets) {
+        socket.destroy()
+      }
+
+      this._activeSockets.clear()
+
       this.netServer.close((error) => {
         if (error) {
           reject(error)
@@ -146,6 +158,9 @@ export default class VelociousHttpServer {
    */
   onConnection = (socket) => {
     const clientCount = this.clientCount
+
+    this._activeSockets.add(socket)
+    socket.once("close", () => this._activeSockets.delete(socket))
 
     this.logger.debug(() => ["New client", {
       clientCount,
