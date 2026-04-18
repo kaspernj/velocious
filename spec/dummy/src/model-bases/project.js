@@ -72,6 +72,22 @@ export default class ProjectBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
+   * @returns {number | null}
+   */
+  tasksCount() { return this.readAttribute("tasksCount") }
+
+  /**
+   * @param {number | null} newValue
+   * @returns {void}
+   */
+  setTasksCount(newValue) { return this._setColumnAttribute("tasksCount", newValue) }
+
+  /**
+   * @returns {boolean}
+   */
+  hasTasksCount() { return this._hasAttribute(this.tasksCount()) }
+
+  /**
    * @returns {string | null}
    */
   name() { return this._getTranslatedAttributeWithFallback("name", this._getConfiguration().getLocale()) ?? null }
@@ -83,9 +99,21 @@ export default class ProjectBase extends DatabaseRecord {
   hasName() { throw new Error("hasName not implemented") }
 
   /**
+   * @param {string} newValue
+   * @returns {void}
+   */
+  setName(newValue) { return this._setTranslatedAttribute("name", this._getConfiguration().getLocale(), newValue) } // eslint-disable-line no-unused-vars
+
+  /**
    * @returns {string | null}
    */
   nameDe() { return this._getTranslatedAttributeWithFallback("name", "de") ?? null }
+
+  /**
+   * @param {string} newValue
+   * @returns {void}
+   */
+  setNameDe(newValue) { return this._setTranslatedAttribute("name", "de", newValue) } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
@@ -97,6 +125,12 @@ export default class ProjectBase extends DatabaseRecord {
    * @returns {string | null}
    */
   nameEn() { return this._getTranslatedAttributeWithFallback("name", "en") ?? null }
+
+  /**
+   * @param {string} newValue
+   * @returns {void}
+   */
+  setNameEn(newValue) { return this._setTranslatedAttribute("name", "en", newValue) } // eslint-disable-line no-unused-vars
 
   /**
    * @abstract
@@ -118,9 +152,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/user.js").default | undefined>}
    */
   loadCreatingUser() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/user.js").default | undefined>}
+   */
+  creatingUserOrLoad() { return this.relationshipOrLoad("creatingUser") }
 
   /**
    * @abstract
@@ -141,9 +180,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/task.js").default>>}
    */
   loadTasks() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  tasksOrLoad() { return this.relationshipOrLoad("tasks") }
 
   /**
    * @abstract
@@ -164,9 +208,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/task.js").default>>}
    */
   loadDoneTasks() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  doneTasksOrLoad() { return this.relationshipOrLoad("doneTasks") }
 
   /**
    * @abstract
@@ -189,9 +238,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
   loadProjectDetail() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
+   */
+  projectDetailOrLoad() { return this.relationshipOrLoad("projectDetail") }
 
   /**
    * @abstract
@@ -214,9 +268,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
   loadActiveProjectDetail() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/project-detail.js").default | undefined>}
+   */
+  activeProjectDetailOrLoad() { return this.relationshipOrLoad("activeProjectDetail") }
 
   /**
    * @abstract
@@ -237,9 +296,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
   loadInteractions() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   */
+  interactionsOrLoad() { return this.relationshipOrLoad("interactions") }
 
   /**
    * @abstract
@@ -262,9 +326,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   loadPrimaryInteraction() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
+   */
+  primaryInteractionOrLoad() { return this.relationshipOrLoad("primaryInteraction") }
 
   /**
    * @abstract
@@ -285,9 +354,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
    */
   loadComments() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
+   */
+  commentsOrLoad() { return this.relationshipOrLoad("comments") }
 
   /**
    * @abstract
@@ -308,9 +382,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../model-bases/project-translation.js").default>>}
    */
   loadTranslations() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../model-bases/project-translation.js").default>>}
+   */
+  translationsOrLoad() { return this.relationshipOrLoad("translations") }
 
   /**
    * @abstract

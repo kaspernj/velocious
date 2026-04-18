@@ -133,9 +133,14 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/project.js").default | undefined>}
    */
   loadProject() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/project.js").default | undefined>}
+   */
+  projectOrLoad() { return this.relationshipOrLoad("project") }
 
   /**
    * @abstract
@@ -156,9 +161,14 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
   loadInteractions() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   */
+  interactionsOrLoad() { return this.relationshipOrLoad("interactions") }
 
   /**
    * @abstract
@@ -181,9 +191,14 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
   loadPrimaryInteraction() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
+   */
+  primaryInteractionOrLoad() { return this.relationshipOrLoad("primaryInteraction") }
 
   /**
    * @abstract
@@ -204,9 +219,14 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
    */
   loadComments() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
+   */
+  commentsOrLoad() { return this.relationshipOrLoad("comments") }
 
   /**
    * @abstract
