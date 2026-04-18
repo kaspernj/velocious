@@ -35,6 +35,16 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
   getLoadedOrUndefined() { return this._loaded }
 
   async load() {
+    // Force-reload: discard the cached value and fetch fresh. When the parent
+    // record was loaded as part of a batch, batch the belongs-to lookup across
+    // cohort siblings that have not preloaded this relationship yet.
+    this._preloaded = false
+    this._loaded = undefined
+
+    const batched = await this._tryCohortPreload()
+
+    if (batched) return this.loaded()
+
     const foreignKey = this.getForeignKey()
     const foreignModelID = this.getModel().readColumn(foreignKey)
     const TargetModelClass = this.getTargetModelClass()

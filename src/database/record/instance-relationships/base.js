@@ -83,20 +83,34 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
    * loaded as part of a batch (cohort) and autoload is enabled, siblings in
    * the cohort that share this relationship and have not preloaded it yet
    * are batched into a single query via the existing preloader path.
-   *
    * @returns {Promise<InstanceType<TMC> | Array<InstanceType<TMC>> | undefined>} - Resolves with loaded relationship value.
    */
   async autoloadOrLoad() {
     if (this._loaded !== undefined) return this._loaded
 
+    const batched = await this._tryCohortPreload()
+
+    if (!batched) await this.load()
+
+    return this._loaded
+  }
+
+  /**
+   * Attempts to batch-load this relationship across cohort siblings via the
+   * existing preloader path. Returns true when a batch ran (self is always
+   * included because callers reset their own `_preloaded` state before
+   * calling), false when autoload is off, there is no cohort, or no batch
+   * candidates remain. Siblings that have already preloaded this relationship
+   * are skipped so their cached value is preserved.
+   * @returns {Promise<boolean>} - Whether a cohort batch preload ran.
+   */
+  async _tryCohortPreload() {
     const relationshipDef = this.getRelationship()
     const configuration = relationshipDef.getConfiguration()
     const cohort = /** @type {Array<import("../index.js").default> | undefined} */ (/** @type {any} */ (this.model)._loadCohort)
 
-    // No cohort, or autoload disabled globally or per-relationship — fall back to single-record load.
     if (!configuration.getAutoload() || !relationshipDef.getAutoload() || !cohort || cohort.length <= 1) {
-      await this.load()
-      return this._loaded
+      return false
     }
 
     const relationshipName = relationshipDef.getRelationshipName()
@@ -116,10 +130,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
       batch.push(sibling)
     }
 
-    if (batch.length === 0) {
-      await this.load()
-      return this._loaded
-    }
+    if (batch.length === 0) return false
 
     const type = relationshipDef.getType()
 
@@ -142,7 +153,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
       throw new Error(`Unknown relationship type: ${type}`)
     }
 
-    return this._loaded
+    return true
   }
 
   /**  @returns {boolean} Whether the relationship has been preloaded */

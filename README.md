@@ -665,7 +665,17 @@ const firstProject = await tasks[0].projectOrLoad()
 const secondProject = tasks[1].project()
 ```
 
-Auto-load is triggered by the async access paths that already exist: `model.${name}OrLoad()`, `model.relationshipOrLoad("...")`, and `model.relationship().toArray()` for hasMany. The synchronous accessor `model.relationship()` still throws when the relationship has not been loaded — call the async form if you want the lazy-load behavior.
+Auto-load is triggered by the async access paths that already exist: `model.${name}OrLoad()`, `model.relationshipOrLoad("...")`, and `model.relationship().toArray()` / `model.relationship().load()` for hasMany. The synchronous accessor `model.relationship()` still throws when the relationship has not been loaded — call the async form if you want the lazy-load behavior.
+
+Scoped queries opt out of cohort batching by design, because the filter is specific to the accessing record:
+
+```js
+// Triggers cohort batch — all cohort siblings get their comments preloaded in one query.
+await firstTask.comments().load()
+
+// Does NOT trigger cohort — scoped filter is unique to this call.
+await firstTask.comments().query().where({isResolved: true}).load()
+```
 
 Disable auto-load per relationship:
 
