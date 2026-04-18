@@ -134,7 +134,8 @@ describe("Cli - Commands - db:rollback", () => {
         "20251223210800",
         "20251223214200",
         "20251225230806",
-        "20251228090000"
+        "20251228090000",
+        "20251228090010"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
