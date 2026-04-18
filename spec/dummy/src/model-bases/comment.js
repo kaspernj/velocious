@@ -101,9 +101,14 @@ export default class CommentBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/task.js").default>}
    */
   loadTask() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/task.js").default>}
+   */
+  taskOrLoad() { return this.relationshipOrLoad("task") }
 
   /**
    * @abstract
@@ -126,9 +131,14 @@ export default class CommentBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/task.js").default>}
    */
   loadDoneTask() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/task.js").default>}
+   */
+  doneTaskOrLoad() { return this.relationshipOrLoad("doneTask") }
 
   /**
    * @abstract

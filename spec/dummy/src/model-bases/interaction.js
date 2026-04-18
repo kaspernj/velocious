@@ -117,9 +117,14 @@ export default class InteractionBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
    */
   loadSubject() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   */
+  subjectOrLoad() { return this.relationshipOrLoad("subject") }
 
   /**
    * @abstract

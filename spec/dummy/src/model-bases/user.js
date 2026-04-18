@@ -117,9 +117,14 @@ export default class UserBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/project.js").default>}
    */
   loadCreatedProject() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/project.js").default>}
+   */
+  createdProjectOrLoad() { return this.relationshipOrLoad("createdProject") }
 
   /**
    * @abstract

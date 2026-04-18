@@ -101,9 +101,14 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/user.js").default>}
    */
   loadUser() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/user.js").default>}
+   */
+  userOrLoad() { return this.relationshipOrLoad("user") }
 
   /**
    * @abstract

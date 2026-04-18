@@ -221,9 +221,15 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += "   * @returns {Promise<void>}\n"
+          fileContent += `   * @returns {Promise<import("${modelFilePath}").default>}\n`
           fileContent += "   */\n"
           fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += `   * @returns {Promise<import("${modelFilePath}").default>}\n`
+          fileContent += "   */\n"
+          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return this.relationshipOrLoad("${relationship.getRelationshipName()}") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"

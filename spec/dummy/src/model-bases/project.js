@@ -72,6 +72,22 @@ export default class ProjectBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
+   * @returns {number | null}
+   */
+  tasksCount() { return this.readAttribute("tasksCount") }
+
+  /**
+   * @param {number | null} newValue
+   * @returns {void}
+   */
+  setTasksCount(newValue) { return this._setColumnAttribute("tasksCount", newValue) }
+
+  /**
+   * @returns {boolean}
+   */
+  hasTasksCount() { return this._hasAttribute(this.tasksCount()) }
+
+  /**
    * @returns {string | null}
    */
   name() { return this._getTranslatedAttributeWithFallback("name", this._getConfiguration().getLocale()) ?? null }
@@ -118,9 +134,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/user.js").default>}
    */
   loadCreatingUser() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/user.js").default>}
+   */
+  creatingUserOrLoad() { return this.relationshipOrLoad("creatingUser") }
 
   /**
    * @abstract
@@ -189,9 +210,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/project-detail.js").default>}
    */
   loadProjectDetail() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/project-detail.js").default>}
+   */
+  projectDetailOrLoad() { return this.relationshipOrLoad("projectDetail") }
 
   /**
    * @abstract
@@ -214,9 +240,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("../models/project-detail.js").default>}
    */
   loadActiveProjectDetail() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/project-detail.js").default>}
+   */
+  activeProjectDetailOrLoad() { return this.relationshipOrLoad("activeProjectDetail") }
 
   /**
    * @abstract
@@ -262,9 +293,14 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @returns {Promise<void>}
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
    */
   loadPrimaryInteraction() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("velocious/build/src/database/record/index.js").default>}
+   */
+  primaryInteractionOrLoad() { return this.relationshipOrLoad("primaryInteraction") }
 
   /**
    * @abstract
