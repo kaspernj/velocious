@@ -493,7 +493,8 @@ class VelociousDatabaseRecord {
 
       if (!ParentModel) return
 
-      const parent = await ParentModel.findBy({id: parentId})
+      const primaryKey = relationship.getPrimaryKey()
+      const parent = await ParentModel.findBy({[primaryKey]: parentId})
 
       if (!parent) return
 
@@ -529,10 +530,17 @@ class VelociousDatabaseRecord {
 
     ChildModel.beforeSave(async (record) => {
       const model = /** @type {any} */ (record)
+
+      if (model.isNewRecord()) return
+
       const relationship = ChildModel.getRelationshipByName(relationshipName)
       const fkColumn = relationship.getForeignKey()
 
-      if (!model.isNewRecord() && fkColumn in model._changes) {
+      // Detect FK change via direct attribute assignment or relationship setter.
+      const directChange = fkColumn in model._changes
+      const belongsToChange = model._instanceRelationships?.[relationshipName]?.getDirty?.()
+
+      if (directChange || belongsToChange) {
         model[`_counterCachePrev_${relationshipName}`] = model._attributes[fkColumn]
       }
     })
