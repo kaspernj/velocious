@@ -13,6 +13,8 @@ function getPool() {
   return pool
 }
 
+// Mutates `pool.connections` and asserts on a snapshot of `connectionsInUse`,
+// so run against a freshly restarted Dummy to isolate from other pool specs.
 describe("database - pool - async tracked multi connection reuse", () => {
   it("checks connections back in and reuses them", async () => {
     await Dummy.run(async () => {
@@ -43,6 +45,6 @@ describe("database - pool - async tracked multi connection reuse", () => {
       })
 
       expect(secondConnection).toBe(firstConnection)
-    })
+    }, {fresh: true})
   })
 })
