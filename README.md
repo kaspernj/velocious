@@ -694,6 +694,30 @@ new Configuration({
 
 Both flags default to `true`. When disabled, lazy access falls back to a per-record load.
 
+The same cohort auto-batch-preload applies to **frontend models**. When a batch is loaded from the backend (`Task.where(...).toArray()` or similar), the first async relationship access on any cohort sibling triggers one combined HTTP request that preloads that relationship for every sibling at once:
+
+```js
+const tasks = await Task.toArray()
+
+// First call issues ONE request to preload the project for every task in the batch.
+const firstProject = await tasks[0].projectOrLoad()
+
+// Sibling has been populated from the same response — no extra request.
+const secondProject = tasks[1].project()
+```
+
+The generator threads the per-relationship `autoload: false` flag through automatically, so `Task.belongsTo("project", {autoload: false})` on the backend also disables cohort batching on the generated frontend model.
+
+Disable auto-batch-preload globally on the frontend:
+
+```js
+import FrontendModelBase from "velocious/frontend-models"
+
+FrontendModelBase.setAutoload(false)
+```
+
+Scoped frontend queries (e.g. `Task.where(...).preload([name]).toArray()` from user code) bypass cohort batching by design, same as the backend. Siblings with locally set state from `.setRelationship()` / `.build()` are preserved across cohort batches.
+
 ## Through relationships
 
 Use the `through` option on `hasMany` to define a relationship that traverses an intermediate (join) table:
