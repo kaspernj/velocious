@@ -118,6 +118,7 @@
 
 /**
  * @typedef {object} StructureSqlConfiguration
+ * @property {string[]} [enabledEnvironments] - Environments allowed to write structure sql files during automatic migration dumps.
  * @property {string[]} [disabledEnvironments] - Environments that should skip writing structure sql files.
  */
 

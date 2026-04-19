@@ -266,6 +266,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
+   * @param {"migration" | "schemaDump"} [args.reason] - Why the structure hook is running.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async afterMigrations({dbs}) {

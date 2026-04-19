@@ -973,16 +973,19 @@ Evaluate inline JavaScript (Rails-style runner) with initialized app/database co
 npx velocious runner "const users = await db.query('SELECT COUNT(*) AS count FROM users'); console.log(users[0].count)"
 ```
 
-By default, migrations write `db/structure-<identifier>.sql` files for each database. Disable writing for specific environments in your configuration:
+By default, migrations write `db/structure-<identifier>.sql` files for each database in non-test environments. Test skips these automatic writes unless you explicitly opt in. Configure allow/deny lists in your configuration:
 
 ```js
 export default new Configuration({
   // ...
   structureSql: {
+    enabledEnvironments: ["development"],
     disabledEnvironments: ["test"]
   }
 })
 ```
+
+If you only want automatic writes in one or two environments, prefer `enabledEnvironments`. `db:schema:dump` is an explicit schema-generation command and still writes missing structure files regardless of the current environment.
 
 If you need to regenerate missing structure files without rerunning migrations, use:
 
