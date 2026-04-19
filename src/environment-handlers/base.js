@@ -326,6 +326,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
+   * @param {"migration" | "schemaDump"} [args.reason] - Why the structure write hook is being invoked.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async afterMigrations(args) { // eslint-disable-line no-unused-vars

@@ -11,7 +11,7 @@ export default class DbSchemaDump extends BaseCommand {
 
       if (!shouldGenerate) return
 
-      await this.getEnvironmentHandler().afterMigrations({dbs})
+      await this.getEnvironmentHandler().afterMigrations({dbs, reason: "schemaDump"})
     })
   }
 
@@ -21,7 +21,7 @@ export default class DbSchemaDump extends BaseCommand {
    * @returns {Promise<boolean>} - Whether structure SQL should be generated.
    */
   async shouldGenerateStructureSql({dbs}) {
-    if (!this.getConfiguration().shouldWriteStructureSql()) return false
+    if (!this.getConfiguration().shouldWriteStructureSql({reason: "schemaDump"})) return false
 
     const dbDir = path.join(this.directory(), "db")
 

@@ -513,13 +513,28 @@ export default class VelociousConfiguration {
   getStructureSqlConfig() { return this._structureSql }
 
   /**
+   * @param {{reason?: "migration" | "schemaDump"}} [args] - Call context for the structure sql write decision.
    * @returns {boolean} - Whether structure SQL files should be generated for the current environment.
    */
-  shouldWriteStructureSql() {
+  shouldWriteStructureSql(args = {}) {
+    const {reason = "migration"} = args
     const config = this.getStructureSqlConfig()
+    const enabledEnvironments = config?.enabledEnvironments
     const disabledEnvironments = config?.disabledEnvironments
 
+    if (reason === "schemaDump") {
+      return true
+    }
+
+    if (Array.isArray(enabledEnvironments)) {
+      return enabledEnvironments.includes(this.getEnvironment())
+    }
+
     if (Array.isArray(disabledEnvironments) && disabledEnvironments.includes(this.getEnvironment())) {
+      return false
+    }
+
+    if (this.getEnvironment() === "test") {
       return false
     }
 

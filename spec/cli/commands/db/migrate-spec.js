@@ -254,8 +254,21 @@ describe("Cli - Commands - db:migrate", () => {
 
   it("writes structure sql for sqlite", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
+    const configuration = new Configuration({
+      database: dummyConfiguration.database,
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      locale: dummyConfiguration.locale,
+      localeFallbacks: dummyConfiguration.localeFallbacks,
+      locales: dummyConfiguration.locales,
+      structureSql: {
+        enabledEnvironments: ["test"]
+      },
+      testing: dummyConfiguration.getTesting()
+    })
     const cli = new Cli({
-      configuration: dummyConfiguration,
+      configuration,
       directory,
       environmentHandler: new EnvironmentHandlerNode(),
       processArgs: ["db:migrate"],
@@ -307,7 +320,7 @@ describe("Cli - Commands - db:migrate", () => {
     })
   })
 
-  it("skips writing structure sql when disabled for the environment", {databaseCleaning: {transaction: false}}, async () => {
+  it("skips writing structure sql by default in test", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
     const configuration = new Configuration({
       database: dummyConfiguration.database,
@@ -317,9 +330,6 @@ describe("Cli - Commands - db:migrate", () => {
       locale: dummyConfiguration.locale,
       localeFallbacks: dummyConfiguration.localeFallbacks,
       locales: dummyConfiguration.locales,
-      structureSql: {
-        disabledEnvironments: ["test"]
-      },
       testing: dummyConfiguration.getTesting()
     })
     const cli = new Cli({

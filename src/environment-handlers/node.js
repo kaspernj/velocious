@@ -673,12 +673,13 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
+   * @param {"migration" | "schemaDump"} [args.reason] - Why the structure write is being triggered.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async afterMigrations({dbs}) {
+  async afterMigrations({dbs, reason = "migration"}) {
     const configuration = this.getConfiguration()
 
-    if (!configuration.shouldWriteStructureSql()) return
+    if (!configuration.shouldWriteStructureSql({reason})) return
 
     const dbDir = path.join(configuration.getDirectory(), "db")
     const structureSqlByIdentifier = await this._structureSqlByIdentifier({dbs})
