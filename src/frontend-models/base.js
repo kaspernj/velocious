@@ -658,7 +658,7 @@ const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
  * callers can read fresh values from the same instance handle.
  */
 class FrontendModelEventSubscription {
-  /** @param {typeof FrontendModelBase} ModelClass */
+  /** @param {typeof FrontendModelBase} ModelClass - Frontend model class for this subscription bucket. */
   constructor(ModelClass) {
     this.ModelClass = ModelClass
     /** @type {Set<(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void>} */
@@ -722,7 +722,7 @@ class FrontendModelEventSubscription {
     await this.readyPromise
   }
 
-  /** @param {any} body */
+  /** @param {any} body - WebSocket event payload. */
   _dispatchEvent(body) {
     if (!body || typeof body !== "object") return
 
@@ -1336,8 +1336,7 @@ export default class FrontendModelBase {
    * Marks this record for destruction when its parent is next saved through
    * nested-attribute support. The record is not removed from the parent's
    * relationship collection until the server confirms the delete.
-   *
-   * @returns {void}
+   * @returns {void} - No return value.
    */
   markForDestruction() {
     this._markedForDestruction = true
@@ -1802,7 +1801,7 @@ export default class FrontendModelBase {
 
   /**
    * Returns the current WebSocket connection state.
-   * @returns {{disconnectedSince: number | null, hasClient: boolean, isOpen: boolean, listenerCount: number}}
+   * @returns {{disconnectedSince: number | null, hasClient: boolean, isOpen: boolean, listenerCount: number}} - Snapshot of the managed websocket connection state.
    */
   static websocketState() {
     if (!internalWebsocketClient) {
@@ -1847,10 +1846,9 @@ export default class FrontendModelBase {
    * Call `handle.sync()` whenever the inputs that drive those
    * functions change (e.g. current-user sign-in/out). The handle
    * retries when the WS client isn't ready and reopens on close.
-   *
-   * @param {string} connectionType
-   * @param {{shouldConnect: () => boolean, params: () => Record<string, any>, onMessage?: (body: any) => void}} options
-   * @returns {{sync: () => void, close: () => void}}
+   * @param {string} connectionType - Connection class name registered on the server.
+   * @param {{shouldConnect: () => boolean, params: () => Record<string, any>, onMessage?: (body: any) => void}} options - Connection lifecycle and payload callbacks.
+   * @returns {{sync: () => void, close: () => void}} - Handle used to resync or close the managed connection.
    */
   static openManagedConnection(connectionType, options) {
     /** @type {any} */
@@ -1936,9 +1934,8 @@ export default class FrontendModelBase {
    * convenience wrapper around the internal WS client's
    * `openConnection`. Apps use this for per-session state/messaging
    * that doesn't fit the pub/sub Channel model (locale, presence).
-   *
    * @param {string} connectionType - Name the server registered the class under.
-   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
+   * @param {{params?: Record<string, any>, onConnect?: () => void, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Connection options and event handlers.
    * @returns {any} - VelociousWebsocketClientConnection handle (typed loosely to avoid a cross-module import cycle).
    */
   static openWebsocketConnection(connectionType, options) {
@@ -1954,10 +1951,9 @@ export default class FrontendModelBase {
   /**
    * Subscribes to a pub/sub `WebsocketChannel`. Thin wrapper around
    * the internal client's `subscribeChannel`.
-   *
-   * @param {string} channelType
-   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options]
-   * @returns {any}
+   * @param {string} channelType - Channel class name registered on the server.
+   * @param {{params?: Record<string, any>, onMessage?: (body: any) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Channel subscription options and event handlers.
+   * @returns {any} - Websocket channel handle from the configured client.
    */
   static subscribeWebsocketChannel(channelType, options) {
     const client = /** @type {any} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
@@ -2221,7 +2217,6 @@ export default class FrontendModelBase {
    * Subscribe-time authorization only — once a subscription is
    * accepted, every future `create` event for this model is delivered
    * without re-checking per-record visibility.
-   *
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
    * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -2240,7 +2235,6 @@ export default class FrontendModelBase {
 
   /**
    * Class-level hook fired when any record of this model is updated.
-   *
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
    * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -2259,7 +2253,6 @@ export default class FrontendModelBase {
 
   /**
    * Class-level hook fired when any record of this model is destroyed.
-   *
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string}) => void} callback - Event callback.
    * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -2281,7 +2274,6 @@ export default class FrontendModelBase {
    * instance's attributes are auto-merged with the broadcast payload
    * before the callback runs, so callers can read fresh values via
    * `this.someAttr()` without re-fetching.
-   *
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
@@ -2317,7 +2309,6 @@ export default class FrontendModelBase {
 
   /**
    * Instance-level hook fired when THIS record is destroyed.
-   *
    * @param {(payload: {id: string}) => void} callback - Event callback.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */

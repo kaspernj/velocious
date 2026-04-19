@@ -496,7 +496,6 @@ class VelociousDatabaseRecord {
    * Registers afterCreate, afterSave, and afterDestroy callbacks to sync
    * a counter cache column on the parent model. The column name follows
    * the convention `<childModelPluralCamelCase>Count`.
-   *
    * @param {string} relationshipName - The belongsTo relationship name.
    */
   static _registerCounterCacheCallbacks(relationshipName) {
@@ -506,9 +505,8 @@ class VelociousDatabaseRecord {
      * Atomically recomputes the counter cache column on the parent via a
      * single UPDATE ... SET col = (SELECT COUNT(*)) so concurrent
      * creates/destroys cannot race into a stale count.
-     *
-     * @param {number | string | null} parentId
-     * @returns {Promise<void>}
+     * @param {number | string | null} parentId - Parent primary-key value.
+     * @returns {Promise<void>} - Resolves when the counter cache has been synced.
      */
     async function syncCounter(parentId) {
       if (!parentId) return
@@ -533,7 +531,10 @@ class VelociousDatabaseRecord {
       await connection.query(sql)
     }
 
-    /** @param {any} record @returns {any} */
+    /**
+     * @param {any} record - Child record instance.
+     * @returns {any} - Current foreign-key attribute value.
+     */
     function readFkAttribute(record) {
       const relationship = ChildModel.getRelationshipByName(relationshipName)
       const fkAttribute = inflection.camelize(relationship.getForeignKey().replace(/_id$/, "Id"), true)
@@ -598,7 +599,7 @@ class VelociousDatabaseRecord {
     return Object.values(this.getRelationshipsMap())
   }
 
-  /** @returns {Record<string, import("./relationships/base.js").default>} */
+  /** @returns {Record<string, import("./relationships/base.js").default>} - Relationship definitions keyed by name. */
   static getRelationshipsMap() {
     if (!Object.hasOwn(this, "_relationships")) {
       /** @type {Record<string, import("./relationships/base.js").default>} */
@@ -1796,7 +1797,6 @@ class VelociousDatabaseRecord {
    * The lock is acquired before the callback runs and released in a
    * `finally` block afterwards, so the callback's return value is
    * propagated and thrown errors still release the lock.
-   *
    * @template T
    * @param {string} name - Lock name.
    * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
@@ -1823,10 +1823,8 @@ class VelociousDatabaseRecord {
    * Runs the callback only if the named advisory lock can be acquired
    * immediately. If the lock is already held by any session, throws
    * `AdvisoryLockBusyError` without waiting.
-   *
    * Use this when contention is a signal that somebody else is already
    * doing the work and you want to bail out rather than queue up.
-   *
    * @template T
    * @param {string} name - Lock name.
    * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
@@ -1853,9 +1851,8 @@ class VelociousDatabaseRecord {
    * session. Primarily useful as a diagnostic; callers that want to act
    * on the result should prefer `withAdvisoryLockOrFail` to avoid a
    * TOCTOU window between the check and the action.
-   *
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory lock is currently held.
    */
   static async hasAdvisoryLock(name) {
     return await this.connection().isAdvisoryLockHeld(name)

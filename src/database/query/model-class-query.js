@@ -512,9 +512,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * Executes a bulk UPDATE on all rows matching the query's WHERE
    * clause. Bypasses model lifecycle callbacks — use this for
    * efficient batch updates where per-row hooks aren't needed.
-   *
    * @param {Record<string, any>} data - camelCase attribute names → values.
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Resolves when the update completes.
    */
   async updateAll(data) {
     const driver = this.driver
