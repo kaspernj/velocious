@@ -6,6 +6,8 @@ import {isPlainObject} from "is-plain-object"
 import Logger from "../../logger.js"
 import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
+import JoinObject from "./join-object.js"
+import JoinPlain from "./join-plain.js"
 import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
 import {normalizeRansackParams, parseRansackSort} from "../../utils/ransack.js"
@@ -474,7 +476,15 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     }
 
     if (appliedQuery._joins.length > originalJoinCount) {
-      this._joins.push(...appliedQuery._joins.slice(originalJoinCount))
+      for (const join of appliedQuery._joins.slice(originalJoinCount)) {
+        if (join instanceof JoinObject) {
+          this._joins.push(new JoinObject(join.object, fullJoinPath))
+        } else if (join instanceof JoinPlain) {
+          this._joins.push(join)
+        } else {
+          this._joins.push(join)
+        }
+      }
     }
 
     if (appliedQuery._wheres.length > originalWhereCount) {

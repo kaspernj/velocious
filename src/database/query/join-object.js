@@ -12,10 +12,12 @@ import WhereNot from "./where-not.js"
 export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   /**
    * @param {JoinObject} object - Object.
+   * @param {string[]} [basePath] - Join base path relative to the root query.
    */
-  constructor(object) {
+  constructor(object, basePath = []) {
     super()
     this.object = object
+    this.basePath = basePath
   }
 
   toSql() {
@@ -25,12 +27,12 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
       throw new Error(`Query has to be a ModelClassQuery but was a ${query.constructor.name}`)
     }
 
-    // @ts-expect-error
-    const ModelClass = /** @type {typeof import("../record/index.js").default} */ (query.modelClass)
-
     const modelQuery = /** @type {import("./model-class-query.js").default} */ (query)
+    const ModelClass = /** @type {typeof import("../record/index.js").default} */ (
+      this.basePath.length > 0 ? modelQuery._resolveModelClassForJoinPath(this.basePath) : modelQuery.modelClass
+    )
 
-    return this.joinObject(this.object, ModelClass, "", 0, modelQuery.getJoinBasePath())
+    return this.joinObject(this.object, ModelClass, "", 0, modelQuery.getJoinBasePath().concat(this.basePath))
   }
 
   /**

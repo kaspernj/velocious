@@ -1,3 +1,4 @@
+import Comment from "../../dummy/src/models/comment.js"
 import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
@@ -120,6 +121,32 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
       .sort()
 
     expect(names).toEqual(["Needle child task", "Root task match"])
+  })
+
+  it("keeps joined-path context when a joined scope adds nested joins", async () => {
+    Task.withCommentBody = Task.defineScope(({driver, query}, body) => query
+      .joins({comments: true})
+      .where(`${query.getTableForJoin("comments")}.${driver.quoteColumn("body")} = ${driver.quote(body)}`))
+
+    const matchingUser = await User.create({email: "joined-scope-match@example.com", encryptedPassword: "secret", reference: "joined-scope-match"})
+    const missingUser = await User.create({email: "joined-scope-miss@example.com", encryptedPassword: "secret", reference: "joined-scope-miss"})
+    const matchingProject = await Project.create({creatingUserReference: matchingUser.reference(), nameEn: "Join scope match", nameDe: "Join bereich treffer"})
+    const missingProject = await Project.create({creatingUserReference: missingUser.reference(), nameEn: "Join scope miss", nameDe: "Join bereich fehlt"})
+    const childTaskMatch = await Task.create({name: "Child task match", project: matchingProject})
+    const childTaskMiss = await Task.create({name: "Child task miss", project: missingProject})
+
+    await Comment.create({body: "needle", task: childTaskMatch})
+    await Comment.create({body: "haystack", task: childTaskMiss})
+
+    const emails = (await User
+      .joins({createdProjects: {tasks: true}})
+      .scope(["createdProjects", "tasks"], Task.withCommentBody.scope("needle"))
+      .distinct()
+      .toArray())
+      .map((user) => user.email())
+      .sort()
+
+    expect(emails).toEqual(["joined-scope-match@example.com"])
   })
 
   it("raises when applying the wrong model scope to a joined path", () => {
