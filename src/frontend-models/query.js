@@ -2,6 +2,7 @@
 
 import {resolveFrontendModelClass} from "./model-registry.js"
 import {normalizeRansackParams, parseRansackSort} from "../utils/ransack.js"
+import {isModelScopeDescriptor} from "../utils/model-scope.js"
 
 /**
  * @typedef {object} FrontendModelSearch
@@ -935,6 +936,29 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @param {import("../utils/model-scope.js").ModelScopeDescriptor} scopeDescriptor - Scope descriptor.
+   * @returns {this} - Scoped query.
+   */
+  scope(scopeDescriptor) {
+    if (!isModelScopeDescriptor(scopeDescriptor)) {
+      throw new Error("scope() expects a descriptor returned by defineScope(...).scope(...)")
+    }
+
+    if (scopeDescriptor.modelClass !== this.modelClass) {
+      throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to ${this.modelClass.name} query`)
+    }
+
+    const scopedQuery = /** @type {this | void} */ (scopeDescriptor.callback({
+      driver: null,
+      modelClass: this.modelClass,
+      query: this,
+      table: null
+    }, ...scopeDescriptor.scopeArgs))
+
+    return scopedQuery || this
+  }
+
+  /**
    * @param {Record<string, any>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
    * @returns {this} - Query with Ransack filters and sort applied.
    */
@@ -1173,6 +1197,11 @@ export default class FrontendModelQuery {
     newQuery._perPage = this._perPage
 
     return newQuery
+  }
+
+  /** @returns {T} - Root model class. */
+  getModelClass() {
+    return this.modelClass
   }
 
   /**

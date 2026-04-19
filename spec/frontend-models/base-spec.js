@@ -70,6 +70,27 @@ function buildCreatedAtTestModelClass() {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Test frontend model class with scope support.
+ */
+function buildScopedTestModelClass() {
+  /** Test model implementation with query scope support. */
+  class Task extends FrontendModelBase {
+    /**
+     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
+     */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "isDone", "name"],
+        commands: {index: "index"},
+        primaryKey: "id"
+      }
+    }
+  }
+
+  return Task
+}
+
+/**
  * @returns {typeof FrontendModelBase} - Test frontend model class with attachments.
  */
 function buildAttachmentTestModelClass() {
@@ -275,6 +296,26 @@ function resetFrontendModelTransport() {
 }
 
 describe("Frontend models - base", () => {
+  it("defines root scopes on frontend model classes", () => {
+    const Task = buildScopedTestModelClass()
+
+    Task.withDoneState = Task.defineScope(({query}, isDone) => query.where({isDone}))
+
+    expect(Task.withDoneState(true).wherePayload()).toEqual({where: {isDone: true}})
+  })
+
+  it("applies reusable frontend model scopes to existing queries", () => {
+    const Task = buildScopedTestModelClass()
+
+    Task.withDoneState = Task.defineScope(({query}, isDone) => query.where({isDone}))
+
+    const query = Task
+      .where({name: "Keep me"})
+      .scope(Task.withDoneState.scope(false))
+
+    expect(query.wherePayload()).toEqual({where: {isDone: false, name: "Keep me"}})
+  })
+
   it("uses the shared frontend-model API and batches requests by default", async () => {
     const originalFetch = globalThis.fetch
     /** @type {FetchCall[]} */

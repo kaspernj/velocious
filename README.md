@@ -768,6 +768,36 @@ Project.hasMany("acceptedTasks", function() {
 }, {className: "Task"})
 ```
 
+## Model scopes
+
+Backend records and frontend models can define reusable named scopes with `defineScope(...)`.
+
+```js
+class Task extends TaskBase {
+  static withAccepted = this.defineScope(({query}, accepted) => query.where({accepted}))
+}
+
+await Task.withAccepted(true).toArray()
+await Task.where({projectId: 1}).scope(Task.withAccepted.scope(true)).toArray()
+await Task.joins({project: {tasks: true}}).scope(["project", "tasks"], Task.withAccepted.scope(true)).toArray()
+```
+
+`Model.scopeName(args...)` starts a fresh query for that model. `Model.scopeName.scope(args...)` returns a reusable scope descriptor for `.scope(...)` on an existing query. Backend record queries also support `.scope(path, descriptor)` to apply a scope to a joined relationship path.
+
+Backend record scopes receive alias-aware SQL context:
+
+```js
+class Task extends TaskBase {
+  static nameLike = this.defineScope(({driver, query, table}, value) => query.where(
+    `${driver.quoteTable(table)}.${driver.quoteColumn("name")} LIKE ${driver.quote(`%${value}%`)}`
+  ))
+}
+```
+
+The `table` value is the active table reference for the current query and may be an alias from `FROM ... AS ...`, not just `Task.tableName()`.
+
+Joined-path scopes receive the joined path in `context.path` and may only add `where(...)` and `joins(...)` clauses.
+
 ### Finding records
 
 `find()` and `findByOrFail()` throw an error when no record is found. `findBy()` returns `null`. These apply to records.

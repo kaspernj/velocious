@@ -6,9 +6,12 @@ import {isPlainObject} from "is-plain-object"
 import Logger from "../../logger.js"
 import Preloader from "./preloader.js"
 import DatabaseQuery from "./index.js"
+import JoinObject from "./join-object.js"
+import JoinPlain from "./join-plain.js"
 import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
 import {normalizeRansackParams, parseRansackSort} from "../../utils/ransack.js"
+import {isModelScopeDescriptor} from "../../utils/model-scope.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
 import JoinsParser from "../query-parser/joins-parser.js"
@@ -46,6 +49,30 @@ function parseFromPlainTableReference(fromPlain) {
   if (!aliasMatch || !aliasMatch[1]) return null
 
   return unquoteSqlIdentifier(aliasMatch[1])
+}
+
+/**
+ * @param {string | string[]} path - Scope path input.
+ * @returns {string[]} - Normalized path.
+ */
+function normalizeScopePath(path) {
+  if (typeof path === "string") {
+    if (path.length < 1) throw new Error("Scope path strings must be non-empty")
+
+    return [path]
+  }
+
+  if (!Array.isArray(path)) {
+    throw new Error(`Invalid scope path type: ${typeof path}`)
+  }
+
+  for (const entry of path) {
+    if (typeof entry !== "string" || entry.length < 1) {
+      throw new Error("Scope path entries must be non-empty strings")
+    }
+  }
+
+  return [...path]
 }
 
 /**
@@ -301,9 +328,15 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {string} - Table name for path.
    */
   _resolveTableNameForJoinPath(path) {
-    let modelClass = this._joinTracker.getRootModelClass()
+    return this._resolveModelClassForJoinPath(path).tableName()
+  }
 
-    if (path.length === 0) return modelClass.tableName()
+  /**
+   * @param {string[]} path - Join path.
+   * @returns {typeof import("../record/index.js").default} - Target model class.
+   */
+  _resolveModelClassForJoinPath(path) {
+    let modelClass = this._joinTracker.getRootModelClass()
 
     for (const relationshipName of path) {
       const relationship = modelClass.getRelationshipByName(relationshipName)
@@ -316,7 +349,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       modelClass = targetModelClass
     }
 
-    return modelClass.tableName()
+    return modelClass
   }
 
   /**
@@ -358,6 +391,110 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+   * @param {import("../../utils/model-scope.js").ModelScopeDescriptor | string | string[]} pathOrScopeDescriptor - Scope descriptor or join path.
+   * @param {import("../../utils/model-scope.js").ModelScopeDescriptor} [maybeScopeDescriptor] - Scope descriptor when path is given.
+   * @returns {this} - Scoped query.
+   */
+  scope(pathOrScopeDescriptor, maybeScopeDescriptor) {
+    if (isModelScopeDescriptor(pathOrScopeDescriptor) && !maybeScopeDescriptor) {
+      return this._applyRootScope(pathOrScopeDescriptor)
+    }
+
+    if (!maybeScopeDescriptor) {
+      throw new Error("scope(path, descriptor) requires a scope descriptor")
+    }
+
+    return this._applyJoinPathScope({
+      joinPath: normalizeScopePath(/** @type {string | string[]} */ (pathOrScopeDescriptor)),
+      scopeDescriptor: maybeScopeDescriptor
+    })
+  }
+
+  /**
+   * @param {import("../../utils/model-scope.js").ModelScopeDescriptor} scopeDescriptor - Scope descriptor.
+   * @returns {this} - Scoped query.
+   */
+  _applyRootScope(scopeDescriptor) {
+    if (!isModelScopeDescriptor(scopeDescriptor)) {
+      throw new Error("scope() expects a descriptor returned by defineScope(...).scope(...)")
+    }
+
+    if (scopeDescriptor.modelClass !== this.getModelClass()) {
+      throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to ${this.getModelClass().name} query`)
+    }
+
+    const scopedQuery = /** @type {this | void} */ (scopeDescriptor.callback({
+      driver: this.driver,
+      modelClass: this.getModelClass(),
+      query: this,
+      table: this.rootTableReference()
+    }, ...scopeDescriptor.scopeArgs))
+
+    return scopedQuery || this
+  }
+
+  /**
+   * @param {object} args - Join-path scope options.
+   * @param {string[]} args.joinPath - Join path relative to the current query.
+   * @param {import("../../utils/model-scope.js").ModelScopeDescriptor} args.scopeDescriptor - Scope descriptor.
+   * @returns {this} - Scoped query.
+   */
+  _applyJoinPathScope({joinPath, scopeDescriptor}) {
+    if (!isModelScopeDescriptor(scopeDescriptor)) {
+      throw new Error("scope() expects a descriptor returned by defineScope(...).scope(...)")
+    }
+
+    const fullJoinPath = this.getJoinBasePath().concat(joinPath)
+    const targetModelClass = this._resolveModelClassForJoinPath(fullJoinPath)
+
+    if (scopeDescriptor.modelClass !== targetModelClass) {
+      throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to join path ${fullJoinPath.join(".")} (${targetModelClass.name})`)
+    }
+
+    const scopedQuery = this.buildJoinScopeQuery(targetModelClass, fullJoinPath)
+    const originalJoinCount = scopedQuery._joins.length
+    const originalWhereCount = scopedQuery._wheres.length
+    const appliedQuery = /** @type {typeof scopedQuery | void} */ (scopeDescriptor.callback({
+      driver: scopedQuery.driver,
+      modelClass: targetModelClass,
+      path: [...fullJoinPath],
+      query: scopedQuery,
+      table: scopedQuery.getTableReferenceForJoin()
+    }, ...scopeDescriptor.scopeArgs)) || scopedQuery
+
+    if (appliedQuery.getFroms().length !== scopedQuery.getFroms().length ||
+      appliedQuery.getGroups().length !== scopedQuery.getGroups().length ||
+      appliedQuery.getSelects().length !== scopedQuery.getSelects().length ||
+      appliedQuery._orders.length !== scopedQuery._orders.length ||
+      appliedQuery._limit !== scopedQuery._limit ||
+      appliedQuery._offset !== scopedQuery._offset ||
+      appliedQuery._page !== scopedQuery._page ||
+      appliedQuery._perPage !== scopedQuery._perPage ||
+      appliedQuery._distinct !== scopedQuery._distinct ||
+      Object.keys(appliedQuery._preload).length !== Object.keys(scopedQuery._preload).length) {
+      throw new Error("Joined-path scopes may only add where(...) and joins(...) clauses")
+    }
+
+    if (appliedQuery._joins.length > originalJoinCount) {
+      for (const join of appliedQuery._joins.slice(originalJoinCount)) {
+        if (join instanceof JoinObject) {
+          this._joins.push(new JoinObject(join.object, fullJoinPath))
+        } else if (join instanceof JoinPlain) {
+          this._joins.push(join)
+        } else {
+          this._joins.push(join)
+        }
+      }
+    }
+
+    if (appliedQuery._wheres.length > originalWhereCount) {
+      this._wheres.push(...appliedQuery._wheres.slice(originalWhereCount))
+    }
+
+    return this
+  }
+
+  /**
    * @param {typeof import("../record/index.js").default} targetModelClass - Target model class.
    * @param {string[]} joinPath - Join path.
    * @returns {VelociousDatabaseQueryModelClassQuery<MC>} - The scoped join query.
@@ -385,9 +522,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * Executes a bulk UPDATE on all rows matching the query's WHERE
    * clause. Bypasses model lifecycle callbacks — use this for
    * efficient batch updates where per-row hooks aren't needed.
-   *
    * @param {Record<string, any>} data - camelCase attribute names → values.
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} - Resolves when the update completes.
    */
   async updateAll(data) {
     const driver = this.driver
