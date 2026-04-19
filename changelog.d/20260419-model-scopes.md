@@ -1,0 +1,1 @@
+- Added `defineScope(...)` support for backend records and frontend models, including reusable query descriptors via `.scope(...)`, backend joined-path scope application via `.scope(path, descriptor)`, and alias-aware backend SQL scope context.

@@ -7,6 +7,7 @@ import {validateFrontendModelResourceCommandName, validateFrontendModelResourceP
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
 import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
+import {defineModelScope} from "../utils/model-scope.js"
 
 /** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
 /** @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
@@ -1231,6 +1232,18 @@ export default class FrontendModelBase {
    */
   static registerModel(modelClass) {
     registerFrontendModel(modelClass)
+  }
+
+  /**
+   * @param {(...args: any[]) => any} callback - Scope callback.
+   * @returns {((...args: any[]) => import("./query.js").default<any>) & {scope: (...args: any[]) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
+   */
+  static defineScope(callback) {
+    return defineModelScope({
+      callback,
+      modelClass: this,
+      startQuery: () => this.query()
+    })
   }
 
   /**

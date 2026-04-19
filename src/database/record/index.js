@@ -23,6 +23,7 @@ import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
+import {defineModelScope} from "../../utils/model-scope.js"
 import ValidatorsFormat from "./validators/format.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
@@ -118,6 +119,18 @@ class VelociousDatabaseRecord {
     }
 
     return this._attributeNameToColumnName
+  }
+
+  /**
+   * @param {(...args: any[]) => any} callback - Scope callback.
+   * @returns {((...args: any[]) => import("../query/model-class-query.js").default<any>) & {scope: (...args: any[]) => import("../../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
+   */
+  static defineScope(callback) {
+    return defineModelScope({
+      callback,
+      modelClass: this,
+      startQuery: () => this._newQuery()
+    })
   }
 
   static getColumnNameToAttributeNameMap() {

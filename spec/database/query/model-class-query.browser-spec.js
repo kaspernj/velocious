@@ -53,6 +53,84 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(falseNames).toEqual(["Task False 1", "Task False 2"])
   })
 
+  it("defines root scopes on record classes", async () => {
+    Task.withDoneState = Task.defineScope(({query}, isDone) => query.where({isDone}))
+
+    const project = await Project.create({nameEn: "Scoped Tasks", nameDe: "Bereichte Aufgaben"})
+
+    await Task.create({isDone: true, name: "Done scoped task", project})
+    await Task.create({isDone: false, name: "Open scoped task", project})
+
+    const names = (await Task.withDoneState(true).toArray()).map((task) => task.name())
+
+    expect(names).toEqual(["Done scoped task"])
+  })
+
+  it("applies reusable record scopes to existing queries", async () => {
+    Task.withDoneState = Task.defineScope(({query}, isDone) => query.where({isDone}))
+
+    const project = await Project.create({nameEn: "Scoped Query Project", nameDe: "Bereichte Abfrageprojekt"})
+
+    await Task.create({isDone: true, name: "Scoped done task", project})
+    await Task.create({isDone: false, name: "Scoped open task", project})
+
+    const names = (await Task
+      .joins({project: true})
+      .where({projects: {id: project.id()}})
+      .scope(Task.withDoneState.scope(true))
+      .toArray())
+      .map((task) => task.name())
+
+    expect(names).toEqual(["Scoped done task"])
+  })
+
+  it("passes the active table alias into raw SQL record scopes", () => {
+    Task.nameLike = Task.defineScope(({driver, query, table}, value) => query.where(
+      `${driver.quoteTable(table)}.${driver.quoteColumn("name")} LIKE ${driver.quote(`%${value}%`)}`
+    ))
+
+    const query = Task
+      .all()
+      .from("tasks AS scoped_tasks")
+      .scope(Task.nameLike.scope("needle"))
+    const sql = query.toSql()
+
+    expect(sql).toContain(`${query.driver.quoteTable("scoped_tasks")}.${query.driver.quoteColumn("name")} LIKE ${query.driver.quote("%needle%")}`)
+  })
+
+  it("applies record scopes on joined paths using the joined table alias", async () => {
+    Task.nameLike = Task.defineScope(({driver, query, table}, value) => query.where(
+      `${driver.quoteTable(table)}.${driver.quoteColumn("name")} LIKE ${driver.quote(`%${value}%`)}`
+    ))
+
+    const matchingProject = await Project.create({nameEn: "Match root", nameDe: "Treffer wurzel"})
+    const missingProject = await Project.create({nameEn: "Miss root", nameDe: "Fehlt wurzel"})
+
+    await Task.create({name: "Root task match", project: matchingProject})
+    await Task.create({name: "Needle child task", project: matchingProject})
+    await Task.create({name: "Root task miss", project: missingProject})
+    await Task.create({name: "Haystack child task", project: missingProject})
+
+    const names = (await Task
+      .joins({project: {tasks: true}})
+      .scope(["project", "tasks"], Task.nameLike.scope("Needle"))
+      .distinct()
+      .toArray())
+      .map((task) => task.name())
+      .sort()
+
+    expect(names).toEqual(["Needle child task", "Root task match"])
+  })
+
+  it("raises when applying the wrong model scope to a joined path", () => {
+    Task.withDoneState = Task.defineScope(({query}, isDone) => query.where({isDone}))
+    Project.activeNamed = Project.defineScope(({query}, value) => query.where({nameEn: value}))
+    const query = Task.joins({project: true})
+
+    expect(() => query.scope("project", Task.withDoneState.scope(true))).toThrow(/Cannot apply Task scope to join path project/)
+    expect(() => query.scope("project", Project.activeNamed.scope("Match"))).not.toThrow()
+  })
+
   it("filters on nested relationship attributes", async () => {
     const projectMatch = await Project.create({
       creatingUserReference: "creator-1",
