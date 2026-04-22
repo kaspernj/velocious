@@ -37,20 +37,24 @@ export default class VelociousWebsocketClientSubscription {
     this._subscribeSent = false
     this._closed = false
 
-    this._ensureReadyPromise()
   }
 
   /** @returns {Promise<void>} */
   _ensureReadyPromise() {
-    if (!this.ready || !this._resolveReady || !this._rejectReady) {
+    if (!this._readyPromise || !this._resolveReady || !this._rejectReady) {
       /** @type {Promise<void>} */
-      this.ready = new Promise((resolve, reject) => {
+      this._readyPromise = new Promise((resolve, reject) => {
         this._resolveReady = resolve
         this._rejectReady = reject
       })
     }
 
-    return this.ready
+    return this._readyPromise
+  }
+
+  /** @returns {Promise<void>} */
+  get ready() {
+    return this._ensureReadyPromise()
   }
 
   /** @returns {void} */
