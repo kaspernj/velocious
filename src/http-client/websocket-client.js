@@ -205,14 +205,30 @@ export default class VelociousWebsocketClient {
     // closes between `isOpen()` and `send()` and `_sendMessage` throws,
     // `_subscribeSent` must stay false so the reconnect path's
     // `_sendPendingChannelSubscriptions()` can retry.
-    this._sendMessage({
-      type: "channel-subscribe",
-      subscriptionId: subscription.subscriptionId,
-      channelType: subscription.channelType,
-      params: subscription.params,
-      ...(subscription.lastEventId ? {lastEventId: subscription.lastEventId} : {})
-    })
-    subscription._markSubscribeSent()
+    try {
+      this._sendMessage({
+        type: "channel-subscribe",
+        subscriptionId: subscription.subscriptionId,
+        channelType: subscription.channelType,
+        params: subscription.params,
+        ...(subscription.lastEventId ? {lastEventId: subscription.lastEventId} : {})
+      })
+      subscription._markSubscribeSent()
+    } catch (error) {
+      // Transient closed-socket race: leave the subscription
+      // retryable so `_sendPendingChannelSubscriptions()` can resend
+      // after reconnect. Rethrow so callers that expect throws on a
+      // dead socket still see them.
+      if (!this.isOpen()) throw error
+
+      // Non-recoverable send failure on an open socket (e.g.
+      // `JSON.stringify` failing on BigInt/cyclic params). Close the
+      // subscription and remove it from the registry so it cannot
+      // poison future `_sendPendingChannelSubscriptions()` loops by
+      // throwing on every attempt and aborting later subscriptions.
+      this._channelSubscriptions.delete(subscription.subscriptionId)
+      subscription._handleClosed(`send_failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   /** @returns {void} */
