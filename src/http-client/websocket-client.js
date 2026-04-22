@@ -152,6 +152,7 @@ export default class VelociousWebsocketClient {
       client: this,
       subscriptionId,
       channelType,
+      lastEventId: options.lastEventId,
       params: options.params,
       onMessage: options.onMessage,
       onDisconnect: options.onDisconnect,
@@ -175,10 +176,9 @@ export default class VelociousWebsocketClient {
 
   /**
    * @param {VelociousWebsocketClientSubscription} subscription
-   * @param {string | undefined} [lastEventId]
    * @returns {void}
    */
-  _sendChannelSubscribe(subscription, lastEventId) {
+  _sendChannelSubscribe(subscription) {
     if (!this.isOpen() || !subscription._needsSubscribe()) return
 
     subscription._markSubscribeSent()
@@ -187,7 +187,7 @@ export default class VelociousWebsocketClient {
       subscriptionId: subscription.subscriptionId,
       channelType: subscription.channelType,
       params: subscription.params,
-      ...(lastEventId ? {lastEventId} : {})
+      ...(subscription.lastEventId ? {lastEventId: subscription.lastEventId} : {})
     })
   }
 
