@@ -54,7 +54,7 @@ describe("WebsocketChannelV2 ()", () => {
           params: {allow: true, topic: "queued"},
           onMessage: (body) => received.push(body)
         })
-        await client.connectWithReconnect({waitForOnline: true})
+        await client.connect({waitForOnline: true})
         await wait(100)
 
         expect(client.isOpen()).toBe(false)
@@ -256,7 +256,7 @@ describe("WebsocketChannelV2 ()", () => {
           onResume: () => events.push("resume")
         })
 
-        await client.connectWithReconnect()
+        await client.connect()
         await subscription.ready
 
         isOnline = false

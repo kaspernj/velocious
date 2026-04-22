@@ -27,7 +27,7 @@ export default class VelociousWebsocketClient {
    * @param {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [args.sessionStore] - Optional sessionId persistence hook. When provided, the client writes every `session-established` / `session-resumed` id via `store.set(id)` and clears it on `session-gone`. Before the first `connect()`, the client reads any persisted id via `store.get()` and attempts resumption. Apps should back this by whatever persistence layer survives page reloads (localStorage, a cookie, SQLite, etc.).
    * @param {string} [args.url] Full websocket URL (default: ws://127.0.0.1:3006/websocket)
    */
-  constructor({autoReconnect = false, debug = false, networkMonitor, reconnectDelays, sessionStore, url} = {}) {
+  constructor({autoReconnect = true, debug = false, networkMonitor, reconnectDelays, sessionStore, url} = {}) {
     if (!globalThis.WebSocket) throw new Error("WebSocket global is not available")
 
     /** @type {boolean} */
@@ -241,7 +241,7 @@ export default class VelociousWebsocketClient {
       this._cancelPendingReconnect()
 
       if (this.isOpen()) {
-        void this.close()
+        void this.dropConnection()
       }
     })
   }
@@ -285,11 +285,37 @@ export default class VelociousWebsocketClient {
 
   /**
    * Ensure a websocket connection is open.
+   * Auto-reconnect and online gating are enabled by default.
+   * Pass `autoReconnect: false` or `waitForOnline: false` only when a caller
+   * explicitly needs lower-level behavior.
+   * @param {{autoReconnect?: boolean, waitForOnline?: boolean, resetReconnectState?: boolean}} [options]
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async connect() {
+  async connect({autoReconnect = this.autoReconnect, waitForOnline = true, resetReconnectState = true} = {}) {
+    this.autoReconnect = autoReconnect
+
+    if (this.autoReconnect) {
+      this._ensureNetworkMonitorSubscription()
+    } else {
+      this._waitingForOnline = false
+      this._cancelPendingReconnect()
+      this._teardownNetworkMonitorSubscription()
+    }
+
+    if (waitForOnline && this.autoReconnect && !await this._isOnline()) {
+      this._waitingForOnline = true
+      return
+    }
+
+    if (resetReconnectState) {
+      this.reconnectAttempt = 0
+    }
+
     if (this.socket && this.socket.readyState === this.socket.OPEN) return
     if (this.connectPromise) return this.connectPromise
+
+    this._waitingForOnline = false
+    this.connectionAttempts += 1
 
     this.connectPromise = new Promise((resolve, reject) => {
       this.socket = new WebSocket(this.url)
@@ -356,26 +382,6 @@ export default class VelociousWebsocketClient {
     if (!this._awaitingResume) {
       this._sendPendingChannelSubscriptions()
     }
-  }
-
-  /**
-   * Connect and enable auto-reconnect. Resets reconnect state.
-   * @returns {Promise<void>} - Resolves when connected.
-   */
-  async connectWithReconnect({waitForOnline = false} = {}) {
-    this.autoReconnect = true
-    this.reconnectAttempt = 0
-    this._cancelPendingReconnect()
-    this._ensureNetworkMonitorSubscription()
-
-    if (waitForOnline && !await this._isOnline()) {
-      this._waitingForOnline = true
-      return
-    }
-
-    this._waitingForOnline = false
-    this.connectionAttempts += 1
-    await this.connect()
     this.disconnectedSince = null
   }
 
@@ -384,6 +390,11 @@ export default class VelociousWebsocketClient {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async close() {
+    this.autoReconnect = false
+    this._waitingForOnline = false
+    this._cancelPendingReconnect()
+    this._teardownNetworkMonitorSubscription()
+
     if (!this.socket) return
 
     if (this.socket.readyState === this.socket.CLOSED) {
@@ -406,11 +417,7 @@ export default class VelociousWebsocketClient {
    * @returns {Promise<void>} - Resolves when closed.
    */
   async disconnectAndStopReconnect() {
-    this.autoReconnect = false
-    this._waitingForOnline = false
-    this._cancelPendingReconnect()
     await this.close()
-    this._teardownNetworkMonitorSubscription()
   }
 
   /**
@@ -824,7 +831,7 @@ export default class VelociousWebsocketClient {
     try {
       this._waitingForOnline = false
       this.connectionAttempts += 1
-      await this.connect()
+      await this.connect({autoReconnect: this.autoReconnect, resetReconnectState: false, waitForOnline: false})
       this.reconnectAttempt = 0
       this.disconnectedSince = null
       this._resubscribeActiveListeners()
