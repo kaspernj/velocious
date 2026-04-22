@@ -16,6 +16,7 @@
     "copy:ejs": "cpy \"src/routes/**/*.ejs\" build/src/routes",
     "copy:templates": "cpy \"src/templates/**/*.js\" build/src/templates",
     "lint": "eslint",
+    "prepare": "npm run build",
     "release:patch": "node scripts/release-patch.js",
     "test": "node scripts/run-tests.js",
     "test:browser": "node scripts/test-browser.js",

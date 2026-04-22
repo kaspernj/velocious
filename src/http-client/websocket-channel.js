@@ -30,6 +30,7 @@ export default class VelociousWebsocketClientSubscription {
     this._onResume = onResume
     this._onClose = onClose
     this._subscribed = false
+    this._subscribeSent = false
     this._closed = false
 
     /** @type {Promise<void>} */
@@ -44,6 +45,16 @@ export default class VelociousWebsocketClientSubscription {
     if (this._closed || this._subscribed) return
     this._subscribed = true
     this._resolveReady?.()
+  }
+
+  /** @returns {void} */
+  _markSubscribeSent() {
+    this._subscribeSent = true
+  }
+
+  /** @returns {boolean} */
+  _needsSubscribe() {
+    return !this._closed && !this._subscribeSent
   }
 
   /**
