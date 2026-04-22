@@ -161,7 +161,7 @@ export default class VelociousWebsocketClient {
     })
 
     this._channelSubscriptions.set(subscriptionId, subscription)
-    this._sendChannelSubscribe(subscription, options.lastEventId)
+    this._sendChannelSubscribe(subscription)
 
     return subscription
   }
