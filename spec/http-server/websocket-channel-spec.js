@@ -437,6 +437,58 @@ describe("WebsocketChannelV2 ()", () => {
     })
   })
 
+  it("retries a subscribe after a failed send on reconnect", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient({autoReconnect: true, reconnectDelays: [50]})
+
+      try {
+        await client.connect()
+
+        const subscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "send-failure-recovery"}
+        })
+
+        await subscription.waitForReady({timeoutMs: 3000})
+        expect(subscription.isReady()).toBe(true)
+
+        // Simulate the send-throwing race: if `_sendMessage` raises
+        // (socket closed between `isOpen()` check and `send()`), the
+        // subscription must remain recoverable. Prior to the fix,
+        // `_markSubscribeSent()` ran before `_sendMessage` so a throw
+        // would leave `_subscribeSent = true` and the reconnect path's
+        // `_sendPendingChannelSubscriptions()` would skip it forever.
+        const secondSubscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "after-send-throw"}
+        })
+
+        // Force the channel back to pre-send state and invoke
+        // `_sendChannelSubscribe` with a broken `_sendMessage`; the
+        // send throws, but `_subscribeSent` should stay false so the
+        // next `_sendPendingChannelSubscriptions()` call retries.
+        secondSubscription._subscribed = false
+        secondSubscription._subscribeSent = false
+        const originalSend = client._sendMessage.bind(client)
+        let sendCalls = 0
+
+        client._sendMessage = () => {
+          sendCalls += 1
+          throw new Error("Websocket is not open")
+        }
+
+        expect(() => client._sendChannelSubscribe(secondSubscription)).toThrow()
+        expect(sendCalls).toBe(1)
+        expect(secondSubscription._subscribeSent).toBe(false)
+
+        client._sendMessage = originalSend
+        client._sendPendingChannelSubscriptions()
+        await secondSubscription.waitForReady({timeoutMs: 3000})
+        expect(secondSubscription.isReady()).toBe(true)
+      } finally {
+        await client.disconnectAndStopReconnect()
+      }
+    })
+  })
+
   it("returns connection-error for unknown channel type", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()

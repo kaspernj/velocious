@@ -201,7 +201,10 @@ export default class VelociousWebsocketClient {
   _sendChannelSubscribe(subscription) {
     if (!this.isOpen() || !this.isSessionReady() || !subscription._needsSubscribe()) return
 
-    subscription._markSubscribeSent()
+    // Send first and only mark as sent on success. If the socket
+    // closes between `isOpen()` and `send()` and `_sendMessage` throws,
+    // `_subscribeSent` must stay false so the reconnect path's
+    // `_sendPendingChannelSubscriptions()` can retry.
     this._sendMessage({
       type: "channel-subscribe",
       subscriptionId: subscription.subscriptionId,
@@ -209,6 +212,7 @@ export default class VelociousWebsocketClient {
       params: subscription.params,
       ...(subscription.lastEventId ? {lastEventId: subscription.lastEventId} : {})
     })
+    subscription._markSubscribeSent()
   }
 
   /** @returns {void} */
