@@ -10,13 +10,21 @@ import WebsocketChannel from "../websocket-channel.js"
 import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
 const WEBSOCKET_FINAL_FRAME = 0x80
+const WEBSOCKET_OPCODE_CONTINUATION = 0x0
 const WEBSOCKET_OPCODE_TEXT = 0x1
+const WEBSOCKET_OPCODE_BINARY = 0x2
 const WEBSOCKET_OPCODE_CLOSE = 0x8
 const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
 
 /** Cap on the paused outbound queue; oldest frames drop on overflow. */
 const WEBSOCKET_PAUSED_QUEUE_CAP = 1000
+
+/** Cap on total bytes buffered for a single fragmented message. */
+const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES = 16 * 1024 * 1024
+
+/** Cap on fragment count for a single fragmented message. */
+const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
 
 /**
  * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | {type: "metadata", data?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
@@ -146,6 +154,30 @@ export default class VelociousHttpServerClientWebsocketSession {
      * @type {Promise<any> | undefined}
      */
     this._resumeIdentityPromise = undefined
+
+    /**
+     * Accumulates payloads for a fragmented websocket message per
+     * RFC 6455. Non-null while mid-fragment; cleared when the frame
+     * with FIN=1 completes and the message is dispatched.
+     * @type {Buffer[] | null}
+     */
+    this._fragmentedPayloads = null
+
+    /**
+     * Opcode (TEXT/BINARY) captured from the first frame of a
+     * fragmented message. Continuation frames (opcode 0) inherit it
+     * at reassembly time.
+     * @type {number | null}
+     */
+    this._fragmentedOpcode = null
+
+    /**
+     * Running byte total for `_fragmentedPayloads`. Used to enforce
+     * `WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES` so a peer cannot
+     * exhaust memory by streaming non-final fragments indefinitely.
+     * @type {number}
+     */
+    this._fragmentedBytes = 0
   }
 
   /**
@@ -364,7 +396,12 @@ export default class VelociousHttpServerClientWebsocketSession {
       return
     }
 
-    if (this.messageHandler) {
+    // The messageHandler short-circuits default routing only when the
+    // app actually declared an `onMessage` hook. Apps that only want
+    // session-lifecycle tracking (`onOpen`/`onClose`) still need the
+    // built-in subscribe/connection/channel-subscribe routing below,
+    // otherwise every incoming message is silently dropped.
+    if (this.messageHandler && typeof this.messageHandler.onMessage === "function") {
       await this._runMessageHandlerMessage(message)
       return
     }
@@ -518,11 +555,10 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       this.buffer = this.buffer.slice(offset + maskLength + payloadLength)
 
-      if (!isFinal) {
-        this.logger.warn("Fragmented frames are not supported yet")
-        continue
-      }
-
+      // Control frames (opcode >= 0x8) must not be fragmented per
+      // RFC 6455 and can arrive interleaved with a fragmented data
+      // message. Handle them first without touching the fragment
+      // accumulator.
       if (opcode === WEBSOCKET_OPCODE_PING) {
         this._sendControlFrame(WEBSOCKET_OPCODE_PONG, payload)
         continue
@@ -534,13 +570,73 @@ export default class VelociousHttpServerClientWebsocketSession {
         continue
       }
 
-      if (opcode !== WEBSOCKET_OPCODE_TEXT) {
-        this.logger.warn(`Unsupported websocket opcode: ${opcode}`)
+      if (opcode >= 0x8) {
+        this.logger.warn(`Unsupported websocket control opcode: ${opcode}`)
+        continue
+      }
+
+      // Data frame (TEXT/BINARY/CONTINUATION). Reassemble fragments
+      // before dispatching. Browsers (Chrome) legitimately fragment
+      // longer client→server text frames; a prior version dropped
+      // every fragmented message silently, so any payload large
+      // enough to hit the browser's fragmentation threshold
+      // (e.g. a channel-subscribe with an auth token) never reached
+      // the handler.
+      if (opcode === WEBSOCKET_OPCODE_CONTINUATION) {
+        if (this._fragmentedPayloads === null) {
+          this.logger.warn("Received continuation frame with no fragmented message in progress")
+          continue
+        }
+
+        if (!this._appendFragment(payload)) return
+
+        if (!isFinal) continue
+      } else if (opcode === WEBSOCKET_OPCODE_TEXT || opcode === WEBSOCKET_OPCODE_BINARY) {
+        if (this._fragmentedPayloads !== null) {
+          this.logger.warn("Received new data frame while a fragmented message was in progress; discarding prior fragments")
+          this._resetFragmentBuffer()
+        }
+
+        if (!isFinal) {
+          this._fragmentedPayloads = [payload]
+          this._fragmentedOpcode = opcode
+          this._fragmentedBytes = payload.length
+
+          if (!this._enforceFragmentLimits()) return
+
+          continue
+        }
+      } else {
+        this.logger.warn(`Unsupported websocket data opcode: ${opcode}`)
+        continue
+      }
+
+      /** @type {Buffer} */
+      let finalPayload
+      /** @type {number} */
+      let finalOpcode
+
+      if (this._fragmentedPayloads !== null) {
+        if (opcode === WEBSOCKET_OPCODE_CONTINUATION) {
+          finalPayload = Buffer.concat(this._fragmentedPayloads)
+          finalOpcode = this._fragmentedOpcode ?? WEBSOCKET_OPCODE_TEXT
+        } else {
+          finalPayload = payload
+          finalOpcode = opcode
+        }
+        this._resetFragmentBuffer()
+      } else {
+        finalPayload = payload
+        finalOpcode = opcode
+      }
+
+      if (finalOpcode !== WEBSOCKET_OPCODE_TEXT) {
+        this.logger.warn(`Unsupported websocket data opcode after reassembly: ${finalOpcode}`)
         continue
       }
 
       try {
-        const message = JSON.parse(payload.toString("utf-8"))
+        const message = JSON.parse(finalPayload.toString("utf-8"))
 
         this._handleMessage(message).catch((error) => {
           this.logger.error(() => ["Websocket message handler failed", error])
@@ -551,6 +647,66 @@ export default class VelociousHttpServerClientWebsocketSession {
         this.sendJson({error: "Invalid websocket message", type: "error"})
       }
     }
+  }
+
+  /**
+   * Appends a continuation-frame payload to the in-progress
+   * fragmented message. Returns true when the fragment was accepted
+   * and false when the per-message cap was hit and the socket has
+   * been closed.
+   * @param {Buffer} payload
+   * @returns {boolean}
+   */
+  _appendFragment(payload) {
+    // Guard pushing first so `_enforceFragmentLimits` sees the final
+    // state; on overflow the reset inside the enforcer drops the
+    // buffered fragments.
+    this._fragmentedPayloads?.push(payload)
+    this._fragmentedBytes += payload.length
+
+    return this._enforceFragmentLimits()
+  }
+
+  /**
+   * Verifies the fragmented message has not exceeded the byte or
+   * fragment-count caps. On overflow, clears the buffer, sends a
+   * close frame, and tears the session down. Returns true when the
+   * caller can continue processing, false when the session is being
+   * closed.
+   * @returns {boolean}
+   */
+  _enforceFragmentLimits() {
+    if (this._fragmentedPayloads === null) return true
+
+    const fragmentCount = this._fragmentedPayloads.length
+    const overBytes = this._fragmentedBytes > WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES
+    const overFragments = fragmentCount > WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS
+
+    if (!overBytes && !overFragments) return true
+
+    this.logger.warn(() => [
+      "Fragmented websocket message exceeded caps; closing connection",
+      {
+        fragmentBytes: this._fragmentedBytes,
+        fragmentCount,
+        maxBytes: WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES,
+        maxFragments: WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS
+      }
+    ])
+
+    this._resetFragmentBuffer()
+    this.buffer = Buffer.alloc(0)
+    this.sendGoodbye(this.client)
+    this._handleClose()
+
+    return false
+  }
+
+  /** @returns {void} */
+  _resetFragmentBuffer() {
+    this._fragmentedPayloads = null
+    this._fragmentedOpcode = null
+    this._fragmentedBytes = 0
   }
 
   /**
@@ -1478,8 +1634,15 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (handler) {
         this.pendingMessageHandler = false
         this.messageHandlerPromise = undefined
-        this.setMessageHandler(handler)
-        await this._flushQueuedMessages({useHandler: true})
+        // Install handler and drain onOpen before replaying queued
+        // messages. setMessageHandler() fires onOpen as fire-and-forget;
+        // awaiting _runMessageHandlerOpen() directly here closes the
+        // race where queued subscribe/connection-* frames would
+        // dispatch while an async onOpen is still setting up session
+        // state.
+        this.messageHandler = handler
+        await this._runMessageHandlerOpen()
+        await this._flushQueuedMessages({useHandler: typeof handler.onMessage === "function"})
         return
       }
     } catch (error) {
