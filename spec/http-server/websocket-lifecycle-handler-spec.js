@@ -59,6 +59,33 @@ describe("WebsocketSession lifecycle-only message handler", () => {
     expect(session.getMetadata()).toEqual({})
   })
 
+  it("finishes an async onOpen before replaying queued messages", async () => {
+    /** @type {string[]} */
+    const callOrder = []
+
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
+      configuration: dummyConfiguration,
+      messageHandlerPromise: Promise.resolve({
+        onOpen: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          callOrder.push("onOpen:done")
+        }
+      })
+    })
+
+    session._handleChannelSubscribe = async () => { callOrder.push("channel-subscribe:dispatched") }
+
+    // Queue a message while the handler is still pending so it
+    // lands in messageQueue and is flushed after the promise
+    // resolves.
+    await session._handleMessage({type: "channel-subscribe", subscriptionId: "s1", channelType: "Counter"})
+
+    await session._resolveMessageHandlerPromise()
+
+    expect(callOrder).toEqual(["onOpen:done", "channel-subscribe:dispatched"])
+  })
+
   it("subscribes via the lifecycle-only socket path when the server only tracks open/close", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient({url: "ws://127.0.0.1:3006/lifecycle-only-socket"})

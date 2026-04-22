@@ -1634,7 +1634,14 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (handler) {
         this.pendingMessageHandler = false
         this.messageHandlerPromise = undefined
-        this.setMessageHandler(handler)
+        // Install handler and drain onOpen before replaying queued
+        // messages. setMessageHandler() fires onOpen as fire-and-forget;
+        // awaiting _runMessageHandlerOpen() directly here closes the
+        // race where queued subscribe/connection-* frames would
+        // dispatch while an async onOpen is still setting up session
+        // state.
+        this.messageHandler = handler
+        await this._runMessageHandlerOpen()
         await this._flushQueuedMessages({useHandler: typeof handler.onMessage === "function"})
         return
       }
