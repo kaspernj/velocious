@@ -134,6 +134,45 @@ describe("WebsocketSession fragmented frames", () => {
     expect(dispatched[0]).toMatchObject({type: "metadata", data: {locale: "en"}})
   })
 
+  it("closes the connection when a fragmented message exceeds the per-fragment count cap", async () => {
+    /** @type {Buffer[]} */
+    const emittedFrames = []
+    let handleCloseCalls = 0
+
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({
+        events: {
+          emit: (name, value) => {
+            if (name === "output" && value instanceof Buffer) emittedFrames.push(value)
+          }
+        },
+        remoteAddress: "127.0.0.1"
+      }),
+      configuration: dummyConfiguration
+    })
+
+    session._handleMessage = async () => { throw new Error("should not dispatch when caps are exceeded") }
+    session._handleClose = () => { handleCloseCalls += 1 }
+
+    const chunkBodies = Array.from({length: 3000}, () => Buffer.from("x"))
+    const framesIn = []
+
+    framesIn.push(buildClientFrame({fin: false, opcode: 0x1, payload: chunkBodies[0]}))
+    for (let i = 1; i < chunkBodies.length; i++) {
+      framesIn.push(buildClientFrame({fin: false, opcode: 0x0, payload: chunkBodies[i]}))
+    }
+
+    session.onData(Buffer.concat(framesIn))
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(handleCloseCalls).toBe(1)
+    // Close frame emitted (opcode 0x8 with FIN=1).
+    expect(emittedFrames.length).toBeGreaterThan(0)
+    expect(emittedFrames.some((frame) => frame[0] === 0x88)).toBe(true)
+    expect(session._fragmentedPayloads).toBe(null)
+    expect(session._fragmentedBytes).toBe(0)
+  })
+
   it("still processes a single-frame message after a fragmented message", async () => {
     const session = new WebsocketSession({
       client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),

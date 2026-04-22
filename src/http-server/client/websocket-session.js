@@ -20,6 +20,12 @@ const WEBSOCKET_OPCODE_PONG = 0xA
 /** Cap on the paused outbound queue; oldest frames drop on overflow. */
 const WEBSOCKET_PAUSED_QUEUE_CAP = 1000
 
+/** Cap on total bytes buffered for a single fragmented message. */
+const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES = 16 * 1024 * 1024
+
+/** Cap on fragment count for a single fragmented message. */
+const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
+
 /**
  * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | {type: "metadata", data?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
  */
@@ -164,6 +170,14 @@ export default class VelociousHttpServerClientWebsocketSession {
      * @type {number | null}
      */
     this._fragmentedOpcode = null
+
+    /**
+     * Running byte total for `_fragmentedPayloads`. Used to enforce
+     * `WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES` so a peer cannot
+     * exhaust memory by streaming non-final fragments indefinitely.
+     * @type {number}
+     */
+    this._fragmentedBytes = 0
   }
 
   /**
@@ -569,17 +583,22 @@ export default class VelociousHttpServerClientWebsocketSession {
           continue
         }
 
-        this._fragmentedPayloads.push(payload)
+        if (!this._appendFragment(payload)) return
 
         if (!isFinal) continue
       } else if (opcode === WEBSOCKET_OPCODE_TEXT || opcode === WEBSOCKET_OPCODE_BINARY) {
         if (this._fragmentedPayloads !== null) {
           this.logger.warn("Received new data frame while a fragmented message was in progress; discarding prior fragments")
+          this._resetFragmentBuffer()
         }
 
         if (!isFinal) {
           this._fragmentedPayloads = [payload]
           this._fragmentedOpcode = opcode
+          this._fragmentedBytes = payload.length
+
+          if (!this._enforceFragmentLimits()) return
+
           continue
         }
       } else {
@@ -600,8 +619,7 @@ export default class VelociousHttpServerClientWebsocketSession {
           finalPayload = payload
           finalOpcode = opcode
         }
-        this._fragmentedPayloads = null
-        this._fragmentedOpcode = null
+        this._resetFragmentBuffer()
       } else {
         finalPayload = payload
         finalOpcode = opcode
@@ -624,6 +642,66 @@ export default class VelociousHttpServerClientWebsocketSession {
         this.sendJson({error: "Invalid websocket message", type: "error"})
       }
     }
+  }
+
+  /**
+   * Appends a continuation-frame payload to the in-progress
+   * fragmented message. Returns true when the fragment was accepted
+   * and false when the per-message cap was hit and the socket has
+   * been closed.
+   * @param {Buffer} payload
+   * @returns {boolean}
+   */
+  _appendFragment(payload) {
+    // Guard pushing first so `_enforceFragmentLimits` sees the final
+    // state; on overflow the reset inside the enforcer drops the
+    // buffered fragments.
+    this._fragmentedPayloads?.push(payload)
+    this._fragmentedBytes += payload.length
+
+    return this._enforceFragmentLimits()
+  }
+
+  /**
+   * Verifies the fragmented message has not exceeded the byte or
+   * fragment-count caps. On overflow, clears the buffer, sends a
+   * close frame, and tears the session down. Returns true when the
+   * caller can continue processing, false when the session is being
+   * closed.
+   * @returns {boolean}
+   */
+  _enforceFragmentLimits() {
+    if (this._fragmentedPayloads === null) return true
+
+    const fragmentCount = this._fragmentedPayloads.length
+    const overBytes = this._fragmentedBytes > WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES
+    const overFragments = fragmentCount > WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS
+
+    if (!overBytes && !overFragments) return true
+
+    this.logger.warn(() => [
+      "Fragmented websocket message exceeded caps; closing connection",
+      {
+        fragmentBytes: this._fragmentedBytes,
+        fragmentCount,
+        maxBytes: WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES,
+        maxFragments: WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS
+      }
+    ])
+
+    this._resetFragmentBuffer()
+    this.buffer = Buffer.alloc(0)
+    this.sendGoodbye(this.client)
+    this._handleClose()
+
+    return false
+  }
+
+  /** @returns {void} */
+  _resetFragmentBuffer() {
+    this._fragmentedPayloads = null
+    this._fragmentedOpcode = null
+    this._fragmentedBytes = 0
   }
 
   /**
