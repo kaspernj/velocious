@@ -22,7 +22,9 @@ export default async function runJobPayload(payload) {
   const perform = jobInstance.perform
 
   try {
-    await perform.apply(jobInstance, payload.args || [])
+    await configuration.withConnections(async () => {
+      await perform.apply(jobInstance, payload.args || [])
+    })
 
     if (payload.id) {
       await reporter.reportWithRetry({
