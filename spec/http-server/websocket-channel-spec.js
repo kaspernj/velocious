@@ -170,6 +170,26 @@ describe("WebsocketChannelV2 ()", () => {
     })
   })
 
+  it("waitForReady resolves the initial subscribe and reports ready state", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+
+      try {
+        await client.connect()
+
+        const subscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "wait-for-ready"}
+        })
+
+        expect(subscription.isReady()).toBe(false)
+        await subscription.waitForReady({timeoutMs: 3000})
+        expect(subscription.isReady()).toBe(true)
+      } finally {
+        await client.close()
+      }
+    })
+  })
+
   it("routes broadcasts to matching subscribers only", async () => {
     await Dummy.run(async () => {
       const clientA = new WebsocketClient()
@@ -316,6 +336,51 @@ describe("WebsocketChannelV2 ()", () => {
         for (const listener of listeners) listener(true)
 
         await waitFor(() => events.includes("resume"), 5000)
+      } finally {
+        await client.disconnectAndStopReconnect()
+      }
+    })
+  })
+
+  it("waitForReady waits for the next ready cycle after disconnect", async () => {
+    await Dummy.run(async () => {
+      let isOnline = true
+      /** @type {Set<(isOnline: boolean) => void>} */
+      const listeners = new Set()
+      const client = new WebsocketClient({
+        autoReconnect: true,
+        networkMonitor: {
+          getIsOnline: () => isOnline,
+          subscribe: (callback) => {
+            listeners.add(callback)
+            return () => listeners.delete(callback)
+          }
+        },
+        reconnectDelays: [50]
+      })
+
+      try {
+        const subscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "ready-cycle-resume"}
+        })
+
+        await client.connect()
+        await subscription.waitForReady({timeoutMs: 3000})
+        expect(subscription.isReady()).toBe(true)
+
+        isOnline = false
+        for (const listener of listeners) listener(false)
+
+        await waitFor(() => subscription.isReady() === false, 3000)
+
+        const waitForResume = subscription.waitForReady({timeoutMs: 5000})
+        await wait(100)
+
+        isOnline = true
+        for (const listener of listeners) listener(true)
+
+        await waitForResume
+        expect(subscription.isReady()).toBe(true)
       } finally {
         await client.disconnectAndStopReconnect()
       }
