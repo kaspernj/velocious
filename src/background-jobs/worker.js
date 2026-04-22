@@ -137,7 +137,9 @@ export default class BackgroundJobsWorker {
     /** @type {(...args: any[]) => Promise<void>} */
     const perform = jobInstance.perform
 
-    await perform.apply(jobInstance, payload.args || [])
+    await configuration.withConnections(async () => {
+      await perform.apply(jobInstance, payload.args || [])
+    })
   }
 
   /**
