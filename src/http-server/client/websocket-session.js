@@ -529,8 +529,8 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       if (opcode === WEBSOCKET_OPCODE_CLOSE) {
-        this._handleClose()
         this.sendGoodbye(this.client)
+        this._handleClose()
         continue
       }
 
