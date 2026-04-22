@@ -30,6 +30,94 @@ async function waitFor(predicate, timeoutMs = 2000) {
 }
 
 describe("WebsocketChannelV2 ()", () => {
+  it("queues channel subscriptions until the network monitor reports online", async () => {
+    await Dummy.run(async () => {
+      let isOnline = false
+      /** @type {Set<(isOnline: boolean) => void>} */
+      const listeners = new Set()
+      const client = new WebsocketClient({
+        autoReconnect: true,
+        networkMonitor: {
+          getIsOnline: () => isOnline,
+          subscribe: (callback) => {
+            listeners.add(callback)
+            return () => listeners.delete(callback)
+          }
+        },
+        reconnectDelays: [50]
+      })
+
+      try {
+        /** @type {any[]} */
+        const received = []
+        const subscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "queued"},
+          onMessage: (body) => received.push(body)
+        })
+        await client.connect({waitForOnline: true})
+        await wait(100)
+
+        expect(client.isOpen()).toBe(false)
+
+        isOnline = true
+        for (const listener of listeners) listener(true)
+
+        await subscription.ready
+        await waitFor(() => received.length >= 1)
+        expect(subscription.isSubscribed()).toBe(true)
+        expect(received[0]).toEqual({welcome: "queued"})
+      } finally {
+        await client.disconnectAndStopReconnect()
+      }
+    })
+  })
+
+  it("preserves lastEventId for queued channel subscriptions", async () => {
+    await Dummy.run(async () => {
+      let isOnline = false
+      /** @type {Set<(isOnline: boolean) => void>} */
+      const listeners = new Set()
+      const client = new WebsocketClient({
+        networkMonitor: {
+          getIsOnline: () => isOnline,
+          subscribe: (callback) => {
+            listeners.add(callback)
+            return () => listeners.delete(callback)
+          }
+        },
+        reconnectDelays: [50]
+      })
+
+      try {
+        /** @type {Record<string, any>[]} */
+        const sentMessages = []
+        const originalSendMessage = client._sendMessage.bind(client)
+        client._sendMessage = (payload) => {
+          sentMessages.push(payload)
+          return originalSendMessage(payload)
+        }
+
+        const subscription = client.subscribeChannel("Counter", {
+          lastEventId: "event-42",
+          params: {allow: true, topic: "queued-checkpoint"}
+        })
+
+        await client.connect({waitForOnline: true})
+        expect(client.isOpen()).toBe(false)
+
+        isOnline = true
+        for (const listener of listeners) listener(true)
+
+        await subscription.ready
+
+        const subscribeMessage = sentMessages.find((message) => message.type === "channel-subscribe" && message.subscriptionId === subscription.subscriptionId)
+        expect(subscribeMessage?.lastEventId).toEqual("event-42")
+      } finally {
+        await client.disconnectAndStopReconnect()
+      }
+    })
+  })
+
   it("rejects subscribe when canSubscribe returns false (default deny)", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()
@@ -185,6 +273,52 @@ describe("WebsocketChannelV2 ()", () => {
 
       await waitFor(() => subscription.isClosed())
       expect(closeReasons).toEqual(["session_destroyed"])
+    })
+  })
+
+  it("waits for the network monitor to report online before resuming a dropped subscription", async () => {
+    await Dummy.run(async () => {
+      let isOnline = true
+      /** @type {Set<(isOnline: boolean) => void>} */
+      const listeners = new Set()
+      const client = new WebsocketClient({
+        autoReconnect: true,
+        networkMonitor: {
+          getIsOnline: () => isOnline,
+          subscribe: (callback) => {
+            listeners.add(callback)
+            return () => listeners.delete(callback)
+          }
+        },
+        reconnectDelays: [50]
+      })
+
+      try {
+        /** @type {string[]} */
+        const events = []
+        const subscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "resume-on-network"},
+          onDisconnect: () => events.push("disconnect"),
+          onResume: () => events.push("resume")
+        })
+
+        await client.connect()
+        await subscription.ready
+
+        isOnline = false
+        for (const listener of listeners) listener(false)
+
+        await waitFor(() => events.includes("disconnect"), 3000)
+        await wait(150)
+        expect(events.includes("resume")).toBe(false)
+
+        isOnline = true
+        for (const listener of listeners) listener(true)
+
+        await waitFor(() => events.includes("resume"), 5000)
+      } finally {
+        await client.disconnectAndStopReconnect()
+      }
     })
   })
 

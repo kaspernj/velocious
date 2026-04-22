@@ -83,21 +83,30 @@ configuration.broadcastToChannel("GameChat", {gameId: "abc"}, {from: "alice", te
 
 ```js
 const subscription = client.subscribeChannel("GameChat", {
+  lastEventId: "evt-42",
   params: {gameId: "abc"},
   onMessage: (body) => console.log(body),
   onClose: (reason) => console.log("sub ended:", reason)
 })
 
+await client.connect()             // default: autoReconnect on, waitForOnline on when a network monitor is configured
 await subscription.ready           // resolves once the server sends channel-subscribed
 subscription.close()                // client-initiated unsubscribe
 ```
 
 Subscription handle exposes:
 - `subscriptionId: string`
+- `lastEventId?: string`
 - `ready: Promise<void>` — resolves on `channel-subscribed`, rejects on `channel-error`
 - `close()`
 - `isClosed()`
 - User-supplied `onMessage(body)` / `onClose(reason)`
+
+Client behavior:
+- `subscribeChannel(...)` may be called before the socket is open. The client queues the subscription and sends `channel-subscribe` after `connect()` succeeds.
+- Queued subscriptions preserve `lastEventId`, so replay checkpoints survive delayed initial connects as well as later reconnects.
+- `connect()` is the normal public entrypoint. By default it enables auto-reconnect, and when a `networkMonitor` is configured it waits for the monitor to report online before opening or re-opening the socket.
+- Callers that need lower-level behavior can still override `connect({autoReconnect: false})` or `connect({waitForOnline: false})`, but those are opt-outs rather than the normal app path.
 
 ## Lifecycle guarantees (Phase 1B)
 

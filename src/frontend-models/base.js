@@ -1786,7 +1786,7 @@ export default class FrontendModelBase {
       throw new Error("connectWebsocket requires configureTransport({websocketUrl})")
     }
 
-    await client.connectWithReconnect()
+    await client.connect()
   }
 
   /**

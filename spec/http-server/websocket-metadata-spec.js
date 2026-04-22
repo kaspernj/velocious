@@ -144,7 +144,7 @@ describe("WebsocketClient - metadata", () => {
 
       try {
         client.setMetadata("locale", "fr")
-        await client.connectWithReconnect()
+        await client.connect()
 
         /** @type {Record<string, any>[]} */
         const sent = []
