@@ -98,8 +98,10 @@ Subscription handle exposes:
 - `subscriptionId: string`
 - `lastEventId?: string`
 - `ready: Promise<void>` — resolves on `channel-subscribed`, rejects on `channel-error`
+- `waitForReady({timeoutMs?: number})` — waits for the current ready cycle with a timeout
 - `close()`
 - `isClosed()`
+- `isReady()`
 - User-supplied `onMessage(body)` / `onClose(reason)`
 
 Client behavior:
@@ -112,5 +114,6 @@ Client behavior:
 
 - `canSubscribe()` → `subscribed()` is the order on the server. `channel-subscribed` is sent AFTER `subscribed()` resolves.
 - Client's `subscription.ready` resolves after `channel-subscribed` arrives.
+- `subscription.waitForReady()` is the higher-level helper for app code. It resolves after the initial subscribe, then resets on disconnect and resolves again after `session-resumed`.
 - `unsubscribed()` fires exactly once: on client-initiated `channel-unsubscribe` OR on session teardown (socket drop, Phase 2 covers grace-period resumption).
 - No persistent event log, no replay, no cross-reconnect survival in Phase 1B. Publish-and-forget; subscribers who missed events while disconnected don't see them.

@@ -31,22 +31,46 @@ export default class VelociousWebsocketClientSubscription {
     this._onDisconnect = onDisconnect
     this._onResume = onResume
     this._onClose = onClose
+    this._ready = false
+    this._resumeReadyOnResume = false
     this._subscribed = false
     this._subscribeSent = false
     this._closed = false
 
-    /** @type {Promise<void>} */
-    this.ready = new Promise((resolve, reject) => {
-      this._resolveReady = resolve
-      this._rejectReady = reject
-    })
+    this._ensureReadyPromise()
+  }
+
+  /** @returns {Promise<void>} */
+  _ensureReadyPromise() {
+    if (!this.ready || !this._resolveReady || !this._rejectReady) {
+      /** @type {Promise<void>} */
+      this.ready = new Promise((resolve, reject) => {
+        this._resolveReady = resolve
+        this._rejectReady = reject
+      })
+    }
+
+    return this.ready
+  }
+
+  /** @returns {void} */
+  _resolveReadyState() {
+    this._ready = true
+    this._resolveReady?.()
+    this._resolveReady = null
+    this._rejectReady = null
+  }
+
+  /** @returns {void} */
+  _markNotReady() {
+    this._ready = false
   }
 
   /** @returns {void} */
   _handleSubscribed() {
     if (this._closed || this._subscribed) return
     this._subscribed = true
-    this._resolveReady?.()
+    this._resolveReadyState()
   }
 
   /** @returns {void} */
@@ -71,12 +95,20 @@ export default class VelociousWebsocketClientSubscription {
   /** @returns {void} */
   _handleDisconnected() {
     if (this._closed) return
+    this._resumeReadyOnResume ||= this._subscribed
+    this._subscribed = false
+    this._markNotReady()
     this._onDisconnect?.()
   }
 
   /** @returns {void} */
   _handleResumed() {
     if (this._closed) return
+    if (this._resumeReadyOnResume) {
+      this._subscribed = true
+      this._resolveReadyState()
+    }
+    this._resumeReadyOnResume = false
     this._onResume?.()
   }
 
@@ -91,10 +123,29 @@ export default class VelociousWebsocketClientSubscription {
     try {
       this._onClose?.(reason)
     } finally {
-      if (!this._subscribed) {
+      this._resumeReadyOnResume = false
+      if (!this._ready) {
         this._rejectReady?.(new Error(`Subscription closed before acknowledgement: ${reason}`))
       }
+
+      this._resolveReady = null
+      this._rejectReady = null
     }
+  }
+
+  /**
+   * @param {{timeoutMs?: number}} [params]
+   * @returns {Promise<void>}
+   */
+  async waitForReady({timeoutMs = 5000} = {}) {
+    if (this._ready) return
+
+    const readyPromise = this._ensureReadyPromise()
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Subscription not ready after ${timeoutMs}ms`)), timeoutMs)
+    })
+
+    await Promise.race([readyPromise, timeoutPromise])
   }
 
   /** @returns {void} */
@@ -115,6 +166,9 @@ export default class VelociousWebsocketClientSubscription {
 
   /** @returns {boolean} */
   isClosed() { return this._closed }
+
+  /** @returns {boolean} */
+  isReady() { return this._ready }
 
   /** @returns {boolean} */
   isSubscribed() { return this._subscribed && !this._closed }
