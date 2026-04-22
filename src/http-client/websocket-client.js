@@ -81,6 +81,9 @@ export default class VelociousWebsocketClient {
     /** @type {(() => void) | null} */
     this._resolveSessionReady = null
 
+    /** @type {unknown | null} */
+    this._sessionReadyError = null
+
     /** @type {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>} | undefined} */
     this._sessionStore = sessionStore
     /** @type {boolean} - true once the sessionStore has been consulted for a restored id. */
@@ -957,7 +960,13 @@ export default class VelociousWebsocketClient {
       })
     }
 
-    return this._sessionReadyPromise
+    return this._sessionReadyPromise.then(() => {
+      if (this._sessionReadyError) {
+        const error = this._sessionReadyError
+        this._sessionReadyError = null
+        throw error
+      }
+    })
   }
 
   /** @returns {void} */
@@ -965,15 +974,21 @@ export default class VelociousWebsocketClient {
     if (this._sessionReady) return
 
     this._sessionReady = true
+    this._sessionReadyError = null
     this._resolveSessionReady?.()
     this._resolveSessionReady = null
     this._sessionReadyPromise = null
   }
 
-  /** @returns {void} */
-  _resetSessionReadyState() {
+  /**
+   * @param {unknown} [error]
+   * @returns {void}
+   */
+  _resetSessionReadyState(error = new Error("Websocket session readiness was reset")) {
     this._sessionReady = false
     this._pendingSessionId = null
+    this._sessionReadyError = error
+    this._resolveSessionReady?.()
     this._sessionReadyPromise = null
     this._resolveSessionReady = null
   }

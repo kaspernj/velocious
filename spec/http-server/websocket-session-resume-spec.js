@@ -272,6 +272,50 @@ describe("WebsocketSession resumption (Phase 2)", () => {
     }
   })
 
+  it("rejects connect when the socket closes before session readiness is established", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient({autoReconnect: false})
+      const originalOnMessage = client.onMessage
+
+      client.onMessage = (event) => {
+        const raw = typeof event.data === "string" ? event.data : event.data?.toString?.()
+
+        if (raw) {
+          const message = JSON.parse(raw)
+
+          if (message.type === "session-established") return
+        }
+
+        originalOnMessage(event)
+      }
+
+      try {
+        const connectPromise = client.connect()
+
+        await waitFor(() => client.isOpen(), 3000)
+        client.socket?.close()
+
+        /** @type {unknown} */
+        let caughtError = null
+
+        try {
+          await connectPromise
+        } catch (error) {
+          caughtError = error
+        }
+
+        expect(caughtError instanceof Error).toBe(true)
+        expect(/** @type {Error} */ (caughtError).message).toContain("session readiness")
+      } finally {
+        try {
+          await client.close()
+        } catch {
+          // Socket may already be gone from the test-induced early close.
+        }
+      }
+    })
+  })
+
   it("tears down live handles with grace_expired when no resume arrives in time", async () => {
     // Override grace window to 100ms for the test.
     const originalGrace = dummyConfiguration.getWebsocketSessionGraceSeconds()
