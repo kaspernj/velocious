@@ -387,6 +387,56 @@ describe("WebsocketChannelV2 ()", () => {
     })
   })
 
+  it("does not mark queued subscriptions ready on session resume before channel acknowledgement", async () => {
+    await Dummy.run(async () => {
+      let isOnline = true
+      /** @type {Set<(isOnline: boolean) => void>} */
+      const listeners = new Set()
+      const client = new WebsocketClient({
+        autoReconnect: true,
+        networkMonitor: {
+          getIsOnline: () => isOnline,
+          subscribe: (callback) => {
+            listeners.add(callback)
+            return () => listeners.delete(callback)
+          }
+        },
+        reconnectDelays: [50]
+      })
+
+      try {
+        const existingSubscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "existing-before-resume"}
+        })
+
+        await client.connect()
+        await existingSubscription.waitForReady({timeoutMs: 3000})
+
+        isOnline = false
+        for (const listener of listeners) listener(false)
+
+        await waitFor(() => existingSubscription.isReady() === false, 3000)
+
+        const queuedSubscription = client.subscribeChannel("Counter", {
+          params: {allow: true, topic: "queued-during-disconnect"}
+        })
+
+        expect(queuedSubscription.isReady()).toBe(false)
+
+        isOnline = true
+        for (const listener of listeners) listener(true)
+
+        await waitFor(() => existingSubscription.isReady() === true, 5000)
+        expect(queuedSubscription.isReady()).toBe(false)
+
+        await queuedSubscription.waitForReady({timeoutMs: 5000})
+        expect(queuedSubscription.isReady()).toBe(true)
+      } finally {
+        await client.disconnectAndStopReconnect()
+      }
+    })
+  })
+
   it("returns connection-error for unknown channel type", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()

@@ -32,6 +32,7 @@ export default class VelociousWebsocketClientSubscription {
     this._onResume = onResume
     this._onClose = onClose
     this._ready = false
+    this._resumeReadyOnResume = false
     this._subscribed = false
     this._subscribeSent = false
     this._closed = false
@@ -63,7 +64,6 @@ export default class VelociousWebsocketClientSubscription {
   /** @returns {void} */
   _markNotReady() {
     this._ready = false
-    this._ensureReadyPromise()
   }
 
   /** @returns {void} */
@@ -95,6 +95,7 @@ export default class VelociousWebsocketClientSubscription {
   /** @returns {void} */
   _handleDisconnected() {
     if (this._closed) return
+    this._resumeReadyOnResume ||= this._subscribed
     this._subscribed = false
     this._markNotReady()
     this._onDisconnect?.()
@@ -103,8 +104,11 @@ export default class VelociousWebsocketClientSubscription {
   /** @returns {void} */
   _handleResumed() {
     if (this._closed) return
-    this._subscribed = true
-    this._resolveReadyState()
+    if (this._resumeReadyOnResume) {
+      this._subscribed = true
+      this._resolveReadyState()
+    }
+    this._resumeReadyOnResume = false
     this._onResume?.()
   }
 
@@ -119,6 +123,7 @@ export default class VelociousWebsocketClientSubscription {
     try {
       this._onClose?.(reason)
     } finally {
+      this._resumeReadyOnResume = false
       if (!this._ready) {
         this._rejectReady?.(new Error(`Subscription closed before acknowledgement: ${reason}`))
       }
