@@ -39,6 +39,8 @@ export default class VelociousWebsocketClient {
     this.pendingSubscriptions = new Map()
     /** @type {number} */
     this.reconnectAttempt = 0
+    /** @type {number} */
+    this.connectionAttempts = 0
     /** @type {number[]} */
     this.reconnectDelays = reconnectDelays || DEFAULT_RECONNECT_DELAYS
     /** @type {ReturnType<typeof setTimeout> | null} */
@@ -372,6 +374,7 @@ export default class VelociousWebsocketClient {
     }
 
     this._waitingForOnline = false
+    this.connectionAttempts += 1
     await this.connect()
     this.disconnectedSince = null
   }
@@ -820,6 +823,7 @@ export default class VelociousWebsocketClient {
 
     try {
       this._waitingForOnline = false
+      this.connectionAttempts += 1
       await this.connect()
       this.reconnectAttempt = 0
       this.disconnectedSince = null

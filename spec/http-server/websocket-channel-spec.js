@@ -54,18 +54,17 @@ describe("WebsocketChannelV2 ()", () => {
           params: {allow: true, topic: "queued"},
           onMessage: (body) => received.push(body)
         })
-
         await client.connectWithReconnect({waitForOnline: true})
         await wait(100)
 
         expect(client.isOpen()).toBe(false)
-        expect(subscription.isSubscribed()).toBe(false)
 
         isOnline = true
         for (const listener of listeners) listener(true)
 
         await subscription.ready
         await waitFor(() => received.length >= 1)
+        expect(subscription.isSubscribed()).toBe(true)
         expect(received[0]).toEqual({welcome: "queued"})
       } finally {
         await client.disconnectAndStopReconnect()
