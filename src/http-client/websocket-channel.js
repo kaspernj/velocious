@@ -48,6 +48,7 @@ export default class VelociousWebsocketClientSubscription {
         this._resolveReady = resolve
         this._rejectReady = reject
       })
+      void this.ready.catch(() => {})
     }
 
     return this.ready
