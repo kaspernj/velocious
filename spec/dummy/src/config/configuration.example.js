@@ -38,6 +38,14 @@ async function websocketMessageHandlerResolver({request}) {
       }
     }
   }
+
+  if (pathValue === "/lifecycle-only-socket") {
+    return {
+      onOpen: ({session}) => {
+        session.sendJson({type: "welcome"})
+      }
+    }
+  }
 }
 
 export default new Configuration({
