@@ -396,7 +396,12 @@ export default class VelociousHttpServerClientWebsocketSession {
       return
     }
 
-    if (this.messageHandler) {
+    // The messageHandler short-circuits default routing only when the
+    // app actually declared an `onMessage` hook. Apps that only want
+    // session-lifecycle tracking (`onOpen`/`onClose`) still need the
+    // built-in subscribe/connection/channel-subscribe routing below,
+    // otherwise every incoming message is silently dropped.
+    if (this.messageHandler && typeof this.messageHandler.onMessage === "function") {
       await this._runMessageHandlerMessage(message)
       return
     }
@@ -1630,7 +1635,7 @@ export default class VelociousHttpServerClientWebsocketSession {
         this.pendingMessageHandler = false
         this.messageHandlerPromise = undefined
         this.setMessageHandler(handler)
-        await this._flushQueuedMessages({useHandler: true})
+        await this._flushQueuedMessages({useHandler: typeof handler.onMessage === "function"})
         return
       }
     } catch (error) {
