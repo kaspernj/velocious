@@ -69,6 +69,21 @@ export default class VelociousWebsocketClient {
     /** @type {boolean} - true between a reconnect and the session-resumed / session-gone reply. */
     this._awaitingResume = false
 
+    /** @type {boolean} - true once the current socket has an active session ready for app messages. */
+    this._sessionReady = false
+
+    /** @type {string | null} - provisional session id announced before a resume attempt finishes. */
+    this._pendingSessionId = null
+
+    /** @type {Promise<void> | null} */
+    this._sessionReadyPromise = null
+
+    /** @type {(() => void) | null} */
+    this._resolveSessionReady = null
+
+    /** @type {unknown | null} */
+    this._sessionReadyError = null
+
     /** @type {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>} | undefined} */
     this._sessionStore = sessionStore
     /** @type {boolean} - true once the sessionStore has been consulted for a restored id. */
@@ -87,6 +102,11 @@ export default class VelociousWebsocketClient {
   /** @returns {boolean} */
   isOpen() {
     return Boolean(this.socket && this.socket.readyState === this.socket.OPEN)
+  }
+
+  /** @returns {boolean} */
+  isSessionReady() {
+    return this._sessionReady
   }
 
   /**
@@ -179,7 +199,7 @@ export default class VelociousWebsocketClient {
    * @returns {void}
    */
   _sendChannelSubscribe(subscription) {
-    if (!this.isOpen() || !subscription._needsSubscribe()) return
+    if (!this.isOpen() || !this.isSessionReady() || !subscription._needsSubscribe()) return
 
     subscription._markSubscribeSent()
     this._sendMessage({
@@ -314,6 +334,7 @@ export default class VelociousWebsocketClient {
     if (this.socket && this.socket.readyState === this.socket.OPEN) return
     if (this.connectPromise) return this.connectPromise
 
+    this._resetSessionReadyState()
     this._waitingForOnline = false
     this.connectionAttempts += 1
 
@@ -379,9 +400,7 @@ export default class VelociousWebsocketClient {
       this._sendMessage({type: "metadata", data: {...this._metadata}})
     }
 
-    if (!this._awaitingResume) {
-      this._sendPendingChannelSubscriptions()
-    }
+    await this._waitForSessionReady()
     this.disconnectedSince = null
   }
 
@@ -400,6 +419,7 @@ export default class VelociousWebsocketClient {
     if (this.socket.readyState === this.socket.CLOSED) {
       this.socket = undefined
       this.connectPromise = undefined
+      this._resetSessionReadyState()
       return
     }
 
@@ -410,6 +430,7 @@ export default class VelociousWebsocketClient {
 
     this.socket = undefined
     this.connectPromise = undefined
+    this._resetSessionReadyState()
   }
 
   /**
@@ -434,6 +455,7 @@ export default class VelociousWebsocketClient {
     })
 
     this.connectPromise = undefined
+    this._resetSessionReadyState()
   }
 
   /**
@@ -685,15 +707,24 @@ export default class VelociousWebsocketClient {
         sub._handleClosed(`error: ${message.message || "channel-error"}`)
       }
     } else if (type === "session-established") {
+      this._pendingSessionId = typeof message.sessionId === "string" ? message.sessionId : null
+
       // First connect: cache sessionId for future resume attempts.
       if (!this._awaitingResume) {
-        this._sessionId = message.sessionId
-        this._persistSessionId(message.sessionId)
+        this._sessionId = this._pendingSessionId
+        if (this._sessionId) {
+          this._persistSessionId(this._sessionId)
+        }
+
+        this._markSessionReady()
+        this._sendPendingChannelSubscriptions()
       }
     } else if (type === "session-resumed") {
       this._awaitingResume = false
+      this._pendingSessionId = null
       this._sessionId = message.sessionId
       this._persistSessionId(message.sessionId)
+      this._markSessionReady()
       this._sendPendingChannelSubscriptions()
       // Fire onResume on every live handle so user code knows the
       // session came back with state intact.
@@ -702,7 +733,9 @@ export default class VelociousWebsocketClient {
     } else if (type === "session-gone") {
       this._awaitingResume = false
       this._sessionId = null
+      this._pendingSessionId = null
       this._clearPersistedSessionId()
+
       // Tear down every live handle — their server-side counterparts
       // are gone and nothing can bring them back.
       const connections = [...this._connections.values()]
@@ -712,6 +745,8 @@ export default class VelociousWebsocketClient {
       const subs = [...this._channelSubscriptions.values()]
       this._channelSubscriptions.clear()
       for (const subscription of subs) subscription._handleClosed("session_gone")
+
+      this._markSessionReady()
     } else if (type === "error" && message.id) {
       const pending = this.pendingRequests.get(message.id)
 
@@ -738,6 +773,7 @@ export default class VelociousWebsocketClient {
    */
   onClose = () => {
     this.disconnectedSince ||= Date.now()
+    this._resetSessionReadyState()
 
     for (const [id, {reject}] of this.pendingRequests.entries()) {
       reject(new Error(`Websocket closed before response for ${id}`))
@@ -912,6 +948,49 @@ export default class VelociousWebsocketClient {
     } catch (error) {
       this._debug("sessionStore.clear failed", error)
     }
+  }
+
+  /** @returns {Promise<void>} */
+  _waitForSessionReady() {
+    if (this._sessionReady) return Promise.resolve()
+
+    if (!this._sessionReadyPromise || !this._resolveSessionReady) {
+      this._sessionReadyPromise = new Promise((resolve) => {
+        this._resolveSessionReady = resolve
+      })
+    }
+
+    return this._sessionReadyPromise.then(() => {
+      if (this._sessionReadyError) {
+        const error = this._sessionReadyError
+        this._sessionReadyError = null
+        throw error
+      }
+    })
+  }
+
+  /** @returns {void} */
+  _markSessionReady() {
+    if (this._sessionReady) return
+
+    this._sessionReady = true
+    this._sessionReadyError = null
+    this._resolveSessionReady?.()
+    this._resolveSessionReady = null
+    this._sessionReadyPromise = null
+  }
+
+  /**
+   * @param {unknown} [error]
+   * @returns {void}
+   */
+  _resetSessionReadyState(error = new Error("Websocket session readiness was reset")) {
+    this._sessionReady = false
+    this._pendingSessionId = null
+    this._sessionReadyError = error
+    this._resolveSessionReady?.()
+    this._sessionReadyPromise = null
+    this._resolveSessionReady = null
   }
 }
 
