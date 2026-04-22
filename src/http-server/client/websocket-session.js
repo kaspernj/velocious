@@ -10,7 +10,9 @@ import WebsocketChannel from "../websocket-channel.js"
 import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
 const WEBSOCKET_FINAL_FRAME = 0x80
+const WEBSOCKET_OPCODE_CONTINUATION = 0x0
 const WEBSOCKET_OPCODE_TEXT = 0x1
+const WEBSOCKET_OPCODE_BINARY = 0x2
 const WEBSOCKET_OPCODE_CLOSE = 0x8
 const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
@@ -146,6 +148,22 @@ export default class VelociousHttpServerClientWebsocketSession {
      * @type {Promise<any> | undefined}
      */
     this._resumeIdentityPromise = undefined
+
+    /**
+     * Accumulates payloads for a fragmented websocket message per
+     * RFC 6455. Non-null while mid-fragment; cleared when the frame
+     * with FIN=1 completes and the message is dispatched.
+     * @type {Buffer[] | null}
+     */
+    this._fragmentedPayloads = null
+
+    /**
+     * Opcode (TEXT/BINARY) captured from the first frame of a
+     * fragmented message. Continuation frames (opcode 0) inherit it
+     * at reassembly time.
+     * @type {number | null}
+     */
+    this._fragmentedOpcode = null
   }
 
   /**
@@ -518,11 +536,10 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       this.buffer = this.buffer.slice(offset + maskLength + payloadLength)
 
-      if (!isFinal) {
-        this.logger.warn("Fragmented frames are not supported yet")
-        continue
-      }
-
+      // Control frames (opcode >= 0x8) must not be fragmented per
+      // RFC 6455 and can arrive interleaved with a fragmented data
+      // message. Handle them first without touching the fragment
+      // accumulator.
       if (opcode === WEBSOCKET_OPCODE_PING) {
         this._sendControlFrame(WEBSOCKET_OPCODE_PONG, payload)
         continue
@@ -534,13 +551,69 @@ export default class VelociousHttpServerClientWebsocketSession {
         continue
       }
 
-      if (opcode !== WEBSOCKET_OPCODE_TEXT) {
-        this.logger.warn(`Unsupported websocket opcode: ${opcode}`)
+      if (opcode >= 0x8) {
+        this.logger.warn(`Unsupported websocket control opcode: ${opcode}`)
+        continue
+      }
+
+      // Data frame (TEXT/BINARY/CONTINUATION). Reassemble fragments
+      // before dispatching. Browsers (Chrome) legitimately fragment
+      // longer client→server text frames; a prior version dropped
+      // every fragmented message silently, so any payload large
+      // enough to hit the browser's fragmentation threshold
+      // (e.g. a channel-subscribe with an auth token) never reached
+      // the handler.
+      if (opcode === WEBSOCKET_OPCODE_CONTINUATION) {
+        if (this._fragmentedPayloads === null) {
+          this.logger.warn("Received continuation frame with no fragmented message in progress")
+          continue
+        }
+
+        this._fragmentedPayloads.push(payload)
+
+        if (!isFinal) continue
+      } else if (opcode === WEBSOCKET_OPCODE_TEXT || opcode === WEBSOCKET_OPCODE_BINARY) {
+        if (this._fragmentedPayloads !== null) {
+          this.logger.warn("Received new data frame while a fragmented message was in progress; discarding prior fragments")
+        }
+
+        if (!isFinal) {
+          this._fragmentedPayloads = [payload]
+          this._fragmentedOpcode = opcode
+          continue
+        }
+      } else {
+        this.logger.warn(`Unsupported websocket data opcode: ${opcode}`)
+        continue
+      }
+
+      /** @type {Buffer} */
+      let finalPayload
+      /** @type {number} */
+      let finalOpcode
+
+      if (this._fragmentedPayloads !== null) {
+        if (opcode === WEBSOCKET_OPCODE_CONTINUATION) {
+          finalPayload = Buffer.concat(this._fragmentedPayloads)
+          finalOpcode = this._fragmentedOpcode ?? WEBSOCKET_OPCODE_TEXT
+        } else {
+          finalPayload = payload
+          finalOpcode = opcode
+        }
+        this._fragmentedPayloads = null
+        this._fragmentedOpcode = null
+      } else {
+        finalPayload = payload
+        finalOpcode = opcode
+      }
+
+      if (finalOpcode !== WEBSOCKET_OPCODE_TEXT) {
+        this.logger.warn(`Unsupported websocket data opcode after reassembly: ${finalOpcode}`)
         continue
       }
 
       try {
-        const message = JSON.parse(payload.toString("utf-8"))
+        const message = JSON.parse(finalPayload.toString("utf-8"))
 
         this._handleMessage(message).catch((error) => {
           this.logger.error(() => ["Websocket message handler failed", error])
