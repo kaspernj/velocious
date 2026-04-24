@@ -11,6 +11,7 @@ For frontend-model runtime/query behavior, prefer `spec/frontend-models/base.htt
 When a spec helper becomes reusable across multiple specs, move it into `spec/helpers` instead of leaving it inline in one spec file.
 Prefer functional tests over raw SQL assertions because SQL varies by database. Only assert SQL when validating a query parser, and normalize it to avoid quoting differences.
 Document newly discovered behavior, constraints, edge cases, and integration caveats in the `docs/` folder as part of normal development flow.
+Every user-facing feature change must land with matching documentation in the SAME PR. For a new feature: add a `docs/<slug>.md` page, link it from `README.md` alongside the existing doc links, and cross-link from the closest existing topic doc (e.g. `docs/frontend-models.md`). For a changed or extended feature: update the existing `docs/` page and the `README.md` entry. A PR that adds or changes public API without the matching docs is not done — push the doc commit before asking for review.
 After changing base model generator logic, run `npx velocious g:base-models` from `spec/dummy` so the generated base models stay in sync.
 `spec/dummy/db/structure-default.sql` is a generated schema snapshot; don't edit it manually, and commit updates when migrations/tests change it.
 Always add tests for new or changed behavior.
