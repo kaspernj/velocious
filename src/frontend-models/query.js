@@ -83,6 +83,62 @@ function normalizePreload(preload) {
 }
 
 /**
+ * Normalize the shorthand `withCount` argument from the frontend-model
+ * query API into the strict internal entries used in the transport
+ * payload. Shares the shape semantics with the backend normalizer in
+ * `database/query/with-count.js`.
+ *
+ * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, unknown>}>} spec
+ * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>}
+ */
+function normalizeWithCountFrontend(spec) {
+  if (spec == null) return []
+
+  if (typeof spec === "string") {
+    return [{attributeName: `${spec}Count`, relationshipName: spec}]
+  }
+
+  if (Array.isArray(spec)) {
+    return spec.flatMap((item) => {
+      if (typeof item !== "string") {
+        throw new Error(`withCount array entries must be strings; got ${typeof item}`)
+      }
+
+      return [{attributeName: `${item}Count`, relationshipName: item}]
+    })
+  }
+
+  if (!isPlainObject(spec)) {
+    throw new Error(`Invalid withCount spec: ${typeof spec}`)
+  }
+
+  const entries = []
+
+  for (const [key, value] of Object.entries(spec)) {
+    if (value === true) {
+      entries.push({attributeName: `${key}Count`, relationshipName: key})
+      continue
+    }
+
+    if (value === false) continue
+
+    if (isPlainObject(value)) {
+      const options = /** @type {{relationship?: string, where?: Record<string, unknown>}} */ (value)
+      entries.push({
+        attributeName: key,
+        relationshipName: options.relationship || key,
+        where: options.where
+      })
+      continue
+    }
+
+    throw new Error(`Invalid withCount value for ${key}: ${typeof value}`)
+  }
+
+  return entries
+}
+
+/**
  * @param {import("../database/query/index.js").NestedPreloadRecord} targetPreload - Existing preload data.
  * @param {import("../database/query/index.js").NestedPreloadRecord} incomingPreload - New preload data.
  * @returns {void}
@@ -917,6 +973,25 @@ export default class FrontendModelQuery {
     this._offset = null
     this._page = null
     this._perPage = null
+    /** @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>} */
+    this._withCount = []
+  }
+
+  /**
+   * Tell the backend index query to attach one or more association
+   * counts to each returned record. Parses the same shapes as the
+   * backend `ModelClassQuery#withCount`, then ships the normalized
+   * entries as part of the `index` command payload.
+   *
+   * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, unknown>}>} spec
+   * @returns {this}
+   */
+  withCount(spec) {
+    for (const entry of normalizeWithCountFrontend(spec)) {
+      this._withCount.push(entry)
+    }
+
+    return this
   }
 
   /**
@@ -1195,6 +1270,11 @@ export default class FrontendModelQuery {
     newQuery._offset = this._offset
     newQuery._page = this._page
     newQuery._perPage = this._perPage
+    newQuery._withCount = this._withCount.map((entry) => ({
+      attributeName: entry.attributeName,
+      relationshipName: entry.relationshipName,
+      where: entry.where ? {...entry.where} : undefined
+    }))
 
     return newQuery
   }
@@ -1211,6 +1291,21 @@ export default class FrontendModelQuery {
     if (Object.keys(this._preload).length === 0) return {}
 
     return {preload: this._preload}
+  }
+
+  /**
+   * @returns {Record<string, any>} - Payload withCount array when present.
+   */
+  withCountPayload() {
+    if (this._withCount.length === 0) return {}
+
+    return {
+      withCount: this._withCount.map((entry) => ({
+        attributeName: entry.attributeName,
+        relationshipName: entry.relationshipName,
+        where: entry.where || undefined
+      }))
+    }
   }
 
   /**
@@ -1331,6 +1426,7 @@ export default class FrontendModelQuery {
       ...this.distinctPayload(),
       ...this.sortPayload(),
       ...this.wherePayload(),
+      ...this.withCountPayload(),
       ...this.paginationPayload()
     })
 

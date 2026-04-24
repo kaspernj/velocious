@@ -5,6 +5,7 @@ import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
 import Logger from "../../logger.js"
 import Preloader from "./preloader.js"
+import {normalizeWithCount, runWithCount} from "./with-count.js"
 import DatabaseQuery from "./index.js"
 import JoinObject from "./join-object.js"
 import JoinPlain from "./join-plain.js"
@@ -136,7 +137,7 @@ function normalizePreloadRecord(preload) {
  */
 /**
  * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
- * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean}} ModelClassQueryArgsType
+ * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[]}} ModelClassQueryArgsType
  */
 
 /**
@@ -160,6 +161,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     this._joinBasePath = args.joinBasePath || []
     this._joinTracker = args.joinTracker || new JoinTracker({modelClass: this.modelClass})
     this._forceQualifyBaseTable = Boolean(args.forceQualifyBaseTable)
+
+    /** @type {import("./with-count.js").WithCountEntry[]} */
+    this._withCount = args.withCount ? [...args.withCount] : []
   }
 
   /** @returns {this} - The clone.  */
@@ -182,11 +186,28 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       wheres: [...this._wheres],
       joinBasePath: [...this._joinBasePath],
       joinTracker: this._joinTracker.clone(),
-      forceQualifyBaseTable: this._forceQualifyBaseTable
+      forceQualifyBaseTable: this._forceQualifyBaseTable,
+      withCount: [...this._withCount]
     }))
 
     // @ts-expect-error
     return newQuery
+  }
+
+  /**
+   * Tell the query to attach one or more association counts onto every
+   * loaded record. The counts land as regular attributes on each record;
+   * read them with `model.readAttribute("<name>Count")`.
+   *
+   * @param {import("./with-count.js").WithCountSpec} spec - Count spec in shorthand or nested form.
+   * @returns {this} - This query, for chaining.
+   */
+  withCount(spec) {
+    for (const entry of normalizeWithCount(spec)) {
+      this._withCount.push(entry)
+    }
+
+    return this
   }
 
   /** @returns {Promise<number>} - Resolves with the count.  */
@@ -698,6 +719,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       })
 
       await preloader.run()
+    }
+
+    if (this._withCount.length > 0 && models.length > 0) {
+      await runWithCount({
+        entries: this._withCount,
+        modelClass: this.modelClass,
+        models
+      })
     }
 
     return models

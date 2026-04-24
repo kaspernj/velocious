@@ -2582,9 +2582,15 @@ class VelociousDatabaseRecord {
     this.getModelClass()._assertHasBeenInitialized()
     const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[attributeName]
 
-    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
+    if (columnName) return this.readColumn(columnName)
 
-    return this.readColumn(columnName)
+    // Virtual attributes attached at runtime (e.g. by `.withCount(...)`)
+    // live directly in `_attributes` without a column mapping. Fall
+    // through to them by name so callers don't need a second reader API
+    // just to access counts.
+    if (attributeName in this._attributes) return this._attributes[attributeName]
+
+    throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
   }
 
   /**

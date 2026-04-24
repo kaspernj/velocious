@@ -1484,6 +1484,33 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>}
+   *   Frontend withCount entries. Empty array when not requested.
+   */
+  frontendModelWithCount() {
+    const raw = this.frontendModelParams().withCount
+
+    if (!Array.isArray(raw)) return []
+
+    /** @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>} */
+    const entries = []
+
+    for (const entry of raw) {
+      if (!entry || typeof entry !== "object") continue
+      if (typeof entry.attributeName !== "string" || entry.attributeName.length === 0) continue
+      if (typeof entry.relationshipName !== "string" || entry.relationshipName.length === 0) continue
+
+      entries.push({
+        attributeName: entry.attributeName,
+        relationshipName: entry.relationshipName,
+        where: entry.where && typeof entry.where === "object" ? entry.where : undefined
+      })
+    }
+
+    return entries
+  }
+
+  /**
    * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
    */
   frontendModelIndexQuery() {
@@ -1535,6 +1562,15 @@ export default class FrontendModelController extends Controller {
       for (const sort of sorts) {
         this.applyFrontendModelSort({query, sort})
       }
+    }
+
+    const withCount = this.frontendModelWithCount()
+
+    for (const entry of withCount) {
+      /** @type {Record<string, boolean | {relationship?: string, where?: Record<string, unknown>}>} */
+      const spec = {}
+      spec[entry.attributeName] = {relationship: entry.relationshipName, where: entry.where}
+      query.withCount(spec)
     }
 
     query = this.applyFrontendModelTranslatedAttributePreloads({query})
