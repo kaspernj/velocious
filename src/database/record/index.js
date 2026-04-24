@@ -641,7 +641,10 @@ class VelociousDatabaseRecord {
 
     const map = this.getQueryDataMap()
 
-    if (map[name]) {
+    // Use Object.hasOwn so a name that happens to match an inherited
+    // Object.prototype key (e.g. "toString", "constructor") isn't
+    // falsely treated as already registered.
+    if (Object.hasOwn(map, name)) {
       throw new Error(`queryData for ${this.name}.${name} is already registered`)
     }
 
@@ -651,8 +654,11 @@ class VelociousDatabaseRecord {
   /** @returns {Record<string, import("../query/query-data.js").QueryDataFn>} - queryData registrations keyed by name. */
   static getQueryDataMap() {
     if (!Object.hasOwn(this, "_queryDataRegistrations")) {
+      // Prototype-less map so bracket access can only ever surface
+      // registrations actually made on this class — never inherited
+      // Object.prototype members.
       /** @type {Record<string, import("../query/query-data.js").QueryDataFn>} */
-      this._queryDataRegistrations = {}
+      this._queryDataRegistrations = Object.create(null)
     }
 
     return /** @type {Record<string, import("../query/query-data.js").QueryDataFn>} */ (this._queryDataRegistrations)
@@ -663,7 +669,12 @@ class VelociousDatabaseRecord {
    * @returns {import("../query/query-data.js").QueryDataFn | null} - Registered fn or null when not found.
    */
   static getQueryDataByName(name) {
-    return this.getQueryDataMap()[name] || null
+    const map = this.getQueryDataMap()
+
+    // Own-property lookup so a spec containing e.g. "toString" doesn't
+    // resolve to an inherited Object.prototype member — matching the
+    // Object.hasOwn guard used when registering.
+    return Object.hasOwn(map, name) ? map[name] : null
   }
 
   /**

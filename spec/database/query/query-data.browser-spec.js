@@ -102,6 +102,24 @@ describe("Database - query - queryData", {databaseCleaning: {transaction: false,
     expect(error.message).toMatch(/nopeDoesNotExist/)
   })
 
+  it("throws for inherited Object.prototype names even though bracket lookup would return a member", async () => {
+    // Guards against a plain-object registry where `map["toString"]`
+    // would surface `Object.prototype.toString` and try to invoke it
+    // as a queryData fn.
+    const project = await Project.create({nameEn: "Proto", nameDe: "Proto"})
+
+    let error = null
+
+    try {
+      await Project.where({id: project.id()}).queryData("toString").toArray()
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error).not.toEqual(null)
+    expect(error.message).toMatch(/toString/)
+  })
+
   it(".count() on the parent query ignores queryData", async () => {
     const project = await Project.create({nameEn: "Counted", nameDe: "Counted"})
 
