@@ -2759,6 +2759,63 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Read a per-record ability result attached by `.abilities(...)`. The
+   * backend evaluates each requested action against the current ability
+   * for this record instance and ships the result alongside the
+   * record's attributes. Returns `false` when the action wasn't
+   * requested for this record — so UI code can safely branch on
+   * `record.can("update")` without first checking whether the ability
+   * was loaded.
+   *
+   * @param {string} action - Ability action name, e.g. `"update"`.
+   * @returns {boolean}
+   */
+  can(action) {
+    if (!this._computedAbilities) return false
+    if (!this._computedAbilities.has(action)) return false
+
+    return Boolean(this._computedAbilities.get(action))
+  }
+
+  /**
+   * Attach a per-record ability result to this record. Internal helper
+   * used by the `abilities` runner and by frontend-model hydration;
+   * outside code should not call this directly.
+   *
+   * @param {string} action - Ability action name.
+   * @param {boolean} value - Whether the current ability permits the action on this record.
+   * @returns {void}
+   */
+  _setComputedAbility(action, value) {
+    if (!this._computedAbilities) {
+      /** @type {Map<string, boolean>} */
+      this._computedAbilities = new Map()
+    }
+
+    this._computedAbilities.set(action, Boolean(value))
+  }
+
+  /**
+   * All attached per-record ability results as a plain object. Used
+   * by the frontend-model serializer to ship results alongside the
+   * record attributes on the wire.
+   *
+   * @returns {Record<string, boolean>}
+   */
+  computedAbilities() {
+    /** @type {Record<string, boolean>} */
+    const result = {}
+
+    if (!this._computedAbilities) return result
+
+    for (const [action, value] of this._computedAbilities) {
+      result[action] = value
+    }
+
+    return result
+  }
+
+  /**
    * Reads a column value from the record.
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
    * @returns {any} - The column.
