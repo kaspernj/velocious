@@ -975,6 +975,8 @@ export default class FrontendModelQuery {
     this._perPage = null
     /** @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>} */
     this._withCount = []
+    /** @type {Array<string | Record<string, any>>} */
+    this._queryData = []
   }
 
   /**
@@ -990,6 +992,25 @@ export default class FrontendModelQuery {
     for (const entry of normalizeWithCountFrontend(spec)) {
       this._withCount.push(entry)
     }
+
+    return this
+  }
+
+  /**
+   * Request one or more backend queryData entries for each returned
+   * record. The spec is a name or nested-record shape matching the
+   * `Model.queryData(name, fn)` registrations on the backend — the
+   * frontend ships only these names; the SQL fragments stay server-
+   * side. All resulting aliases are attached to the root record and
+   * read back with `record.queryData(aliasName)`.
+   *
+   * @param {string | Array<string | Record<string, any>> | Record<string, any>} spec
+   * @returns {this}
+   */
+  queryData(spec) {
+    if (spec == null) return this
+
+    this._queryData.push(/** @type {any} */ (spec))
 
     return this
   }
@@ -1275,6 +1296,9 @@ export default class FrontendModelQuery {
       relationshipName: entry.relationshipName,
       where: entry.where ? {...entry.where} : undefined
     }))
+    newQuery._queryData = this._queryData.map((entry) => (
+      typeof entry === "string" ? entry : JSON.parse(JSON.stringify(entry))
+    ))
 
     return newQuery
   }
@@ -1305,6 +1329,20 @@ export default class FrontendModelQuery {
         relationshipName: entry.relationshipName,
         where: entry.where || undefined
       }))
+    }
+  }
+
+  /**
+   * @returns {Record<string, any>} - Payload queryData spec when present.
+   */
+  queryDataPayload() {
+    if (this._queryData.length === 0) return {}
+
+    // Single accumulated spec goes on the wire verbatim. The backend
+    // normalizer accepts string/array/object at each level, so we can
+    // ship multiple `.queryData(...)` calls as an array.
+    return {
+      queryData: this._queryData.length === 1 ? this._queryData[0] : this._queryData
     }
   }
 
@@ -1427,6 +1465,7 @@ export default class FrontendModelQuery {
       ...this.sortPayload(),
       ...this.wherePayload(),
       ...this.withCountPayload(),
+      ...this.queryDataPayload(),
       ...this.paginationPayload()
     })
 

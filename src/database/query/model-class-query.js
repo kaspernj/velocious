@@ -5,6 +5,7 @@ import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
 import Logger from "../../logger.js"
 import Preloader from "./preloader.js"
+import {normalizeQueryDataSpec, runQueryData} from "./query-data.js"
 import {normalizeWithCount, runWithCount} from "./with-count.js"
 import DatabaseQuery from "./index.js"
 import JoinObject from "./join-object.js"
@@ -137,7 +138,7 @@ function normalizePreloadRecord(preload) {
  */
 /**
  * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
- * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[]}} ModelClassQueryArgsType
+ * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[], queryData?: import("./query-data.js").QueryDataEntry[]}} ModelClassQueryArgsType
  */
 
 /**
@@ -164,6 +165,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     /** @type {import("./with-count.js").WithCountEntry[]} */
     this._withCount = args.withCount ? [...args.withCount] : []
+
+    /** @type {import("./query-data.js").QueryDataEntry[]} */
+    this._queryData = args.queryData ? [...args.queryData] : []
   }
 
   /** @returns {this} - The clone.  */
@@ -187,7 +191,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       joinBasePath: [...this._joinBasePath],
       joinTracker: this._joinTracker.clone(),
       forceQualifyBaseTable: this._forceQualifyBaseTable,
-      withCount: [...this._withCount]
+      withCount: [...this._withCount],
+      queryData: [...this._queryData]
     }))
 
     // @ts-expect-error
@@ -208,6 +213,42 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     }
 
     return this
+  }
+
+  /**
+   * Attach one or more consumer-defined, per-row computed values onto
+   * every loaded root record. Leaf strings in the spec are names of
+   * functions previously registered via `Model.queryData(name, fn)`.
+   * Nested object keys are relationship names traced from the root to
+   * the model that declares the fn. Every resulting SELECT alias is
+   * attached to the **root** record (not to the intermediate joined
+   * rows); read values with `record.queryData(aliasName)`.
+   *
+   * See also `src/database/query/query-data.js`.
+   *
+   * @param {import("./query-data.js").QueryDataSpec} spec - Spec in shorthand or nested form.
+   * @returns {this} - This query, for chaining.
+   */
+  queryData(spec) {
+    for (const entry of normalizeQueryDataSpec(spec)) {
+      this._queryData.push(entry)
+    }
+
+    return this
+  }
+
+  /**
+   * Return the table reference (alias or table name) registered for the
+   * given relationship chain, relative to the query's current join base
+   * path. Convenience wrapper around `getTableReferenceForJoin` for use
+   * inside `queryData` callbacks where the writer's intent reads more
+   * naturally as "give me the table name for 'tasks'".
+   *
+   * @param {...string} path - Relationship path segments.
+   * @returns {string} - Unquoted table reference.
+   */
+  tableNameFor(...path) {
+    return this.getTableReferenceForJoin(...path)
   }
 
   /** @returns {Promise<number>} - Resolves with the count.  */
@@ -726,6 +767,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
         entries: this._withCount,
         modelClass: this.modelClass,
         models
+      })
+    }
+
+    if (this._queryData.length > 0 && models.length > 0) {
+      await runQueryData({
+        entries: this._queryData,
+        rootModelClass: this.modelClass,
+        rootModels: models
       })
     }
 

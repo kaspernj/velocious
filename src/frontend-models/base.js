@@ -33,6 +33,7 @@ const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 const ASSOCIATION_COUNTS_KEY = "__associationCounts"
+const QUERY_DATA_KEY = "__queryData"
 /** @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
@@ -1643,6 +1644,40 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Read a consumer-defined value attached by `.queryData(...)`. Stored
+   * on a dedicated map rather than `_attributes`, so a virtual alias
+   * like `tasksCount` cannot silently shadow a real column of the same
+   * name. Returns `null` when no registered fn produced that alias for
+   * this record (e.g. no child rows matched the aggregate).
+   *
+   * @param {string} name - queryData alias name.
+   * @returns {unknown}
+   */
+  queryData(name) {
+    if (!this._queryDataValues) return null
+    if (!this._queryDataValues.has(name)) return null
+
+    return this._queryDataValues.get(name)
+  }
+
+  /**
+   * Internal setter used by `instantiateFromResponse` when hydrating
+   * queryData values that rode along with the record payload.
+   *
+   * @param {string} name - queryData alias name.
+   * @param {unknown} value - Attached value.
+   * @returns {void}
+   */
+  _setQueryData(name, value) {
+    if (!this._queryDataValues) {
+      /** @type {Map<string, unknown>} */
+      this._queryDataValues = new Map()
+    }
+
+    this._queryDataValues.set(name, value)
+  }
+
+  /**
    * @param {string} attributeName - Attribute name.
    * @param {any} newValue - New value.
    * @returns {any} - Assigned value.
@@ -2030,7 +2065,7 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
-   * @returns {{attributes: Record<string, any>, associationCounts: Record<string, number>, preloadedRelationships: Record<string, any>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, and the selected-attributes set.
+   * @returns {{attributes: Record<string, any>, associationCounts: Record<string, number>, queryData: Record<string, unknown>, preloadedRelationships: Record<string, any>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, and the selected-attributes set.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
@@ -2057,6 +2092,9 @@ export default class FrontendModelBase {
     const associationCounts = isPlainObject(attributes[ASSOCIATION_COUNTS_KEY])
       ? /** @type {Record<string, number>} */ (attributes[ASSOCIATION_COUNTS_KEY])
       : {}
+    const queryData = isPlainObject(attributes[QUERY_DATA_KEY])
+      ? /** @type {Record<string, unknown>} */ (attributes[QUERY_DATA_KEY])
+      : {}
     const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
       ? new Set(/** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
       : null
@@ -2064,10 +2102,11 @@ export default class FrontendModelBase {
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
     delete attributes[SELECTED_ATTRIBUTES_KEY]
     delete attributes[ASSOCIATION_COUNTS_KEY]
+    delete attributes[QUERY_DATA_KEY]
 
     const selectedAttributes = selectedAttributesFromPayload || new Set(Object.keys(attributes))
 
-    return {attributes, associationCounts, preloadedRelationships, selectedAttributes}
+    return {attributes, associationCounts, queryData, preloadedRelationships, selectedAttributes}
   }
 
   /**
@@ -2115,6 +2154,7 @@ export default class FrontendModelBase {
     const attributes = modelData.attributes
     const preloadedRelationships = modelData.preloadedRelationships
     const associationCounts = modelData.associationCounts
+    const queryData = modelData.queryData
     const selectedAttributes = modelData.selectedAttributes
     const model = /** @type {InstanceType<T>} */ (new this(attributes))
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
@@ -2123,6 +2163,10 @@ export default class FrontendModelBase {
 
     for (const [attributeName, value] of Object.entries(associationCounts || {})) {
       model._setAssociationCount(attributeName, Number(value) || 0)
+    }
+
+    for (const [name, value] of Object.entries(queryData || {})) {
+      model._setQueryData(name, value)
     }
 
     model.setIsNewRecord(false)
