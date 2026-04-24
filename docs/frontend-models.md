@@ -26,6 +26,9 @@
 ## Association counts
 - `query.withCount("tasks")` attaches a per-row has-many count to each loaded record, read via `record.readCount("tasksCount")`. Accepts a relationship name, an array of names, or an object form with custom attribute names and per-association `where` filters. Polymorphic has-many is supported. See [with-count.md](with-count.md) for full usage and semantics.
 
+## Per-record abilities
+- `query.abilities(["update", "destroy"])` (flat form) or `query.abilities({Timelog: ["update"]})` (keyed form) asks the backend to evaluate the current ability against each returned record and attach the results for `record.can(action)` reads. The keyed form also walks preloaded children. See [abilities.md](abilities.md) for full usage and semantics.
+
 ## Ransack filtering and sorting
 - `ransack(params)` applies Rails-compatible ransack filters and sorting on both frontend and database model queries.
 - Supported predicates: `eq`, `notEq`, `in`, `notIn`, `gt`, `gteq`, `lt`, `lteq`, `cont`, `start`, `end`, `null`.

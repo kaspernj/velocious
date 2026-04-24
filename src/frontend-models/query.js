@@ -139,6 +139,63 @@ function normalizeWithCountFrontend(spec) {
 }
 
 /**
+ * Normalize a frontend `.abilities(...)` spec into a flat list of
+ * `{modelName, actions}` entries. Accepts the flat actions-array
+ * shorthand (applies to the query's own model class) and the keyed
+ * `{ModelName: [action, ...]}` form (applies to records of that model
+ * class, useful for preloaded children).
+ *
+ * @param {string[] | Record<string, string[]>} spec
+ * @param {{getModelName: () => string}} rootModelClass
+ * @returns {Array<{modelName: string, actions: string[]}>}
+ */
+function normalizeAbilitiesSpec(spec, rootModelClass) {
+  if (spec == null) return []
+
+  if (Array.isArray(spec)) {
+    for (const action of spec) {
+      if (typeof action !== "string" || action.length < 1) {
+        throw new Error(`abilities flat-form actions must be non-empty strings; got ${typeof action}`)
+      }
+    }
+
+    const rootModelName = typeof rootModelClass?.getModelName === "function"
+      ? rootModelClass.getModelName()
+      : undefined
+    if (!rootModelName) {
+      throw new Error("abilities flat-form requires a root model class with getModelName()")
+    }
+
+    return [{actions: [...spec], modelName: rootModelName}]
+  }
+
+  if (!isPlainObject(spec)) {
+    throw new Error(`Invalid abilities spec: ${typeof spec}`)
+  }
+
+  /** @type {Array<{modelName: string, actions: string[]}>} */
+  const entries = []
+
+  for (const [modelName, actions] of Object.entries(spec)) {
+    if (!Array.isArray(actions)) {
+      throw new Error(`abilities[${modelName}] must be an array of action names; got ${typeof actions}`)
+    }
+
+    const sanitized = actions.map((action) => {
+      if (typeof action !== "string" || action.length < 1) {
+        throw new Error(`abilities[${modelName}] entries must be non-empty strings; got ${typeof action}`)
+      }
+
+      return action
+    })
+
+    entries.push({actions: sanitized, modelName})
+  }
+
+  return entries
+}
+
+/**
  * @param {import("../database/query/index.js").NestedPreloadRecord} targetPreload - Existing preload data.
  * @param {import("../database/query/index.js").NestedPreloadRecord} incomingPreload - New preload data.
  * @returns {void}
@@ -977,6 +1034,74 @@ export default class FrontendModelQuery {
     this._withCount = []
     /** @type {Array<string | Record<string, any>>} */
     this._queryData = []
+    /**
+     * Per-record ability spec. Normalized to a list of
+     * `{modelName, actions}` entries — one entry per model that should
+     * have ability results attached. The root query's model class
+     * name is implicit via `"__root__"` when the caller used the flat
+     * array form.
+     * @type {Array<{modelName: string, actions: string[]}>}
+     */
+    this._abilities = []
+  }
+
+  /**
+   * Tell the backend to evaluate one or more ability actions against
+   * each returned record (and its preloaded relations, when keyed by
+   * model name) and ship the results back so the frontend can read
+   * them via `record.can(action)`.
+   *
+   * Flat form — applies to the query's own model class:
+   *   ```
+   *   const timelogs = await Timelog.where({taskId})
+   *     .abilities(["update", "destroy"])
+   *     .toArray()
+   *   timelogs[0].can("update") // → boolean
+   *   ```
+   *
+   * Keyed form — targets records by model name, useful for preloaded
+   * children:
+   *   ```
+   *   const project = await Project
+   *     .preload("timelogs")
+   *     .abilities({Timelog: ["update", "destroy"]})
+   *     .first()
+   *   project.timelogs().loaded()[0].can("update") // → boolean
+   *   ```
+   *
+   * Keys in the keyed form are the backend model names (as returned by
+   * `ModelClass.getModelName()` / the `modelName` field of the
+   * frontend-model resource config). Values are the ability-action
+   * strings — typically `"update"` / `"destroy"` / `"create"` /
+   * `"read"`, but any custom action registered on the resource's
+   * authorization ability is accepted.
+   *
+   * @param {string[] | Record<string, string[]>} spec
+   * @returns {this}
+   */
+  abilities(spec) {
+    for (const entry of normalizeAbilitiesSpec(spec, this.modelClass)) {
+      this._mergeAbilityEntry(entry)
+    }
+
+    return this
+  }
+
+  /**
+   * @param {{modelName: string, actions: string[]}} entry
+   * @returns {void}
+   */
+  _mergeAbilityEntry(entry) {
+    const existing = this._abilities.find((candidate) => candidate.modelName === entry.modelName)
+
+    if (!existing) {
+      this._abilities.push({actions: [...entry.actions], modelName: entry.modelName})
+      return
+    }
+
+    for (const action of entry.actions) {
+      if (!existing.actions.includes(action)) existing.actions.push(action)
+    }
   }
 
   /**
@@ -1299,6 +1424,10 @@ export default class FrontendModelQuery {
     newQuery._queryData = this._queryData.map((entry) => (
       typeof entry === "string" ? entry : JSON.parse(JSON.stringify(entry))
     ))
+    newQuery._abilities = this._abilities.map((entry) => ({
+      actions: [...entry.actions],
+      modelName: entry.modelName
+    }))
 
     return newQuery
   }
@@ -1328,6 +1457,20 @@ export default class FrontendModelQuery {
         attributeName: entry.attributeName,
         relationshipName: entry.relationshipName,
         where: entry.where || undefined
+      }))
+    }
+  }
+
+  /**
+   * @returns {Record<string, any>} - Payload abilities array when present.
+   */
+  abilitiesPayload() {
+    if (this._abilities.length === 0) return {}
+
+    return {
+      abilities: this._abilities.map((entry) => ({
+        actions: [...entry.actions],
+        modelName: entry.modelName
       }))
     }
   }
@@ -1465,6 +1608,7 @@ export default class FrontendModelQuery {
       ...this.sortPayload(),
       ...this.wherePayload(),
       ...this.withCountPayload(),
+      ...this.abilitiesPayload(),
       ...this.queryDataPayload(),
       ...this.paginationPayload()
     })
@@ -1621,6 +1765,7 @@ export default class FrontendModelQuery {
       ...this.groupPayload(),
       ...this.distinctPayload(),
       ...this.sortPayload(),
+      ...this.abilitiesPayload(),
       ...this.paginationPayload(),
       where: mergedWhere
     })

@@ -34,6 +34,7 @@ const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 const ASSOCIATION_COUNTS_KEY = "__associationCounts"
 const QUERY_DATA_KEY = "__queryData"
+const ABILITIES_KEY = "__abilities"
 /** @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
@@ -1644,6 +1645,43 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Read a per-record ability result attached by `.abilities(...)`. The
+   * backend evaluates each requested action against the current
+   * ability for this record instance and ships the result alongside
+   * the record's attributes. Returns `false` when the action wasn't
+   * requested (or the ability denied it), so UI code can safely branch
+   * on `record.can("update")` without first checking whether the
+   * ability was loaded.
+   *
+   * @param {string} action - Ability action name, e.g. `"update"`.
+   * @returns {boolean}
+   */
+  can(action) {
+    if (!this._computedAbilities) return false
+    if (!this._computedAbilities.has(action)) return false
+
+    return Boolean(this._computedAbilities.get(action))
+  }
+
+  /**
+   * Internal setter called by `instantiateFromResponse` when hydrating
+   * per-record ability results that rode along with the record
+   * payload.
+   *
+   * @param {string} action - Ability action name.
+   * @param {boolean} value - Whether the current ability permits the action on this record.
+   * @returns {void}
+   */
+  _setComputedAbility(action, value) {
+    if (!this._computedAbilities) {
+      /** @type {Map<string, boolean>} */
+      this._computedAbilities = new Map()
+    }
+
+    this._computedAbilities.set(action, Boolean(value))
+  }
+
+  /**
    * Read a consumer-defined value attached by `.queryData(...)`. Stored
    * on a dedicated map rather than `_attributes`, so a virtual alias
    * like `tasksCount` cannot silently shadow a real column of the same
@@ -2065,7 +2103,7 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
-   * @returns {{attributes: Record<string, any>, associationCounts: Record<string, number>, queryData: Record<string, unknown>, preloadedRelationships: Record<string, any>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, and the selected-attributes set.
+   * @returns {{abilities: Record<string, boolean>, attributes: Record<string, any>, associationCounts: Record<string, number>, queryData: Record<string, unknown>, preloadedRelationships: Record<string, any>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, abilities, and the selected-attributes set.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
@@ -2095,6 +2133,9 @@ export default class FrontendModelBase {
     const queryData = isPlainObject(attributes[QUERY_DATA_KEY])
       ? /** @type {Record<string, unknown>} */ (attributes[QUERY_DATA_KEY])
       : {}
+    const abilities = isPlainObject(attributes[ABILITIES_KEY])
+      ? /** @type {Record<string, boolean>} */ (attributes[ABILITIES_KEY])
+      : {}
     const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
       ? new Set(/** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
       : null
@@ -2103,10 +2144,11 @@ export default class FrontendModelBase {
     delete attributes[SELECTED_ATTRIBUTES_KEY]
     delete attributes[ASSOCIATION_COUNTS_KEY]
     delete attributes[QUERY_DATA_KEY]
+    delete attributes[ABILITIES_KEY]
 
     const selectedAttributes = selectedAttributesFromPayload || new Set(Object.keys(attributes))
 
-    return {attributes, associationCounts, queryData, preloadedRelationships, selectedAttributes}
+    return {abilities, attributes, associationCounts, queryData, preloadedRelationships, selectedAttributes}
   }
 
   /**
@@ -2155,6 +2197,7 @@ export default class FrontendModelBase {
     const preloadedRelationships = modelData.preloadedRelationships
     const associationCounts = modelData.associationCounts
     const queryData = modelData.queryData
+    const abilities = modelData.abilities
     const selectedAttributes = modelData.selectedAttributes
     const model = /** @type {InstanceType<T>} */ (new this(attributes))
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
@@ -2167,6 +2210,10 @@ export default class FrontendModelBase {
 
     for (const [name, value] of Object.entries(queryData || {})) {
       model._setQueryData(name, value)
+    }
+
+    for (const [action, value] of Object.entries(abilities || {})) {
+      model._setComputedAbility(action, Boolean(value))
     }
 
     model.setIsNewRecord(false)

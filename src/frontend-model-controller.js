@@ -1511,6 +1511,190 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Resolve an entry from the frontend-model `abilities` payload to
+   * its backend model class by looking up the resource by modelName
+   * across all configured backend projects. Returns null when no
+   * resource matches — the spec entry is then silently ignored so a
+   * caller requesting abilities for a model they cannot resolve does
+   * not crash the request.
+   *
+   * @param {string} modelName
+   * @returns {typeof import("./database/record/index.js").default | null}
+   */
+  _frontendModelClassForAbilities(modelName) {
+    if (typeof modelName !== "string" || modelName.length === 0) return null
+
+    const configuration = this.getConfiguration()
+    const backendProjects = configuration?.getBackendProjects?.() ?? []
+
+    for (const backendProject of backendProjects) {
+      const frontendModels = backendProject?.frontendModels
+      if (!frontendModels || typeof frontendModels !== "object") continue
+
+      const resourceDefinition = frontendModels[modelName]
+      if (!resourceDefinition) continue
+
+      const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+      if (!resourceClass) continue
+
+      const modelClass = typeof resourceClass.modelClass === "function"
+        ? resourceClass.modelClass()
+        : resourceClass.ModelClass
+
+      if (typeof modelClass === "function") return modelClass
+    }
+
+    return null
+  }
+
+  /**
+   * Collect every loaded record whose `getModelName()` matches the
+   * requested name, walking across the root-level slice plus any
+   * preloaded relationships at any depth. Used to evaluate per-record
+   * abilities against nested preloaded children with a single batched
+   * query per (modelClass, action) pair.
+   *
+   * @param {import("./database/record/index.js").default[]} rootModels
+   * @param {string} modelName
+   * @returns {import("./database/record/index.js").default[]}
+   */
+  _frontendModelCollectRecordsForName(rootModels, modelName) {
+    /** @type {import("./database/record/index.js").default[]} */
+    const out = []
+    /** @type {Set<import("./database/record/index.js").default>} */
+    const seen = new Set()
+
+    /** @param {import("./database/record/index.js").default | null | undefined} record */
+    const walk = (record) => {
+      if (!record || typeof record !== "object") return
+      if (seen.has(record)) return
+      seen.add(record)
+
+      const ModelClass = typeof record.getModelClass === "function"
+        ? record.getModelClass()
+        : null
+      if (ModelClass && typeof ModelClass.getModelName === "function" && ModelClass.getModelName() === modelName) {
+        out.push(record)
+      }
+
+      const relationshipsMap = typeof ModelClass?.getRelationshipsMap === "function"
+        ? ModelClass.getRelationshipsMap()
+        : null
+      if (!relationshipsMap) return
+
+      for (const relationshipName of Object.keys(relationshipsMap)) {
+        const relationship = typeof record.getRelationshipByName === "function"
+          ? record.getRelationshipByName(relationshipName)
+          : null
+        if (!relationship || typeof relationship.getLoadedOrUndefined !== "function") continue
+
+        const loaded = relationship.getLoadedOrUndefined()
+        if (loaded === undefined) continue
+
+        if (Array.isArray(loaded)) {
+          for (const child of loaded) walk(child)
+        } else {
+          walk(loaded)
+        }
+      }
+    }
+
+    for (const root of rootModels) walk(root)
+
+    return out
+  }
+
+  /**
+   * Evaluate every ability requested via the frontend `abilities`
+   * param against the loaded model cohort (plus any preloaded
+   * children), attaching the results to each record via
+   * `_setComputedAbility`. Runs one batched `authorized query + pluck`
+   * per (modelClass, action) pair, regardless of how many records
+   * were loaded.
+   *
+   * @param {import("./database/record/index.js").default[]} rootModels
+   * @returns {Promise<void>}
+   */
+  async frontendModelComputeAbilities(rootModels) {
+    const entries = this.frontendModelAbilities()
+    if (entries.length === 0) return
+    if (!Array.isArray(rootModels) || rootModels.length === 0) return
+
+    const ability = this.currentAbility()
+    if (!ability) return
+
+    for (const entry of entries) {
+      const modelClass = this._frontendModelClassForAbilities(entry.modelName)
+      if (!modelClass) continue
+
+      const candidates = this._frontendModelCollectRecordsForName(rootModels, entry.modelName)
+      if (candidates.length === 0) continue
+
+      const primaryKey = modelClass.primaryKey()
+      const ids = candidates
+        .map((record) => record.readAttribute(primaryKey))
+        .filter((value) => value !== null && value !== undefined)
+      if (ids.length === 0) continue
+
+      for (const action of entry.actions) {
+        let allowedIds
+        try {
+          const authorizedQuery = modelClass.accessibleFor(action, ability).where({[primaryKey]: ids})
+          const plucked = await authorizedQuery.pluck(primaryKey)
+          allowedIds = new Set(plucked.map((value) => String(value)))
+        } catch (error) {
+          // An ability with no allow rules for the action throws via
+          // `accessibleFor`; treat as a universal deny so the frontend
+          // gets `can(action) === false` for every candidate, instead
+          // of surfacing an error that the UI can't act on.
+          void error
+          allowedIds = new Set()
+        }
+
+        for (const record of candidates) {
+          const idValue = record.readAttribute(primaryKey)
+          const allowed = idValue !== null && idValue !== undefined && allowedIds.has(String(idValue))
+          record._setComputedAbility(action, allowed)
+        }
+      }
+    }
+  }
+
+  /**
+   * Parse the frontend-model `abilities` param into a list of
+   * `{modelName, actions}` entries to evaluate against loaded records.
+   * Unknown entries are silently skipped — downstream code resolves
+   * model names to classes when applying the check, so unresolved
+   * names naturally become no-ops.
+   *
+   * @returns {Array<{modelName: string, actions: string[]}>}
+   */
+  frontendModelAbilities() {
+    const raw = this.frontendModelParams().abilities
+
+    if (!Array.isArray(raw)) return []
+
+    /** @type {Array<{modelName: string, actions: string[]}>} */
+    const entries = []
+
+    for (const entry of raw) {
+      if (!entry || typeof entry !== "object") continue
+      if (typeof entry.modelName !== "string" || entry.modelName.length === 0) continue
+      if (!Array.isArray(entry.actions)) continue
+
+      const actions = entry.actions.filter(
+        (/** @type {unknown} */ action) => typeof action === "string" && action.length > 0
+      )
+
+      if (actions.length === 0) continue
+
+      entries.push({actions, modelName: entry.modelName})
+    }
+
+    return entries
+  }
+
+  /**
    * Read the frontend-model `queryData` param. The wire format carries
    * only **names** (the keys the frontend wants attached) plus the
    * optional nested-relationship chain leading to them — the actual SQL
@@ -2616,11 +2800,15 @@ export default class FrontendModelController extends Controller {
       const queryDataValues = typeof model.queryDataValues === "function"
         ? model.queryDataValues()
         : {}
+      const computedAbilities = typeof model.computedAbilities === "function"
+        ? model.computedAbilities()
+        : {}
       const hasCounts = Object.keys(associationCounts).length > 0
       const hasQueryData = Object.keys(queryDataValues).length > 0
+      const hasAbilities = Object.keys(computedAbilities).length > 0
       const hasPreloaded = Object.keys(preloadedRelationships).length > 0
 
-      if (!hasPreloaded && !hasCounts && !hasQueryData) {
+      if (!hasPreloaded && !hasCounts && !hasQueryData && !hasAbilities) {
         serializedModels.push(serializedAttributes)
         continue
       }
@@ -2631,6 +2819,7 @@ export default class FrontendModelController extends Controller {
       if (hasPreloaded) serialized.__preloadedRelationships = preloadedRelationships
       if (hasCounts) serialized.__associationCounts = associationCounts
       if (hasQueryData) serialized.__queryData = queryDataValues
+      if (hasAbilities) serialized.__abilities = computedAbilities
 
       serializedModels.push(serialized)
     }
@@ -2791,6 +2980,7 @@ export default class FrontendModelController extends Controller {
       }
 
       const models = await this.frontendModelRecords()
+      await this.frontendModelComputeAbilities(models)
       const serializedModels = await Promise.all(models.map(async (model) => await resource.serialize(model, "index")))
 
       return {
@@ -2925,6 +3115,7 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
+      await this.frontendModelComputeAbilities([model])
       const serializedModel = await resource.serialize(model, "find")
 
       return {
