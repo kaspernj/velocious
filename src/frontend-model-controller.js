@@ -2580,16 +2580,24 @@ export default class FrontendModelController extends Controller {
     for (const [modelIndex, model] of models.entries()) {
       const serializedAttributes = await this.serializeFrontendModelAttributes(model)
       const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
+      const associationCounts = typeof model.associationCounts === "function"
+        ? model.associationCounts()
+        : {}
+      const hasCounts = Object.keys(associationCounts).length > 0
+      const hasPreloaded = Object.keys(preloadedRelationships).length > 0
 
-      if (Object.keys(preloadedRelationships).length < 1) {
+      if (!hasPreloaded && !hasCounts) {
         serializedModels.push(serializedAttributes)
         continue
       }
 
-      serializedModels.push({
-        ...serializedAttributes,
-        __preloadedRelationships: preloadedRelationships
-      })
+      /** @type {Record<string, any>} */
+      const serialized = {...serializedAttributes}
+
+      if (hasPreloaded) serialized.__preloadedRelationships = preloadedRelationships
+      if (hasCounts) serialized.__associationCounts = associationCounts
+
+      serializedModels.push(serialized)
     }
 
     return serializedModels

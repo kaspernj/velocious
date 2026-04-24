@@ -116,14 +116,14 @@ export async function runWithCount({models, modelClass, entries}) {
       // returns integers as JS numbers, but MySQL's raw driver can
       // return count primary keys as strings. Try both.
       const resolvedCount = counts.has(modelPrimaryKeyValue)
-        ? counts.get(modelPrimaryKeyValue)
-        : (counts.get(String(modelPrimaryKeyValue)) ?? 0)
+        ? /** @type {number} */ (counts.get(modelPrimaryKeyValue))
+        : Number(counts.get(String(modelPrimaryKeyValue)) ?? 0)
 
-      // Write directly into the record's attribute map rather than going
-      // through `setAttribute`: these are computed counts rather than
-      // mapped columns, so no generated setter exists (`setAttribute`
-      // requires one) and there's nothing to typecoerce as with columns.
-      model._attributes[entry.attributeName] = resolvedCount
+      // Counts go on the record's dedicated association-count map,
+      // NOT on `_attributes`, so a virtual `tasksCount` can't shadow a
+      // real `tasks_count` column (e.g. a counter_cache) nor leak into
+      // attribute-level serialization / change tracking.
+      model._setAssociationCount(entry.attributeName, resolvedCount)
     }
   }
 }
