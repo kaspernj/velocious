@@ -1511,6 +1511,30 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Read the frontend-model `queryData` param. The wire format carries
+   * only **names** (the keys the frontend wants attached) plus the
+   * optional nested-relationship chain leading to them — the actual SQL
+   * fragments live on the backend model as `Model.queryData(name, fn)`
+   * registrations. Callers cannot push SQL through this endpoint.
+   *
+   * Returns the raw nested-record spec (shape validated by the
+   * normalizer inside `Query.queryData`) or `null` when not requested.
+   *
+   * @returns {import("./database/query/query-data.js").QueryDataSpec | null}
+   */
+  frontendModelQueryData() {
+    const raw = this.frontendModelParams().queryData
+
+    if (raw == null) return null
+
+    if (typeof raw === "string") return raw
+    if (Array.isArray(raw)) return raw
+    if (typeof raw === "object") return raw
+
+    return null
+  }
+
+  /**
    * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
    */
   frontendModelIndexQuery() {
@@ -1571,6 +1595,12 @@ export default class FrontendModelController extends Controller {
       const spec = {}
       spec[entry.attributeName] = {relationship: entry.relationshipName, where: entry.where}
       query.withCount(spec)
+    }
+
+    const queryData = this.frontendModelQueryData()
+
+    if (queryData != null) {
+      query.queryData(queryData)
     }
 
     query = this.applyFrontendModelTranslatedAttributePreloads({query})
@@ -2583,10 +2613,14 @@ export default class FrontendModelController extends Controller {
       const associationCounts = typeof model.associationCounts === "function"
         ? model.associationCounts()
         : {}
+      const queryDataValues = typeof model.queryDataValues === "function"
+        ? model.queryDataValues()
+        : {}
       const hasCounts = Object.keys(associationCounts).length > 0
+      const hasQueryData = Object.keys(queryDataValues).length > 0
       const hasPreloaded = Object.keys(preloadedRelationships).length > 0
 
-      if (!hasPreloaded && !hasCounts) {
+      if (!hasPreloaded && !hasCounts && !hasQueryData) {
         serializedModels.push(serializedAttributes)
         continue
       }
@@ -2596,6 +2630,7 @@ export default class FrontendModelController extends Controller {
 
       if (hasPreloaded) serialized.__preloadedRelationships = preloadedRelationships
       if (hasCounts) serialized.__associationCounts = associationCounts
+      if (hasQueryData) serialized.__queryData = queryDataValues
 
       serializedModels.push(serialized)
     }

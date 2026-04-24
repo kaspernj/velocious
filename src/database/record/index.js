@@ -617,6 +617,56 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Register a consumer-defined queryData entry. The callback receives
+   * a grouped query already joined down the relationship chain from the
+   * root of `.queryData(...)` to this model, already filtered by the
+   * root parent IDs, and with `parent_id` pre-selected — so the fn
+   * only needs to add its own SELECT (and optionally joins/where). Any
+   * aliases the fn selects are attached to each **root** record via
+   * `record.queryData(aliasName)`. Multi-column selects are fine — one
+   * alias maps to one queryData key.
+   *
+   * @param {string} name - Identifier used in the `.queryData(...)` spec.
+   * @param {import("../query/query-data.js").QueryDataFn} fn - Callback that mutates the query.
+   * @returns {void}
+   */
+  static queryData(name, fn) {
+    if (!name || typeof name !== "string") {
+      throw new Error(`Invalid queryData name: ${name}`)
+    }
+
+    if (typeof fn !== "function") {
+      throw new Error(`queryData fn for ${this.name}.queryData(${JSON.stringify(name)}) must be a function`)
+    }
+
+    const map = this.getQueryDataMap()
+
+    if (map[name]) {
+      throw new Error(`queryData for ${this.name}.${name} is already registered`)
+    }
+
+    map[name] = fn
+  }
+
+  /** @returns {Record<string, import("../query/query-data.js").QueryDataFn>} - queryData registrations keyed by name. */
+  static getQueryDataMap() {
+    if (!Object.hasOwn(this, "_queryDataRegistrations")) {
+      /** @type {Record<string, import("../query/query-data.js").QueryDataFn>} */
+      this._queryDataRegistrations = {}
+    }
+
+    return /** @type {Record<string, import("../query/query-data.js").QueryDataFn>} */ (this._queryDataRegistrations)
+  }
+
+  /**
+   * @param {string} name - queryData name.
+   * @returns {import("../query/query-data.js").QueryDataFn | null} - Registered fn or null when not found.
+   */
+  static getQueryDataByName(name) {
+    return this.getQueryDataMap()[name] || null
+  }
+
+  /**
    * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
    */
   static getAttachments() {
@@ -2636,6 +2686,62 @@ class VelociousDatabaseRecord {
 
     for (const [attributeName, value] of this._associationCounts) {
       result[attributeName] = value
+    }
+
+    return result
+  }
+
+  /**
+   * Read a value attached by `.queryData(...)`. Stored on a dedicated
+   * map rather than on `_attributes`, so a virtual queryData key like
+   * `transportSecondsSum` cannot silently shadow a real column of the
+   * same name. Returns `null` when the key wasn't produced by any
+   * registered fn for this record (e.g. no child rows matched the
+   * aggregate).
+   *
+   * @param {string} name - queryData attribute name (matches a SELECT alias from the registered fn).
+   * @returns {unknown}
+   */
+  queryData(name) {
+    if (!this._queryDataValues) return null
+    if (!this._queryDataValues.has(name)) return null
+
+    return this._queryDataValues.get(name)
+  }
+
+  /**
+   * Attach a queryData value to this record. Internal helper used by
+   * the `queryData` runner and by frontend-model hydration; outside
+   * code should not call this directly.
+   *
+   * @param {string} name - queryData attribute name.
+   * @param {unknown} value - Value to attach.
+   * @returns {void}
+   */
+  _setQueryData(name, value) {
+    if (!this._queryDataValues) {
+      /** @type {Map<string, unknown>} */
+      this._queryDataValues = new Map()
+    }
+
+    this._queryDataValues.set(name, value)
+  }
+
+  /**
+   * All attached queryData values as a plain object. Used by the
+   * frontend-model serializer to ship queryData alongside the record
+   * attributes on the wire.
+   *
+   * @returns {Record<string, unknown>}
+   */
+  queryDataValues() {
+    /** @type {Record<string, unknown>} */
+    const result = {}
+
+    if (!this._queryDataValues) return result
+
+    for (const [name, value] of this._queryDataValues) {
+      result[name] = value
     }
 
     return result
