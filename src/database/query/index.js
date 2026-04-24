@@ -279,13 +279,8 @@ export default class VelociousDatabaseQuery {
    * @returns {this} - The page.
    */
   page(pageNumber) {
-    const perPage = this._perPage || 30
-    const offset = (pageNumber - 1) * perPage
-    const limit = perPage
-
     this._page = pageNumber
-    this.limit(limit)
-    this.offset(offset)
+    this._applyPagination()
     return this
   }
 
@@ -295,7 +290,27 @@ export default class VelociousDatabaseQuery {
    */
   perPage(perPage) {
     this._perPage = perPage
+    this._applyPagination()
     return this
+  }
+
+  /**
+   * Re-derive LIMIT and OFFSET from whichever of `_page` / `_perPage`
+   * are currently set. Called from both `page()` and `perPage()` so the
+   * chaining order (`page(n).perPage(pp)` vs `perPage(pp).page(n)`) no
+   * longer determines which perPage value wins — the last value of
+   * each setter always takes effect.
+   *
+   * @returns {void}
+   */
+  _applyPagination() {
+    if (this._page == null) return
+
+    const perPage = this._perPage || 30
+    const offset = (this._page - 1) * perPage
+
+    this.limit(perPage)
+    this.offset(offset)
   }
 
   /**

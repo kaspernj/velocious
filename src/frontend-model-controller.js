@@ -1484,6 +1484,33 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>}
+   *   Frontend withCount entries. Empty array when not requested.
+   */
+  frontendModelWithCount() {
+    const raw = this.frontendModelParams().withCount
+
+    if (!Array.isArray(raw)) return []
+
+    /** @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>} */
+    const entries = []
+
+    for (const entry of raw) {
+      if (!entry || typeof entry !== "object") continue
+      if (typeof entry.attributeName !== "string" || entry.attributeName.length === 0) continue
+      if (typeof entry.relationshipName !== "string" || entry.relationshipName.length === 0) continue
+
+      entries.push({
+        attributeName: entry.attributeName,
+        relationshipName: entry.relationshipName,
+        where: entry.where && typeof entry.where === "object" ? entry.where : undefined
+      })
+    }
+
+    return entries
+  }
+
+  /**
    * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
    */
   frontendModelIndexQuery() {
@@ -1535,6 +1562,15 @@ export default class FrontendModelController extends Controller {
       for (const sort of sorts) {
         this.applyFrontendModelSort({query, sort})
       }
+    }
+
+    const withCount = this.frontendModelWithCount()
+
+    for (const entry of withCount) {
+      /** @type {Record<string, boolean | {relationship?: string, where?: Record<string, unknown>}>} */
+      const spec = {}
+      spec[entry.attributeName] = {relationship: entry.relationshipName, where: entry.where}
+      query.withCount(spec)
     }
 
     query = this.applyFrontendModelTranslatedAttributePreloads({query})
@@ -2544,16 +2580,24 @@ export default class FrontendModelController extends Controller {
     for (const [modelIndex, model] of models.entries()) {
       const serializedAttributes = await this.serializeFrontendModelAttributes(model)
       const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
+      const associationCounts = typeof model.associationCounts === "function"
+        ? model.associationCounts()
+        : {}
+      const hasCounts = Object.keys(associationCounts).length > 0
+      const hasPreloaded = Object.keys(preloadedRelationships).length > 0
 
-      if (Object.keys(preloadedRelationships).length < 1) {
+      if (!hasPreloaded && !hasCounts) {
         serializedModels.push(serializedAttributes)
         continue
       }
 
-      serializedModels.push({
-        ...serializedAttributes,
-        __preloadedRelationships: preloadedRelationships
-      })
+      /** @type {Record<string, any>} */
+      const serialized = {...serializedAttributes}
+
+      if (hasPreloaded) serialized.__preloadedRelationships = preloadedRelationships
+      if (hasCounts) serialized.__associationCounts = associationCounts
+
+      serializedModels.push(serialized)
     }
 
     return serializedModels

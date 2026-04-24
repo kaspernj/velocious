@@ -32,6 +32,7 @@ const frontendModelTransportConfig = {}
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
 const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
+const ASSOCIATION_COUNTS_KEY = "__associationCounts"
 /** @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, any>, requestId: string, resolve: (response: Record<string, any>) => void, reject: (error: unknown) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
@@ -1608,6 +1609,40 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Read an association count attached by `.withCount(...)`. Counts
+   * live on a dedicated map separate from the record's attributes so
+   * a virtual count like `tasksCount` can't silently shadow a real
+   * column of the same name. Returns the attached value, or 0 when
+   * `.withCount(...)` wasn't requested for this attribute.
+   *
+   * @param {string} attributeName - Attribute name, e.g. `"tasksCount"` or a custom name from `.withCount({customName: {...}})`.
+   * @returns {number}
+   */
+  readCount(attributeName) {
+    if (!this._associationCounts) return 0
+    if (!this._associationCounts.has(attributeName)) return 0
+
+    return /** @type {number} */ (this._associationCounts.get(attributeName))
+  }
+
+  /**
+   * Internal setter called by `instantiateFromResponse` when hydrating
+   * association counts that rode along with the record payload.
+   *
+   * @param {string} attributeName - Attribute name.
+   * @param {number} value - Count value.
+   * @returns {void}
+   */
+  _setAssociationCount(attributeName, value) {
+    if (!this._associationCounts) {
+      /** @type {Map<string, number>} */
+      this._associationCounts = new Map()
+    }
+
+    this._associationCounts.set(attributeName, value)
+  }
+
+  /**
    * @param {string} attributeName - Attribute name.
    * @param {any} newValue - New value.
    * @returns {any} - Assigned value.
@@ -1995,7 +2030,7 @@ export default class FrontendModelBase {
   /**
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
-   * @returns {{attributes: Record<string, any>, preloadedRelationships: Record<string, any>, selectedAttributes: Set<string>}} - Attributes and preload/select payload.
+   * @returns {{attributes: Record<string, any>, associationCounts: Record<string, number>, preloadedRelationships: Record<string, any>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, and the selected-attributes set.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
@@ -2019,16 +2054,20 @@ export default class FrontendModelBase {
     const preloadedRelationships = isPlainObject(attributes[PRELOADED_RELATIONSHIPS_KEY])
       ? /** @type {Record<string, any>} */ (attributes[PRELOADED_RELATIONSHIPS_KEY])
       : {}
+    const associationCounts = isPlainObject(attributes[ASSOCIATION_COUNTS_KEY])
+      ? /** @type {Record<string, number>} */ (attributes[ASSOCIATION_COUNTS_KEY])
+      : {}
     const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
       ? new Set(/** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
       : null
 
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
     delete attributes[SELECTED_ATTRIBUTES_KEY]
+    delete attributes[ASSOCIATION_COUNTS_KEY]
 
     const selectedAttributes = selectedAttributesFromPayload || new Set(Object.keys(attributes))
 
-    return {attributes, preloadedRelationships, selectedAttributes}
+    return {attributes, associationCounts, preloadedRelationships, selectedAttributes}
   }
 
   /**
@@ -2075,11 +2114,17 @@ export default class FrontendModelBase {
     const modelData = this.modelDataFromResponse(response)
     const attributes = modelData.attributes
     const preloadedRelationships = modelData.preloadedRelationships
+    const associationCounts = modelData.associationCounts
     const selectedAttributes = modelData.selectedAttributes
     const model = /** @type {InstanceType<T>} */ (new this(attributes))
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
 
     this.applyPreloadedRelationships(model, preloadedRelationships)
+
+    for (const [attributeName, value] of Object.entries(associationCounts || {})) {
+      model._setAssociationCount(attributeName, Number(value) || 0)
+    }
+
     model.setIsNewRecord(false)
     model._persistedAttributes = cloneFrontendModelAttributes(model.attributes())
 

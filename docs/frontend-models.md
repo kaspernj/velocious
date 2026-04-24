@@ -23,6 +23,9 @@
 - `findOrCreateBy(conditions, callback)` returns existing model or creates a new model.
 - Date condition values are normalized through JSON serialization to align request and local matching semantics.
 
+## Association counts
+- `query.withCount("tasks")` attaches a per-row has-many count to each loaded record, read via `record.readCount("tasksCount")`. Accepts a relationship name, an array of names, or an object form with custom attribute names and per-association `where` filters. Polymorphic has-many is supported. See [with-count.md](with-count.md) for full usage and semantics.
+
 ## Ransack filtering and sorting
 - `ransack(params)` applies Rails-compatible ransack filters and sorting on both frontend and database model queries.
 - Supported predicates: `eq`, `notEq`, `in`, `notIn`, `gt`, `gteq`, `lt`, `lteq`, `cont`, `start`, `end`, `null`.

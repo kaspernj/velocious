@@ -2588,6 +2588,60 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Read an association count attached by `.withCount(...)`. Counts are
+   * stored on a separate map from the record's `_attributes` so a
+   * virtual count like `tasksCount` cannot silently shadow a real
+   * column of the same name. Returns the attached number, or 0 when
+   * `.withCount(...)` wasn't requested for this attribute.
+   *
+   * @param {string} attributeName - Attribute name, e.g. `"tasksCount"` or a custom `"activeMembersCount"` from `.withCount({activeMembersCount: {...}})`.
+   * @returns {number}
+   */
+  readCount(attributeName) {
+    if (!this._associationCounts) return 0
+    if (!this._associationCounts.has(attributeName)) return 0
+
+    return /** @type {number} */ (this._associationCounts.get(attributeName))
+  }
+
+  /**
+   * Attach an association count to this record. Internal helper used by
+   * the `withCount` runner; outside code should not call this directly.
+   *
+   * @param {string} attributeName - Attribute name.
+   * @param {number} value - Count value.
+   * @returns {void}
+   */
+  _setAssociationCount(attributeName, value) {
+    if (!this._associationCounts) {
+      /** @type {Map<string, number>} */
+      this._associationCounts = new Map()
+    }
+
+    this._associationCounts.set(attributeName, value)
+  }
+
+  /**
+   * All attached association counts as a plain object. Used by the
+   * frontend-model serializer to ship counts alongside the record
+   * attributes on the wire.
+   *
+   * @returns {Record<string, number>}
+   */
+  associationCounts() {
+    /** @type {Record<string, number>} */
+    const result = {}
+
+    if (!this._associationCounts) return result
+
+    for (const [attributeName, value] of this._associationCounts) {
+      result[attributeName] = value
+    }
+
+    return result
+  }
+
+  /**
    * Reads a column value from the record.
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
    * @returns {any} - The column.
