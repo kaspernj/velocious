@@ -6,7 +6,6 @@ import Controller from "../../src/controller.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
-import FrontendModelUserError from "../../src/frontend-model-resource/user-error.js"
 import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 
@@ -29,7 +28,9 @@ class CustomFrontendModelCommandController extends Controller {
 
   /** @returns {Promise<void>} */
   async rejectInvalidInput() {
-    throw new FrontendModelUserError("Invalid email or password")
+    const error = /** @type {Error & {velocious?: Record<string, any>}} */ (new Error("Invalid email or password"))
+    error.velocious = {type: "UserError"}
+    throw error
   }
 }
 
@@ -145,7 +146,7 @@ describe("Controller frontend model custom commands", () => {
     expect(responsePayload.responses[0].response.debugBacktrace[0]).toMatch(/Custom frontend model command exploded\./)
   })
 
-  it("returns the message but suppresses the endpoint-failed log line for FrontendModelUserError", async () => {
+  it("returns the message + velocious metadata and suppresses the endpoint-failed log line when error.velocious is set", async () => {
     const configuration = new Configuration({
       database: {test: {}},
       directory: dummyDirectory(),
@@ -213,14 +214,19 @@ describe("Controller frontend model custom commands", () => {
       process.stdout.write = originalWrite
     }
 
-    // The message still reaches the client so it can be displayed —
-    // user errors must not be swallowed silently.
+    // The message still reaches the client (exposed because
+    // `error.velocious` was set; otherwise the framework returns a
+    // generic safe message).
     expect(responsePayload.responses[0].response.status).toEqual("error")
-    expect(responsePayload.responses[0].response.debugErrorMessage).toEqual("Invalid email or password")
+    expect(responsePayload.responses[0].response.errorMessage).toEqual("Invalid email or password")
 
-    // But the noisy "Frontend model endpoint request failed" line at
-    // error level should NOT be emitted — it's a normal user-flow
-    // failure, not a backend bug worth alerting on.
+    // The velocious metadata bag is forwarded to the client so app
+    // code can branch on `error.velocious?.type`.
+    expect(responsePayload.responses[0].response.velocious).toEqual({type: "UserError"})
+
+    // The noisy "Frontend model endpoint request failed" line at
+    // error level is NOT emitted — annotated errors are normal
+    // user-flow failures, not backend bugs.
     const combinedWrites = writes.join("")
     expect(combinedWrites).not.toMatch(/Frontend model endpoint request failed/)
   })
