@@ -5,18 +5,24 @@ import Task from "../../dummy/src/models/task.js"
 // declare their relationships. They persist across describe blocks but
 // each attribute name lives under a distinct registration so suites
 // don't collide.
+// AS aliases are quoted via driver.quoteColumn(...) so pgsql preserves
+// the camelCase. Unquoted identifiers are lowercase-folded by pgsql,
+// which would make the result row key `manualtaskscount` and break the
+// later `record.queryData("manualTasksCount")` lookup. SQLite/MySQL/MSSQL
+// preserve case for unquoted identifiers, so quoting is a portability
+// requirement, not a performance concern.
 Project.queryData("manualTasksCount", ({driver, query}) => {
   query.joins({tasks: true})
   const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
-  query.select(`COUNT(${tasksTable}.${driver.quoteColumn("id")}) AS manualTasksCount`)
+  query.select(`COUNT(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("manualTasksCount")}`)
 })
 
 Project.queryData("projectStats", ({driver, query}) => {
   query.joins({tasks: true})
   const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
   const idCol = driver.quoteColumn("id")
-  query.select(`COUNT(${tasksTable}.${idCol}) AS statTaskCount`)
-  query.select(`MIN(${tasksTable}.${idCol}) AS statMinTaskId`)
+  query.select(`COUNT(${tasksTable}.${idCol}) AS ${driver.quoteColumn("statTaskCount")}`)
+  query.select(`MIN(${tasksTable}.${idCol}) AS ${driver.quoteColumn("statMinTaskId")}`)
 })
 
 // Registered on Task so nested-chain specs target it via
@@ -26,14 +32,14 @@ Project.queryData("projectStats", ({driver, query}) => {
 Task.queryData("taskAggregates", ({driver, query, tableName}) => {
   const tasksTable = driver.quoteTable(tableName)
   const idCol = driver.quoteColumn("id")
-  query.select(`COUNT(${tasksTable}.${idCol}) AS taskAggregateCount`)
-  query.select(`MAX(${tasksTable}.${idCol}) AS taskAggregateMaxId`)
+  query.select(`COUNT(${tasksTable}.${idCol}) AS ${driver.quoteColumn("taskAggregateCount")}`)
+  query.select(`MAX(${tasksTable}.${idCol}) AS ${driver.quoteColumn("taskAggregateMaxId")}`)
 })
 
 Project.queryData("nullableSum", ({driver, query}) => {
   query.joins({tasks: true})
   const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
-  query.select(`SUM(${tasksTable}.${driver.quoteColumn("id")}) AS nullableSum`)
+  query.select(`SUM(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("nullableSum")}`)
 })
 
 describe("Database - query - queryData", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {

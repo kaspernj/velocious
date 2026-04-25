@@ -626,6 +626,14 @@ class VelociousDatabaseRecord {
    * `record.queryData(aliasName)`. Multi-column selects are fine — one
    * alias maps to one queryData key.
    *
+   * **Quote AS aliases on PostgreSQL.** PostgreSQL folds unquoted
+   * identifiers (including SELECT aliases) to lowercase, so a
+   * `... AS manualTasksCount` lands in the result row as
+   * `manualtaskscount` while the lookup `record.queryData("manualTasksCount")`
+   * never finds it. Use `driver.quoteColumn("manualTasksCount")` for the
+   * alias to preserve the case on every supported driver:
+   *   query.select(`COUNT(...) AS ${driver.quoteColumn("manualTasksCount")}`)
+   *
    * @param {string} name - Identifier used in the `.queryData(...)` spec.
    * @param {import("../query/query-data.js").QueryDataFn} fn - Callback that mutates the query.
    * @returns {void}
