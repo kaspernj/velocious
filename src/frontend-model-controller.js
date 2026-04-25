@@ -339,11 +339,38 @@ function frontendModelValidationError(message) {
 }
 
 /**
+ * Whether the error carries an `error.velocious` metadata bag. The
+ * presence of any such bag marks the error as "annotated by the
+ * developer for the frontend" — the framework treats it as
+ * user-facing: surface the message, forward the metadata, and skip
+ * the noisy endpoint-error log.
+ *
+ * @param {unknown} error - Caught error.
+ * @returns {boolean}
+ */
+function frontendModelErrorHasVelociousMetadata(error) {
+  return Boolean(error && typeof error === "object" && /** @type {any} */ (error).velocious && typeof /** @type {any} */ (error).velocious === "object")
+}
+
+/**
+ * @param {unknown} error - Caught error.
+ * @returns {Record<string, any> | null}
+ */
+function frontendModelVelociousMetadataForError(error) {
+  if (!frontendModelErrorHasVelociousMetadata(error)) return null
+  return /** @type {Record<string, any>} */ (/** @type {any} */ (error).velocious)
+}
+
+/**
  * @param {unknown} error - Caught error.
  * @returns {string} - Message safe to return to API clients.
  */
 function frontendModelClientMessageForError(error) {
   if (error instanceof VelociousError && error.safeToExpose) {
+    return error.message
+  }
+
+  if (frontendModelErrorHasVelociousMetadata(error) && error instanceof Error) {
     return error.message
   }
 
@@ -362,6 +389,10 @@ function frontendModelDebugPayloadForError({environment, error}) {
   }
 
   if (error instanceof VelociousError && error.safeToExpose) {
+    return {}
+  }
+
+  if (frontendModelErrorHasVelociousMetadata(error)) {
     return {}
   }
 
@@ -2884,12 +2915,14 @@ export default class FrontendModelController extends Controller {
    * @returns {Record<string, any>} - Client payload for the current environment.
    */
   frontendModelClientErrorPayloadForError(error) {
+    const velociousMetadata = frontendModelVelociousMetadataForError(error)
     return {
       ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error)),
       ...frontendModelDebugPayloadForError({
         environment: this.getConfiguration().getEnvironment(),
         error
-      })
+      }),
+      ...(velociousMetadata ? {velocious: velociousMetadata} : {})
     }
   }
 
@@ -2903,6 +2936,14 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<void>} - Resolves after logging.
    */
   async frontendModelLogEndpointError({action, error, commandType, model, requestId}) {
+    // Errors annotated with `error.velocious = {...}` are user-flow
+    // failures the developer has marked as expected (bad password,
+    // validation message, etc.). Surface the message + metadata to
+    // the client (handled by frontendModelClientErrorPayloadForError),
+    // but skip the error log so monitoring stays focused on real
+    // backend failures.
+    if (frontendModelErrorHasVelociousMetadata(error)) return
+
     let resolvedModel = model
 
     if (!resolvedModel) {
