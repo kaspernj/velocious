@@ -4,6 +4,7 @@ import * as inflection from "inflection"
 import Controller from "./controller.js"
 import Response from "./http-server/client/response.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
+import FrontendModelUserError from "./frontend-model-resource/user-error.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import RoutesResolver from "./routes/resolver.js"
@@ -2903,6 +2904,12 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<void>} - Resolves after logging.
    */
   async frontendModelLogEndpointError({action, error, commandType, model, requestId}) {
+    // Expected user errors (bad password, validation message, etc.) are
+    // thrown via FrontendModelUserError and are part of normal user
+    // flow — surface the message to the client but skip the error log
+    // so monitoring stays focused on real backend failures.
+    if (error instanceof FrontendModelUserError) return
+
     let resolvedModel = model
 
     if (!resolvedModel) {
