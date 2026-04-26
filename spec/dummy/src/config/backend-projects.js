@@ -10,22 +10,10 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        create: "create",
-        destroy: "destroy",
-        find: "read",
-        index: "read",
-        update: "update"
-      },
+      abilities: ["read", "create", "update", "destroy"],
       attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "updatedAt"],
-      builtInCollectionCommands: {
-        index: "list",
-      },
-      builtInMemberCommands: {
-        destroy: "destroy",
-        find: "find",
-        update: "update"
-      },
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find", "update", "destroy"],
       relationships: ["project", "comments"],
       primaryKey: "id"
     }
@@ -56,12 +44,7 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        create: "create",
-        find: "read",
-        index: "read",
-        update: "update"
-      },
+      abilities: ["read", "create", "update"],
       attributes: ["id", {name: "name", selectedByDefault: false}],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
@@ -81,21 +64,12 @@ class UserFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id", "email", "name", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: {
-        currentSessionCookie: "current-session-cookie",
-        setSessionCookie: "set-session-cookie",
-        lookupByEmail: "lookup-by-email"
-      },
-      memberCommands: {
-        refreshProfile: "refresh-profile"
-      }
+      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail"],
+      memberCommands: ["refreshProfile"]
     }
   }
 
@@ -147,10 +121,7 @@ class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id", "body"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"]

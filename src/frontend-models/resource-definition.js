@@ -88,7 +88,7 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
 }
 
 /**
- * @param {Record<string, string> | string[] | undefined} abilities - Resource abilities config.
+ * @param {string[] | undefined} abilities - Resource abilities config (camelCase action list).
  * @returns {Record<string, string>} - Normalized abilities config.
  */
 function normalizeFrontendModelResourceAbilities(abilities) {
@@ -97,7 +97,7 @@ function normalizeFrontendModelResourceAbilities(abilities) {
   }
 
   if (!Array.isArray(abilities)) {
-    return abilities
+    throw new Error("Resource abilities must be an array of action names. Object form is no longer supported.")
   }
 
   /** @type {Record<string, string>} */
@@ -165,7 +165,7 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
 /**
  * @param {object} args - Arguments.
  * @param {Record<string, string>} args.commandDefaults - Built-in default command names.
- * @param {Record<string, string> | string[] | undefined} args.commandsConfig - Built-in commands config.
+ * @param {string[] | undefined} args.commandsConfig - Built-in commands config (camelCase command type list).
  * @param {string} args.modelName - Diagnostic model name.
  * @returns {Record<string, string>} - Normalized built-in command config.
  */
@@ -174,38 +174,23 @@ function normalizeFrontendModelBuiltInCommands({commandDefaults, commandsConfig,
     return commandDefaults
   }
 
-  if (Array.isArray(commandsConfig)) {
-    /** @type {Record<string, string>} */
-    const normalizedCommands = {}
-
-    for (const commandType of commandsConfig) {
-      const defaultCommandName = commandDefaults[commandType]
-
-      if (!defaultCommandName) {
-        throw new Error(`Unknown built-in frontend model command '${commandType}' for ${modelName}`)
-      }
-
-      normalizedCommands[commandType] = validateFrontendModelResourceCommandName({
-        commandName: defaultCommandName,
-        commandType: defaultCommandName,
-        modelName
-      })
-    }
-
-    return normalizedCommands
+  if (!Array.isArray(commandsConfig)) {
+    throw new Error(`${modelName} configuration must use the array form. Object form is no longer supported.`)
   }
 
   /** @type {Record<string, string>} */
   const normalizedCommands = {}
 
-  for (const [commandType, commandName] of Object.entries(commandsConfig)) {
-    if (!commandDefaults[commandType]) {
+  for (const commandType of commandsConfig) {
+    const defaultCommandName = commandDefaults[commandType]
+
+    if (!defaultCommandName) {
       throw new Error(`Unknown built-in frontend model command '${commandType}' for ${modelName}`)
     }
 
     normalizedCommands[commandType] = validateFrontendModelResourceCommandName({
-      commandName,
-      commandType: /** @type {string} */ (commandType),
+      commandName: defaultCommandName,
+      commandType: defaultCommandName,
       modelName
     })
   }
@@ -215,43 +200,31 @@ function normalizeFrontendModelBuiltInCommands({commandDefaults, commandsConfig,
 
 /**
  * @param {object} args - Arguments.
- * @param {Record<string, string> | string[] | undefined} args.commandsConfig - Custom commands config.
+ * @param {string[] | undefined} args.commandsConfig - Custom commands config (camelCase method-name list).
  * @param {string} args.modelName - Diagnostic model name.
- * @returns {Record<string, string>} - Normalized custom command config.
+ * @returns {Record<string, string>} - Normalized custom command config (camelCase method name → kebab-case command slug).
  */
 function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
   if (!commandsConfig) {
     return {}
   }
 
-  if (Array.isArray(commandsConfig)) {
-    /** @type {Record<string, string>} */
-    const normalizedCommands = {}
-
-    for (const commandName of commandsConfig) {
-      const validatedCommandName = validateFrontendModelResourceCommandName({
-        commandName,
-        commandType: commandName,
-        modelName
-      })
-
-      normalizedCommands[inflection.camelize(validatedCommandName, true)] = validatedCommandName
-    }
-
-    return normalizedCommands
+  if (!Array.isArray(commandsConfig)) {
+    throw new Error(`${modelName} configuration must use the array form. Object form is no longer supported.`)
   }
 
   /** @type {Record<string, string>} */
   const normalizedCommands = {}
 
-  for (const methodName of Object.keys(commandsConfig)) {
-    const commandName = commandsConfig[methodName]
-
-    normalizedCommands[methodName] = validateFrontendModelResourceCommandName({
-      commandName,
-      commandType: commandName,
+  for (const methodName of commandsConfig) {
+    const validatedMethodName = validateFrontendModelResourceCommandName({
+      commandName: methodName,
+      commandType: methodName,
       modelName
     })
+    const commandSlug = inflection.dasherize(inflection.underscore(validatedMethodName))
+
+    normalizedCommands[validatedMethodName] = commandSlug
   }
 
   return normalizedCommands

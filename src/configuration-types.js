@@ -205,13 +205,13 @@
 /**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {string[] | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
- * @property {FrontendModelResourceAbilitiesConfiguration | string[]} [abilities] - Ability actions keyed by frontend command (`index`, `find`, `create`, `update`, `destroy`) or shorthand action list. Defaults to `{find: "read", index: "read"}` when omitted.
+ * @property {string[]} [abilities] - Ability action list (camelCase action names). Defaults to `["read"]` for `find` and `index` when omitted.
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
- * @property {Record<string, string> | string[]} [commands] - Legacy built-in command names keyed by action (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
- * @property {Record<string, string> | string[]} [collectionCommands] - Custom collection commands keyed by generated method name or shorthand command list using camelized method names. When `builtInCollectionCommands` and `builtInMemberCommands` are omitted, this key keeps its legacy built-in-command behavior.
- * @property {Record<string, string> | string[]} [memberCommands] - Custom member commands keyed by generated method name or shorthand command list using camelized method names. When `builtInCollectionCommands` and `builtInMemberCommands` are omitted, this key keeps its legacy built-in-command behavior.
- * @property {Record<string, string> | string[]} [builtInCollectionCommands] - Built-in collection command names keyed by action (`index`, `create`) or shorthand command list using default names.
- * @property {Record<string, string> | string[]} [builtInMemberCommands] - Built-in member command names keyed by action (`find`, `update`, `destroy`, `attach`, `download`, `url`) or shorthand command list using default names.
+ * @property {string[]} [commands] - Legacy built-in command names (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).
+ * @property {string[]} [collectionCommands] - Custom collection commands as camelCase method names. The runtime derives the kebab-case command slug from each name.
+ * @property {string[]} [memberCommands] - Custom member commands as camelCase method names. The runtime derives the kebab-case command slug from each name.
+ * @property {string[]} [builtInCollectionCommands] - Built-in collection command names (`index`, `create`).
+ * @property {string[]} [builtInMemberCommands] - Built-in member command names (`find`, `update`, `destroy`, `attach`, `download`, `url`).
  * @property {string[]} [relationships] - Relationship names to expose in frontend models. Type and target model are inferred from the backend model's registered relationships.
  * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
