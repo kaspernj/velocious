@@ -15,7 +15,7 @@ import {defineModelScope} from "../utils/model-scope.js"
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
- * @typedef {{attributes?: string[], builtInCollectionCommands?: Record<string, string>, builtInMemberCommands?: Record<string, string>, collectionCommands?: Record<string, string>, commands?: Record<string, string>, memberCommands?: Record<string, string>, attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
+ * @typedef {{attributes?: string[], builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
  */
 /**
  * @typedef {object} FrontendModelTransportConfig
@@ -1789,10 +1789,11 @@ export default class FrontendModelBase {
    */
   static commandName(commandType) {
     const resourceConfig = this.resourceConfig()
-    const builtInCollectionCommands = resourceConfig.builtInCollectionCommands || {}
-    const builtInMemberCommands = resourceConfig.builtInMemberCommands || {}
-    const commands = resourceConfig.commands || {}
-    const commandName = builtInCollectionCommands[commandType] ?? builtInMemberCommands[commandType] ?? commands[commandType] ?? commandType
+    const builtInCollectionCommands = resourceConfig.builtInCollectionCommands || []
+    const builtInMemberCommands = resourceConfig.builtInMemberCommands || []
+    const commands = resourceConfig.commands || []
+    const isExposed = builtInCollectionCommands.includes(commandType) || builtInMemberCommands.includes(commandType) || commands.includes(commandType)
+    const commandName = isExposed ? inflection.dasherize(inflection.underscore(commandType)) : commandType
 
     return validateFrontendModelResourceCommandName({
       commandName,

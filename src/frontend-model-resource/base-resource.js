@@ -9,7 +9,7 @@ import * as inflection from "inflection"
  * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
  * @property {string} modelName - Model name.
  * @property {Record<string, any>} params - Request params.
- * @property {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration.
+ * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration (or raw input shape during early bootstrap).
  */
 
 /**
@@ -20,7 +20,7 @@ import * as inflection from "inflection"
  * @property {typeof import("../database/record/index.js").default} [modelClass] - Optional backing model class override.
  * @property {string} [modelName] - Optional model name override.
  * @property {Record<string, any>} [params] - Optional params override.
- * @property {import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
+ * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
  */
 
 /**
@@ -29,17 +29,17 @@ import * as inflection from "inflection"
 export default class FrontendModelBaseResource extends AuthorizationBaseResource {
   /** @type {Record<string, any> | string[] | undefined} */
   static attributes = undefined
-  /** @type {Record<string, string> | undefined} */
+  /** @type {string[] | undefined} */
   static abilities = undefined
   /** @type {Record<string, any> | undefined} */
   static attachments = undefined
-  /** @type {Record<string, string> | undefined} */
+  /** @type {string[] | undefined} */
   static collectionCommands = undefined
-  /** @type {Record<string, string> | string[] | undefined} */
+  /** @type {string[] | undefined} */
   static builtInCollectionCommands = undefined
-  /** @type {Record<string, string> | string[] | undefined} */
+  /** @type {string[] | undefined} */
   static memberCommands = undefined
-  /** @type {Record<string, string> | string[] | undefined} */
+  /** @type {string[] | undefined} */
   static builtInMemberCommands = undefined
   /** @type {string[] | undefined} */
   static relationships = undefined
@@ -60,7 +60,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     this.modelClassValue = "modelClass" in args ? args.modelClass : /** @type {typeof import("../database/record/index.js").default | undefined} */ (/** @type {typeof FrontendModelBaseResource} */ (this.constructor).modelClass())
     this.modelNameValue = "modelName" in args ? args.modelName : (this.modelClassValue?.getModelName ? this.modelClassValue.getModelName() : this.modelClassValue?.name || "")
     this.paramsValue = "params" in args ? args.params : undefined
-    this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */ ({abilities: {}, attributes: []})
+    this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */ ({attributes: []})
   }
 
   /**
@@ -76,15 +76,15 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * @returns {import("../configuration-types.js").FrontendModelResourceConfiguration} - Static resource config.
+   * @returns {import("../configuration-types.js").FrontendModelResourceConfiguration} - Static resource config (raw user input shape; consumers normalize).
    */
   static resourceConfig() {
     /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
     const config = {
-      abilities: normalizeFrontendModelResourceAbilities(this.abilities),
       attributes: this.attributes || []
     }
 
+    if (this.abilities) config.abilities = this.abilities
     if (this.attachments) config.attachments = this.attachments
     if (this.builtInCollectionCommands) config.builtInCollectionCommands = this.builtInCollectionCommands
     if (this.builtInMemberCommands) config.builtInMemberCommands = this.builtInMemberCommands
@@ -121,7 +121,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /** @returns {Record<string, any>} - Params. */
   params() { return this.paramsValue || super.params() || {} }
 
-  /** @returns {import("../configuration-types.js").FrontendModelResourceConfiguration} - Normalized resource config. */
+  /** @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} - Resource config (normalized at runtime; raw during early bootstrap). */
   resourceConfiguration() {
     if (!this.resourceConfigurationValue) throw new Error(`${this.constructor.name} requires a resource configuration.`)
 
@@ -783,45 +783,3 @@ function filterWritableFrontendModelAttributes(receiver, attributes, resource = 
   return writableAttributes
 }
 
-/**
- * @param {Record<string, string> | string[] | undefined} abilities - Resource abilities config.
- * @returns {Record<string, string>} - Normalized abilities config.
- */
-function normalizeFrontendModelResourceAbilities(abilities) {
-  if (!abilities) {
-    return {
-      create: "create",
-      destroy: "destroy",
-      find: "read",
-      index: "read",
-      update: "update"
-    }
-  }
-
-  if (!Array.isArray(abilities)) {
-    return abilities
-  }
-
-  /** @type {Record<string, string>} */
-  const normalized = {}
-
-  if (abilities.includes("manage")) {
-    normalized.create = "manage"
-    normalized.destroy = "manage"
-    normalized.find = "manage"
-    normalized.index = "manage"
-    normalized.update = "manage"
-
-    return normalized
-  }
-
-  if (abilities.includes("create")) normalized.create = "create"
-  if (abilities.includes("destroy")) normalized.destroy = "destroy"
-  if (abilities.includes("read")) {
-    normalized.find = "read"
-    normalized.index = "read"
-  }
-  if (abilities.includes("update")) normalized.update = "update"
-
-  return normalized
-}

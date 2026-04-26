@@ -35,7 +35,7 @@ describe("Dummy frontend model ability request helper", () => {
     const result = isFrontendModelAbilityRequest({
       backendProjects,
       params: {},
-      request: requestStub("/tasks/list")
+      request: requestStub("/tasks/index")
     })
 
     expect(result).toEqual(true)

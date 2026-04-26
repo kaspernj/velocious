@@ -8,21 +8,15 @@ import UserRecord from "../dummy/src/models/user.js"
 /** Frontend model used for browser integration tests against dummy backend routes. */
 class User extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], abilities: {find: string, index: string}, builtInCollectionCommands: string[], builtInMemberCommands: string[], collectionCommands: Record<string, string>, modelName: string, primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], abilities: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], collectionCommands: string[], modelName: string, primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: {
-        currentSessionCookie: "current-session-cookie",
-        setSessionCookie: "set-session-cookie"
-      },
+      collectionCommands: ["currentSessionCookie", "setSessionCookie"],
       modelName: "User",
       primaryKey: "id"
     }
@@ -67,14 +61,11 @@ class User extends FrontendModelBase {
 /** Frontend model that uses a stable backend model name different from its class name. */
 class MinifiedUserTransportModel extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], abilities: {find: string, index: string}, builtInCollectionCommands: string[], builtInMemberCommands: string[], modelName: string, primaryKey: string}} - Resource config.
+   * @returns {{attributes: string[], abilities: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], modelName: string, primaryKey: string}} - Resource config.
    */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
@@ -93,14 +84,11 @@ class MinifiedUserTransportModel extends FrontendModelBase {
 /** Frontend model comment class for browser preload integration tests. */
 class Comment extends FrontendModelBase {
   /**
-   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: Record<string, string>, builtInMemberCommands: string[], primaryKey: string}}
+   * @returns {{abilities: string[], attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id", "body"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
@@ -112,18 +100,13 @@ class Comment extends FrontendModelBase {
 /** Frontend model task class for browser preload integration tests. */
 class Task extends FrontendModelBase {
   /**
-   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
+   * @returns {{abilities: string[], attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id", "name", "updatedAt"],
-      builtInCollectionCommands: {
-        index: "list"
-      },
+      builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
@@ -154,14 +137,11 @@ class Task extends FrontendModelBase {
 /** Frontend model project class for browser preload integration tests. */
 class Project extends FrontendModelBase {
   /**
-   * @returns {{abilities: {find: string, index: string}, attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
+   * @returns {{abilities: string[], attributes: string[], builtInCollectionCommands: string[], builtInMemberCommands: string[], primaryKey: string}}
    */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],

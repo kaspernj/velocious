@@ -127,8 +127,8 @@ describe("routes - resolver hooks", async () => {
       static resourceConfig() {
         return {
           attributes: ["id", "name"],
-          builtInCollectionCommands: {index: "list"},
-          builtInMemberCommands: {find: "find"}
+          builtInCollectionCommands: ["index"],
+          builtInMemberCommands: ["find"]
         }
       }
     }

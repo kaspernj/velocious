@@ -11,12 +11,12 @@ function buildAutoloadTestModelClasses() {
   /** Frontend model comment test class. */
   class Comment extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}}
      */
     static resourceConfig() {
       return {
         attributes: ["id", "body"],
-        commands: {index: "index"},
+        commands: ["index"],
         primaryKey: "id"
       }
     }
@@ -25,12 +25,12 @@ function buildAutoloadTestModelClasses() {
   /** Frontend model task test class. */
   class Task extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}}
      */
     static resourceConfig() {
       return {
         attributes: ["id", "name"],
-        commands: {index: "index"},
+        commands: ["index"],
         primaryKey: "id"
       }
     }
@@ -59,12 +59,12 @@ function buildAutoloadTestModelClasses() {
   /** Frontend model project test class. */
   class Project extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}}
      */
     static resourceConfig() {
       return {
         attributes: ["id", "name"],
-        commands: {index: "index"},
+        commands: ["index"],
         primaryKey: "id"
       }
     }

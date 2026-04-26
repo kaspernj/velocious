@@ -9,24 +9,12 @@ class UserFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id"],
-      builtInCollectionCommands: {
-        index: "frontend-index"
-      },
-      builtInMemberCommands: {
-        find: "frontend-find",
-        update: "update"
-      },
-      collectionCommands: {
-        reindexAll: "reindex-all"
-      },
-      memberCommands: {
-        resetPassword: "reset-password"
-      }
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find", "update"],
+      collectionCommands: ["reindexAll"],
+      memberCommands: ["resetPassword"]
     }
   }
 }
@@ -80,7 +68,7 @@ describe("routes - frontend model command route hook", () => {
           User: UserFrontendResource
         }
       }]),
-      currentPath: "/users/frontend-index"
+      currentPath: "/users/index"
     })
 
     expect(routeMatch).toEqual({
@@ -179,7 +167,7 @@ describe("routes - frontend model command route hook", () => {
     })
   })
 
-  it("keeps explicit object ability subsets read-only", () => {
+  it("normalizes array ability subsets to a read-only abilities map", () => {
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(UserFrontendResource)
 
     expect(resourceConfiguration?.abilities).toEqual({
@@ -194,11 +182,8 @@ describe("routes - frontend model command route hook", () => {
       static resourceConfig() {
         return {
           attributes: ["id"],
-          capabilities: {index: "read"},
-          abilities: {
-            find: "read",
-            index: "read"
-          }
+          capabilities: ["read"],
+          abilities: ["read"]
         }
       }
     }
@@ -224,14 +209,14 @@ describe("routes - frontend model command route hook", () => {
     }).toThrow("Unknown arguments: path")
   })
 
-  it("separates built-in and custom command normalization for opted-in resources", () => {
+  it("derives built-in slugs from defaults and custom slugs from camelCase method names", () => {
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(UserFrontendResource)
 
     expect(resourceConfiguration?.builtInCollectionCommands).toEqual({
-      index: "frontend-index"
+      index: "index"
     })
     expect(resourceConfiguration?.builtInMemberCommands).toEqual({
-      find: "frontend-find",
+      find: "find",
       update: "update"
     })
     expect(resourceConfiguration?.collectionCommands).toEqual({

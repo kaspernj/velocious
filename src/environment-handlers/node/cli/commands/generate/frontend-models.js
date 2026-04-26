@@ -490,7 +490,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         modelClass: resourceClass.ModelClass,
         modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
         params: {},
-        resourceConfiguration: /** @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration} */ ({abilities: {}, attributes: []})
+        resourceConfiguration: /** @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration} */ ({attributes: []})
       })
       spec = instance.permittedParams()
     } catch (error) {
@@ -547,16 +547,16 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {string} args.indent - Base indentation.
    * @param {string} args.propertyName - Object property name.
    * @param {Record<string, string>} args.values - Command key-values.
-   * @returns {string} - Formatted property (array when keys match values, object otherwise).
+   * @returns {string} - Formatted multiline array property. Always emits
+   *   the camelCase method-name array form (`memberCommands: ["updateAccess"]`)
+   *   so the generated config matches the canonical
+   *   `FrontendModelResourceConfig.{collection,member}Commands: string[]`
+   *   shape. The runtime derives the command slug from the camelCase
+   *   method name; consumers never need to write out
+   *   `{updateAccess: "update-access"}` by hand.
    */
   formattedCommandsProperty({indent, propertyName, values}) {
-    const allKeysMatchValues = Object.entries(values).every(([key, value]) => key === value)
-
-    if (allKeysMatchValues) {
-      return this.formattedArrayProperty({indent, propertyName, values: Object.keys(values)})
-    }
-
-    return this.formattedObjectProperty({indent, propertyName, values})
+    return this.formattedArrayProperty({indent, propertyName, values: Object.keys(values)})
   }
 
   /**

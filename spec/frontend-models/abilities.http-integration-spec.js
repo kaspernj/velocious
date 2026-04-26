@@ -9,17 +9,12 @@ import TaskModel from "../dummy/src/models/task.js"
 /** Frontend model used for per-record ability HTTP integration tests against dummy backend routes. */
 class Task extends FrontendModelBase {
   /**
-   * @returns {{attributes: string[], commands: {destroy: string, find: string, index: string, update: string}}} - Resource config.
+   * @returns {{attributes: string[], commands: string[]}} - Resource config.
    */
   static resourceConfig() {
     return {
       attributes: ["id", "identifier", "isDone", "name"],
-      commands: {
-        destroy: "destroy",
-        find: "find",
-        index: "list",
-        update: "update"
-      }
+      commands: ["destroy", "find", "index", "update"]
     }
   }
 
