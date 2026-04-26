@@ -16,17 +16,10 @@ class ClassBasedFrontendModelResource extends FrontendModelBaseResource {
   /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read"],
       attributes: ["id"],
-      builtInCollectionCommands: {
-        index: "frontend-index"
-      },
-      builtInMemberCommands: {
-        find: "frontend-find"
-      }
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"]
     }
   }
 }
@@ -36,57 +29,10 @@ class CreateFrontendModelResource extends FrontendModelBaseResource {
   /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: {
-        create: "create",
-        find: "read",
-        index: "read"
-      },
+      abilities: ["read", "create"],
       attributes: ["id"],
-      builtInCollectionCommands: {
-        create: "frontend-create",
-        index: "frontend-index"
-      },
-      builtInMemberCommands: {
-        find: "frontend-find",
-      }
-    }
-  }
-}
-
-class InvalidCommandFrontendModelResource extends FrontendModelBaseResource {
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
-      attributes: ["id"],
-      builtInCollectionCommands: {
-        index: "frontend-index?raw=1"
-      },
-      builtInMemberCommands: {
-        find: "frontend-find"
-      }
-    }
-  }
-}
-
-class EmptyCommandFrontendModelResource extends FrontendModelBaseResource {
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: {
-        find: "read",
-        index: "read"
-      },
-      attributes: ["id"],
-      builtInCollectionCommands: {
-        index: ""
-      },
-      builtInMemberCommands: {
-        find: "frontend-find"
-      }
+      builtInCollectionCommands: ["index", "create"],
+      builtInMemberCommands: ["find"]
     }
   }
 }
@@ -139,7 +85,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const request = new Request({client, configuration})
     const response = new Response({configuration})
     const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
+    const requestLines = requestLinesForPath("/frontend-models/index")
 
     try {
       request.feed(Buffer.from(requestLines, "utf8"))
@@ -188,7 +134,7 @@ describe("routes - resolver frontend model autoroute", async () => {
     const request = new Request({client, configuration})
     const response = new Response({configuration})
     const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = requestLinesForPath("/frontend-models/frontend-create")
+    const requestLines = requestLinesForPath("/frontend-models/create")
 
     try {
       request.feed(Buffer.from(requestLines, "utf8"))
@@ -202,103 +148,5 @@ describe("routes - resolver frontend model autoroute", async () => {
     }
 
     expect(response.statusCode).not.toEqual(404)
-  })
-
-  it("raises on unsafe frontend model commands in backendProjects config", async () => {
-    const configuration = new Configuration({
-      backendProjects: [{
-        path: "/tmp/backend",
-        frontendModels: {
-          FrontendModel: InvalidCommandFrontendModelResource
-        }
-      }],
-      database: {test: {}},
-      directory: dummyDirectory(),
-      environment: "test",
-      environmentHandler: new EnvironmentHandlerNode(),
-      initializeModels: async () => {},
-      locale: "en",
-      localeFallbacks: {en: ["en"]},
-      locales: ["en"],
-      logging: {console: true, file: false, levels: ["info", "warn", "error"]}
-    })
-
-    let previousConfiguration
-    try {
-      previousConfiguration = Configuration.current()
-    } catch {
-      // Ignore missing configuration
-    }
-
-    configuration.setCurrent()
-    configuration.setRoutes(dummyRoutes.routes)
-
-    const client = {remoteAddress: "127.0.0.1"}
-    const request = new Request({client, configuration})
-    const response = new Response({configuration})
-    const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
-
-    try {
-      request.feed(Buffer.from(requestLines, "utf8"))
-      await donePromise
-
-      const resolver = new RoutesResolver({configuration, request, response})
-
-      await expect(async () => {
-        await resolver.resolve()
-      }).toThrow(/Invalid frontend model command/)
-    } finally {
-      if (previousConfiguration) previousConfiguration.setCurrent()
-    }
-  })
-
-  it("raises on empty frontend model commands in backendProjects config", async () => {
-    const configuration = new Configuration({
-      backendProjects: [{
-        path: "/tmp/backend",
-        frontendModels: {
-          FrontendModel: EmptyCommandFrontendModelResource
-        }
-      }],
-      database: {test: {}},
-      directory: dummyDirectory(),
-      environment: "test",
-      environmentHandler: new EnvironmentHandlerNode(),
-      initializeModels: async () => {},
-      locale: "en",
-      localeFallbacks: {en: ["en"]},
-      locales: ["en"],
-      logging: {console: true, file: false, levels: ["info", "warn", "error"]}
-    })
-
-    let previousConfiguration
-    try {
-      previousConfiguration = Configuration.current()
-    } catch {
-      // Ignore missing configuration
-    }
-
-    configuration.setCurrent()
-    configuration.setRoutes(dummyRoutes.routes)
-
-    const client = {remoteAddress: "127.0.0.1"}
-    const request = new Request({client, configuration})
-    const response = new Response({configuration})
-    const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-    const requestLines = requestLinesForPath("/frontend-models/frontend-index")
-
-    try {
-      request.feed(Buffer.from(requestLines, "utf8"))
-      await donePromise
-
-      const resolver = new RoutesResolver({configuration, request, response})
-
-      await expect(async () => {
-        await resolver.resolve()
-      }).toThrow(/Invalid frontend model command/)
-    } finally {
-      if (previousConfiguration) previousConfiguration.setCurrent()
-    }
   })
 })

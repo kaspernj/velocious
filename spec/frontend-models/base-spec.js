@@ -12,18 +12,12 @@ function buildTestModelClass() {
   /** Test model implementation for frontend model base specs. */
   class User extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {create: string, destroy: string, find: string, index: string, update: string}, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
         attributes: ["id", "name", "email"],
-        commands: {
-          create: "create",
-          destroy: "destroy",
-          find: "find",
-          index: "index",
-          update: "update"
-        },
+        commands: ["create", "destroy", "find", "index", "update"],
         primaryKey: "id"
       }
     }
@@ -76,12 +70,12 @@ function buildScopedTestModelClass() {
   /** Test model implementation with query scope support. */
   class Task extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
         attributes: ["id", "isDone", "name"],
-        commands: {index: "index"},
+        commands: ["index"],
         primaryKey: "id"
       }
     }
@@ -97,7 +91,7 @@ function buildAttachmentTestModelClass() {
   /** Test frontend model with attachment definitions. */
   class Task extends FrontendModelBase {
     /**
-     * @returns {{attachments: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], commands: {attach: string, download: string, update: string, url?: string}, primaryKey: string}} - Resource configuration.
+     * @returns {{attachments: Record<string, {type: "hasOne" | "hasMany"}>, attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
@@ -105,11 +99,7 @@ function buildAttachmentTestModelClass() {
           descriptionFile: {type: "hasOne"}
         },
         attributes: ["id", "name"],
-        commands: {
-          attach: "attach",
-          download: "download",
-          update: "update"
-        },
+        commands: ["attach", "download", "update"],
         primaryKey: "id"
       }
     }
@@ -128,15 +118,12 @@ function buildCustomPrimaryKeyTestModelClass() {
   /** Test model implementation with custom primary key. */
   class User extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {find: string, index: string}, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
         attributes: ["reference", "name"],
-        commands: {
-          find: "find",
-          index: "index"
-        },
+        commands: ["find", "index"],
         primaryKey: "reference"
       }
     }
@@ -158,12 +145,12 @@ function buildPreloadTestModelClasses() {
   /** Frontend model comment test class. */
   class Comment extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
         attributes: ["id", "body"],
-        commands: {index: "index"},
+        commands: ["index"],
         primaryKey: "id"
       }
     }
@@ -172,12 +159,12 @@ function buildPreloadTestModelClasses() {
   /** Frontend model task test class. */
   class Task extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
         attributes: ["id", "name"],
-        commands: {index: "index"},
+        commands: ["index"],
         primaryKey: "id"
       }
     }
@@ -211,12 +198,12 @@ function buildPreloadTestModelClasses() {
   /** Frontend model project test class. */
   class Project extends FrontendModelBase {
     /**
-     * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
+     * @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
      */
     static resourceConfig() {
       return {
         attributes: ["id", "name"],
-        commands: {index: "index"},
+        commands: ["index"],
         primaryKey: "id"
       }
     }
@@ -324,14 +311,12 @@ describe("Frontend models - base", () => {
     /** Shared API user model. */
     class SharedApiUser extends FrontendModelBase {
       /**
-       * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}}
+       * @returns {{attributes: string[], commands: string[], primaryKey: string}}
        */
       static resourceConfig() {
         return {
           attributes: ["id", "name"],
-          commands: {
-            index: "index"
-          },
+          commands: ["index"],
           primaryKey: "id"
         }
       }
@@ -391,14 +376,12 @@ describe("Frontend models - base", () => {
     /** Shared API task model with aliased index command. */
     class SharedApiTask extends FrontendModelBase {
       /**
-       * @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} - Resource configuration.
+       * @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration.
        */
       static resourceConfig() {
         return {
           attributes: ["id", "name"],
-          commands: {
-            index: "list"
-          },
+          commands: ["index"],
           primaryKey: "id"
         }
       }
@@ -723,13 +706,11 @@ describe("Frontend models - base", () => {
     const calls = []
 
     class SharedApiUser extends FrontendModelBase {
-      /** @returns {{attributes: string[], commands: {index: string}}} */
+      /** @returns {{attributes: string[], commands: string[]}} */
       static resourceConfig() {
         return {
           attributes: ["id", "name"],
-          commands: {
-            index: "index"
-          }
+          commands: ["index"]
         }
       }
     }
@@ -817,42 +798,6 @@ describe("Frontend models - base", () => {
       resetFrontendModelTransport()
       fetchStub.restore()
     }
-  })
-
-  it("rejects unsafe command segments in resourceConfig", async () => {
-    /** Model with unsafe command name. */
-    class UnsafeCommandUser extends FrontendModelBase {
-      /** @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} */
-      static resourceConfig() {
-        return {
-          attributes: ["id"],
-          commands: {index: "index?raw=1"},
-          primaryKey: "id"
-        }
-      }
-    }
-
-    await expect(async () => {
-      await UnsafeCommandUser.toArray()
-    }).toThrow(/Invalid frontend model command/)
-  })
-
-  it("rejects empty command overrides in resourceConfig", async () => {
-    /** Model with empty command override. */
-    class EmptyCommandUser extends FrontendModelBase {
-      /** @returns {{attributes: string[], commands: {index: string}, primaryKey: string}} */
-      static resourceConfig() {
-        return {
-          attributes: ["id"],
-          commands: {index: ""},
-          primaryKey: "id"
-        }
-      }
-    }
-
-    await expect(async () => {
-      await EmptyCommandUser.toArray()
-    }).toThrow(/Invalid frontend model command/)
   })
 
   it("sends relationship-path where payload when using where(...).toArray()", async () => {
