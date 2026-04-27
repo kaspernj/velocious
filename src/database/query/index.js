@@ -342,6 +342,23 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Replaces the current set of `SELECT` clauses with the given ones.
+   * Equivalent to calling `select(...)` after first wiping any previously
+   * accumulated selects — mirrors Active Record's `reselect`. Pass no
+   * argument (or an empty array) to drop the projection entirely so the
+   * driver falls back to its default `SELECT *`.
+   * @param {SelectArgumentType} [select] - Select to replace existing selects with.
+   * @returns {this} - The query for chaining.
+   */
+  reselect(select) {
+    this._selects = []
+
+    if (typeof select == "undefined") return this
+
+    return this.select(select)
+  }
+
+  /**
    * @param {SelectArgumentType} select - Select.
    * @returns {this} - The select.
    */

@@ -1153,6 +1153,18 @@ const accountNames = tasks.map((task) => task.project().account().name())
 const tasks = await Task.select(["tasks.id", "tasks.name"]).toArray()
 ```
 
+### Reselecting columns
+
+`reselect` replaces any previously accumulated `SELECT` clauses — useful
+when repurposing a shared base query for an aggregate or a column-
+projected read. `reselect()` with no argument drops the projection so
+the driver falls back to `SELECT *`.
+
+```js
+const baseQuery = Task.where({state: "open"})
+const counts = await baseQuery.reselect("COUNT(*) AS count").results()
+```
+
 ### Ordering
 
 ```js
