@@ -18,6 +18,36 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(distinctCount).toEqual(1)
   })
 
+  it("replaces accumulated selects with reselect", async () => {
+    const project = await Project.create({nameEn: "Reselect project", nameDe: "Auswahl-Projekt"})
+    await Task.create({name: "Reselect task", project})
+
+    const query = Task.where({})
+    query.select("tasks.id AS picked_id")
+    query.select("tasks.name AS picked_name")
+    const reselected = query.reselect("tasks.name AS just_name")
+    const rows = /** @type {{just_name?: string, picked_id?: number, picked_name?: string}[]} */ (
+      /** @type {unknown} */ (await reselected.results())
+    )
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].just_name).toEqual("Reselect task")
+    expect(rows[0].picked_id).toBeUndefined()
+    expect(rows[0].picked_name).toBeUndefined()
+  })
+
+  it("drops every select when reselect is called with no argument", async () => {
+    const project = await Project.create({nameEn: "Reselect default", nameDe: "Reselect-Standard"})
+    await Task.create({name: "Default columns task", project})
+
+    const query = Task.where({})
+    query.select("tasks.id AS picked_id")
+    const tasks = await query.reselect().toArray()
+
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0].name()).toEqual("Default columns task")
+  })
+
   it("counts distinct records across groups without collapsing counts", async () => {
     const project1 = await Project.create({nameEn: "Alpha", nameDe: "Alfa"})
     const project2 = await Project.create({nameEn: "Beta", nameDe: "Beta"})
