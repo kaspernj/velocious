@@ -92,26 +92,26 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
  * @returns {Record<string, string>} - Normalized abilities config.
  */
 function normalizeFrontendModelResourceAbilities(abilities) {
-  if (!abilities) {
-    return {find: "read", index: "read"}
+  if (abilities === undefined) {
+    return defaultCrudAbilities()
   }
 
   if (!Array.isArray(abilities)) {
     throw new Error("Resource abilities must be an array of action names. Object form is no longer supported.")
   }
 
+  if (abilities.includes("manage")) {
+    return {
+      create: "manage",
+      destroy: "manage",
+      find: "manage",
+      index: "manage",
+      update: "manage"
+    }
+  }
+
   /** @type {Record<string, string>} */
   const normalized = {}
-
-  if (abilities.includes("manage")) {
-    normalized.create = "manage"
-    normalized.destroy = "manage"
-    normalized.find = "manage"
-    normalized.index = "manage"
-    normalized.update = "manage"
-
-    return normalized
-  }
 
   if (abilities.includes("create")) normalized.create = "create"
   if (abilities.includes("destroy")) normalized.destroy = "destroy"
@@ -122,6 +122,17 @@ function normalizeFrontendModelResourceAbilities(abilities) {
   if (abilities.includes("update")) normalized.update = "update"
 
   return normalized
+}
+
+/** @returns {Record<string, string>} - Default CRUD ability map. */
+function defaultCrudAbilities() {
+  return {
+    create: "create",
+    destroy: "destroy",
+    find: "read",
+    index: "read",
+    update: "update"
+  }
 }
 
 /**

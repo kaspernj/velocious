@@ -293,13 +293,6 @@ import FrontendModelBaseResource from "velocious/build/src/frontend-model-resour
 class UserResource extends FrontendModelBaseResource {
   static resourceConfig() {
     return {
-      abilities: {
-        create: "create",
-        destroy: "destroy",
-        find: "read",
-        index: "read",
-        update: "update"
-      },
       attributes: ["id", "name", "email"],
       relationships: {
         projects: {type: "hasMany", model: "Project"}
@@ -322,6 +315,15 @@ export default new Configuration({
 ```
 
 `frontendModels` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
+
+Resources expose the full CRUD ability set (`create`, `destroy`, `read`, `update`) by default. To restrict the API surface — for example to a read-only resource — declare an explicit subset:
+
+```js
+class AuditLogResource extends FrontendModelBaseResource {
+  static abilities = ["read"]
+  static attributes = ["id", "message", "createdAt"]
+}
+```
 
 Generate classes:
 
