@@ -1,0 +1,1 @@
+- Accept camelCase relationship prefixes in ransack keys (for example `taskProjectIdEq` and `projectProjectDetailIsActiveEq` now traverse the same way `task_project_id_eq` and `project_project_detail_is_active_eq` already did) by normalizing the path to snake_case before relationship/attribute resolution.

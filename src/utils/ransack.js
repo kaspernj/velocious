@@ -114,7 +114,11 @@ function resolveRansackPath({modelClass, value}) {
   /** @type {string[]} */
   const path = []
   let currentModelClass = modelClass
-  let remainingValue = value
+  // Normalize the path to snake_case so relationship traversal works
+  // for camelCase keys (e.g. `taskProjectId`) the same way it works
+  // for snake_case keys (e.g. `task_project_id`). Downstream attribute
+  // and relationship matchers already accept either form.
+  let remainingValue = inflection.underscore(value)
 
   while (true) {
     if (resolveAttributeName({modelClass: currentModelClass, value: remainingValue})) {
