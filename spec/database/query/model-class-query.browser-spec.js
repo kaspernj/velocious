@@ -280,6 +280,54 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(names).toEqual(["owner-ransack-match"])
   })
 
+  it("traverses relationships from camelCase ransack keys", async () => {
+    const projectMatch = await Project.create({
+      creatingUserReference: "creator-camel-match",
+      nameEn: "CamelCase Match Project",
+      nameDe: "CamelCase Trefferprojekt"
+    })
+    const projectMiss = await Project.create({
+      creatingUserReference: "creator-camel-miss",
+      nameEn: "CamelCase Miss Project",
+      nameDe: "CamelCase Fehlprojekt"
+    })
+
+    await Task.create({name: "Camel match task", project: projectMatch})
+    await Task.create({name: "Camel miss task", project: projectMiss})
+
+    const names = (await Task.ransack({projectIdEq: projectMatch.id()}).toArray())
+      .map((task) => task.name())
+
+    expect(names).toEqual(["Camel match task"])
+  })
+
+  it("walks nested camelCase relationship prefixes", async () => {
+    const projectMatch = await Project.create({
+      creatingUserReference: "creator-nested-camel-match",
+      nameEn: "Nested CamelCase Match",
+      nameDe: "Nested CamelCase Treffer"
+    })
+    const projectMiss = await Project.create({
+      creatingUserReference: "creator-nested-camel-miss",
+      nameEn: "Nested CamelCase Miss",
+      nameDe: "Nested CamelCase Fehl"
+    })
+
+    await ProjectDetail.create({project: projectMatch, isActive: true, note: "Camel needs review"})
+    await ProjectDetail.create({project: projectMiss, isActive: false, note: "Camel ignore"})
+
+    await Task.create({name: "Camel needle task", project: projectMatch})
+    await Task.create({name: "Camel haystack task", project: projectMiss})
+
+    const names = (await Task.ransack({
+      nameCont: "needle",
+      projectProjectDetailIsActiveEq: true
+    }).toArray())
+      .map((task) => task.name())
+
+    expect(names).toEqual(["Camel needle task"])
+  })
+
   it("keeps polymorphic foreign-key ransack filters on the root model", async () => {
     const uuidItem = await UuidItem.create({title: "Uuid item"})
     const otherUuidItem = await UuidItem.create({title: "Other uuid item"})

@@ -156,10 +156,9 @@ function findRelationshipPrefix({modelClass, value}) {
     const relationship = relationshipEntries(modelClass)[relationshipName]
 
     for (const candidate of relationshipCandidates(relationshipName)) {
-      if (!value.startsWith(`${candidate}_`)) continue
+      const remainingValue = stripRelationshipCandidate(value, candidate)
 
-      const remainingValue = value.slice(candidate.length + 1)
-
+      if (remainingValue === null) continue
       if (remainingValue.length < 1) continue
       if (bestMatch && candidate.length <= bestMatch.candidateLength) continue
 
@@ -179,6 +178,36 @@ function findRelationshipPrefix({modelClass, value}) {
     remainingValue: bestMatch.remainingValue,
     targetModelClass: bestMatch.targetModelClass
   }
+}
+
+/**
+ * Returns the portion of `value` after `candidate` when `candidate`
+ * sits at a relationship-path boundary, or null when there's no
+ * boundary match. Two boundary forms are accepted:
+ * - snake: `<candidate>_` followed by the rest of the path (e.g.
+ *   `task_project_id` against candidate `task` returns `project_id`).
+ * - camel: `<candidate>` immediately followed by an uppercase letter,
+ *   which marks a new word in camelCase (e.g. `taskProjectId` against
+ *   candidate `task` returns `projectId` with the leading `P`
+ *   lowercased so the remainder stays in caller-form for the next
+ *   attribute / relationship match).
+ * @param {string} value - Remaining ransack path.
+ * @param {string} candidate - Relationship name candidate.
+ * @returns {string | null} - Remainder after the candidate, or null.
+ */
+function stripRelationshipCandidate(value, candidate) {
+  if (value.startsWith(`${candidate}_`)) {
+    return value.slice(candidate.length + 1)
+  }
+
+  if (value.length <= candidate.length) return null
+  if (!value.startsWith(candidate)) return null
+
+  const nextChar = value.charAt(candidate.length)
+
+  if (nextChar < "A" || nextChar > "Z") return null
+
+  return nextChar.toLowerCase() + value.slice(candidate.length + 1)
 }
 
 /**
