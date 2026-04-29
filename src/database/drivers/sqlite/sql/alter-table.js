@@ -1,10 +1,12 @@
 // @ts-check
 
 import AlterTableBase from "../../../query/alter-table-base.js"
-import CreateIndexBase from "../../../query/create-index-base.js"
 import Logger from "../../../../logger.js"
 import restArgsError from "../../../../utils/rest-args-error.js"
 import TableData from "../../../table-data/index.js"
+import TableForeignKey from "../../../table-data/table-foreign-key.js"
+import TableIndex from "../../../table-data/table-index.js"
+import TableRebuilder from "../table-rebuilder.js"
 
 export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable extends AlterTableBase {
   /**
@@ -26,136 +28,154 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {
-    const {tableData} = this
-    const table = await this.getDriver().getTableByName(tableData.getName())
+    const driver = this.getDriver()
+    const {tableData: alterTableData} = this
+    const tableName = alterTableData.getName()
+    const table = await driver.getTableByName(tableName)
 
-    if (!table) throw new Error(`Table ${tableData.getName()} does not exist`)
+    if (!table) throw new Error(`Table ${tableName} does not exist`)
 
     const currentTableData = await table.getTableData()
-    const options = this.getOptions()
-    const tableName = tableData.getName()
-    const tempTableName = `${tableData.getName()}AlterTableTemp`
-    const newColumnNames = currentTableData.getColumns()
-      .filter((column) => !column.isNewColumn())
-      .map((column) => {
-        const newTableColumn = tableData.getColumns().find((tableColumn) => tableColumn.getName() == column.getName())
+    const {targetTableData, columnPairs} = this._buildTargetSchema(currentTableData, alterTableData)
 
-        return newTableColumn?.getNewName() || newTableColumn?.getName() || column.getNewName() || column.getName()
-      })
-    const oldColumnNames = currentTableData.getColumns().filter((column) => !column.isNewColumn()).map((column) => column.getName())
-    const newColumnsSQL = newColumnNames.map((name) => options.quoteColumnName(name)).join(", ")
-    const oldColumnsSQL = oldColumnNames.map((name) => options.quoteColumnName(name)).join(", ")
+    const rebuilder = new TableRebuilder({
+      columnPairs,
+      driver,
+      originalTableName: tableName,
+      targetTableData
+    })
 
-    tableData.setName(tempTableName)
-
-    const newTableData = new TableData(tempTableName)
-
-    for (const tableDataColumn of currentTableData.getColumns()) {
-      let newTableDataColumn = tableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == tableDataColumn.getName())
-
-      if (newTableDataColumn && newTableDataColumn.isNewColumn()) {
-        newTableDataColumn = undefined
-      }
-
-      if (newTableDataColumn) {
-        newTableDataColumn.setAutoIncrement(tableDataColumn.getAutoIncrement())
-        newTableDataColumn.setDefault(tableDataColumn.getDefault())
-        newTableDataColumn.setIndex(tableDataColumn.getIndex())
-        newTableDataColumn.setForeignKey(tableDataColumn.getForeignKey())
-        newTableDataColumn.setMaxLength(tableDataColumn.getMaxLength())
-        newTableDataColumn.setPrimaryKey(tableDataColumn.getPrimaryKey())
-        newTableDataColumn.setType(tableDataColumn.getType())
-      }
-
-      newTableData.addColumn(newTableDataColumn || tableDataColumn)
-    }
-
-    // SQLite rebuilds use existing columns plus new ones; avoid duplicating a column that already exists.
-    const existingColumnNames = new Set(currentTableData.getColumns().map((column) => column.getName()))
-
-    for (const tableDataColumn of tableData.getColumns()) {
-      if (!tableDataColumn.isNewColumn()) continue
-      if (existingColumnNames.has(tableDataColumn.getName())) continue
-
-      newTableData.addColumn(tableDataColumn)
-    }
-
-    const foundForeignKeys = []
-
-    for (const tableDataForeignKey of currentTableData.getForeignKeys()) {
-      const newTableDataForeignKey = newTableData.getForeignKeys().find((newTableDataForeignKey) => newTableDataForeignKey.getName() == tableDataForeignKey.getName())
-
-      if (newTableDataForeignKey) foundForeignKeys.push(newTableDataForeignKey.getName())
-
-      const actualTableDataForeignKey = newTableDataForeignKey || tableDataForeignKey
-
-      // Register foreign key on the table
-      newTableData.addForeignKey(actualTableDataForeignKey)
-
-      // Register foreign key on the column
-      const tableDataColumn = newTableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == actualTableDataForeignKey.getColumnName())
-
-      if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${actualTableDataForeignKey.getName()}`)
-
-      this.logger.debugLowLevel(() => `Setting foreign key on column ${tableDataColumn.getName()}`)
-      tableDataColumn.setForeignKey(actualTableDataForeignKey)
-    }
-
-    for (const foreignKey of tableData.getForeignKeys()) {
-      if (foundForeignKeys.includes(foreignKey.getName())) continue
-
-      // Register foreign key on the table
-      newTableData.addForeignKey(foreignKey)
-
-      // Register foreign key on the column
-      const tableDataColumn = newTableData.getColumns().find((newTableDataColumn) => newTableDataColumn.getName() == foreignKey.getColumnName())
-
-      if (!tableDataColumn) throw new Error(`Couldn't find column for foreign key: ${foreignKey.getName()}`)
-
-      this.logger.debugLowLevel(() => `Setting foreign key on column ${tableDataColumn.getName()}`)
-      tableDataColumn.setForeignKey(foreignKey)
-    }
-
-    const createNewTableSQL = await this.getDriver().createTableSql(newTableData)
-    const insertSQL = `INSERT INTO ${options.quoteTableName(tempTableName)} (${newColumnsSQL}) SELECT ${oldColumnsSQL} FROM ${options.quoteTableName(tableName)}`
-    const dropTableSQLs = `DROP TABLE ${options.quoteTableName(tableName)}`
-    const renameTableSQL = `ALTER TABLE ${options.quoteTableName(tempTableName)} RENAME TO ${options.quoteTableName(tableName)}`
+    const rebuildSQLs = await rebuilder.toSQLs()
     const sqls = []
 
-    for (const sql of createNewTableSQL) {
-      sqls.push(sql)
-    }
+    // PRAGMA foreign_keys can only be toggled outside an active transaction; when the
+    // caller is already inside one these become no-ops (matching prior behavior). Outside
+    // a transaction they protect the rebuild from cross-table FK enforcement during the
+    // DROP/RENAME swap. Capture the prior state so we restore it instead of unconditionally
+    // forcing ON — callers that deliberately disabled FK enforcement (e.g. bulk data fixes)
+    // shouldn't be silently flipped back on by a migration.
+    const priorState = await driver.query("PRAGMA foreign_keys")
+    const wasEnabled = priorState[0]?.foreign_keys == 1
 
-    sqls.push(insertSQL)
-    sqls.push(dropTableSQLs)
-    sqls.push(renameTableSQL)
+    sqls.push("PRAGMA foreign_keys = OFF")
 
-    for (const tableDataIndex of currentTableData.getIndexes()) {
-      const newTableDataIndex = newTableData.getIndexes().find((newTableDataIndex) => newTableDataIndex.getName() == tableDataIndex.getName())
-      const actualTableIndex = newTableDataIndex || tableDataIndex
+    for (const sql of rebuildSQLs) sqls.push(sql)
 
-      newTableData.addIndex(actualTableIndex)
-
-      const columnNames = actualTableIndex.getColumns().map((columnName) => {
-        const newTableColumn = tableData.getColumns().find((tableColumn) => tableColumn.getName() == columnName)
-
-        return newTableColumn?.getNewName() || newTableColumn?.getName() || columnName
-      })
-
-      const createIndexArgs = {
-        columns: columnNames,
-        driver: this.getDriver(),
-        name: actualTableIndex.getName(),
-        tableName,
-        unique: actualTableIndex.getUnique()
-      }
-      const createIndexSQLs = await new CreateIndexBase(createIndexArgs).toSQLs()
-
-      for (const createIndexSQL of createIndexSQLs) {
-        sqls.push(createIndexSQL)
-      }
-    }
+    sqls.push(`PRAGMA foreign_keys = ${wasEnabled ? "ON" : "OFF"}`)
 
     return sqls
+  }
+
+  /**
+   * Merges the current schema with the alter request to produce the desired final schema
+   * and the column copy plan.
+   * @param {TableData} currentTableData - Current schema as introspected from the database.
+   * @param {TableData} alterTableData - Alter request: new columns (`isNewColumn`), renames (`newName`), drops (`dropColumn`), modifies, and new foreign keys.
+   * @returns {{targetTableData: TableData, columnPairs: Array<[string, string]>}} - The merged target schema and the [oldName, newName] pairs for INSERT...SELECT.
+   */
+  _buildTargetSchema(currentTableData, alterTableData) {
+    const targetTableData = new TableData(currentTableData.getName())
+    /** @type {Array<[string, string]>} */
+    const columnPairs = []
+    const alterColumns = alterTableData.getColumns()
+    const existingNames = new Set(currentTableData.getColumns().map((column) => column.getName()))
+    /** @type {Map<string, string>} */
+    const columnRenames = new Map()
+
+    for (const alterColumn of alterColumns) {
+      if (alterColumn.isNewColumn()) continue
+
+      const newName = alterColumn.getNewName()
+
+      if (newName) columnRenames.set(alterColumn.getName(), newName)
+    }
+
+    for (const currentColumn of currentTableData.getColumns()) {
+      const alterColumn = alterColumns.find((column) => column.getName() == currentColumn.getName() && !column.isNewColumn())
+
+      if (alterColumn?.getDropColumn()) continue
+
+      let targetColumn
+
+      if (alterColumn) {
+        // The alter request supplies a partial column spec (e.g. just a rename or a type change);
+        // inherit unset properties from the current column so we don't lose existing definitions.
+        alterColumn.setAutoIncrement(alterColumn.getAutoIncrement() || currentColumn.getAutoIncrement())
+        if (alterColumn.getDefault() === undefined) alterColumn.setDefault(currentColumn.getDefault())
+        if (!alterColumn.getIndex()) alterColumn.setIndex(currentColumn.getIndex())
+        if (!alterColumn.getForeignKey()) alterColumn.setForeignKey(currentColumn.getForeignKey())
+        if (alterColumn.getMaxLength() === undefined) alterColumn.setMaxLength(currentColumn.getMaxLength())
+        alterColumn.setPrimaryKey(alterColumn.getPrimaryKey() || currentColumn.getPrimaryKey())
+        if (!alterColumn.getType()) alterColumn.setType(currentColumn.getType())
+
+        targetColumn = alterColumn
+      } else {
+        targetColumn = currentColumn
+      }
+
+      targetTableData.addColumn(targetColumn)
+      columnPairs.push([currentColumn.getName(), targetColumn.getNewName() || targetColumn.getName()])
+    }
+
+    for (const alterColumn of alterColumns) {
+      if (!alterColumn.isNewColumn()) continue
+      if (existingNames.has(alterColumn.getName())) continue
+
+      targetTableData.addColumn(alterColumn)
+    }
+
+    const seenForeignKeyNames = new Set()
+
+    for (const currentForeignKey of currentTableData.getForeignKeys()) {
+      const alterForeignKey = alterTableData.getForeignKeys().find((foreignKey) => foreignKey.getName() == currentForeignKey.getName())
+      const finalForeignKey = this._renameForeignKeyColumn(alterForeignKey || currentForeignKey, columnRenames)
+
+      seenForeignKeyNames.add(finalForeignKey.getName())
+      targetTableData.addForeignKey(finalForeignKey)
+    }
+
+    for (const alterForeignKey of alterTableData.getForeignKeys()) {
+      if (seenForeignKeyNames.has(alterForeignKey.getName())) continue
+
+      targetTableData.addForeignKey(this._renameForeignKeyColumn(alterForeignKey, columnRenames))
+    }
+
+    for (const currentIndex of currentTableData.getIndexes()) {
+      const renamedColumns = currentIndex.getColumns().map((columnName) => {
+        if (typeof columnName != "string") return columnName
+
+        return columnRenames.get(columnName) || columnName
+      })
+
+      targetTableData.addIndex(new TableIndex(renamedColumns, {
+        name: currentIndex.getName(),
+        unique: currentIndex.getUnique()
+      }))
+    }
+
+    return {targetTableData, columnPairs}
+  }
+
+  /**
+   * Returns the foreign key with its column name updated when the column was renamed in the
+   * alter request. SQLite re-creates the constraint inside the rebuilt CREATE TABLE, so a
+   * stale column name there would reference a column that no longer exists.
+   * @param {TableForeignKey} foreignKey - Foreign key to evaluate.
+   * @param {Map<string, string>} columnRenames - Map of old → new column names from the alter request.
+   * @returns {TableForeignKey} - The original foreign key, or a fresh instance with the renamed column.
+   */
+  _renameForeignKeyColumn(foreignKey, columnRenames) {
+    const renamed = columnRenames.get(foreignKey.getColumnName())
+
+    if (!renamed) return foreignKey
+
+    return new TableForeignKey({
+      columnName: renamed,
+      isNewForeignKey: foreignKey.getIsNewForeignKey(),
+      name: foreignKey.getName(),
+      referencedColumnName: foreignKey.getReferencedColumnName(),
+      referencedTableName: foreignKey.getReferencedTableName(),
+      tableName: foreignKey.getTableName()
+    })
   }
 }

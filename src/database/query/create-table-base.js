@@ -45,6 +45,8 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
     sql += ` ${options.quoteTableName(tableData.getName())} (`
 
+    const tableLevelFKColumnNames = new Set(tableData.getForeignKeys().map((foreignKey) => foreignKey.getColumnName()))
+
     let columnCount = 0
 
     for (const column of tableData.getColumns()) {
@@ -52,7 +54,18 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (columnCount > 1) sql += ", "
 
-      sql += column.getSQL({driver, forAlterTable: false})
+      sql += column.getSQL({driver, forAlterTable: false, skipForeignKey: tableLevelFKColumnNames.has(column.getActualName())})
+    }
+
+    for (const foreignKey of tableData.getForeignKeys()) {
+      sql += ", "
+
+      if (foreignKey.getName()) {
+        sql += `CONSTRAINT ${options.quoteIndexName(foreignKey.getName())} `
+      }
+
+      sql += `FOREIGN KEY (${options.quoteColumnName(foreignKey.getColumnName())})`
+      sql += ` REFERENCES ${options.quoteTableName(foreignKey.getReferencedTableName())} (${options.quoteColumnName(foreignKey.getReferencedColumnName())})`
     }
 
     if (this.indexInCreateTable) {
