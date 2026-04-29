@@ -59,25 +59,23 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
       actionCount++
     }
 
-    // SQLite's ALTER TABLE does not support adding constraints — defining
-    // foreign keys requires creating the table with them inline.
-    if (databaseType != "sqlite") {
-      for (const foreignKey of tableData.getForeignKeys()) {
-        if (!foreignKey.getIsNewForeignKey()) continue
+    // SQLite's ALTER TABLE does not support adding constraints; the SQLite driver overrides
+    // alterTableSQLs entirely (via TableRebuilder) so this base path is never invoked there.
+    for (const foreignKey of tableData.getForeignKeys()) {
+      if (!foreignKey.getIsNewForeignKey()) continue
 
-        if (actionCount > 0) sql += ", "
+      if (actionCount > 0) sql += ", "
 
-        sql += "ADD"
+      sql += "ADD"
 
-        if (foreignKey.getName()) {
-          sql += ` CONSTRAINT ${options.quoteIndexName(foreignKey.getName())}`
-        }
-
-        sql += ` FOREIGN KEY (${options.quoteColumnName(foreignKey.getColumnName())})`
-        sql += ` REFERENCES ${options.quoteTableName(foreignKey.getReferencedTableName())} (${options.quoteColumnName(foreignKey.getReferencedColumnName())})`
-
-        actionCount++
+      if (foreignKey.getName()) {
+        sql += ` CONSTRAINT ${options.quoteIndexName(foreignKey.getName())}`
       }
+
+      sql += ` FOREIGN KEY (${options.quoteColumnName(foreignKey.getColumnName())})`
+      sql += ` REFERENCES ${options.quoteTableName(foreignKey.getReferencedTableName())} (${options.quoteColumnName(foreignKey.getReferencedColumnName())})`
+
+      actionCount++
     }
 
     if (actionCount > 0) {

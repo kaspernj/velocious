@@ -89,22 +89,6 @@ describe("database - query - alter-table foreign-key SQL", () => {
     ])
   })
 
-  it("skips foreign-key emission on sqlite (ALTER TABLE ADD CONSTRAINT is unsupported there)", async () => {
-    const tableData = new TableData("github_projects")
-
-    tableData.addForeignKey(newForeignKey({
-      columnName: "github_app_installation_id",
-      name: "fk_github_projects_github_app_installation",
-      referencedColumnName: "id",
-      referencedTableName: "github_app_installations",
-      tableName: "github_projects"
-    }))
-
-    const sqls = await new AlterTableBase({driver: buildDriver("sqlite"), tableData}).toSQLs()
-
-    expect(sqls).toEqual([])
-  })
-
   it("emits column-add and FK-add as a single ALTER TABLE with comma-separated actions", async () => {
     const tableData = new TableData("github_projects")
 

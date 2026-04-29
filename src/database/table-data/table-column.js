@@ -236,9 +236,10 @@ export default class TableColumn {
    * @param {object} args - Options object.
    * @param {boolean} args.forAlterTable - Whether for alter table.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
+   * @param {boolean} [args.skipForeignKey] - Skip emitting the inline REFERENCES clause (the caller emits a table-level FOREIGN KEY constraint instead).
    * @returns {string} - SQL string.
    */
-  getSQL({forAlterTable, driver, ...restArgs}) {
+  getSQL({forAlterTable, driver, skipForeignKey, ...restArgs}) {
     restArgsError(restArgs)
 
     const databaseType = driver.getType()
@@ -352,7 +353,7 @@ export default class TableColumn {
       sql += ` COMMENT ${options.quote(notes)}`
     }
 
-    const foreignKey = this.getForeignKey()
+    const foreignKey = skipForeignKey ? undefined : this.getForeignKey()
 
     if (foreignKey) {
       let foreignKeyTable, foreignKeyColumn
