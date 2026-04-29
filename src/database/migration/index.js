@@ -157,24 +157,41 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
-   * @param {string} tableName - Table name.
-   * @param {string} referenceName - Reference name.
+   * @typedef {object} AddForeignKeyArgsType
+   * @property {string} [columnName] - Override the derived FK column name (default: `${reference_underscored}_id`).
+   * @property {string} [name] - Override the derived constraint name (default: `fk_${tableName}_${referenceName}`).
+   * @property {string} [referencedColumnName] - Override the referenced column name (default: `id`).
+   * @property {string} [referencedTableName] - Override the derived referenced table (default: pluralized `referenceName`).
+   */
+  /**
+   * @param {string} tableName - Table the FK lives on.
+   * @param {string} referenceName - Singular reference name. Defaults derive
+   *   the FK column as `${reference}_id`, the referenced table by pluralizing
+   *   the reference, the referenced column as `id`, and the constraint name
+   *   as `fk_${tableName}_${referenceName}`. Override any of those via `args`
+   *   when the schema doesn't follow the convention.
+   * @param {AddForeignKeyArgsType} [args] - Optional overrides.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async addForeignKey(tableName, referenceName) {
+  async addForeignKey(tableName, referenceName, args = {}) {
+    const {columnName, name, referencedColumnName, referencedTableName, ...restArgs} = args
+
+    restArgsError(restArgs)
+
     const referenceNameUnderscore = inflection.underscore(referenceName)
-    const referencedTableName = inflection.pluralize(referenceNameUnderscore)
-    const columnName = `${referenceNameUnderscore}_id`
-    const foreignKeyName = `fk_${tableName}_${referenceName}`
+    const resolvedReferencedTableName = referencedTableName || inflection.pluralize(referenceNameUnderscore)
+    const resolvedColumnName = columnName || `${referenceNameUnderscore}_id`
+    const resolvedReferencedColumnName = referencedColumnName || "id"
+    const resolvedName = name || `fk_${tableName}_${referenceName}`
 
     await this.getDriver().addForeignKey(
       tableName,
-      columnName,
-      referencedTableName,
-      "id",
+      resolvedColumnName,
+      resolvedReferencedTableName,
+      resolvedReferencedColumnName,
       {
         isNewForeignKey: true,
-        name: foreignKeyName
+        name: resolvedName
       }
     )
   }
