@@ -64,8 +64,8 @@ services:
     mem_limit: 4096m
     restart_policy: on-failure
 builds:
-  build_1:
-    name: MariaDB
+  mariadb_1:
+    name: "MariaDB (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
@@ -74,9 +74,31 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test
-  build_2:
-    name: MS-SQL
+      - npm run test -- --groups 3 --group-number 1
+  mariadb_2:
+    name: "MariaDB (2/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
+      - wait-for-it mariadb:3306
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 2
+  mariadb_3:
+    name: "MariaDB (3/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
+      - wait-for-it mariadb:3306
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 3
+  mssql_1:
+    name: "MS-SQL (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
       - wait-for-it -t 120 mssql:1433
@@ -84,9 +106,29 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test
-  build_3:
-    name: PG-SQL
+      - npm run test -- --groups 3 --group-number 1
+  mssql_2:
+    name: "MS-SQL (2/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 2
+  mssql_3:
+    name: "MS-SQL (3/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 3
+  pgsql_1:
+    name: "PG-SQL (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it postgres:5432
@@ -95,9 +137,31 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test
-  build_4:
-    name: SQLite
+      - npm run test -- --groups 3 --group-number 1
+  pgsql_2:
+    name: "PG-SQL (2/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
+      - wait-for-it postgres:5432
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 2
+  pgsql_3:
+    name: "PG-SQL (3/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
+      - wait-for-it postgres:5432
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 3
+  sqlite_1:
+    name: "SQLite (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - wait-for-it -t 120 mssql:1433
@@ -105,15 +169,35 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test
-  build_5:
+      - npm run test -- --groups 3 --group-number 1
+  sqlite_2:
+    name: "SQLite (2/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 2
+  sqlite_3:
+    name: "SQLite (3/3)"
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 3 --group-number 3
+  eslint:
     name: ESLint
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - sleep 5
       - npm run lint
       - npm run typecheck
-  build_6:
+  browser_tests:
     name: Browser Tests
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js

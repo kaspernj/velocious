@@ -29,10 +29,10 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
     const options = this.getOptions()
 
     let sql = `ALTER TABLE ${options.quoteTableName(tableData.getName())} `
-    let columnsCount = 0
+    let actionCount = 0
 
     for (const column of tableData.getColumns()) {
-      if (columnsCount > 0) sql += ", "
+      if (actionCount > 0) sql += ", "
 
       if (column.isNewColumn()) {
         sql += "ADD "
@@ -56,10 +56,33 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
       }
 
 
-      columnsCount++
+      actionCount++
     }
 
-    sqls.push(sql)
+    // SQLite's ALTER TABLE does not support adding constraints — defining
+    // foreign keys requires creating the table with them inline.
+    if (databaseType != "sqlite") {
+      for (const foreignKey of tableData.getForeignKeys()) {
+        if (!foreignKey.getIsNewForeignKey()) continue
+
+        if (actionCount > 0) sql += ", "
+
+        sql += "ADD"
+
+        if (foreignKey.getName()) {
+          sql += ` CONSTRAINT ${options.quoteIndexName(foreignKey.getName())}`
+        }
+
+        sql += ` FOREIGN KEY (${options.quoteColumnName(foreignKey.getColumnName())})`
+        sql += ` REFERENCES ${options.quoteTableName(foreignKey.getReferencedTableName())} (${options.quoteColumnName(foreignKey.getReferencedColumnName())})`
+
+        actionCount++
+      }
+    }
+
+    if (actionCount > 0) {
+      sqls.push(sql)
+    }
 
     if (databaseType == "pgsql") {
       for (const column of tableData.getColumns()) {
