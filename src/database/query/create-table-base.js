@@ -54,7 +54,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
       if (columnCount > 1) sql += ", "
 
-      sql += column.getSQL({driver, forAlterTable: false, skipForeignKey: tableLevelFKColumnNames.has(column.getName())})
+      sql += column.getSQL({driver, forAlterTable: false, skipForeignKey: tableLevelFKColumnNames.has(column.getActualName())})
     }
 
     for (const foreignKey of tableData.getForeignKeys()) {

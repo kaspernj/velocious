@@ -84,6 +84,89 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
     })
   })
 
+  it("retargets a foreign key when its column is renamed in the same rebuild", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const driver = dbs.default
+
+      if (driver.getType() !== "sqlite") return
+
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      await driver.query("DROP TABLE IF EXISTS fk_rename_posts")
+      await driver.query("DROP TABLE IF EXISTS fk_rename_authors")
+
+      await migration.createTable("fk_rename_authors", (table) => {
+        table.string("name", {null: false})
+      })
+
+      await migration.createTable("fk_rename_posts", (table) => {
+        table.string("title", {null: false})
+        table.integer("author_id", {null: true})
+      })
+
+      await driver.addForeignKey("fk_rename_posts", "author_id", "fk_rename_authors", "id", {
+        isNewForeignKey: true,
+        name: "fk_rename_posts_author"
+      })
+
+      await migration.renameColumn("fk_rename_posts", "author_id", "writer_id")
+
+      const table = await driver.getTableByNameOrFail("fk_rename_posts")
+      const foreignKeys = await table.getForeignKeys()
+      const fkColumns = foreignKeys.map((fk) => fk.getColumnName())
+
+      expect(fkColumns).toContain("writer_id")
+      expect(fkColumns).not.toContain("author_id")
+
+      await migration.dropTable("fk_rename_posts")
+      await migration.dropTable("fk_rename_authors")
+    })
+  })
+
+  it("restores PRAGMA foreign_keys to its prior state after the rebuild", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const driver = dbs.default
+
+      if (driver.getType() !== "sqlite") return
+
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      await driver.query("DROP TABLE IF EXISTS fk_state_posts")
+      await driver.query("DROP TABLE IF EXISTS fk_state_authors")
+
+      await migration.createTable("fk_state_authors", (table) => {
+        table.string("name", {null: false})
+      })
+
+      await migration.createTable("fk_state_posts", (table) => {
+        table.string("title", {null: false})
+        table.integer("author_id", {null: true})
+      })
+
+      try {
+        await driver.query("PRAGMA foreign_keys = OFF")
+
+        await driver.addForeignKey("fk_state_posts", "author_id", "fk_state_authors", "id", {
+          isNewForeignKey: true,
+          name: "fk_state_posts_author"
+        })
+
+        const after = await driver.query("PRAGMA foreign_keys")
+
+        expect(after[0]?.foreign_keys).toEqual(0)
+      } finally {
+        await driver.query("PRAGMA foreign_keys = ON")
+      }
+
+      await migration.dropTable("fk_state_posts")
+      await migration.dropTable("fk_state_authors")
+    })
+  })
+
   it("preserves cross-table foreign keys pointing at the rebuilt table", async () => {
     const configuration = Configuration.current()
 
