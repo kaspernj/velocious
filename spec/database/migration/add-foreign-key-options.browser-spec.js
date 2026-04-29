@@ -11,6 +11,11 @@ import Migration from "../../../src/database/migration/index.js"
  * database driver the dummy is currently configured for (sqlite for the
  * default `.browser-spec.js` runner, mariadb / pgsql / mssql for the matrix
  * jobs).
+ *
+ * Both tables are pinned to UUID primary keys (`{id: {type: "uuid"}}`) and
+ * UUID FK columns so the types match across every driver — using `integer`
+ * here trips MariaDB errno 150 ("Foreign key constraint is incorrectly
+ * formed") because its default id type is BIGINT.
  */
 describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () => {
   it("derives column / referenced-table / constraint name from the reference name when no options given", async () => {
@@ -20,25 +25,26 @@ describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () =
       const driver = dbs.default
       const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
 
-      await dropFkOptionsTables(driver)
-      await migration.createTable("fk_options_authors", (table) => {
-        table.string("name", {null: false})
-      })
-      await migration.createTable("fk_options_posts", (table) => {
-        table.string("title", {null: false})
-        table.integer("fk_options_author_id", {null: true})
-      })
+      try {
+        await dropFkOptionsTables(driver)
+        await migration.createTable("fk_options_authors", {id: {type: "uuid"}}, (table) => {
+          table.string("name", {null: false})
+        })
+        await migration.createTable("fk_options_posts", {id: {type: "uuid"}}, (table) => {
+          table.string("title", {null: false})
+          table.uuid("fk_options_author_id", {null: true})
+        })
 
-      await migration.addForeignKey("fk_options_posts", "fk_options_author")
+        await migration.addForeignKey("fk_options_posts", "fk_options_author")
 
-      const table = await driver.getTableByNameOrFail("fk_options_posts")
-      const foreignKeys = await table.getForeignKeys()
+        const table = await driver.getTableByNameOrFail("fk_options_posts")
+        const foreignKeys = await table.getForeignKeys()
 
-      expect(foreignKeys.map((fk) => fk.getReferencedTableName())).toContain("fk_options_authors")
-      expect(foreignKeys.map((fk) => fk.getColumnName())).toContain("fk_options_author_id")
-
-      await migration.dropTable("fk_options_posts")
-      await migration.dropTable("fk_options_authors")
+        expect(foreignKeys.map((fk) => fk.getReferencedTableName())).toContain("fk_options_authors")
+        expect(foreignKeys.map((fk) => fk.getColumnName())).toContain("fk_options_author_id")
+      } finally {
+        await dropFkOptionsTables(driver)
+      }
     })
   })
 
@@ -49,27 +55,28 @@ describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () =
       const driver = dbs.default
       const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
 
-      await dropFkOptionsTables(driver)
-      await migration.createTable("fk_options_authors", (table) => {
-        table.string("name", {null: false})
-      })
-      await migration.createTable("fk_options_posts", (table) => {
-        table.string("title", {null: false})
-        table.integer("written_by_id", {null: true})
-      })
+      try {
+        await dropFkOptionsTables(driver)
+        await migration.createTable("fk_options_authors", {id: {type: "uuid"}}, (table) => {
+          table.string("name", {null: false})
+        })
+        await migration.createTable("fk_options_posts", {id: {type: "uuid"}}, (table) => {
+          table.string("title", {null: false})
+          table.uuid("written_by_id", {null: true})
+        })
 
-      await migration.addForeignKey("fk_options_posts", "fk_options_author", {
-        columnName: "written_by_id"
-      })
+        await migration.addForeignKey("fk_options_posts", "fk_options_author", {
+          columnName: "written_by_id"
+        })
 
-      const table = await driver.getTableByNameOrFail("fk_options_posts")
-      const foreignKeys = await table.getForeignKeys()
+        const table = await driver.getTableByNameOrFail("fk_options_posts")
+        const foreignKeys = await table.getForeignKeys()
 
-      expect(foreignKeys.map((fk) => fk.getColumnName())).toContain("written_by_id")
-      expect(foreignKeys.map((fk) => fk.getReferencedTableName())).toContain("fk_options_authors")
-
-      await migration.dropTable("fk_options_posts")
-      await migration.dropTable("fk_options_authors")
+        expect(foreignKeys.map((fk) => fk.getColumnName())).toContain("written_by_id")
+        expect(foreignKeys.map((fk) => fk.getReferencedTableName())).toContain("fk_options_authors")
+      } finally {
+        await dropFkOptionsTables(driver)
+      }
     })
   })
 
@@ -80,28 +87,29 @@ describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () =
       const driver = dbs.default
       const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
 
-      await dropFkOptionsTables(driver)
-      await migration.createTable("fk_options_authors", (table) => {
-        table.string("name", {null: false})
-      })
-      await migration.createTable("fk_options_posts", (table) => {
-        table.string("title", {null: false})
-        table.integer("written_by_id", {null: true})
-      })
+      try {
+        await dropFkOptionsTables(driver)
+        await migration.createTable("fk_options_authors", {id: {type: "uuid"}}, (table) => {
+          table.string("name", {null: false})
+        })
+        await migration.createTable("fk_options_posts", {id: {type: "uuid"}}, (table) => {
+          table.string("title", {null: false})
+          table.uuid("written_by_id", {null: true})
+        })
 
-      await migration.addForeignKey("fk_options_posts", "writer", {
-        columnName: "written_by_id",
-        referencedTableName: "fk_options_authors"
-      })
+        await migration.addForeignKey("fk_options_posts", "writer", {
+          columnName: "written_by_id",
+          referencedTableName: "fk_options_authors"
+        })
 
-      const table = await driver.getTableByNameOrFail("fk_options_posts")
-      const foreignKeys = await table.getForeignKeys()
-      const writerFk = foreignKeys.find((fk) => fk.getColumnName() === "written_by_id")
+        const table = await driver.getTableByNameOrFail("fk_options_posts")
+        const foreignKeys = await table.getForeignKeys()
+        const writerFk = foreignKeys.find((fk) => fk.getColumnName() === "written_by_id")
 
-      expect(writerFk?.getReferencedTableName()).toEqual("fk_options_authors")
-
-      await migration.dropTable("fk_options_posts")
-      await migration.dropTable("fk_options_authors")
+        expect(writerFk?.getReferencedTableName()).toEqual("fk_options_authors")
+      } finally {
+        await dropFkOptionsTables(driver)
+      }
     })
   })
 
@@ -127,6 +135,9 @@ describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () =
 })
 
 /**
+ * Drops the two scratch tables in FK-safe order (child first), tolerating
+ * either being already absent.
+ *
  * @param {any} driver
  * @returns {Promise<void>}
  */
@@ -135,7 +146,7 @@ async function dropFkOptionsTables(driver) {
     try {
       await driver.query(`DROP TABLE IF EXISTS ${tableName}`)
     } catch {
-      // pgsql + mssql may need a different cascade syntax; fall back to a
+      // pgsql + mssql may need different cascade syntax; fall back to a
       // best-effort drop that ignores already-missing tables.
     }
   }
