@@ -1250,10 +1250,26 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * @param {import("./http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithRequestTiming(requestTiming, callback) {
+    return await this.getEnvironmentHandler().runWithRequestTiming(requestTiming, callback)
+  }
+
+  /**
    * @returns {import("./authorization/ability.js").default | undefined} - Current ability from context.
    */
   getCurrentAbility() {
     return this.getEnvironmentHandler().getCurrentAbility()
+  }
+
+  /**
+   * @returns {import("./http-server/client/request-timing.js").default | undefined} - Current request timing collector.
+   */
+  getCurrentRequestTiming() {
+    return this.getEnvironmentHandler().getCurrentRequestTiming()
   }
 
   /**

@@ -511,6 +511,9 @@ export default class VelociousHttpServerClientWebsocketSession {
         statusMessage: response.getStatusMessage(),
         type: "response"
       })
+      void requestRunner.logCompletedRequest().catch((error) => {
+        this.logger.warn("Failed to log completed request", error)
+      })
     })
 
     await requestRunner.run()

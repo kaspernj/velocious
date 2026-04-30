@@ -3,7 +3,7 @@
 import VelociousHttpServerClientRequestRunner from "../../src/http-server/client/request-runner.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("HttpServer - request runner", async () => {
+describe("HttpServer - request runner", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
   it("logs a cleaned backtrace when request processing fails", async () => {
     const originalConsoleError = console.error
     const consoleErrorWrites = []
@@ -28,7 +28,8 @@ describe("HttpServer - request runner", async () => {
         },
         getErrorEvents: () => ({
           emit: () => {}
-        })
+        }),
+        runWithRequestTiming: async (_requestTiming, callback) => await callback()
       })
       const request = /** @type {any} */ ({
         header: () => undefined,
@@ -73,7 +74,8 @@ describe("HttpServer - request runner", async () => {
         },
         getErrorEvents: () => ({
           emit: () => {}
-        })
+        }),
+        runWithRequestTiming: async (_requestTiming, callback) => await callback()
       })
       const request = /** @type {any} */ ({
         header: () => undefined,
@@ -117,7 +119,8 @@ describe("HttpServer - request runner", async () => {
         },
         getErrorEvents: () => ({
           emit: () => {}
-        })
+        }),
+        runWithRequestTiming: async (_requestTiming, callback) => await callback()
       })
       const request = /** @type {any} */ ({
         header: () => undefined,

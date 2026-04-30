@@ -4,6 +4,7 @@ import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import ensureError from "../../utils/ensure-error.js"
 import EventEmitter from "../../utils/event-emitter.js"
 import Logger from "../../logger.js"
+import RequestTiming from "./request-timing.js"
 import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
 
@@ -81,6 +82,22 @@ function responseBodyTypeForLog(response) {
   }
 }
 
+/**
+ * @param {number} value - Milliseconds.
+ * @returns {string} - Formatted milliseconds with one decimal place.
+ */
+function formatBucketMs(value) {
+  return `${value.toFixed(1)}ms`
+}
+
+/**
+ * @param {number} count - Query count.
+ * @returns {string} - Query count label.
+ */
+function queryCountLabel(count) {
+  return `${count} ${count === 1 ? "query" : "queries"}`
+}
+
 export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
@@ -97,6 +114,8 @@ export default class VelociousHttpServerClientRequestRunner {
     this.configuration = configuration
     this.request = request
     this.response = new Response({configuration})
+    this.completedRequestLogged = false
+    this.requestTiming = new RequestTiming()
     this.state = "running"
   }
 
@@ -104,6 +123,14 @@ export default class VelociousHttpServerClientRequestRunner {
   getState() { return this.state }
 
   async run() {
+    this.requestTiming.startedAtMs = Date.now()
+
+    return await this.configuration.runWithRequestTiming(this.requestTiming, async () => {
+      await this._run()
+    })
+  }
+
+  async _run() {
     const {configuration, request, response} = this
 
     if (!request) throw new Error("No request?")
@@ -240,5 +267,32 @@ export default class VelociousHttpServerClientRequestRunner {
     }])
     this.state = "done"
     this.events.emit("done", this)
+  }
+
+  /** @returns {Promise<void>} - Logs the completed request line after the response has been served. */
+  async logCompletedRequest() {
+    if (this.completedRequestLogged) return
+
+    this.completedRequestLogged = true
+
+    const requestTiming = this.requestTiming
+
+    requestTiming.markResponseServed()
+
+    if (!requestTiming.completedLogSubject || !requestTiming.completedLogMethod) return
+
+    const logger = new Logger(requestTiming.completedLogSubject, {configuration: this.configuration})
+    const summary = requestTiming.summary()
+    const response = this.response
+    const completedMessage = [
+      `Completed ${response.getStatusCode()} ${response.getStatusMessage()} in ${Math.round(summary.totalMs)}ms (`,
+      `Controller: ${formatBucketMs(summary.controllerMs)}`,
+      ` | Views: ${formatBucketMs(summary.viewsMs)}`,
+      ` | DB: ${formatBucketMs(summary.dbMs)} (${queryCountLabel(summary.dbQueryCount)})`,
+      ` | Velocious: ${formatBucketMs(summary.velociousMs)}`,
+      `)`
+    ].join("")
+
+    await logger[requestTiming.completedLogMethod](completedMessage)
   }
 }

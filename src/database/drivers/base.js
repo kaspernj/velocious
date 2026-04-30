@@ -700,11 +700,18 @@ export default class VelociousDatabaseDriversBase {
 
     let tries = 0
     const maxTries = 5
+    const requestTiming = this.configuration.getCurrentRequestTiming()
 
     while (tries < maxTries) {
       tries++
 
       try {
+        if (requestTiming && tries === 1) {
+          return await requestTiming.measureDbQuery(async () => await this._queryActual(sql))
+        } else if (requestTiming) {
+          return await requestTiming.measure("db", async () => await this._queryActual(sql))
+        }
+
         return await this._queryActual(sql)
       } catch (error) {
         if (!(error instanceof Error)) throw error

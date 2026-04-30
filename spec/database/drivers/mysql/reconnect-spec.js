@@ -3,9 +3,14 @@
 import MysqlDriver from "../../../../src/database/drivers/mysql/index.js"
 import {describe, expect, it} from "../../../../src/testing/test.js"
 
-describe("Database - drivers - mysql reconnect", () => {
+const configuration = /** @type {any} */ ({
+  debug: false,
+  getCurrentRequestTiming: () => undefined
+})
+
+describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("connects when the pool is missing", async () => {
-    const driver = new MysqlDriver({}, {debug: false})
+    const driver = new MysqlDriver({}, configuration)
     let didConnect = false
 
     driver.connect = async () => {
@@ -25,7 +30,7 @@ describe("Database - drivers - mysql reconnect", () => {
   })
 
   it("escapes values without a pool", () => {
-    const driver = new MysqlDriver({}, {debug: false})
+    const driver = new MysqlDriver({}, configuration)
 
     const escaped = driver.escape("hello")
     const quoted = driver.quote("hello")
@@ -35,7 +40,7 @@ describe("Database - drivers - mysql reconnect", () => {
   })
 
   it("retries and reconnects after connection failures", async () => {
-    const driver = new MysqlDriver({}, {debug: false})
+    const driver = new MysqlDriver({}, configuration)
     let connectCount = 0
     let closeCount = 0
     let attempts = 0
@@ -70,7 +75,7 @@ describe("Database - drivers - mysql reconnect", () => {
   })
 
   it("raises when a reconnect would bypass an active transaction", async () => {
-    const driver = new MysqlDriver({}, {debug: false})
+    const driver = new MysqlDriver({}, configuration)
     let didReconnect = false
 
     driver._transactionsCount = 1
