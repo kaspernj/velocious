@@ -4,7 +4,7 @@ import mssql from "mssql"
 import MssqlDriver from "../../../../src/database/drivers/mssql/index.js"
 import {describe, expect, it} from "../../../../src/testing/test.js"
 
-describe("Database - drivers - mssql query reconnect", () => {
+describe("Database - drivers - mssql query reconnect", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("recreates requests after reconnecting", async () => {
     const originalRequest = mssql.Request
     let tries = 0
@@ -28,7 +28,11 @@ describe("Database - drivers - mssql query reconnect", () => {
     mssql.Request = FakeRequest
 
     try {
-      const driver = new MssqlDriver({sqlConfig: {}}, {debug: false})
+      const configuration = /** @type {any} */ ({
+        debug: false,
+        getCurrentRequestTiming: () => undefined
+      })
+      const driver = new MssqlDriver({sqlConfig: {}}, configuration)
       driver.connection = undefined
 
       driver.connect = async () => {
