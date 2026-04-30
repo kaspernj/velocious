@@ -700,7 +700,7 @@ export default class VelociousDatabaseDriversBase {
 
     let tries = 0
     const maxTries = 5
-    const requestTiming = this.configuration.getCurrentRequestTiming?.()
+    const requestTiming = this.configuration.getCurrentRequestTiming()
 
     while (tries < maxTries) {
       tries++

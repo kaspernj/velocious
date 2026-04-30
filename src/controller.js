@@ -227,7 +227,7 @@ export default class VelociousController {
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   renderView() {
-    const requestTiming = this.getConfiguration().getCurrentRequestTiming?.()
+    const requestTiming = this.getConfiguration().getCurrentRequestTiming()
 
     return requestTiming
       ? requestTiming.measure("views", async () => await this._renderViewActual())
@@ -311,7 +311,7 @@ export default class VelociousController {
    * @returns {T} - Callback result.
    */
   _measureViewRender(callback) {
-    const requestTiming = this.getConfiguration().getCurrentRequestTiming?.()
+    const requestTiming = this.getConfiguration().getCurrentRequestTiming()
 
     return requestTiming
       ? requestTiming.measureSync("views", callback)

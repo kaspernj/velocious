@@ -397,7 +397,7 @@ export default class VelociousRoutesResolver {
    * @returns {Promise<T>} - Callback result.
    */
   async _measureController(callback) {
-    const requestTiming = this.configuration.getCurrentRequestTiming?.()
+    const requestTiming = this.configuration.getCurrentRequestTiming()
 
     return requestTiming
       ? await requestTiming.measure("controller", callback)
@@ -411,7 +411,7 @@ export default class VelociousRoutesResolver {
    * @returns {void} - No return value.
    */
   _setCompletedLogMetadata({controllerClass, logMethod}) {
-    const requestTiming = this.configuration.getCurrentRequestTiming?.()
+    const requestTiming = this.configuration.getCurrentRequestTiming()
 
     if (!requestTiming) return
 
