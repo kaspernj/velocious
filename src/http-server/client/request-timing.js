@@ -84,10 +84,12 @@ export default class RequestTiming {
    * @returns {{controllerMs: number, dbMs: number, totalMs: number, velociousMs: number, viewsMs: number, dbQueryCount: number}} - Timing summary.
    */
   summary() {
-    const totalMs = (this.responseServedAtMs || Date.now()) - this.startedAtMs
-    const controllerMs = this.buckets.controller
-    const dbMs = this.buckets.db
-    const viewsMs = this.buckets.views
+    const now = this.responseServedAtMs || Date.now()
+    const buckets = this._bucketTotalsAt(now)
+    const totalMs = now - this.startedAtMs
+    const controllerMs = buckets.controller
+    const dbMs = buckets.db
+    const viewsMs = buckets.views
     const velociousMs = Math.max(totalMs - controllerMs - dbMs - viewsMs, 0)
 
     return {
@@ -98,6 +100,21 @@ export default class RequestTiming {
       velociousMs,
       viewsMs
     }
+  }
+
+  /**
+   * @param {number} now - Timestamp to calculate active bucket elapsed time against.
+   * @returns {Record<RequestTimingBucket, number>} - Bucket totals.
+   */
+  _bucketTotalsAt(now) {
+    const buckets = Object.assign({}, this.buckets)
+    const activeBucket = this.bucketStack[this.bucketStack.length - 1]
+
+    if (activeBucket) {
+      buckets[activeBucket.bucket] += Math.max(now - activeBucket.startedAtMs, 0)
+    }
+
+    return buckets
   }
 
   /**

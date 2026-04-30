@@ -177,4 +177,24 @@ describe("HttpServer - request completed logging", {databaseCleaning: {transacti
 
     expect(summary.dbQueryCount).toEqual(1)
   })
+
+  it("includes active bucket elapsed time in request timing summaries", () => {
+    const requestTiming = new RequestTiming()
+
+    requestTiming.startedAtMs = 1000
+    requestTiming.responseServedAtMs = 1500
+    requestTiming.buckets.controller = 100
+    requestTiming.buckets.db = 25
+    requestTiming.buckets.views = 50
+    requestTiming.bucketStack.push({bucket: "controller", startedAtMs: 1200})
+
+    const summary = requestTiming.summary()
+
+    expect(summary.totalMs).toEqual(500)
+    expect(summary.controllerMs).toEqual(400)
+    expect(summary.dbMs).toEqual(25)
+    expect(summary.viewsMs).toEqual(50)
+    expect(summary.velociousMs).toEqual(25)
+    expect(requestTiming.buckets.controller).toEqual(100)
+  })
 })
