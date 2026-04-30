@@ -1,3 +1,4 @@
+import wait from "awaitery/build/wait.js"
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import Comment from "../models/comment.js"
 import Project from "../models/project.js"
@@ -68,7 +69,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
       attributes: ["id", "email", "name", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail"],
+      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail"],
       memberCommands: ["refreshProfile"]
     }
   }
@@ -101,6 +102,13 @@ class UserFrontendResource extends FrontendModelBaseResource {
     }
 
     return {users: await query.toArray()}
+  }
+
+  /** @returns {Promise<{users: import("../models/user.js").default[]}>} */
+  async delayedLookupByEmail() {
+    await wait(100)
+
+    return await this.lookupByEmail()
   }
 
   /** @returns {Promise<{user: import("../models/user.js").default | null}>} */

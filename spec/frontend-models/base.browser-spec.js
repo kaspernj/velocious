@@ -16,7 +16,7 @@ class User extends FrontendModelBase {
       attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: ["currentSessionCookie", "setSessionCookie"],
+      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail"],
       modelName: "User",
       primaryKey: "id"
     }
@@ -56,7 +56,22 @@ class User extends FrontendModelBase {
       resourcePath: this.resourcePath()
     })
   }
+
+  /**
+   * @param {Record<string, any>} [payload={}] - Command payload.
+   * @returns {Promise<{users: User[]}>} - Command response.
+   */
+  static async delayedLookupByEmail(payload = {}) {
+    return /** @type {Promise<{users: User[]}>} */ (this.executeCustomCommand({
+      commandName: "delayed-lookup-by-email",
+      commandType: "delayed-lookup-by-email",
+      payload,
+      resourcePath: this.resourcePath()
+    }))
+  }
 }
+
+FrontendModelBase.registerModel(User)
 
 /** Frontend model that uses a stable backend model name different from its class name. */
 class MinifiedUserTransportModel extends FrontendModelBase {
@@ -97,6 +112,8 @@ class Comment extends FrontendModelBase {
   }
 }
 
+FrontendModelBase.registerModel(Comment)
+
 /** Frontend model task class for browser preload integration tests. */
 class Task extends FrontendModelBase {
   /**
@@ -134,6 +151,8 @@ class Task extends FrontendModelBase {
   primaryInteraction() { return this.getRelationshipByName("primaryInteraction").loaded() }
 }
 
+FrontendModelBase.registerModel(Task)
+
 /** Frontend model project class for browser preload integration tests. */
 class Project extends FrontendModelBase {
   /**
@@ -167,6 +186,8 @@ class Project extends FrontendModelBase {
     }
   }
 }
+
+FrontendModelBase.registerModel(Project)
 
 /** @returns {void} */
 function resetFrontendModelTransport() {
@@ -311,6 +332,33 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
       const user = await MinifiedUserTransportModel.findBy({email: "john@example.com"})
 
       expect(user?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("waits until pending shared browser requests are resolved", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      await seedUsers()
+      /** @type {{users: User[]} | undefined} */
+      let lookupResponse
+      const lookupResponsePromise = (async () => {
+        lookupResponse = await User.delayedLookupByEmail({email: "john@example.com"})
+      })()
+
+      try {
+        await FrontendModelBase.waitForIdle()
+
+        expect(lookupResponse?.users.map((user) => user.email())).toEqual(["john@example.com"])
+      } finally {
+        await lookupResponsePromise
+      }
     } finally {
       resetFrontendModelTransport()
     }

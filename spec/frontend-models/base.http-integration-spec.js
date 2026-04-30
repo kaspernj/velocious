@@ -21,7 +21,7 @@ class User extends FrontendModelBase {
       attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: ["currentSessionCookie", "setSessionCookie"],
+      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail"],
       modelName: "User",
       primaryKey: "id"
     }
@@ -70,6 +70,19 @@ class User extends FrontendModelBase {
     return /** @type {Promise<{users: User[]}>} */ (this.executeCustomCommand({
       commandName: "lookup-by-email",
       commandType: "lookup-by-email",
+      payload,
+      resourcePath: this.resourcePath()
+    }))
+  }
+
+  /**
+   * @param {Record<string, any>} [payload={}] - Command payload.
+   * @returns {Promise<{users: User[]}>} - Command response.
+   */
+  static async delayedLookupByEmail(payload = {}) {
+    return /** @type {Promise<{users: User[]}>} */ (this.executeCustomCommand({
+      commandName: "delayed-lookup-by-email",
+      commandType: "delayed-lookup-by-email",
       payload,
       resourcePath: this.resourcePath()
     }))
@@ -343,6 +356,63 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         expect(lookupResponse.users[0].email()).toEqual(john.email())
         expect(refreshResponse.user instanceof User).toEqual(true)
         expect(refreshResponse.user?.email()).toEqual(jane.email())
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("waits until pending shared Node HTTP requests are resolved", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {john} = await seedHttpFrontendModels()
+        /** @type {{users: User[]} | undefined} */
+        let lookupResponse
+        const lookupResponsePromise = (async () => {
+          lookupResponse = await User.delayedLookupByEmail({email: john.email()})
+        })()
+
+        try {
+          await FrontendModelBase.waitForIdle()
+
+          expect(lookupResponse?.users.map((user) => user.email())).toEqual([john.email()])
+        } finally {
+          await lookupResponsePromise
+        }
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("waits for shared Node HTTP requests scheduled during the idle quiet period", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {john} = await seedHttpFrontendModels()
+        /** @type {{users: User[]} | undefined} */
+        let lookupResponse
+        const lookupResponsePromise = new Promise((resolve, reject) => {
+          setTimeout(async () => {
+            try {
+              lookupResponse = await User.delayedLookupByEmail({email: john.email()})
+              resolve(undefined)
+            } catch (error) {
+              reject(error)
+            }
+          }, 0)
+        })
+
+        try {
+          await FrontendModelBase.waitForIdle({quietMs: 25})
+
+          expect(lookupResponse?.users.map((user) => user.email())).toEqual([john.email()])
+        } finally {
+          await lookupResponsePromise
+        }
       } finally {
         resetFrontendModelTransport()
       }

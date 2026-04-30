@@ -3,6 +3,7 @@
 ## Core transport
 - Frontend models run over HTTP transport, not local database connections.
 - Transport should be configured once via `FrontendModelBase.configureTransport(...)` (or wrapper APIs built on top of it).
+- `FrontendModelBase.waitForIdle()` waits until queued, scheduled, and active frontend-model transport requests have resolved. Browser/system-test harnesses can call it during teardown before resetting app state.
 - Keep request execution centralized in Velocious instead of per-project endpoint overrides.
 
 ## Frontend vs backend model API differences

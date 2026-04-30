@@ -1,6 +1,7 @@
 // @ts-check
 
 import * as inflection from "inflection"
+import timeout from "awaitery/build/timeout.js"
 import FrontendModelQuery from "./query.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
@@ -26,6 +27,11 @@ import {defineModelScope} from "../utils/model-scope.js"
  * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
  * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
  */
+/**
+ * @typedef {object} FrontendModelIdleWaitArgs
+ * @property {number} [quietMs] - Milliseconds the transport must stay idle before resolving.
+ * @property {number} [timeout] - Timeout in milliseconds.
+ */
 
 /** @type {FrontendModelTransportConfig} */
 const frontendModelTransportConfig = {}
@@ -39,9 +45,79 @@ const ABILITIES_KEY = "__abilities"
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
+let activeFrontendModelTransportRequestCount = 0
+/** @type {Array<() => void>} */
+let frontendModelIdleResolvers = []
 
 /** @type {VelociousWebsocketClient | null} */
 let internalWebsocketClient = null
+
+/** @returns {boolean} - Whether all queued and active frontend-model transport requests are done. */
+function frontendModelTransportIsIdle() {
+  return activeFrontendModelTransportRequestCount === 0
+    && pendingSharedFrontendModelRequests.length === 0
+    && !sharedFrontendModelFlushScheduled
+}
+
+/** @returns {void} */
+function resolveFrontendModelIdleWaiters() {
+  if (!frontendModelTransportIsIdle()) return
+
+  const resolvers = frontendModelIdleResolvers
+  frontendModelIdleResolvers = []
+
+  for (const resolve of resolvers) {
+    resolve()
+  }
+}
+
+/**
+ * @param {number} milliseconds - Quiet period length.
+ * @returns {Promise<void>} Resolves after the quiet period.
+ */
+async function waitForFrontendModelTransportQuietPeriod(milliseconds) {
+  if (milliseconds <= 0) return
+
+  await new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+/**
+ * @param {number} quietMs - Milliseconds the transport must stay idle before resolving.
+ * @returns {Promise<void>} Resolves when transport stays idle.
+ */
+async function waitForFrontendModelTransportIdle(quietMs = 0) {
+  while (true) {
+    if (frontendModelTransportIsIdle()) {
+      await new Promise((resolve) => queueMicrotask(() => resolve(undefined)))
+
+      if (frontendModelTransportIsIdle()) {
+        await waitForFrontendModelTransportQuietPeriod(quietMs)
+
+        if (frontendModelTransportIsIdle()) return
+      }
+    } else {
+      await new Promise((resolve) => {
+        frontendModelIdleResolvers.push(() => resolve(undefined))
+      })
+    }
+  }
+}
+
+/**
+ * @template T
+ * @param {() => Promise<T>} callback - Transport callback.
+ * @returns {Promise<T>} - Callback result.
+ */
+async function trackFrontendModelTransportRequest(callback) {
+  activeFrontendModelTransportRequestCount += 1
+
+  try {
+    return await callback()
+  } finally {
+    activeFrontendModelTransportRequestCount -= 1
+    resolveFrontendModelIdleWaiters()
+  }
+}
 
 /**
  * Resolve the internal websocket client from websocketUrl config.
@@ -903,7 +979,10 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
 async function flushPendingSharedFrontendModelRequests() {
   sharedFrontendModelFlushScheduled = false
 
-  if (pendingSharedFrontendModelRequests.length < 1) return
+  if (pendingSharedFrontendModelRequests.length < 1) {
+    resolveFrontendModelIdleWaiters()
+    return
+  }
 
   const batchedRequests = pendingSharedFrontendModelRequests
   pendingSharedFrontendModelRequests = []
@@ -930,27 +1009,29 @@ async function flushPendingSharedFrontendModelRequests() {
     })
   }
 
-  try {
-    void url
-    const decodedResponse = await performSharedFrontendModelApiRequest(requestPayload)
-    const responses = Array.isArray(decodedResponse.responses) ? decodedResponse.responses : []
-    const responsesById = new Map(responses.map((entry) => [entry.requestId, entry.response]))
+  await trackFrontendModelTransportRequest(async () => {
+    try {
+      void url
+      const decodedResponse = await performSharedFrontendModelApiRequest(requestPayload)
+      const responses = Array.isArray(decodedResponse.responses) ? decodedResponse.responses : []
+      const responsesById = new Map(responses.map((entry) => [entry.requestId, entry.response]))
 
-    for (const request of batchedRequests) {
-      const responsePayload = responsesById.get(request.requestId)
+      for (const request of batchedRequests) {
+        const responsePayload = responsesById.get(request.requestId)
 
-      if (!responsePayload || typeof responsePayload !== "object") {
-        request.reject(new Error(`Missing batched response for ${request.modelClass.name}#${request.commandType}`))
-        continue
+        if (!responsePayload || typeof responsePayload !== "object") {
+          request.reject(new Error(`Missing batched response for ${request.modelClass.name}#${request.commandType}`))
+          continue
+        }
+
+        request.resolve(/** @type {Record<string, any>} */ (responsePayload))
       }
-
-      request.resolve(/** @type {Record<string, any>} */ (responsePayload))
+    } catch (error) {
+      for (const request of batchedRequests) {
+        request.reject(error)
+      }
     }
-  } catch (error) {
-    for (const request of batchedRequests) {
-      request.reject(error)
-    }
-  }
+  })
 }
 
 /** @returns {void} */
@@ -1906,6 +1987,29 @@ export default class FrontendModelBase {
     if (!internalWebsocketClient) return
 
     await internalWebsocketClient.disconnectAndStopReconnect()
+  }
+
+  /**
+   * Waits until queued and active frontend-model transport requests finish.
+   * @param {FrontendModelIdleWaitArgs} [args] - Wait options.
+   * @returns {Promise<void>} - Resolves when transport is idle.
+   */
+  static async waitForIdle(args = {}) {
+    const {quietMs = 0, timeout: timeoutMs = 5000, ...restArgs} = args
+    const restArgKeys = Object.keys(restArgs)
+
+    if (restArgKeys.length > 0) {
+      throw new Error(`Unknown waitForIdle args: ${restArgKeys.join(", ")}`)
+    }
+
+    if (!Number.isFinite(quietMs) || quietMs < 0) {
+      throw new Error(`Expected waitForIdle quietMs to be a non-negative number, got: ${quietMs}`)
+    }
+
+    await timeout(
+      {timeout: timeoutMs, errorMessage: "Timed out waiting for frontend model transport to become idle"},
+      async () => await waitForFrontendModelTransportIdle(quietMs)
+    )
   }
 
   /**
@@ -3088,29 +3192,31 @@ export default class FrontendModelBase {
       return decodedBatchResponse
     }
 
-    const directResponse = await fetch(url, {
-      body: JSON.stringify(serializedPayload),
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      method: "POST"
+    return await trackFrontendModelTransportRequest(async () => {
+      const directResponse = await fetch(url, {
+        body: JSON.stringify(serializedPayload),
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        method: "POST"
+      })
+
+      if (!directResponse.ok) {
+        throw new Error(`Request failed (${directResponse.status}) for ${this.name}#${commandType}`)
+      }
+
+      const directResponseText = await directResponse.text()
+      const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
+      const decodedDirectResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(directJson))
+
+      this.throwOnErrorFrontendModelResponse({
+        commandType,
+        response: decodedDirectResponse
+      })
+
+      return decodedDirectResponse
     })
-
-    if (!directResponse.ok) {
-      throw new Error(`Request failed (${directResponse.status}) for ${this.name}#${commandType}`)
-    }
-
-    const directResponseText = await directResponse.text()
-    const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
-    const decodedDirectResponse = /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(directJson))
-
-    this.throwOnErrorFrontendModelResponse({
-      commandType,
-      response: decodedDirectResponse
-    })
-
-    return decodedDirectResponse
   }
 
   /**

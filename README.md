@@ -491,6 +491,8 @@ Available transport options:
 
 - `url` (can also be a relative path like `"/frontend-models"` on web)
 
+Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle needs to wait for queued, scheduled, and active frontend-model transport requests to finish before resetting state.
+
 Frontend-model HTTP requests always use `credentials: "include"` so shared custom commands can set session cookies without app-level transport overrides.
 
 Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
