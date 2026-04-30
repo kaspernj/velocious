@@ -387,6 +387,38 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("waits for shared Node HTTP requests scheduled during the idle quiet period", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {john} = await seedHttpFrontendModels()
+        /** @type {{users: User[]} | undefined} */
+        let lookupResponse
+        const lookupResponsePromise = new Promise((resolve, reject) => {
+          setTimeout(async () => {
+            try {
+              lookupResponse = await User.delayedLookupByEmail({email: john.email()})
+              resolve(undefined)
+            } catch (error) {
+              reject(error)
+            }
+          }, 0)
+        })
+
+        try {
+          await FrontendModelBase.waitForIdle({quietMs: 25})
+
+          expect(lookupResponse?.users.map((user) => user.email())).toEqual([john.email()])
+        } finally {
+          await lookupResponsePromise
+        }
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("delivers Phase 3 model lifecycle events via onCreate/onUpdate/onDestroy", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()

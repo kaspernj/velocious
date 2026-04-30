@@ -29,6 +29,7 @@ import {defineModelScope} from "../utils/model-scope.js"
  */
 /**
  * @typedef {object} FrontendModelIdleWaitArgs
+ * @property {number} [quietMs] - Milliseconds the transport must stay idle before resolving.
  * @property {number} [timeout] - Timeout in milliseconds.
  */
 
@@ -70,13 +71,30 @@ function resolveFrontendModelIdleWaiters() {
   }
 }
 
-/** @returns {Promise<void>} */
-async function waitForFrontendModelTransportIdle() {
+/**
+ * @param {number} milliseconds - Quiet period length.
+ * @returns {Promise<void>} Resolves after the quiet period.
+ */
+async function waitForFrontendModelTransportQuietPeriod(milliseconds) {
+  if (milliseconds <= 0) return
+
+  await new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+/**
+ * @param {number} quietMs - Milliseconds the transport must stay idle before resolving.
+ * @returns {Promise<void>} Resolves when transport stays idle.
+ */
+async function waitForFrontendModelTransportIdle(quietMs = 0) {
   while (true) {
     if (frontendModelTransportIsIdle()) {
       await new Promise((resolve) => queueMicrotask(() => resolve(undefined)))
 
-      if (frontendModelTransportIsIdle()) return
+      if (frontendModelTransportIsIdle()) {
+        await waitForFrontendModelTransportQuietPeriod(quietMs)
+
+        if (frontendModelTransportIsIdle()) return
+      }
     } else {
       await new Promise((resolve) => {
         frontendModelIdleResolvers.push(() => resolve(undefined))
@@ -1977,16 +1995,20 @@ export default class FrontendModelBase {
    * @returns {Promise<void>} - Resolves when transport is idle.
    */
   static async waitForIdle(args = {}) {
-    const {timeout: timeoutMs = 5000, ...restArgs} = args
+    const {quietMs = 0, timeout: timeoutMs = 5000, ...restArgs} = args
     const restArgKeys = Object.keys(restArgs)
 
     if (restArgKeys.length > 0) {
       throw new Error(`Unknown waitForIdle args: ${restArgKeys.join(", ")}`)
     }
 
+    if (!Number.isFinite(quietMs) || quietMs < 0) {
+      throw new Error(`Expected waitForIdle quietMs to be a non-negative number, got: ${quietMs}`)
+    }
+
     await timeout(
       {timeout: timeoutMs, errorMessage: "Timed out waiting for frontend model transport to become idle"},
-      async () => await waitForFrontendModelTransportIdle()
+      async () => await waitForFrontendModelTransportIdle(quietMs)
     )
   }
 
