@@ -217,14 +217,25 @@ export default class VelociousController {
 
   /** @param {object} json - JSON payload. */
   renderJsonArg(json) {
-    const body = JSON.stringify(serializeFrontendModelTransportValue(json))
+    return this._measureViewRender(() => {
+      const body = JSON.stringify(serializeFrontendModelTransportValue(json))
 
-    this._response.setHeader("Content-Type", "application/json; charset=UTF-8")
-    this._response.setBody(body)
+      this._response.setHeader("Content-Type", "application/json; charset=UTF-8")
+      this._response.setBody(body)
+    })
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   renderView() {
+    const requestTiming = this.getConfiguration().getCurrentRequestTiming?.()
+
+    return requestTiming
+      ? requestTiming.measure("views", async () => await this._renderViewActual())
+      : this._renderViewActual()
+  }
+
+  /** @returns {Promise<void>} - Resolves when complete. */
+  _renderViewActual() {
     return new Promise((resolve, reject) => {
       const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
       const actualViewParams = incorporate({controller: this}, this.viewParams)
@@ -271,25 +282,40 @@ export default class VelociousController {
    * @returns {void} - No return value.
    */
   sendFile(filePath, args = {}) {
-    const {contentType, status, ...restArgs} = args
+    this._measureViewRender(() => {
+      const {contentType, status, ...restArgs} = args
 
-    restArgsError(restArgs)
+      restArgsError(restArgs)
 
-    if (typeof filePath !== "string" || filePath.length < 1) {
-      throw new Error(`Expected file path to be a non-empty string, got: ${String(filePath)}`)
-    }
+      if (typeof filePath !== "string" || filePath.length < 1) {
+        throw new Error(`Expected file path to be a non-empty string, got: ${String(filePath)}`)
+      }
 
-    const detectedContentType = contentType || this.sendFileContentType(filePath)
+      const detectedContentType = contentType || this.sendFileContentType(filePath)
 
-    if (detectedContentType) {
-      this._response.setHeader("Content-Type", detectedContentType)
-    }
+      if (detectedContentType) {
+        this._response.setHeader("Content-Type", detectedContentType)
+      }
 
-    if (status) {
-      this._response.setStatus(status)
-    }
+      if (status) {
+        this._response.setStatus(status)
+      }
 
-    this._response.setFilePath(filePath)
+      this._response.setFilePath(filePath)
+    })
+  }
+
+  /**
+   * @template T
+   * @param {() => T} callback - Callback to measure.
+   * @returns {T} - Callback result.
+   */
+  _measureViewRender(callback) {
+    const requestTiming = this.getConfiguration().getCurrentRequestTiming?.()
+
+    return requestTiming
+      ? requestTiming.measureSync("views", callback)
+      : callback()
   }
 
   /**

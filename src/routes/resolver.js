@@ -181,7 +181,10 @@ export default class VelociousRoutesResolver {
 
     const actionHandlers = /** @type {Record<string, () => void | Promise<void>>} */ (/** @type {unknown} */ (controllerInstance))
 
-    await this._logActionStart({action, controllerClass})
+    const logMethod = this._logMethod()
+
+    this._setCompletedLogMetadata({controllerClass, logMethod})
+    await this._logActionStart({action, controllerClass, logMethod})
 
     try {
       const tenant = await this.configuration.resolveTenant({
@@ -200,8 +203,10 @@ export default class VelociousRoutesResolver {
             })
 
             await this.configuration.runWithAbility(ability, async () => {
-              await controllerInstance._runBeforeCallbacks()
-              await actionHandlers[action]()
+              await this._measureController(async () => {
+                await controllerInstance._runBeforeCallbacks()
+                await actionHandlers[action]()
+              })
             })
           })
         })
@@ -362,14 +367,14 @@ export default class VelociousRoutesResolver {
    * @param {object} args - Options object.
    * @param {string} args.action - Action.
    * @param {typeof import("../controller.js").default} args.controllerClass - Controller class.
+   * @param {"debug" | "info"} args.logMethod - Logger method.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _logActionStart({action, controllerClass}) {
+  async _logActionStart({action, controllerClass, logMethod}) {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
     const loggedParams = /** @type {Record<string, unknown>} */ (this._sanitizeParamsForLogging(this.params))
-    const logMethod = this.configuration.getEnvironment() === "test" ? "debug" : "info"
 
     delete loggedParams.action
     delete loggedParams.controller
@@ -379,6 +384,39 @@ export default class VelociousRoutesResolver {
     await controllerLogger[logMethod](() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
     await controllerLogger[logMethod](() => `Processing by ${controllerClass.name}#${action}`)
     await controllerLogger[logMethod](() => [`  Parameters:`, loggedParams])
+  }
+
+  /** @returns {"debug" | "info"} - Request log method. */
+  _logMethod() {
+    return this.configuration.getEnvironment() === "test" ? "debug" : "info"
+  }
+
+  /**
+   * @template T
+   * @param {() => Promise<T>} callback - Callback to measure.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async _measureController(callback) {
+    const requestTiming = this.configuration.getCurrentRequestTiming?.()
+
+    return requestTiming
+      ? await requestTiming.measure("controller", callback)
+      : await callback()
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {typeof import("../controller.js").default} args.controllerClass - Controller class.
+   * @param {"debug" | "info"} args.logMethod - Logger method.
+   * @returns {void} - No return value.
+   */
+  _setCompletedLogMetadata({controllerClass, logMethod}) {
+    const requestTiming = this.configuration.getCurrentRequestTiming?.()
+
+    if (!requestTiming) return
+
+    requestTiming.completedLogSubject = controllerClass.name
+    requestTiming.completedLogMethod = logMethod
   }
 
   /**

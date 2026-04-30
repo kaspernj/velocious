@@ -28,7 +28,7 @@ import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 
-/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, tenant?: unknown}} TimezoneStore */
+/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: unknown}} TimezoneStore */
 
 /**
  * @param {string} filePath - Input file path.
@@ -173,6 +173,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     return await this._timezoneAsyncLocalStorage.run({
       ability: existingStore?.ability,
       offsetMinutes,
+      requestTiming: existingStore?.requestTiming,
       tenant: existingStore?.tenant
     }, callback)
   }
@@ -194,6 +195,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       this._timezoneAsyncLocalStorage.enterWith({
         ability: existingStore?.ability,
         offsetMinutes,
+        requestTiming: existingStore?.requestTiming,
         tenant: existingStore?.tenant
       })
     }
@@ -230,6 +232,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     return await this._timezoneAsyncLocalStorage.run({
       ability,
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      requestTiming: existingStore?.requestTiming,
       tenant: existingStore?.tenant
     }, callback)
   }
@@ -252,6 +255,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       this._timezoneAsyncLocalStorage.enterWith({
         ability,
         offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
+        requestTiming: undefined,
         tenant: undefined
       })
     }
@@ -269,6 +273,37 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * @param {import("../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithRequestTiming(requestTiming, callback) {
+    if (!this._timezoneAsyncLocalStorage) {
+      return await super.runWithRequestTiming(requestTiming, callback)
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    return await this._timezoneAsyncLocalStorage.run({
+      ability: existingStore?.ability,
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      requestTiming,
+      tenant: existingStore?.tenant
+    }, callback)
+  }
+
+  /**
+   * @returns {import("../http-server/client/request-timing.js").default | undefined} - Current request timing collector.
+   */
+  getCurrentRequestTiming() {
+    if (!this._timezoneAsyncLocalStorage) {
+      return super.getCurrentRequestTiming()
+    }
+
+    return this._timezoneAsyncLocalStorage.getStore()?.requestTiming
+  }
+
+  /**
    * @param {unknown} tenant - Tenant to set for callback scope.
    * @param {() => Promise<any>} callback - Callback.
    * @returns {Promise<any>} - Callback result.
@@ -283,6 +318,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     return await this._timezoneAsyncLocalStorage.run({
       ability: existingStore?.ability,
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      requestTiming: existingStore?.requestTiming,
       tenant
     }, callback)
   }
@@ -305,6 +341,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       this._timezoneAsyncLocalStorage.enterWith({
         ability: undefined,
         offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
+        requestTiming: undefined,
         tenant
       })
     }

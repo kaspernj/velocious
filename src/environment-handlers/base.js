@@ -69,6 +69,28 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * @param {import("../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
+   * @param {() => Promise<any>} callback - Callback.
+   * @returns {Promise<any>} - Callback result.
+   */
+  async runWithRequestTiming(requestTiming, callback) {
+    this._currentRequestTiming = requestTiming
+
+    try {
+      return await callback()
+    } finally {
+      this._currentRequestTiming = undefined
+    }
+  }
+
+  /**
+   * @returns {import("../http-server/client/request-timing.js").default | undefined} - Current request timing collector.
+   */
+  getCurrentRequestTiming() {
+    return this._currentRequestTiming
+  }
+
+  /**
    * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
    * @param {() => Promise<any>} callback - Callback.
    * @returns {Promise<any>} - Callback result.

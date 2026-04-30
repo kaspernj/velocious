@@ -1360,6 +1360,14 @@ class MyLogger extends BaseLogger {
 
 - **Per-instance control**: You can create a `new Logger("Subject", {configuration, debug: false})` to honor the configuration defaults, or toggle `logger.setDebug(true)` for verbose output in specific cases.
 
+- **Request completion logging**: HTTP and websocket-routed controller requests log a Rails-style completion line after the response is served:
+
+```text
+Completed 200 OK in 1603ms (Controller: 107.8ms | Views: 1097.4ms | DB: 381.8ms (2 queries) | Velocious: 16.0ms)
+```
+
+`Controller` measures before callbacks plus action work, excluding nested view rendering and database queries. `Views` measures JSON/view rendering and file-response setup. `DB` measures database driver query time and query count. `Velocious` is the remaining framework overhead, including routing, request setup, timeout handling, and response writing.
+
 ## Listen for framework errors
 
 Velocious emits framework errors (including uncaught controller action errors) on the configuration error event bus:

@@ -402,6 +402,8 @@ export default class VeoliciousHttpServerClient {
       this.logger.debug(() => ["sendResponse body emitted", {clientCount: this.clientCount, bodyLength: bodyIsString ? body.length : body.byteLength}])
     }
 
+    await requestRunner.logCompletedRequest()
+
     if ("getRequestParser" in request) {
       const httpRequest = /** @type {import("./request.js").default} */ (request)
       httpRequest.getRequestParser().destroy()
