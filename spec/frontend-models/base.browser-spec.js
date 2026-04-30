@@ -71,6 +71,8 @@ class User extends FrontendModelBase {
   }
 }
 
+FrontendModelBase.registerModel(User)
+
 /** Frontend model that uses a stable backend model name different from its class name. */
 class MinifiedUserTransportModel extends FrontendModelBase {
   /**
@@ -110,6 +112,8 @@ class Comment extends FrontendModelBase {
   }
 }
 
+FrontendModelBase.registerModel(Comment)
+
 /** Frontend model task class for browser preload integration tests. */
 class Task extends FrontendModelBase {
   /**
@@ -147,6 +151,8 @@ class Task extends FrontendModelBase {
   primaryInteraction() { return this.getRelationshipByName("primaryInteraction").loaded() }
 }
 
+FrontendModelBase.registerModel(Task)
+
 /** Frontend model project class for browser preload integration tests. */
 class Project extends FrontendModelBase {
   /**
@@ -180,6 +186,8 @@ class Project extends FrontendModelBase {
     }
   }
 }
+
+FrontendModelBase.registerModel(Project)
 
 /** @returns {void} */
 function resetFrontendModelTransport() {
