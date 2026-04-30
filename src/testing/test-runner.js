@@ -718,8 +718,28 @@ export default class TestRunner {
               })
             } catch (error) {
               lastError = error
-              if (retriesUsed < retryCount) {
+              const willRetry = retriesUsed < retryCount
+
+              if (willRetry) {
                 retriesUsed++
+              }
+
+              await this.emitEvent("testAttemptFailed", {
+                configuration: this.getConfiguration(),
+                descriptions,
+                error,
+                attemptNumber,
+                nextAttempt: willRetry ? attemptNumber + 1 : undefined,
+                retriesUsed,
+                retryCount,
+                testArgs,
+                testData,
+                testDescription,
+                testRunner: this,
+                willRetry
+              })
+
+              if (willRetry) {
                 shouldRetry = true
                 console.warn(picocolors.red(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${error instanceof Error ? error.message : String(error)}`))
                 await this.emitEvent("testRetrying", {

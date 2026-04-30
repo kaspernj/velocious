@@ -239,6 +239,86 @@ describe("TestRunner events", () => {
     expect(retriedEvents[0].testRunner).toBe(testRunner)
   })
 
+  it("emits and waits for testAttemptFailed for every failed attempt", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+
+    /** @type {any[]} */
+    const attemptFailedEvents = []
+    let firstAttemptFailureHandled = false
+    const handler = async (payload) => {
+      attemptFailedEvents.push(payload)
+
+      if (payload.attemptNumber === 1) {
+        await delay(20)
+        firstAttemptFailureHandled = true
+      }
+    }
+
+    testEvents.on("testAttemptFailed", handler)
+
+    try {
+      let attempts = 0
+      const tests = {
+        args: {},
+        afterEaches: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "fails twice": {
+            args: {retry: 1},
+            function: async () => {
+              attempts++
+
+              if (attempts === 2) {
+                expect(firstAttemptFailureHandled).toBe(true)
+              }
+
+              throw new Error(`boom ${attempts}`)
+            }
+          }
+        }
+      }
+
+      await testRunner.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
+      })
+    } finally {
+      testEvents.off("testAttemptFailed", handler)
+    }
+
+    expect(attemptFailedEvents.length).toBe(2)
+    expect(attemptFailedEvents[0].testDescription).toBe("fails twice")
+    expect(attemptFailedEvents[0].attemptNumber).toBe(1)
+    expect(attemptFailedEvents[0].retriesUsed).toBe(1)
+    expect(attemptFailedEvents[0].retryCount).toBe(1)
+    expect(attemptFailedEvents[0].nextAttempt).toBe(2)
+    expect(attemptFailedEvents[0].willRetry).toBe(true)
+    expect(attemptFailedEvents[0].error.message).toBe("boom 1")
+    expect(attemptFailedEvents[0].testRunner).toBe(testRunner)
+    expect(attemptFailedEvents[1].attemptNumber).toBe(2)
+    expect(attemptFailedEvents[1].retriesUsed).toBe(1)
+    expect(attemptFailedEvents[1].retryCount).toBe(1)
+    expect(attemptFailedEvents[1].nextAttempt).toBeUndefined()
+    expect(attemptFailedEvents[1].willRetry).toBe(false)
+    expect(attemptFailedEvents[1].error.message).toBe("boom 2")
+    expect(attemptFailedEvents[1].testRunner).toBe(testRunner)
+  })
+
   it("collects failed test details for summary output", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({
