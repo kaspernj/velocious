@@ -258,6 +258,36 @@ export default class VelociousEnvironmentHandlerBase {
    * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.
    */
+  async cliCommandsBeacon(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsBeacon not implemented")
+  }
+
+  /**
+   * Loads the TCP-backed Beacon client class. Routed through the
+   * environment handler so the dynamic `import("../beacon/client.js")`
+   * call lives on the Node-only path — keeps Beacon's `node:net` /
+   * `node:crypto` deps out of browser bundles that statically reach
+   * `Configuration` (and therefore previously reached the dynamic
+   * imports).
+   * @returns {Promise<typeof import("../beacon/client.js").default>} - Beacon client class.
+   */
+  async loadBeaconClient() {
+    throw new Error("loadBeaconClient not implemented by this environment handler")
+  }
+
+  /**
+   * Loads the in-process Beacon client class. Same indirection rationale
+   * as `loadBeaconClient`.
+   * @returns {Promise<typeof import("../beacon/in-process-client.js").default>} - In-process client class.
+   */
+  async loadInProcessBeaconClient() {
+    throw new Error("loadInProcessBeaconClient not implemented by this environment handler")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
   async cliCommandsDbSchemaDump(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsDbSchemaDump not implemented")
   }

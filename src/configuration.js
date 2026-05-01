@@ -59,13 +59,18 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
     this._abilityResources = abilityResources || []
     this._autoload = autoload
     this._backgroundJobs = backgroundJobs
+    this._beacon = beacon
+    /** @type {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} */
+    this._beaconClient = undefined
+    /** @type {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined> | undefined} */
+    this._beaconConnectPromise = undefined
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
     this._backendProjects = backendProjects || []
@@ -441,6 +446,248 @@ export default class VelociousConfiguration {
    */
   setBackgroundJobsConfig(backgroundJobs) {
     this._backgroundJobs = Object.assign({}, this._backgroundJobs, backgroundJobs)
+  }
+
+  /**
+   * Resolves the active Beacon configuration. Beacon is opt-in: it
+   * stays disabled unless the app passes `beacon: {host, port}` /
+   * `beacon: {inProcess: true}`, calls `setBeaconConfig({...})`, or
+   * sets the `VELOCIOUS_BEACON_HOST` / `VELOCIOUS_BEACON_PORT` env vars.
+   * Setting `enabled: false` explicitly disables it even when env vars
+   * are present (useful for tests). When `inProcess: true` is set,
+   * env-var host/port are ignored — code-level config wins.
+   * @returns {{enabled: boolean, host: string, port: number, peerType?: string, inProcess: boolean}} - Beacon configuration with defaults applied.
+   */
+  getBeaconConfig() {
+    const configured = this._beacon || {}
+    const inProcess = configured.inProcess === true
+
+    if (inProcess && (configured.host || typeof configured.port === "number")) {
+      throw new Error("Beacon configuration: `inProcess: true` is mutually exclusive with `host`/`port`. Use one or the other.")
+    }
+
+    const envHost = inProcess ? undefined : process.env.VELOCIOUS_BEACON_HOST
+    const envPortRaw = inProcess ? undefined : process.env.VELOCIOUS_BEACON_PORT
+    const envPort = envPortRaw ? Number(envPortRaw) : undefined
+    const host = configured.host || envHost || "127.0.0.1"
+    const port = typeof configured.port === "number"
+      ? configured.port
+      : (typeof envPort === "number" && Number.isFinite(envPort) ? envPort : 7330)
+
+    let enabled
+
+    if (typeof configured.enabled === "boolean") {
+      enabled = configured.enabled
+    } else {
+      enabled = Boolean(inProcess || configured.host || configured.port || envHost || envPort)
+    }
+
+    return {enabled, host, port, peerType: configured.peerType, inProcess}
+  }
+
+  /**
+   * @param {import("./configuration-types.js").BeaconConfiguration} beacon - Beacon config.
+   * @returns {void}
+   */
+  setBeaconConfig(beacon) {
+    this._beacon = Object.assign({}, this._beacon, beacon)
+  }
+
+  /**
+   * @returns {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} - The active Beacon client, if connected.
+   */
+  getBeaconClient() {
+    return this._beaconClient
+  }
+
+  /**
+   * Connects this configuration's Beacon client to the configured
+   * broker, wiring incoming broadcasts to the local delivery path so
+   * any websocket subscribers in this process receive them. Idempotent
+   * — repeat calls return the same in-flight or resolved promise.
+   *
+   * Returns immediately with `undefined` if Beacon is not enabled.
+   *
+   * **Non-blocking by design (TCP mode).** For broker-backed Beacon, the
+   * returned promise resolves as soon as the client is constructed and
+   * the TCP connect is launched — it does **not** wait for the connect
+   * handshake to complete. A broker that silently drops SYNs
+   * (firewall/NACL DROP rules) would otherwise block startup on the OS
+   * TCP connect timeout (tens of seconds), which contradicts the
+   * documented "fall back to local-only and reconnect in the
+   * background" contract. Initial-connect failures surface
+   * asynchronously on the framework-error channel via the
+   * `connect-error` listener registered here. Callers that need to
+   * wait for connectivity should poll `getBeaconClient()?.isConnected()`.
+   *
+   * **In-process mode** awaits `connect()` — that path is synchronous,
+   * cannot fail, and gives callers predictable readiness.
+   * @param {object} [args] - Options.
+   * @param {string} [args.peerType] - Override peerType for this connect call (e.g. `"server"`, `"background-jobs-worker"`).
+   * @returns {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined>} - Resolves with the registered client (TCP mode: connect may still be in flight), or undefined when Beacon is disabled.
+   */
+  async connectBeacon({peerType} = {}) {
+    if (this._beaconClient) return this._beaconClient
+    if (this._beaconConnectPromise) return await this._beaconConnectPromise
+
+    const config = this.getBeaconConfig()
+
+    if (!config.enabled) return undefined
+
+    this._beaconConnectPromise = (async () => {
+      const client = await this._createBeaconClient({
+        config,
+        peerType: peerType || config.peerType
+      })
+
+      client.onBroadcast((message) => {
+        // Synapse-style fan-out: deliver every broadcast we receive
+        // from the bus through the local delivery path. Echoes of our
+        // own publishes follow the same path so every peer sees the
+        // same delivery semantics.
+        this._deliverBroadcastFromBeacon(message)
+      })
+
+      // `connect-error` fires when the *initial* TCP/handshake fails.
+      // We report it via the framework error channel; the BeaconClient's
+      // reconnect loop keeps trying in the background.
+      client.on("connect-error", (error) => {
+        this._reportBeaconError({stage: "beacon-connect", error})
+      })
+
+      // `disconnect` fires when an established connection drops. The
+      // payload is the underlying socket error if there was one, or a
+      // synthetic Error("Beacon broker disconnected") otherwise.
+      client.on("disconnect", (reason) => {
+        this._reportBeaconError({stage: "beacon-disconnect", error: reason})
+      })
+
+      // Register the client *before* kicking off connect so subsequent
+      // `connectBeacon()` calls return this same instance instead of
+      // racing to construct a second one.
+      this._beaconClient = client
+
+      if (config.inProcess) {
+        // In-process connect is synchronous, cannot fail, and resolves
+        // before this await yields — callers can rely on
+        // `isConnected() === true` immediately after `connectBeacon()`.
+        await client.connect()
+      } else {
+        // Fire-and-forget the TCP connect. Awaiting here would block
+        // startup on the OS TCP connect timeout (75s default on Linux)
+        // when the broker silently drops SYNs. Failures surface
+        // asynchronously via the `connect-error` listener registered
+        // above; the BeaconClient's reconnect loop keeps trying.
+        void client.connect().catch(() => {
+          // Already reported via connect-error above.
+        })
+      }
+
+      return client
+    })()
+
+    return await this._beaconConnectPromise
+  }
+
+  /**
+   * Builds a Beacon client matching the configured mode. Split out so
+   * `connectBeacon` stays focused on lifecycle and error wiring.
+   * @param {object} args - Options.
+   * @param {ReturnType<VelociousConfiguration["getBeaconConfig"]>} args.config - Resolved Beacon config.
+   * @param {string} [args.peerType] - Resolved peer type.
+   * @returns {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default>} - Beacon client.
+   */
+  async _createBeaconClient({config, peerType}) {
+    // Route through the environment handler so the Node-only `node:net`
+    // / `node:crypto` deps in the Beacon client modules don't get pulled
+    // into browser bundles. Browser bundles statically reach
+    // `Configuration` (via `Logger`); putting the dynamic
+    // `import("./beacon/...")` calls here would still drag those modules
+    // through esbuild's static analysis. Hiding the imports inside the
+    // Node environment handler keeps them off the browser path —
+    // browser-bundled apps never reach `environment-handlers/node.js`.
+    const handler = this.getEnvironmentHandler()
+
+    if (config.inProcess) {
+      const InProcessBeaconClient = await handler.loadInProcessBeaconClient()
+
+      return new InProcessBeaconClient({peerType})
+    }
+
+    const BeaconClient = await handler.loadBeaconClient()
+
+    return new BeaconClient({
+      host: config.host,
+      port: config.port,
+      peerType
+    })
+  }
+
+  /**
+   * Surfaces a Beacon failure on the framework error channel. Mirrors
+   * the pattern used by `request-runner.js` for HTTP errors. When no
+   * listener is attached to either `framework-error` or `all-error`,
+   * also schedules an unhandled promise rejection so process-level bug
+   * reporters (which subscribe to `unhandledRejection` by default) pick
+   * the failure up.
+   * @param {object} args - Options.
+   * @param {"beacon-connect" | "beacon-disconnect"} args.stage - Failure stage.
+   * @param {Error} args.error - Error instance.
+   * @returns {void}
+   */
+  _reportBeaconError({stage, error}) {
+    const errorEvents = this._errorEvents
+    const hasListener = errorEvents.listenerCount("framework-error") > 0
+      || errorEvents.listenerCount("all-error") > 0
+    const payload = {
+      context: {stage},
+      error
+    }
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+
+    if (!hasListener) {
+      void Promise.reject(error)
+    }
+  }
+
+  /**
+   * Closes the active Beacon client (if any). Safe to call multiple
+   * times.
+   * @returns {Promise<void>}
+   */
+  async disconnectBeacon() {
+    const client = this._beaconClient
+
+    this._beaconClient = undefined
+    this._beaconConnectPromise = undefined
+
+    if (client) await client.close()
+  }
+
+  /**
+   * Routes a Beacon-sourced broadcast through the same delivery code
+   * path as a locally-originated one. Prefers the workerthread-aware
+   * `broadcastV2` when an HTTP server is hosting workers, and falls
+   * back to the per-process subscription dispatch otherwise.
+   * @param {import("./beacon/types.js").BeaconBroadcastMessage} message - Broadcast message.
+   * @returns {void}
+   */
+  _deliverBroadcastFromBeacon(message) {
+    /** @type {any} */
+    const websocketEvents = this._websocketEvents
+
+    if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
+      websocketEvents.broadcastV2({
+        channel: message.channel,
+        broadcastParams: message.broadcastParams,
+        body: message.body
+      })
+      return
+    }
+
+    this._broadcastToChannelLocal(message.channel, message.broadcastParams, message.body)
   }
 
   /**
@@ -1109,6 +1356,18 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   broadcastToChannel(name, broadcastParams, body) {
+    // When Beacon is connected, ship the broadcast onto the bus. The
+    // daemon echoes it back to every peer (including this one) and
+    // each peer's `_deliverBroadcastFromBeacon` performs the same
+    // local delivery as the synchronous paths below — so every
+    // subscriber, in any process, sees broadcasts via a single code
+    // path.
+    if (this._beaconClient && this._beaconClient.isConnected()) {
+      const sent = this._beaconClient.publish({channel: name, broadcastParams, body})
+
+      if (sent) return
+    }
+
     // V2 subscriptions live per worker-thread. When running in
     // worker-thread mode, the publisher runs either in the main
     // process (host) or in one of the workers:

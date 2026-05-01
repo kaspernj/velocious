@@ -11,6 +11,7 @@
 * Per-row association counts via `.withCount(...)` on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)` on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
+* Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon` (see [docs/beacon.md](docs/beacon.md))
 
 # Setup
 

@@ -67,6 +67,7 @@ configuration.broadcastToChannel("GameChat", {gameId: "abc"}, {from: "alice", te
 ```
 
 - `broadcastToChannel(name, broadcastParams, body)` iterates all active subscriptions to `name`, calls `instance.matches(broadcastParams)` on each, and sends the body to those that match. Routing, not authorization.
+- By default the broadcast only reaches subscribers in the *current* process. To deliver broadcasts across processes (HTTP server, background-jobs worker, sidecars, etc.) run a [Beacon broker](beacon.md) daemon and configure each peer to connect to it.
 
 ## Auth model — locked in
 
