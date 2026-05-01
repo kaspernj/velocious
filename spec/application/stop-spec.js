@@ -9,7 +9,8 @@ describe("Application.stop", () => {
 
     const configuration = {
       closeDatabaseConnections: async () => { closedConnections = true },
-      debug: false
+      debug: false,
+      disconnectBeacon: async () => {}
     }
 
     const app = new Application({configuration, type: "test"})
