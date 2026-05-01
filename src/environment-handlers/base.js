@@ -258,6 +258,14 @@ export default class VelociousEnvironmentHandlerBase {
    * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.
    */
+  async cliCommandsBeacon(_command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsBeacon not implemented")
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
   async cliCommandsDbSchemaDump(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsDbSchemaDump not implemented")
   }

@@ -130,6 +130,14 @@
  */
 
 /**
+ * @typedef {object} BeaconConfiguration
+ * @property {boolean} [enabled] - Whether to connect to a Beacon broker. Defaults to false unless `host`/`port` are set or env vars are present. Explicit `false` disables Beacon even when env vars are set.
+ * @property {string} [host] - Hostname of the Beacon broker daemon.
+ * @property {number} [port] - Port of the Beacon broker daemon.
+ * @property {string} [peerType] - Optional human-readable label for this peer (e.g. "server", "background-jobs-worker").
+ */
+
+/**
  * @typedef {object} ScheduledBackgroundJobEveryOptions
  * @property {number | string} [firstIn] - Delay before the first enqueue.
  * @property {number | string} [first_in] - Sidekiq-style alias for `firstIn`.
@@ -319,6 +327,7 @@
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
+ * @property {BeaconConfiguration} [beacon] - Beacon broadcast bus configuration.
  * @property {ScheduledBackgroundJobsConfiguration | ScheduledBackgroundJobsLoaderType} [scheduledBackgroundJobs] - Scheduled background jobs configuration.
  * @property {MailerBackend} [mailerBackend] - Mail delivery backend.
  * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.

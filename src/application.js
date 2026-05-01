@@ -86,6 +86,8 @@ export default class VelociousApplication {
       configuration.setWebsocketEvents(/** @type {any} */ (websocketEventsHost))
     }
 
+    await configuration.connectBeacon({peerType: "server"})
+
     this.httpServer = new HttpServer({configuration, inProcess: httpServerConfiguration.inProcess, port})
     this.httpServer.events.on("close", this.onHttpServerClose)
 
@@ -96,6 +98,7 @@ export default class VelociousApplication {
   async stop() {
     await this.logger.debug("Stopping server")
     await this.httpServer?.stop()
+    await this.configuration.disconnectBeacon()
     await this.configuration.closeDatabaseConnections()
   }
 

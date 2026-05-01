@@ -13,6 +13,7 @@ import CliCommandsTest from "./node/cli/commands/test.js"
 import CliCommandsBackgroundJobsMain from "./node/cli/commands/background-jobs-main.js"
 import CliCommandsBackgroundJobsWorker from "./node/cli/commands/background-jobs-worker.js"
 import CliCommandsBackgroundJobsRunner from "./node/cli/commands/background-jobs-runner.js"
+import CliCommandsBeacon from "./node/cli/commands/beacon.js"
 import CliCommandsConsole from "./node/cli/commands/console.js"
 import CliCommandsDbSchemaDump from "./node/cli/commands/db/schema/dump.js"
 import CliCommandsDbSchemaLoad from "./node/cli/commands/db/schema/load.js"
@@ -504,6 +505,14 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsBackgroundJobsRunner(command) {
     return await this.forwardCommand(command, CliCommandsBackgroundJobsRunner)
+  }
+
+  /**
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<unknown>} - Resolves with the command result.
+   */
+  async cliCommandsBeacon(command) {
+    return await this.forwardCommand(command, CliCommandsBeacon)
   }
 
   /**

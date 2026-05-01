@@ -37,6 +37,7 @@ export default class BackgroundJobsWorker {
     this.configuration = await this.configurationPromise
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-worker"})
+    await this.configuration.connectBeacon({peerType: "background-jobs-worker"})
     this.statusReporter = new BackgroundJobsStatusReporter({
       configuration: this.configuration,
       host: this.host,
@@ -51,6 +52,7 @@ export default class BackgroundJobsWorker {
   async stop() {
     this.shouldStop = true
     if (this.jsonSocket) this.jsonSocket.close()
+    if (this.configuration) await this.configuration.disconnectBeacon()
   }
 
   async _connect() {

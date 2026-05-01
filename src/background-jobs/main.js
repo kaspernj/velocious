@@ -41,6 +41,7 @@ export default class BackgroundJobsMain {
   async start() {
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-main"})
+    await this.configuration.connectBeacon({peerType: "background-jobs-main"})
     await this.store.ensureReady()
     const server = net.createServer((socket) => this._handleConnection(socket))
     this.server = server
@@ -93,6 +94,8 @@ export default class BackgroundJobsMain {
     if (this._dispatchTimer) clearInterval(this._dispatchTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
     this.scheduler?.stop()
+
+    await this.configuration.disconnectBeacon()
 
     if (!this.server) return
 
