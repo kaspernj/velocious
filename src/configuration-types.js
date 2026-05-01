@@ -131,7 +131,8 @@
 
 /**
  * @typedef {object} BeaconConfiguration
- * @property {boolean} [enabled] - Whether to connect to a Beacon broker. Defaults to false unless `host`/`port` are set or env vars are present. Explicit `false` disables Beacon even when env vars are set.
+ * @property {boolean} [enabled] - Whether to connect to a Beacon broker. Defaults to false unless `host`/`port` or `inProcess: true` are set, or env vars are present. Explicit `false` disables Beacon even when env vars are set.
+ * @property {boolean} [inProcess] - When true, use a module-level in-process broker singleton instead of connecting over TCP. Mutually exclusive with `host`/`port`. Useful for tests and single-process deployments.
  * @property {string} [host] - Hostname of the Beacon broker daemon.
  * @property {number} [port] - Port of the Beacon broker daemon.
  * @property {string} [peerType] - Optional human-readable label for this peer (e.g. "server", "background-jobs-worker").

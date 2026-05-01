@@ -67,9 +67,9 @@ export default class VelociousConfiguration {
     this._autoload = autoload
     this._backgroundJobs = backgroundJobs
     this._beacon = beacon
-    /** @type {import("./beacon/client.js").default | undefined} */
+    /** @type {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} */
     this._beaconClient = undefined
-    /** @type {Promise<import("./beacon/client.js").default | undefined> | undefined} */
+    /** @type {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined> | undefined} */
     this._beaconConnectPromise = undefined
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
@@ -450,18 +450,25 @@ export default class VelociousConfiguration {
 
   /**
    * Resolves the active Beacon configuration. Beacon is opt-in: it
-   * stays disabled unless the app passes `beacon: {host, port}`,
-   * `setBeaconConfig({...})`, or sets the `VELOCIOUS_BEACON_HOST` /
-   * `VELOCIOUS_BEACON_PORT` env vars. Setting `enabled: false`
-   * explicitly disables it even when env vars are present (useful for
-   * tests).
-   * @returns {{enabled: boolean, host: string, port: number, peerType?: string}} - Beacon configuration with defaults applied.
+   * stays disabled unless the app passes `beacon: {host, port}` /
+   * `beacon: {inProcess: true}`, calls `setBeaconConfig({...})`, or
+   * sets the `VELOCIOUS_BEACON_HOST` / `VELOCIOUS_BEACON_PORT` env vars.
+   * Setting `enabled: false` explicitly disables it even when env vars
+   * are present (useful for tests). When `inProcess: true` is set,
+   * env-var host/port are ignored — code-level config wins.
+   * @returns {{enabled: boolean, host: string, port: number, peerType?: string, inProcess: boolean}} - Beacon configuration with defaults applied.
    */
   getBeaconConfig() {
-    const envHost = process.env.VELOCIOUS_BEACON_HOST
-    const envPortRaw = process.env.VELOCIOUS_BEACON_PORT
-    const envPort = envPortRaw ? Number(envPortRaw) : undefined
     const configured = this._beacon || {}
+    const inProcess = configured.inProcess === true
+
+    if (inProcess && (configured.host || typeof configured.port === "number")) {
+      throw new Error("Beacon configuration: `inProcess: true` is mutually exclusive with `host`/`port`. Use one or the other.")
+    }
+
+    const envHost = inProcess ? undefined : process.env.VELOCIOUS_BEACON_HOST
+    const envPortRaw = inProcess ? undefined : process.env.VELOCIOUS_BEACON_PORT
+    const envPort = envPortRaw ? Number(envPortRaw) : undefined
     const host = configured.host || envHost || "127.0.0.1"
     const port = typeof configured.port === "number"
       ? configured.port
@@ -472,10 +479,10 @@ export default class VelociousConfiguration {
     if (typeof configured.enabled === "boolean") {
       enabled = configured.enabled
     } else {
-      enabled = Boolean(configured.host || configured.port || envHost || envPort)
+      enabled = Boolean(inProcess || configured.host || configured.port || envHost || envPort)
     }
 
-    return {enabled, host, port, peerType: configured.peerType}
+    return {enabled, host, port, peerType: configured.peerType, inProcess}
   }
 
   /**
@@ -487,7 +494,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {import("./beacon/client.js").default | undefined} - The active Beacon client, if connected.
+   * @returns {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} - The active Beacon client, if connected.
    */
   getBeaconClient() {
     return this._beaconClient
@@ -506,7 +513,7 @@ export default class VelociousConfiguration {
    * delivery while disconnected.
    * @param {object} [args] - Options.
    * @param {string} [args.peerType] - Override peerType for this connect call (e.g. `"server"`, `"background-jobs-worker"`).
-   * @returns {Promise<import("./beacon/client.js").default | undefined>} - Resolves with the connected client, or undefined when Beacon is disabled.
+   * @returns {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined>} - Resolves with the connected client, or undefined when Beacon is disabled.
    */
   async connectBeacon({peerType} = {}) {
     if (this._beaconClient) return this._beaconClient
@@ -517,10 +524,8 @@ export default class VelociousConfiguration {
     if (!config.enabled) return undefined
 
     this._beaconConnectPromise = (async () => {
-      const {default: BeaconClient} = await import("./beacon/client.js")
-      const client = new BeaconClient({
-        host: config.host,
-        port: config.port,
+      const client = await this._createBeaconClient({
+        config,
         peerType: peerType || config.peerType
       })
 
@@ -532,14 +537,27 @@ export default class VelociousConfiguration {
         this._deliverBroadcastFromBeacon(message)
       })
 
-      client.on("error", (error) => {
-        console.error("Beacon client error:", error)
+      // `connect-error` fires when the *initial* TCP/handshake fails. We
+      // report it via the framework error channel and then swallow the
+      // throw from `connect()` so the reconnect loop stays alive — the
+      // Beacon contract is "broadcastToChannel falls back to local-only
+      // delivery while disconnected", not "process exit".
+      client.on("connect-error", (error) => {
+        this._reportBeaconError({stage: "beacon-connect", error})
+      })
+
+      // `disconnect` fires when an established connection drops. The
+      // payload is the underlying socket error if there was one, or a
+      // synthetic Error("Beacon broker disconnected") otherwise.
+      client.on("disconnect", (reason) => {
+        this._reportBeaconError({stage: "beacon-disconnect", error: reason})
       })
 
       try {
         await client.connect()
-      } catch (error) {
-        console.warn("Initial Beacon connect failed; will keep retrying:", error)
+      } catch {
+        // Already reported via `connect-error` above. The client keeps
+        // its reconnect timer alive in the background.
       }
 
       this._beaconClient = client
@@ -548,6 +566,59 @@ export default class VelociousConfiguration {
     })()
 
     return await this._beaconConnectPromise
+  }
+
+  /**
+   * Builds a Beacon client matching the configured mode. Split out so
+   * `connectBeacon` stays focused on lifecycle and error wiring.
+   * @param {object} args - Options.
+   * @param {ReturnType<VelociousConfiguration["getBeaconConfig"]>} args.config - Resolved Beacon config.
+   * @param {string} [args.peerType] - Resolved peer type.
+   * @returns {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default>} - Beacon client.
+   */
+  async _createBeaconClient({config, peerType}) {
+    if (config.inProcess) {
+      const {default: InProcessBeaconClient} = await import("./beacon/in-process-client.js")
+
+      return new InProcessBeaconClient({peerType})
+    }
+
+    const {default: BeaconClient} = await import("./beacon/client.js")
+
+    return new BeaconClient({
+      host: config.host,
+      port: config.port,
+      peerType
+    })
+  }
+
+  /**
+   * Surfaces a Beacon failure on the framework error channel. Mirrors
+   * the pattern used by `request-runner.js` for HTTP errors. When no
+   * listener is attached to either `framework-error` or `all-error`,
+   * also schedules an unhandled promise rejection so process-level bug
+   * reporters (which subscribe to `unhandledRejection` by default) pick
+   * the failure up.
+   * @param {object} args - Options.
+   * @param {"beacon-connect" | "beacon-disconnect"} args.stage - Failure stage.
+   * @param {Error} args.error - Error instance.
+   * @returns {void}
+   */
+  _reportBeaconError({stage, error}) {
+    const errorEvents = this._errorEvents
+    const hasListener = errorEvents.listenerCount("framework-error") > 0
+      || errorEvents.listenerCount("all-error") > 0
+    const payload = {
+      context: {stage},
+      error
+    }
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+
+    if (!hasListener) {
+      void Promise.reject(error)
+    }
   }
 
   /**

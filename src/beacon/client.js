@@ -59,6 +59,11 @@ export default class BeaconClient extends EventEmitter {
     this._reconnectTimer = undefined
     /** @type {Promise<void> | undefined} */
     this._connectPromise = undefined
+    /**
+     * Last socket error observed while connected, surfaced as the disconnect reason.
+     * @type {Error | undefined}
+     */
+    this._lastSocketError = undefined
   }
 
   /** @returns {string} - The peer id sent on the hello handshake. */
@@ -70,7 +75,10 @@ export default class BeaconClient extends EventEmitter {
   /**
    * Resolves on the first successful connect. Subsequent calls return
    * the same promise. Subsequent reconnects after a drop are silent —
-   * use `on("connect")` / `on("disconnect")` to observe them.
+   * use `on("connect")` / `on("disconnect", reason)` to observe them.
+   * The `disconnect` listener receives an `Error` reason: either the
+   * underlying socket error, or `Error("Beacon broker disconnected")`
+   * when the close had no preceding error.
    * @returns {Promise<void>}
    */
   async connect() {
@@ -190,18 +198,37 @@ export default class BeaconClient extends EventEmitter {
     })
 
     jsonSocket.on("error", (error) => {
-      // Never had a successful connect — surface to the connect promise.
-      if (!this._connected) this.emit("connect-error", error)
-      this.emit("error", error)
+      if (!this._connected) {
+        // Initial connect failed — surface to `connect()`'s promise via `connect-error`.
+        // No `error` emit: that channel is for established-session errors; the
+        // initial-connect path is owned by `connect-error`.
+        this.emit("connect-error", error)
+      } else {
+        // Established session error. Cache so the upcoming `close` event can
+        // surface it as the disconnect reason.
+        this._lastSocketError = error
+        this.emit("error", error)
+      }
     })
 
     jsonSocket.on("close", () => {
       const wasConnected = this._connected
+
       this._connected = false
       this._jsonSocket = undefined
       this._socket = undefined
 
-      if (wasConnected) this.emit("disconnect")
+      // Explicit close() sets `_closed = true` before ending the socket.
+      // Don't surface user-initiated teardown as a disconnect "error" —
+      // only network-driven drops should be reported.
+      if (wasConnected && !this._closed) {
+        const reason = this._lastSocketError || new Error("Beacon broker disconnected")
+
+        this.emit("disconnect", reason)
+      }
+
+      this._lastSocketError = undefined
+
       if (this._closed) return
 
       this._scheduleReconnect()

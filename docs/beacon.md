@@ -83,9 +83,41 @@ await configuration.disconnectBeacon()
 
 `connectBeacon()` is idempotent. The first call opens the JsonSocket
 and resolves once the broker accepts the hello handshake — or, if the
-broker is unreachable, logs a warning and returns the client anyway so
-publishing can keep falling back to local-only delivery while
-reconnects continue in the background.
+broker is unreachable, surfaces the failure on
+`configuration.getErrorEvents()` (see *Error reporting* below) and
+returns the client anyway so publishing can keep falling back to
+local-only delivery while reconnects continue in the background.
+
+## In-process mode
+
+`beacon: {inProcess: true}` runs Beacon entirely in-memory: a
+module-level broker singleton inside Velocious replaces the TCP daemon,
+and every `Configuration` with `inProcess: true` registers itself as a
+peer.
+
+```js
+new Configuration({
+  // ...
+  beacon: {inProcess: true}
+})
+```
+
+Use cases:
+
+- **Tests.** Multiple `Configuration` instances in one process can
+  exchange broadcasts without spinning up a TCP daemon or allocating a
+  port. The in-process broker preserves "publish, then receive"
+  ordering by scheduling each fan-out via `queueMicrotask`.
+- **Single-process deployments.** Apps that don't need cross-process
+  delivery still get the same `broadcastToChannel` ergonomics — useful
+  if a future deployment topology might add a worker, since flipping
+  `inProcess: true` off and pointing at a daemon is a no-op for call
+  sites.
+
+`inProcess: true` is **mutually exclusive** with `host` / `port` —
+`getBeaconConfig()` throws if both are set. When `inProcess: true` is
+set, the `VELOCIOUS_BEACON_HOST` / `VELOCIOUS_BEACON_PORT` env vars are
+ignored (code-level config wins).
 
 ## Broadcast semantics
 
@@ -118,6 +150,50 @@ pubsub posture:
 - For client-reconnect *replay*, use the existing
   websocket-event-log-store — Beacon is the cross-process bus, the
   event log is the resume buffer.
+
+## Error reporting
+
+When Beacon is configured but the broker is unreachable or the
+connection drops mid-session, the failure is surfaced on
+`configuration.getErrorEvents()` — the same channel
+`request-runner.js` uses for HTTP errors:
+
+```js
+configuration.getErrorEvents().on("framework-error", ({context, error}) => {
+  if (context.stage === "beacon-connect") {
+    // Broker unreachable on initial connect (or during reconnect attempts).
+  } else if (context.stage === "beacon-disconnect") {
+    // An established connection dropped.
+  }
+
+  Sentry.captureException(error, {tags: {component: "beacon", stage: context.stage}})
+})
+```
+
+Stages emitted today:
+
+- `"beacon-connect"` — fired when the initial TCP connect fails or the
+  broker rejects the handshake. Reconnect attempts continue in the
+  background; further failures fire the same event again.
+- `"beacon-disconnect"` — fired once when an established connection
+  drops. The `error` is the underlying socket error if there was one,
+  or `Error("Beacon broker disconnected")` otherwise. Explicit
+  `disconnectBeacon()` calls do **not** fire this event.
+
+A parallel `"all-error"` event mirrors the framework-error channel
+with `errorType: "framework-error"` for apps that prefer one
+listener.
+
+**Unhandled-rejection safety net.** When neither `"framework-error"`
+nor `"all-error"` has any listeners, Beacon also schedules a
+`Promise.reject(error)` for each failure so process-level bug
+reporters (which subscribe to Node's `unhandledRejection` by default)
+still pick the failure up. Apps that wire either listener won't see
+the unhandled rejection — wire one to suppress it.
+
+`broadcastToChannel` keeps falling back to local-only delivery while
+disconnected: surfacing the error doesn't replace the fallback, the
+two are independent.
 
 ## Security
 
