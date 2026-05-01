@@ -81,12 +81,20 @@ await configuration.connectBeacon({peerType: "my-sidecar"})
 await configuration.disconnectBeacon()
 ```
 
-`connectBeacon()` is idempotent. The first call opens the JsonSocket
-and resolves once the broker accepts the hello handshake — or, if the
-broker is unreachable, surfaces the failure on
-`configuration.getErrorEvents()` (see *Error reporting* below) and
-returns the client anyway so publishing can keep falling back to
-local-only delivery while reconnects continue in the background.
+`connectBeacon()` is idempotent. In TCP mode it is **non-blocking**:
+the call kicks off the TCP connect and returns immediately, without
+waiting for the handshake to complete. A broker that silently drops
+SYNs (firewall/NACL DROP rules) would otherwise block startup on the
+OS TCP connect timeout (tens of seconds), defeating the documented
+"fall back to local-only and reconnect in the background" contract.
+Initial-connect failures surface asynchronously on the framework-error
+channel (see *Error reporting* below); the BeaconClient's reconnect
+loop keeps trying. If a caller needs to wait for connectivity, poll
+`configuration.getBeaconClient()?.isConnected()`.
+
+In-process mode (`beacon: {inProcess: true}`) **does** await `connect()`
+— that path is synchronous, cannot fail, and gives callers predictable
+readiness on the very next line.
 
 ## In-process mode
 

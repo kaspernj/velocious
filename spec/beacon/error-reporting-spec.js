@@ -87,14 +87,16 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
     configuration.getErrorEvents().on("framework-error", (payload) => errors.push({stage: payload.context.stage, error: payload.error}))
 
     await configuration.connectBeacon({peerType: "test"})
-    expect(configuration.getBeaconClient()?.isConnected()).toBe(true)
 
-    // Wait for the broker to register the peer (it tracks peers only after
-    // the hello handshake lands). Otherwise `beacon.stop()` may run before
-    // the broker has anything to close, leaving the client connected.
+    // `connectBeacon` is non-blocking in TCP mode — the TCP connect runs
+    // in the background. Wait for the broker to register the peer (it
+    // tracks peers only after the hello handshake lands) before asserting
+    // connectedness or stopping the broker.
     await timeout({timeout: 1000}, async () => {
       while (beacon.getPeerCount() < 1) await wait(0.01)
     })
+
+    expect(configuration.getBeaconClient()?.isConnected()).toBe(true)
 
     await beacon.stop()
 
@@ -226,6 +228,42 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
 
     expect(reasons.length).toBe(0)
 
+    await beacon.stop()
+  })
+
+  it("connectBeacon registers the client without awaiting the broker TCP connect", async () => {
+    // Connect to a working broker but inspect state synchronously after
+    // `connectBeacon` resolves: the configuration should already hold a
+    // client reference even though the connect handshake is still in
+    // flight. The original blocking implementation only registered the
+    // client *after* awaiting `client.connect()`, so under this contract
+    // a regression would either delay the client registration or block on
+    // the OS TCP timeout.
+    const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port: 0})
+
+    await beacon.start()
+
+    const configuration = buildConfiguration({host: "127.0.0.1", port: beacon.getPort()})
+    const start = Date.now()
+
+    await configuration.connectBeacon({peerType: "test"})
+
+    const elapsed = Date.now() - start
+
+    // Broad regression bound — `connectBeacon` should return effectively
+    // immediately. Anything substantially over this would mean we
+    // reintroduced a synchronous await on the TCP handshake.
+    expect(elapsed).toBeLessThan(100)
+    expect(configuration.getBeaconClient()).toBeTruthy()
+
+    // Eventually the connect lands.
+    await timeout({timeout: 1000}, async () => {
+      while (!configuration.getBeaconClient()?.isConnected()) await wait(0.01)
+    })
+
+    expect(configuration.getBeaconClient()?.isConnected()).toBe(true)
+
+    await configuration.disconnectBeacon()
     await beacon.stop()
   })
 })

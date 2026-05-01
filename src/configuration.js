@@ -506,14 +506,25 @@ export default class VelociousConfiguration {
    * any websocket subscribers in this process receive them. Idempotent
    * — repeat calls return the same in-flight or resolved promise.
    *
-   * Returns immediately with `undefined` if Beacon is not enabled. If
-   * the broker is unreachable, the promise still resolves once the
-   * client has been created — reconnection attempts continue in the
-   * background and `broadcastToChannel` falls back to local-only
-   * delivery while disconnected.
+   * Returns immediately with `undefined` if Beacon is not enabled.
+   *
+   * **Non-blocking by design (TCP mode).** For broker-backed Beacon, the
+   * returned promise resolves as soon as the client is constructed and
+   * the TCP connect is launched — it does **not** wait for the connect
+   * handshake to complete. A broker that silently drops SYNs
+   * (firewall/NACL DROP rules) would otherwise block startup on the OS
+   * TCP connect timeout (tens of seconds), which contradicts the
+   * documented "fall back to local-only and reconnect in the
+   * background" contract. Initial-connect failures surface
+   * asynchronously on the framework-error channel via the
+   * `connect-error` listener registered here. Callers that need to
+   * wait for connectivity should poll `getBeaconClient()?.isConnected()`.
+   *
+   * **In-process mode** awaits `connect()` — that path is synchronous,
+   * cannot fail, and gives callers predictable readiness.
    * @param {object} [args] - Options.
    * @param {string} [args.peerType] - Override peerType for this connect call (e.g. `"server"`, `"background-jobs-worker"`).
-   * @returns {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined>} - Resolves with the connected client, or undefined when Beacon is disabled.
+   * @returns {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined>} - Resolves with the registered client (TCP mode: connect may still be in flight), or undefined when Beacon is disabled.
    */
   async connectBeacon({peerType} = {}) {
     if (this._beaconClient) return this._beaconClient
@@ -537,11 +548,9 @@ export default class VelociousConfiguration {
         this._deliverBroadcastFromBeacon(message)
       })
 
-      // `connect-error` fires when the *initial* TCP/handshake fails. We
-      // report it via the framework error channel and then swallow the
-      // throw from `connect()` so the reconnect loop stays alive — the
-      // Beacon contract is "broadcastToChannel falls back to local-only
-      // delivery while disconnected", not "process exit".
+      // `connect-error` fires when the *initial* TCP/handshake fails.
+      // We report it via the framework error channel; the BeaconClient's
+      // reconnect loop keeps trying in the background.
       client.on("connect-error", (error) => {
         this._reportBeaconError({stage: "beacon-connect", error})
       })
@@ -553,14 +562,26 @@ export default class VelociousConfiguration {
         this._reportBeaconError({stage: "beacon-disconnect", error: reason})
       })
 
-      try {
-        await client.connect()
-      } catch {
-        // Already reported via `connect-error` above. The client keeps
-        // its reconnect timer alive in the background.
-      }
-
+      // Register the client *before* kicking off connect so subsequent
+      // `connectBeacon()` calls return this same instance instead of
+      // racing to construct a second one.
       this._beaconClient = client
+
+      if (config.inProcess) {
+        // In-process connect is synchronous, cannot fail, and resolves
+        // before this await yields — callers can rely on
+        // `isConnected() === true` immediately after `connectBeacon()`.
+        await client.connect()
+      } else {
+        // Fire-and-forget the TCP connect. Awaiting here would block
+        // startup on the OS TCP connect timeout (75s default on Linux)
+        // when the broker silently drops SYNs. Failures surface
+        // asynchronously via the `connect-error` listener registered
+        // above; the BeaconClient's reconnect loop keeps trying.
+        void client.connect().catch(() => {
+          // Already reported via connect-error above.
+        })
+      }
 
       return client
     })()
