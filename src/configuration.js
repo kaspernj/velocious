@@ -598,13 +598,23 @@ export default class VelociousConfiguration {
    * @returns {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default>} - Beacon client.
    */
   async _createBeaconClient({config, peerType}) {
+    // Route through the environment handler so the Node-only `node:net`
+    // / `node:crypto` deps in the Beacon client modules don't get pulled
+    // into browser bundles. Browser bundles statically reach
+    // `Configuration` (via `Logger`); putting the dynamic
+    // `import("./beacon/...")` calls here would still drag those modules
+    // through esbuild's static analysis. Hiding the imports inside the
+    // Node environment handler keeps them off the browser path —
+    // browser-bundled apps never reach `environment-handlers/node.js`.
+    const handler = this.getEnvironmentHandler()
+
     if (config.inProcess) {
-      const {default: InProcessBeaconClient} = await import("./beacon/in-process-client.js")
+      const InProcessBeaconClient = await handler.loadInProcessBeaconClient()
 
       return new InProcessBeaconClient({peerType})
     }
 
-    const {default: BeaconClient} = await import("./beacon/client.js")
+    const BeaconClient = await handler.loadBeaconClient()
 
     return new BeaconClient({
       host: config.host,

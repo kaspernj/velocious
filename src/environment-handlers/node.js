@@ -515,6 +515,20 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     return await this.forwardCommand(command, CliCommandsBeacon)
   }
 
+  /** @returns {Promise<typeof import("../beacon/client.js").default>} - Beacon client class. */
+  async loadBeaconClient() {
+    const {default: BeaconClient} = await import("../beacon/client.js")
+
+    return BeaconClient
+  }
+
+  /** @returns {Promise<typeof import("../beacon/in-process-client.js").default>} - In-process client class. */
+  async loadInProcessBeaconClient() {
+    const {default: InProcessBeaconClient} = await import("../beacon/in-process-client.js")
+
+    return InProcessBeaconClient
+  }
+
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<unknown>} - Resolves with the command result.
