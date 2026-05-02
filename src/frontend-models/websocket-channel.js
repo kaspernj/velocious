@@ -20,7 +20,7 @@ import Response from "../http-server/client/response.js"
  * `matches()` routes by model name.
  */
 export default class FrontendModelWebsocketChannel extends VelociousWebsocketChannel {
-  /** @returns {Promise<boolean>} */
+  /** @returns {Promise<boolean>} Whether the frontend-model subscription is authorized. */
   async canSubscribe() {
     const modelName = this._modelName()
 
@@ -56,7 +56,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * @param {Record<string, any>} broadcastParams - Params from `broadcastToChannel`.
-   * @returns {boolean}
+   * @returns {boolean} Whether the broadcast matches this subscriber's model.
    */
   matches(broadcastParams) {
     return broadcastParams?.model === this._modelName()
@@ -74,22 +74,27 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * importing `WebsocketRequest` here because its `node:querystring`
    * dependency would pull server-only code into browser bundles via
    * the `configuration → logger → websocket-publishers` import chain.
-   *
    * Header names are normalized to lowercase so `header("cookie")`
    * finds a value regardless of whether the upgrade-request headers
-   * map uses `"Cookie"` or `"cookie"`.
-   *
-   * @returns {{headers: () => Record<string, any>, header: (name: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}}
+   * map uses `"Cookie"` or `"cookie"`. Session metadata is treated as
+   * websocket-delivered request headers, which lets apps pass auth tokens
+   * after the initial upgrade request without replacing this channel.
+   * @returns {{headers: () => Record<string, any>, header: (name: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}} Request-like object for ability resolution.
    */
   _syntheticRequest() {
     const upgradeRequest = /** @type {any} */ (this.session.upgradeRequest)
     const rawHeaders = typeof upgradeRequest?.headers === "function" ? upgradeRequest.headers() : {}
+    const metadata = typeof this.session.getMetadata === "function" ? this.session.getMetadata() : {}
     const remoteAddress = typeof upgradeRequest?.remoteAddress === "function" ? upgradeRequest.remoteAddress() : undefined
     /** @type {Record<string, any>} */
     const headerMap = {}
 
     for (const key of Object.keys(rawHeaders || {})) {
       headerMap[key.toLowerCase()] = rawHeaders[key]
+    }
+
+    for (const key of Object.keys(metadata || {})) {
+      headerMap[key.toLowerCase()] = metadata[key]
     }
 
     return {
