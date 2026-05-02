@@ -1,0 +1,1 @@
+Frontend-model WebSocket subscription authorization now treats upgrade-request headers as authoritative when merging client metadata into synthetic request headers. Metadata can still provide supplemental headers, but it cannot spoof handshake headers such as `cookie`, `origin`, or an already-present token header.

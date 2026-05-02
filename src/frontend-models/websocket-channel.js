@@ -76,9 +76,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * the `configuration → logger → websocket-publishers` import chain.
    * Header names are normalized to lowercase so `header("cookie")`
    * finds a value regardless of whether the upgrade-request headers
-   * map uses `"Cookie"` or `"cookie"`. Session metadata is treated as
-   * websocket-delivered request headers, which lets apps pass auth tokens
-   * after the initial upgrade request without replacing this channel.
+   * map uses `"Cookie"` or `"cookie"`. Session metadata is added before
+   * upgrade headers so client-delivered metadata can provide supplemental
+   * request headers, but cannot override trusted handshake headers.
    * @returns {{headers: () => Record<string, any>, header: (name: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}} Request-like object for ability resolution.
    */
   _syntheticRequest() {
@@ -89,12 +89,12 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     /** @type {Record<string, any>} */
     const headerMap = {}
 
-    for (const key of Object.keys(rawHeaders || {})) {
-      headerMap[key.toLowerCase()] = rawHeaders[key]
-    }
-
     for (const key of Object.keys(metadata || {})) {
       headerMap[key.toLowerCase()] = metadata[key]
+    }
+
+    for (const key of Object.keys(rawHeaders || {})) {
+      headerMap[key.toLowerCase()] = rawHeaders[key]
     }
 
     return {
