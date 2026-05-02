@@ -76,10 +76,10 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * the `configuration → logger → websocket-publishers` import chain.
    * Header names are normalized to lowercase so `header("cookie")`
    * finds a value regardless of whether the upgrade-request headers
-   * map uses `"Cookie"` or `"cookie"`. Session metadata is added before
-   * upgrade headers so client-delivered metadata can provide supplemental
-   * request headers, but cannot override trusted handshake headers.
-   * @returns {{headers: () => Record<string, any>, header: (name: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}} Request-like object for ability resolution.
+   * map uses `"Cookie"` or `"cookie"`. Session metadata stays separate
+   * from headers and is exposed through `metadata(...)` for ability
+   * resolvers that need websocket-delivered session data.
+   * @returns {{headers: () => Record<string, any>, header: (name: string) => any, metadata: (key?: string) => any, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => any}} Request-like object for ability resolution.
    */
   _syntheticRequest() {
     const upgradeRequest = /** @type {any} */ (this.session.upgradeRequest)
@@ -89,10 +89,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     /** @type {Record<string, any>} */
     const headerMap = {}
 
-    for (const key of Object.keys(metadata || {})) {
-      headerMap[key.toLowerCase()] = metadata[key]
-    }
-
     for (const key of Object.keys(rawHeaders || {})) {
       headerMap[key.toLowerCase()] = rawHeaders[key]
     }
@@ -100,6 +96,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     return {
       headers: () => headerMap,
       header: (name) => headerMap[String(name).toLowerCase()],
+      metadata: (key) => key === undefined ? {...metadata} : metadata[key],
       path: () => "/frontend-models",
       httpMethod: () => "POST",
       remoteAddress: () => remoteAddress,

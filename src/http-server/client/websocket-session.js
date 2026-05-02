@@ -489,6 +489,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     const request = new WebsocketRequest({
       body,
       headers,
+      metadata: this.getMetadata(),
       method,
       path,
       remoteAddress: this.client.remoteAddress
