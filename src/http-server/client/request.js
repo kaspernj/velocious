@@ -36,6 +36,15 @@ export default class VelociousHttpServerClientRequest {
   httpMethod() { return this.requestParser.getHttpMethod() }
   httpVersion() { return this.requestParser.getHttpVersion() }
   host() { return this.requestParser.getHost() }
+  /**
+   * @param {string} [key] - Metadata key.
+   * @returns {any} - Metadata value for a key, or the full metadata object.
+   */
+  metadata(key) {
+    if (key !== undefined) return undefined
+
+    return {}
+  }
 
   hostWithPort() {
     const port = this.port()

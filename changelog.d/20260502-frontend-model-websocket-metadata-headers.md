@@ -1,0 +1,1 @@
+WebSocket session metadata is now exposed as request metadata instead of synthetic request headers. Ability resolvers and WebSocket-borne controllers can read it with `request.metadata()` / `request.metadata("key")`, while `request.header(...)` remains reserved for actual upgrade or request headers.

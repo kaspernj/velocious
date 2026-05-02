@@ -273,6 +273,27 @@ describe("WebsocketSession - metadata", () => {
   })
 })
 
+describe("WebsocketRequest - metadata", () => {
+  it("exposes websocket metadata separately from request headers", () => {
+    const request = new WebsocketRequest({
+      headers: {
+        cookie: "session=upgrade-token"
+      },
+      metadata: {
+        locale: "da",
+        sessionToken: "metadata-token"
+      },
+      method: "POST",
+      path: "/api/version"
+    })
+
+    expect(request.header("cookie")).toEqual("session=upgrade-token")
+    expect(request.header("locale")).toEqual(null)
+    expect(request.metadata()).toEqual({locale: "da", sessionToken: "metadata-token"})
+    expect(request.metadata("sessionToken")).toEqual("metadata-token")
+  })
+})
+
 describe("WebSocket metadata integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("delivers metadata from client to server session", async () => {
     await Dummy.run(async () => {
@@ -300,6 +321,29 @@ describe("WebSocket metadata integration", {databaseCleaning: {transaction: fals
         }
       } finally {
         socket.close()
+      }
+    })
+  })
+
+  it("exposes metadata to requests posted over the websocket", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+
+      try {
+        client.setMetadata("locale", "da")
+        client.setMetadata("sessionToken", "metadata-token")
+
+        await client.connect()
+
+        const response = await client.post("/api/metadata")
+
+        expect(response.statusCode).toEqual(200)
+        expect(response.json().metadata).toEqual({
+          locale: "da",
+          sessionToken: "metadata-token"
+        })
+      } finally {
+        await client.close()
       }
     })
   })

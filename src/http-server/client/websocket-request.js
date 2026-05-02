@@ -7,18 +7,21 @@ export default class VelociousHttpServerClientWebsocketRequest {
    * @param {object} args - Options object.
    * @param {any} [args.body] - Request body.
    * @param {Record<string, string>} [args.headers] - Header list.
+   * @param {Record<string, any>} [args.metadata] - Session metadata.
    * @param {string} args.method - HTTP method.
    * @param {string} args.path - Path.
    * @param {Record<string, any>} [args.params] - Parameters object.
    * @param {string} [args.remoteAddress] - Remote address.
    */
-  constructor({body, headers, method, params, path, remoteAddress}) {
+  constructor({body, headers, metadata, method, params, path, remoteAddress}) {
     if (!method) throw new Error("method is required")
     if (!path) throw new Error("path is required")
 
     this.body = body
     /** @type {Record<string, string>} */
     this.headersMap = {}
+    /** @type {Record<string, any>} */
+    this.metadataObject = metadata ? {...metadata} : {}
     this.method = method.toUpperCase()
     /** @type {Record<string, any>} */
     this.paramsObject = {}
@@ -62,6 +65,16 @@ export default class VelociousHttpServerClientWebsocketRequest {
   httpVersion() { return "websocket" }
 
   host() { return this.header("host") || undefined }
+
+  /**
+   * @param {string} [key] - Metadata key.
+   * @returns {any} - Metadata value for a key, or the full metadata object.
+   */
+  metadata(key) {
+    if (key !== undefined) return this.metadataObject[key]
+
+    return {...this.metadataObject}
+  }
 
   hostWithPort() {
     const host = this.host()

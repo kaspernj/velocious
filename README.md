@@ -1305,6 +1305,30 @@ socket.addEventListener("message", (event) => {
 })
 ```
 
+## Attach WebSocket metadata
+
+Clients can send session metadata over the shared WebSocket. Metadata is exposed to WebSocket-borne controller requests and frontend-model subscription authorization through `request.metadata(...)`; it is not merged into HTTP headers.
+
+```js
+socket.addEventListener("open", () => {
+  socket.send(JSON.stringify({
+    data: {locale: "da", sessionToken: "abc"},
+    type: "metadata"
+  }))
+
+  socket.send(JSON.stringify({
+    id: "req-2",
+    method: "POST",
+    path: "/api/version",
+    type: "request"
+  }))
+})
+```
+
+```js
+const sessionToken = this.getRequest().metadata("sessionToken")
+```
+
 # Logging
 
 Velocious includes a lightweight logger that can write to both console and file and is environment-aware.

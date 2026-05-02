@@ -2040,7 +2040,7 @@ export default class FrontendModelBase {
 
   /**
    * Sets global metadata on the WebSocket connection. Sent to the server immediately
-   * over WebSocket and included with every HTTP request as headers.
+   * over WebSocket and exposed to WebSocket-borne requests as request metadata.
    * @param {string} key - Metadata key.
    * @param {any} value - Metadata value (null to clear).
    * @returns {void}

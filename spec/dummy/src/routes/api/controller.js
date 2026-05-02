@@ -15,4 +15,8 @@ export default class ApiController extends Controller {
     await this.getConfiguration().awaitPendingBroadcasts()
     this.renderJsonArg({status: "published"})
   }
+
+  metadata() {
+    this.renderJsonArg({metadata: this.getRequest().metadata()})
+  }
 }
