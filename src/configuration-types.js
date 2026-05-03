@@ -112,6 +112,7 @@
  * @property {string} [filePath] - Explicit path for the log file. Defaults to "<directory>/<environment>.log".
  * @property {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [levels] - Override which log levels are emitted.
  * @property {boolean} [debugLowLevel] - Convenience flag to include very low-level debug logs.
+ * @property {boolean} [queryLogging] - Enable/disable database query logging. Defaults to true outside test and false in test.
  * @property {LoggerConfig[]} [loggers] - Logger instances (converted to outputs when configured).
  * @property {LoggingOutputConfig[]} [outputs] - Explicit logger outputs (overrides console/file defaults when provided).
  */

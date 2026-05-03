@@ -41,6 +41,7 @@
 /**
  * @typedef {object} QueryOptions
  * @property {string} [logName] - Query log subject.
+ * @property {boolean} [logQuery] - Whether to log the query.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
 /**
@@ -725,19 +726,20 @@ export default class VelociousDatabaseDriversBase {
     let tries = 0
     const maxTries = 5
     const requestTiming = this.configuration.getCurrentRequestTiming()
-    const sourceStack = options.sourceStack || Error().stack
+    const logQuery = options.logQuery ?? this._queryLoggingEnabled()
+    const sourceStack = logQuery ? (options.sourceStack || Error().stack) : undefined
 
     while (tries < maxTries) {
       tries++
 
       try {
         if (requestTiming && tries === 1) {
-          return await requestTiming.measureDbQuery(async () => await this._queryActualWithLogging(sql, {...options, sourceStack}))
+          return await requestTiming.measureDbQuery(async () => await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack}))
         } else if (requestTiming) {
-          return await requestTiming.measure("db", async () => await this._queryActualWithLogging(sql, {...options, sourceStack}))
+          return await requestTiming.measure("db", async () => await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack}))
         }
 
-        return await this._queryActualWithLogging(sql, {...options, sourceStack})
+        return await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack})
       } catch (error) {
         if (!(error instanceof Error)) throw error
 
@@ -775,14 +777,25 @@ export default class VelociousDatabaseDriversBase {
     const startedAtMs = nowMs()
     const result = await this._queryActual(sql)
 
-    await this._logQuery({
-      elapsedMs: nowMs() - startedAtMs,
-      logName: options.logName || "SQL",
-      sourceStack: options.sourceStack,
-      sql
-    })
+    if (options.logQuery !== false) {
+      await this._logQuery({
+        elapsedMs: nowMs() - startedAtMs,
+        logName: options.logName || "SQL",
+        sourceStack: options.sourceStack,
+        sql
+      })
+    }
 
     return result
+  }
+
+  /**
+   * @returns {boolean} - Whether query logging is enabled for this driver.
+   */
+  _queryLoggingEnabled() {
+    if (typeof this.configuration?.getQueryLoggingEnabled !== "function") return true
+
+    return this.configuration.getQueryLoggingEnabled()
   }
 
   /**

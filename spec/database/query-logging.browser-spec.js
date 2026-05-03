@@ -11,18 +11,24 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 /**
  * @param {function(LoggerArrayOutput): Promise<void>} callback - Callback with captured query logs.
+ * @param {object} [args] - Options object.
+ * @param {boolean | undefined} [args.queryLogging] - Query logging override.
  * @returns {Promise<void>} - Resolves when complete.
  */
-async function withQueryLogOutput(callback) {
+async function withQueryLogOutput(callback, args = {}) {
   const configuration = /** @type {MutableLoggingConfiguration} */ (Configuration.current())
   const previousLogging = configuration._logging
   const arrayOutput = new LoggerArrayOutput()
-
-  configuration._logging = {
+  const queryLogging = "queryLogging" in args ? args.queryLogging : true
+  const logging = /** @type {LoggingConfiguration} */ ({
     console: false,
     file: false,
     outputs: [{output: arrayOutput, levels: ["info"]}]
-  }
+  })
+
+  if (queryLogging !== undefined) logging.queryLogging = queryLogging
+
+  configuration._logging = logging
 
   try {
     await callback(arrayOutput)
@@ -37,6 +43,18 @@ function logMessages(arrayOutput) {
 }
 
 describe("Database - query logging", {tags: ["dummy"]}, () => {
+  it("does not log database queries by default in test", async () => {
+    await withQueryLogOutput(async (arrayOutput) => {
+      await Configuration.current().ensureConnections(async (dbs) => {
+        await dbs.default.query("SELECT 1 AS query_logging_disabled_result")
+      })
+
+      const messages = logMessages(arrayOutput)
+
+      expect(messages.some((message) => message.includes("query_logging_disabled_result"))).toBeFalse()
+    }, {queryLogging: undefined})
+  })
+
   it("logs model loads with elapsed time at info level", async () => {
     const project = await Project.create({name: "Query logging project"})
     const task = await Task.create({name: "Query logging task", project})

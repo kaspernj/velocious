@@ -1403,6 +1403,8 @@ Task Load (1.9ms)  SELECT `tasks`.* FROM `tasks` WHERE `tasks`.`id` = 1 LIMIT 1
 
 Model queries use operation names such as `Task Load`, `Task Count`, `Task Pluck`, `Task Create`, `Task Update`, and `Task Destroy`. Raw driver queries use `SQL`. The source arrow is included only when Velocious can identify an application frame; dependency and framework frames such as `node_modules` are omitted.
 
+Query logging defaults to off in the `test` environment to keep CI output quiet. Override it with `logging: {queryLogging: true}` when a test build should write SQL timing logs, and use the normal logging output settings to send those logs to console or file.
+
 ## Listen for framework errors
 
 Velocious emits framework errors (including uncaught controller action errors) on the configuration error event bus:
