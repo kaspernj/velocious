@@ -166,14 +166,14 @@ export default class BackgroundJobsWorker {
   async _runInlineJobAndReport(payload) {
     try {
       await this._runJobInline(payload)
-      void this._reportJobResult({
+      await this._reportJobResult({
         jobId: payload.id,
         status: "completed",
         handedOffAtMs: payload.handedOffAtMs,
         workerId: payload.workerId || this.workerId
       })
     } catch (error) {
-      void this._reportJobResult({
+      await this._reportJobResult({
         jobId: payload.id,
         status: "failed",
         error,

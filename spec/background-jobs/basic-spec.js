@@ -190,7 +190,7 @@ describe("Background jobs", () => {
     const outputPath = path.join(tmpDir, `slow-job-${Date.now()}.json`)
 
     const jobId = await SlowTestJob.performLaterWithOptions({
-      args: ["graceful", outputPath, 0.4],
+      args: ["graceful", outputPath, 400],
       options: {forked: false}
     })
 
