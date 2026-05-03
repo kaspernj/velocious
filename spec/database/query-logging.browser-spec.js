@@ -1,17 +1,69 @@
 // @ts-check
 
 import Configuration from "../../src/configuration.js"
+import DatabaseDriverBase from "../../src/database/drivers/base.js"
+import RequestTiming from "../../src/http-server/client/request-timing.js"
 import LoggerArrayOutput from "../../src/logger/outputs/array-output.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
+/** @typedef {import("../../src/configuration-types.js").LogLevel} LogLevel */
 /** @typedef {import("../../src/configuration-types.js").LoggingConfiguration} LoggingConfiguration */
 /** @typedef {Configuration & {_logging?: LoggingConfiguration}} MutableLoggingConfiguration */
+
+class TestDriver extends DatabaseDriverBase {
+  /** @type {string | undefined} */
+  lastSourceStack = undefined
+
+  async _queryActual() {
+    return []
+  }
+
+  async _queryActualWithLogging(sql, options, requestTiming, tries) {
+    this.lastSourceStack = options.sourceStack
+
+    return await super._queryActualWithLogging(sql, options, requestTiming, tries)
+  }
+
+  async connect() {}
+
+  getType() { return "test" }
+  primaryKeyType() { return "bigint" }
+  queryToSql() { return "" }
+}
+
+class TimingDriver extends TestDriver {
+  /** @type {function(number): void} */
+  advanceTime
+
+  /**
+   * @param {import("../../src/configuration-types.js").DatabaseConfigurationType} config - Database config.
+   * @param {Configuration} configuration - Configuration.
+   * @param {object} args - Options object.
+   * @param {function(number): void} args.advanceTime - Advances fake time.
+   */
+  constructor(config, configuration, {advanceTime}) {
+    super(config, configuration)
+
+    this.advanceTime = advanceTime
+  }
+
+  async _queryActual() {
+    this.advanceTime(5)
+
+    return []
+  }
+
+  async _logQuery() {
+    this.advanceTime(100)
+  }
+}
 
 /**
  * @param {function(LoggerArrayOutput): Promise<void>} callback - Callback with captured query logs.
  * @param {object} [args] - Options object.
+ * @param {LogLevel[]} [args.levels] - Enabled output levels.
  * @param {boolean | undefined} [args.queryLogging] - Query logging override.
  * @returns {Promise<void>} - Resolves when complete.
  */
@@ -19,11 +71,12 @@ async function withQueryLogOutput(callback, args = {}) {
   const configuration = /** @type {MutableLoggingConfiguration} */ (Configuration.current())
   const previousLogging = configuration._logging
   const arrayOutput = new LoggerArrayOutput()
+  const levels = args.levels || ["info"]
   const queryLogging = "queryLogging" in args ? args.queryLogging : true
   const logging = /** @type {LoggingConfiguration} */ ({
     console: false,
     file: false,
-    outputs: [{output: arrayOutput, levels: ["info"]}]
+    outputs: [{output: arrayOutput, levels}]
   })
 
   if (queryLogging !== undefined) logging.queryLogging = queryLogging
@@ -53,6 +106,47 @@ describe("Database - query logging", {tags: ["dummy"]}, () => {
 
       expect(messages.some((message) => message.includes("query_logging_disabled_result"))).toBeFalse()
     }, {queryLogging: undefined})
+  })
+
+  it("does not prepare source stacks when info logs are filtered", async () => {
+    await withQueryLogOutput(async () => {
+      const driver = new TestDriver({}, Configuration.current())
+
+      await driver.query("SELECT 1 AS query_logging_filtered_result")
+
+      expect(driver.lastSourceStack).toBeUndefined()
+    }, {levels: ["warn"], queryLogging: true})
+  })
+
+  it("excludes query log work from request database timing", async () => {
+    const configuration = Configuration.current()
+    const requestTiming = new RequestTiming()
+    const originalNow = Date.now
+    let currentTime = 1000
+    let summary
+
+    try {
+      Date.now = () => currentTime
+      requestTiming.startedAtMs = currentTime
+
+      await withQueryLogOutput(async () => {
+        const driver = new TimingDriver({}, configuration, {
+          advanceTime: (ms) => {
+            currentTime += ms
+          }
+        })
+
+        await configuration.runWithRequestTiming(requestTiming, async () => {
+          await driver.query("SELECT 1 AS query_logging_timing_result")
+        })
+      })
+
+      summary = requestTiming.summary()
+    } finally {
+      Date.now = originalNow
+    }
+
+    expect(summary?.dbMs).toEqual(5)
   })
 
   it("logs model loads with elapsed time at info level", async () => {

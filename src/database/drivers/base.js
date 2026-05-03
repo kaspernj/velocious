@@ -733,13 +733,7 @@ export default class VelociousDatabaseDriversBase {
       tries++
 
       try {
-        if (requestTiming && tries === 1) {
-          return await requestTiming.measureDbQuery(async () => await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack}))
-        } else if (requestTiming) {
-          return await requestTiming.measure("db", async () => await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack}))
-        }
-
-        return await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack})
+        return await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack}, requestTiming, tries)
       } catch (error) {
         if (!(error instanceof Error)) throw error
 
@@ -771,15 +765,27 @@ export default class VelociousDatabaseDriversBase {
   /**
    * @param {string} sql - SQL string.
    * @param {QueryOptions} options - Query options.
+   * @param {import("../../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing.
+   * @param {number} tries - Query attempt count.
    * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
-  async _queryActualWithLogging(sql, options) {
+  async _queryActualWithLogging(sql, options, requestTiming, tries) {
     const startedAtMs = nowMs()
-    const result = await this._queryActual(sql)
+    let result
+
+    if (requestTiming && tries === 1) {
+      result = await requestTiming.measureDbQuery(async () => await this._queryActual(sql))
+    } else if (requestTiming) {
+      result = await requestTiming.measure("db", async () => await this._queryActual(sql))
+    } else {
+      result = await this._queryActual(sql)
+    }
+
+    const elapsedMs = nowMs() - startedAtMs
 
     if (options.logQuery !== false) {
       await this._logQuery({
-        elapsedMs: nowMs() - startedAtMs,
+        elapsedMs,
         logName: options.logName || "SQL",
         sourceStack: options.sourceStack,
         sql
@@ -794,8 +800,11 @@ export default class VelociousDatabaseDriversBase {
    */
   _queryLoggingEnabled() {
     if (typeof this.configuration?.getQueryLoggingEnabled !== "function") return true
+    if (!this.configuration.getQueryLoggingEnabled()) return false
 
-    return this.configuration.getQueryLoggingEnabled()
+    const logger = new Logger("SQL", {configuration: this.configuration})
+
+    return logger.isLevelEnabled("info")
   }
 
   /**

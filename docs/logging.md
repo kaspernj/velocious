@@ -11,4 +11,4 @@ Model-backed reads use names such as `Task Load`, `Task Count`, and `Task Pluck`
 
 The source arrow is included only when Velocious can identify application code. Dependency and framework frames, including `node_modules`, are filtered out; if no application frame is available, Velocious logs only the timed SQL line.
 
-Query logs use the same configured logger outputs as other Velocious logs. Disable them with `logging: {queryLogging: false}`. Enable them in tests with `logging: {queryLogging: true}` and choose the output you want, such as `console: true` for local debugging or `file: true` for a test log file.
+Query logs use the same configured logger outputs as other Velocious logs and are skipped when no output emits `info`. Disable them with `logging: {queryLogging: false}` or by removing `info` from your configured levels. Enable them in tests with `logging: {queryLogging: true}` and choose the output you want, such as `console: true` for local debugging or `file: true` for a test log file.
