@@ -528,7 +528,7 @@ class VelociousDatabaseRecord {
 
       const sql = `UPDATE ${connection.quoteTable(parentTable)} SET ${connection.quoteColumn(counterColumn)} = (SELECT COUNT(*) FROM ${connection.quoteTable(childTable)} WHERE ${connection.quoteColumn(fk)} = ${quoted}) WHERE ${connection.quoteColumn(pkColumn)} = ${quoted}`
 
-      await connection.query(sql)
+      await connection.query(sql, {logName: `${ParentModel.name} Update`})
     }
 
     /**
@@ -2542,7 +2542,7 @@ class VelociousDatabaseRecord {
       tableName: this._tableName()
     })
 
-    await this._connection().query(sql)
+    await this._connection().query(sql, {logName: `${this.getModelClass().name} Destroy`})
     await this._runLifecycleCallbacks("afterDestroy")
   }
 
@@ -2957,7 +2957,7 @@ class VelociousDatabaseRecord {
       tableName: this._tableName(),
       data
     })
-    const insertResult = await this._connection().query(sql)
+    const insertResult = await this._connection().query(sql, {logName: `${this.getModelClass().name} Create`})
 
     if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
       this._attributes = insertResult[0]
@@ -3029,7 +3029,7 @@ class VelociousDatabaseRecord {
         data: changes,
         conditions
       })
-      await this._connection().query(sql)
+      await this._connection().query(sql, {logName: `${this.getModelClass().name} Update`})
       await this._reloadWithId(this.id())
     }
   }

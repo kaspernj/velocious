@@ -383,13 +383,13 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * @param {object} [args] - Options object.
+   * @param {string} [args.logName] - Query log name.
    * @returns {Promise<Array<object>>} Array of results from the database
    */
-  async _executeQuery() {
+  async _executeQuery({logName = this.queryLogName("Load")} = {}) {
     const sql = this.toSql()
-    const results = await this.driver.query(sql)
-
-    this.logger.debug(() => ["SQL:", sql])
+    const results = await this.driver.query(sql, {logName})
 
     return results
   }
@@ -397,6 +397,15 @@ export default class VelociousDatabaseQuery {
   /** @returns {Promise<Array<object>>} Array of results from the database */
   async results() {
     return await this._executeQuery()
+  }
+
+  /**
+   * @param {string} operation - Query operation.
+   * @returns {string} - Query log name.
+   */
+  queryLogName(operation) {
+    void operation
+    return "SQL"
   }
 
   /**

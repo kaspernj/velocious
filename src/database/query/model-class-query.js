@@ -270,7 +270,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     countQuery._selects = []
     countQuery.select(sql)
 
-    const results = /** @type {{count: number}[]} */ (await countQuery._executeQuery())
+    const results = /** @type {{count: number}[]} */ (await countQuery._executeQuery({
+      logName: countQuery.queryLogName("Count")
+    }))
 
     // The query isn't grouped and a single result has been given
     if (results.length == 1) {
@@ -616,7 +618,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       sql = `UPDATE ${driver.quoteTable(tableName)} SET ${setCols}${whereSql}`
     }
 
-    await driver.query(sql)
+    await driver.query(sql, {logName: this.queryLogName("Update All")})
   }
 
   /**
@@ -815,7 +817,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       query.select(selectSql)
     })
 
-    const rows = await query._executeQuery()
+    const rows = await query._executeQuery({logName: query.queryLogName("Pluck")})
 
     if (columnNames.length === 1) {
       const [columnName] = columnNames
@@ -924,6 +926,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     }
 
     throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
+  }
+
+  /**
+   * @param {string} operation - Query operation.
+   * @returns {string} - Query log name.
+   */
+  queryLogName(operation) {
+    return `${this.getModelClass().name} ${operation}`
   }
 }
 
