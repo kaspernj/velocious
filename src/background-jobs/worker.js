@@ -28,6 +28,13 @@ export default class BackgroundJobsWorker {
     this.jsonSocket = undefined
     /** @type {BackgroundJobsStatusReporter | undefined} */
     this.statusReporter = undefined
+    /**
+     * In-flight inline jobs the worker is currently running. Forked jobs run
+     * in detached child processes so they don't appear here; the worker
+     * doesn't need to wait for them on shutdown — they survive on their own.
+     * @type {Set<Promise<void>>}
+     */
+    this.inflightInlineJobs = new Set()
   }
 
   /**
@@ -47,10 +54,44 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Gracefully stops the worker: announces draining to the main process so
+   * no new jobs are dispatched, waits for any in-flight inline jobs to
+   * finish (so their results can be reported), then closes the socket and
+   * disconnects from the beacon. Forked jobs are detached child processes
+   * and continue running on their own across the worker exit.
+   *
+   * Pass `{timeoutMs}` to bound how long to wait for in-flight inline jobs
+   * before forcing the socket closed.
+   * @param {object} [args] - Options.
+   * @param {number} [args.timeoutMs] - Max wait for in-flight inline jobs in ms.
    * @returns {Promise<void>} - Resolves when stopped.
    */
-  async stop() {
+  async stop({timeoutMs} = {}) {
+    if (this.shouldStop) return
     this.shouldStop = true
+
+    // Announce drain so main stops dispatching but keeps the connection
+    // open until we close it ourselves below.
+    if (this.jsonSocket) {
+      try {
+        this.jsonSocket.send({type: "draining"})
+      } catch {
+        // Socket may already be closing; nothing to do.
+      }
+    }
+
+    if (this.inflightInlineJobs.size > 0) {
+      const drain = Promise.allSettled([...this.inflightInlineJobs])
+      if (typeof timeoutMs === "number" && timeoutMs >= 0) {
+        let timer
+        const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs) })
+        await Promise.race([drain, timeout])
+        clearTimeout(timer)
+      } else {
+        await drain
+      }
+    }
+
     if (this.jsonSocket) this.jsonSocket.close()
     if (this.configuration) await this.configuration.disconnectBeacon()
   }
@@ -94,16 +135,35 @@ export default class BackgroundJobsWorker {
    */
   async _handleJob(payload) {
     if (!payload.id) throw new Error("Background job payload missing id")
+    /** @type {import("./types.js").BackgroundJobPayload & {id: string}} */
+    const identifiedPayload = /** @type {any} */ (payload)
 
-    const options = payload.options || {}
+    const options = identifiedPayload.options || {}
     const shouldFork = options.forked !== false
 
     if (shouldFork) {
-      await this._spawnDetachedJob(payload)
-      this.jsonSocket?.send({type: "ready"})
+      await this._spawnDetachedJob(identifiedPayload)
+      this._sendReadyIfRunning()
       return
     }
 
+    /** @type {Promise<void>} */
+    const inflight = this._runInlineJobAndReport(identifiedPayload)
+    this.inflightInlineJobs.add(inflight)
+    try {
+      await inflight
+    } finally {
+      this.inflightInlineJobs.delete(inflight)
+    }
+
+    this._sendReadyIfRunning()
+  }
+
+  /**
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload with required id.
+   * @returns {Promise<void>} - Resolves when complete (success or failure reported).
+   */
+  async _runInlineJobAndReport(payload) {
     try {
       await this._runJobInline(payload)
       void this._reportJobResult({
@@ -121,6 +181,16 @@ export default class BackgroundJobsWorker {
         workerId: payload.workerId || this.workerId
       })
     }
+  }
+
+  /**
+   * Tells main we're ready for the next job — but only if we haven't been
+   * asked to drain. Once we've sent `draining` we don't want to take more
+   * work.
+   * @returns {void}
+   */
+  _sendReadyIfRunning() {
+    if (this.shouldStop) return
     this.jsonSocket?.send({type: "ready"})
   }
 
