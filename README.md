@@ -12,6 +12,7 @@
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)` on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon` (see [docs/beacon.md](docs/beacon.md))
+* Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 
 # Setup
 
@@ -1392,6 +1393,17 @@ Completed 200 OK in 1603ms (Controller: 107.8ms | Views: 1097.4ms | DB: 381.8ms 
 ```
 
 `Controller` measures before callbacks plus action work, excluding nested view rendering and database queries. `Views` measures JSON/view rendering and file-response setup. `DB` measures database driver query time and query count. `Velocious` is the remaining framework overhead, including routing, request setup, timeout handling, and response writing.
+
+- **Query logging**: Database queries log at `info` level by default with Rails-style elapsed time:
+
+```text
+Task Load (1.9ms)  SELECT `tasks`.* FROM `tasks` WHERE `tasks`.`id` = 1 LIMIT 1
+  ↳ src/routes/tasks/controller.js:12:in show
+```
+
+Model queries use operation names such as `Task Load`, `Task Count`, `Task Pluck`, `Task Create`, `Task Update`, and `Task Destroy`. Raw driver queries use `SQL`. The source arrow is included only when Velocious can identify an application frame; dependency and framework frames such as `node_modules` are omitted.
+
+Query logging defaults to off in the `test` environment to keep CI output quiet and is skipped when no output emits `info`. Override it with `logging: {queryLogging: true}` when a test build should write SQL timing logs, and use the normal logging output settings to send those logs to console or file.
 
 ## Listen for framework errors
 

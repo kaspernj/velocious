@@ -423,6 +423,15 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * @returns {boolean} - Whether database query logging is enabled.
+   */
+  getQueryLoggingEnabled() {
+    if (this._logging?.queryLogging !== undefined) return this._logging.queryLogging
+
+    return this.getEnvironment() !== "test"
+  }
+
+  /**
    * @returns {Required<import("./configuration-types.js").BackgroundJobsConfiguration>} - Background jobs configuration.
    */
   getBackgroundJobsConfig() {

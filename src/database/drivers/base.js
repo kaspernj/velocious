@@ -39,6 +39,12 @@
  * @property {number} [waitMs] - Wait time before retrying in milliseconds.
  */
 /**
+ * @typedef {object} QueryOptions
+ * @property {string} [logName] - Query log subject.
+ * @property {boolean} [logQuery] - Whether to log the query.
+ * @property {string} [sourceStack] - Stack captured at the caller boundary.
+ */
+/**
  * @typedef {object}UpdateSqlArgsType
  * @property {object} conditions - Conditions used to build the update WHERE clause.
  * @property {object} data - Column/value pairs to update.
@@ -52,6 +58,7 @@
  * @property {string[]} updateColumns - Columns to update on conflict.
  */
 
+import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
@@ -62,6 +69,23 @@ import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
+
+/** @returns {number} - Current high-resolution-ish timestamp in milliseconds. */
+function nowMs() {
+  if (globalThis.performance && typeof globalThis.performance.now == "function") {
+    return globalThis.performance.now()
+  }
+
+  return Date.now()
+}
+
+/**
+ * @param {number} elapsedMs - Elapsed milliseconds.
+ * @returns {string} - Formatted elapsed milliseconds.
+ */
+function formatElapsedMs(elapsedMs) {
+  return `${Math.max(elapsedMs, 0).toFixed(1)}ms`
+}
 
 export default class VelociousDatabaseDriversBase {
   /** @type {number | undefined} */
@@ -693,26 +717,23 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {string} sql - SQL string.
+   * @param {QueryOptions} [options] - Query options.
    * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
-  async query(sql) {
+  async query(sql, options = {}) {
     this._assertWritableQuery(sql)
 
     let tries = 0
     const maxTries = 5
     const requestTiming = this.configuration.getCurrentRequestTiming()
+    const logQuery = options.logQuery ?? this._queryLoggingEnabled()
+    const sourceStack = logQuery ? (options.sourceStack || Error().stack) : undefined
 
     while (tries < maxTries) {
       tries++
 
       try {
-        if (requestTiming && tries === 1) {
-          return await requestTiming.measureDbQuery(async () => await this._queryActual(sql))
-        } else if (requestTiming) {
-          return await requestTiming.measure("db", async () => await this._queryActual(sql))
-        }
-
-        return await this._queryActual(sql)
+        return await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack}, requestTiming, tries)
       } catch (error) {
         if (!(error instanceof Error)) throw error
 
@@ -739,6 +760,85 @@ export default class VelociousDatabaseDriversBase {
     }
 
     throw new Error("'query' unexpected came here")
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @param {QueryOptions} options - Query options.
+   * @param {import("../../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing.
+   * @param {number} tries - Query attempt count.
+   * @returns {Promise<QueryResultType>} - Resolves with the query.
+   */
+  async _queryActualWithLogging(sql, options, requestTiming, tries) {
+    const startedAtMs = nowMs()
+    let result
+
+    if (requestTiming && tries === 1) {
+      result = await requestTiming.measureDbQuery(async () => await this._queryActual(sql))
+    } else if (requestTiming) {
+      result = await requestTiming.measure("db", async () => await this._queryActual(sql))
+    } else {
+      result = await this._queryActual(sql)
+    }
+
+    const elapsedMs = nowMs() - startedAtMs
+
+    if (options.logQuery !== false) {
+      await this._logQuery({
+        elapsedMs,
+        logName: options.logName || "SQL",
+        sourceStack: options.sourceStack,
+        sql
+      })
+    }
+
+    return result
+  }
+
+  /**
+   * @returns {boolean} - Whether query logging is enabled for this driver.
+   */
+  _queryLoggingEnabled() {
+    if (typeof this.configuration?.getQueryLoggingEnabled !== "function") return true
+    if (!this.configuration.getQueryLoggingEnabled()) return false
+
+    const logger = new Logger("SQL", {configuration: this.configuration})
+
+    return logger.isLevelEnabled("info")
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {number} args.elapsedMs - Elapsed milliseconds.
+   * @param {string} args.logName - Query log subject.
+   * @param {string | undefined} args.sourceStack - Source stack.
+   * @param {string} args.sql - SQL string.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _logQuery({elapsedMs, logName, sourceStack, sql}) {
+    const logger = new Logger(logName, {configuration: this.configuration})
+    const sourceLine = this._querySourceLine(sourceStack)
+    const message = sourceLine
+      ? `(${formatElapsedMs(elapsedMs)})  ${sql}\n  ↳ ${sourceLine}`
+      : `(${formatElapsedMs(elapsedMs)})  ${sql}`
+
+    await logger.info(message)
+  }
+
+  /**
+   * @param {string | undefined} sourceStack - Source stack.
+   * @returns {string | undefined} - Source line when an application frame is available.
+   */
+  _querySourceLine(sourceStack) {
+    if (!sourceStack || typeof this.configuration?.getDirectory !== "function") return undefined
+
+    const error = new Error("Query source")
+
+    error.stack = sourceStack
+
+    return BacktraceCleaner.getApplicationSourceLine(error, {
+      applicationDirectory: this.configuration.getDirectory()
+    })
   }
 
   /**

@@ -263,6 +263,22 @@ function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugF
 
 /**
  * @param {object} args - Options object.
+ * @param {LogLevel} args.level - Level.
+ * @param {import("./configuration-types.js").LoggingOutputConfig[]} args.outputs - Output configurations.
+ * @param {import("./configuration-types.js").LoggingConfiguration} args.loggingConfiguration - Logging configuration.
+ * @param {boolean} [args.debugFlag] - Whether debug flag.
+ * @returns {import("./configuration-types.js").LoggingOutputConfig[]} - Outputs enabled for the level.
+ */
+function enabledOutputConfigs({level, outputs, loggingConfiguration, debugFlag}) {
+  return outputs.filter((outputConfig) => {
+    if (!outputConfig || !outputConfig.output || typeof outputConfig.output.write !== "function") return false
+
+    return isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugFlag})
+  })
+}
+
+/**
+ * @param {object} args - Options object.
  * @param {string} args.subject - Log subject.
  * @param {LogLevel} args.level - Level.
  * @param {Parameters<typeof functionOrMessages>} args.messages - Messages.
@@ -274,8 +290,14 @@ function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugF
 async function writeLog({subject, level, messages, configuration, loggingConfiguration, debugFlag}) {
   const resolvedLoggingConfiguration = loggingConfiguration || resolveLoggingConfiguration(configuration)
   const outputs = resolveLoggingOutputs({loggingConfiguration: resolvedLoggingConfiguration, configuration})
+  const enabledOutputs = enabledOutputConfigs({
+    level,
+    outputs,
+    loggingConfiguration: resolvedLoggingConfiguration,
+    debugFlag
+  })
 
-  if (outputs.length === 0) return
+  if (enabledOutputs.length === 0) return
 
   const writes = []
   /** @type {Array<any> | undefined} */
@@ -285,10 +307,7 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
   /** @type {import("./configuration-types.js").LoggingOutputPayload | null} */
   let payload = null
 
-  for (const outputConfig of outputs) {
-    if (!outputConfig || !outputConfig.output || typeof outputConfig.output.write !== "function") continue
-    if (!isOutputLevelAllowed({level, outputConfig, loggingConfiguration: resolvedLoggingConfiguration, debugFlag})) continue
-
+  for (const outputConfig of enabledOutputs) {
     if (!payload) {
       resolvedMessages = functionOrMessages(...messages)
       message = messagesToMessage(subject, ...resolvedMessages)
@@ -355,6 +374,23 @@ export default class Logger {
     } catch {
       return undefined
     }
+  }
+
+  /**
+   * @param {LogLevel} level - Level.
+   * @returns {boolean} - Whether any configured output emits this level.
+   */
+  isLevelEnabled(level) {
+    const configuration = this._safeConfiguration()
+    const loggingConfiguration = this._loggingConfiguration || resolveLoggingConfiguration(configuration)
+    const outputs = resolveLoggingOutputs({loggingConfiguration, configuration})
+
+    return enabledOutputConfigs({
+      level,
+      outputs,
+      loggingConfiguration,
+      debugFlag: this._debug
+    }).length > 0
   }
 
   /**

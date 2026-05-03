@@ -158,6 +158,14 @@ export default class BackgroundJobsMain {
         return
       }
 
+      if (role === "worker" && message?.type === "draining") {
+        // The worker is shutting down gracefully. Stop dispatching new jobs
+        // to it but keep the connection in `workers` so any in-flight job
+        // it's still draining can report its result.
+        this.readyWorkers.delete(jsonSocket)
+        return
+      }
+
       if ((role === "worker" || role === "reporter") && message?.type === "job-complete") {
         this._handleJobComplete({jsonSocket, message})
         return
