@@ -18,6 +18,32 @@ export default class RootController extends Controller {
     })
   }
 
+  async pingWithStatus() {
+    // Exercises `render({json, status})` returning the configured numeric
+    // status alongside the JSON body — the previous render path silently
+    // dropped the status and shipped 200.
+    await this.render({
+      json: {
+        message: "Rejected",
+        status: "error"
+      },
+      status: 422
+    })
+  }
+
+  async pingNoBody() {
+    // Exercises a no-body status code (204) — the response sender must
+    // suppress the body + Content-Length header per RFC 7230 §3.3.3 so
+    // keep-alive clients are not desynchronized waiting for bytes that
+    // will not arrive.
+    await this.render({
+      json: {
+        ignored: true
+      },
+      status: 204
+    })
+  }
+
   async params() {
     this.viewParams.response = {
       params: super.params(),
