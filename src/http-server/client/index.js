@@ -367,16 +367,26 @@ export default class VeoliciousHttpServerClient {
       response.setHeader("Connection", "Keep-Alive")
     }
 
-    let contentLength
+    // Per RFC 7230 §3.3.3, responses with status codes 1xx, 204, and 304
+    // MUST NOT carry a message body and MUST NOT include Content-Length
+    // (with a narrow 304 exception we don't lean on). Sending one would
+    // desynchronize keep-alive clients waiting for bytes that never
+    // arrive — drop the body entirely for those codes.
+    const isBodylessStatus = isNoBodyStatusCode(response.getStatusCode())
 
-    if (hasFilePath) {
-      const stats = await fs.stat(filePath)
-      contentLength = stats.size
-    } else {
-      contentLength = bodyIsString ? new TextEncoder().encode(body).length : body.byteLength
+    if (!isBodylessStatus) {
+      let contentLength
+
+      if (hasFilePath) {
+        const stats = await fs.stat(filePath)
+        contentLength = stats.size
+      } else {
+        contentLength = bodyIsString ? new TextEncoder().encode(body).length : body.byteLength
+      }
+
+      response.setHeader("Content-Length", contentLength)
     }
 
-    response.setHeader("Content-Length", contentLength)
     response.setHeader("Date", date.toUTCString())
     response.setHeader("Server", "Velocious")
 
@@ -395,7 +405,9 @@ export default class VeoliciousHttpServerClient {
     this.events.emit("output", headers)
     this.logger.debug(() => ["sendResponse headers emitted", {clientCount: this.clientCount, headersLength: headers.length}])
 
-    if (hasFilePath) {
+    if (isBodylessStatus) {
+      this.logger.debug(() => ["sendResponse body suppressed for no-body status", {clientCount: this.clientCount, statusCode: response.getStatusCode()}])
+    } else if (hasFilePath) {
       await this.sendFileOutput(filePath)
     } else {
       this.events.emit("output", body)
@@ -451,4 +463,16 @@ export default class VeoliciousHttpServerClient {
 
     return false
   }
+}
+
+/**
+ * Returns true for the status codes that RFC 7230 §3.3.3 declares
+ * cannot carry a message body: every 1xx informational, 204 No
+ * Content, and 304 Not Modified.
+ *
+ * @param {number} statusCode - HTTP status code.
+ * @returns {boolean}
+ */
+function isNoBodyStatusCode(statusCode) {
+  return (statusCode >= 100 && statusCode < 200) || statusCode === 204 || statusCode === 304
 }

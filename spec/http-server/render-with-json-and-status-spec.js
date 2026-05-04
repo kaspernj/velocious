@@ -15,4 +15,18 @@ describe("Controller#render with json + status", {databaseCleaning: {transaction
       expect(json).toEqual({message: "Rejected", status: "error"})
     })
   })
+
+  it("suppresses the body and Content-Length for no-body status codes (204)", async () => {
+    await Dummy.run(async () => {
+      const response = await fetch("http://localhost:3006/ping-no-body")
+      const text = await response.text()
+
+      expect(response.status).toEqual(204)
+      expect(response.statusText).toEqual("No Content")
+      expect(text).toEqual("")
+      // Content-Length must NOT be present per RFC 7230 §3.3.3 so
+      // keep-alive clients do not wait for bytes that will not arrive.
+      expect(response.headers.get("content-length")).toEqual(null)
+    })
+  })
 })

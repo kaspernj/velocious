@@ -70,4 +70,12 @@ describe("VelociousHttpServerClientResponse#setStatus", () => {
     expect(() => response.setStatus(600)).toThrow("Unhandled status: 600")
     expect(() => response.setStatus("teapot")).toThrow("Unhandled status: teapot")
   })
+
+  it("returns the standard reason phrase for HTTP 305 Use Proxy", () => {
+    const response = new VelociousHttpServerClientResponse({configuration: stubConfiguration})
+
+    response.setStatus(305)
+    expect(response.getStatusCode()).toEqual(305)
+    expect(response.getStatusMessage()).toEqual("Use Proxy")
+  })
 })
