@@ -963,11 +963,34 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
     method: "POST"
   })
 
+  const responseText = await response.text()
+
   if (!response.ok) {
+    // Surface the backend's friendly errorMessage envelope (the
+    // `{status: "error", errorMessage: "..."}` shape every controller
+    // ships on its 4xx/5xx responses) instead of the generic status
+    // string. Fall through to the status-only message when the body is
+    // missing, non-JSON, or has no usable errorMessage field.
+    const responseContentType = response.headers.get("content-type")
+
+    if (responseContentType && responseContentType.includes("application/json") && responseText.length > 0) {
+      /** @type {Record<string, any> | null} */
+      let errorBody
+
+      try {
+        errorBody = JSON.parse(responseText)
+      } catch {
+        errorBody = null
+      }
+
+      if (errorBody && typeof errorBody.errorMessage === "string" && errorBody.errorMessage.trim().length > 0) {
+        throw new Error(errorBody.errorMessage.trim())
+      }
+    }
+
     throw new Error(`Request failed (${response.status}) for shared frontend model API`)
   }
 
-  const responseText = await response.text()
   const json = responseText.length > 0 ? JSON.parse(responseText) : {}
 
   return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(json))

@@ -368,6 +368,97 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("surfaces the backend errorMessage envelope from a 4xx shared frontend-model response", async () => {
+    const originalFetch = globalThis.fetch
+
+    /** Shared API user model. */
+    class ErrorEnvelopeUser extends FrontendModelBase {
+      /**
+       * @returns {{attributes: string[], commands: string[], primaryKey: string}}
+       */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          commands: ["index"],
+          primaryKey: "id"
+        }
+      }
+    }
+
+    globalThis.fetch = /** @type {typeof fetch} */ (async () => /** @type {any} */ ({
+      ok: false,
+      status: 422,
+      headers: {
+        get: (key) => key.toLowerCase() === "content-type" ? "application/json; charset=UTF-8" : null
+      },
+      /** @returns {Promise<string>} */
+      text: async () => JSON.stringify({
+        errorMessage: "Resource is unavailable.",
+        status: "error"
+      })
+    }))
+
+    try {
+      let captured
+
+      try {
+        await ErrorEnvelopeUser.toArray()
+      } catch (error) {
+        captured = error
+      }
+
+      expect(captured instanceof Error).toEqual(true)
+      expect(captured.message).toEqual("Resource is unavailable.")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("falls back to the status-only error when a 4xx response has no errorMessage envelope", async () => {
+    const originalFetch = globalThis.fetch
+
+    /** Shared API user model. */
+    class StatusOnlyErrorUser extends FrontendModelBase {
+      /**
+       * @returns {{attributes: string[], commands: string[], primaryKey: string}}
+       */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          commands: ["index"],
+          primaryKey: "id"
+        }
+      }
+    }
+
+    globalThis.fetch = /** @type {typeof fetch} */ (async () => /** @type {any} */ ({
+      ok: false,
+      status: 503,
+      headers: {
+        get: () => "text/plain"
+      },
+      /** @returns {Promise<string>} */
+      text: async () => "service unavailable"
+    }))
+
+    try {
+      let captured
+
+      try {
+        await StatusOnlyErrorUser.toArray()
+      } catch (error) {
+        captured = error
+      }
+
+      expect(captured instanceof Error).toEqual(true)
+      expect(captured.message).toEqual("Request failed (503) for shared frontend model API")
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("keeps built-in command aliases as built-in command types in shared requests", async () => {
     const originalFetch = globalThis.fetch
     /** @type {FetchCall[]} */
