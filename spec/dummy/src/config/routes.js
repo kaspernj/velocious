@@ -42,6 +42,7 @@ routes.draw((route) => {
     route.get("read")
   })
   route.get("ping")
+  route.get("ping-with-status")
   route.post("current-user/update")
   route.post("current-user/update-password")
   route.get("current-user/update/details")

@@ -204,12 +204,16 @@ export default class VelociousController {
   async render({json, status, ...restArgs} = {}) {
     restArgsError(restArgs)
 
-    if (json) {
-      return this.renderJsonArg(json)
-    }
-
+    // Apply the status BEFORE delegating to renderJsonArg/renderView so
+    // `render({json: {...}, status: 422})` produces a 422 response with
+    // a JSON body. The previous order short-circuited via `return
+    // this.renderJsonArg(json)` and silently dropped the status arg.
     if (status) {
       this._response.setStatus(status)
+    }
+
+    if (json) {
+      return this.renderJsonArg(json)
     }
 
     return await this.renderView()

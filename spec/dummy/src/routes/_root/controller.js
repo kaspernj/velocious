@@ -18,6 +18,19 @@ export default class RootController extends Controller {
     })
   }
 
+  async pingWithStatus() {
+    // Exercises `render({json, status})` returning the configured numeric
+    // status alongside the JSON body — the previous render path silently
+    // dropped the status and shipped 200.
+    await this.render({
+      json: {
+        message: "Rejected",
+        status: "error"
+      },
+      status: 422
+    })
+  }
+
   async params() {
     this.viewParams.response = {
       params: super.params(),
