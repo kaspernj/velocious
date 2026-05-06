@@ -325,7 +325,7 @@ export default class DbGenerateModel extends BaseCommand {
       return "boolean"
     } else if (type == "json") {
       return "Record<string, any>"
-    } else if (["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
+    } else if (["blob", "char", "nvarchar", "varchar", "text", "tinytext", "mediumtext", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
     } else if (["bit", "bigint", "decimal", "float", "int", "integer", "numeric", "smallint", "tinyint"].includes(type)) {
       return "number"
