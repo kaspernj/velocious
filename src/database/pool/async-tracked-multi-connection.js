@@ -203,6 +203,23 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Clears schema metadata cached by every live connection owned by this pool.
+   * @returns {void} - No return value.
+   */
+  clearSchemaCache() {
+    const connections = new Set([
+      ...this.connections,
+      ...Object.values(this.connectionsInUse),
+      this.getGlobalConnection(),
+      this._testSharedConnection
+    ].filter(Boolean))
+
+    for (const connection of connections) {
+      if (connection) this._clearConnectionSchemaCache(connection)
+    }
+  }
+
+  /**
    * Closes all active and cached connections for this pool.
    * @returns {Promise<void>} - Resolves when complete.
    */

@@ -94,6 +94,8 @@ export default class VelociousDatabaseDriversBase {
   _afterCommitCallbackFrames
   /** @type {Map<string, Promise<unknown>>} */
   _schemaCache
+  /** @type {(() => void) | undefined} */
+  _schemaCacheInvalidator
 
   /**
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
@@ -315,7 +317,28 @@ export default class VelociousDatabaseDriversBase {
    * @returns {void} - No return value.
    */
   clearSchemaCache() {
+    if (this._schemaCacheInvalidator) {
+      this._schemaCacheInvalidator()
+      return
+    }
+
+    this._clearLocalSchemaCache()
+  }
+
+  /**
+   * Clears only the metadata cached on this driver instance.
+   * @returns {void} - No return value.
+   */
+  _clearLocalSchemaCache() {
     this._schemaCache.clear()
+  }
+
+  /**
+   * @param {() => void} invalidator - Callback used to clear schema caches that share this driver pool.
+   * @returns {void} - No return value.
+   */
+  setSchemaCacheInvalidator(invalidator) {
+    this._schemaCacheInvalidator = invalidator
   }
 
   /**
@@ -884,6 +907,7 @@ export default class VelociousDatabaseDriversBase {
 
     if (!normalized) return false
     if (/^(create|alter|drop|rename)\b/.test(normalized)) return true
+    if (/^comment\s+on\b/.test(normalized)) return true
     if (/^exec(?:ute)?\s+sp_rename\b/.test(normalized)) return true
     if (/^if\b[\s\S]*\bbegin\s+(create|alter|drop|rename)\b/.test(normalized)) return true
 

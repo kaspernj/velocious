@@ -1023,7 +1023,7 @@ npx velocious db:schema:load
 
 ## Schema metadata cache
 
-Velocious caches schema metadata on each database driver instance so repeated model initialization, table lookups, column introspection, and structure SQL generation can reuse the same database results. The cache is cleared automatically after schema-changing SQL runs through Velocious, such as migrations, `createTable`, `dropTable`, `renameColumn`, `ALTER TABLE`, and `CREATE INDEX`. See [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md) for details.
+Velocious caches schema metadata on each database driver instance so repeated model initialization, table lookups, column introspection, and structure SQL generation can reuse the same database results. The cache is cleared automatically after schema-changing SQL runs through Velocious, such as migrations, `createTable`, `dropTable`, `renameColumn`, `ALTER TABLE`, `CREATE INDEX`, and `COMMENT ON`. See [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md) for details.
 
 If another process changes the schema outside Velocious while the current process is still running, clear the cache before reading metadata again:
 

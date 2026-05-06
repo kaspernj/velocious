@@ -8,7 +8,6 @@ export default function baseMethodsForward(PoolBase) {
   const forwardMethods = [
     "alterTable",
     "alterTableSQLs",
-    "clearSchemaCache",
     "createIndex",
     "createIndexSQLs",
     "createTable",

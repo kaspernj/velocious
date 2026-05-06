@@ -6,7 +6,7 @@ The cache is in-process only. It is not written to disk and is discarded when th
 
 ## Invalidation
 
-Velocious clears the cache automatically after successful schema-changing SQL sent through `db.query(...)`. This covers migrations and helpers such as `createTable`, `dropTable`, `renameColumn`, `ALTER TABLE`, `CREATE INDEX`, and `DROP INDEX`.
+Velocious clears the cache automatically after successful schema-changing SQL sent through `db.query(...)`. This covers migrations and helpers such as `createTable`, `dropTable`, `renameColumn`, `ALTER TABLE`, `CREATE INDEX`, `DROP INDEX`, and `COMMENT ON`.
 
 If another process changes the schema outside the running Velocious process, clear the cache before reading schema metadata again:
 
