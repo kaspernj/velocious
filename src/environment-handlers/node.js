@@ -21,6 +21,7 @@ import CliCommandsDbSeed from "./node/cli/commands/db/seed.js"
 import CliCommandsRunner from "./node/cli/commands/runner.js"
 import CliCommandsRunScript from "./node/cli/commands/run-script.js"
 import frontendModelCommandRouteHook from "../routes/hooks/frontend-model-command-route-hook.js"
+import {FRAMEWORK_SOURCE_DIRECTORY} from "../utils/backtrace-cleaner-node.js"
 import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
@@ -57,6 +58,13 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
+
+  /**
+   * @returns {string | undefined} - Velocious source directory used to filter framework stack frames.
+   */
+  getFrameworkSourceDirectory() {
+    return FRAMEWORK_SOURCE_DIRECTORY
+  }
 
   /**
    * Auto-discovers resource classes from src/resources/ in each backend project.

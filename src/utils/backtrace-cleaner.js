@@ -17,23 +17,6 @@ function escapeRegExp(value) {
  */
 
 /**
- * @returns {string | undefined} - The framework source directory.
- */
-function frameworkSourceDirectory() {
-  try {
-    const sourceUrl = new URL("../", import.meta.url)
-
-    if (sourceUrl.protocol !== "file:") return undefined
-
-    return normalizePath(sourceUrl.pathname)
-  } catch {
-    return undefined
-  }
-}
-
-const FRAMEWORK_SOURCE_DIRECTORY = frameworkSourceDirectory()
-
-/**
  * @param {string | undefined} value - Path or file URL.
  * @returns {string | undefined} - Normalized path.
  */
@@ -116,31 +99,39 @@ function relativeApplicationPath(sourcePath, applicationDirectory) {
 }
 
 export default class BacktraceCleaner {
+  /** @type {string | undefined} */
+  frameworkSourceDirectory = undefined
+
   /**
    * @param {Error} error - Error instance.
    * @param {object} [args] - Options object.
+   * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.
    * @param {boolean} [args.includeErrorHeader] - Whether to include the `Error: ...` header line.
    * @returns {string | undefined} - The cleaned stack.
    */
   static getCleanedStack(error, args) {
-    return new BacktraceCleaner(error).getCleanedStack(args)
+    return new BacktraceCleaner(error, args).getCleanedStack(args)
   }
 
   /**
    * @param {Error} error - Error instance.
    * @param {object} args - Options object.
    * @param {string} args.applicationDirectory - Application directory.
+   * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.
    * @returns {string | undefined} - Source line for the first application frame.
    */
   static getApplicationSourceLine(error, args) {
-    return new BacktraceCleaner(error).getApplicationSourceLine(args)
+    return new BacktraceCleaner(error, args).getApplicationSourceLine(args)
   }
 
   /**
    * @param {Error} error - Error instance.
+   * @param {object} [args] - Options object.
+   * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.
    */
-  constructor(error) {
+  constructor(error, {frameworkSourceDirectory} = {}) {
     this.error = error
+    this.frameworkSourceDirectory = normalizeDirectory(frameworkSourceDirectory)
   }
 
   /**
@@ -237,9 +228,9 @@ export default class BacktraceCleaner {
    * @returns {boolean} - Whether the path belongs to Velocious internals.
    */
   _frameworkSourcePath(sourcePath) {
-    if (!FRAMEWORK_SOURCE_DIRECTORY) return false
+    if (!this.frameworkSourceDirectory) return false
 
-    return sourcePath.startsWith(FRAMEWORK_SOURCE_DIRECTORY)
+    return sourcePath.startsWith(this.frameworkSourceDirectory)
   }
 
   /**

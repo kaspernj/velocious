@@ -1,6 +1,6 @@
 // @ts-check
 
-import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
+import BacktraceCleaner from "../../utils/backtrace-cleaner-node.js"
 import ensureError from "../../utils/ensure-error.js"
 import EventEmitter from "../../utils/event-emitter.js"
 import Logger from "../../logger.js"
