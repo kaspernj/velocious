@@ -36,4 +36,11 @@ describe("Base-models JSDoc types", () => {
     expect(command.jsDocTypeFromColumn(column)).toEqual("Date")
     expect(command.jsDocSetterTypeFromColumn(column)).toEqual("Date | string")
   })
+
+  it("maps mysql mediumtext and tinytext to string", async () => {
+    const command = buildCommand()
+
+    expect(command.jsDocTypeFromColumn({getType: () => "mediumtext"})).toEqual("string")
+    expect(command.jsDocTypeFromColumn({getType: () => "tinytext"})).toEqual("string")
+  })
 })
