@@ -101,40 +101,20 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    */
   insertSql(args) { return new Insert(Object.assign({driver: this}, args)).toSql() }
 
-  /**
-   * @param {string} name - Name.
-   * @param {object} [args] - Options object.
-   * @param {boolean} args.throwError - Whether throw error.
-   * @returns {Promise<import("../base-table.js").default | undefined>} - Resolves with the table by name.
-   */
-  async getTableByName(name, args) {
-    const result = await this.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${this.quote(name)} LIMIT 1`)
-    const row = result[0]
-
-    if (row) {
-      return new Table({driver: this, row: /** @type {Record<string, string | number | null>} */ (row)})
-    }
-
-    if (args?.throwError !== false) {
-      const tables = await this.getTables()
-      const tableNames = tables.map((table) => table.getName())
-
-      throw new Error(this._missingTableErrorMessage(name, tableNames))
-    }
-  }
-
   /** @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.  */
   async getTables() {
-    const result = await this.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-    const tables = []
+    return await this._cachedSchemaMetadata("tables", async () => {
+      const result = await this.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+      const tables = []
 
-    for (const row of result) {
-      const table = new Table({driver: this, row: /** @type {Record<string, string | number | null>} */ (row)})
+      for (const row of result) {
+        const table = new Table({driver: this, row: /** @type {Record<string, string | number | null>} */ (row)})
 
-      tables.push(table)
-    }
+        tables.push(table)
+      }
 
-    return tables
+      return tables
+    })
   }
 
   /**
@@ -338,7 +318,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
-    return await new StructureSql({driver: this}).toSql()
+    return await this._cachedSchemaMetadata("structureSql", async () => await new StructureSql({driver: this}).toSql())
   }
 
   /**

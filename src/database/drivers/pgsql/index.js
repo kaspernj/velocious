@@ -242,16 +242,18 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   async getTables() {
-    const result = await this.query("SELECT * FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public'")
-    const tables = []
+    return await this._cachedSchemaMetadata("tables", async () => {
+      const result = await this.query("SELECT * FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public'")
+      const tables = []
 
-    for (const row of result) {
-      const table = new Table(this, /** @type {Record<string, string>} */ (row))
+      for (const row of result) {
+        const table = new Table(this, /** @type {Record<string, string>} */ (row))
 
-      tables.push(table)
-    }
+        tables.push(table)
+      }
 
-    return tables
+      return tables
+    })
   }
 
   async lastInsertID() {
@@ -295,7 +297,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
-    return await new StructureSql({driver: this}).toSql()
+    return await this._cachedSchemaMetadata("structureSql", async () => await new StructureSql({driver: this}).toSql())
   }
 
   /**

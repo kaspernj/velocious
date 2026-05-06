@@ -115,6 +115,7 @@ class VelociousDatabasePoolBase {
       name: databaseConfiguration.name,
       port: databaseConfiguration.port,
       schema: databaseConfiguration.schema,
+      schemaCache: databaseConfiguration.schemaCache,
       sqlConfig: databaseConfiguration.sqlConfig,
       type: databaseConfiguration.type,
       useDatabase: databaseConfiguration.useDatabase,

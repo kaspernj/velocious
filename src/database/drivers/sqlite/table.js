@@ -19,57 +19,63 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
 
   /** @returns {Promise<Array<import("../base-column.js").default>>} - Resolves with the columns.  */
   async getColumns() {
-    const result = await this.driver.query(`PRAGMA table_info('${this.getName()}')`)
-    const columns = []
+    return await this.getDriver()._cachedTableSchemaMetadata(this.getName(), "columns", async () => {
+      const result = await this.driver.query(`PRAGMA table_info('${this.getName()}')`)
+      const columns = []
 
-    for (const columnData of result) {
-      const column = new Column({column: columnData, driver: this.driver, table: this})
+      for (const columnData of result) {
+        const column = new Column({column: columnData, driver: this.driver, table: this})
 
-      columns.push(column)
-    }
+        columns.push(column)
+      }
 
-    return columns
+      return columns
+    })
   }
 
   async getForeignKeys() {
-    const foreignKeysData = await this.driver.query(`SELECT * FROM pragma_foreign_key_list(${this.driver.quote(this.getName())})`)
-    const foreignKeys = []
+    return await this.getDriver()._cachedTableSchemaMetadata(this.getName(), "foreignKeys", async () => {
+      const foreignKeysData = await this.driver.query(`SELECT * FROM pragma_foreign_key_list(${this.driver.quote(this.getName())})`)
+      const foreignKeys = []
 
-    for (const foreignKeyData of foreignKeysData) {
-      const foreignKey = new ForeignKey(foreignKeyData, {tableName: this.getName()})
+      for (const foreignKeyData of foreignKeysData) {
+        const foreignKey = new ForeignKey(foreignKeyData, {tableName: this.getName()})
 
-      foreignKeys.push(foreignKey)
-    }
+        foreignKeys.push(foreignKey)
+      }
 
-    return foreignKeys
+      return foreignKeys
+    })
   }
 
   async getIndexes() {
-    const rows = await this.getDriver().query(`PRAGMA index_list(${this.getOptions().quoteTableName(this.getName())})`)
-    const indexes = []
+    return await this.getDriver()._cachedTableSchemaMetadata(this.getName(), "indexes", async () => {
+      const rows = await this.getDriver().query(`PRAGMA index_list(${this.getOptions().quoteTableName(this.getName())})`)
+      const indexes = []
 
-    for (const row of rows) {
-      const indexName = row.name
+      for (const row of rows) {
+        const indexName = row.name
 
-      if (typeof indexName == "string" && indexName.startsWith("sqlite_autoindex_")) {
-        // Skip SQLite internal auto indexes (e.g. primary key / unique constraints)
-        continue
+        if (typeof indexName == "string" && indexName.startsWith("sqlite_autoindex_")) {
+          // Skip SQLite internal auto indexes (e.g. primary key / unique constraints)
+          continue
+        }
+
+        const columnsIndex = new ColumnsIndex(this, row)
+        const indexMasterData = await this.getDriver().query(`SELECT * FROM sqlite_master WHERE type = 'index' AND name = ${this.getOptions().quote(columnsIndex.getName())}`)
+        const sql = indexMasterData[0]?.sql
+
+        if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
+
+        const indexData = /** @type {typeof columnsIndex.data & {columnNames?: string[]}} */ (columnsIndex.data)
+
+        indexData.columnNames = this._parseColumnsFromSQL(String(sql))
+
+        indexes.push(columnsIndex)
       }
 
-      const columnsIndex = new ColumnsIndex(this, row)
-      const indexMasterData = await this.getDriver().query(`SELECT * FROM sqlite_master WHERE type = 'index' AND name = ${this.getOptions().quote(columnsIndex.getName())}`)
-      const sql = indexMasterData[0]?.sql
-
-      if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
-
-      const indexData = /** @type {typeof columnsIndex.data & {columnNames?: string[]}} */ (columnsIndex.data)
-
-      indexData.columnNames = this._parseColumnsFromSQL(String(sql))
-
-      indexes.push(columnsIndex)
-    }
-
-    return indexes
+      return indexes
+    })
   }
 
   /**

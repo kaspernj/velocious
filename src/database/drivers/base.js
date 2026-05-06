@@ -92,6 +92,8 @@ export default class VelociousDatabaseDriversBase {
   idSeq = undefined
   /** @type {Array<Array<() => void | Promise<void>>>} */
   _afterCommitCallbackFrames
+  /** @type {Map<string, Promise<unknown>>} */
+  _schemaCache
 
   /**
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
@@ -105,6 +107,7 @@ export default class VelociousDatabaseDriversBase {
     this._afterCommitCallbackFrames = []
     this._transactionsCount = 0
     this._transactionsActionsMutex = new Mutex()
+    this._schemaCache = new Map()
   }
 
   /**
@@ -175,6 +178,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async reconnect() {
+    this.clearSchemaCache()
     await this.close()
     await this.connect()
   }
@@ -304,6 +308,72 @@ export default class VelociousDatabaseDriversBase {
    */
   getIdSeq() {
     return this.idSeq
+  }
+
+  /**
+   * Clears cached schema metadata for this driver instance.
+   * @returns {void} - No return value.
+   */
+  clearSchemaCache() {
+    this._schemaCache.clear()
+  }
+
+  /**
+   * @returns {boolean} - Whether schema metadata caching is enabled.
+   */
+  _schemaCacheEnabled() {
+    return this.getArgs().schemaCache !== false
+  }
+
+  /**
+   * @template T
+   * @param {string} cacheKey - Schema cache key.
+   * @param {() => Promise<T>} callback - Cache miss callback.
+   * @returns {Promise<T>} - Resolves with the cached metadata.
+   */
+  async _cachedSchemaMetadata(cacheKey, callback) {
+    if (!this._schemaCacheEnabled()) return await callback()
+
+    const existingPromise = this._schemaCache.get(cacheKey)
+
+    if (existingPromise) {
+      return /** @type {T} */ (this._schemaCacheReturnValue(await existingPromise))
+    }
+
+    const promise = (async () => await callback())()
+
+    this._schemaCache.set(cacheKey, promise)
+
+    try {
+      return /** @type {T} */ (this._schemaCacheReturnValue(await promise))
+    } catch (error) {
+      if (this._schemaCache.get(cacheKey) === promise) {
+        this._schemaCache.delete(cacheKey)
+      }
+
+      throw error
+    }
+  }
+
+  /**
+   * @template T
+   * @param {string} tableName - Table name.
+   * @param {string} metadataName - Metadata name.
+   * @param {() => Promise<T>} callback - Cache miss callback.
+   * @returns {Promise<T>} - Resolves with the cached table metadata.
+   */
+  async _cachedTableSchemaMetadata(tableName, metadataName, callback) {
+    return await this._cachedSchemaMetadata(`table:${tableName}:${metadataName}`, callback)
+  }
+
+  /**
+   * @param {unknown} value - Cached value.
+   * @returns {unknown} - Value returned to callers.
+   */
+  _schemaCacheReturnValue(value) {
+    if (Array.isArray(value)) return value.slice()
+
+    return value
   }
 
   /**
@@ -792,7 +862,32 @@ export default class VelociousDatabaseDriversBase {
       })
     }
 
+    if (this._schemaCacheInvalidatingSql(sql)) {
+      this.clearSchemaCache()
+    }
+
     return result
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @returns {boolean} - Whether the SQL should invalidate schema metadata.
+   */
+  _schemaCacheInvalidatingSql(sql) {
+    const normalized = sql
+      .trim()
+      .replace(/^\ufeff/, "")
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/--[^\n]*(\n|$)/g, " ")
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+
+    if (!normalized) return false
+    if (/^(create|alter|drop|rename)\b/.test(normalized)) return true
+    if (/^exec(?:ute)?\s+sp_rename\b/.test(normalized)) return true
+    if (/^if\b[\s\S]*\bbegin\s+(create|alter|drop|rename)\b/.test(normalized)) return true
+
+    return false
   }
 
   /**
