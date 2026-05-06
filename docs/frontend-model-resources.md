@@ -17,6 +17,10 @@ Without a resource definition, frontend models should not silently work.
 - Resource `commands` can map `attach`, `download`, and `url` in addition to CRUD/index commands.
 - Resource `attachments` defines attachment helpers generated on frontend models.
 
+## Custom index records
+- Resources that override `records()` opt out of aggregate `count()` automatically because Velocious cannot infer whether the default query still matches the custom records.
+- Override `count()` on the resource when a custom index needs frontend-model `count()` support.
+
 ## Naming conventions
 - Resource files should use concise domain naming (for example `battle.js`, `challenge-level.js`) instead of frontend-specific suffixes.
 - Frontend imports should use model names without `FrontendModel` suffix (for example `Account`, not `AccountFrontendModel`).

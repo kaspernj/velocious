@@ -43,6 +43,7 @@
 - `all()` returns a query builder (parity with backend `all()`).
 - `order(...)` is available as alias parity with backend `order(...)` (and forwards to frontend sort payloads).
 - `first()` and `last()` are available on frontend query/model classes.
+- `count()` executes as a backend aggregate, preserving filters, joins, grouping, distinct, and pagination without loading serialized model records.
 - `search(path, column, operator, value)` supports both named operators (`gt`, `lt`, `gteq`, `lteq`) and symbolic aliases (`>`, `<`, `>=`, `<=`).
 - `defineScope(...)` creates reusable named query scopes. Call `Model.scopeName(args...)` to start a new query, or `query.scope(Model.scopeName.scope(args...))` to apply the same scope to an existing frontend query.
 - Frontend scope callbacks receive `{query, modelClass}` plus `table: null` and `driver: null`; frontend scopes should stay descriptor-based (`where`, `joins`, `sort`, etc.) rather than building raw SQL.

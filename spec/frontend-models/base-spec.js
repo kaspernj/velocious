@@ -869,10 +869,7 @@ describe("Frontend models - base", () => {
   it("returns model count with count", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({
-      models: [
-        {email: "john@example.com", id: 5, name: "John"},
-        {email: "jane@example.com", id: 6, name: "Jane"}
-      ]
+      count: 2
     })
 
     try {
@@ -880,7 +877,7 @@ describe("Frontend models - base", () => {
 
       expect(fetchStub.calls).toEqual([
         {
-          body: {},
+          body: {count: true},
           url: "/frontend-models"
         }
       ])
@@ -1074,7 +1071,7 @@ describe("Frontend models - base", () => {
 
   it("sends relationship-path searches payload when using search(...).count()", async () => {
     const User = buildTestModelClass()
-    const fetchStub = stubFetch({models: [{id: 1}, {id: 2}]})
+    const fetchStub = stubFetch({count: 2})
 
     try {
       const oneDayAgo = new Date("2026-02-24T10:00:00.000Z")
@@ -1085,6 +1082,7 @@ describe("Frontend models - base", () => {
       expect(fetchStub.calls).toEqual([
         {
           body: {
+            count: true,
             searches: [
               {
                 column: "createdAt",
@@ -1134,6 +1132,37 @@ describe("Frontend models - base", () => {
           url: "/frontend-models"
         }
       ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("omits model serialization payload when using count()", async () => {
+    const {Project} = buildPreloadTestModelClasses()
+    const fetchStub = stubFetch({count: 1})
+
+    try {
+      const projectsCount = await Project
+        .preload(["tasks"])
+        .select({
+          Project: ["id"],
+          Task: ["id"]
+        })
+        .where({id: 1})
+        .order("name")
+        .count()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            count: true,
+            where: {id: 1}
+          },
+          url: "/frontend-models"
+        }
+      ])
+      expect(projectsCount).toEqual(1)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()

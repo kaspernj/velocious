@@ -195,6 +195,17 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @returns {boolean | Promise<boolean>} - Whether count is supported.
+   */
+  supportsCount(action) {
+    void action
+
+    return Object.getPrototypeOf(this).records === FrontendModelBaseResource.prototype.records ||
+      Object.getPrototypeOf(this).count !== FrontendModelBaseResource.prototype.count
+  }
+
+  /**
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
    * @returns {boolean | void | Promise<boolean | void>} - Continue processing unless false.
    */
   beforeAction(action) {
@@ -208,6 +219,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    */
   async records() {
     return await this.typedControllerInstance().frontendModelIndexQuery().toArray()
+  }
+
+  /**
+   * @returns {Promise<number>} - Records count for index action.
+   */
+  async count() {
+    return await this.typedControllerInstance().frontendModelIndexQuery().count()
   }
 
   /**
@@ -782,4 +800,3 @@ function filterWritableFrontendModelAttributes(receiver, attributes, resource = 
 
   return writableAttributes
 }
-

@@ -92,7 +92,9 @@ Velocious does not support running multiple test processes simultaneously. Alway
 
 ## Pull requests
 Use the `gh` CLI to open GitHub pull requests when needed.
-Do not push to GitHub unless explicitly asked.
+When the user asks to implement, fix, or continue feature work on a non-master branch, treat that as permission to commit, push, and open or update the matching PR after validation unless the user explicitly says to keep the work local-only.
+Do not stop after verified local changes on a feature branch; either publish the PR in the same flow or clearly document the blocker that prevents publishing.
+For investigation-only tasks, do not push to GitHub unless explicitly asked.
 
 ## Branches and commits
 When asked to create branches and commit changes, come up with fitting branch names and commit messages. Split commits into smaller commits for each distinct change.

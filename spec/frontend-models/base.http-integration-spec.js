@@ -574,8 +574,12 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         await seedHttpFrontendModels()
 
         const usersCount = await User.count()
+        const filteredUsersCount = await User
+          .search([], "email", "like", "%john%")
+          .count()
 
         expect(usersCount).toEqual(2)
+        expect(filteredUsersCount).toEqual(1)
       } finally {
         resetFrontendModelTransport()
       }
