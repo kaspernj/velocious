@@ -30,6 +30,7 @@ When a generated model/base-model JSDoc says a SQLite-backed attribute is `boole
 Trust JSDoc-typed model/accessor return values directly in Velocious code and specs; do not patch contract mismatches with `String(model.id())`, `Number(value)`, or similar coercions just to make comparisons pass. Fix the serializer/accessor contract and prove it with `npm run typecheck`.
 For locals or params typed as `string | undefined`, branch on presence only; do not add redundant `typeof value == "string"` guards before calling string methods or normalizing the typed branch.
 For code that runs in Expo/Metro bundles, avoid non-literal dynamic imports (for example `import(variable)`); use static imports or environment-handler indirection.
+- Shared runtime modules imported by Expo/Metro/browser bundles must not contain raw `import.meta` syntax. Put `import.meta` usage in Node-only helper modules and keep browser-shared imports parseable as classic scripts.
 
 ## Verification commands
 
