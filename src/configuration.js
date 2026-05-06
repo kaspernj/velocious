@@ -27,6 +27,17 @@ class CurrentConfigurationNotSetError extends Error {}
 export {CurrentConfigurationNotSetError}
 
 /**
+ * @returns {string | undefined} - Current working directory when the runtime exposes one.
+ */
+function currentWorkingDirectory() {
+  const processObject = /** @type {{cwd?: unknown} | undefined} */ (globalThis.process)
+
+  if (typeof processObject?.cwd !== "function") return undefined
+
+  return processObject.cwd()
+}
+
+/**
  * @param {import("./configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Base database configuration.
  * @param {import("./configuration-types.js").DatabaseConfigurationType | Partial<import("./configuration-types.js").DatabaseConfigurationType> | void} overrideConfiguration - Tenant override configuration.
  * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Merged database configuration.
@@ -266,8 +277,19 @@ export default class VelociousConfiguration {
    * @returns {string} - The directory.
    */
   getDirectory() {
+    const directory = this.getDirectoryIfAvailable()
+
+    if (!directory) throw new Error("No directory configured and process.cwd is unavailable")
+
+    return directory
+  }
+
+  /**
+   * @returns {string | undefined} - The directory when the runtime can resolve one.
+   */
+  getDirectoryIfAvailable() {
     if (!this._directory) {
-      this._directory = process.cwd()
+      this._directory = currentWorkingDirectory()
     }
 
     return this._directory

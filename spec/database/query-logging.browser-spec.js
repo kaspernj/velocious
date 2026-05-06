@@ -118,6 +118,23 @@ describe("Database - query logging", {tags: ["dummy"]}, () => {
     }, {levels: ["warn"], queryLogging: true})
   })
 
+  it("omits query source lines when the runtime has no project directory", () => {
+    const configuration = /** @type {Configuration} */ (Object.create(Configuration.current()))
+    const driver = new TestDriver({}, configuration)
+
+    configuration.getDirectoryIfAvailable = () => undefined
+    configuration.getDirectory = () => {
+      throw new Error("getDirectory should not be called when no directory is available")
+    }
+
+    const sourceLine = driver._querySourceLine([
+      "Error: Query source",
+      "    at VelociousDatabaseDriversBase.query (/bundle/entry.js:700:10)"
+    ].join("\n"))
+
+    expect(sourceLine).toBeUndefined()
+  })
+
   it("excludes query log work from request database timing", async () => {
     const configuration = Configuration.current()
     const requestTiming = new RequestTiming()

@@ -949,14 +949,20 @@ export default class VelociousDatabaseDriversBase {
    * @returns {string | undefined} - Source line when an application frame is available.
    */
   _querySourceLine(sourceStack) {
-    if (!sourceStack || typeof this.configuration?.getDirectory !== "function") return undefined
+    if (!sourceStack) return undefined
+
+    const applicationDirectory = typeof this.configuration?.getDirectoryIfAvailable === "function"
+      ? this.configuration.getDirectoryIfAvailable()
+      : this.configuration?.getDirectory?.()
+
+    if (!applicationDirectory) return undefined
 
     const error = new Error("Query source")
 
     error.stack = sourceStack
 
     return BacktraceCleaner.getApplicationSourceLine(error, {
-      applicationDirectory: this.configuration.getDirectory()
+      applicationDirectory
     })
   }
 
