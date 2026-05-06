@@ -115,6 +115,7 @@ class VelociousDatabasePoolBase {
       name: databaseConfiguration.name,
       port: databaseConfiguration.port,
       schema: databaseConfiguration.schema,
+      schemaCache: databaseConfiguration.schemaCache,
       sqlConfig: databaseConfiguration.sqlConfig,
       type: databaseConfiguration.type,
       useDatabase: databaseConfiguration.useDatabase,
@@ -130,6 +131,23 @@ class VelociousDatabasePoolBase {
     const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
+  }
+
+  /**
+   * Clears schema metadata cached by this pool's current connection.
+   * Pools that keep multiple connections alive should override this to clear every live connection.
+   * @returns {void} - No return value.
+   */
+  clearSchemaCache() {
+    this._clearConnectionSchemaCache(this.getCurrentConnection())
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Connection whose local schema cache should be cleared.
+   * @returns {void} - No return value.
+   */
+  _clearConnectionSchemaCache(connection) {
+    connection._clearLocalSchemaCache()
   }
 
   /**
@@ -166,6 +184,7 @@ class VelociousDatabasePoolBase {
 
     const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
     connectionWithPoolKey[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
+    connection.setSchemaCacheInvalidator(() => this.clearSchemaCache())
 
     return connection
   }

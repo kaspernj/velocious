@@ -13,6 +13,7 @@
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon` (see [docs/beacon.md](docs/beacon.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
+* In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 
 # Setup
 
@@ -1020,6 +1021,33 @@ npx velocious db:schema:load
 ```
 
 `db:schema:load` reads `db/structure-<identifier>.sql` for each configured database identifier and executes those statements against the current connections.
+
+## Schema metadata cache
+
+Velocious caches schema metadata on each database driver instance so repeated model initialization, table lookups, column introspection, and structure SQL generation can reuse the same database results. The cache is cleared automatically after schema-changing SQL runs through Velocious, such as migrations, `createTable`, `dropTable`, `renameColumn`, `ALTER TABLE`, `CREATE INDEX`, and `COMMENT ON`. See [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md) for details.
+
+If another process changes the schema outside Velocious while the current process is still running, clear the cache before reading metadata again:
+
+```js
+await configuration.ensureConnections(async (dbs) => {
+  dbs.default.clearSchemaCache()
+})
+```
+
+To disable schema metadata caching for a database connection, set `schemaCache: false` on that database config:
+
+```js
+export default new Configuration({
+  database: {
+    development: {
+      default: {
+        type: "mysql",
+        schemaCache: false
+      }
+    }
+  }
+})
+```
 
 ## Configure CLI commands (Node vs Browser)
 

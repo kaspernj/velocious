@@ -45,6 +45,14 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
+   * Clears schema metadata cached by the reusable connection if it exists.
+   * @returns {void} - No return value.
+   */
+  clearSchemaCache() {
+    if (this.connection) this._clearConnectionSchemaCache(this.connection)
+  }
+
+  /**
    * Closes the cached connection if it exists.
    * @returns {Promise<void>} - Resolves when complete.
    */

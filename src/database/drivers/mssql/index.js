@@ -271,45 +271,22 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
    */
   async getTables() {
-    const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
-    const schemaClause = schema
-      ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
-      : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
-    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME()${schemaClause}`)
-    const tables = []
+    return await this._cachedSchemaMetadata("tables", async () => {
+      const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
+      const schemaClause = schema
+        ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
+        : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
+      const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME()${schemaClause}`)
+      const tables = []
 
-    for (const row of result) {
-      const table = new Table(this, /** @type {Record<string, string>} */ (row))
+      for (const row of result) {
+        const table = new Table(this, /** @type {Record<string, string>} */ (row))
 
-      tables.push(table)
-    }
+        tables.push(table)
+      }
 
-    return tables
-  }
-
-  /**
-   * @param {string} name - Name.
-   * @param {object} [args] - Options object.
-   * @param {boolean} args.throwError - Whether throw error.
-   * @returns {Promise<import("../base-table.js").default | undefined>} - Resolves with the table by name.
-   */
-  async getTableByName(name, args) {
-    const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
-    const schemaClause = schema
-      ? ` AND [TABLE_SCHEMA] = ${this.quote(schema)}`
-      : " AND [TABLE_SCHEMA] = SCHEMA_NAME()"
-    const result = await this.query(`SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME()${schemaClause} AND [TABLE_NAME] = ${this.quote(name)}`)
-
-    if (result[0]) {
-      return new Table(this, /** @type {Record<string, string>} */ (result[0]))
-    }
-
-    if (args?.throwError !== false) {
-      const tables = await this.getTables()
-      const tableNames = tables.map((table) => table.getName())
-
-      throw new Error(this._missingTableErrorMessage(name, tableNames))
-    }
+      return tables
+    })
   }
 
   async lastInsertID() {
@@ -450,7 +427,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
-    return await new StructureSql({driver: this}).toSql()
+    return await this._cachedSchemaMetadata("structureSql", async () => await new StructureSql({driver: this}).toSql())
   }
 
   /**

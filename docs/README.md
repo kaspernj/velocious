@@ -7,6 +7,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.
 - `docs/logging.md`: Rails-style request and database query logging behavior.
+- `docs/schema-metadata-cache.md`: Driver schema metadata caching, invalidation, and disabling.
 - `docs/frontend-model-resources.md`: Resource recipe requirements for generated frontend models.
 - `docs/routing-hooks-and-autoroutes.md`: Route hook support and frontend-model autoroute behavior.
 - `docs/authorization-and-current.md`: Ability usage, `Current`, and `accessible`/`accessibleBy` behavior.

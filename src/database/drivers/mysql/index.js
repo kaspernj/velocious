@@ -279,23 +279,25 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
    */
   async getTables() {
-    const result = await this.query("SHOW FULL TABLES")
-    const tables = []
+    return await this._cachedSchemaMetadata("tables", async () => {
+      const result = await this.query("SHOW FULL TABLES")
+      const tables = []
 
-    for (const row of result) {
-      const table = new Table(this, /** @type {Record<string, string>} */ (row))
+      for (const row of result) {
+        const table = new Table(this, /** @type {Record<string, string>} */ (row))
 
-      tables.push(table)
-    }
+        tables.push(table)
+      }
 
-    return tables
+      return tables
+    })
   }
 
   /**
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
-    return await new StructureSql({driver: this}).toSql()
+    return await this._cachedSchemaMetadata("structureSql", async () => await new StructureSql({driver: this}).toSql())
   }
 
   /**
