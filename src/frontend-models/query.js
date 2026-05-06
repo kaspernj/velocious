@@ -1642,9 +1642,25 @@ export default class FrontendModelQuery {
    * @returns {Promise<number>} - Number of loaded model instances.
    */
   async count() {
-    const models = await this.toArray()
+    const response = await this.modelClass.executeCommand("index", {
+      ...this.joinsPayload(),
+      ...this.searchPayload(),
+      ...this.groupPayload(),
+      ...this.distinctPayload(),
+      ...this.wherePayload(),
+      ...this.paginationPayload(),
+      count: true
+    })
 
-    return models.length
+    if (!response || typeof response !== "object") {
+      throw new Error(`Expected object response but got: ${response}`)
+    }
+
+    if (!Number.isFinite(response.count)) {
+      throw new Error(`Expected numeric count response but got: ${response.count}`)
+    }
+
+    return response.count
   }
 
   /**

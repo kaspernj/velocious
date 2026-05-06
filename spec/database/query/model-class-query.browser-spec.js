@@ -62,6 +62,31 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(count).toEqual(4)
   })
 
+  it("counts records after limit and offset are applied", async () => {
+    const project = await Project.create({nameEn: "Paginated count", nameDe: "Seitennummerierte Anzahl"})
+    await Task.create({name: "Paginated count task 1", project})
+    await Task.create({name: "Paginated count task 2", project})
+    await Task.create({name: "Paginated count task 3", project})
+
+    const limitedCount = await Task
+      .order("tasks.id ASC")
+      .limit(2)
+      .count()
+    const offsetCount = await Task
+      .order("tasks.id ASC")
+      .offset(2)
+      .count()
+    const pageCount = await Task
+      .order("tasks.id ASC")
+      .page(2)
+      .perPage(2)
+      .count()
+
+    expect(limitedCount).toEqual(2)
+    expect(offsetCount).toEqual(1)
+    expect(pageCount).toEqual(1)
+  })
+
   it("findOrInitializeBy marks new records as new and changed", async () => {
     const record = await Task.where({name: "New Task"}).findOrInitializeBy({name: "New Task"})
 

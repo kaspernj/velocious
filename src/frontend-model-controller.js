@@ -1514,6 +1514,11 @@ export default class FrontendModelController extends Controller {
     return normalizeFrontendModelPluck(this.frontendModelParams().pluck)
   }
 
+  /** @returns {boolean} - Whether the request asks for an aggregate count. */
+  frontendModelCountRequested() {
+    return this.frontendModelParams().count === true
+  }
+
   /**
    * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, unknown>}>}
    *   Frontend withCount entries. Empty array when not requested.
@@ -3002,6 +3007,17 @@ export default class FrontendModelController extends Controller {
     const resource = this.frontendModelResourceInstance()
 
     if (action === "index") {
+      if (this.frontendModelCountRequested()) {
+        if (!(await resource.supportsCount("index"))) {
+          throw new Error("count is not supported when resource records are customized")
+        }
+
+        return {
+          count: await resource.count(),
+          status: "success"
+        }
+      }
+
       const pluck = this.frontendModelPluck()
 
       if (pluck.length > 0) {

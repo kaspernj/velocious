@@ -360,6 +360,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - `await Task.sort({project: {account: [["name", "desc"], ["createdAt", "asc"]]}}).toArray()`
 - `await Task.group({project: {account: ["id"]}}).toArray()`
 - `await Task.sort({comments: ["body", "asc"]}).distinct().toArray()`
+- `await Task.count()`
 - `await Task.pluck("id")`
 - `await Task.pluck({project: ["id"]})`
 - `await User.preload({projects: ["tasks"]}).toArray()`
@@ -1221,6 +1222,8 @@ const tasks = await Task.page(2).perPage(25).toArray()
 const totalTasks = await Task.count()
 const distinctProjects = await Task.joins({project: true}).distinct().count()
 ```
+
+Frontend-model `count()` runs as a backend aggregate, so list UIs can request counts without loading and serializing every matching model.
 
 ### First and last
 

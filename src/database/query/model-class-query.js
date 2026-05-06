@@ -253,6 +253,10 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /** @returns {Promise<number>} - Resolves with the count.  */
   async count() {
+    if (this._limit !== null || this._offset !== null) {
+      return await this.paginatedCount()
+    }
+
     // Generate count SQL
     const primaryKey = `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())}`
     const distinctPrefix = this._distinct ? "DISTINCT " : ""
@@ -291,6 +295,26 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     }
 
     return countResult
+  }
+
+  /** @returns {Promise<number>} - Resolves with the count after pagination is applied. */
+  async paginatedCount() {
+    const countQuery = this.clone()
+    const countSql = this.driver.getType() == "pgsql" ? "COUNT(*)::int" : "COUNT(*)"
+    const sql = [
+      `SELECT ${countSql} AS ${this.driver.quoteColumn("count")}`,
+      `FROM (${countQuery.toSql()}) AS ${this.driver.quoteTable("paginated_count_rows")}`
+    ].join(" ")
+    const results = /** @type {{count: number}[]} */ (await this.driver.query(
+      sql,
+      {logName: this.queryLogName("Count")}
+    ))
+
+    if (results.length != 1 || !("count" in results[0])) {
+      throw new Error("Invalid count result")
+    }
+
+    return results[0].count
   }
 
   /**
