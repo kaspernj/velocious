@@ -378,9 +378,13 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
       const filteredUsersCount = await User
         .search([], "email", "like", "%john%")
         .count()
+      const limitedUsersCount = await User.limit(1).count()
+      const offsetUsersCount = await User.offset(1).count()
 
       expect(usersCount).toEqual(2)
       expect(filteredUsersCount).toEqual(1)
+      expect(limitedUsersCount).toEqual(1)
+      expect(offsetUsersCount).toEqual(1)
     } finally {
       resetFrontendModelTransport()
     }

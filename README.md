@@ -1223,7 +1223,7 @@ const totalTasks = await Task.count()
 const distinctProjects = await Task.joins({project: true}).distinct().count()
 ```
 
-Frontend-model `count()` runs as a backend aggregate, so paginated list UIs can request totals without loading and serializing every matching model.
+Frontend-model `count()` runs as a backend aggregate, so list UIs can request counts without loading and serializing every matching model.
 
 ### First and last
 

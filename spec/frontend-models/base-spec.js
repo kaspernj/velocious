@@ -1169,6 +1169,33 @@ describe("Frontend models - base", () => {
     }
   })
 
+  it("sends pagination payload when using count()", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({count: 5})
+
+    try {
+      const usersCount = await User
+        .limit(5)
+        .offset(10)
+        .count()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            count: true,
+            limit: 5,
+            offset: 10
+          },
+          url: "/frontend-models"
+        }
+      ])
+      expect(usersCount).toEqual(5)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("throws when using ransack with an unknown attribute", async () => {
     const User = buildTestModelClass()
     const sevenDaysAgo = new Date("2026-02-24T10:00:00.000Z")
