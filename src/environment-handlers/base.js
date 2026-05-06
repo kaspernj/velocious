@@ -16,6 +16,13 @@
 
 export default class VelociousEnvironmentHandlerBase {
   /**
+   * @returns {string | undefined} - Velocious source directory used to filter framework stack frames.
+   */
+  getFrameworkSourceDirectory() {
+    return undefined
+  }
+
+  /**
    * Auto-discovers resource classes. No-op in base handler; overridden in Node handler.
    * @param {import("../configuration.js").default} _configuration - Configuration instance.
    * @returns {Promise<void>}

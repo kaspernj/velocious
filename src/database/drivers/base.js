@@ -962,7 +962,8 @@ export default class VelociousDatabaseDriversBase {
     error.stack = sourceStack
 
     return BacktraceCleaner.getApplicationSourceLine(error, {
-      applicationDirectory
+      applicationDirectory,
+      frameworkSourceDirectory: this.configuration.getEnvironmentHandler().getFrameworkSourceDirectory()
     })
   }
 

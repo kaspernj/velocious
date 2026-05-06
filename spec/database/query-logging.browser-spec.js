@@ -135,6 +135,24 @@ describe("Database - query logging", {tags: ["dummy"]}, () => {
     expect(sourceLine).toBeUndefined()
   })
 
+  it("skips configured framework frames when selecting the query source line", () => {
+    const configuration = /** @type {Configuration} */ (Object.create(Configuration.current()))
+    const driver = new TestDriver({}, configuration)
+
+    configuration.getDirectoryIfAvailable = () => "/app"
+    configuration.getEnvironmentHandler = () => ({
+      getFrameworkSourceDirectory: () => "/app/vendor/velocious/src"
+    })
+
+    const sourceLine = driver._querySourceLine([
+      "Error: Query source",
+      "    at VelociousDatabaseDriversBase.query (/app/vendor/velocious/src/database/drivers/base.js:700:10)",
+      "    at CountryController.show (/app/src/routes/countries/controller.js:44:8)"
+    ].join("\n"))
+
+    expect(sourceLine).toEqual("src/routes/countries/controller.js:44:in CountryController.show")
+  })
+
   it("excludes query log work from request database timing", async () => {
     const configuration = Configuration.current()
     const requestTiming = new RequestTiming()
