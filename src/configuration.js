@@ -660,7 +660,13 @@ export default class VelociousConfiguration {
    * listener is attached to either `framework-error` or `all-error`,
    * also schedules an unhandled promise rejection so process-level bug
    * reporters (which subscribe to `unhandledRejection` by default) pick
-   * the failure up.
+   * the failure up — and ALSO writes a one-line summary to `stderr` so
+   * the failure isn't completely silent on Node 24+ where the default
+   * behavior of `unhandledRejection` is to terminate the process. An
+   * app that sees its server suddenly exit needs at least one
+   * breadcrumb in the logs to know Beacon was the cause; the previous
+   * behavior left a stack-only crash with no context tying it back to
+   * the broker.
    * @param {object} args - Options.
    * @param {"beacon-connect" | "beacon-disconnect"} args.stage - Failure stage.
    * @param {Error} args.error - Error instance.
@@ -679,6 +685,10 @@ export default class VelociousConfiguration {
     errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
 
     if (!hasListener) {
+      const message = error instanceof Error ? error.message : String(error)
+
+      // eslint-disable-next-line no-console
+      console.error(`[velocious framework-error stage=${stage}] ${message} — register a listener via configuration.getErrorEvents().on("framework-error", …) to suppress this stderr fallback`)
       void Promise.reject(error)
     }
   }
