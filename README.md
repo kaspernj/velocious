@@ -1768,7 +1768,8 @@ export default new Configuration({
   backgroundJobs: {
     host: "127.0.0.1",
     port: 7331,
-    databaseIdentifier: "default"
+    databaseIdentifier: "default",
+    maxConcurrentInlineJobs: 4
   }
 })
 ```
@@ -1779,7 +1780,10 @@ Or via env vars:
 VELOCIOUS_BACKGROUND_JOBS_HOST=127.0.0.1
 VELOCIOUS_BACKGROUND_JOBS_PORT=7331
 VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER=default
+VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS=4
 ```
+
+`maxConcurrentInlineJobs` (default: `4`) caps how many `forked: false` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores.
 
 ## Defining jobs
 
@@ -1806,6 +1810,12 @@ await MyJob.performLaterWithOptions({
   args: ["a", "b"],
   options: {forked: false}
 })
+```
+
+Inline jobs share the worker process and run concurrently up to `maxConcurrentInlineJobs`, so a single slow inline job no longer blocks the queue. A single worker can also override the configured cap explicitly:
+
+```js
+new BackgroundJobsWorker({configuration, maxConcurrentInlineJobs: 8})
 ```
 
 ## Scheduled jobs
