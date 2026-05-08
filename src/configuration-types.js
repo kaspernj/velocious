@@ -129,6 +129,12 @@
  * @property {string} [host] - Hostname for the background jobs main process.
  * @property {number} [port] - Port for the background jobs main process.
  * @property {string} [databaseIdentifier] - Database identifier used to store background jobs.
+ * @property {number} [maxConcurrentInlineJobs] - How many `forked: false` jobs a single
+ *   `background-jobs-worker` process is allowed to run in parallel. Concurrency
+ *   is at the JS event-loop level: every concurrent job shares the worker's
+ *   process and DB connection pool, so this should fit the pool size, not the
+ *   CPU count. Forking remains the right tool for memory isolation across
+ *   long-running jobs and for using more cores. Default: `4`.
  */
 
 /**
