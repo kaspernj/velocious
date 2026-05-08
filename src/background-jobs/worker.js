@@ -14,14 +14,32 @@ export default class BackgroundJobsWorker {
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    * @param {string} [args.host] - Hostname.
    * @param {number} [args.port] - Port.
+   * @param {number} [args.maxConcurrentInlineJobs] - Override the
+   *   concurrency cap from `configuration.getBackgroundJobsConfig()`.
+   *   See `BackgroundJobsConfiguration` for what the value means.
    */
-  constructor({configuration, host, port} = {}) {
+  constructor({configuration, host, port, maxConcurrentInlineJobs} = {}) {
     /** @type {Promise<import("../configuration.js").default>} */
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
     /** @type {import("../configuration.js").default | undefined} */
     this.configuration = undefined
     this.host = host
     this.port = port
+    /**
+     * Constructor override for the inline-job concurrency cap. When unset
+     * the cap is read from `configuration.getBackgroundJobsConfig()` in
+     * `start()` (default: 4).
+     * @type {number | undefined}
+     */
+    this.maxConcurrentInlineJobsOverride = typeof maxConcurrentInlineJobs === "number" && maxConcurrentInlineJobs >= 1
+      ? maxConcurrentInlineJobs
+      : undefined
+    /**
+     * Resolved cap for inline-job concurrency. Set in `start()`; defaults to
+     * 4 if no configuration value is available.
+     * @type {number}
+     */
+    this.maxConcurrentInlineJobs = this.maxConcurrentInlineJobsOverride || 4
     this.shouldStop = false
     this.workerId = randomUUID()
     /** @type {JsonSocket | undefined} */
@@ -32,6 +50,11 @@ export default class BackgroundJobsWorker {
      * In-flight inline jobs the worker is currently running. Forked jobs run
      * in detached child processes so they don't appear here; the worker
      * doesn't need to wait for them on shutdown — they survive on their own.
+     *
+     * Up to `this.maxConcurrentInlineJobs` of these run in parallel. They
+     * share the worker's process and DB connection pool, so concurrency is
+     * about overlapping I/O waits — use forking for memory isolation across
+     * long-running jobs and for using more cores.
      * @type {Set<Promise<void>>}
      */
     this.inflightInlineJobs = new Set()
@@ -45,6 +68,14 @@ export default class BackgroundJobsWorker {
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-worker"})
     await this.configuration.connectBeacon({peerType: "background-jobs-worker"})
+
+    // Constructor override wins; otherwise pick up the configured cap.
+    if (typeof this.maxConcurrentInlineJobsOverride !== "number") {
+      const config = this.configuration.getBackgroundJobsConfig()
+
+      this.maxConcurrentInlineJobs = config.maxConcurrentInlineJobs || this.maxConcurrentInlineJobs
+    }
+
     this.statusReporter = new BackgroundJobsStatusReporter({
       configuration: this.configuration,
       host: this.host,
@@ -147,16 +178,33 @@ export default class BackgroundJobsWorker {
       return
     }
 
+    // Inline jobs share the worker's process and DB pool, but each one
+    // is its own async chain — there's no semantic reason to serialize
+    // them. We kick off the job, register it with `inflightInlineJobs`
+    // for shutdown drain, and signal capacity to main:
+    // - If we still have a free slot we ask for the next job right
+    //   away, so a slow job (e.g. a docker alive check that waits 15s
+    //   on a gone server) no longer starves every other inline job.
+    // - When the job finishes, if the worker had been at the cap, we
+    //   ask for the next job to refill the slot.
+    // The bookkeeping in `finally()` ratchets capacity back up
+    // regardless of success or failure.
     /** @type {Promise<void>} */
-    const inflight = this._runInlineJobAndReport(identifiedPayload)
-    this.inflightInlineJobs.add(inflight)
-    try {
-      await inflight
-    } finally {
-      this.inflightInlineJobs.delete(inflight)
-    }
+    let inflight
 
-    this._sendReadyIfRunning()
+    inflight = this._runInlineJobAndReport(identifiedPayload).finally(() => {
+      this.inflightInlineJobs.delete(inflight)
+
+      if (!this.shouldStop && this.inflightInlineJobs.size === this.maxConcurrentInlineJobs - 1) {
+        this._sendReadyIfRunning()
+      }
+    })
+
+    this.inflightInlineJobs.add(inflight)
+
+    if (this.inflightInlineJobs.size < this.maxConcurrentInlineJobs) {
+      this._sendReadyIfRunning()
+    }
   }
 
   /**

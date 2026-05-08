@@ -460,15 +460,20 @@ export default class VelociousConfiguration {
     const envHost = process.env.VELOCIOUS_BACKGROUND_JOBS_HOST
     const envPortRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_PORT
     const envDatabaseIdentifier = process.env.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
+    const envMaxConcurrentRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS
     const envPort = envPortRaw ? Number(envPortRaw) : undefined
+    const envMaxConcurrent = envMaxConcurrentRaw ? Number(envMaxConcurrentRaw) : undefined
     const configured = this._backgroundJobs || {}
     const host = configured.host || envHost || "127.0.0.1"
     const port = typeof configured.port === "number"
       ? configured.port
       : (typeof envPort === "number" && Number.isFinite(envPort) ? envPort : 7331)
     const databaseIdentifier = configured.databaseIdentifier || envDatabaseIdentifier || "default"
+    const maxConcurrentInlineJobs = typeof configured.maxConcurrentInlineJobs === "number" && configured.maxConcurrentInlineJobs >= 1
+      ? configured.maxConcurrentInlineJobs
+      : (typeof envMaxConcurrent === "number" && Number.isFinite(envMaxConcurrent) && envMaxConcurrent >= 1 ? envMaxConcurrent : 4)
 
-    return {host, port, databaseIdentifier}
+    return {host, port, databaseIdentifier, maxConcurrentInlineJobs}
   }
 
   /**
