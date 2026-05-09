@@ -35,7 +35,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
       if (actionCount > 0) sql += ", "
 
       if (column.isNewColumn()) {
-        sql += "ADD "
+        sql += databaseType == "mssql" ? "ADD " : "ADD COLUMN "
         sql += column.getSQL({driver: this.getDriver(), forAlterTable: false})
       } else if (column.getNewName()) {
         const newColumnName = column.getNewName()
