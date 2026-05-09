@@ -138,7 +138,7 @@ function isFrontendModelMarker(value) {
  * @param {unknown} value - Candidate value.
  * @returns {value is {attributes: () => Record<string, any>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => {getRelationshipsMap: () => Record<string, any>}, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => any}}} - Whether value looks like a backend model instance.
  */
-function isBackendModelInstance(value) {
+export function isBackendModelInstance(value) {
   if (!value || typeof value !== "object") return false
 
   const candidate = /** @type {Record<string, any>} */ (value)
@@ -277,18 +277,21 @@ function deserializeFrontendModelMarker(marker) {
     }
   }
 
-  const model = new modelClass(attributes)
+  // Route hydration through `instantiateFromResponse` so
+  // `__abilities` / `__queryData` / `__associationCounts` /
+  // `__preloadedRelationships` baked into the marker's attributes blob (e.g.
+  // by `resource.serialize` in custom-command auto-serialization) get
+  // extracted and applied. Legacy markers that used a separate top-level
+  // `preloadedRelationships` field merge them under the standard key first
+  // so `modelDataFromResponse` picks them up.
+  const responseAttributes = Object.keys(preloadedRelationships).length > 0
+    ? {
+      ...attributes,
+      [PRELOADED_RELATIONSHIPS_KEY]: preloadedRelationships
+    }
+    : attributes
 
-  model._selectedAttributes = new Set(Object.keys(attributes))
-
-  for (const [relationshipName, relationshipValue] of Object.entries(preloadedRelationships)) {
-    model.getRelationshipByName(relationshipName).setLoaded(relationshipValue)
-  }
-
-  model.setIsNewRecord(false)
-  model._persistedAttributes = cloneFrontendModelAttributes(model.attributes())
-
-  return model
+  return modelClass.instantiateFromResponse(responseAttributes)
 }
 
 /**

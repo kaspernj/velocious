@@ -5,7 +5,7 @@ import Controller from "./controller.js"
 import Response from "./http-server/client/response.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
-import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+import {deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import RoutesResolver from "./routes/resolver.js"
 import VelociousError from "./velocious-error.js"
 
@@ -3510,7 +3510,82 @@ export default class FrontendModelController extends Controller {
       return {status: "success"}
     }
 
-    return /** @type {Record<string, any>} */ (responsePayload)
+    return /** @type {Record<string, any>} */ (
+      await this.autoSerializeFrontendModelsInPayload(
+        responsePayload,
+        /** @type {{serialize: (model: unknown, action: string) => Promise<Record<string, any>>}} */ (resource),
+        methodName
+      )
+    )
+  }
+
+  /**
+   * Walks a custom-command response payload and replaces any backend `Record`
+   * instance with the resource's per-action serialized form so handlers can
+   * return `{record, status: "ok"}` instead of explicitly calling
+   * `await this.serialize(record, action)`. Plain objects, arrays, and
+   * primitive values pass through and are later encoded by
+   * `serializeFrontendModelTransportValue`.
+   *
+   * @param {unknown} value - Payload value.
+   * @param {{serialize: (model: unknown, action: string) => Promise<Record<string, any>>}} resource - Resource instance providing `serialize`.
+   * @param {string} action - Custom command method name passed to `resource.serialize` for per-action authorization filtering.
+   * @param {WeakSet<object>} [seen] - Tracks visited plain-object containers to avoid cycles.
+   * @returns {Promise<unknown>} - Payload with backend `Record` instances replaced by serialized markers.
+   */
+  async autoSerializeFrontendModelsInPayload(value, resource, action, seen = new WeakSet()) {
+    if (value === null || value === undefined) {
+      return value
+    }
+
+    if (isBackendModelInstance(value)) {
+      const richSerialized = await resource.serialize(value, action)
+      const modelClass = /** @type {{constructor: {getModelName?: () => string, name?: string}}} */ (value).constructor
+      const modelName = typeof modelClass.getModelName === "function" ? modelClass.getModelName() : (modelClass.name || "")
+
+      // Wrap the resource-serialized payload in the frontend_model transport
+      // marker. Marker-based decoding routes through `instantiateFromResponse`,
+      // so abilities / queryData / associationCounts / preloadedRelationships
+      // baked into the rich attributes by `resource.serialize` are restored on
+      // the client without callers needing to wrap models manually.
+      return {
+        __velocious_type: "frontend_model",
+        attributes: richSerialized,
+        modelName
+      }
+    }
+
+    if (Array.isArray(value)) {
+      /** @type {unknown[]} */
+      const result = []
+
+      for (const entry of value) {
+        result.push(await this.autoSerializeFrontendModelsInPayload(entry, resource, action, seen))
+      }
+
+      return result
+    }
+
+    if (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+      const container = /** @type {Record<string, unknown>} */ (value)
+
+      if (seen.has(container)) {
+        return container
+      }
+
+      seen.add(container)
+
+      /** @type {Record<string, unknown>} */
+      const result = {}
+
+      for (const [key, nested] of Object.entries(container)) {
+        result[key] = await this.autoSerializeFrontendModelsInPayload(nested, resource, action, seen)
+      }
+
+      return result
+    }
+
+    return value
   }
 
 }
