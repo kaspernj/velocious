@@ -5,7 +5,7 @@ import Controller from "./controller.js"
 import Response from "./http-server/client/response.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
-import {deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import RoutesResolver from "./routes/resolver.js"
 import VelociousError from "./velocious-error.js"
 
@@ -3530,7 +3530,7 @@ export default class FrontendModelController extends Controller {
    * @param {unknown} value - Payload value.
    * @param {{serialize: (model: unknown, action: string) => Promise<Record<string, any>>}} resource - Resource instance providing `serialize`.
    * @param {string} action - Custom command method name passed to `resource.serialize` for per-action authorization filtering.
-   * @param {WeakSet<object>} [seen] - Tracks visited plain-object containers to avoid cycles.
+   * @param {WeakSet<object>} [seen] - Recursion stack of plain-object containers currently being walked. Membership is added on entry and removed on exit so a container shared between siblings (i.e. referenced twice but not cyclically) is walked on each reference instead of being short-circuited the second time, which would let backend `Record` instances inside it bypass `resource.serialize`.
    * @returns {Promise<unknown>} - Payload with backend `Record` instances replaced by serialized markers.
    */
   async autoSerializeFrontendModelsInPayload(value, resource, action, seen = new WeakSet()) {
@@ -3570,19 +3570,35 @@ export default class FrontendModelController extends Controller {
       const container = /** @type {Record<string, unknown>} */ (value)
 
       if (seen.has(container)) {
+        // Cyclic back-reference along the current recursion path; the
+        // ancestor frame is still walking this container and will produce
+        // its serialized form. Returning the original container here
+        // breaks the cycle without bypassing the walker for siblings that
+        // share a non-cyclic reference (those re-enter the branch below
+        // because the container is removed from `seen` on stack exit).
         return container
       }
 
       seen.add(container)
 
-      /** @type {Record<string, unknown>} */
-      const result = {}
+      try {
+        /** @type {Record<string, unknown>} */
+        const result = {}
 
-      for (const [key, nested] of Object.entries(container)) {
-        result[key] = await this.autoSerializeFrontendModelsInPayload(nested, resource, action, seen)
+        for (const [key, nested] of Object.entries(container)) {
+          // `assignSafeProperty` stores keys like `__proto__` as own
+          // data properties instead of invoking the prototype setter,
+          // so a custom-command response that echoes parsed client
+          // input cannot pollute `Object.prototype` here. The transport
+          // serializer applies the same protection on its own pass; we
+          // just preserve it across the auto-serialize walk.
+          assignSafeProperty(result, key, await this.autoSerializeFrontendModelsInPayload(nested, resource, action, seen))
+        }
+
+        return result
+      } finally {
+        seen.delete(container)
       }
-
-      return result
     }
 
     return value

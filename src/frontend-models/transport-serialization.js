@@ -24,7 +24,7 @@ const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
  * @param {unknown} value - Property value.
  * @returns {void}
  */
-function assignSafeProperty(target, key, value) {
+export function assignSafeProperty(target, key, value) {
   Object.defineProperty(target, key, {
     value,
     writable: true,
@@ -148,14 +148,6 @@ export function isBackendModelInstance(value) {
     && typeof candidate.getModelClass === "function"
     && typeof candidate.getRelationshipByName === "function"
   )
-}
-
-/**
- * @param {Record<string, any>} value - Attributes hash.
- * @returns {Record<string, any>} - Cloned attributes hash.
- */
-function cloneFrontendModelAttributes(value) {
-  return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(serializeFrontendModelTransportValue(value)))
 }
 
 /**

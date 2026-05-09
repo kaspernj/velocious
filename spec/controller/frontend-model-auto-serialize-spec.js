@@ -160,6 +160,60 @@ describe("FrontendModelController autoSerializeFrontendModelsInPayload", () => {
     })
   })
 
+  it("walks a plain-object container that is referenced twice (shared but non-cyclic) so backend Records inside both references are serialized", async () => {
+    const controller = await buildController()
+    let serializeCalls = 0
+    const resource = {
+      async serialize(model) {
+        serializeCalls += 1
+
+        return {id: model.attributes().id}
+      }
+    }
+    const sharedRecord = makeFakeRecord("shared", "Build")
+    const sharedContainer = /** @type {Record<string, any>} */ ({build: sharedRecord})
+
+    const result = /** @type {Record<string, any>} */ (
+      await controller.autoSerializeFrontendModelsInPayload(
+        {first: sharedContainer, second: sharedContainer, status: "ok"},
+        resource,
+        "cancel"
+      )
+    )
+
+    expect(serializeCalls).toEqual(2)
+    expect(result.first).toEqual({
+      build: {__velocious_type: "frontend_model", attributes: {id: "shared"}, modelName: "Build"}
+    })
+    expect(result.second).toEqual({
+      build: {__velocious_type: "frontend_model", attributes: {id: "shared"}, modelName: "Build"}
+    })
+    expect(result.status).toEqual("ok")
+  })
+
+  it("stores a `__proto__` key as an own data property without polluting Object.prototype", async () => {
+    const controller = await buildController()
+    const resource = {
+      async serialize(model) {
+        return {id: model.attributes().id}
+      }
+    }
+    const payload = /** @type {Record<string, any>} */ (JSON.parse('{"safe":1,"__proto__":{"polluted":true}}'))
+
+    try {
+      const result = /** @type {Record<string, any>} */ (
+        await controller.autoSerializeFrontendModelsInPayload(payload, resource, "cancel")
+      )
+
+      expect(/** @type {Record<string, any>} */ (Object.prototype).polluted).toEqual(undefined)
+      expect(Object.prototype.hasOwnProperty.call(result, "__proto__")).toEqual(true)
+      expect(result["__proto__"].polluted).toEqual(true)
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype)
+    } finally {
+      delete /** @type {Record<string, any>} */ (Object.prototype).polluted
+    }
+  })
+
   it("does not infinite-loop on cyclic plain-object references", async () => {
     const controller = await buildController()
     const resource = {
