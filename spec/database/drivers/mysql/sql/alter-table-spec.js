@@ -11,7 +11,7 @@ function buildDriver() {
 }
 
 describe("database/drivers/mysql/sql/alter-table", () => {
-  it("uses the in-place algorithm for simple add-column alters", async () => {
+  it("uses the instant algorithm for simple add-column alters", async () => {
     const tableData = new TableData("builds")
 
     tableData.string("check_run_payload_digest", {maxLength: 64})
@@ -19,7 +19,7 @@ describe("database/drivers/mysql/sql/alter-table", () => {
     const sqls = await buildDriver().alterTableSQLs(tableData)
 
     expect(sqls).toEqual([
-      "ALTER TABLE `builds` ADD COLUMN `check_run_payload_digest` VARCHAR(64), ALGORITHM=INPLACE"
+      "ALTER TABLE `builds` ADD COLUMN `check_run_payload_digest` VARCHAR(64), ALGORITHM=INSTANT"
     ])
   })
 

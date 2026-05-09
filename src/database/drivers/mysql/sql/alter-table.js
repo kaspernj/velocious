@@ -11,7 +11,7 @@ export default class VelociousDatabaseConnectionDriversMysqlSqlAlterTable extend
 
     if (!this.onlyAddsColumns()) return sqls
 
-    return sqls.map((sql) => `${sql}, ALGORITHM=INPLACE`)
+    return sqls.map((sql) => `${sql}, ALGORITHM=INSTANT`)
   }
 
   /**
