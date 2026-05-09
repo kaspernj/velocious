@@ -2316,10 +2316,23 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
-   * @param {Record<string, any>} response - Response payload.
-   * @returns {InstanceType<T>} - New model instance.
+   * @param {Record<string, any> | InstanceType<T>} response - Response payload, or an already-hydrated instance of this class.
+   * @returns {InstanceType<T>} - New model instance, or the same instance unchanged if it was already hydrated.
    */
   static instantiateFromResponse(response) {
+    // Idempotent: if a caller hands us an already-hydrated instance of this
+    // class (now common because the shared frontend-model API auto-serializes
+    // backend `Record` instances returned from custom commands and the
+    // transport deserializer hydrates them into models before the call site
+    // sees the response), return it as-is. Without this, code that has
+    // historically wrapped custom-command responses in
+    // `Model.instantiateFromResponse(response.field)` would spread the live
+    // model instance into a new constructor call and produce a broken model
+    // with internal state keys promoted to attributes.
+    if (response instanceof this) {
+      return /** @type {InstanceType<T>} */ (response)
+    }
+
     const modelData = this.modelDataFromResponse(response)
     const attributes = modelData.attributes
     const preloadedRelationships = modelData.preloadedRelationships
