@@ -2115,6 +2115,19 @@ describe("Frontend models - base", () => {
     expect(task.getRelationshipByName("project").loaded()).toEqual(beforeProject)
   })
 
+  it("returns an already-hydrated instance unchanged when passed to instantiateFromResponse", () => {
+    const User = buildTestModelClass()
+    const original = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
+    // Auto-serialized custom-command responses arrive at call sites as
+    // already-hydrated models, so wrapping them in a second
+    // `Model.instantiateFromResponse(...)` call must be a no-op rather
+    // than spreading internal state into a freshly constructed model.
+    const passthrough = User.instantiateFromResponse(original)
+
+    expect(passthrough).toBe(original)
+    expect(passthrough.name()).toEqual("John")
+  })
+
   it("updates a model and refreshes local attributes", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "johnny@example.com", id: 5, name: "Johnny"}})
