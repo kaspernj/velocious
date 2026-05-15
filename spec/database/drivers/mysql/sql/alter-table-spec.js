@@ -11,7 +11,7 @@ function buildDriver() {
 }
 
 describe("database/drivers/mysql/sql/alter-table", () => {
-  it("uses the instant algorithm for simple add-column alters", async () => {
+  it("does not force an algorithm for simple add-column alters", async () => {
     const tableData = new TableData("builds")
 
     tableData.string("check_run_payload_digest", {maxLength: 64})
@@ -19,11 +19,11 @@ describe("database/drivers/mysql/sql/alter-table", () => {
     const sqls = await buildDriver().alterTableSQLs(tableData)
 
     expect(sqls).toEqual([
-      "ALTER TABLE `builds` ADD COLUMN `check_run_payload_digest` VARCHAR(64), ALGORITHM=INSTANT"
+      "ALTER TABLE `builds` ADD COLUMN `check_run_payload_digest` VARCHAR(64)"
     ])
   })
 
-  it("does not force the in-place algorithm for foreign-key alters", async () => {
+  it("does not force an algorithm for foreign-key alters", async () => {
     const tableData = new TableData("build_artifacts")
 
     tableData.addForeignKey(new TableForeignKey({
@@ -37,6 +37,6 @@ describe("database/drivers/mysql/sql/alter-table", () => {
     const sqls = await buildDriver().alterTableSQLs(tableData)
 
     expect(sqls[0]).toContain("ADD FOREIGN KEY")
-    expect(sqls[0]).not.toContain("ALGORITHM=INPLACE")
+    expect(sqls[0]).not.toContain("ALGORITHM=")
   })
 })
