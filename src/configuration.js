@@ -70,7 +70,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -102,6 +102,7 @@ export default class VelociousConfiguration {
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._requestTimeoutMs = requestTimeoutMs
     this._structureSql = structureSql
+    this._tenantDatabaseProviders = tenantDatabaseProviders || {}
     this._tenantDatabaseResolver = tenantDatabaseResolver
     this._tenantResolver = tenantResolver
     this._websocketEvents = undefined
@@ -208,9 +209,8 @@ export default class VelociousConfiguration {
     return mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration)
   }
 
-  /** @returns {Array<string>} - The database identifiers.  */
-  getDatabaseIdentifiers() {
-    const identifiers = Object.keys(this.getDatabaseConfiguration())
+  /** @returns {Set<string>} - Disabled database identifiers from env flags. */
+  getDisabledDatabaseIdentifiers() {
     const disabledIdentifiers = new Set()
     const disabledIdentifiersRaw = process.env.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS
 
@@ -226,9 +226,40 @@ export default class VelociousConfiguration {
       disabledIdentifiers.add("mssql")
     }
 
-    if (disabledIdentifiers.size === 0) return identifiers
+    return disabledIdentifiers
+  }
 
-    return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier))
+  /**
+   * @param {string} identifier - Database identifier.
+   * @param {unknown} [tenant] - Tenant override.
+   * @returns {boolean} - Whether this database identifier is active in the current tenant context.
+   */
+  isDatabaseIdentifierActive(identifier, tenant = this.getCurrentTenant()) {
+    const databaseConfiguration = this.getDatabaseConfiguration()[identifier]
+
+    if (!databaseConfiguration) {
+      throw new Error(`No such database identifier configured: ${identifier}`)
+    }
+
+    if (!databaseConfiguration.tenantOnly) return true
+    if (tenant === undefined || !this._tenantDatabaseResolver) return false
+
+    const overrideConfiguration = this._tenantDatabaseResolver({
+      configuration: this,
+      databaseConfiguration,
+      identifier,
+      tenant
+    })
+
+    return Boolean(overrideConfiguration)
+  }
+
+  /** @returns {Array<string>} - The database identifiers.  */
+  getDatabaseIdentifiers() {
+    const identifiers = Object.keys(this.getDatabaseConfiguration())
+    const disabledIdentifiers = this.getDisabledDatabaseIdentifiers()
+
+    return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier) && this.isDatabaseIdentifierActive(identifier))
   }
 
   /**
@@ -318,6 +349,23 @@ export default class VelociousConfiguration {
   /** @returns {import("./configuration-types.js").TenantDatabaseResolverType | undefined} - Tenant database resolver. */
   getTenantDatabaseResolver() { return this._tenantDatabaseResolver }
 
+  /** @returns {Record<string, import("./configuration-types.js").TenantDatabaseProviderType>} - Tenant database lifecycle providers. */
+  getTenantDatabaseProviders() { return this._tenantDatabaseProviders }
+
+  /**
+   * @param {string} identifier - Database identifier.
+   * @returns {import("./configuration-types.js").TenantDatabaseProviderType} - Tenant database lifecycle provider.
+   */
+  getTenantDatabaseProvider(identifier) {
+    const provider = this._tenantDatabaseProviders[identifier]
+
+    if (!provider) {
+      throw new Error(`No tenant database provider configured for database identifier: ${identifier}`)
+    }
+
+    return provider
+  }
+
   /** @returns {import("./configuration-types.js").AttachmentsConfiguration} - Attachments configuration. */
   getAttachmentsConfiguration() { return this._attachments || {} }
 
@@ -349,6 +397,12 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   setTenantDatabaseResolver(resolver) { this._tenantDatabaseResolver = resolver }
+
+  /**
+   * @param {Record<string, import("./configuration-types.js").TenantDatabaseProviderType>} providers - Tenant database lifecycle providers.
+   * @returns {void} - No return value.
+   */
+  setTenantDatabaseProviders(providers) { this._tenantDatabaseProviders = providers }
 
   /**
    * @returns {string} - The environment.

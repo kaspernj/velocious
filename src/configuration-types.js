@@ -72,6 +72,7 @@
  * @property {boolean} [record.transactions] - Whether record operations should use transactions.
  * @property {boolean} [reset] - Whether to reset the database on startup.
  * @property {SqlConfig} [sqlConfig] - Driver-specific SQL config.
+ * @property {boolean} [tenantOnly] - Whether this database identifier is only active inside a resolved tenant context.
  * @property {"mssql" | "mysql" | "pgsql" | "sqlite"} [type] - Database type identifier.
  * @property {string} [useDatabase] - Database to switch to after connecting.
  * @property {string} [username] - Username for database authentication.
@@ -321,6 +322,14 @@
  */
 
 /**
+ * @typedef {object} TenantDatabaseProviderType
+ * @property {function({configuration: import("./configuration.js").default, identifier: string}) : unknown[] | Promise<unknown[]>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
+ * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [createDatabase] - Creates the tenant database/schema for one tenant.
+ * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [dropDatabase] - Drops the tenant database/schema for one tenant.
+ * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [checkTenant] - Checks one tenant database before generic connection validation.
+ */
+
+/**
  * @typedef {object} ConfigurationArgsType
  * @property {boolean} [autoload] - Globally enable auto-batch-preload of relationships on lazy access. Default true.
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
@@ -347,6 +356,7 @@
  * @property {StructureSqlConfiguration} [structureSql] - Structure SQL generation configuration.
  * @property {TenantResolverType} [tenantResolver] - Resolver for creating request-scoped tenant context objects.
  * @property {TenantDatabaseResolverType} [tenantDatabaseResolver] - Resolver for deriving tenant-specific database config overrides.
+ * @property {Record<string, TenantDatabaseProviderType>} [tenantDatabaseProviders] - Tenant database lifecycle providers keyed by database identifier.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.

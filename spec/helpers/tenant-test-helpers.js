@@ -35,6 +35,14 @@ export async function createTenantTestConfiguration(prefix) {
           name: `${prefix}-default`,
           poolType: AsyncTrackedMultiConnection,
           type: "sqlite"
+        },
+        projectTenant: {
+          driver: SqliteDriver,
+          migrations: false,
+          name: `${prefix}-project-tenant-default`,
+          poolType: AsyncTrackedMultiConnection,
+          tenantOnly: true,
+          type: "sqlite"
         }
       }
     },
@@ -49,6 +57,7 @@ export async function createTenantTestConfiguration(prefix) {
       const tenantSlug = tenantSlugFromUnknownTenant(tenant)
 
       if (!tenantSlug) return
+      if (identifier == "projectTenant") return {name: `${prefix}-${identifier}-${tenantSlug}`}
 
       return {name: `${prefix}-${identifier}-${tenantSlug}`}
     },
@@ -72,7 +81,7 @@ export async function createTenantTestConfiguration(prefix) {
 
 /**
  * @param {Configuration} configuration - Configuration.
- * @param {"analytics" | "default"} identifier - Database identifier.
+ * @param {"analytics" | "default" | "projectTenant"} identifier - Database identifier.
  * @param {string | undefined} tenantSlug - Tenant slug.
  * @param {string} value - Stored value.
  * @returns {Promise<void>} - Resolves when complete.
@@ -93,7 +102,7 @@ export async function seedTenantValue(configuration, identifier, tenantSlug, val
 
 /**
  * @param {Configuration} configuration - Configuration.
- * @param {"analytics" | "default"} identifier - Database identifier.
+ * @param {"analytics" | "default" | "projectTenant"} identifier - Database identifier.
  * @param {string | undefined} tenantSlug - Tenant slug.
  * @returns {Promise<string | undefined>} - Stored value.
  */

@@ -17,6 +17,8 @@
 ## Tenant and elevator hooks
 - `configuration.tenantResolver(...)` can resolve a request-scoped tenant object from request params, websocket subscriptions, or other request metadata.
 - `configuration.tenantDatabaseResolver(...)` can override a configured database identifier per resolved tenant.
+- Database identifiers configured with `tenantOnly: true` are active only inside a tenant context where `tenantDatabaseResolver(...)` returns an override; normal `db:migrate` and global connection setup skip them.
+- `tenantDatabaseProviders` powers `db:tenants:create`, `db:tenants:check`, and `db:tenants:migrate` for Apartment-style project/account databases.
 - `configuration.runWithTenant(tenant, callback)` and `Current.tenant()` expose the active tenant for custom model/database routing.
 - Model classes can declare tenant-aware database routing with `ModelClass.switchesTenantDatabase(...)` instead of overriding `getDatabaseIdentifier()` manually.
 - HTTP routes and websocket subscriptions/events run inside the resolved tenant context before abilities and controller/channel code execute.
