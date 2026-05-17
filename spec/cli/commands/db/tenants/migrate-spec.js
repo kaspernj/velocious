@@ -11,6 +11,68 @@ import path from "path"
 import SqliteDriver from "../../../../../src/database/drivers/sqlite/index.js"
 
 describe("Cli - Commands - db:tenants:migrate", () => {
+  it("initializes the app runtime before listing provider tenants", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenants-initialize-"))
+    let initialized = false
+    const configuration = new Configuration({
+      database: {
+        test: {
+          default: {
+            driver: SqliteDriver,
+            migrations: false,
+            name: "velocious-cli-tenants-initialize-default",
+            poolType: AsyncTrackedMultiConnection,
+            type: "sqlite"
+          },
+          projectTenant: {
+            driver: SqliteDriver,
+            migrations: true,
+            name: "velocious-cli-tenants-initialize-project-default",
+            poolType: AsyncTrackedMultiConnection,
+            tenantOnly: true,
+            type: "sqlite"
+          }
+        }
+      },
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {
+        initialized = true
+      },
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      tenantDatabaseProviders: {
+        projectTenant: {
+          listTenants: async () => {
+            expect(initialized).toEqual(true)
+
+            return []
+          }
+        }
+      },
+      tenantDatabaseResolver: () => {}
+    })
+    const cli = new Cli({
+      configuration,
+      directory,
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["db:tenants:check", "projectTenant"],
+      testing: true
+    })
+
+    try {
+      expect(await cli.execute()).toEqual({
+        identifier: "projectTenant",
+        tenantCount: 0
+      })
+    } finally {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
+
   it("runs targeted migrations for every tenant of a tenant-only database", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenants-migrate-"))
     const migrationsDirectory = path.join(directory, "src", "database", "migrations")

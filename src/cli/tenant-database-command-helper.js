@@ -36,9 +36,15 @@ export default class TenantDatabaseCommandHelper {
     }
   }
 
+  /** @returns {Promise<void>} - Resolves when app runtime is initialized. */
+  async initializeRuntime() {
+    await this.configuration.initialize({type: "db-tenants"})
+  }
+
   /** @returns {Promise<unknown[]>} - Tenants. */
   async listTenants() {
     this.validateTenantDatabaseIdentifier()
+    await this.initializeRuntime()
 
     const tenants = await this.configuration.ensureConnections(async () => {
       return await this.provider.listTenants({
