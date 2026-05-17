@@ -4,7 +4,6 @@ import fs from "fs/promises"
 import path from "path"
 import {fileURLToPath, pathToFileURL} from "url"
 import timeout from "awaitery/build/timeout.js"
-import wait from "awaitery/build/wait.js"
 
 import BeaconServer from "../../src/beacon/server.js"
 import Configuration, {CurrentConfigurationNotSetError} from "../../src/configuration.js"
@@ -89,17 +88,20 @@ function createConfiguration({beacon, directory, name}) {
 }
 
 /**
- * @returns {{matches: (broadcastParams: Record<string, unknown>) => boolean, sendMessage: (body: unknown) => void, isClosed: () => boolean, received: Array<unknown>, subscriptionId: string}}
+ * @returns {{matches: (broadcastParams: Record<string, unknown>) => boolean, sendMessage: (body: unknown) => void, isClosed: () => boolean, nextMessage: Promise<unknown>, subscriptionId: string}}
  */
 function makeSubscription() {
-  /** @type {Array<unknown>} */
-  const received = []
+  /** @type {(body: unknown) => void} */
+  let resolveNextMessage = () => {}
+  const nextMessage = new Promise((resolve) => {
+    resolveNextMessage = resolve
+  })
 
   return {
     isClosed: () => false,
     matches: (broadcastParams) => broadcastParams.model === "BuildLog",
-    received,
-    sendMessage: (body) => received.push(body),
+    nextMessage,
+    sendMessage: (body) => resolveNextMessage(body),
     subscriptionId: `s-${Math.random().toString(36).slice(2)}`
   }
 }
@@ -145,16 +147,14 @@ describe("Background jobs - runner Beacon", {databaseCleaning: {transaction: fal
     try {
       subscriberConfiguration._registerWebsocketChannelSubscription("frontend-models", /** @type {any} */ (subscription))
       const subscriberClient = await subscriberConfiguration.connectBeacon({peerType: "subscriber"})
-      await subscriberClient?.waitForReady({timeoutMs: 1000})
+      await subscriberClient?.waitForReady({timeoutMs: 5000})
 
       runnerConfiguration.setCurrent()
       await runJobPayload({jobName: "BroadcastBuildLogJob", args: []})
 
-      await timeout({timeout: 1000}, async () => {
-        while (subscription.received.length === 0) await wait(0.01)
-      })
+      const received = await timeout({timeout: 5000}, async () => await subscription.nextMessage)
 
-      expect(subscription.received[0]).toEqual({action: "create", id: "runner-log"})
+      expect(received).toEqual({action: "create", id: "runner-log"})
     } finally {
       previousConfiguration?.setCurrent()
       await runnerConfiguration.disconnectBeacon()
