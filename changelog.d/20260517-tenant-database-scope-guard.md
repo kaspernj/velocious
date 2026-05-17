@@ -1,0 +1,1 @@
+Velocious now raises `TenantDatabaseScopeError` when a model configured with `switchesTenantDatabase(...)` is queried without a resolved tenant database identifier. Set `enforceTenantDatabaseScopes: false` to keep the legacy fallback behavior temporarily.

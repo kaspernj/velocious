@@ -6,6 +6,8 @@ A tenant database identifier is a logical slot, not one physical database. For e
 
 Configure the tenant database as `tenantOnly: true`. Tenant-only identifiers are skipped by normal connection setup and `db:migrate` until a tenant context activates them through `tenantDatabaseResolver`.
 
+Model classes that call `switchesTenantDatabase(...)` require a tenant database identifier by default. If a model query or write runs without a current tenant, or with a tenant object that does not resolve the model's tenant database, Velocious raises `TenantDatabaseScopeError` instead of falling back to the global database. Legacy apps can temporarily set `enforceTenantDatabaseScopes: false` on the configuration while migrating to explicit tenant scopes.
+
 ```js
 export default new Configuration({
   database: {

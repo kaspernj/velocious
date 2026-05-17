@@ -96,6 +96,18 @@ class AdvisoryLockBusyError extends Error {
   }
 }
 
+class TenantDatabaseScopeError extends Error {
+  /**
+   * @param {string} message - Error message.
+   * @param {{modelName: string}} args - Context for the failed tenant-scoped model.
+   */
+  constructor(message, {modelName}) {
+    super(message)
+    this.name = "TenantDatabaseScopeError"
+    this.modelName = modelName
+  }
+}
+
 class VelociousDatabaseRecord {
   /** @type {string | undefined} */
   static modelName
@@ -787,10 +799,14 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {object} [args] - Options.
+   * @param {boolean} [args.enforceTenantDatabaseScope] - Whether tenant-switched models must resolve a tenant database identifier.
    * @returns {import("../drivers/base.js").default} - The connection.
    */
-  static connection() {
-    const databasePool = this._getConfiguration().getDatabasePool(this.getDatabaseIdentifier())
+  static connection({enforceTenantDatabaseScope = true, ...restArgs} = {}) {
+    restArgsError(restArgs)
+
+    const databasePool = this._getConfiguration().getDatabasePool(this.getDatabaseIdentifier({enforceTenantDatabaseScope}))
     const connection = databasePool.getCurrentConnection()
 
     if (!connection) throw new Error("No connection?")
@@ -976,9 +992,11 @@ class VelociousDatabaseRecord {
 
     this._configuration = configuration
     this._configuration.registerModelClass(this)
-    this._databaseType = this.connection().getType()
+    const connection = this.connection({enforceTenantDatabaseScope: false})
 
-    this._table = await this.connection().getTableByName(this.tableName())
+    this._databaseType = connection.getType()
+
+    this._table = await connection.getTableByName(this.tableName())
     this._columns = await this._getTable().getColumns()
 
     /** @type {Record<string, import("../drivers/base-column.js").default>} */
@@ -1126,17 +1144,34 @@ class VelociousDatabaseRecord {
     }
   }
 
+  /** @returns {string} - The configured non-tenant database identifier. */
+  static getConfiguredDatabaseIdentifier() {
+    return this._databaseIdentifier || "default"
+  }
+
   /**
+   * @param {object} [args] - Options.
+   * @param {boolean} [args.enforceTenantDatabaseScope] - Whether tenant-switched models must resolve a tenant database identifier.
    * @returns {string} - The database identifier.
    */
-  static getDatabaseIdentifier() {
-    const tenantDatabaseIdentifier = this.getTenantDatabaseIdentifier()
+  static getDatabaseIdentifier({enforceTenantDatabaseScope = true, ...restArgs} = {}) {
+    restArgsError(restArgs)
+
+    const tenant = Current.tenant()
+    const tenantDatabaseIdentifier = this.getTenantDatabaseIdentifier(tenant)
 
     if (tenantDatabaseIdentifier) {
       return tenantDatabaseIdentifier
     }
 
-    return this._databaseIdentifier || "default"
+    if (enforceTenantDatabaseScope && this._tenantDatabaseIdentifierResolver && this._getConfiguration().getEnforceTenantDatabaseScopes()) {
+      throw new TenantDatabaseScopeError(
+        `${this.getModelName()} is configured with switchesTenantDatabase(...) but no tenant database identifier resolved for the current tenant. Wrap the model query in configuration.runWithTenant(...) or set enforceTenantDatabaseScopes: false to allow legacy fallback behavior.`,
+        {modelName: this.getModelName()}
+      )
+    }
+
+    return this.getConfiguredDatabaseIdentifier()
   }
 
   /**
@@ -3163,5 +3198,5 @@ VelociousDatabaseRecord.registerValidatorType("format", ValidatorsFormat)
 VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
 VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
 
-export {AdvisoryLockBusyError, AdvisoryLockTimeoutError, ValidationError}
+export {AdvisoryLockBusyError, AdvisoryLockTimeoutError, TenantDatabaseScopeError, ValidationError}
 export default VelociousDatabaseRecord
