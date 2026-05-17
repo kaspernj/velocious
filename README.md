@@ -1989,7 +1989,7 @@ export default new Configuration({
 
 Use `configuration.runWithTenant(tenant, callback)` or `Current.tenant()` when custom model/database routing needs to read the active tenant manually.
 
-For Apartment-style project/account databases, mark the per-tenant identifier with `tenantOnly: true`, provide `tenantDatabaseProviders`, and run tenant lifecycle commands explicitly:
+For Apartment-style project/account databases, mark the logical per-tenant identifier with `tenantOnly: true`, provide `tenantDatabaseProviders`, and run tenant lifecycle commands explicitly. One logical identifier can resolve to any number of physical tenant databases at runtime; provider `listTenants` is queried for every command run so added/removed tenants do not require configuration changes or redeploys.
 
 ```sh
 npx velocious db:tenants:create projectTenant

@@ -27,6 +27,10 @@ export default class TenantDatabaseCommandHelper {
       throw new Error(`Database identifier ${this.identifier} is not configured with tenantOnly: true`)
     }
 
+    if (this.configuration.getDisabledDatabaseIdentifiers().has(this.identifier)) {
+      throw new Error(`Tenant database identifier ${this.identifier} is disabled by VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS`)
+    }
+
     if (typeof this.provider.listTenants !== "function") {
       throw new Error(`Tenant database provider for ${this.identifier} must define listTenants`)
     }
