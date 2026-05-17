@@ -18,7 +18,7 @@ import {publishToInProcessPeers, registerInProcessPeer} from "./in-process-broke
  * `Configuration` can use either client interchangeably.
  *
  * Lifecycle differs from `BeaconClient` in two intentional ways:
- *   - `connect()` resolves immediately; there is no broker to wait for.
+ *   - `connect()` and `waitForReady()` resolve immediately; there is no broker to wait for.
  *   - There is no reconnect loop and no `connect-error` / `disconnect`
  *     event surface, because nothing can fail.
  */
@@ -43,6 +43,9 @@ export default class InProcessBeaconClient extends EventEmitter {
   /** @returns {boolean} - Whether the peer is registered with the broker. */
   isConnected() { return this._connected }
 
+  /** @returns {boolean} - Whether the peer is ready to publish through the broker. */
+  isReady() { return this._connected }
+
   /**
    * Registers with the in-process broker. Idempotent.
    * @returns {Promise<void>}
@@ -53,6 +56,14 @@ export default class InProcessBeaconClient extends EventEmitter {
     this._unregister = registerInProcessPeer(this)
     this._connected = true
     this.emit("connect")
+  }
+
+  /**
+   * In-process peers are ready as soon as they are connected.
+   * @returns {Promise<void>}
+   */
+  async waitForReady() {
+    if (!this._connected) await this.connect()
   }
 
   /**

@@ -607,8 +607,9 @@ export default class VelociousConfiguration {
    * documented "fall back to local-only and reconnect in the
    * background" contract. Initial-connect failures surface
    * asynchronously on the framework-error channel via the
-   * `connect-error` listener registered here. Callers that need to
-   * wait for connectivity should poll `getBeaconClient()?.isConnected()`.
+   * `connect-error` listener registered here. Callers that need a
+   * deterministic publish-readiness boundary should call
+   * `getBeaconClient()?.waitForReady({timeoutMs})`.
    *
    * **In-process mode** awaits `connect()` — that path is synchronous,
    * cannot fail, and gives callers predictable readiness.

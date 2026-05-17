@@ -37,6 +37,8 @@ describe("BeaconClient", {databaseCleaning: {transaction: false, truncate: false
     await client.connect()
 
     expect(client.isConnected()).toBe(true)
+    await client.waitForReady({timeoutMs: 1000})
+    expect(client.isReady()).toBe(true)
     expect(client.publish({channel: "c", broadcastParams: {}, body: {}})).toBe(true)
 
     await client.close()
