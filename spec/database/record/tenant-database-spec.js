@@ -18,6 +18,10 @@ class StaticTenantAnalyticsRecord extends DatabaseRecord {}
 
 StaticTenantAnalyticsRecord.switchesTenantDatabase("analytics")
 
+class StaticProjectTenantRecord extends DatabaseRecord {}
+
+StaticProjectTenantRecord.switchesTenantDatabase("projectTenant")
+
 class GlobalRecord extends DatabaseRecord {}
 
 async function createTenantAnalyticsRecordTable(configuration, tenant) {
@@ -151,8 +155,46 @@ describe("DatabaseRecord tenant database switching", () => {
     }
   })
 
-  it("leaves static and non-tenant database identifiers unchanged", () => {
-    expect(StaticTenantAnalyticsRecord.getDatabaseIdentifier()).toEqual("analytics")
-    expect(GlobalRecord.getDatabaseIdentifier()).toEqual("default")
+  it("leaves static and non-tenant database identifiers unchanged", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-record-tenant-static-active")
+    let previousConfiguration
+
+    try {
+      try {
+        previousConfiguration = Current.configuration()
+      } catch {
+        // Ignore missing current configuration.
+      }
+
+      configuration.setCurrent()
+      expect(StaticTenantAnalyticsRecord.getDatabaseIdentifier()).toEqual("analytics")
+      expect(GlobalRecord.getDatabaseIdentifier()).toEqual("default")
+    } finally {
+      previousConfiguration?.setCurrent()
+      await cleanup()
+    }
+  })
+
+  it("throws when a static tenant-only database identifier is inactive", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-record-tenant-static-inactive")
+    let previousConfiguration
+
+    try {
+      try {
+        previousConfiguration = Current.configuration()
+      } catch {
+        // Ignore missing current configuration.
+      }
+
+      configuration.setCurrent()
+      await expect(async () => StaticProjectTenantRecord.getDatabaseIdentifier()).toThrow(TenantDatabaseScopeError)
+
+      await configuration.runWithTenant({}, async () => {
+        await expect(async () => StaticProjectTenantRecord.getDatabaseIdentifier()).toThrow(TenantDatabaseScopeError)
+      })
+    } finally {
+      previousConfiguration?.setCurrent()
+      await cleanup()
+    }
   })
 })

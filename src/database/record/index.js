@@ -1161,6 +1161,17 @@ class VelociousDatabaseRecord {
     const tenantDatabaseIdentifier = this.getTenantDatabaseIdentifier(tenant)
 
     if (tenantDatabaseIdentifier) {
+      if (
+        enforceTenantDatabaseScope &&
+        this._getConfiguration().getEnforceTenantDatabaseScopes() &&
+        !this._getConfiguration().isDatabaseIdentifierActive(tenantDatabaseIdentifier, tenant)
+      ) {
+        throw new TenantDatabaseScopeError(
+          `${this.getModelName()} resolved tenant database identifier ${JSON.stringify(tenantDatabaseIdentifier)} but that database identifier is not active for the current tenant. Wrap the model query in configuration.runWithTenant(...) or set enforceTenantDatabaseScopes: false to allow legacy fallback behavior.`,
+          {modelName: this.getModelName()}
+        )
+      }
+
       return tenantDatabaseIdentifier
     }
 
