@@ -14,14 +14,26 @@ export default class VelociousDatabaseMigrator {
   /**
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {string[]} [args.databaseIdentifiers] - Optional database identifiers to migrate.
    */
-  constructor({configuration, ...restArgs}) {
+  constructor({configuration, databaseIdentifiers, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration argument is required")
 
     this.configuration = configuration
+    this.databaseIdentifiers = databaseIdentifiers
     this.logger = new Logger(this)
+  }
+
+  /**
+   * @param {string} dbIdentifier - Database identifier.
+   * @returns {boolean} - Whether this migrator should touch the database identifier.
+   */
+  handlesDatabaseIdentifier(dbIdentifier) {
+    if (!this.databaseIdentifiers) return true
+
+    return this.databaseIdentifiers.includes(dbIdentifier)
   }
 
 
@@ -36,6 +48,8 @@ export default class VelociousDatabaseMigrator {
     const dbs = await this.configuration.getCurrentConnections()
 
     for (const dbIdentifier in dbs) {
+      if (!this.handlesDatabaseIdentifier(dbIdentifier)) continue
+
       const db = dbs[dbIdentifier]
       const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
 
@@ -162,10 +176,13 @@ export default class VelociousDatabaseMigrator {
   async _afterMigrations() {
     const environmentHandler = this.configuration.getEnvironmentHandler()
     const dbs = await this.configuration.getCurrentConnections()
+    const filteredDbs = Object.fromEntries(
+      Object.entries(dbs).filter(([dbIdentifier]) => this.handlesDatabaseIdentifier(dbIdentifier))
+    )
 
-    if (!environmentHandler || !dbs || Object.keys(dbs).length == 0) return
+    if (!environmentHandler || Object.keys(filteredDbs).length == 0) return
 
-    await environmentHandler.afterMigrations({dbs})
+    await environmentHandler.afterMigrations({dbs: filteredDbs})
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
@@ -175,6 +192,8 @@ export default class VelociousDatabaseMigrator {
     const dbs = await this.configuration.getCurrentConnections()
 
     for (const dbIdentifier in dbs) {
+      if (!this.handlesDatabaseIdentifier(dbIdentifier)) continue
+
       const db = dbs[dbIdentifier]
       const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
 
@@ -257,6 +276,8 @@ export default class VelociousDatabaseMigrator {
     const dbs = await this.configuration.getCurrentConnections()
 
     for (const dbIdentifier in dbs) {
+      if (!this.handlesDatabaseIdentifier(dbIdentifier)) continue
+
       const db = dbs[dbIdentifier]
 
       await db.withDisabledForeignKeys(async () => {
@@ -360,6 +381,8 @@ export default class VelociousDatabaseMigrator {
     const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
 
     for (const dbIdentifier in dbs) {
+      if (!this.handlesDatabaseIdentifier(dbIdentifier)) continue
+
       const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
 
       if (!databaseConfiguration.migrations) {

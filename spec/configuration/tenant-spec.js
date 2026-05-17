@@ -17,10 +17,12 @@ describe("Configuration tenant support", () => {
       }
 
       configuration.setCurrent()
+      expect(configuration.getDatabaseIdentifiers()).toEqual(["analytics", "default"])
       await seedTenantValue(configuration, "default", undefined, "default-default")
       await seedTenantValue(configuration, "analytics", undefined, "default-analytics")
       await seedTenantValue(configuration, "default", "alpha", "alpha-default")
       await seedTenantValue(configuration, "analytics", "alpha", "alpha-analytics")
+      await seedTenantValue(configuration, "projectTenant", "alpha", "alpha-project-tenant")
       await seedTenantValue(configuration, "default", "beta", "beta-default")
       await seedTenantValue(configuration, "analytics", "beta", "beta-analytics")
 
@@ -33,10 +35,12 @@ describe("Configuration tenant support", () => {
       expect(await readTenantValue(configuration, "analytics", undefined)).toEqual("default-analytics")
       expect(await readTenantValue(configuration, "default", "alpha")).toEqual("alpha-default")
       expect(await readTenantValue(configuration, "analytics", "alpha")).toEqual("alpha-analytics")
+      expect(await readTenantValue(configuration, "projectTenant", "alpha")).toEqual("alpha-project-tenant")
       expect(await readTenantValue(configuration, "default", "beta")).toEqual("beta-default")
       expect(await readTenantValue(configuration, "analytics", "beta")).toEqual("beta-analytics")
 
       await configuration.runWithTenant({slug: "alpha"}, async () => {
+        expect(configuration.getDatabaseIdentifiers()).toEqual(["analytics", "default", "projectTenant"])
         expect(Current.tenant()).toEqual({slug: "alpha"})
         expect(configuration.getCurrentTenant()).toEqual({slug: "alpha"})
       })
