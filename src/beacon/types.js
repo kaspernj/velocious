@@ -29,6 +29,14 @@
  */
 
 /**
+ * @typedef {{type: "hello-ack", peerId: string}} BeaconHelloAckMessage
+ *
+ * Sent by the daemon after it has registered the peer. Clients can use
+ * this as a deterministic readiness boundary before publishing events
+ * that must not fall back to local-only delivery.
+ */
+
+/**
  * @typedef {{type: "broadcast", channel: string, broadcastParams: Record<string, any>, body: any, originPeerId?: string}} BeaconBroadcastMessage
  *
  * `channel`, `broadcastParams`, and `body` mirror the
@@ -41,7 +49,7 @@
  */
 
 /**
- * @typedef {BeaconHelloMessage | BeaconBroadcastMessage} BeaconSocketMessage
+ * @typedef {BeaconHelloMessage | BeaconHelloAckMessage | BeaconBroadcastMessage} BeaconSocketMessage
  */
 
 export const nothing = {}

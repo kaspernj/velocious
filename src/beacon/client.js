@@ -2,6 +2,7 @@
 
 import {randomUUID} from "node:crypto"
 import net from "node:net"
+import timeout from "awaitery/build/timeout.js"
 
 import JsonSocket from "../background-jobs/json-socket.js"
 import EventEmitter from "../utils/event-emitter.js"
@@ -20,6 +21,7 @@ const MAX_RECONNECT_DELAY_MS = 30_000
  * Lifecycle:
  *   const client = new BeaconClient({host, port, peerType: "server"})
  *   await client.connect()                         // resolves on first successful connect
+ *   await client.waitForReady({timeoutMs: 1000})   // resolves after the daemon hello-ack
  *   client.onBroadcast((message) => { ... })       // every fan-out
  *   client.publish({channel, broadcastParams, body})
  *   await client.close()
@@ -54,6 +56,7 @@ export default class BeaconClient extends EventEmitter {
     /** @type {net.Socket | undefined} */
     this._socket = undefined
     this._connected = false
+    this._ready = false
     this._closed = false
     /** @type {NodeJS.Timeout | undefined} */
     this._reconnectTimer = undefined
@@ -71,6 +74,9 @@ export default class BeaconClient extends EventEmitter {
 
   /** @returns {boolean} - Whether the underlying socket is currently connected. */
   isConnected() { return this._connected }
+
+  /** @returns {boolean} - Whether the daemon has acknowledged this peer registration. */
+  isReady() { return this._ready }
 
   /**
    * Resolves on the first successful connect. Subsequent calls return
@@ -104,6 +110,43 @@ export default class BeaconClient extends EventEmitter {
     this._openSocket()
 
     return await this._connectPromise
+  }
+
+  /**
+   * Resolves after the Beacon daemon has acknowledged this peer's
+   * hello handshake. This is stronger than `isConnected()`: connected
+   * means the TCP socket is open, ready means the daemon has registered
+   * the peer and broadcasts can be routed through the bus.
+   * @param {object} [args] - Options.
+   * @param {number} [args.timeoutMs] - Optional timeout in milliseconds.
+   * @returns {Promise<void>}
+   */
+  async waitForReady({timeoutMs} = {}) {
+    if (this._ready) return
+
+    /** @type {() => void} */
+    let cleanup = () => {}
+    const readyPromise = new Promise((resolve) => {
+      const onReady = () => {
+        cleanup()
+        resolve(undefined)
+      }
+
+      cleanup = () => this.off("ready", onReady)
+      this.on("ready", onReady)
+    })
+
+    try {
+      if (typeof timeoutMs === "number") {
+        await timeout({timeout: timeoutMs}, async () => {
+          await readyPromise
+        })
+      } else {
+        await readyPromise
+      }
+    } finally {
+      cleanup()
+    }
   }
 
   /**
@@ -179,6 +222,7 @@ export default class BeaconClient extends EventEmitter {
 
     socket.on("connect", () => {
       this._connected = true
+      this._ready = false
       this._reconnectDelayMs = this._initialReconnectDelayMs
 
       jsonSocket.send({
@@ -192,7 +236,10 @@ export default class BeaconClient extends EventEmitter {
     })
 
     jsonSocket.on("message", (/** @type {import("./types.js").BeaconSocketMessage} */ message) => {
-      if (message?.type === "broadcast") {
+      if (message?.type === "hello-ack" && message.peerId === this.peerId) {
+        this._ready = true
+        this.emit("ready")
+      } else if (message?.type === "broadcast") {
         this.emit("broadcast", message)
       }
     })
@@ -215,6 +262,7 @@ export default class BeaconClient extends EventEmitter {
       const wasConnected = this._connected
 
       this._connected = false
+      this._ready = false
       this._jsonSocket = undefined
       this._socket = undefined
 

@@ -106,6 +106,7 @@ export default class BeaconServer {
       if (!peerId && message?.type === "hello") {
         peerId = message.peerId
         this.peers.add(jsonSocket)
+        jsonSocket.send({type: "hello-ack", peerId})
         return
       }
 

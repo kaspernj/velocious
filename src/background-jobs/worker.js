@@ -280,6 +280,7 @@ export default class BackgroundJobsWorker {
       detached: true,
       stdio: "ignore",
       env: Object.assign({}, process.env, {
+        VELOCIOUS_ENV: configuration.getEnvironment(),
         VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
         VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`,
         VELOCIOUS_JOB_PAYLOAD: encodedPayload
