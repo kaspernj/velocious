@@ -8,8 +8,10 @@ import Comment from "../dummy/src/models/comment.js"
 import backendProjects from "../dummy/src/config/backend-projects.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
 import Project from "../dummy/src/models/project.js"
+import Record from "../../src/database/record/index.js"
 import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
@@ -382,6 +384,86 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     ])
   })
 
+  it("only initializes the requested frontend-model class", async () => {
+    class RequestedLazyFrontendModel extends Record {
+      /** @returns {Promise<void>} */
+      static async initializeRecord() {
+        this._initialized = true
+      }
+    }
+
+    class UnrequestedLazyFrontendModel extends Record {
+      /** @returns {Promise<void>} */
+      static async initializeRecord() {
+        throw new Error("Unrequested lazy frontend model should not initialize")
+      }
+    }
+
+    class RequestedLazyFrontendResource extends FrontendModelBaseResource {
+      static ModelClass = RequestedLazyFrontendModel
+
+      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {
+          abilities: ["read"],
+          attributes: ["id"],
+          builtInCollectionCommands: ["index"]
+        }
+      }
+    }
+
+    class UnrequestedLazyFrontendResource extends FrontendModelBaseResource {
+      static ModelClass = UnrequestedLazyFrontendModel
+
+      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {
+          abilities: ["read"],
+          attributes: ["id"],
+          builtInCollectionCommands: ["index"]
+        }
+      }
+    }
+
+    const configuration = new Configuration({
+      backendProjects: [{
+        frontendModels: {
+          RequestedLazyFrontendModel: RequestedLazyFrontendResource,
+          UnrequestedLazyFrontendModel: UnrequestedLazyFrontendResource
+        },
+        path: dummyDirectory()
+      }],
+      cookieSecret: "dummy-cookie-secret",
+      database: {test: {}},
+      directory: dummyDirectory(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const client = {remoteAddress: "127.0.0.1"}
+    const request = new Request({client, configuration})
+    const response = new Response({configuration})
+    const controller = new FrontendModelController({
+      action: "frontendApi",
+      configuration,
+      controller: "frontend-models",
+      params: {model: "RequestedLazyFrontendModel"},
+      request,
+      response,
+      viewPath: `${dummyDirectory()}/src/routes/frontend-models`
+    })
+
+    await controller.withFrontendModelParams({model: "RequestedLazyFrontendModel"}, async () => {
+      await controller.ensureFrontendModelClassInitialized()
+    })
+
+    expect(RequestedLazyFrontendModel.isInitialized()).toEqual(true)
+    expect(UnrequestedLazyFrontendModel.isInitialized()).toEqual(false)
+  })
+
   it("keeps unexpected shared frontend-model failures generic in production", async () => {
     const configuration = buildFrontendModelControllerConfiguration("production")
     const payload = await runFrontendApi({
@@ -418,6 +500,53 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.models.length).toEqual(1)
       expect(payload.models[0].__preloadedRelationships?.project).toBeDefined()
       expect(payload.models[0].__preloadedRelationships.project?.id).toEqual(task.readAttribute("projectId"))
+    })
+  })
+
+  it("initializes relationship target classes before frontendIndex preload", async () => {
+    await Dummy.run(async () => {
+      const configuration = Configuration.current()
+      const modelClasses = configuration.getModelClasses()
+      const project = await Project.create({name: "Lazy relationship preload project"})
+      const task = await Task.create({name: "Lazy relationship preload task", projectId: project.id()})
+      const comment = await Comment.create({body: "Lazy relationship preload comment", taskId: task.id()})
+      const previousTaskModelClass = modelClasses.Task
+      const previousCommentModelClass = modelClasses.Comment
+
+      delete modelClasses.Task
+      delete modelClasses.Comment
+      Task._initialized = false
+      Task._initializeRecordPromise = null
+      Comment._initialized = false
+      Comment._initializeRecordPromise = null
+
+      try {
+        const response = await postFrontendModel("/frontend-models", {
+          requests: [{
+            commandType: "index",
+            model: "Project",
+            payload: {
+              preload: {tasks: ["comments"]},
+              where: {id: project.id()}
+            },
+            requestId: "request-1"
+          }]
+        })
+        const payload = response.responses[0].response
+
+        expect(payload.status).toEqual("success")
+        expect(Task.isInitialized()).toEqual(true)
+        expect(Comment.isInitialized()).toEqual(true)
+        expect(payload.models.length).toEqual(1)
+        expect(payload.models[0].__preloadedRelationships?.tasks.length).toEqual(1)
+        expect(payload.models[0].__preloadedRelationships.tasks[0].id).toEqual(task.id())
+        expect(payload.models[0].__preloadedRelationships.tasks[0].__preloadedRelationships.comments[0].id).toEqual(comment.id())
+      } finally {
+        modelClasses.Task = previousTaskModelClass
+        modelClasses.Comment = previousCommentModelClass
+        await Task.ensureInitialized({configuration})
+        await Comment.ensureInitialized({configuration})
+      }
     })
   })
 

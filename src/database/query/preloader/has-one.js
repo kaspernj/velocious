@@ -1,5 +1,6 @@
 // @ts-check
 
+import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasOne {
@@ -53,6 +54,8 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
     const targetModelClass = this.relationship.getTargetModelClass()
 
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
 
     // Load target models to be preloaded on the given models
     let query = targetModelClass.where(whereArgs)

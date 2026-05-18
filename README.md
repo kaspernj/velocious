@@ -623,6 +623,10 @@ Task.validates("name", {presence: true, uniqueness: true})
 export default Task
 ```
 
+Async class APIs initialize record metadata on first use when a model has not
+already been initialized eagerly. See [docs/model-initialization.md](docs/model-initialization.md)
+for the eager and lazy initialization behavior.
+
 ## Lifecycle callbacks
 
 Register lifecycle callbacks with either a function or an instance method name. Registrations run in order, so you can stack multiple callbacks on the same lifecycle hook.
