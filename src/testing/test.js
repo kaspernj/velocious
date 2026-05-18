@@ -87,20 +87,36 @@ function normalizeTags(tags) {
 
 /** @type {VelociousTestConfig} */
 const testConfig = {
+  consoleOutput: "failure",
+  failedConsoleOutputMaxLines: 200,
   excludeTags: [],
   defaultTimeoutSeconds: 60
 }
 
 /**
  * @param {object} args - Options.
+ * @param {"failure" | "live"} [args.consoleOutput] - Console output mode.
  * @param {string[] | string} [args.excludeTags] - Tags to exclude.
  * @param {number} [args.defaultTimeoutSeconds] - Default timeout in seconds.
+ * @param {number} [args.failedConsoleOutputMaxLines] - Maximum failed console lines to print inline.
  * @returns {void}
  */
-function configureTests({excludeTags, defaultTimeoutSeconds} = {}) {
+function configureTests({consoleOutput, excludeTags, defaultTimeoutSeconds, failedConsoleOutputMaxLines} = {}) {
   testConfig.excludeTags = normalizeTags(excludeTags)
+  if (consoleOutput !== undefined) {
+    if (consoleOutput !== "failure" && consoleOutput !== "live") {
+      throw new Error(`Invalid consoleOutput config: ${consoleOutput}`)
+    }
+
+    testConfig.consoleOutput = consoleOutput
+  }
+
   if (typeof defaultTimeoutSeconds === "number") {
     testConfig.defaultTimeoutSeconds = defaultTimeoutSeconds
+  }
+
+  if (typeof failedConsoleOutputMaxLines === "number") {
+    testConfig.failedConsoleOutputMaxLines = failedConsoleOutputMaxLines
   }
 }
 
@@ -301,6 +317,8 @@ globalThis.configureTests = configureTests
 export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests}
 /**
  * @typedef {object} VelociousTestConfig
+ * @property {"failure" | "live"} consoleOutput - Console output mode.
  * @property {string[]} excludeTags - Tags excluded by default.
  * @property {number} defaultTimeoutSeconds - Default timeout in seconds.
+ * @property {number} failedConsoleOutputMaxLines - Maximum failed console lines to print inline.
  */

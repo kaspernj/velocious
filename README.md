@@ -83,7 +83,23 @@ it("retries a flaky check", {retry: 2}, async () => {})
 })
 ```
 
-During a failing run, Velocious captures all console output emitted while each test executes. At the end of a failed run, those logs are saved under `tmp/screenshots` next to failure screenshots/browser logs/HTML, and each failed test summary prints the saved console log path.
+Velocious captures console output emitted while each test executes, but does not print passing-test output by default. When a test fails, Velocious prints a truncated `Console output:` block for that failed test and saves the full captured log under `tmp/screenshots` next to failure screenshots/browser logs/HTML. Each failed test summary prints the saved console log path.
+
+Configure console output behavior in your testing config file.
+
+```js
+// src/config/testing.js
+import {configureTests} from "velocious/build/src/testing/test.js"
+
+export default async function configureTesting() {
+  configureTests({
+    consoleOutput: "failure", // default: print captured output only for failed tests
+    failedConsoleOutputMaxLines: 200 // default: print the last 200 lines inline
+  })
+}
+```
+
+Use `consoleOutput: "live"` to preserve the previous passthrough behavior where test console output is printed while tests run.
 
 Listen for attempt and retry events if you need to reset shared state after a failed attempt or log retry lifecycle details. `testAttemptFailed` fires after every failed attempt, including the final failed attempt when no retries remain. `testRetrying` only fires before a retry, and `testFailed` only fires after retries are exhausted.
 

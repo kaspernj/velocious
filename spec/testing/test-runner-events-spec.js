@@ -3,13 +3,66 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import {format} from "node:util"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
-import {describe, expect, it, testEvents} from "../../src/testing/test.js"
+import {configureTests, describe, expect, it, testConfig, testEvents} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
 describe("TestRunner events", () => {
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  const buildTestRunner = () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+
+    return new TestRunner({configuration, testFiles: []})
+  }
+  const runTestRunner = async (testRunner, tests) => {
+    await testRunner.runTests({
+      afterEaches: [],
+      beforeEaches: [],
+      tests,
+      descriptions: [],
+      indentLevel: 0
+    })
+  }
+  const captureConsole = async (callback) => {
+    /** @type {Array<{methodName: string, output: string}>} */
+    const entries = []
+    const originalConsoleMethods = {
+      debug: console.debug,
+      error: console.error,
+      info: console.info,
+      log: console.log,
+      warn: console.warn
+    }
+
+    for (const methodName of Object.keys(originalConsoleMethods)) {
+      console[methodName] = (...args) => {
+        entries.push({methodName, output: format(...args)})
+        originalConsoleMethods[methodName](...args)
+      }
+    }
+
+    try {
+      await callback()
+    } finally {
+      for (const methodName of Object.keys(originalConsoleMethods)) {
+        console[methodName] = originalConsoleMethods[methodName]
+      }
+    }
+
+    return entries
+  }
 
   it("emits testFailed with test details", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
@@ -368,6 +421,206 @@ describe("TestRunner events", () => {
     expect(failedDetails[0].filePath).toBe("/tmp/sample-spec.js")
     expect(failedDetails[0].line).toBe(42)
     expect(failedDetails[0].consoleOutput).toContain("console output from failing test")
+  })
+
+  it("does not print passing test console output by default", async () => {
+    const previousConsoleOutput = testConfig.consoleOutput
+
+    configureTests({consoleOutput: "failure"})
+
+    try {
+      const testRunner = buildTestRunner()
+      const tests = {
+        args: {},
+        afterEaches: [],
+        afterAlls: [],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "passes quietly": {
+            args: {},
+            function: async () => {
+              console.log("hidden passing console output")
+            }
+          }
+        }
+      }
+
+      const entries = await captureConsole(async () => {
+        await runTestRunner(testRunner, tests)
+      })
+      const output = entries.map((entry) => entry.output).join("\n")
+
+      expect(testRunner.getSuccessfulTests()).toBe(1)
+      expect(output).not.toContain("hidden passing console output")
+    } finally {
+      configureTests({consoleOutput: previousConsoleOutput})
+    }
+  })
+
+  it("prints failing test console output by default", async () => {
+    const previousConsoleOutput = testConfig.consoleOutput
+
+    configureTests({consoleOutput: "failure"})
+
+    try {
+      const testRunner = buildTestRunner()
+      const tests = {
+        args: {},
+        afterEaches: [],
+        afterAlls: [],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "fails with output": {
+            args: {},
+            function: async () => {
+              console.info("visible failing console output")
+              throw new Error("boom")
+            }
+          }
+        }
+      }
+
+      const entries = await captureConsole(async () => {
+        await runTestRunner(testRunner, tests)
+      })
+      const output = entries.map((entry) => entry.output).join("\n")
+      const failedDetails = testRunner.getFailedTestDetails()
+
+      expect(output).toContain("Console output:")
+      expect(output).toContain("visible failing console output")
+      expect(failedDetails.length).toBe(1)
+      expect(failedDetails[0].consoleOutput).toContain("visible failing console output")
+    } finally {
+      configureTests({consoleOutput: previousConsoleOutput})
+    }
+  })
+
+  it("keeps live console passthrough available", async () => {
+    const previousConsoleOutput = testConfig.consoleOutput
+
+    configureTests({consoleOutput: "live"})
+
+    try {
+      const testRunner = buildTestRunner()
+      const tests = {
+        args: {},
+        afterEaches: [],
+        afterAlls: [],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "passes live": {
+            args: {},
+            function: async () => {
+              console.log("live passing console output")
+            }
+          }
+        }
+      }
+
+      const entries = await captureConsole(async () => {
+        await runTestRunner(testRunner, tests)
+      })
+      const output = entries.map((entry) => entry.output).join("\n")
+
+      expect(testRunner.getSuccessfulTests()).toBe(1)
+      expect(output).toContain("live passing console output")
+    } finally {
+      configureTests({consoleOutput: previousConsoleOutput})
+    }
+  })
+
+  it("discards retry attempt console output when a retry passes", async () => {
+    const previousConsoleOutput = testConfig.consoleOutput
+
+    configureTests({consoleOutput: "failure"})
+
+    try {
+      const testRunner = buildTestRunner()
+      let attempts = 0
+      const tests = {
+        args: {},
+        afterEaches: [],
+        afterAlls: [],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "retries into success": {
+            args: {retry: 1},
+            function: async () => {
+              attempts++
+              console.log(`hidden retry console output ${attempts}`)
+              if (attempts === 1) throw new Error("boom")
+            }
+          }
+        }
+      }
+
+      const entries = await captureConsole(async () => {
+        await runTestRunner(testRunner, tests)
+      })
+      const output = entries.map((entry) => entry.output).join("\n")
+
+      expect(testRunner.getSuccessfulTests()).toBe(1)
+      expect(testRunner.getFailedTestDetails().length).toBe(0)
+      expect(output).not.toContain("hidden retry console output")
+    } finally {
+      configureTests({consoleOutput: previousConsoleOutput})
+    }
+  })
+
+  it("truncates inline failed test console output", async () => {
+    const previousConsoleOutput = testConfig.consoleOutput
+    const previousFailedConsoleOutputMaxLines = testConfig.failedConsoleOutputMaxLines
+
+    configureTests({consoleOutput: "failure", failedConsoleOutputMaxLines: 2})
+
+    try {
+      const testRunner = buildTestRunner()
+      const tests = {
+        args: {},
+        afterEaches: [],
+        afterAlls: [],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "fails with long output": {
+            args: {},
+            function: async () => {
+              console.log("console line 1")
+              console.log("console line 2")
+              console.log("console line 3")
+              console.log("console line 4")
+              throw new Error("boom")
+            }
+          }
+        }
+      }
+
+      const entries = await captureConsole(async () => {
+        await runTestRunner(testRunner, tests)
+      })
+      const output = entries.map((entry) => entry.output).join("\n")
+      const failedDetails = testRunner.getFailedTestDetails()
+
+      expect(output).toContain("2 console output lines omitted")
+      expect(output).toContain("console line 3")
+      expect(output).toContain("console line 4")
+      expect(output).not.toContain("console line 1")
+      expect(failedDetails[0].consoleOutput).toContain("console line 1")
+    } finally {
+      configureTests({
+        consoleOutput: previousConsoleOutput,
+        failedConsoleOutputMaxLines: previousFailedConsoleOutputMaxLines
+      })
+    }
   })
 
   it("persists failed test console output to an assets path", async () => {
