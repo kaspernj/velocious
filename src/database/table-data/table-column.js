@@ -262,6 +262,10 @@ export default class TableColumn {
       type = databaseType == "mssql" ? "NVARCHAR" : "VARCHAR"
       maxlength ||= 255
     }
+    if (databaseType == "mysql" && type == "BOOLEAN") {
+      type = "TINYINT"
+      maxlength = 1
+    }
     if (databaseType == "pgsql" && type == "TINYINT") {
       type = "SMALLINT"
     }
