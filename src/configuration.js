@@ -70,7 +70,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -91,6 +91,7 @@ export default class VelociousConfiguration {
     this.debug = debug
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
+    this._enforceTenantDatabaseScopes = enforceTenantDatabaseScopes
     this._directory = directory
     this._initializeModels = initializeModels
     this._isInitialized = false
@@ -349,6 +350,9 @@ export default class VelociousConfiguration {
   /** @returns {import("./configuration-types.js").TenantDatabaseResolverType | undefined} - Tenant database resolver. */
   getTenantDatabaseResolver() { return this._tenantDatabaseResolver }
 
+  /** @returns {boolean} - Whether tenant-switched models require a resolved tenant database identifier. */
+  getEnforceTenantDatabaseScopes() { return this._enforceTenantDatabaseScopes }
+
   /** @returns {Record<string, import("./configuration-types.js").TenantDatabaseProviderType>} - Tenant database lifecycle providers. */
   getTenantDatabaseProviders() { return this._tenantDatabaseProviders }
 
@@ -397,6 +401,12 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   setTenantDatabaseResolver(resolver) { this._tenantDatabaseResolver = resolver }
+
+  /**
+   * @param {boolean} newValue - Whether tenant-switched models require a resolved tenant database identifier.
+   * @returns {void} - No return value.
+   */
+  setEnforceTenantDatabaseScopes(newValue) { this._enforceTenantDatabaseScopes = newValue }
 
   /**
    * @param {Record<string, import("./configuration-types.js").TenantDatabaseProviderType>} providers - Tenant database lifecycle providers.

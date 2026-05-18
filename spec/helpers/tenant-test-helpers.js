@@ -14,9 +14,11 @@ import path from "path"
 
 /**
  * @param {string} prefix - Temp-path prefix.
+ * @param {object} [args] - Options.
+ * @param {boolean} [args.enforceTenantDatabaseScopes] - Whether tenant-switched model queries require a resolved tenant database.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
  */
-export async function createTenantTestConfiguration(prefix) {
+export async function createTenantTestConfiguration(prefix, {enforceTenantDatabaseScopes = true} = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
 
   const configuration = new Configuration({
@@ -47,6 +49,7 @@ export async function createTenantTestConfiguration(prefix) {
       }
     },
     directory,
+    enforceTenantDatabaseScopes,
     environment: "test",
     environmentHandler: new EnvironmentHandlerNode(),
     initializeModels: async () => {},

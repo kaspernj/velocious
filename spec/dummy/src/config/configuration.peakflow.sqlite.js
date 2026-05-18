@@ -129,7 +129,7 @@ const configuration = new Configuration({
 
         if (!modelClass?.initializeRecord) continue
 
-        if (typeof modelClass.getDatabaseIdentifier === "function" && modelClass.getDatabaseIdentifier() !== "default") {
+        if (typeof modelClass.getConfiguredDatabaseIdentifier === "function" && modelClass.getConfiguredDatabaseIdentifier() !== "default") {
           continue
         }
 
