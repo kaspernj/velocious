@@ -8,8 +8,10 @@ import Comment from "../dummy/src/models/comment.js"
 import backendProjects from "../dummy/src/config/backend-projects.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
 import Project from "../dummy/src/models/project.js"
+import Record from "../../src/database/record/index.js"
 import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
@@ -380,6 +382,86 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(response.headers["Set-Cookie"]).toEqual([
       "frontend_model_session=frontend-model-shared-cookie; Path=/; HttpOnly; SameSite=Lax"
     ])
+  })
+
+  it("only initializes the requested frontend-model class", async () => {
+    class RequestedLazyFrontendModel extends Record {
+      /** @returns {Promise<void>} */
+      static async initializeRecord() {
+        this._initialized = true
+      }
+    }
+
+    class UnrequestedLazyFrontendModel extends Record {
+      /** @returns {Promise<void>} */
+      static async initializeRecord() {
+        throw new Error("Unrequested lazy frontend model should not initialize")
+      }
+    }
+
+    class RequestedLazyFrontendResource extends FrontendModelBaseResource {
+      static ModelClass = RequestedLazyFrontendModel
+
+      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {
+          abilities: ["read"],
+          attributes: ["id"],
+          builtInCollectionCommands: ["index"]
+        }
+      }
+    }
+
+    class UnrequestedLazyFrontendResource extends FrontendModelBaseResource {
+      static ModelClass = UnrequestedLazyFrontendModel
+
+      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {
+          abilities: ["read"],
+          attributes: ["id"],
+          builtInCollectionCommands: ["index"]
+        }
+      }
+    }
+
+    const configuration = new Configuration({
+      backendProjects: [{
+        frontendModels: {
+          RequestedLazyFrontendModel: RequestedLazyFrontendResource,
+          UnrequestedLazyFrontendModel: UnrequestedLazyFrontendResource
+        },
+        path: dummyDirectory()
+      }],
+      cookieSecret: "dummy-cookie-secret",
+      database: {test: {}},
+      directory: dummyDirectory(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const client = {remoteAddress: "127.0.0.1"}
+    const request = new Request({client, configuration})
+    const response = new Response({configuration})
+    const controller = new FrontendModelController({
+      action: "frontendApi",
+      configuration,
+      controller: "frontend-models",
+      params: {model: "RequestedLazyFrontendModel"},
+      request,
+      response,
+      viewPath: `${dummyDirectory()}/src/routes/frontend-models`
+    })
+
+    await controller.withFrontendModelParams({model: "RequestedLazyFrontendModel"}, async () => {
+      await controller.ensureFrontendModelClassInitialized()
+    })
+
+    expect(RequestedLazyFrontendModel.isInitialized()).toEqual(true)
+    expect(UnrequestedLazyFrontendModel.isInitialized()).toEqual(false)
   })
 
   it("keeps unexpected shared frontend-model failures generic in production", async () => {

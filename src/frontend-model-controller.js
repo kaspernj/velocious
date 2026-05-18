@@ -1247,20 +1247,11 @@ export default class FrontendModelController extends Controller {
     if (!modelClass || modelClass._initialized) return
 
     const configuration = this.getConfiguration()
-    const backendProjects = configuration.getBackendProjects()
 
-    for (const backendProject of backendProjects) {
-      const resources = frontendModelResourcesForBackendProject(backendProject)
-
-      for (const resourceModelName in resources) {
-        const resourceDefinition = resources[resourceModelName]
-        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
-        const resourceModelClass = resourceClass?.ModelClass
-
-        if (resourceModelClass && !resourceModelClass._initialized && typeof resourceModelClass.initializeRecord === "function") {
-          await resourceModelClass.initializeRecord({configuration})
-        }
-      }
+    if (typeof modelClass.ensureInitialized === "function") {
+      await modelClass.ensureInitialized({configuration})
+    } else if (typeof modelClass.initializeRecord === "function") {
+      await modelClass.initializeRecord({configuration})
     }
   }
 

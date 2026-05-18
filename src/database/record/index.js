@@ -112,6 +112,9 @@ class VelociousDatabaseRecord {
   /** @type {string | undefined} */
   static modelName
 
+  /** @type {Promise<void> | null | undefined} */
+  static _initializeRecordPromise
+
   /**
    * Returns the model name, preferring an explicit `static modelName` declaration
    * over the JavaScript class `.name` property. This allows minified builds to
@@ -821,6 +824,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the create.
    */
   static async create(attributes) {
+    await this.ensureInitialized()
+
     const record = /** @type {InstanceType<MC>} */ (new this(attributes))
 
     await record.save()
@@ -1039,6 +1044,37 @@ class VelociousDatabaseRecord {
 
     await this._defineTranslationMethods()
     this._initialized = true
+  }
+
+  /**
+   * Initializes the model class the first time an async record API needs table
+   * metadata. Concurrent callers share the same initialization promise, and a
+   * failed initialization can be retried by a later call.
+   * @param {{configuration?: import("../../configuration.js").default}} [args] - Optional configuration override.
+   * @returns {Promise<void>} - Resolves when the model class is initialized.
+   */
+  static async ensureInitialized(args = {}) {
+    const {configuration, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    if (this._initialized) return
+
+    if (this._initializeRecordPromise) {
+      await this._initializeRecordPromise
+      return
+    }
+
+    const resolvedConfiguration = configuration || this._configuration || Configuration.current()
+
+    this._initializeRecordPromise = this.initializeRecord({configuration: resolvedConfiguration})
+
+    try {
+      await this._initializeRecordPromise
+    } catch (error) {
+      this._initializeRecordPromise = null
+      throw error
+    }
   }
 
   /**
@@ -1411,6 +1447,7 @@ class VelociousDatabaseRecord {
     const {cast = true, retryIndividuallyOnFailure = false, returnResults = false, ...restArgs} = args
 
     restArgsError(restArgs)
+    await this.ensureInitialized()
 
     const normalizedRows = cast
       ? this._normalizeInsertMultipleRows({columns, rows})
@@ -1653,6 +1690,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<number>} - Resolves with the next primary key.
    */
   static async nextPrimaryKey() {
+    await this.ensureInitialized()
+
     const primaryKey = this.primaryKey()
     const tableName = this.tableName()
     const connection = this.connection()
@@ -1894,6 +1933,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<unknown>} - Resolves with the transaction.
    */
   static async transaction(callback) {
+    await this.ensureInitialized()
+
     const useTransactions = this.connection().getArgs().record?.transactions
 
     if (useTransactions !== false) {
@@ -1920,6 +1961,8 @@ class VelociousDatabaseRecord {
    * @throws {AdvisoryLockTimeoutError} - If `timeoutMs` elapses before the lock is granted.
    */
   static async withAdvisoryLock(name, callback, args = {}) {
+    await this.ensureInitialized()
+
     const connection = this.connection()
     const acquired = await connection.acquireAdvisoryLock(name, args)
 
@@ -1947,6 +1990,8 @@ class VelociousDatabaseRecord {
    * @throws {AdvisoryLockBusyError} - If the lock is already held.
    */
   static async withAdvisoryLockOrFail(name, callback) {
+    await this.ensureInitialized()
+
     const connection = this.connection()
     const acquired = await connection.tryAcquireAdvisoryLock(name)
 
@@ -1970,6 +2015,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<boolean>} - Whether the advisory lock is currently held.
    */
   static async hasAdvisoryLock(name) {
+    await this.ensureInitialized()
+
     return await this.connection().isAdvisoryLockHeld(name)
   }
 
@@ -2240,6 +2287,8 @@ class VelociousDatabaseRecord {
 
   /** @returns {Promise<number>} - Resolves with the count.  */
   static async count() {
+    await this.ensureInitialized()
+
     return await this._newQuery().count()
   }
 
@@ -2254,6 +2303,8 @@ class VelociousDatabaseRecord {
   }
 
   static async destroyAll() {
+    await this.ensureInitialized()
+
     return await this._newQuery().destroyAll()
   }
 
@@ -2264,6 +2315,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<any[]>} - Resolves with the pluck.
    */
   static async pluck(...columns) {
+    await this.ensureInitialized()
+
     return await this._newQuery().pluck(...columns)
   }
 
@@ -2274,6 +2327,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   static async find(recordId) {
+    await this.ensureInitialized()
+
     return await this._newQuery().find(recordId)
   }
 
@@ -2284,6 +2339,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   static async findBy(conditions) {
+    await this.ensureInitialized()
+
     return await this._newQuery().findBy(conditions)
   }
 
@@ -2294,6 +2351,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
   static async findByOrFail(conditions) {
+    await this.ensureInitialized()
+
     return await this._newQuery().findByOrFail(conditions)
   }
 
@@ -2305,6 +2364,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or create by.
    */
   static async findOrCreateBy(conditions, callback) {
+    await this.ensureInitialized()
+
     return await this._newQuery().findOrCreateBy(conditions, callback)
   }
 
@@ -2316,6 +2377,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
    */
   static async findOrInitializeBy(conditions, callback) {
+    await this.ensureInitialized()
+
     return await this._newQuery().findOrInitializeBy(conditions, callback)
   }
 
@@ -2325,6 +2388,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the first.
    */
   static async first() {
+    await this.ensureInitialized()
+
     const result = await this._newQuery().first()
 
     if (!result) throw new Error(`${this.name}.first() returned no records`)
@@ -2348,6 +2413,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>>} - Resolves with the last.
    */
   static async last() {
+    await this.ensureInitialized()
+
     const result = await this._newQuery().last()
 
     if (!result) throw new Error(`${this.name}.last() returned no records`)
@@ -2413,6 +2480,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>[]>} - Resolves with the array.
    */
   static async toArray() {
+    await this.ensureInitialized()
+
     return await this._newQuery().toArray()
   }
 
@@ -2422,6 +2491,8 @@ class VelociousDatabaseRecord {
    * @returns {Promise<InstanceType<MC>[]>} - Resolves with the array.
    */
   static async load() {
+    await this.ensureInitialized()
+
     return await this._newQuery().load()
   }
 
