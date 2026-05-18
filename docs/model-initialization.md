@@ -31,6 +31,9 @@ class. Other resources configured on the same backend project are not touched
 for that request, so an optional legacy resource does not block unrelated
 frontend-model commands at boot or request time.
 
+When a request uses `preload`, Velocious initializes only the relationship
+target classes needed by that preload tree before building their queries.
+
 Use eager initialization when startup should validate every configured model and
 fail immediately on missing tables. Use lazy initialization when a model is an
 optional integration point and the missing-table error should surface only if

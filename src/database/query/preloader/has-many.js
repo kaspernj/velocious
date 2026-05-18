@@ -1,5 +1,6 @@
 // @ts-check
 
+import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasMany {
@@ -46,6 +47,11 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const targetModelClass = this.relationship.getTargetModelClass()
 
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    const configuration = this.relationship.getConfiguration()
+
+    await ensureModelClassInitialized(throughModelClass, configuration)
+    await ensureModelClassInitialized(targetModelClass, configuration)
 
     const throughForeignKey = throughRelationship.getForeignKey()
 
@@ -196,6 +202,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const targetModelClass = this.relationship.getTargetModelClass()
 
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
 
     let query = targetModelClass.where(whereArgs)
 

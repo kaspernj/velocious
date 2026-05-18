@@ -1067,13 +1067,16 @@ class VelociousDatabaseRecord {
 
     const resolvedConfiguration = configuration || this._configuration || Configuration.current()
 
-    this._initializeRecordPromise = this.initializeRecord({configuration: resolvedConfiguration})
+    const initializeRecordPromise = this.initializeRecord({configuration: resolvedConfiguration})
+
+    this._initializeRecordPromise = initializeRecordPromise
 
     try {
-      await this._initializeRecordPromise
-    } catch (error) {
-      this._initializeRecordPromise = null
-      throw error
+      await initializeRecordPromise
+    } finally {
+      if (this._initializeRecordPromise === initializeRecordPromise) {
+        this._initializeRecordPromise = null
+      }
     }
   }
 

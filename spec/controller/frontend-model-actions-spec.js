@@ -503,6 +503,39 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("initializes relationship target classes before frontendIndex preload", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Lazy relationship preload project"})
+      const task = await Task.create({name: "Lazy relationship preload task", projectId: project.id()})
+
+      Task._initialized = false
+      Task._initializeRecordPromise = null
+
+      try {
+        const response = await postFrontendModel("/frontend-models", {
+          requests: [{
+            commandType: "index",
+            model: "Project",
+            payload: {
+              preload: {tasks: true},
+              where: {id: project.id()}
+            },
+            requestId: "request-1"
+          }]
+        })
+        const payload = response.responses[0].response
+
+        expect(payload.status).toEqual("success")
+        expect(Task.isInitialized()).toEqual(true)
+        expect(payload.models.length).toEqual(1)
+        expect(payload.models[0].__preloadedRelationships?.tasks.length).toEqual(1)
+        expect(payload.models[0].__preloadedRelationships.tasks[0].id).toEqual(task.id())
+      } finally {
+        await Task.ensureInitialized()
+      }
+    })
+  })
+
   it("merges nested preload entries from array shorthand", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Merged preload task")
