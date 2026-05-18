@@ -1192,26 +1192,55 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
-   * @returns {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
+   * @param {object} args - Arguments.
+   * @param {import("./configuration-types.js").BackendProjectConfiguration} args.backendProject - Backend project configuration.
+   * @param {string} args.modelName - Model name.
+   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model name.
    */
-  frontendModelResourceConfigurationForModelClass(modelClass) {
-    const frontendModelResource = this.frontendModelResourceConfiguration()
+  frontendModelResourceConfigurationForBackendProjectModelName({backendProject, modelName}) {
+    const resources = frontendModelResourcesForBackendProject(backendProject)
+    const resourceDefinition = resources[modelName]
 
-    if (!frontendModelResource) return null
+    if (!resourceDefinition) return null
 
-    const resources = frontendModelResourcesForBackendProject(frontendModelResource.backendProject)
-    const resourceDefinition = resources[modelClass.getModelName()]
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
     const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
     if (!resourceConfiguration || !resourceClass) return null
 
     return {
-      modelName: modelClass.getModelName(),
+      backendProject,
+      modelName,
       resourceClass,
       resourceConfiguration
     }
+  }
+
+  /**
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {{backendProject: import("./configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("./configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Frontend model resource configuration for model class.
+   */
+  frontendModelResourceConfigurationForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
+
+    if (!frontendModelResource) return null
+
+    return this.frontendModelResourceConfigurationForBackendProjectModelName({
+      backendProject: frontendModelResource.backendProject,
+      modelName: modelClass.getModelName()
+    })
+  }
+
+  /**
+   * @param {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType}} frontendModelResource - Frontend model resource configuration.
+   * @returns {typeof import("./database/record/index.js").default | null} - Backing record class, when available.
+   */
+  frontendModelResourceModelClass(frontendModelResource) {
+    const resourceModelClass = frontendModelResource.resourceClass.ModelClass
+
+    if (resourceModelClass) return resourceModelClass
+
+    return this.getConfiguration().getModelClasses()[frontendModelResource.modelName] || null
   }
 
   /**
@@ -1222,7 +1251,7 @@ export default class FrontendModelController extends Controller {
 
     if (!frontendModelResource) return null
 
-    const resourceModelClass = frontendModelResource.resourceClass?.ModelClass
+    const resourceModelClass = this.frontendModelResourceModelClass(frontendModelResource)
 
     if (resourceModelClass) return resourceModelClass
 
@@ -1237,14 +1266,33 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * Ensures the frontend model class is initialized (has columns, table name, etc.).
+   * Ensures the frontend model class and requested preload target classes are initialized.
    * This handles the case where model initialization was skipped at startup (e.g., browser tests).
    * @returns {Promise<void>} - Resolves when the model class is ready.
    */
   async ensureFrontendModelClassInitialized() {
+    const frontendModelResource = this.frontendModelResourceConfiguration()
     const modelClass = this.frontendModelClassFromConfiguration()
 
-    if (!modelClass || modelClass._initialized) return
+    if (!modelClass) return
+
+    await this.ensureFrontendModelRecordClassInitialized(modelClass)
+
+    if (!frontendModelResource) return
+
+    await this.ensureFrontendModelPreloadClassesInitialized({
+      backendProject: frontendModelResource.backendProject,
+      modelClass,
+      preload: this.frontendModelPreload()
+    })
+  }
+
+  /**
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class to initialize.
+   * @returns {Promise<void>} - Resolves when the model class is ready.
+   */
+  async ensureFrontendModelRecordClassInitialized(modelClass) {
+    if (!modelClass || modelClass.isInitialized()) return
 
     const configuration = this.getConfiguration()
 
@@ -1253,6 +1301,92 @@ export default class FrontendModelController extends Controller {
     } else if (typeof modelClass.initializeRecord === "function") {
       await modelClass.initializeRecord({configuration})
     }
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {import("./configuration-types.js").BackendProjectConfiguration} args.backendProject - Backend project configuration.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class whose preload tree is being resolved.
+   * @param {import("./database/query/index.js").NestedPreloadRecord | null} args.preload - Normalized preload tree.
+   * @returns {Promise<void>} - Resolves when preload target classes are initialized.
+   */
+  async ensureFrontendModelPreloadClassesInitialized({backendProject, modelClass, preload}) {
+    if (!preload) return
+
+    for (const [relationshipName, relationshipPreload] of Object.entries(preload)) {
+      if (relationshipPreload === false) continue
+
+      const relationship = modelClass.getRelationshipByName(relationshipName)
+      const targetModelClass = await this.ensureFrontendModelRelationshipTargetClassInitialized({
+        backendProject,
+        relationship
+      })
+
+      if (!targetModelClass || !isPlainObject(relationshipPreload)) continue
+
+      await this.ensureFrontendModelPreloadClassesInitialized({
+        backendProject,
+        modelClass: targetModelClass,
+        preload: /** @type {import("./database/query/index.js").NestedPreloadRecord} */ (relationshipPreload)
+      })
+    }
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {import("./configuration-types.js").BackendProjectConfiguration} args.backendProject - Backend project configuration.
+   * @param {import("./database/record/relationships/base.js").default} args.relationship - Relationship definition.
+   * @returns {Promise<typeof import("./database/record/index.js").default | null>} - Target model class, when available.
+   */
+  async ensureFrontendModelRelationshipTargetClassInitialized({backendProject, relationship}) {
+    if (relationship.through) {
+      const throughRelationship = relationship.getModelClass().getRelationshipByName(relationship.through)
+      await this.ensureFrontendModelRelationshipTargetClassInitialized({
+        backendProject,
+        relationship: throughRelationship
+      })
+    }
+
+    const targetModelClass = this.frontendModelRelationshipTargetModelClass({
+      backendProject,
+      relationship
+    })
+
+    if (!targetModelClass) return null
+
+    await this.ensureFrontendModelRecordClassInitialized(targetModelClass)
+
+    return targetModelClass
+  }
+
+  /**
+   * @param {object} args - Arguments.
+   * @param {import("./configuration-types.js").BackendProjectConfiguration} args.backendProject - Backend project configuration.
+   * @param {import("./database/record/relationships/base.js").default} args.relationship - Relationship definition.
+   * @returns {typeof import("./database/record/index.js").default | null} - Target model class, when available.
+   */
+  frontendModelRelationshipTargetModelClass({backendProject, relationship}) {
+    if (relationship.getPolymorphic() && relationship.getType() === "belongsTo") return null
+
+    if (relationship.klass) return relationship.klass
+
+    if (relationship.className) {
+      const frontendModelResource = this.frontendModelResourceConfigurationForBackendProjectModelName({
+        backendProject,
+        modelName: relationship.className
+      })
+      const resourceModelClass = frontendModelResource ? this.frontendModelResourceModelClass(frontendModelResource) : null
+
+      if (resourceModelClass) return resourceModelClass
+
+      const registeredModelClass = this.getConfiguration().getModelClasses()[relationship.className]
+
+      if (registeredModelClass) return registeredModelClass
+    }
+
+    const targetModelClass = relationship.getTargetModelClass()
+
+    return targetModelClass || null
   }
 
   /**

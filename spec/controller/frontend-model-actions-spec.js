@@ -505,11 +505,20 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("initializes relationship target classes before frontendIndex preload", async () => {
     await Dummy.run(async () => {
+      const configuration = Configuration.current()
+      const modelClasses = configuration.getModelClasses()
       const project = await Project.create({name: "Lazy relationship preload project"})
       const task = await Task.create({name: "Lazy relationship preload task", projectId: project.id()})
+      const comment = await Comment.create({body: "Lazy relationship preload comment", taskId: task.id()})
+      const previousTaskModelClass = modelClasses.Task
+      const previousCommentModelClass = modelClasses.Comment
 
+      delete modelClasses.Task
+      delete modelClasses.Comment
       Task._initialized = false
       Task._initializeRecordPromise = null
+      Comment._initialized = false
+      Comment._initializeRecordPromise = null
 
       try {
         const response = await postFrontendModel("/frontend-models", {
@@ -517,7 +526,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
             commandType: "index",
             model: "Project",
             payload: {
-              preload: {tasks: true},
+              preload: {tasks: ["comments"]},
               where: {id: project.id()}
             },
             requestId: "request-1"
@@ -527,11 +536,16 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
         expect(payload.status).toEqual("success")
         expect(Task.isInitialized()).toEqual(true)
+        expect(Comment.isInitialized()).toEqual(true)
         expect(payload.models.length).toEqual(1)
         expect(payload.models[0].__preloadedRelationships?.tasks.length).toEqual(1)
         expect(payload.models[0].__preloadedRelationships.tasks[0].id).toEqual(task.id())
+        expect(payload.models[0].__preloadedRelationships.tasks[0].__preloadedRelationships.comments[0].id).toEqual(comment.id())
       } finally {
-        await Task.ensureInitialized()
+        modelClasses.Task = previousTaskModelClass
+        modelClasses.Comment = previousCommentModelClass
+        await Task.ensureInitialized({configuration})
+        await Comment.ensureInitialized({configuration})
       }
     })
   })
