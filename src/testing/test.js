@@ -102,7 +102,10 @@ const testConfig = {
  * @returns {void}
  */
 function configureTests({consoleOutput, excludeTags, defaultTimeoutSeconds, failedConsoleOutputMaxLines} = {}) {
-  testConfig.excludeTags = normalizeTags(excludeTags)
+  if (excludeTags !== undefined) {
+    testConfig.excludeTags = normalizeTags(excludeTags)
+  }
+
   if (consoleOutput !== undefined) {
     if (consoleOutput !== "failure" && consoleOutput !== "live") {
       throw new Error(`Invalid consoleOutput config: ${consoleOutput}`)

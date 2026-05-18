@@ -696,9 +696,12 @@ export default class TestRunner {
         while (true) {
           let shouldRetry = false
           /** @type {unknown} */
+          let caughtError
+          /** @type {unknown} */
           let failedError
           /** @type {unknown} */
           let lastError
+          let willRetry = false
           const stopConsoleCapture = this.startConsoleCapture({
             passthrough: testConfig.consoleOutput === "live"
           })
@@ -726,27 +729,13 @@ export default class TestRunner {
               }
             })
           } catch (error) {
+            caughtError = error
             lastError = error
-            const willRetry = retriesUsed < retryCount
+            willRetry = retriesUsed < retryCount
 
             if (willRetry) {
               retriesUsed++
             }
-
-            await this.emitEvent("testAttemptFailed", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error,
-              attemptNumber,
-              nextAttempt: willRetry ? attemptNumber + 1 : undefined,
-              retriesUsed,
-              retryCount,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this,
-              willRetry
-            })
 
             if (willRetry) {
               shouldRetry = true
@@ -759,6 +748,23 @@ export default class TestRunner {
             if (consoleOutput) {
               attemptConsoleOutputs.push({attemptNumber, output: consoleOutput})
             }
+          }
+
+          if (caughtError !== undefined) {
+            await this.emitEvent("testAttemptFailed", {
+              configuration: this.getConfiguration(),
+              descriptions,
+              error: caughtError,
+              attemptNumber,
+              nextAttempt: willRetry ? attemptNumber + 1 : undefined,
+              retriesUsed,
+              retryCount,
+              testArgs,
+              testData,
+              testDescription,
+              testRunner: this,
+              willRetry
+            })
           }
 
           if (shouldRetry) {

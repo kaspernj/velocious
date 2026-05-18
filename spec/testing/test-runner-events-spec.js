@@ -575,6 +575,52 @@ describe("TestRunner events", () => {
     }
   })
 
+  it("prints attempt failure listener console output when a retry passes", async () => {
+    const previousConsoleOutput = testConfig.consoleOutput
+    const handler = (payload) => {
+      console.log(`retry lifecycle output attempt ${payload.attemptNumber} retry ${payload.willRetry}`)
+    }
+
+    configureTests({consoleOutput: "failure"})
+
+    try {
+      const testRunner = buildTestRunner()
+      let attempts = 0
+      const tests = {
+        args: {},
+        afterEaches: [],
+        afterAlls: [],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "retries after listener output": {
+            args: {retry: 1},
+            function: async () => {
+              attempts++
+              console.log(`hidden test attempt output ${attempts}`)
+              if (attempts === 1) throw new Error("boom")
+            }
+          }
+        }
+      }
+
+      testEvents.on("testAttemptFailed", handler)
+
+      const entries = await captureConsole(async () => {
+        await runTestRunner(testRunner, tests)
+      })
+      const output = entries.map((entry) => entry.output).join("\n")
+
+      expect(testRunner.getSuccessfulTests()).toBe(1)
+      expect(output).toContain("retry lifecycle output attempt 1 retry true")
+      expect(output).not.toContain("hidden test attempt output")
+    } finally {
+      testEvents.off("testAttemptFailed", handler)
+      configureTests({consoleOutput: previousConsoleOutput})
+    }
+  })
+
   it("truncates inline failed test console output", async () => {
     const previousConsoleOutput = testConfig.consoleOutput
     const previousFailedConsoleOutputMaxLines = testConfig.failedConsoleOutputMaxLines
