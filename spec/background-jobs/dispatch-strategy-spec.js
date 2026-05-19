@@ -114,4 +114,41 @@ describe("Background jobs - dispatch strategy", () => {
       await store.clearAll()
     }
   })
+
+  it("arms a retry timer when a drain fails and clears it after recovery", async () => {
+    dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
+
+    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    await main.start()
+
+    try {
+      const originalNextAvailableJob = main.store.nextAvailableJob.bind(main.store)
+      let throwOnce = true
+      main.store.nextAvailableJob = async () => {
+        if (throwOnce) {
+          throwOnce = false
+          throw new Error("simulated transient DB failure")
+        }
+        return await originalNextAvailableJob()
+      }
+
+      // Make the store look like it has a ready worker so the drain
+      // actually calls `nextAvailableJob()` — the loop is gated on
+      // `readyWorkers.size > 0`.
+      const fakeWorker = /** @type {any} */ ({workerId: "fake", send: () => {}})
+      main.readyWorkers.add(fakeWorker)
+
+      await main._drain()
+
+      expect(main._errorRetryTimer).toBeTruthy()
+
+      // Subsequent successful drain clears the retry timer.
+      await main._drain()
+      expect(main._errorRetryTimer).toBeUndefined()
+    } finally {
+      await main.stop()
+    }
+  })
 })

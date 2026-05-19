@@ -49,6 +49,8 @@ export default class BackgroundJobsMain {
     /** @type {NodeJS.Timeout | undefined} */
     this._scheduledTimer = undefined
     /** @type {NodeJS.Timeout | undefined} */
+    this._errorRetryTimer = undefined
+    /** @type {NodeJS.Timeout | undefined} */
     this._orphanTimer = undefined
     /** @type {BackgroundJobsScheduler | undefined} */
     this.scheduler = undefined
@@ -130,9 +132,11 @@ export default class BackgroundJobsMain {
 
     if (this._pollTimer) clearInterval(this._pollTimer)
     if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
+    if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
     this._pollTimer = undefined
     this._scheduledTimer = undefined
+    this._errorRetryTimer = undefined
     this._orphanTimer = undefined
 
     if (this._unsubscribeBeacon) {
@@ -367,6 +371,14 @@ export default class BackgroundJobsMain {
    * flight just sets a re-drain flag and lets the in-flight drain
    * re-loop after it finishes, so no signal is dropped but no two
    * drains run in parallel.
+   *
+   * Resilience: in beacon mode this is the sole wake-up path for
+   * already-queued work, so a transient DB error during the drain (e.g.
+   * `nextAvailableJob()` rejecting) must not strand the queue until the
+   * next external signal. On any error we log it and arm a one-shot
+   * retry via `_scheduleErrorRetry` using `pollIntervalMs` as the
+   * cadence; on success the retry timer is cleared. Polling-mode runs
+   * `_drain` from its own interval, so the retry timer is a no-op there.
    * @returns {Promise<void>}
    */
   async _drain() {
@@ -378,17 +390,60 @@ export default class BackgroundJobsMain {
     }
 
     this._draining = true
+    let errored = false
 
     try {
       do {
         this._redrainQueued = false
-        await this._drainOnce()
+        try {
+          await this._drainOnce()
+        } catch (error) {
+          errored = true
+          this.logger.error(() => ["Background jobs drain failed:", error])
+          break
+        }
       } while (this._redrainQueued && !this._stopped)
     } finally {
       this._draining = false
     }
 
-    if (!this._stopped) await this._armScheduledTimer()
+    if (this._stopped) return
+
+    if (errored) {
+      this._scheduleErrorRetry()
+      return
+    }
+
+    try {
+      await this._armScheduledTimer()
+    } catch (error) {
+      this.logger.error(() => ["Background jobs scheduled-timer arming failed:", error])
+      this._scheduleErrorRetry()
+      return
+    }
+
+    if (this._errorRetryTimer) {
+      clearTimeout(this._errorRetryTimer)
+      this._errorRetryTimer = undefined
+    }
+  }
+
+  /**
+   * Arms a one-shot `setTimeout` to retry `_drain` after a transient
+   * failure. Idempotent — repeated calls while a retry is already
+   * pending are no-ops. Polling mode already retries via its own
+   * interval, so this is a no-op in that mode.
+   * @returns {void}
+   */
+  _scheduleErrorRetry() {
+    if (this._stopped) return
+    if (this._errorRetryTimer) return
+    if (this.dispatchStrategy === "polling") return
+
+    this._errorRetryTimer = setTimeout(() => {
+      this._errorRetryTimer = undefined
+      void this._drain()
+    }, this.pollIntervalMs)
   }
 
   /**
