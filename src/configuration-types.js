@@ -126,6 +126,19 @@
  */
 
 /**
+ * @typedef {"beacon" | "polling"} BackgroundJobsDispatchStrategy
+ *
+ * - `"beacon"` (default): event-driven dispatch. The
+ *   `background-jobs-main` process drains the queue on enqueue, on
+ *   worker readiness, on Beacon broadcasts (so cross-process enqueues
+ *   wake it), and arms a `setTimeout` for the soonest future-scheduled
+ *   job. Falls back gracefully to direct in-process triggering when
+ *   Beacon is not configured.
+ * - `"polling"`: legacy mode, runs a fixed-interval poll over the
+ *   `background_jobs` table (see `pollIntervalMs`).
+ */
+
+/**
  * @typedef {object} BackgroundJobsConfiguration
  * @property {string} [host] - Hostname for the background jobs main process.
  * @property {number} [port] - Port for the background jobs main process.
@@ -136,6 +149,11 @@
  *   process and DB connection pool, so this should fit the pool size, not the
  *   CPU count. Forking remains the right tool for memory isolation across
  *   long-running jobs and for using more cores. Default: `4`.
+ * @property {BackgroundJobsDispatchStrategy} [dispatchStrategy] - How the main process
+ *   detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
+ *   to restore the legacy fixed-interval poll.
+ * @property {number} [pollIntervalMs] - Poll interval in milliseconds. Only used
+ *   when `dispatchStrategy === "polling"`. Default: `1000`.
  */
 
 /**

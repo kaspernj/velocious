@@ -85,4 +85,35 @@ describe("Background jobs - store", () => {
     expect(job?.attempts).toEqual(1)
     expect(job?.orphanedAtMs).toBeGreaterThan(0)
   })
+
+  it("returns the soonest future-scheduled queued job from nextScheduledJob", async () => {
+    dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
+
+    // Job 1: immediately eligible — should NOT come back from nextScheduledJob.
+    await store.enqueue({jobName: "TestJob", args: ["now"], options: {forked: false}})
+
+    // Job 2: build a future-scheduled job by re-queueing a failed job with backoff.
+    const futureJobId = await store.enqueue({jobName: "TestJob", args: ["later"], options: {forked: false, maxRetries: 5}})
+    const handedOffAtMs = await store.markHandedOff({jobId: futureJobId, workerId: "worker-x"})
+    await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-x", handedOffAtMs})
+
+    const next = await store.nextScheduledJob()
+
+    expect(next?.id).toEqual(futureJobId)
+    expect(next?.scheduledAtMs).toBeGreaterThan(Date.now())
+  })
+
+  it("returns null from nextScheduledJob when no future-scheduled jobs exist", async () => {
+    dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
+
+    await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+
+    const next = await store.nextScheduledJob()
+
+    expect(next).toBeNull()
+  })
 })

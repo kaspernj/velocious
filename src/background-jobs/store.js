@@ -116,6 +116,37 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Returns the soonest future-scheduled queued job (one whose
+   * `scheduled_at_ms` is in the future), or null when there are no
+   * future-scheduled jobs. Used by the event-driven dispatcher to arm a
+   * `setTimeout` for the exact moment the next scheduled job becomes
+   * eligible, replacing the legacy 1-second polling loop.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Soonest future-scheduled job, or null.
+   */
+  async nextScheduledJob() {
+    await this.ensureReady()
+
+    return await this._withDb(async (db) => {
+      const now = Date.now()
+      const query = db
+        .newQuery()
+        .from(JOBS_TABLE)
+        .where({status: "queued"})
+        .where(`scheduled_at_ms > ${db.quote(now)}`)
+        .order("scheduled_at_ms ASC")
+        .order("created_at_ms ASC")
+        .limit(1)
+
+      const rows = await query.results()
+      const row = rows[0]
+
+      if (!row) return null
+
+      return this._normalizeJobRow(row)
+    })
+  }
+
+  /**
    * @param {string} jobId - Job id.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Job row.
    */

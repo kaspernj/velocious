@@ -1789,7 +1789,8 @@ export default new Configuration({
     host: "127.0.0.1",
     port: 7331,
     databaseIdentifier: "default",
-    maxConcurrentInlineJobs: 4
+    maxConcurrentInlineJobs: 4,
+    dispatchStrategy: "beacon"
   }
 })
 ```
@@ -1801,9 +1802,20 @@ VELOCIOUS_BACKGROUND_JOBS_HOST=127.0.0.1
 VELOCIOUS_BACKGROUND_JOBS_PORT=7331
 VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER=default
 VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS=4
+VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY=beacon
+VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
 ```
 
 `maxConcurrentInlineJobs` (default: `4`) caps how many `forked: false` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores.
+
+### Dispatch strategy
+
+`dispatchStrategy` controls how `background-jobs-main` detects new work.
+
+- `"beacon"` (default): event-driven dispatch. `background-jobs-main` drains the queue when a job is enqueued (directly, or via a [Beacon](docs/beacon.md) broadcast from another process), when a worker comes up or reports ready, and at the exact `scheduled_at_ms` of the next future-scheduled job via a precise `setTimeout`. There is no fixed-interval polling. The `background_jobs` table is the durable log — on (re)connect to Beacon, the dispatcher does a one-shot catch-up drain so anything enqueued while the bus was unreachable is picked up.
+- `"polling"`: legacy fixed-interval poll. `background-jobs-main` runs `SELECT … FROM background_jobs WHERE status='queued' AND scheduled_at_ms <= now` every `pollIntervalMs` (default `1000`). Use this if you want the previous behavior, or for environments where Beacon is unavailable and you don't want event-driven dispatch.
+
+Beacon is opt-in for the rest of the framework, but the dispatcher uses event-driven dispatch even when Beacon is not configured — it falls back to direct in-process triggering from the enqueue/handoff paths plus `setTimeout` for scheduled jobs. Configure Beacon when you want cross-process enqueues (e.g. enqueue from an HTTP server process) to wake the main process immediately.
 
 ## Defining jobs
 
