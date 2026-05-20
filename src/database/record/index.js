@@ -1003,6 +1003,20 @@ class VelociousDatabaseRecord {
     return this._eagerLoadRecordMetadata
   }
 
+  /** @returns {void} - No return value. */
+  static resetRecordMetadata() {
+    this._initialized = false
+    this._initializeRecordPromise = null
+    this._databaseType = undefined
+    this._table = undefined
+    this._columns = undefined
+    this._columnsAsHash = undefined
+    this._columnNames = undefined
+    this._columnTypeByName = undefined
+    this._attributeNameToColumnName = undefined
+    this._columnNameToAttributeName = undefined
+  }
+
   /**
    * Registers the model class with a configuration without loading table metadata.
    * @param {object} args - Options object.
@@ -1014,6 +1028,7 @@ class VelociousDatabaseRecord {
 
     if (!configuration) throw new Error(`No configuration given for ${this.name}`)
 
+    this.resetRecordMetadata()
     this._configuration = configuration
     this._configuration.registerModelClass(this)
   }

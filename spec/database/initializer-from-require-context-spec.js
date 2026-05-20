@@ -94,6 +94,50 @@ describe("Database - initializer from require context", () => {
     expect(configuration.getModelClasses().LazyMetadataRecord).toEqual(LazyMetadataRecord)
   })
 
+  it("clears stale metadata when an opted-out model is re-registered", async () => {
+    class ReRegisteredLazyMetadataRecord extends DatabaseRecord {
+      /**
+       * @param {object} args - Options object.
+       * @param {Configuration} args.configuration - Configuration instance.
+       * @returns {Promise<void>} - Resolves when complete.
+       */
+      static async initializeRecord({configuration}) {
+        this.registerRecordClass({configuration})
+        this._databaseType = "sqlite"
+        this._columns = []
+        this._columnsAsHash = {}
+        this._initialized = true
+      }
+    }
+
+    ReRegisteredLazyMetadataRecord.setEagerLoadRecordMetadata(false)
+    ReRegisteredLazyMetadataRecord._databaseType = "mysql"
+    ReRegisteredLazyMetadataRecord._table = /** @type {any} */ ({})
+    ReRegisteredLazyMetadataRecord._columns = [/** @type {any} */ ({})]
+    ReRegisteredLazyMetadataRecord._columnsAsHash = {id: /** @type {any} */ ({})}
+    ReRegisteredLazyMetadataRecord._columnNames = ["id"]
+    ReRegisteredLazyMetadataRecord._columnTypeByName = {id: "integer"}
+    ReRegisteredLazyMetadataRecord._attributeNameToColumnName = {id: "id"}
+    ReRegisteredLazyMetadataRecord._columnNameToAttributeName = {id: "id"}
+    ReRegisteredLazyMetadataRecord._initialized = true
+
+    const configuration = buildConfiguration()
+    const initializer = new InitializerFromRequireContext({
+      requireContext: buildRequireContext({"./re-registered-lazy-metadata-record.js": {default: ReRegisteredLazyMetadataRecord}})
+    })
+
+    await initializer.initialize({configuration})
+
+    expect(ReRegisteredLazyMetadataRecord.isInitialized()).toEqual(false)
+    expect(() => ReRegisteredLazyMetadataRecord.getDatabaseType()).toThrow("Database type hasn't been set")
+    expect(() => ReRegisteredLazyMetadataRecord.getColumns()).toThrow(/used before initialization/)
+
+    await ReRegisteredLazyMetadataRecord.ensureInitialized()
+
+    expect(ReRegisteredLazyMetadataRecord.getDatabaseType()).toEqual("sqlite")
+    expect(ReRegisteredLazyMetadataRecord.isInitialized()).toEqual(true)
+  })
+
   it("initializes opted-out models on first use", async () => {
     class FirstUseLazyMetadataRecord extends DatabaseRecord {
       static initializeRecordCalls = 0
