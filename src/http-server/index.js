@@ -9,8 +9,21 @@ import Net from "net"
 import ServerClient from "./server-client.js"
 import WorkerHandler from "./worker-handler/index.js"
 
+/** @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
+/** @typedef {function({configuration: import("../configuration.js").default, workerCount: number}) : (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
+
 export default class VelociousHttpServer {
   clientCount = 0
+  _starting = false
+
+  /** @type {DevelopmentReloader | DevelopmentReloaderLike | undefined} */
+  developmentReloader
+
+  /** @type {import("net").Server | undefined} */
+  netServer
+
+  /** @type {WorkerHandlerFactory | undefined} */
+  workerHandlerFactory
 
   /** @type {Record<string, ServerClient>}  */
   clients = {}
@@ -32,10 +45,12 @@ export default class VelociousHttpServer {
    * @param {number} [args.port] - Port.
    * @param {number} [args.maxWorkers] - Max workers.
    * @param {function({configuration: import("../configuration.js").default, onReload: function({changedPath: string}) : Promise<void>}) : {start: () => Promise<void>, stop: () => Promise<void>}} [args.developmentReloaderFactory] - Development reloader factory.
+   * @param {WorkerHandlerFactory} [args.workerHandlerFactory] - Worker handler factory.
    */
-  constructor({configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port}) {
+  constructor({configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port, workerHandlerFactory}) {
     this.configuration = configuration
     this.developmentReloaderFactory = developmentReloaderFactory
+    this.workerHandlerFactory = workerHandlerFactory
     this.inProcess = inProcess || false
     this.logger = new Logger(this)
     this.host = host || "0.0.0.0"
@@ -45,18 +60,62 @@ export default class VelociousHttpServer {
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async start() {
+    if (this._starting) throw new Error("Velocious HTTP server is already starting")
+    if (this.isActive()) throw new Error("Velocious HTTP server is already running")
+
+    this._starting = true
+    const startupState = this._captureStartupState()
+
     try {
       await this._ensureAtLeastOneWorker()
       await this._startDevelopmentReloader()
-      this.netServer = new Net.Server()
-      this.netServer.on("close", this.onClose)
-      this.netServer.on("connection", this.onConnection)
-      this.netServer.on("error", this.onServerError)
+      /** @type {import("net").Server} */
+      const netServer = new Net.Server()
+      this.netServer = netServer
+      netServer.on("close", this.onClose)
+      netServer.on("connection", this.onConnection)
+      netServer.on("error", this.onServerError)
       await this._netServerListen()
     } catch (error) {
-      await this.stop()
+      await this._stopStartupResources(startupState)
       throw error
+    } finally {
+      this._starting = false
     }
+  }
+
+  /** @returns {{developmentReloader: DevelopmentReloader | DevelopmentReloaderLike | undefined, netServer: import("net").Server | undefined, workerHandlers: Array<WorkerHandler | InProcessHandler>}} - Startup state. */
+  _captureStartupState() {
+    return {
+      developmentReloader: this.developmentReloader,
+      netServer: this.netServer,
+      workerHandlers: [...this.workerHandlers]
+    }
+  }
+
+  /**
+   * @param {ReturnType<VelociousHttpServer["_captureStartupState"]>} startupState - State captured before startup.
+   * @returns {Promise<void>} - Resolves when cleanup is complete.
+   */
+  async _stopStartupResources(startupState) {
+    /** @type {import("net").Server | undefined} */
+    const startupNetServer = this.netServer
+
+    if (this.developmentReloader && this.developmentReloader !== startupState.developmentReloader) {
+      await this.developmentReloader.stop()
+    }
+
+    if (startupNetServer && startupNetServer !== startupState.netServer) {
+      await this.stopServer(startupNetServer)
+    }
+
+    const startupWorkerHandlers = this.workerHandlers.filter((workerHandler) => !startupState.workerHandlers.includes(workerHandler))
+
+    await Promise.all(startupWorkerHandlers.map((handler) => handler.stop()))
+
+    this.developmentReloader = startupState.developmentReloader
+    this.netServer = startupState.netServer
+    this.workerHandlers = startupState.workerHandlers
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
@@ -112,24 +171,29 @@ export default class VelociousHttpServer {
     await Promise.all(promises)
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
-  stopServer() {
+  /**
+   * @param {import("net").Server | undefined} [netServer] - Server to stop.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  stopServer(netServer = this.netServer) {
     return new Promise((resolve, reject) => {
-      if (!this.netServer || !this.netServer.listening) {
+      if (!netServer || !netServer.listening) {
         resolve(undefined)
         return
       }
 
-      // Force-close lingering sockets (e.g. WebSocket upgrade
-      // connections mid-close-handshake) so the port is released
-      // immediately instead of waiting for graceful drain.
-      for (const socket of this._activeSockets) {
-        socket.destroy()
+      if (netServer === this.netServer) {
+        // Force-close lingering sockets (e.g. WebSocket upgrade
+        // connections mid-close-handshake) so the port is released
+        // immediately instead of waiting for graceful drain.
+        for (const socket of this._activeSockets) {
+          socket.destroy()
+        }
+
+        this._activeSockets.clear()
       }
 
-      this._activeSockets.clear()
-
-      this.netServer.close((error) => {
+      netServer.close((error) => {
         if (error) {
           reject(error)
         } else {
@@ -233,10 +297,12 @@ export default class VelociousHttpServer {
     this.workerCount++
 
     const Handler = this.inProcess ? InProcessHandler : WorkerHandler
-    const workerHandler = new Handler({
-      configuration: this.configuration,
-      workerCount
-    })
+    const workerHandler = this.workerHandlerFactory
+      ? this.workerHandlerFactory({configuration: this.configuration, workerCount})
+      : new Handler({
+        configuration: this.configuration,
+        workerCount
+      })
 
     await workerHandler.start()
 
