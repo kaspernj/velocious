@@ -38,6 +38,11 @@ export default class VelociousDatabaseInitializerFromRequireContext {
 
       if (!modelClass) throw new Error(`Model wasn't exported from: ${fileName}`)
 
+      if (!modelClass.getEagerLoadRecordMetadata()) {
+        modelClass.registerRecordClass({configuration})
+        continue
+      }
+
       await modelClass.initializeRecord({configuration})
 
       if (await modelClass.hasTranslationsTable()) {
