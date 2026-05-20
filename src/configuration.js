@@ -70,7 +70,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -101,6 +101,7 @@ export default class VelociousConfiguration {
     this._initializers = initializers
     this._testing = testing
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
+    this._trustedProxies = trustedProxies
     this._requestTimeoutMs = requestTimeoutMs
     this._structureSql = structureSql
     this._tenantDatabaseProviders = tenantDatabaseProviders || {}
@@ -952,6 +953,15 @@ export default class VelociousConfiguration {
 
   /** @returns {string | undefined} The path to a config file that should be used for testing. */
   getTesting() { return this._testing }
+
+  /** @returns {string | string[] | undefined} Trusted reverse proxy address ranges. */
+  getTrustedProxies() { return this._trustedProxies }
+
+  /**
+   * @param {string | string[] | undefined} trustedProxies - Trusted reverse proxy address ranges.
+   * @returns {void}
+   */
+  setTrustedProxies(trustedProxies) { this._trustedProxies = trustedProxies }
 
   /**
    * @param {string} [identifier] - Database identifier to initialize.

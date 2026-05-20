@@ -378,6 +378,7 @@
  * @property {Record<string, TenantDatabaseProviderType>} [tenantDatabaseProviders] - Tenant database lifecycle providers keyed by database identifier.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
+ * @property {string | string[]} [trustedProxies] - Trusted reverse proxy address ranges used to resolve request remote addresses from forwarding headers.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.
  * @property {RouteResolverHookType[]} [routeResolverHooks] - Hook callbacks that can hijack unresolved routes.
  * @property {WebsocketChannelResolverType} [websocketChannelResolver] - Resolve a websocket channel class/instance for each connection.
