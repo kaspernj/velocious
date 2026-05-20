@@ -115,6 +115,9 @@ class VelociousDatabaseRecord {
   /** @type {Promise<void> | null | undefined} */
   static _initializeRecordPromise
 
+  /** @type {boolean | undefined} */
+  static _eagerLoadRecordMetadata
+
   /**
    * Returns the model name, preferring an explicit `static modelName` declaration
    * over the JavaScript class `.name` property. This allows minified builds to
@@ -986,6 +989,51 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * @param {boolean} eagerLoadRecordMetadata - Whether require-context initialization should load table metadata for this model.
+   * @returns {void} - No return value.
+   */
+  static setEagerLoadRecordMetadata(eagerLoadRecordMetadata) {
+    this._eagerLoadRecordMetadata = eagerLoadRecordMetadata
+  }
+
+  /** @returns {boolean} - Whether require-context initialization should load table metadata for this model. */
+  static getEagerLoadRecordMetadata() {
+    if (this._eagerLoadRecordMetadata === undefined) return true
+
+    return this._eagerLoadRecordMetadata
+  }
+
+  /** @returns {void} - No return value. */
+  static resetRecordMetadata() {
+    this._initialized = false
+    this._initializeRecordPromise = null
+    this._databaseType = undefined
+    this._table = undefined
+    this._columns = undefined
+    this._columnsAsHash = undefined
+    this._columnNames = undefined
+    this._columnTypeByName = undefined
+    this._attributeNameToColumnName = undefined
+    this._columnNameToAttributeName = undefined
+  }
+
+  /**
+   * Registers the model class with a configuration without loading table metadata.
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @returns {void} - No return value.
+   */
+  static registerRecordClass({configuration, ...restArgs}) {
+    restArgsError(restArgs)
+
+    if (!configuration) throw new Error(`No configuration given for ${this.name}`)
+
+    this.resetRecordMetadata()
+    this._configuration = configuration
+    this._configuration.registerModelClass(this)
+  }
+
+  /**
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @returns {Promise<void>} - Resolves when complete.
@@ -995,8 +1043,7 @@ class VelociousDatabaseRecord {
 
     if (!configuration) throw new Error(`No configuration given for ${this.name}`)
 
-    this._configuration = configuration
-    this._configuration.registerModelClass(this)
+    this.registerRecordClass({configuration})
     const connection = this.connection({enforceTenantDatabaseScope: false})
 
     this._databaseType = connection.getType()
