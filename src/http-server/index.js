@@ -45,13 +45,18 @@ export default class VelociousHttpServer {
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async start() {
-    await this._ensureAtLeastOneWorker()
-    await this._startDevelopmentReloader()
-    this.netServer = new Net.Server()
-    this.netServer.on("close", this.onClose)
-    this.netServer.on("connection", this.onConnection)
-    this.netServer.on("error", this.onServerError)
-    await this._netServerListen()
+    try {
+      await this._ensureAtLeastOneWorker()
+      await this._startDevelopmentReloader()
+      this.netServer = new Net.Server()
+      this.netServer.on("close", this.onClose)
+      this.netServer.on("connection", this.onConnection)
+      this.netServer.on("error", this.onServerError)
+      await this._netServerListen()
+    } catch (error) {
+      await this.stop()
+      throw error
+    }
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
@@ -59,8 +64,16 @@ export default class VelociousHttpServer {
     return new Promise((resolve, reject) => {
       if (!this.netServer) throw new Error("No netServer")
 
+      /** @param {Error} error - Listen error. */
+      const onListenError = (error) => {
+        this.netServer?.off("error", onListenError)
+        reject(error)
+      }
+
       try {
+        this.netServer.once("error", onListenError)
         this.netServer.listen(this.port, this.host, () => {
+          this.netServer?.off("error", onListenError)
           this.logger.debug(`Velocious listening on ${this.host}:${this.port}`)
           resolve(undefined)
         })
