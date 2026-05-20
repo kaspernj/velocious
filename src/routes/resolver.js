@@ -373,7 +373,7 @@ export default class VelociousRoutesResolver {
   async _logActionStart({action, controllerClass, logMethod}) {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
-    const remoteAddress = request.remoteAddress?.() || request.header("x-forwarded-for") || "unknown"
+    const remoteAddress = request.remoteAddress() || "unknown"
     const loggedParams = /** @type {Record<string, unknown>} */ (this._sanitizeParamsForLogging(this.params))
 
     delete loggedParams.action

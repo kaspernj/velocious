@@ -3,6 +3,7 @@
 import {digg} from "diggerize"
 import querystring from "querystring"
 import RequestParser from "./request-parser.js"
+import resolveRemoteAddress from "../remote-address.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousHttpServerClientRequest {
@@ -87,7 +88,14 @@ export default class VelociousHttpServerClientRequest {
     return params
   }
   protocol() { return this.requestParser.getProtocol() }
-  remoteAddress() { return this.client?.remoteAddress }
+  remoteAddress() {
+    return resolveRemoteAddress({
+      configuration: this.configuration,
+      headers: this.headers(),
+      socketRemoteAddress: this.socketRemoteAddress()
+    })
+  }
+  socketRemoteAddress() { return this.client?.remoteAddress }
 
   getRequestBuffer() { return this.getRequestParser().getRequestBuffer() }
   getRequestParser() { return this.requestParser }

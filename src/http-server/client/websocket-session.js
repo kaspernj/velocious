@@ -492,7 +492,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       metadata: this.getMetadata(),
       method,
       path,
-      remoteAddress: this.client.remoteAddress
+      remoteAddress: this.remoteAddress()
     })
     const requestRunner = new RequestRunner({
       configuration: this.configuration,
@@ -1618,6 +1618,11 @@ export default class VelociousHttpServerClientWebsocketSession {
     } catch (error) {
       this.logger.error(() => ["Websocket close handler failed", error])
     }
+  }
+
+  /** @returns {string | undefined} - Remote address resolved from the websocket upgrade request. */
+  remoteAddress() {
+    return this.upgradeRequest?.remoteAddress() || this.client.remoteAddress
   }
 
   /**

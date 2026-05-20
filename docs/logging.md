@@ -1,5 +1,10 @@
 # Logging
 
+Request logs use the same remote address as `request.remoteAddress()`. If your
+app runs behind a reverse proxy, configure trusted proxies so logs and
+controllers resolve the real client IP consistently; see
+[trusted proxies](trusted-proxies.md).
+
 Velocious logs database queries by default at `info` level using Rails-style query names and elapsed time. Query logging defaults to off in the `test` environment so CI output stays focused on failures:
 
 ```text

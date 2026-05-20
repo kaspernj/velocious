@@ -13,6 +13,7 @@
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including forked background job runners (see [docs/beacon.md](docs/beacon.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
+* Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 
 # Setup
