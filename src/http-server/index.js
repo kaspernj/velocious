@@ -53,9 +53,9 @@ export default class VelociousHttpServer {
     this.workerHandlerFactory = workerHandlerFactory
     this.inProcess = inProcess || false
     this.logger = new Logger(this)
-    this.host = host || "0.0.0.0"
-    this.port = port || 3006
-    this.maxWorkers = maxWorkers || 16
+    this.host = host ?? "0.0.0.0"
+    this.port = port ?? 3006
+    this.maxWorkers = maxWorkers ?? 16
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */

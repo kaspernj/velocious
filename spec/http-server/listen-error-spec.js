@@ -124,4 +124,13 @@ describe("HttpServer - listen errors", () => {
 
     expect(stoppedWorkers).toEqual(["worker-0"])
   })
+
+  it("preserves explicit port zero for random-port test servers", () => {
+    const server = new HttpServer({
+      configuration: buildConfiguration(),
+      port: 0
+    })
+
+    expect(server.port).toEqual(0)
+  })
 })
