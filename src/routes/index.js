@@ -16,4 +16,29 @@ export default class VelociousRoutes {
   draw(callback) {
     callback(this.rootRoute)
   }
+
+  /**
+   * Collects all `route.mount(...)` registrations across the route tree so the
+   * configuration can apply them when the routes are set.
+   * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} - Declared mounts.
+   */
+  getMounts() {
+    /** @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} */
+    const collected = []
+
+    /** @param {import("./base-route.js").default} route - Route to visit. */
+    const visit = (route) => {
+      if (typeof route.getMounts === "function") {
+        collected.push(...route.getMounts())
+      }
+
+      for (const subRoute of route.getSubRoutes()) {
+        visit(subRoute)
+      }
+    }
+
+    visit(this.rootRoute)
+
+    return collected
+  }
 }

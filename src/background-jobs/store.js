@@ -12,6 +12,21 @@ const JOBS_TABLE = "background_jobs"
 const DEFAULT_MAX_RETRIES = 10
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
 
+/**
+ * Columns the dashboard is allowed to sort job listings by, mapped to their
+ * database column names. Restricting to this set keeps the sort parameter
+ * (which originates from untrusted query strings) from reaching raw SQL.
+ * @type {Record<string, string>}
+ */
+const SORTABLE_COLUMNS = {
+  attempts: "attempts",
+  completedAtMs: "completed_at_ms",
+  createdAtMs: "created_at_ms",
+  failedAtMs: "failed_at_ms",
+  handedOffAtMs: "handed_off_at_ms",
+  scheduledAtMs: "scheduled_at_ms"
+}
+
 export default class BackgroundJobsStore {
   /**
    * @param {object} args - Options.
@@ -166,6 +181,92 @@ export default class BackgroundJobsStore {
       if (!row) return null
 
       return this._normalizeJobRow(row)
+    })
+  }
+
+  /**
+   * Counts jobs grouped by status. Used by the dashboard overview.
+   * @returns {Promise<Record<string, number>>} - Counts keyed by status.
+   */
+  async countsByStatus() {
+    await this.ensureReady()
+
+    return await this._withDb(async (db) => {
+      const rows = await db
+        .newQuery()
+        .from(JOBS_TABLE)
+        .select("status")
+        .select("COUNT(*) AS count")
+        .group("status")
+        .results()
+
+      /** @type {Record<string, number>} */
+      const counts = {}
+
+      for (const row of rows) {
+        const typedRow = /** @type {Record<string, any>} */ (row)
+
+        counts[String(typedRow.status)] = this._normalizeNumber(typedRow.count) || 0
+      }
+
+      return counts
+    })
+  }
+
+  /**
+   * Counts jobs matching the given filters.
+   * @param {object} [args] - Options.
+   * @param {string} [args.status] - Filter by status.
+   * @param {string} [args.jobName] - Filter by job name.
+   * @returns {Promise<number>} - Matching job count.
+   */
+  async countJobs({status, jobName} = {}) {
+    await this.ensureReady()
+
+    return await this._withDb(async (db) => {
+      let query = db.newQuery().from(JOBS_TABLE).select("COUNT(*) AS count")
+
+      if (status) query = query.where({status})
+      if (jobName) query = query.where({job_name: jobName})
+
+      const rows = await query.results()
+      const countRow = /** @type {Record<string, any>} */ (rows[0] || {})
+
+      return this._normalizeNumber(countRow.count) || 0
+    })
+  }
+
+  /**
+   * Lists jobs for the dashboard, filtered, sorted and paginated.
+   * @param {object} [args] - Options.
+   * @param {string} [args.status] - Filter by status.
+   * @param {string} [args.jobName] - Filter by job name.
+   * @param {number} [args.limit] - Maximum rows to return.
+   * @param {number} [args.offset] - Rows to skip.
+   * @param {string} [args.sortColumn] - Camel-cased column to sort by (see SORTABLE_COLUMNS).
+   * @param {"ASC" | "DESC"} [args.sortDirection] - Sort direction.
+   * @returns {Promise<import("./types.js").BackgroundJobRow[]>} - Normalized job rows.
+   */
+  async listJobs({status, jobName, limit = 25, offset = 0, sortColumn = "createdAtMs", sortDirection = "DESC"} = {}) {
+    await this.ensureReady()
+
+    const column = SORTABLE_COLUMNS[sortColumn] || SORTABLE_COLUMNS.createdAtMs
+    const direction = sortDirection === "ASC" ? "ASC" : "DESC"
+
+    return await this._withDb(async (db) => {
+      let query = db.newQuery().from(JOBS_TABLE)
+
+      if (status) query = query.where({status})
+      if (jobName) query = query.where({job_name: jobName})
+
+      const rows = await query
+        .order(`${column} ${direction}`)
+        .order("created_at_ms DESC")
+        .limit(limit)
+        .offset(offset)
+        .results()
+
+      return rows.map((row) => this._normalizeJobRow(row))
     })
   }
 

@@ -144,6 +144,9 @@ export default class VelociousConfiguration {
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
+
+    /** @type {WeakSet<object>} */
+    this._appliedRouteMounts = new WeakSet()
     this._errorEvents = new EventEmitter()
 
     /** @type {{[key: string]: import("./database/pool/base.js").default}} */
@@ -1112,7 +1115,29 @@ export default class VelociousConfiguration {
    * @param {import("./routes/index.js").default} newRoutes - New routes.
    * @returns {void} - No return value.
    */
-  setRoutes(newRoutes) { this._routes = newRoutes }
+  setRoutes(newRoutes) {
+    this._routes = newRoutes
+    this._applyRouteMounts(newRoutes)
+  }
+
+  /**
+   * Applies any `route.mount(...)` registrations from the routes file by letting
+   * each mountable register its routes (typically route-resolver hooks) against
+   * this configuration. Guarded so repeated setRoutes calls with the same routes
+   * don't register a mount more than once.
+   * @param {import("./routes/index.js").default} newRoutes - Routes instance.
+   * @returns {void} - No return value.
+   */
+  _applyRouteMounts(newRoutes) {
+    if (!newRoutes || typeof newRoutes.getMounts !== "function") return
+
+    for (const mount of newRoutes.getMounts()) {
+      if (this._appliedRouteMounts.has(mount)) continue
+
+      this._appliedRouteMounts.add(mount)
+      mount.mountable.mountInto({configuration: this, ...mount.options})
+    }
+  }
 
   /**
    * Adds plugin/library routes using a lightweight route DSL backed by route resolver hooks.

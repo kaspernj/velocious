@@ -1,8 +1,15 @@
 import Routes from "../../../../src/routes/index.js"
+import VelociousBackgroundJobsApi from "../../../../src/background-jobs/web/index.js"
 
 const routes = new Routes()
 
 routes.draw((route) => {
+  route.mount(VelociousBackgroundJobsApi, {
+    accessTokens: ["test-jobs-token"],
+    at: "/velocious/jobs",
+    authorize: async ({request}) => request.header("x-jobs-allow") === "yes"
+  })
+
   route.namespace("api", (route) => {
     route.post("broadcast-event")
     route.post("metadata")
