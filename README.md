@@ -11,6 +11,7 @@
 * Per-row association counts via `.withCount(...)` on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)` on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
+* Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including forked background job runners (see [docs/beacon.md](docs/beacon.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
@@ -639,6 +640,8 @@ Task.validates("name", {presence: true, uniqueness: true})
 
 export default Task
 ```
+
+Translated models also get a `currentTranslation` `hasOne` relationship scoped to the first available row in the current locale fallback order. See [docs/translations.md](docs/translations.md) for preloading and frontend-model sorting behavior.
 
 Async class APIs initialize record metadata on first use when a model has not
 already been initialized eagerly. See [docs/model-initialization.md](docs/model-initialization.md)

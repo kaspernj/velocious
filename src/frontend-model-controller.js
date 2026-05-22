@@ -2520,7 +2520,7 @@ export default class FrontendModelController extends Controller {
       const translationModelClass = targetModelClass.getTranslationClass()
       const translationAttributeNameToColumnNameMap = translationModelClass.getAttributeNameToColumnNameMap()
       const translationColumnName = translationAttributeNameToColumnNameMap[sort.column]
-      const translationPath = sort.path.concat(["translations"])
+      const translationPath = sort.path.concat(["currentTranslation"])
 
       if (!translationColumnName) {
         throw new Error(`Unknown translated sort column "${sort.column}" for ${targetModelClass.name}`)

@@ -2085,7 +2085,52 @@ class VelociousDatabaseRecord {
       if (!this._relationshipExists("translations")) {
         this._defineRelationship("translations", {dependent: "destroy", klass: this.getTranslationClass(), type: "hasMany"})
       }
+
+      if (!this._relationshipExists("currentTranslation")) {
+        this._defineRelationship("currentTranslation", {
+          klass: this.getTranslationClass(),
+          scope: (query) => this.currentTranslationScope(query),
+          type: "hasOne"
+        })
+      }
     }
+  }
+
+  /**
+   * @param {ModelClassQuery} query - Translation query.
+   * @returns {ModelClassQuery} - Scoped query.
+   */
+  static currentTranslationScope(query) {
+    const configuration = this._getConfiguration()
+    const locale = configuration.getLocale()
+    const fallbacks = configuration.getLocaleFallbacks()
+    const locales = locale ? (fallbacks?.[locale] || [locale]) : []
+
+    if (locales.length === 0) return query.where("1=0")
+
+    const driver = query.driver
+    const translationClass = this.getTranslationClass()
+    const relationship = this.getRelationshipByName("currentTranslation")
+    const tableName = translationClass.tableName()
+    const scopeTableReference = `${tableName}_current_translation_scope`
+    const targetTableSql = driver.quoteTable(query.getTableReferenceForJoin())
+    const scopeTableSql = driver.quoteTable(scopeTableReference)
+    const scopeTableFromSql = `${driver.quoteTable(tableName)} AS ${scopeTableSql}`
+    const primaryKeyColumn = translationClass.primaryKey()
+    const foreignKeyColumn = relationship.getForeignKey()
+    const targetPrimaryKeySql = `${targetTableSql}.${driver.quoteColumn(primaryKeyColumn)}`
+    const targetForeignKeySql = `${targetTableSql}.${driver.quoteColumn(foreignKeyColumn)}`
+    const scopePrimaryKeySql = `${scopeTableSql}.${driver.quoteColumn(primaryKeyColumn)}`
+    const scopeForeignKeySql = `${scopeTableSql}.${driver.quoteColumn(foreignKeyColumn)}`
+    const scopeLocaleSql = `${scopeTableSql}.${driver.quoteColumn("locale")}`
+    const localeListSql = locales.map((fallbackLocale) => driver.quote(fallbackLocale)).join(", ")
+    const localeOrderSql = locales.map((fallbackLocale, index) => `WHEN ${scopeLocaleSql} = ${driver.quote(fallbackLocale)} THEN ${driver.quote(index)}`).join(" ")
+    const fallbackOrderSql = `CASE ${localeOrderSql} ELSE ${driver.quote(locales.length)} END`
+    const selectedTranslationSql = driver.getType() == "mssql"
+      ? `SELECT TOP 1 ${scopePrimaryKeySql} FROM ${scopeTableFromSql} WHERE ${scopeForeignKeySql} = ${targetForeignKeySql} AND ${scopeLocaleSql} IN (${localeListSql}) ORDER BY ${fallbackOrderSql}, ${scopePrimaryKeySql} ASC`
+      : `SELECT ${scopePrimaryKeySql} FROM ${scopeTableFromSql} WHERE ${scopeForeignKeySql} = ${targetForeignKeySql} AND ${scopeLocaleSql} IN (${localeListSql}) ORDER BY ${fallbackOrderSql}, ${scopePrimaryKeySql} ASC LIMIT 1`
+
+    return query.where(`${targetPrimaryKeySql} = (${selectedTranslationSql})`)
   }
 
   /**
