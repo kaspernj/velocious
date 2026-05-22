@@ -35,9 +35,19 @@ export function normalizeMountPrefix(at) {
  * @returns {JobsApiMatch | null} - Matched action or null.
  */
 export function matchJobsApiPath({prefix, path, method}) {
-  if (path !== prefix && !path.startsWith(`${prefix}/`)) return null
+  /** @type {string} */
+  let subPath
 
-  const subPath = path.slice(prefix.length) || "/"
+  if (prefix === "/") {
+    // Root mount: the whole path is the sub-path (avoid building a "//" guard).
+    subPath = path
+  } else if (path === prefix) {
+    subPath = "/"
+  } else if (path.startsWith(`${prefix}/`)) {
+    subPath = path.slice(prefix.length)
+  } else {
+    return null
+  }
 
   if (method === "GET" && subPath === "/api/health") return {action: "health", params: {}}
   if (method === "GET" && subPath === "/api/stats") return {action: "stats", params: {}}
