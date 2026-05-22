@@ -1300,6 +1300,23 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("orders translated attributes through the current translation", async () => {
+    await Dummy.run(async () => {
+      const laterProject = await Project.create({nameDe: "Aardvark fallback", nameEn: "Zeta current"})
+      const earlierProject = await Project.create({nameDe: "Zulu fallback", nameEn: "Alpha current"})
+
+      const payload = await postSharedProjectFrontendModelCommand("index", {
+        select: {Project: ["id", "name"]},
+        sort: "name asc",
+        where: {id: [laterProject.id(), earlierProject.id()]}
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.models.map((project) => project.id)).toEqual([earlierProject.id(), laterProject.id()])
+      expect(payload.models.map((project) => project.name)).toEqual(["Alpha current", "Zeta current"])
+    })
+  })
+
   it("excludes name from default serialization when selectedByDefault is false", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({name: "Hidden name project"})

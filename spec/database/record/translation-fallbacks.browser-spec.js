@@ -1,3 +1,4 @@
+import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - translation fallbacks", {tags: ["dummy"]}, () => {
@@ -17,5 +18,18 @@ describe("Record - translation fallbacks", {tags: ["dummy"]}, () => {
     expect(sameProject.name()).toEqual("Test projekt")
     expect(sameProject.nameEn()).toEqual(undefined)
     expect(sameProject.nameDe()).toEqual("Test projekt")
+  })
+
+  it("preloads the current translation for translated records", async () => {
+    const task = new Task({name: "Test task"})
+    const project = task.buildProject({nameDe: "Test projekt", nameEn: "Test project"})
+
+    await task.save()
+
+    const sameProject = await Project.preload("currentTranslation").find(project.id())
+    const currentTranslation = sameProject.currentTranslation()
+
+    expect(currentTranslation.locale()).toEqual("en")
+    expect(currentTranslation.name()).toEqual("Test project")
   })
 })

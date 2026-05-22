@@ -37,6 +37,7 @@
 - The `s` key applies sorting: `ransack({s: "name asc"})` sorts by name ascending.
 - Multiple sort columns can be specified: `ransack({s: "name asc, createdAt desc"})`.
 - Relationship paths are resolved automatically: `ransack({projectNameCont: "foo"})` filters through the `project` relationship.
+- Translated sort attributes use the translated model's `currentTranslation` relationship so the sort follows the current locale without duplicating records. See [translations.md](translations.md).
 - Example combining filter and sort: `User.ransack({emailCont: "john", s: "name asc"}).toArray()`.
 
 ## Query parity helpers

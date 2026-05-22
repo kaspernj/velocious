@@ -2085,6 +2085,18 @@ class VelociousDatabaseRecord {
       if (!this._relationshipExists("translations")) {
         this._defineRelationship("translations", {dependent: "destroy", klass: this.getTranslationClass(), type: "hasMany"})
       }
+
+      if (!this._relationshipExists("currentTranslation")) {
+        this._defineRelationship("currentTranslation", {
+          klass: this.getTranslationClass(),
+          scope: (query) => {
+            const locale = this._getConfiguration().getLocale()
+
+            return locale ? query.where({locale}) : query.where("1=0")
+          },
+          type: "hasOne"
+        })
+      }
     }
   }
 
