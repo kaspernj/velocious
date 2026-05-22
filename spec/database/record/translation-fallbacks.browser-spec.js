@@ -23,13 +23,20 @@ describe("Record - translation fallbacks", {tags: ["dummy"]}, () => {
   it("preloads the current translation for translated records", async () => {
     const task = new Task({name: "Test task"})
     const project = task.buildProject({nameDe: "Test projekt", nameEn: "Test project"})
+    const fallbackTask = new Task({name: "Fallback task"})
+    const fallbackProject = fallbackTask.buildProject({nameDe: "Fallback projekt"})
 
     await task.save()
+    await fallbackTask.save()
 
     const sameProject = await Project.preload("currentTranslation").find(project.id())
     const currentTranslation = sameProject.currentTranslation()
+    const sameFallbackProject = await Project.preload("currentTranslation").find(fallbackProject.id())
+    const fallbackTranslation = sameFallbackProject.currentTranslation()
 
     expect(currentTranslation.locale()).toEqual("en")
     expect(currentTranslation.name()).toEqual("Test project")
+    expect(fallbackTranslation.locale()).toEqual("de")
+    expect(fallbackTranslation.name()).toEqual("Fallback projekt")
   })
 })

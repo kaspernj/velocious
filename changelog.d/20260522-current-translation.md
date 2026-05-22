@@ -1,1 +1,1 @@
-- Add a `currentTranslation` relationship for translated records and use it for translated frontend-model sorting.
+- Add a fallback-aware `currentTranslation` relationship for translated records and use it for translated frontend-model sorting.

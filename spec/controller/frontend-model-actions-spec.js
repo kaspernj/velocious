@@ -1300,20 +1300,21 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
-  it("orders translated attributes through the current translation", async () => {
+  it("orders translated attributes through current translation fallbacks", async () => {
     await Dummy.run(async () => {
-      const laterProject = await Project.create({nameDe: "Aardvark fallback", nameEn: "Zeta current"})
-      const earlierProject = await Project.create({nameDe: "Zulu fallback", nameEn: "Alpha current"})
+      const fallbackProject = await Project.create({nameDe: "Zulu fallback"})
+      const middleProject = await Project.create({nameDe: "Should not sort first", nameEn: "Beta current"})
+      const lastProject = await Project.create({nameEn: "Alpha current"})
 
       const payload = await postSharedProjectFrontendModelCommand("index", {
         select: {Project: ["id", "name"]},
-        sort: "name asc",
-        where: {id: [laterProject.id(), earlierProject.id()]}
+        sort: "name desc",
+        where: {id: [fallbackProject.id(), middleProject.id(), lastProject.id()]}
       })
 
       expect(payload.status).toEqual("success")
-      expect(payload.models.map((project) => project.id)).toEqual([earlierProject.id(), laterProject.id()])
-      expect(payload.models.map((project) => project.name)).toEqual(["Alpha current", "Zeta current"])
+      expect(payload.models.map((project) => project.id)).toEqual([fallbackProject.id(), middleProject.id(), lastProject.id()])
+      expect(payload.models.map((project) => project.name)).toEqual(["Zulu fallback", "Beta current", "Alpha current"])
     })
   })
 

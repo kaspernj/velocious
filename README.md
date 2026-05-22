@@ -641,7 +641,7 @@ Task.validates("name", {presence: true, uniqueness: true})
 export default Task
 ```
 
-Translated models also get a `currentTranslation` `hasOne` relationship scoped to the current locale. See [docs/translations.md](docs/translations.md) for preloading and frontend-model sorting behavior.
+Translated models also get a `currentTranslation` `hasOne` relationship scoped to the first available row in the current locale fallback order. See [docs/translations.md](docs/translations.md) for preloading and frontend-model sorting behavior.
 
 Async class APIs initialize record metadata on first use when a model has not
 already been initialized eagerly. See [docs/model-initialization.md](docs/model-initialization.md)
