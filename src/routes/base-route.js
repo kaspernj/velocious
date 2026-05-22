@@ -36,9 +36,15 @@ export default class VelociousBaseRoute {
   /** @type {Array<VelociousBaseRoute>} */
   routes = []
 
+  /** @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} */
+  mounts = []
+
   constructor() {
     // Nothing
   }
+
+  /** @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} - Mounts declared on this route. */
+  getMounts() { return this.mounts }
 
   /**
    * @abstract

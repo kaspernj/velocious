@@ -1926,6 +1926,24 @@ await MyJob.performLaterWithOptions({
 
 If a handed-off job does not report back within 2 hours, it is marked orphaned and re-queued if retries remain.
 
+## Dashboard
+
+Velocious ships a mountable read-only HTTP API for inspecting jobs (queued, running, completed, failed, orphaned and scheduled), similar in spirit to `sidekiq-web`. Mount it in your routes file the way `Sidekiq::Web` is mounted in Rails:
+
+```js
+import VelociousBackgroundJobsApi from "velocious/build/src/background-jobs/web/index.js"
+
+routes.draw((route) => {
+  route.mount(VelociousBackgroundJobsApi, {
+    at: "/velocious/jobs",
+    authorize: async ({request, ability}) => Boolean(ability?.can("manage", "BackgroundJobs")),
+    accessTokens: [process.env.VELOCIOUS_JOBS_TOKEN]
+  })
+})
+```
+
+It exposes `GET /api/stats`, `/api/jobs`, `/api/jobs/:id`, `/api/schedule` and `/api/health` under the mount path, gated by a bearer token and/or an `authorize` callback (loopback-only when neither is configured). The dashboard UI is a separate Expo app. See [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md).
+
 # Running a server
 
 ```bash
