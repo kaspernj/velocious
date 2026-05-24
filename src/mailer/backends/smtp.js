@@ -2,6 +2,8 @@
 
 import restArgsError from "../../utils/rest-args-error.js"
 
+/** @typedef {import("smtp-connection").SMTPConnectionOptions} SmtpConnectionOptions */
+
 /**
  * @param {any} value - Recipient input.
  * @returns {string[]} - Normalized recipients.
@@ -29,7 +31,7 @@ function headerLine(name, value) {
 export default class SmtpMailerBackend {
   /**
    * @param {object} args - Constructor args.
-   * @param {object} args.connectionOptions - smtp-connection options.
+   * @param {SmtpConnectionOptions} args.connectionOptions - smtp-connection options.
    * @param {string} [args.defaultFrom] - Default from address.
    */
   constructor({connectionOptions, defaultFrom, ...restArgs}) {
@@ -83,30 +85,55 @@ export default class SmtpMailerBackend {
 
     const message = `${headers.join("\r\n")}\r\n\r\n${payload.html}`
     const {default: SmtpConnection} = await import("smtp-connection")
-    const connection = new SmtpConnection(/** @type {Record<string, unknown>} */ (this.connectionOptions))
+    const connectionOptions = this.connectionOptions
+    const connection = new SmtpConnection(connectionOptions)
 
     await new Promise((resolve, reject) => {
-      connection.connect((connectError) => {
-        if (connectError) {
-          reject(connectError)
+      let settled = false
+
+      /**
+       * @param {Error | null | undefined} error - Error that finished delivery.
+       */
+      const finish = (error) => {
+        if (settled) return
+
+        settled = true
+        connection.removeListener("error", finish)
+
+        if (error) {
+          connection.close()
+          reject(error)
           return
         }
 
+        connection.quit()
+        resolve(undefined)
+      }
+
+      const sendMessage = () => {
         connection.send({from, to: recipients}, /** @type {any} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
-          if (sendError) {
-            connection.quit(() => reject(sendError))
+          finish(sendError)
+        })
+      }
+
+      const authenticateAndSend = () => {
+        if (!connectionOptions.auth) {
+          sendMessage()
+          return
+        }
+
+        connection.login(connectionOptions.auth, (loginError) => {
+          if (loginError) {
+            finish(loginError)
             return
           }
 
-          connection.quit((quitError) => {
-            if (quitError) {
-              reject(quitError)
-            } else {
-              resolve(null)
-            }
-          })
+          sendMessage()
         })
-      })
+      }
+
+      connection.once("error", finish)
+      connection.connect(authenticateAndSend)
     })
   }
 }

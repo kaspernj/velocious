@@ -264,6 +264,8 @@ Install the SMTP peer dependency in your app:
 npm install smtp-connection
 ```
 
+When `connectionOptions.auth` is present, the SMTP backend authenticates before sending the message.
+
 Test deliveries are stored in memory:
 
 ```js
