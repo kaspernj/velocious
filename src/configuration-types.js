@@ -362,6 +362,7 @@
  * @property {boolean} [enforceTenantDatabaseScopes] - Require tenant-switched model queries to resolve a tenant database identifier. Defaults to true.
  * @property {string} [environment] - Current environment name.
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
+ * @property {boolean} [exposeInternalErrorsToClients] - Return unexpected internal error details in client API payloads outside production. Defaults to false.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
  * @property {BeaconConfiguration} [beacon] - Beacon broadcast bus configuration.

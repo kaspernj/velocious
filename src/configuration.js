@@ -70,7 +70,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -92,6 +92,7 @@ export default class VelociousConfiguration {
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
     this._enforceTenantDatabaseScopes = enforceTenantDatabaseScopes
+    this._exposeInternalErrorsToClients = exposeInternalErrorsToClients
     this._directory = directory
     this._initializeModels = initializeModels
     this._isInitialized = false
@@ -160,6 +161,9 @@ export default class VelociousConfiguration {
 
   /** @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally. */
   getAutoload() { return this._autoload }
+
+  /** @returns {boolean} Whether unexpected internal error details may be returned to API clients. */
+  getExposeInternalErrorsToClients() { return this._exposeInternalErrorsToClients === true }
 
   /**
    * @param {boolean} newValue - Whether auto-batch-preload of relationships is enabled.
