@@ -190,7 +190,7 @@ describe("SmtpMailerBackend", () => {
         }
       })
 
-      const authIndex = fakeServer.commands.findIndex((command) => command.startsWith("AUTH PLAIN "))
+      const authIndex = fakeServer.commands.findIndex((command) => command === "AUTH PLAIN" || command.startsWith("AUTH PLAIN "))
       const mailFromIndex = fakeServer.commands.findIndex((command) => command.startsWith("MAIL FROM"))
 
       expect(authIndex >= 0).toEqual(true)
