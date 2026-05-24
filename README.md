@@ -1236,7 +1236,10 @@ const counts = await baseQuery.reselect("COUNT(*) AS count").results()
 
 ```js
 const tasks = await Task.order("name").toArray()
+const sortedTasks = await Task.order({tableName: "tasks", column: "name", direction: "ASC"}).toArray()
 ```
+
+Use structured order descriptors for runtime-selected columns so identifiers are quoted by the active database driver. Plain string orders are still available for fixed SQL expressions that cannot be represented as a column descriptor.
 
 ### Reordering and reverse order
 

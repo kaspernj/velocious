@@ -5,6 +5,8 @@ import {isPlainObject} from "is-plain-object"
 import JoinObject from "./join-object.js"
 import JoinPlain from "./join-plain.js"
 import Logger from "../../logger.js"
+import OrderBase from "./order-base.js"
+import OrderColumn from "./order-column.js"
 import OrderPlain from "./order-plain.js"
 import SelectBase from "./select-base.js"
 import SelectPlain from "./select-plain.js"
@@ -14,6 +16,7 @@ import WherePlain from "./where-plain.js"
 
 /**
  * @typedef {{[key: string]: boolean | string | string[] | NestedPreloadRecord }} NestedPreloadRecord
+ * @typedef {string | number | import("./order-base.js").default | import("./order-column.js").OrderColumnInput} OrderArgumentType
  * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
  * @typedef {object | string} WhereArgumentType
  */
@@ -259,7 +262,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | number} order - Order.
+   * @param {OrderArgumentType} order - Order.
    * @returns {this} - The order.
    */
   order(order) {
@@ -267,6 +270,10 @@ export default class VelociousDatabaseQuery {
       this._orders.push(new OrderPlain(this, order))
     } else if (typeof order == "number") {
       this._orders.push(new OrderPlain(this, `${order}`))
+    } else if (order instanceof OrderBase) {
+      this._orders.push(order)
+    } else if (isPlainObject(order)) {
+      this._orders.push(new OrderColumn(this, order))
     } else {
       throw new Error(`Unknown order type: ${typeof order}`)
     }
@@ -314,7 +321,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
-   * @param {string | number} order - Order.
+   * @param {OrderArgumentType} order - Order.
    * @returns {this} - The reorder.
    */
   reorder(order) {

@@ -252,11 +252,6 @@ export default class BackgroundJobsStore {
 
     const column = SORTABLE_COLUMNS[sortColumn] || SORTABLE_COLUMNS.createdAtMs
     const direction = sortDirection === "ASC" ? "ASC" : "DESC"
-    const orderClauses = [`${column} ${direction}`]
-
-    if (column !== SORTABLE_COLUMNS.createdAtMs) {
-      orderClauses.push("created_at_ms DESC")
-    }
 
     return await this._withDb(async (db) => {
       let query = db.newQuery().from(JOBS_TABLE)
@@ -264,7 +259,8 @@ export default class BackgroundJobsStore {
       if (status) query = query.where({status})
       if (jobName) query = query.where({job_name: jobName})
 
-      for (const orderClause of orderClauses) query = query.order(orderClause)
+      query = query.order({column, direction})
+      if (column !== SORTABLE_COLUMNS.createdAtMs) query = query.order({column: SORTABLE_COLUMNS.createdAtMs, direction: "DESC"})
 
       const rows = await query.limit(limit).offset(offset).results()
 
