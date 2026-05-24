@@ -2,7 +2,7 @@
 
 import restArgsError from "../../utils/rest-args-error.js"
 
-/** @typedef {import("smtp-connection").SMTPConnectionOptions} SmtpConnectionOptions */
+/** @typedef {{auth?: Record<string, unknown>, [key: string]: unknown}} SmtpConnectionOptions */
 
 /**
  * @param {any} value - Recipient input.
