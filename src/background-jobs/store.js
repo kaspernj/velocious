@@ -259,12 +259,10 @@ export default class BackgroundJobsStore {
       if (status) query = query.where({status})
       if (jobName) query = query.where({job_name: jobName})
 
-      const rows = await query
-        .order(`${column} ${direction}`)
-        .order("created_at_ms DESC")
-        .limit(limit)
-        .offset(offset)
-        .results()
+      query = query.order({column, direction})
+      if (column !== SORTABLE_COLUMNS.createdAtMs) query = query.order({column: SORTABLE_COLUMNS.createdAtMs, direction: "DESC"})
+
+      const rows = await query.limit(limit).offset(offset).results()
 
       return rows.map((row) => this._normalizeJobRow(row))
     })

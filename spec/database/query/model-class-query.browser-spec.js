@@ -87,6 +87,18 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(pageCount).toEqual(1)
   })
 
+  it("orders records with a structured column descriptor", async () => {
+    const project = await Project.create({nameEn: "Structured order", nameDe: "Strukturierte Reihenfolge"})
+    await Task.create({name: "Bravo structured order", project})
+    await Task.create({name: "Alpha structured order", project})
+
+    const tasks = await Task
+      .order({tableName: "tasks", column: "name", direction: "ASC"})
+      .toArray()
+
+    expect(tasks.map((task) => task.name())).toEqual(["Alpha structured order", "Bravo structured order"])
+  })
+
   it("findOrInitializeBy marks new records as new and changed", async () => {
     const record = await Task.where({name: "New Task"}).findOrInitializeBy({name: "New Task"})
 

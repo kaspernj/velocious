@@ -2530,7 +2530,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {string | number} order - Order.
+   * @param {import("../query/index.js").OrderArgumentType} order - Order.
    * @returns {ModelClassQuery<MC>} - The order.
    */
   static order(order) {
