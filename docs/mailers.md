@@ -1,6 +1,6 @@
 # Mailers
 
-Velocious mailers render EJS templates from `src/mailers/<mailer-name>/<action>.ejs`. Mailer actions should assign template data, then return `this.mail(...)` with an explicit `actionName`.
+Velocious mailers render EJS templates from `src/mailers/<mailer-name>/<action>.ejs`. The mailer directory and action filename are normalized with underscore + dasherize, so `TasksMailer#newNotification` renders `src/mailers/tasks/new-notification.ejs`. Mailer actions should assign template data, then return `this.mail(...)` with an explicit `actionName`.
 
 ```js
 import VelociousMailer from "velocious/build/src/mailer.js"
