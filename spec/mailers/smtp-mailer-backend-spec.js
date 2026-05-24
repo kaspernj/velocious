@@ -181,6 +181,7 @@ describe("SmtpMailerBackend", () => {
       })
 
       await mailerBackend.deliver({
+        configuration: /** @type {import("../../src/configuration.js").default} */ ({}),
         payload: {
           action: "notice",
           html: "<p>SMTP smoke body</p>",

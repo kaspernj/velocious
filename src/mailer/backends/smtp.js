@@ -48,9 +48,10 @@ export default class SmtpMailerBackend {
   /**
    * @param {object} args - Delivery args.
    * @param {import("../index.js").MailerDeliveryPayload} args.payload - Mail delivery payload.
+   * @param {import("../../configuration.js").default} [args.configuration] - Active configuration.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async deliver({payload, ...restArgs}) {
+  async deliver({payload, configuration: _configuration, ...restArgs}) {
     restArgsError(restArgs)
 
     const from = payload.from || this.defaultFrom
