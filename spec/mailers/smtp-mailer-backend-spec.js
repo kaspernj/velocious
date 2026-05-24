@@ -1,6 +1,7 @@
 // @ts-check
 
 import net from "net"
+import wait from "awaitery/build/wait.js"
 
 import SmtpMailerBackend from "../../src/mailer/backends/smtp.js"
 
@@ -10,21 +11,36 @@ import SmtpMailerBackend from "../../src/mailer/backends/smtp.js"
  * @property {() => Promise<void>} close - Closes the server.
  * @property {string[]} messages - DATA payloads accepted by the server.
  * @property {number} port - Listening port.
+ * @property {Promise<void>} quitReceived - Resolves when the server receives QUIT.
+ * @property {() => void} releaseQuitResponse - Allows a held QUIT response to continue.
  */
 
 /**
  * @param {object} [args] - Server options.
+ * @param {boolean} [args.holdQuitResponse] - Whether QUIT should wait for release before responding.
  * @param {boolean} [args.requireAuth] - Whether MAIL FROM requires AUTH first.
  * @returns {Promise<FakeSmtpServer>} - Fake SMTP server state.
  */
-async function startFakeSmtpServer({requireAuth = true} = {}) {
+async function startFakeSmtpServer({holdQuitResponse = false, requireAuth = true} = {}) {
   const commands = []
   const messages = []
+  const sockets = new Set()
+  let releaseQuitResponse = () => {}
+  let resolveQuitReceived = () => {}
+  const quitReceived = new Promise((resolve) => {
+    resolveQuitReceived = resolve
+  })
+  const quitResponseReleased = holdQuitResponse ? new Promise((resolve) => {
+    releaseQuitResponse = resolve
+  }) : Promise.resolve()
   const server = net.createServer((socket) => {
     let authenticated = false
     let dataMode = false
     let dataBuffer = ""
     let lineBuffer = ""
+
+    sockets.add(socket)
+    socket.once("close", () => sockets.delete(socket))
 
     const write = (response) => socket.write(`${response}\r\n`)
 
@@ -80,8 +96,12 @@ async function startFakeSmtpServer({requireAuth = true} = {}) {
           dataMode = true
           write("354 End data with <CR><LF>.<CR><LF>")
         } else if (line === "QUIT") {
-          write("221 Bye")
-          socket.end()
+          resolveQuitReceived()
+
+          void quitResponseReleased.then(() => {
+            write("221 Bye")
+            socket.end()
+          })
         } else {
           write("250 OK")
         }
@@ -102,6 +122,12 @@ async function startFakeSmtpServer({requireAuth = true} = {}) {
 
   return {
     close: async () => {
+      releaseQuitResponse()
+
+      for (const socket of sockets) {
+        socket.destroy()
+      }
+
       await new Promise((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -114,7 +140,9 @@ async function startFakeSmtpServer({requireAuth = true} = {}) {
     },
     commands,
     messages,
-    port: address.port
+    port: address.port,
+    quitReceived,
+    releaseQuitResponse
   }
 }
 
@@ -153,6 +181,47 @@ describe("SmtpMailerBackend", () => {
       expect(fakeServer.messages.length).toEqual(1)
       expect(fakeServer.messages[0]).toContain("Subject: SMTP smoke subject")
       expect(fakeServer.messages[0]).toContain("<p>SMTP smoke body</p>")
+    } finally {
+      await fakeServer.close()
+    }
+  })
+
+  it("waits until graceful SMTP shutdown completes before resolving delivery", async () => {
+    const fakeServer = await startFakeSmtpServer({holdQuitResponse: true})
+    let resolved = false
+
+    try {
+      const mailerBackend = new SmtpMailerBackend({
+        connectionOptions: {
+          auth: {user: "robot", pass: "secret"},
+          host: "127.0.0.1",
+          ignoreTLS: true,
+          port: fakeServer.port,
+          secure: false
+        },
+        defaultFrom: "robot@example.com"
+      })
+      const deliverPromise = mailerBackend.deliver({
+        payload: {
+          action: "notice",
+          html: "<p>SMTP smoke body</p>",
+          mailer: "smtp",
+          subject: "SMTP smoke subject",
+          to: "receiver@example.com"
+        }
+      }).then(() => {
+        resolved = true
+      })
+
+      await fakeServer.quitReceived
+      await wait(0.01)
+
+      expect(resolved).toEqual(false)
+
+      fakeServer.releaseQuitResponse()
+      await deliverPromise
+
+      expect(resolved).toEqual(true)
     } finally {
       await fakeServer.close()
     }

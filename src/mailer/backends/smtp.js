@@ -90,29 +90,61 @@ export default class SmtpMailerBackend {
 
     await new Promise((resolve, reject) => {
       let settled = false
+      let shuttingDown = false
 
-      /**
-       * @param {Error | null | undefined} error - Error that finished delivery.
-       */
-      const finish = (error) => {
+      const cleanup = () => {
+        connection.removeListener("end", onEnd)
+        connection.removeListener("error", onError)
+      }
+
+      const resolveDelivery = () => {
         if (settled) return
 
         settled = true
-        connection.removeListener("error", finish)
+        cleanup()
+        resolve(undefined)
+      }
 
-        if (error) {
-          connection.close()
-          reject(error)
+      /**
+       * @param {Error} error - Error that failed delivery.
+       */
+      const rejectDelivery = (error) => {
+        if (settled) return
+
+        settled = true
+        cleanup()
+        connection.close()
+        reject(error)
+      }
+
+      const onEnd = () => resolveDelivery()
+
+      /**
+       * @param {Error} error - Error emitted by the SMTP connection.
+       */
+      const onError = (error) => {
+        if (shuttingDown) {
+          resolveDelivery()
           return
         }
 
+        rejectDelivery(error)
+      }
+
+      const quitAfterAcceptedMessage = () => {
+        shuttingDown = true
+        connection.once("end", onEnd)
         connection.quit()
-        resolve(undefined)
       }
 
       const sendMessage = () => {
         connection.send({from, to: recipients}, /** @type {any} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
-          finish(sendError)
+          if (sendError) {
+            rejectDelivery(sendError)
+            return
+          }
+
+          quitAfterAcceptedMessage()
         })
       }
 
@@ -124,7 +156,7 @@ export default class SmtpMailerBackend {
 
         connection.login(connectionOptions.auth, (loginError) => {
           if (loginError) {
-            finish(loginError)
+            rejectDelivery(loginError)
             return
           }
 
@@ -132,7 +164,7 @@ export default class SmtpMailerBackend {
         })
       }
 
-      connection.once("error", finish)
+      connection.on("error", onError)
       connection.connect(authenticateAndSend)
     })
   }
