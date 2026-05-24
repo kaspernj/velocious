@@ -27,11 +27,24 @@ declare module "sql.js" {
 }
 
 declare module "smtp-connection" {
-  export default class SMTPConnection {
-    constructor(options?: Record<string, unknown>)
-    connect(callback: (error?: Error | null) => void): void
+  import {EventEmitter} from "node:events"
+
+  export interface SMTPConnectionAuth {
+    [key: string]: unknown
+  }
+
+  export interface SMTPConnectionOptions {
+    auth?: SMTPConnectionAuth
+    [key: string]: unknown
+  }
+
+  export default class SMTPConnection extends EventEmitter {
+    constructor(options?: SMTPConnectionOptions)
+    close(): void
+    connect(callback: () => void): void
+    login(authData: SMTPConnectionAuth, callback: (error?: Error | null) => void): void
     send(envelope: unknown, message: unknown, callback: (error?: Error | null, info?: unknown) => void): void
-    quit(callback: (error?: Error | null) => void): void
+    quit(): void
   }
 }
 
