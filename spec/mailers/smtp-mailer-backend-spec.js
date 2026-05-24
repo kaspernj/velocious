@@ -38,6 +38,7 @@ async function startFakeSmtpServer({holdQuitResponse = false, requireAuth = true
     let dataMode = false
     let dataBuffer = ""
     let lineBuffer = ""
+    let pendingPlainAuth = false
 
     sockets.add(socket)
     socket.once("close", () => sockets.delete(socket))
@@ -71,9 +72,26 @@ async function startFakeSmtpServer({holdQuitResponse = false, requireAuth = true
 
         commands.push(line)
 
+        if (pendingPlainAuth) {
+          pendingPlainAuth = false
+          const credentials = Buffer.from(line, "base64").toString("utf8")
+
+          if (credentials === "\u0000robot\u0000secret") {
+            authenticated = true
+            write("235 2.7.0 Authentication successful")
+          } else {
+            write("535 5.7.8 Authentication failed")
+          }
+
+          continue
+        }
+
         if (line.startsWith("EHLO") || line.startsWith("HELO")) {
           write("250-localhost")
-          write("250 AUTH PLAIN LOGIN")
+          write("250 AUTH PLAIN")
+        } else if (line === "AUTH PLAIN") {
+          pendingPlainAuth = true
+          write("334 ")
         } else if (line.startsWith("AUTH PLAIN ")) {
           const encodedCredentials = line.slice("AUTH PLAIN ".length)
           const credentials = Buffer.from(encodedCredentials, "base64").toString("utf8")
