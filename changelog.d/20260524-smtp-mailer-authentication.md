@@ -1,0 +1,1 @@
+- Fix `SmtpMailerBackend` to authenticate SMTP connections before sending and resolve delivery promises after the SMTP server accepts the message.

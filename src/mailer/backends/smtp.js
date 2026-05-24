@@ -2,6 +2,8 @@
 
 import restArgsError from "../../utils/rest-args-error.js"
 
+/** @typedef {import("smtp-connection").SMTPConnectionOptions} SmtpConnectionOptions */
+
 /**
  * @param {any} value - Recipient input.
  * @returns {string[]} - Normalized recipients.
@@ -29,7 +31,7 @@ function headerLine(name, value) {
 export default class SmtpMailerBackend {
   /**
    * @param {object} args - Constructor args.
-   * @param {object} args.connectionOptions - smtp-connection options.
+   * @param {SmtpConnectionOptions} args.connectionOptions - smtp-connection options.
    * @param {string} [args.defaultFrom] - Default from address.
    */
   constructor({connectionOptions, defaultFrom, ...restArgs}) {
@@ -83,30 +85,87 @@ export default class SmtpMailerBackend {
 
     const message = `${headers.join("\r\n")}\r\n\r\n${payload.html}`
     const {default: SmtpConnection} = await import("smtp-connection")
-    const connection = new SmtpConnection(/** @type {Record<string, unknown>} */ (this.connectionOptions))
+    const connectionOptions = this.connectionOptions
+    const connection = new SmtpConnection(connectionOptions)
 
     await new Promise((resolve, reject) => {
-      connection.connect((connectError) => {
-        if (connectError) {
-          reject(connectError)
+      let settled = false
+      let shuttingDown = false
+
+      const cleanup = () => {
+        connection.removeListener("end", onEnd)
+        connection.removeListener("error", onError)
+      }
+
+      const resolveDelivery = () => {
+        if (settled) return
+
+        settled = true
+        cleanup()
+        resolve(undefined)
+      }
+
+      /**
+       * @param {Error} error - Error that failed delivery.
+       */
+      const rejectDelivery = (error) => {
+        if (settled) return
+
+        settled = true
+        cleanup()
+        connection.close()
+        reject(error)
+      }
+
+      const onEnd = () => resolveDelivery()
+
+      /**
+       * @param {Error} error - Error emitted by the SMTP connection.
+       */
+      const onError = (error) => {
+        if (shuttingDown) {
+          resolveDelivery()
           return
         }
 
+        rejectDelivery(error)
+      }
+
+      const quitAfterAcceptedMessage = () => {
+        shuttingDown = true
+        connection.once("end", onEnd)
+        connection.quit()
+      }
+
+      const sendMessage = () => {
         connection.send({from, to: recipients}, /** @type {any} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
-            connection.quit(() => reject(sendError))
+            rejectDelivery(sendError)
             return
           }
 
-          connection.quit((quitError) => {
-            if (quitError) {
-              reject(quitError)
-            } else {
-              resolve(null)
-            }
-          })
+          quitAfterAcceptedMessage()
         })
-      })
+      }
+
+      const authenticateAndSend = () => {
+        if (!connectionOptions.auth) {
+          sendMessage()
+          return
+        }
+
+        connection.login(connectionOptions.auth, (loginError) => {
+          if (loginError) {
+            rejectDelivery(loginError)
+            return
+          }
+
+          sendMessage()
+        })
+      }
+
+      connection.on("error", onError)
+      connection.connect(authenticateAndSend)
     })
   }
 }
