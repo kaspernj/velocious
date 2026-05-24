@@ -1,0 +1,1 @@
+- Made the `velocious server` command stop the running application gracefully on SIGINT and SIGTERM.
