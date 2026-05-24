@@ -1,0 +1,1 @@
+Extract the WebSocket client into the cross-platform `snapreq` library. `VelociousWebsocketClient` is now a thin subclass of `snapreq`'s WebSocket client that pre-wires the local development websocket URL and frontend-model transport deserialization; the connection/session/channel machinery is shared via `snapreq`. No change to the client's public behaviour.
