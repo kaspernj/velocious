@@ -24,11 +24,19 @@ export default class MailerDelivery {
   }
 
   /**
+   * @returns {Promise<import("./index.js").MailerDeliveryPayload>} - Rendered mailer payload.
+   */
+  async buildPayload() {
+    await this.actionPromise
+
+    return /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
+  }
+
+  /**
    * @returns {Promise<import("./index.js").MailerDeliveryPayload | unknown>} - Delivered payload or handler result.
    */
   async deliverNow() {
-    await this.actionPromise
-    const payload = /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
+    const payload = await this.buildPayload()
 
     return await this.mailer._deliverPayload(payload)
   }
@@ -37,8 +45,7 @@ export default class MailerDelivery {
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
   async deliverLater() {
-    await this.actionPromise
-    const payload = /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
+    const payload = await this.buildPayload()
 
     return await this.mailer._enqueuePayload(payload)
   }

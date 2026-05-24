@@ -7,7 +7,7 @@ import Configuration from "../../src/configuration.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
-import VelociousMailer, {deliveries} from "../../src/mailer.js"
+import VelociousMailer, {clearDeliveries, deliveries} from "../../src/mailer.js"
 
 class TasksMailer extends VelociousMailer {
   /**
@@ -117,6 +117,34 @@ describe("Mailers", () => {
       expect(sent[0].subject).toEqual("New task")
       expect(sent[0].html).toMatch(/Hello Tess/)
       expect(sent[0].html).toMatch(/Task 42 has just been created/)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("builds a rendered payload without delivering it", async () => {
+    const {directory, cleanup} = await createTempProjectDir()
+
+    try {
+      const configuration = createConfiguration(directory)
+      configuration.setCurrent()
+      clearDeliveries()
+
+      const task = {id: () => 51}
+      const user = {
+        email: () => "preview@example.com",
+        name: () => "Priya"
+      }
+
+      const payload = await new TasksMailer().delayedNotification(task, user).buildPayload()
+
+      expect(payload.to).toEqual("preview@example.com")
+      expect(payload.subject).toEqual("Delayed task")
+      expect(payload.mailer).toEqual("TasksMailer")
+      expect(payload.action).toEqual("delayedNotification")
+      expect(payload.html).toMatch(/Hello Priya/)
+      expect(payload.html).toMatch(/Task 51 has just been created/)
+      expect(deliveries().length).toEqual(0)
     } finally {
       await cleanup()
     }

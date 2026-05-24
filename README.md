@@ -14,6 +14,7 @@
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including forked background job runners (see [docs/beacon.md](docs/beacon.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
+* EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 
@@ -214,6 +215,12 @@ Deliver immediately or enqueue via background jobs:
 ```js
 await new TasksMailer().newNotification(task, user).deliverNow()
 await new TasksMailer().newNotification(task, user).deliverLater()
+```
+
+Build the rendered payload without sending when the app needs to store an audit copy or hand delivery to its own transport:
+
+```js
+const payload = await new TasksMailer().newNotification(task, user).buildPayload()
 ```
 
 If your mailer needs async setup, keep the action sync and pass `actionPromise`:
