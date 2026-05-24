@@ -7,6 +7,8 @@ export default class DbGenerateModel extends BaseCommand {
   async execute() {
     await this.getConfiguration().initializeModels()
 
+    const enforceTenantDatabaseScopes = this.getConfiguration().getEnforceTenantDatabaseScopes()
+
     const rootDirectory = this.directory()
     const modelsDir = `${rootDirectory}/src/models`
     const baseModelsDir = `${rootDirectory}/src/model-bases`
@@ -21,8 +23,11 @@ export default class DbGenerateModel extends BaseCommand {
       await fs.mkdir(baseModelsDir, {recursive: true})
     }
 
-    await this.getConfiguration().ensureConnections(async () => {
-      for (const modelClassName in modelClasses) {
+    this.getConfiguration().setEnforceTenantDatabaseScopes(false)
+
+    try {
+      await this.getConfiguration().ensureConnections(async () => {
+        for (const modelClassName in modelClasses) {
         const modelClass = modelClasses[modelClassName]
         const modelName = inflection.dasherize(modelClassName)
         const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
@@ -310,8 +315,11 @@ export default class DbGenerateModel extends BaseCommand {
       fileContent += "}\n"
 
         await fs.writeFile(modelPath, fileContent)
-      }
-    })
+        }
+      })
+    } finally {
+      this.getConfiguration().setEnforceTenantDatabaseScopes(enforceTenantDatabaseScopes)
+    }
   }
 
   /**

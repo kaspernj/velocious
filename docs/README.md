@@ -7,6 +7,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.
 - `docs/logging.md`: Rails-style request and database query logging behavior.
+- `docs/mailers.md`: EJS mailer templates, direct delivery, background delivery, and payload rendering.
 - `docs/model-initialization.md`: Eager and lazy record/frontend-model initialization behavior.
 - `docs/schema-metadata-cache.md`: Driver schema metadata caching, invalidation, and disabling.
 - `docs/tenant-databases.md`: Tenant-only database identifiers and tenant lifecycle commands.
