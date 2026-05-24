@@ -536,6 +536,16 @@ Frontend-model HTTP requests always use `credentials: "include"` so shared custo
 
 Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
 In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.
+Other non-production environments, such as `staging`, keep the same client-safe default unless you explicitly opt in with `exposeInternalErrorsToClients: true`:
+
+```js
+const configuration = new Configuration({
+  environment: "staging",
+  exposeInternalErrorsToClients: true
+})
+```
+
+This opt-in is ignored in `production`; production frontend-model responses never include internal exception details.
 
 For sqlite web databases, Velocious defaults to `https://sql.js.org/dist/<file>` for `sql.js` wasm loading. You can override wasm resolution per database config with `locateFile`:
 

@@ -6,6 +6,12 @@
 - `FrontendModelBase.waitForIdle()` waits until queued, scheduled, and active frontend-model transport requests have resolved. Browser/system-test harnesses can call it during teardown before resetting app state.
 - Keep request execution centralized in Velocious instead of per-project endpoint overrides.
 
+## Unexpected error payloads
+- Unexpected frontend-model endpoint failures return `errorMessage: "Request failed."` by default so internal exception details are not exposed to clients.
+- `development` and `test` responses also include `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` for faster browser/system-test diagnosis.
+- Other non-production environments, such as `staging`, can opt into the same debug fields with `exposeInternalErrorsToClients: true` on the app `Configuration`.
+- `production` always keeps the generic response, even if `exposeInternalErrorsToClients` is set.
+
 ## Frontend vs backend model API differences
 - Frontend models expose a narrower query surface (mainly `find`, `findBy`, `findByOrFail`, `findOrInitializeBy`, `findOrCreateBy`, `toArray`, `where`, `joins`, `sort`, `order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`) and do not expose the full backend query API (raw SQL joins, etc.).
 - Frontend model commands are resource-mapped; `toArray()` calls the configured `index` command, which may map to a backend command name like `list` instead of literal `index`.
