@@ -68,9 +68,10 @@ async function postSharedTaskFrontendModelCommand(commandType, payload) {
 
 /**
  * @param {string} environment - Environment.
+ * @param {{exposeInternalErrorsToClients?: boolean}} [options] - Configuration options.
  * @returns {Configuration} - Test configuration.
  */
-function buildFrontendModelControllerConfiguration(environment) {
+function buildFrontendModelControllerConfiguration(environment, options = {}) {
   return new Configuration({
     backendProjects,
     cookieSecret: "dummy-cookie-secret",
@@ -78,6 +79,7 @@ function buildFrontendModelControllerConfiguration(environment) {
     directory: dummyDirectory(),
     environment,
     environmentHandler: new EnvironmentHandlerNode(),
+    exposeInternalErrorsToClients: options.exposeInternalErrorsToClients === true,
     initializeModels: async () => {},
     locale: "en",
     localeFallbacks: {en: ["en"]},
@@ -154,6 +156,18 @@ function expectDebugFrontendModelError(payload, messagePattern) {
   expect(payload.debugErrorMessage).toMatch(messagePattern)
   expect(Array.isArray(payload.debugBacktrace)).toEqual(true)
   expect(payload.debugBacktrace[0]).toMatch(messagePattern)
+}
+
+/**
+ * @param {Record<string, any>} payload - Error payload.
+ * @returns {void}
+ */
+function expectGenericFrontendModelError(payload) {
+  expect(payload.status).toEqual("error")
+  expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+  expect(payload.debugErrorClass).toEqual(undefined)
+  expect(payload.debugErrorMessage).toEqual(undefined)
+  expect(payload.debugBacktrace).toEqual(undefined)
 }
 
 /**
@@ -480,11 +494,64 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
     expect(payload.status).toEqual("success")
     expect(payload.responses.length).toEqual(1)
-    expect(payload.responses[0].response.status).toEqual("error")
-    expect(payload.responses[0].response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
-    expect(payload.responses[0].response.debugErrorClass).toEqual(undefined)
-    expect(payload.responses[0].response.debugErrorMessage).toEqual(undefined)
-    expect(payload.responses[0].response.debugBacktrace).toEqual(undefined)
+    expectGenericFrontendModelError(payload.responses[0].response)
+  })
+
+  it("keeps unexpected shared frontend-model failures generic in staging by default", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("staging")
+    const payload = await runFrontendApi({
+      configuration,
+      params: {
+        requests: [{
+          commandType: "index",
+          model: "UnknownModel",
+          payload: {},
+          requestId: "request-1"
+        }]
+      }
+    })
+
+    expect(payload.status).toEqual("success")
+    expect(payload.responses.length).toEqual(1)
+    expectGenericFrontendModelError(payload.responses[0].response)
+  })
+
+  it("returns debug details for unexpected shared frontend-model failures when staging opts in", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("staging", {exposeInternalErrorsToClients: true})
+    const payload = await runFrontendApi({
+      configuration,
+      params: {
+        requests: [{
+          commandType: "index",
+          model: "UnknownModel",
+          payload: {},
+          requestId: "request-1"
+        }]
+      }
+    })
+
+    expect(payload.status).toEqual("success")
+    expect(payload.responses.length).toEqual(1)
+    expectDebugFrontendModelError(payload.responses[0].response, /No frontend model resource configuration/)
+  })
+
+  it("keeps unexpected shared frontend-model failures generic in production when debug details are enabled", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production", {exposeInternalErrorsToClients: true})
+    const payload = await runFrontendApi({
+      configuration,
+      params: {
+        requests: [{
+          commandType: "index",
+          model: "UnknownModel",
+          payload: {},
+          requestId: "request-1"
+        }]
+      }
+    })
+
+    expect(payload.status).toEqual("success")
+    expect(payload.responses.length).toEqual(1)
+    expectGenericFrontendModelError(payload.responses[0].response)
   })
 
   it("applies preload params to frontendIndex query", async () => {

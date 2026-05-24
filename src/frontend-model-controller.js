@@ -379,12 +379,15 @@ function frontendModelClientMessageForError(error) {
 
 /**
  * @param {object} args - Arguments.
+ * @param {import("./configuration.js").default} args.configuration - Current configuration.
  * @param {string} args.environment - Current environment.
  * @param {unknown} args.error - Caught error.
  * @returns {Record<string, any>} - Optional debug payload for non-production environments.
  */
-function frontendModelDebugPayloadForError({environment, error}) {
-  if (!frontendModelDebugErrorEnvironments.has(environment)) {
+function frontendModelDebugPayloadForError({configuration, environment, error}) {
+  const debugAllowed = frontendModelDebugErrorEnvironments.has(environment) || environment !== "production" && configuration.getExposeInternalErrorsToClients()
+
+  if (!debugAllowed) {
     return {}
   }
 
@@ -3049,6 +3052,7 @@ export default class FrontendModelController extends Controller {
     return {
       ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error)),
       ...frontendModelDebugPayloadForError({
+        configuration: this.getConfiguration(),
         environment: this.getConfiguration().getEnvironment(),
         error
       }),
