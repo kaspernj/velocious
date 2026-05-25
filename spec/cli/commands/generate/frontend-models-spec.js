@@ -465,4 +465,50 @@ describe("Cli - generate - frontend-models", () => {
 
     await fs.rm(outputDirectory, {force: true, recursive: true})
   })
+
+  it("allows the same frontend model class name in different output directories", async () => {
+    const firstOutputDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-output-one")
+    const secondOutputDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-output-two")
+    await fs.rm(firstOutputDirectory, {force: true, recursive: true})
+    await fs.rm(secondOutputDirectory, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [
+          {
+            path: "/tmp/backend-one",
+            frontendModels: {
+              User: ReferenceUserFrontendResource
+            },
+            frontendModelsOutputPath: firstOutputDirectory
+          },
+          {
+            path: "/tmp/backend-two",
+            frontendModels: {
+              User: ReferenceUserFrontendResource
+            },
+            frontendModelsOutputPath: secondOutputDirectory
+          }
+        ],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(User)
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const firstUserContents = await fs.readFile(`${firstOutputDirectory}/src/frontend-models/user.js`, "utf8")
+    const secondUserContents = await fs.readFile(`${secondOutputDirectory}/src/frontend-models/user.js`, "utf8")
+
+    expect(firstUserContents).toContain("class User extends FrontendModelBase")
+    expect(secondUserContents).toContain("class User extends FrontendModelBase")
+
+    await fs.rm(firstOutputDirectory, {force: true, recursive: true})
+    await fs.rm(secondOutputDirectory, {force: true, recursive: true})
+  })
 })

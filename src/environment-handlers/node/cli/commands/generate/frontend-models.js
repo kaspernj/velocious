@@ -24,9 +24,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     /** @type {Set<string>} */
-    const generatedModelNames = new Set()
-    /** @type {Set<string>} */
     const ensuredDirectories = new Set()
+    /** @type {Map<string, Set<string>>} */
+    const generatedModelNamesByDirectory = new Map()
     /** @type {Map<string, Array<{className: string, fileName: string}>>} */
     const generatedFilesByDirectory = new Map()
 
@@ -43,9 +43,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         generatedFilesByDirectory.set(frontendModelsDir, [])
       }
 
+      if (!generatedModelNamesByDirectory.has(frontendModelsDir)) {
+        generatedModelNamesByDirectory.set(frontendModelsDir, new Set())
+      }
+
       const generatedFiles = generatedFilesByDirectory.get(frontendModelsDir)
+      const generatedModelNames = generatedModelNamesByDirectory.get(frontendModelsDir)
 
       if (!generatedFiles) throw new Error(`Generated files list missing for ${frontendModelsDir}`)
+      if (!generatedModelNames) throw new Error(`Generated model names set missing for ${frontendModelsDir}`)
       const resources = this.resourcesForBackendProject(backendProject)
       const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
