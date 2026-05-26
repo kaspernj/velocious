@@ -8,6 +8,7 @@
  * @typedef {((model: VelociousDatabaseRecord) => void | Promise<void>) | string} LifecycleCallbackType
  */
 
+import timeout from "awaitery/build/timeout.js"
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
 import Configuration from "../../configuration.js"
@@ -2083,6 +2084,12 @@ class VelociousDatabaseRecord {
    * not settled within `holdTimeoutMs`. The caller's `finally` then releases
    * the lock, so a hung holder can't block other sessions forever. The
    * callback is not cancelled — this is a safety net, not cancellation.
+   *
+   * Uses `awaitery`'s shared `timeout` helper for the hard timeout, then
+   * translates its timeout into the typed `AdvisoryLockHoldTimeoutError` so
+   * callers can catch it like the other advisory-lock errors. A `callbackSettled`
+   * flag distinguishes the timeout from a rejection thrown by the callback
+   * itself, which is rethrown unchanged.
    * @template T
    * @param {string} name - Lock name (for the error message).
    * @param {() => Promise<T>} callback - Callback holding the lock.
@@ -2094,18 +2101,22 @@ class VelociousDatabaseRecord {
       return await callback()
     }
 
-    /** @type {ReturnType<typeof setTimeout> | undefined} */
-    let timer
-
-    /** @type {Promise<never>} */
-    const timeout = new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new AdvisoryLockHoldTimeoutError(`Advisory lock ${JSON.stringify(name)} held longer than ${holdTimeoutMs}ms`, {name})), holdTimeoutMs)
-    })
+    let callbackSettled = false
 
     try {
-      return await Promise.race([callback(), timeout])
-    } finally {
-      clearTimeout(timer)
+      return await timeout({timeout: holdTimeoutMs}, async () => {
+        try {
+          return await callback()
+        } finally {
+          callbackSettled = true
+        }
+      })
+    } catch (error) {
+      if (!callbackSettled) {
+        throw new AdvisoryLockHoldTimeoutError(`Advisory lock ${JSON.stringify(name)} held longer than ${holdTimeoutMs}ms`, {name})
+      }
+
+      throw error
     }
   }
 
