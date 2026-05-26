@@ -96,6 +96,25 @@ class AdvisoryLockBusyError extends Error {
   }
 }
 
+/**
+ * Thrown by `Record.withAdvisoryLock` / `withAdvisoryLockOrFail` when the
+ * caller supplied a `holdTimeoutMs` and the callback ran longer than it. The
+ * lock is released before this is thrown, so a hung holder can't block other
+ * sessions indefinitely. Note: the callback itself is not cancelled — pass an
+ * AbortSignal to the work if it needs to stop.
+ */
+class AdvisoryLockHoldTimeoutError extends Error {
+  /**
+   * @param {string} message - Error message.
+   * @param {{name: string}} args - The advisory lock name whose hold timed out.
+   */
+  constructor(message, {name}) {
+    super(message)
+    this.name = "AdvisoryLockHoldTimeoutError"
+    this.lockName = name
+  }
+}
+
 class TenantDatabaseScopeError extends Error {
   /**
    * @param {string} message - Error message.
@@ -2006,9 +2025,10 @@ class VelociousDatabaseRecord {
    * @template T
    * @param {string} name - Lock name.
    * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
-   * @param {{timeoutMs?: number | null}} [args] - Options forwarded to the driver; `timeoutMs` caps how long we will wait for the lock.
+   * @param {{timeoutMs?: number | null, holdTimeoutMs?: number | null}} [args] - `timeoutMs` caps how long we wait to acquire the lock; `holdTimeoutMs` caps how long the callback may hold it before the lock is released and `AdvisoryLockHoldTimeoutError` is thrown.
    * @returns {Promise<T>} - Resolves with the callback's return value.
    * @throws {AdvisoryLockTimeoutError} - If `timeoutMs` elapses before the lock is granted.
+   * @throws {AdvisoryLockHoldTimeoutError} - If `holdTimeoutMs` elapses while the callback holds the lock.
    */
   static async withAdvisoryLock(name, callback, args = {}) {
     await this.ensureInitialized()
@@ -2021,7 +2041,7 @@ class VelociousDatabaseRecord {
     }
 
     try {
-      return await callback()
+      return await this.runWithAdvisoryLockHoldTimeout(name, callback, args.holdTimeoutMs)
     } finally {
       await connection.releaseAdvisoryLock(name)
     }
@@ -2036,10 +2056,12 @@ class VelociousDatabaseRecord {
    * @template T
    * @param {string} name - Lock name.
    * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @param {{holdTimeoutMs?: number | null}} [args] - `holdTimeoutMs` caps how long the callback may hold the lock before it is released and `AdvisoryLockHoldTimeoutError` is thrown.
    * @returns {Promise<T>} - Resolves with the callback's return value.
    * @throws {AdvisoryLockBusyError} - If the lock is already held.
+   * @throws {AdvisoryLockHoldTimeoutError} - If `holdTimeoutMs` elapses while the callback holds the lock.
    */
-  static async withAdvisoryLockOrFail(name, callback) {
+  static async withAdvisoryLockOrFail(name, callback, args = {}) {
     await this.ensureInitialized()
 
     const connection = this.connection()
@@ -2050,9 +2072,40 @@ class VelociousDatabaseRecord {
     }
 
     try {
-      return await callback()
+      return await this.runWithAdvisoryLockHoldTimeout(name, callback, args.holdTimeoutMs)
     } finally {
       await connection.releaseAdvisoryLock(name)
+    }
+  }
+
+  /**
+   * Runs `callback`, rejecting with `AdvisoryLockHoldTimeoutError` if it has
+   * not settled within `holdTimeoutMs`. The caller's `finally` then releases
+   * the lock, so a hung holder can't block other sessions forever. The
+   * callback is not cancelled — this is a safety net, not cancellation.
+   * @template T
+   * @param {string} name - Lock name (for the error message).
+   * @param {() => Promise<T>} callback - Callback holding the lock.
+   * @param {number | null} [holdTimeoutMs] - Max hold time; falsy disables the timeout.
+   * @returns {Promise<T>}
+   */
+  static async runWithAdvisoryLockHoldTimeout(name, callback, holdTimeoutMs) {
+    if (!holdTimeoutMs || holdTimeoutMs <= 0) {
+      return await callback()
+    }
+
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let timer
+
+    /** @type {Promise<never>} */
+    const timeout = new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new AdvisoryLockHoldTimeoutError(`Advisory lock ${JSON.stringify(name)} held longer than ${holdTimeoutMs}ms`, {name})), holdTimeoutMs)
+    })
+
+    try {
+      return await Promise.race([callback(), timeout])
+    } finally {
+      clearTimeout(timer)
     }
   }
 
@@ -3375,5 +3428,5 @@ VelociousDatabaseRecord.registerValidatorType("format", ValidatorsFormat)
 VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
 VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
 
-export {AdvisoryLockBusyError, AdvisoryLockTimeoutError, TenantDatabaseScopeError, ValidationError}
+export {AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError, TenantDatabaseScopeError, ValidationError}
 export default VelociousDatabaseRecord
