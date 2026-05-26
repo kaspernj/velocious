@@ -1,5 +1,6 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
+import path from "node:path"
 import * as inflection from "inflection"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
 
@@ -31,7 +32,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const generatedFilesByDirectory = new Map()
 
     for (const backendProject of backendProjects) {
-      const frontendModelsDir = this.frontendModelsDirectoryForBackendProject(backendProject)
+      // Canonicalize the output directory so equivalent spellings (a trailing
+      // slash, `.`/`..` segments, duplicate separators, relative vs absolute)
+      // resolve to a single key. Otherwise the per-directory maps below treat
+      // them as different directories, duplicate class names slip past detection,
+      // and the split buckets write incomplete index.js/setup.js for files that
+      // actually land in the same directory on disk.
+      const frontendModelsDir = path.resolve(this.frontendModelsDirectoryForBackendProject(backendProject))
       const importPath = this.importPathForFrontendModelsDirectory(frontendModelsDir)
 
       if (!ensuredDirectories.has(frontendModelsDir)) {

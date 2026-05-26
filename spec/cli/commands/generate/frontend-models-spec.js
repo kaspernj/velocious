@@ -511,4 +511,44 @@ describe("Cli - generate - frontend-models", () => {
     await fs.rm(firstOutputDirectory, {force: true, recursive: true})
     await fs.rm(secondOutputDirectory, {force: true, recursive: true})
   })
+
+  it("detects duplicate model names when two projects target the same directory spelled differently", async () => {
+    const outputDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-output-canonical")
+    await fs.rm(outputDirectory, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [
+          {
+            path: "/tmp/backend-one",
+            frontendModels: {
+              User: ReferenceUserFrontendResource
+            },
+            frontendModelsOutputPath: outputDirectory
+          },
+          {
+            path: "/tmp/backend-two",
+            frontendModels: {
+              User: ReferenceUserFrontendResource
+            },
+            // Same directory as above, spelled with a redundant "." segment and a trailing slash.
+            frontendModelsOutputPath: `${outputDirectory}/./`
+          }
+        ],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(User)
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => {
+      await cli.execute()
+    }).toThrow(/Duplicate frontend model definition for 'User'/)
+
+    await fs.rm(outputDirectory, {force: true, recursive: true})
+  })
 })
