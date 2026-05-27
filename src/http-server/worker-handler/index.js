@@ -47,7 +47,7 @@ export default class VelociousHttpServerWorker {
 
     this.logger = new Logger(this)
     this.workerCount = workerCount
-    this.unregisterFromEventsHost = websocketEventsHost.register(this)
+    this.workerStarted = false
     this._stopping = false
   }
 
@@ -107,6 +107,7 @@ export default class VelociousHttpServerWorker {
    */
   onWorkerExit = (code) => {
     this._hasExited = true
+    this.workerStarted = false
 
     if (code !== 0 && !this._stopping) {
       this.logger.error(`Velocious worker ${this.workerCount} exited unexpectedly with code ${code}`)
@@ -116,8 +117,10 @@ export default class VelociousHttpServerWorker {
       this.logger.debug(() => `Client worker stopped with exit code ${code}`)
     }
 
-    this.unregisterFromEventsHost?.()
-    this._stopResolve?.()
+    this.unregisterFromEventsHostIfNeeded()
+    if (this._stopResolve) {
+      this._stopResolve()
+    }
     this._stopResolve = null
   }
 
@@ -155,6 +158,9 @@ export default class VelociousHttpServerWorker {
 
 
     if (command == "started") {
+      this.workerStarted = true
+      this.registerWithEventsHost()
+
       if (this.onStartCallback) {
         this.onStartCallback(null)
       }
@@ -233,6 +239,8 @@ export default class VelociousHttpServerWorker {
     if (this._hasExited) return Promise.resolve()
 
     this._stopping = true
+    this.workerStarted = false
+    this.unregisterFromEventsHostIfNeeded()
     const worker = this.worker
 
     if (!worker) return Promise.resolve()
@@ -253,6 +261,7 @@ export default class VelociousHttpServerWorker {
    */
   dispatchWebsocketEvent({channel, createdAt, eventId, payload}) {
     // Test and shutdown paths can leave a registered handler without a live worker-thread transport.
+    if (!this.workerStarted) return
     if (!this.worker || typeof this.worker.postMessage !== "function") return
 
     this.worker.postMessage({channel, command: "websocketEvent", createdAt, eventId, payload})
@@ -261,7 +270,6 @@ export default class VelociousHttpServerWorker {
   /**
    * Forwards a V2 channel broadcast to this worker's thread so it can
    * dispatch to any locally-registered V2 subscriptions.
-   *
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {Record<string, any>} args.broadcastParams - Routing filter params.
@@ -271,8 +279,24 @@ export default class VelociousHttpServerWorker {
    * @returns {void}
    */
   dispatchWebsocketV2Broadcast({body, broadcastParams, channel, eventId, createdAt}) {
+    if (!this.workerStarted) return
     if (!this.worker || typeof this.worker.postMessage !== "function") return
 
     this.worker.postMessage({body, broadcastParams, channel, command: "websocketV2Broadcast", eventId, createdAt})
+  }
+
+  /** @returns {void} */
+  registerWithEventsHost() {
+    if (this.unregisterFromEventsHost) return
+
+    this.unregisterFromEventsHost = websocketEventsHost.register(this)
+  }
+
+  /** @returns {void} */
+  unregisterFromEventsHostIfNeeded() {
+    if (!this.unregisterFromEventsHost) return
+
+    this.unregisterFromEventsHost()
+    this.unregisterFromEventsHost = null
   }
 }
