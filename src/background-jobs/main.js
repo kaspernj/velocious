@@ -347,12 +347,22 @@ export default class BackgroundJobsMain {
    */
   async _handleJobFailed({jsonSocket, message}) {
     try {
-      await this.store.markFailed({
+      const failedJob = await this.store.markFailed({
         jobId: message.jobId,
         error: message.error,
         workerId: message.workerId,
         handedOffAtMs: message.handedOffAtMs
       })
+
+      if (failedJob) {
+        this._emitBackgroundJobFailed({
+          error: message.error,
+          handedOffAtMs: message.handedOffAtMs,
+          job: failedJob,
+          workerId: message.workerId
+        })
+      }
+
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
       // A failed job may have been re-queued (with backoff) for retry —
       // poke the dispatcher so the retry timer is armed.
@@ -362,6 +372,53 @@ export default class BackgroundJobsMain {
       this.logger.error(() => ["Failed to update job failure:", error])
       jsonSocket.send({type: "job-update-error", jobId: message.jobId, error: "Failed to update job"})
     }
+  }
+
+  /**
+   * @param {{error: unknown, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
+   * @returns {void}
+   */
+  _emitBackgroundJobFailed({error, handedOffAtMs, job, workerId}) {
+    const normalizedError = this._normalizeFailureError(error)
+    const payload = {
+      context: {
+        attempts: job.attempts,
+        handedOffAtMs,
+        jobArgs: job.args,
+        jobId: job.id,
+        jobName: job.jobName,
+        maxRetries: job.maxRetries,
+        stage: "background-job-failed",
+        status: job.status,
+        terminal: job.status === "failed" || job.status === "orphaned",
+        willRetry: job.status === "queued",
+        workerId
+      },
+      error: normalizedError
+    }
+    const errorEvents = this.configuration.getErrorEvents()
+
+    errorEvents.emit("background-job-failed", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "background-job-failed"})
+  }
+
+  /**
+   * @param {unknown} error - Reported failure value.
+   * @returns {Error} Normalized error.
+   */
+  _normalizeFailureError(error) {
+    if (error instanceof Error) return error
+
+    const message = typeof error === "string" && error.trim()
+      ? error.trim().split("\n")[0]
+      : String(error || "Background job failed")
+    const normalizedError = new Error(message)
+
+    if (typeof error === "string" && error.trim()) {
+      normalizedError.stack = error
+    }
+
+    return normalizedError
   }
 
   /**

@@ -349,18 +349,18 @@ export default class BackgroundJobsStore {
    * @param {unknown} args.error - Error.
    * @param {string} [args.workerId] - Worker id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
-   * @returns {Promise<void>} - Resolves when updated.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the report was accepted.
    */
   async markFailed({jobId, error, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    await this._withDb(async (db) => {
+    return await this._withDb(async (db) => {
       const job = await this._getJobRowById(db, jobId)
 
-      if (!job) return
-      if (!this._shouldAcceptReport({job, workerId, handedOffAtMs})) return
+      if (!job) return null
+      if (!this._shouldAcceptReport({job, workerId, handedOffAtMs})) return null
 
-      await this._applyFailure({db, job, error, markOrphaned: false})
+      return await this._applyFailure({db, job, error, markOrphaned: false})
     })
   }
 
@@ -558,7 +558,7 @@ export default class BackgroundJobsStore {
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {unknown} args.error - Error.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
-   * @returns {Promise<void>} - Resolves when updated.
+   * @returns {Promise<import("./types.js").BackgroundJobRow>} - Updated job row.
    */
   async _applyFailure({db, job, error, markOrphaned}) {
     const now = Date.now()
@@ -595,6 +595,18 @@ export default class BackgroundJobsStore {
       data: update,
       conditions: {id: job.id}
     })
+
+    return {
+      ...job,
+      attempts: nextAttempt,
+      failedAtMs: update.failed_at_ms ?? job.failedAtMs,
+      handedOffAtMs: null,
+      lastError: failureMessage,
+      orphanedAtMs: update.orphaned_at_ms ?? job.orphanedAtMs,
+      scheduledAtMs: update.scheduled_at_ms ?? job.scheduledAtMs,
+      status: update.status,
+      workerId: null
+    }
   }
 
   /**

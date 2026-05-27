@@ -1,0 +1,1 @@
+Background job failures now emit a structured `background-job-failed` error event after Velocious records an accepted failed attempt, including job id/name, args, attempts, retry/final status, worker handoff data, and the failure stack when available. Apps can subscribe to this event for bug reporting without wrapping every job class.

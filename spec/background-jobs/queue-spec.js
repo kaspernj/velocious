@@ -10,6 +10,7 @@ import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
 import DelayedJob from "../dummy/src/jobs/delayed-job.js"
+import FailingJob from "../dummy/src/jobs/failing-job.js"
 
 describe("Background jobs - queue", () => {
   it("processes inline jobs in order", async () => {
@@ -205,5 +206,60 @@ describe("Background jobs - queue", () => {
 
     await worker.stop()
     await main.stop()
+  })
+
+  it("emits background-job-failed after an accepted job failure report", async () => {
+    dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
+
+    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    await main.start()
+
+    dummyConfiguration.setBackgroundJobsConfig({
+      host: "127.0.0.1",
+      port: main.getPort()
+    })
+
+    const worker = new BackgroundJobsWorker({configuration: dummyConfiguration})
+    const failureEvents = []
+    const onFailure = (payload) => {
+      failureEvents.push(payload)
+    }
+
+    dummyConfiguration.getErrorEvents().on("background-job-failed", onFailure)
+
+    try {
+      await worker.start()
+
+      const jobId = await FailingJob.performLaterWithOptions({
+        args: ["planned failure"],
+        options: {forked: false, maxRetries: 0}
+      })
+
+      await timeout({timeout: 2000}, async () => {
+        while (true) {
+          const job = await store.getJob(jobId)
+
+          if (job?.status === "failed") break
+
+          await wait(0.05)
+        }
+      })
+
+      expect(failureEvents.length).toEqual(1)
+      expect(failureEvents[0].context.jobId).toEqual(jobId)
+      expect(failureEvents[0].context.jobName).toEqual("FailingJob")
+      expect(failureEvents[0].context.jobArgs).toEqual(["planned failure"])
+      expect(failureEvents[0].context.attempts).toEqual(1)
+      expect(failureEvents[0].context.terminal).toEqual(true)
+      expect(failureEvents[0].context.willRetry).toEqual(false)
+      expect(failureEvents[0].error.message).toEqual("Error: planned failure")
+      expect(String(failureEvents[0].error.stack)).toContain("planned failure")
+    } finally {
+      dummyConfiguration.getErrorEvents().off("background-job-failed", onFailure)
+      await worker.stop()
+      await main.stop()
+    }
   })
 })
