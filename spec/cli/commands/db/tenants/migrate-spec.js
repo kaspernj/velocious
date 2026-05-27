@@ -77,6 +77,7 @@ describe("Cli - Commands - db:tenants:migrate", () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenants-migrate-"))
     const migrationsDirectory = path.join(directory, "src", "database", "migrations")
     const migrationModuleUrl = new URL("../../../../../src/database/migration/index.js", import.meta.url).href
+    const migratedTenantSlugs = []
 
     await fs.mkdir(migrationsDirectory, {recursive: true})
     await fs.writeFile(path.join(migrationsDirectory, "20260517000000-create-tenant-widgets.js"), `
@@ -124,6 +125,15 @@ export default CreateTenantWidgets
       locales: ["en"],
       tenantDatabaseProviders: {
         projectTenant: {
+          afterMigrateTenant: async ({configuration, tenant}) => {
+            const tenantObject = /** @type {{slug?: string}} */ (tenant)
+
+            await configuration.ensureConnections(async (dbs) => {
+              expect(await dbs.projectTenant.getTableByName("tenant_widgets")).toBeTruthy()
+            })
+
+            migratedTenantSlugs.push(tenantObject.slug)
+          },
           listTenants: async () => [{slug: "alpha"}, {slug: "beta"}]
         }
       },
@@ -153,6 +163,7 @@ export default CreateTenantWidgets
         migrationCount: 1,
         tenantCount: 2
       })
+      expect(migratedTenantSlugs.sort()).toEqual(["alpha", "beta"])
 
       await configuration.runWithTenant({slug: "alpha"}, async () => {
         await configuration.ensureConnections(async (dbs) => {
@@ -173,6 +184,150 @@ export default CreateTenantWidgets
           expect(table?.getName()).toEqual("tenant_widgets")
         })
       })
+    } finally {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
+
+  it("runs tenant commands with opt-in bounded parallelism", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenants-parallel-"))
+    let activeTenantCount = 0
+    let maximumActiveTenantCount = 0
+    const checkedTenantSlugs = []
+    const configuration = new Configuration({
+      database: {
+        test: {
+          default: {
+            driver: SqliteDriver,
+            migrations: false,
+            name: "velocious-cli-tenants-parallel-default",
+            poolType: AsyncTrackedMultiConnection,
+            type: "sqlite"
+          },
+          projectTenant: {
+            driver: SqliteDriver,
+            migrations: true,
+            name: "velocious-cli-tenants-parallel-project-default",
+            poolType: AsyncTrackedMultiConnection,
+            tenantOnly: true,
+            type: "sqlite"
+          }
+        }
+      },
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      tenantDatabaseProviders: {
+        projectTenant: {
+          checkTenant: async ({tenant}) => {
+            const tenantObject = /** @type {{slug?: string}} */ (tenant)
+
+            activeTenantCount++
+            maximumActiveTenantCount = Math.max(maximumActiveTenantCount, activeTenantCount)
+
+            await new Promise((resolve) => setTimeout(resolve, 25))
+
+            checkedTenantSlugs.push(tenantObject.slug)
+            activeTenantCount--
+          },
+          listTenants: async () => [
+            {slug: "alpha"},
+            {slug: "beta"},
+            {slug: "gamma"},
+            {slug: "delta"}
+          ]
+        }
+      },
+      tenantDatabaseResolver: ({identifier, tenant}) => {
+        const tenantObject = /** @type {{slug?: string}} */ (tenant)
+
+        if (identifier != "projectTenant" || !tenantObject.slug) return
+
+        return {name: `velocious-cli-tenants-parallel-project-${tenantObject.slug}`}
+      }
+    })
+    const cli = new Cli({
+      configuration,
+      directory,
+      environmentHandler: new EnvironmentHandlerNode(),
+      parsedProcessArgs: {parallel: "2"},
+      processArgs: ["db:tenants:check", "projectTenant", "--parallel", "2"],
+      testing: true
+    })
+
+    try {
+      expect(await cli.execute()).toEqual({
+        identifier: "projectTenant",
+        tenantCount: 4
+      })
+      expect(maximumActiveTenantCount).toEqual(2)
+      expect(checkedTenantSlugs.sort()).toEqual(["alpha", "beta", "delta", "gamma"])
+    } finally {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
+
+  it("rejects invalid parallel tenant command counts", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenants-parallel-invalid-"))
+    const configuration = new Configuration({
+      database: {
+        test: {
+          default: {
+            driver: SqliteDriver,
+            migrations: false,
+            name: "velocious-cli-tenants-parallel-invalid-default",
+            poolType: AsyncTrackedMultiConnection,
+            type: "sqlite"
+          },
+          projectTenant: {
+            driver: SqliteDriver,
+            migrations: true,
+            name: "velocious-cli-tenants-parallel-invalid-project-default",
+            poolType: AsyncTrackedMultiConnection,
+            tenantOnly: true,
+            type: "sqlite"
+          }
+        }
+      },
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      tenantDatabaseProviders: {
+        projectTenant: {
+          listTenants: async () => [{slug: "alpha"}]
+        }
+      },
+      tenantDatabaseResolver: ({identifier, tenant}) => {
+        const tenantObject = /** @type {{slug?: string}} */ (tenant)
+
+        if (identifier != "projectTenant" || !tenantObject.slug) return
+
+        return {name: `velocious-cli-tenants-parallel-invalid-project-${tenantObject.slug}`}
+      }
+    })
+    const cli = new Cli({
+      configuration,
+      directory,
+      environmentHandler: new EnvironmentHandlerNode(),
+      parsedProcessArgs: {parallel: "zero"},
+      processArgs: ["db:tenants:check", "projectTenant", "--parallel", "zero"],
+      testing: true
+    })
+
+    try {
+      await expect(async () => {
+        await cli.execute()
+      }).toThrow(/--parallel must be a positive integer/)
     } finally {
       await configuration.closeDatabaseConnections()
       await fs.rm(directory, {force: true, recursive: true})
