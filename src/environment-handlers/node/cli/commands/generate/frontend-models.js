@@ -1,5 +1,6 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
+import path from "node:path"
 import * as inflection from "inflection"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
 
@@ -24,14 +25,20 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     /** @type {Set<string>} */
-    const generatedModelNames = new Set()
-    /** @type {Set<string>} */
     const ensuredDirectories = new Set()
+    /** @type {Map<string, Set<string>>} */
+    const generatedModelNamesByDirectory = new Map()
     /** @type {Map<string, Array<{className: string, fileName: string}>>} */
     const generatedFilesByDirectory = new Map()
 
     for (const backendProject of backendProjects) {
-      const frontendModelsDir = this.frontendModelsDirectoryForBackendProject(backendProject)
+      // Canonicalize the output directory so equivalent spellings (a trailing
+      // slash, `.`/`..` segments, duplicate separators, relative vs absolute)
+      // resolve to a single key. Otherwise the per-directory maps below treat
+      // them as different directories, duplicate class names slip past detection,
+      // and the split buckets write incomplete index.js/setup.js for files that
+      // actually land in the same directory on disk.
+      const frontendModelsDir = path.resolve(this.frontendModelsDirectoryForBackendProject(backendProject))
       const importPath = this.importPathForFrontendModelsDirectory(frontendModelsDir)
 
       if (!ensuredDirectories.has(frontendModelsDir)) {
@@ -43,9 +50,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         generatedFilesByDirectory.set(frontendModelsDir, [])
       }
 
+      if (!generatedModelNamesByDirectory.has(frontendModelsDir)) {
+        generatedModelNamesByDirectory.set(frontendModelsDir, new Set())
+      }
+
       const generatedFiles = generatedFilesByDirectory.get(frontendModelsDir)
+      const generatedModelNames = generatedModelNamesByDirectory.get(frontendModelsDir)
 
       if (!generatedFiles) throw new Error(`Generated files list missing for ${frontendModelsDir}`)
+      if (!generatedModelNames) throw new Error(`Generated model names set missing for ${frontendModelsDir}`)
       const resources = this.resourcesForBackendProject(backendProject)
       const availableFrontendModelClassNames = this.availableFrontendModelClassNames(resources)
 
