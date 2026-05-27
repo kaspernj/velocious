@@ -13,6 +13,7 @@
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including forked background job runners (see [docs/beacon.md](docs/beacon.md))
+* Background jobs with failure events for production reporting (see [docs/background-jobs.md](docs/background-jobs.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
@@ -1783,6 +1784,8 @@ Create the file `src/routes/testing/another-action.ejs` and so something like th
 # Background jobs
 
 Velocious includes a simple background jobs system inspired by Sidekiq.
+
+Production apps can listen for `background-job-failed` or its `all-error` mirror to report accepted failed attempts, including retry and terminal state metadata. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
 
 ## Setup
 

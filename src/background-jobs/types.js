@@ -33,6 +33,16 @@
  * @property {string | null} lastError - Last failure message.
  */
 /**
+ * @typedef {object} BackgroundJobFailureEvent
+ * @property {BackgroundJobRow} job - Updated job row after failure handling.
+ * @property {unknown} error - Failure error.
+ * @property {number | null} attempts - Updated failure attempts count.
+ * @property {boolean} terminal - Whether this failure ended the job.
+ * @property {boolean} willRetry - Whether the job was returned to the queue.
+ * @property {number | undefined} handedOffAtMs - Handoff timestamp from the worker report.
+ * @property {string | undefined} workerId - Worker id from the worker report.
+ */
+/**
  * @typedef {"worker" | "client" | "reporter"} BackgroundJobSocketRole
  */
 /**
