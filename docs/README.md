@@ -4,6 +4,7 @@ This folder contains implementation learnings and practical guidance discovered 
 
 ## Index
 - `docs/advisory-locks.md`: Cooperative, connection-scoped advisory lock helpers on every record class.
+- `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.
 - `docs/logging.md`: Rails-style request and database query logging behavior.
