@@ -66,21 +66,99 @@ export default class TenantDatabaseCommandHelper {
    */
   async eachTenant(callback) {
     const tenants = await this.listTenants()
+    const parallelCount = this.parallelCount()
 
-    for (const tenant of tenants) {
-      await this.configuration.runWithTenant(tenant, async () => {
-        if (!this.configuration.isDatabaseIdentifierActive(this.identifier)) {
-          throw new Error(`Tenant database identifier ${this.identifier} is inactive for tenant: ${this.tenantLabel(tenant)}`)
+    if (parallelCount <= 1) {
+      for (const tenant of tenants) {
+        await this.runTenantCallback({callback, tenant})
+      }
+
+      return tenants.length
+    }
+
+    /** @type {Array<{error: Error, tenant: unknown}>} */
+    const failures = []
+    const workers = []
+    let tenantIndex = 0
+    const workerCount = Math.min(parallelCount, tenants.length)
+
+    for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
+      workers.push((async () => {
+        while (tenantIndex < tenants.length) {
+          const tenant = tenants[tenantIndex]
+
+          tenantIndex++
+
+          try {
+            await this.runTenantCallback({callback, tenant})
+          } catch (error) {
+            failures.push({
+              error: error instanceof Error ? error : new Error(String(error)),
+              tenant
+            })
+          }
         }
+      })())
+    }
 
-        await callback({
-          databaseConfiguration: this.configuration.resolveDatabaseConfiguration(this.identifier),
-          tenant
-        })
-      })
+    await Promise.all(workers)
+
+    if (failures.length > 0) {
+      const failedTenantLabels = failures.map((failure) => this.tenantLabel(failure.tenant)).join(", ")
+
+      throw new AggregateError(
+        failures.map((failure) => failure.error),
+        `Failed tenant database command for tenant(s): ${failedTenantLabels}`
+      )
     }
 
     return tenants.length
+  }
+
+  /** @returns {number} - Number of tenants to process concurrently. */
+  parallelCount() {
+    const parsedProcessArgs = this.command.args?.parsedProcessArgs || {}
+    let parallelArg = parsedProcessArgs.parallel
+
+    if (parallelArg === undefined) {
+      const parallelArgIndex = this.command.processArgs?.indexOf("--parallel") ?? -1
+
+      if (parallelArgIndex >= 0) {
+        const nextArg = this.command.processArgs?.[parallelArgIndex + 1]
+
+        parallelArg = nextArg && !nextArg.startsWith("-") ? nextArg : true
+      }
+    }
+
+    if (parallelArg === undefined || parallelArg === false) return 1
+    if (parallelArg === true) return 20
+
+    const parallelCount = Number(parallelArg)
+
+    if (!Number.isInteger(parallelCount) || parallelCount < 1) {
+      throw new Error(`--parallel must be a positive integer when a value is provided: ${parallelArg}`)
+    }
+
+    return parallelCount
+  }
+
+  /**
+   * @param {object} args - Tenant callback args.
+   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: unknown}) : Promise<void>} args.callback - Callback.
+   * @param {unknown} args.tenant - Tenant.
+   * @returns {Promise<void>}
+   */
+  async runTenantCallback({callback, tenant}) {
+    await this.configuration.runWithTenant(tenant, async () => {
+      if (!this.configuration.isDatabaseIdentifierActive(this.identifier)) {
+        throw new Error(`Tenant database identifier ${this.identifier} is inactive for tenant: ${this.tenantLabel(tenant)}`)
+      }
+
+      await callback({
+        databaseConfiguration: this.configuration.resolveDatabaseConfiguration(this.identifier),
+        tenant
+      })
+    })
   }
 
   /**

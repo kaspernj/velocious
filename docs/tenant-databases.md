@@ -42,6 +42,9 @@ export default new Configuration({
       },
       checkTenant: async ({databaseConfiguration, tenant}) => {
         // Optional preflight checks before generic connection validation.
+      },
+      afterMigrateTenant: async ({configuration, databaseConfiguration, tenant}) => {
+        // Optional app-owned schema or data work after generic migrations.
       }
     }
   }
@@ -54,6 +57,13 @@ Run tenant lifecycle commands by database identifier:
 npx velocious db:tenants:create projectTenant
 npx velocious db:tenants:check projectTenant
 npx velocious db:tenants:migrate projectTenant
+```
+
+Tenant lifecycle commands run one tenant at a time by default. Add `--parallel` to process up to 20 tenants at once, or pass a positive integer to choose a different concurrency:
+
+```sh
+npx velocious db:tenants:migrate projectTenant --parallel
+npx velocious db:tenants:migrate projectTenant --parallel 20
 ```
 
 Tenant migrations should explicitly target the tenant identifier:

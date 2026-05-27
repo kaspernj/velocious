@@ -2076,6 +2076,7 @@ For Apartment-style project/account databases, mark the logical per-tenant ident
 npx velocious db:tenants:create projectTenant
 npx velocious db:tenants:check projectTenant
 npx velocious db:tenants:migrate projectTenant
+npx velocious db:tenants:migrate projectTenant --parallel 20
 ```
 
 See [docs/tenant-databases.md](docs/tenant-databases.md) for the full configuration and migration pattern.

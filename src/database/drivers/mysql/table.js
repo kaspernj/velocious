@@ -70,9 +70,13 @@ export default class VelociousDatabaseDriversMysqlTable extends BaseTable {
         WHERE
           TABLE_SCHEMA = DATABASE() AND
           TABLE_NAME = ${options.quote(this.getName())}
+        ORDER BY
+          INDEX_NAME,
+          SEQ_IN_INDEX
       `
       const indexesRows = await this.getDriver().query(sql)
       const indexes = []
+      const indexRowsByName = new Map()
 
       for (const indexRow of indexesRows) {
         if (indexRow.NON_UNIQUE == 1) {
@@ -87,9 +91,19 @@ export default class VelociousDatabaseDriversMysqlTable extends BaseTable {
           indexRow.is_primary_key = false
         }
 
-        const index = new ColumnsIndex(this, indexRow)
+        const existingIndexRow = indexRowsByName.get(indexRow.index_name)
 
-        indexes.push(index)
+        if (existingIndexRow) {
+          existingIndexRow.column_names.push(indexRow.COLUMN_NAME)
+        } else {
+          const groupedIndexRow = Object.assign({}, indexRow, {
+            column_names: [indexRow.COLUMN_NAME]
+          })
+          const index = new ColumnsIndex(this, groupedIndexRow)
+
+          indexRowsByName.set(indexRow.index_name, groupedIndexRow)
+          indexes.push(index)
+        }
       }
 
       return indexes
