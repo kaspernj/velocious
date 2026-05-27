@@ -3,6 +3,7 @@
 import WorkerHandler from "../../src/http-server/worker-handler/index.js"
 import HttpServer from "../../src/http-server/index.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+import websocketEventsHost from "../../src/http-server/websocket-events-host.js"
 
 describe("HttpServer - worker handler", () => {
   it("closes client connections when the worker exits unexpectedly", () => {
@@ -43,6 +44,54 @@ describe("HttpServer - worker handler", () => {
     handler.unregisterFromEventsHost = () => {}
 
     expect(() => handler.dispatchWebsocketEvent({channel: "frontend-models:Task", payload: {action: "update"}})).not.toThrow()
+  })
+
+  it("only receives websocket broadcasts after the worker has started", async () => {
+    await websocketEventsHost.awaitPendingBroadcasts()
+
+    const originalHandlers = new Set(websocketEventsHost.handlers)
+    const sentMessages = []
+    const handler = new WorkerHandler({configuration: {debug: false}, workerCount: 1})
+
+    websocketEventsHost.handlers.clear()
+    handler.worker = {
+      postMessage: (message) => {
+        sentMessages.push(message)
+      }
+    }
+
+    try {
+      websocketEventsHost.broadcastV2({body: {action: "create", id: "1"}, broadcastParams: {model: "Build"}, channel: "frontend-models"})
+      await websocketEventsHost.awaitPendingBroadcasts()
+
+      expect(sentMessages).toEqual([])
+
+      handler.onWorkerMessage({command: "started"})
+      websocketEventsHost.broadcastV2({body: {action: "update", id: "1"}, broadcastParams: {model: "Build"}, channel: "frontend-models"})
+      await websocketEventsHost.awaitPendingBroadcasts()
+
+      expect(sentMessages).toEqual([{
+        body: {action: "update", id: "1"},
+        broadcastParams: {model: "Build"},
+        channel: "frontend-models",
+        command: "websocketV2Broadcast",
+        createdAt: undefined,
+        eventId: undefined
+      }])
+
+      handler.onWorkerExit(0)
+      websocketEventsHost.broadcastV2({body: {action: "destroy", id: "1"}, broadcastParams: {model: "Build"}, channel: "frontend-models"})
+      await websocketEventsHost.awaitPendingBroadcasts()
+
+      expect(sentMessages.length).toEqual(1)
+    } finally {
+      handler.unregisterFromEventsHostIfNeeded()
+      websocketEventsHost.handlers.clear()
+
+      for (const originalHandler of originalHandlers) {
+        websocketEventsHost.handlers.add(originalHandler)
+      }
+    }
   })
 
   it("recycles workers on development reload without restarting the process", async () => {
