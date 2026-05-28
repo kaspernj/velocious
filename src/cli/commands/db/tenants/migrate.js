@@ -22,16 +22,16 @@ export default class DbTenantsMigrate extends BaseCommand {
       await this.getConfiguration().ensureConnections(async () => {
         await migrator.prepare()
         await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
-      })
 
-      if (typeof helper.provider.afterMigrateTenant === "function") {
-        await helper.provider.afterMigrateTenant({
-          configuration: this.getConfiguration(),
-          databaseConfiguration,
-          identifier: helper.identifier,
-          tenant
-        })
-      }
+        if (typeof helper.provider.afterMigrateTenant === "function") {
+          await helper.provider.afterMigrateTenant({
+            configuration: this.getConfiguration(),
+            databaseConfiguration,
+            identifier: helper.identifier,
+            tenant
+          })
+        }
+      })
     })
 
     if (this.args.testing) {
