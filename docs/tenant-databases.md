@@ -66,6 +66,8 @@ npx velocious db:tenants:migrate projectTenant --parallel
 npx velocious db:tenants:migrate projectTenant --parallel 20
 ```
 
+`afterMigrateTenant` runs inside the tenant command's active connection scope after generic migrations finish for that tenant. Hooks can read `configuration.getCurrentConnections()` or run model/database queries against both the default database and the active tenant database without opening another connection scope.
+
 Tenant migrations should explicitly target the tenant identifier:
 
 ```js

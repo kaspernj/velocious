@@ -2079,4 +2079,6 @@ npx velocious db:tenants:migrate projectTenant
 npx velocious db:tenants:migrate projectTenant --parallel 20
 ```
 
+`afterMigrateTenant` hooks run inside the active default and tenant database connection scope for the tenant being migrated.
+
 See [docs/tenant-databases.md](docs/tenant-databases.md) for the full configuration and migration pattern.
