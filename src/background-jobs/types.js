@@ -47,7 +47,7 @@
  */
 /**
  * @typedef {{type: "hello", role: BackgroundJobSocketRole, workerId?: string}} BackgroundJobHelloMessage
- * @typedef {{type: "ready"}} BackgroundJobReadyMessage
+ * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
  * @typedef {{type: "enqueue", jobName: string, args?: any[], options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
  * @typedef {{type: "job", payload: BackgroundJobPayload}} BackgroundJobJobMessage

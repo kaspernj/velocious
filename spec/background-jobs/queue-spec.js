@@ -11,6 +11,7 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
 import DelayedJob from "../dummy/src/jobs/delayed-job.js"
 import FailingJob from "../dummy/src/jobs/failing-job.js"
+import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 
 describe("Background jobs - queue", () => {
   it("processes inline jobs in order", async () => {
@@ -136,6 +137,89 @@ describe("Background jobs - queue", () => {
     })
 
     expect(forkedResult).toEqual({value: "forked"})
+
+    await worker.stop()
+    await main.stop()
+  })
+
+  it("limits forked runner concurrency without blocking inline job capacity", async () => {
+    dummyConfiguration.setCurrent()
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    await store.clearAll()
+
+    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    await main.start()
+
+    dummyConfiguration.setBackgroundJobsConfig({
+      host: "127.0.0.1",
+      port: main.getPort()
+    })
+
+    const worker = new BackgroundJobsWorker({
+      configuration: dummyConfiguration,
+      maxConcurrentForkedJobs: 1,
+      maxConcurrentInlineJobs: 4
+    })
+    await worker.start()
+
+    const tmpDir = path.join(dummyConfiguration.getDirectory(), "tmp")
+    await fs.mkdir(tmpDir, {recursive: true})
+    const firstForkedPath = path.join(tmpDir, `forked-limit-first-${Date.now()}.json`)
+    const secondForkedPath = path.join(tmpDir, `forked-limit-second-${Date.now()}.json`)
+    const inlinePath = path.join(tmpDir, `forked-limit-inline-${Date.now()}.json`)
+
+    await SlowTestJob.performLater("first", firstForkedPath, 1)
+    await SlowTestJob.performLater("second", secondForkedPath, 0.01)
+    await AppendJob.performLaterWithOptions({
+      args: ["inline", inlinePath],
+      options: {forked: false}
+    })
+
+    await timeout({timeout: 2000}, async () => {
+      while (true) {
+        try {
+          const contents = await fs.readFile(inlinePath, "utf8")
+          if (JSON.parse(contents).length === 1) break
+        } catch {
+          // Ignore missing file.
+        }
+
+        await wait(0.05)
+      }
+    })
+
+    let secondForkedExists = true
+
+    try {
+      await fs.readFile(secondForkedPath, "utf8")
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error
+
+      secondForkedExists = false
+    }
+
+    expect(secondForkedExists).toBeFalse()
+
+    await timeout({timeout: 5000}, async () => {
+      while (true) {
+        try {
+          const [firstContents, secondContents] = await Promise.all([
+            fs.readFile(firstForkedPath, "utf8"),
+            fs.readFile(secondForkedPath, "utf8")
+          ])
+
+          if (firstContents && secondContents) break
+        } catch {
+          // Ignore missing files.
+        }
+
+        await wait(0.05)
+      }
+    })
+
+    expect(JSON.parse(await fs.readFile(inlinePath, "utf8"))).toEqual(["inline"])
+    expect(JSON.parse(await fs.readFile(firstForkedPath, "utf8"))).toEqual({message: "first"})
+    expect(JSON.parse(await fs.readFile(secondForkedPath, "utf8"))).toEqual({message: "second"})
 
     await worker.stop()
     await main.stop()

@@ -1356,6 +1356,23 @@ To prime *all* configured pools at once, call `configuration.ensureGlobalConnect
 
 When an async context exists, that connection is still preferred over the global one.
 
+Checked-in `AsyncTrackedMultiConnection` connections are closed after 5 seconds of idle time by default. This keeps tenant-scoped and short-lived background-job connections from accumulating in long-running processes while still allowing immediate reuse by nearby async work. Configure `database.<environment>.<identifier>.pool.idleTimeoutMillis` to change the timeout, or set it to `null` to disable idle reaping for that pool:
+
+```js
+database: {
+  production: {
+    default: {
+      driver: MysqlDriver,
+      poolType: AsyncTrackedMultiConnection,
+      type: "mysql",
+      pool: {
+        idleTimeoutMillis: 10000
+      }
+    }
+  }
+}
+```
+
 # Websockets
 
 Velocious includes a lightweight websocket entry point for API-style calls and server-side events.
@@ -1818,6 +1835,7 @@ export default new Configuration({
     host: "127.0.0.1",
     port: 7331,
     databaseIdentifier: "default",
+    maxConcurrentForkedJobs: 4,
     maxConcurrentInlineJobs: 4,
     dispatchStrategy: "beacon"
   }
@@ -1830,12 +1848,15 @@ Or via env vars:
 VELOCIOUS_BACKGROUND_JOBS_HOST=127.0.0.1
 VELOCIOUS_BACKGROUND_JOBS_PORT=7331
 VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER=default
+VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS=4
 VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS=4
 VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY=beacon
 VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
 ```
 
 `maxConcurrentInlineJobs` (default: `4`) caps how many `forked: false` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores.
+
+`maxConcurrentForkedJobs` (default: `4`) caps how many detached `background-jobs-runner` child processes one worker may keep in flight. Forked jobs still run in separate Node processes, but the worker withholds forked-job capacity until an existing runner exits so bursts cannot spawn unbounded database-using children.
 
 ### Dispatch strategy
 

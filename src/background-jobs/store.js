@@ -105,18 +105,26 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * @param {object} [args] - Options.
+   * @param {boolean} [args.forked] - When set, only return jobs with this forked value.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next job.
    */
-  async nextAvailableJob() {
+  async nextAvailableJob(args = {}) {
     await this.ensureReady()
 
     return await this._withDb(async (db) => {
       const now = Date.now()
-      const query = db
+      let query = db
         .newQuery()
         .from(JOBS_TABLE)
         .where({status: "queued"})
         .where(`scheduled_at_ms <= ${db.quote(now)}`)
+
+      if (typeof args.forked === "boolean") {
+        query = query.where({forked: args.forked})
+      }
+
+      query = query
         .order("scheduled_at_ms ASC")
         .order("created_at_ms ASC")
         .limit(1)

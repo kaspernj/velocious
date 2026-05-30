@@ -4,6 +4,8 @@ import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
 export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
+const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
+const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
   /**
@@ -27,6 +29,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /** @type {Record<number, import("../drivers/base.js").default>} */
   connectionsInUse = {}
+
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  idleConnectionReaperTimer = undefined
 
   idSeq = 0
 
@@ -53,16 +58,20 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(undefined)
 
-    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean}} */ (connection)
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
     if (trackedConnection[CLOSED_CONNECTION]) return
 
+    trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
     this.connections.push(connection)
+    this.scheduleIdleConnectionReaper()
 
   }
 
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
   async checkout() {
+    await this.reapIdleConnections()
+
     const connectionIndex = this.connections.findIndex((queuedConnection) => this.connectionMatchesCurrentConfiguration(queuedConnection))
     let connection = connectionIndex === -1 ? undefined : this.connections.splice(connectionIndex, 1)[0]
 
@@ -73,6 +82,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (connection.getIdSeq() !== undefined) throw new Error(`Connection already has an ID-seq - is it in use? ${connection.getIdSeq()}`)
 
     const id = this.idSeq++
+
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+    delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
 
     connection.setIdSeq(id)
     this.connectionsInUse[id] = connection
@@ -219,11 +231,148 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     }
   }
 
+  /** @returns {number | null} - Idle timeout in milliseconds, or null when disabled. */
+  idleTimeoutMillis() {
+    const value = this.getConfiguration().pool?.idleTimeoutMillis
+
+    if (value === null) return null
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value
+
+    return DEFAULT_IDLE_TIMEOUT_MILLIS
+  }
+
+  /** @returns {void} */
+  scheduleIdleConnectionReaper() {
+    if (this.idleConnectionReaperTimer) return
+    if (this.connections.length === 0) return
+
+    const idleTimeoutMillis = this.idleTimeoutMillis()
+
+    if (idleTimeoutMillis === null) return
+
+    const delay = this.nextIdleConnectionReapDelay(idleTimeoutMillis)
+
+    this.idleConnectionReaperTimer = setTimeout(() => {
+      this.idleConnectionReaperTimer = undefined
+      void this.reapIdleConnections().catch((error) => {
+        this.logger.warn(() => ["Failed to reap idle database connections:", error])
+      })
+    }, delay)
+
+    if (typeof this.idleConnectionReaperTimer.unref === "function") {
+      this.idleConnectionReaperTimer.unref()
+    }
+  }
+
+  /**
+   * @param {number} idleTimeoutMillis - Idle timeout in milliseconds.
+   * @returns {number} - Delay before the next reap.
+   */
+  nextIdleConnectionReapDelay(idleTimeoutMillis) {
+    let delay = idleTimeoutMillis
+    const now = Date.now()
+
+    for (const connection of this.connections) {
+      if (this.connectionHasOpenTransaction(connection)) continue
+
+      const trackedConnection = /** @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+      const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
+
+      if (typeof checkedInAt !== "number") continue
+
+      delay = Math.min(delay, Math.max(0, idleTimeoutMillis - (now - checkedInAt)))
+    }
+
+    return delay
+  }
+
+  /**
+   * Closes idle checked-in connections that have exceeded the configured timeout.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async reapIdleConnections() {
+    if (this.connections.length === 0) return
+
+    const idleTimeoutMillis = this.idleTimeoutMillis()
+
+    if (idleTimeoutMillis === null) return
+
+    const now = Date.now()
+    /** @type {import("../drivers/base.js").default[]} */
+    const keptConnections = []
+    /** @type {import("../drivers/base.js").default[]} */
+    const expiredConnections = []
+
+    for (const connection of this.connections) {
+      const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+
+      if (trackedConnection[CLOSED_CONNECTION]) continue
+      if (this.connectionHasOpenTransaction(connection)) {
+        keptConnections.push(connection)
+        continue
+      }
+
+      const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
+      const expired = typeof checkedInAt === "number" && now - checkedInAt >= idleTimeoutMillis
+
+      if (expired) {
+        expiredConnections.push(connection)
+      } else {
+        keptConnections.push(connection)
+      }
+    }
+
+    this.connections = keptConnections
+
+    for (const connection of expiredConnections) {
+      await this.closeConnection(connection)
+    }
+
+    if (this.connections.length > 0) {
+      this.scheduleIdleConnectionReaper()
+    }
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Connection to inspect.
+   * @returns {boolean} - Whether the connection has an open transaction.
+   */
+  connectionHasOpenTransaction(connection) {
+    return connection._transactionsCount > 0
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Connection to close.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async closeConnection(connection) {
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+
+    trackedConnection[CLOSED_CONNECTION] = true
+    delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
+
+    if (typeof trackedConnection.close === "function") {
+      await trackedConnection.close()
+    } else if (typeof trackedConnection.disconnect === "function") {
+      await trackedConnection.disconnect()
+    }
+  }
+
+  /** @returns {void} */
+  clearIdleConnectionReaperTimer() {
+    if (!this.idleConnectionReaperTimer) return
+
+    clearTimeout(this.idleConnectionReaperTimer)
+    this.idleConnectionReaperTimer = undefined
+  }
+
   /**
    * Closes all active and cached connections for this pool.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async closeAll() {
+    this.clearIdleConnectionReaperTimer()
+
     const connections = new Set([
       ...this.connections,
       ...Object.values(this.connectionsInUse),
@@ -236,14 +385,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     for (const connection of connections) {
       if (!connection) continue
 
-      const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean}} */ (connection)
-      trackedConnection[CLOSED_CONNECTION] = true
-
-      if (typeof trackedConnection.close === "function") {
-        await trackedConnection.close()
-      } else if (typeof trackedConnection.disconnect === "function") {
-        await trackedConnection.disconnect()
-      }
+      await this.closeConnection(connection)
     }
 
   }
