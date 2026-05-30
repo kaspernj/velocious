@@ -1609,11 +1609,25 @@ export default class VelociousConfiguration {
 
       void Promise
         .resolve()
-        .then(() => subscription.deliverBroadcast(body, {eventId: meta?.eventId}))
+        .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, {eventId: meta?.eventId}))
         .catch((error) => {
           console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
         })
     }
+  }
+
+  /**
+   * @param {import("./http-server/websocket-channel.js").default} subscription - Channel subscription.
+   * @param {import("./http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
+   * @param {{eventId?: string}} meta - Broadcast metadata.
+   * @returns {void | Promise<void>} Broadcast delivery result.
+   */
+  _deliverWebsocketChannelBroadcast(subscription, body, meta) {
+    if (typeof subscription.deliverBroadcast === "function") {
+      return subscription.deliverBroadcast(body, meta)
+    }
+
+    return subscription.sendMessage(body, meta)
   }
 
   /** @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver. */
