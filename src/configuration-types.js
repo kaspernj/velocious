@@ -52,6 +52,11 @@
  */
 
 /**
+ * @typedef {object} DatabasePoolConfiguration
+ * @property {number | null} [idleTimeoutMillis] - Idle timeout before closing a checked-in async-tracked connection. Set null to disable idle reaping. Default: 5000.
+ */
+
+/**
  * @typedef {object} DatabaseConfigurationType
  * @property {string} [databaseCharset] - Default character set applied by `db:create` via mysql/mariadb `CREATE DATABASE ... CHARACTER SET`. Distinct from `charset`, which is the client connection charset forwarded to the mysql2 driver.
  * @property {string} [databaseCollation] - Default collation applied by `db:create` via mysql/mariadb `CREATE DATABASE ... COLLATE`.
@@ -63,6 +68,7 @@
  * @property {boolean} [migrations] - Whether migrations are enabled for this database.
  * @property {string} [password] - Password for the database user.
  * @property {number} [port] - Database port.
+ * @property {DatabasePoolConfiguration} [pool] - Velocious database pool lifecycle configuration.
  * @property {string} [name] - Friendly name for the configuration.
  * @property {(file: string) => string} [locateFile] - Optional sqlite-web sql.js wasm resolver (`initSqlJs({locateFile})`).
  * @property {boolean} [readOnly] - Whether writes should be blocked for this database.
@@ -149,6 +155,9 @@
  *   process and DB connection pool, so this should fit the pool size, not the
  *   CPU count. Forking remains the right tool for memory isolation across
  *   long-running jobs and for using more cores. Default: `4`.
+ * @property {number} [maxConcurrentForkedJobs] - How many forked detached runner
+ *   processes a single `background-jobs-worker` is allowed to keep in flight.
+ *   Default: `4`.
  * @property {BackgroundJobsDispatchStrategy} [dispatchStrategy] - How the main process
  *   detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
  *   to restore the legacy fixed-interval poll.

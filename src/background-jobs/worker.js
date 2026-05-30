@@ -14,11 +14,10 @@ export default class BackgroundJobsWorker {
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    * @param {string} [args.host] - Hostname.
    * @param {number} [args.port] - Port.
-   * @param {number} [args.maxConcurrentInlineJobs] - Override the
-   *   concurrency cap from `configuration.getBackgroundJobsConfig()`.
-   *   See `BackgroundJobsConfiguration` for what the value means.
+   * @param {number} [args.maxConcurrentForkedJobs] - Override the forked runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
+   * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
    */
-  constructor({configuration, host, port, maxConcurrentInlineJobs} = {}) {
+  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs} = {}) {
     /** @type {Promise<import("../configuration.js").default>} */
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
     /** @type {import("../configuration.js").default | undefined} */
@@ -34,12 +33,18 @@ export default class BackgroundJobsWorker {
     this.maxConcurrentInlineJobsOverride = typeof maxConcurrentInlineJobs === "number" && maxConcurrentInlineJobs >= 1
       ? maxConcurrentInlineJobs
       : undefined
+    /** @type {number | undefined} */
+    this.maxConcurrentForkedJobsOverride = typeof maxConcurrentForkedJobs === "number" && maxConcurrentForkedJobs >= 1
+      ? maxConcurrentForkedJobs
+      : undefined
     /**
      * Resolved cap for inline-job concurrency. Set in `start()`; defaults to
      * 4 if no configuration value is available.
      * @type {number}
      */
     this.maxConcurrentInlineJobs = this.maxConcurrentInlineJobsOverride || 4
+    /** @type {number} */
+    this.maxConcurrentForkedJobs = this.maxConcurrentForkedJobsOverride || 4
     this.shouldStop = false
     this.workerId = randomUUID()
     /** @type {JsonSocket | undefined} */
@@ -47,10 +52,6 @@ export default class BackgroundJobsWorker {
     /** @type {BackgroundJobsStatusReporter | undefined} */
     this.statusReporter = undefined
     /**
-     * In-flight inline jobs the worker is currently running. Forked jobs run
-     * in detached child processes so they don't appear here; the worker
-     * doesn't need to wait for them on shutdown — they survive on their own.
-     *
      * Up to `this.maxConcurrentInlineJobs` of these run in parallel. They
      * share the worker's process and DB connection pool, so concurrency is
      * about overlapping I/O waits — use forking for memory isolation across
@@ -58,6 +59,13 @@ export default class BackgroundJobsWorker {
      * @type {Set<Promise<void>>}
      */
     this.inflightInlineJobs = new Set()
+    /**
+     * In-flight detached runner processes. The worker does not wait for
+     * them during shutdown, but it does track exits while running so
+     * forked job handoff stays bounded.
+     * @type {Set<Promise<void>>}
+     */
+    this.inflightForkedJobs = new Set()
   }
 
   /**
@@ -69,11 +77,16 @@ export default class BackgroundJobsWorker {
     await this.configuration.initialize({type: "background-jobs-worker"})
     await this.configuration.connectBeacon({peerType: "background-jobs-worker"})
 
-    // Constructor override wins; otherwise pick up the configured cap.
+    // Constructor overrides win; otherwise pick up the configured caps.
     if (typeof this.maxConcurrentInlineJobsOverride !== "number") {
       const config = this.configuration.getBackgroundJobsConfig()
 
       this.maxConcurrentInlineJobs = config.maxConcurrentInlineJobs || this.maxConcurrentInlineJobs
+    }
+    if (typeof this.maxConcurrentForkedJobsOverride !== "number") {
+      const config = this.configuration.getBackgroundJobsConfig()
+
+      this.maxConcurrentForkedJobs = config.maxConcurrentForkedJobs || this.maxConcurrentForkedJobs
     }
 
     this.statusReporter = new BackgroundJobsStatusReporter({
@@ -156,7 +169,7 @@ export default class BackgroundJobsWorker {
 
     socket.on("connect", () => {
       jsonSocket.send({type: "hello", role: "worker", workerId: this.workerId})
-      jsonSocket.send({type: "ready"})
+      this._sendReadyIfRunning()
     })
   }
 
@@ -173,7 +186,18 @@ export default class BackgroundJobsWorker {
     const shouldFork = options.forked !== false
 
     if (shouldFork) {
-      await this._spawnDetachedJob(identifiedPayload)
+      /** @type {Promise<void>} */
+      let inflight
+
+      inflight = this._spawnDetachedJob(identifiedPayload).finally(() => {
+        this.inflightForkedJobs.delete(inflight)
+
+        if (!this.shouldStop && this.inflightForkedJobs.size === this.maxConcurrentForkedJobs - 1) {
+          this._sendReadyIfRunning()
+        }
+      })
+
+      this.inflightForkedJobs.add(inflight)
       this._sendReadyIfRunning()
       return
     }
@@ -239,7 +263,18 @@ export default class BackgroundJobsWorker {
    */
   _sendReadyIfRunning() {
     if (this.shouldStop) return
-    this.jsonSocket?.send({type: "ready"})
+    if (!this.jsonSocket) return
+
+    const acceptsForked = this.inflightForkedJobs.size < this.maxConcurrentForkedJobs
+    const acceptsInline = this.inflightInlineJobs.size < this.maxConcurrentInlineJobs
+
+    if (!acceptsForked && !acceptsInline) return
+
+    this.jsonSocket.send({
+      type: "ready",
+      acceptsForked,
+      acceptsInline
+    })
   }
 
   /**
@@ -264,9 +299,9 @@ export default class BackgroundJobsWorker {
 
   /**
    * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
-   * @returns {Promise<void>} - Resolves when spawned.
+   * @returns {Promise<void>} - Resolves when the detached runner exits or spawn fails.
    */
-  async _spawnDetachedJob(payload) {
+  _spawnDetachedJob(payload) {
     const configuration = this.configuration
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
 
@@ -286,8 +321,17 @@ export default class BackgroundJobsWorker {
         VELOCIOUS_JOB_PAYLOAD: encodedPayload
       })
     })
+    const finished = new Promise((resolve) => {
+      child.once("exit", () => resolve(undefined))
+      child.once("error", (error) => {
+        console.error("Background jobs forked runner spawn error:", error)
+        resolve(undefined)
+      })
+    })
 
     child.unref()
+
+    return finished
   }
 
   /**

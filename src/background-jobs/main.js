@@ -259,8 +259,6 @@ export default class BackgroundJobsMain {
         if (role === "worker") {
           jsonSocket.workerId = message.workerId
           this.workers.add(jsonSocket)
-          this.readyWorkers.add(jsonSocket)
-          void this._drain()
         }
 
         return
@@ -272,6 +270,8 @@ export default class BackgroundJobsMain {
       }
 
       if (role === "worker" && message?.type === "ready") {
+        jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
+        jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
         this.readyWorkers.add(jsonSocket)
         void this._drain()
         return
@@ -510,10 +510,10 @@ export default class BackgroundJobsMain {
    */
   async _drainOnce() {
     while (this.readyWorkers.size > 0 && !this._stopped) {
-      const job = await this.store.nextAvailableJob()
+      const job = await this.nextAvailableJobForReadyWorkers()
       if (!job) return
 
-      const [worker] = this.readyWorkers
+      const worker = this.readyWorkerForJob(job)
       if (!worker) return
 
       this.readyWorkers.delete(worker)
@@ -539,6 +539,49 @@ export default class BackgroundJobsMain {
         await this.store.markReturnedToQueue({jobId: job.id})
         this.readyWorkers.add(worker)
       }
+    }
+  }
+
+  /**
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next queued job matching ready worker capacity.
+   */
+  async nextAvailableJobForReadyWorkers() {
+    const acceptsForked = this.readyWorkersAcceptForkedJobs()
+    const acceptsInline = this.readyWorkersAcceptInlineJobs()
+
+    if (!acceptsForked && !acceptsInline) return null
+    if (acceptsForked && acceptsInline) return await this.store.nextAvailableJob()
+    if (acceptsForked) return await this.store.nextAvailableJob({forked: true})
+
+    return await this.store.nextAvailableJob({forked: false})
+  }
+
+  /** @returns {boolean} - Whether any ready worker can accept forked jobs. */
+  readyWorkersAcceptForkedJobs() {
+    for (const worker of this.readyWorkers) {
+      if (worker.acceptsForkedJobs) return true
+    }
+
+    return false
+  }
+
+  /** @returns {boolean} - Whether any ready worker can accept inline jobs. */
+  readyWorkersAcceptInlineJobs() {
+    for (const worker of this.readyWorkers) {
+      if (worker.acceptsInlineJobs) return true
+    }
+
+    return false
+  }
+
+  /**
+   * @param {import("./types.js").BackgroundJobRow} job - Job being handed off.
+   * @returns {JsonSocket | undefined} - Ready worker for the job type.
+   */
+  readyWorkerForJob(job) {
+    for (const worker of this.readyWorkers) {
+      if (job.forked && worker.acceptsForkedJobs) return worker
+      if (!job.forked && worker.acceptsInlineJobs) return worker
     }
   }
 

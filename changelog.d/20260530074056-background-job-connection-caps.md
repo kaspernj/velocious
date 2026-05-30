@@ -1,0 +1,1 @@
+Async-tracked database pools now reap checked-in idle connections after 5 seconds by default, configurable with `pool.idleTimeoutMillis`. Background job workers also cap detached forked runners with `maxConcurrentForkedJobs` so forked job bursts cannot spawn unbounded database-using child processes.

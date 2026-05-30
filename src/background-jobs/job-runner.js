@@ -93,6 +93,10 @@ export default async function runJobPayload(payload) {
       throw error
     }
   } finally {
-    await configuration.disconnectBeacon()
+    try {
+      await configuration.disconnectBeacon()
+    } finally {
+      await configuration.closeDatabaseConnections()
+    }
   }
 }

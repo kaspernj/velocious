@@ -532,10 +532,12 @@ export default class VelociousConfiguration {
     const envHost = process.env.VELOCIOUS_BACKGROUND_JOBS_HOST
     const envPortRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_PORT
     const envDatabaseIdentifier = process.env.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
+    const envMaxConcurrentForkedRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS
     const envMaxConcurrentRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS
     const envDispatchStrategy = process.env.VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY
     const envPollIntervalRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS
     const envPort = envPortRaw ? Number(envPortRaw) : undefined
+    const envMaxConcurrentForked = envMaxConcurrentForkedRaw ? Number(envMaxConcurrentForkedRaw) : undefined
     const envMaxConcurrent = envMaxConcurrentRaw ? Number(envMaxConcurrentRaw) : undefined
     const envPollInterval = envPollIntervalRaw ? Number(envPollIntervalRaw) : undefined
     const configured = this._backgroundJobs || {}
@@ -547,13 +549,16 @@ export default class VelociousConfiguration {
     const maxConcurrentInlineJobs = typeof configured.maxConcurrentInlineJobs === "number" && configured.maxConcurrentInlineJobs >= 1
       ? configured.maxConcurrentInlineJobs
       : (typeof envMaxConcurrent === "number" && Number.isFinite(envMaxConcurrent) && envMaxConcurrent >= 1 ? envMaxConcurrent : 4)
+    const maxConcurrentForkedJobs = typeof configured.maxConcurrentForkedJobs === "number" && configured.maxConcurrentForkedJobs >= 1
+      ? configured.maxConcurrentForkedJobs
+      : (typeof envMaxConcurrentForked === "number" && Number.isFinite(envMaxConcurrentForked) && envMaxConcurrentForked >= 1 ? envMaxConcurrentForked : 4)
     const dispatchStrategyRaw = configured.dispatchStrategy || envDispatchStrategy
     const dispatchStrategy = dispatchStrategyRaw === "polling" ? "polling" : "beacon"
     const pollIntervalMs = typeof configured.pollIntervalMs === "number" && configured.pollIntervalMs >= 1
       ? configured.pollIntervalMs
       : (typeof envPollInterval === "number" && Number.isFinite(envPollInterval) && envPollInterval >= 1 ? envPollInterval : 1000)
 
-    return {host, port, databaseIdentifier, maxConcurrentInlineJobs, dispatchStrategy, pollIntervalMs}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, dispatchStrategy, pollIntervalMs}
   }
 
   /**
