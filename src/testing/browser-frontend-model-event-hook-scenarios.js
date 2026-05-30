@@ -30,6 +30,20 @@ async function sleep(milliseconds) {
 }
 
 /**
+ * @param {() => boolean} callback - Predicate to wait for.
+ * @returns {Promise<void>} - Resolves when the predicate returns true.
+ */
+async function waitFor(callback) {
+  const startedAt = Date.now()
+
+  while (!callback()) {
+    if (Date.now() - startedAt > 1000) return
+
+    await sleep(10)
+  }
+}
+
+/**
  * @param {React.ReactElement} element - Element to render.
  * @returns {Promise<{rerender: (nextElement: React.ReactElement) => Promise<void>, unmount: () => Promise<void>}>} - Render controls.
  */
@@ -132,6 +146,8 @@ async function classLifecycleScenario() {
   }
 
   const controls = await renderElement(React.createElement(TestComponent))
+  await waitFor(() => subscriptions.create.size === 2 && subscriptions.update.size === 1)
+
   const mountedCreateSubscriptions = subscriptions.create.size
   const mountedUpdateSubscriptions = subscriptions.update.size
   const mountedDestroySubscriptions = subscriptions.destroy.size
@@ -176,6 +192,8 @@ async function instanceLifecycleScenario() {
   }
 
   const controls = await renderElement(React.createElement(TestComponent))
+  await waitFor(() => subscriptions.update.size === 1 && subscriptions.destroy.size === 1)
+
   const mountedConnectedCount = connectedCount
   const mountedDestroySubscriptions = subscriptions.destroy.size
   const mountedUpdateSubscriptions = subscriptions.update.size
@@ -214,6 +232,7 @@ async function debounceUnmountScenario() {
   }
 
   const controls = await renderElement(React.createElement(TestComponent))
+  await waitFor(() => classSubscriptions.update.size === 1 && instanceSubscriptions.update.size === 1 && instanceSubscriptions.destroy.size === 1)
 
   emitEvent(classSubscriptions, "update", {id: "task-1", model})
   emitEvent(instanceSubscriptions, "update", {id: "task-1", model})
@@ -245,10 +264,13 @@ async function resubscribeInstanceScenario() {
   }
 
   const controls = await renderElement(React.createElement(TestComponent, {model: firstModel}))
+  await waitFor(() => firstSubscriptions.update.size === 1 && firstSubscriptions.destroy.size === 1)
+
   const firstMountedDestroySubscriptions = firstSubscriptions.destroy.size
   const firstMountedUpdateSubscriptions = firstSubscriptions.update.size
 
   await controls.rerender(React.createElement(TestComponent, {model: secondModel}))
+  await waitFor(() => firstSubscriptions.update.size === 0 && firstSubscriptions.destroy.size === 0 && secondSubscriptions.update.size === 1 && secondSubscriptions.destroy.size === 1)
 
   const firstAfterRerenderDestroySubscriptions = firstSubscriptions.destroy.size
   const firstAfterRerenderUpdateSubscriptions = firstSubscriptions.update.size
