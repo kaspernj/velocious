@@ -109,6 +109,16 @@ for (const invoice of invoices) {
 }
 ```
 
+### Collection size
+
+Use `size()` on `hasMany` relationship helpers when you need a count and the relationship may already be loaded:
+
+```js
+const count = await invoice.invoiceGroups().size()
+```
+
+`size()` returns the loaded collection length when records were preloaded or built in memory. If the relationship has not been loaded and the parent is persisted, it runs a count query. This keeps display virtuals and frontend-model payloads from issuing extra child queries when a resource has already preloaded the relationship.
+
 ### Frontend model preloading
 
 Through relationships are also supported in frontend model preload queries:

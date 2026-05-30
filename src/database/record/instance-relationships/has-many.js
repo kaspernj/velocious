@@ -119,6 +119,21 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     return Array.isArray(loadedValue) ? loadedValue : [loadedValue]
   }
 
+  /** @returns {Promise<number>} - Resolves with the relationship size, using loaded records when available. */
+  async size() {
+    const loadedValue = this.getLoadedOrUndefined()
+
+    if (loadedValue !== undefined) {
+      if (!Array.isArray(loadedValue)) throw new Error(`Loaded had an unexpected type: ${typeof loadedValue}`)
+
+      return loadedValue.length
+    }
+
+    if (this.getModel().isNewRecord()) return 0
+
+    return await this.query().count()
+  }
+
   /**
    * @param {import("../../query/index.js").NestedPreloadRecord} preloads - Preload map for related records.
    * @returns {import("../../query/model-class-query.js").default<TMC>} - The preload.
