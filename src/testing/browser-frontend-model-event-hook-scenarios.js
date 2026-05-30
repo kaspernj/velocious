@@ -5,14 +5,19 @@ import {createRoot} from "react-dom/client"
 
 import useDestroyedEvent from "../frontend-models/use-destroyed-event.js"
 import useCreatedEvent from "../frontend-models/use-created-event.js"
+import FrontendModelBase from "../frontend-models/base.js"
 import useModelClassEvent from "../frontend-models/use-model-class-event.js"
 import useUpdatedEvent from "../frontend-models/use-updated-event.js"
 
+/** @typedef {import("../frontend-models/query.js").FrontendModelProjectionOptions} FrontendModelProjectionOptions */
+/** @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
+/** @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
 /**
  * @typedef {object} FakeSubscriptions
- * @property {Set<(payload: unknown) => void>} create - Create callbacks.
- * @property {Set<(payload: unknown) => void>} destroy - Destroy callbacks.
- * @property {Set<(payload: unknown) => void>} update - Update callbacks.
+ * @property {Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>} create - Create callbacks.
+ * @property {Set<(payload: FrontendModelHookTestDestroyPayload) => void>} destroy - Destroy callbacks.
+ * @property {{create: FrontendModelProjectionOptions[], destroy: FrontendModelProjectionOptions[], update: FrontendModelProjectionOptions[]}} options - Subscription options.
+ * @property {Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>} update - Update callbacks.
  */
 
 /** @returns {Promise<void>} - Resolves after React effects have run. */
@@ -43,6 +48,16 @@ async function waitFor(callback) {
   }
 }
 
+/** @returns {FakeSubscriptions} - Empty fake subscription store. */
+function buildFakeSubscriptions() {
+  return {
+    create: new Set(),
+    destroy: new Set(),
+    options: {create: [], destroy: [], update: []},
+    update: new Set()
+  }
+}
+
 /**
  * @param {React.ReactElement} element - Element to render.
  * @returns {Promise<{rerender: (nextElement: React.ReactElement) => Promise<void>, unmount: () => Promise<void>}>} - Render controls.
@@ -68,41 +83,70 @@ async function renderElement(element) {
   }
 }
 
-/** @returns {{ModelClass: typeof import("../frontend-models/base.js").default, subscriptions: FakeSubscriptions}} - Fake model class setup. */
+/** @returns {{ModelClass: typeof FrontendModelBase, subscriptions: FakeSubscriptions}} - Fake model class setup. */
 function buildFakeModelClass() {
-  const subscriptions = {
-    create: new Set(),
-    destroy: new Set(),
-    update: new Set()
-  }
-  const ModelClass = /** @type {typeof import("../frontend-models/base.js").default} */ (/** @type {unknown} */ ({
-    onCreate: async (/** @type {(payload: unknown) => void} */ callback) => {
+  const subscriptions = buildFakeSubscriptions()
+
+  class FakeModelClass extends FrontendModelBase {
+    /**
+     * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
+     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @returns {Promise<() => void>} - Unsubscribe callback.
+     */
+    static async onCreate(callback, options = {}) {
       subscriptions.create.add(callback)
+      subscriptions.options.create.push(options)
 
       return () => subscriptions.create.delete(callback)
-    },
-    onDestroy: async (/** @type {(payload: unknown) => void} */ callback) => {
+    }
+
+    /**
+     * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
+     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @returns {Promise<() => void>} - Unsubscribe callback.
+     */
+    static async onDestroy(callback, options = {}) {
       subscriptions.destroy.add(callback)
+      subscriptions.options.destroy.push(options)
 
       return () => subscriptions.destroy.delete(callback)
-    },
-    onUpdate: async (/** @type {(payload: unknown) => void} */ callback) => {
+    }
+
+    /**
+     * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
+     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @returns {Promise<() => void>} - Unsubscribe callback.
+     */
+    static async onUpdate(callback, options = {}) {
       subscriptions.update.add(callback)
+      subscriptions.options.update.push(options)
 
       return () => subscriptions.update.delete(callback)
     }
-  }))
+  }
 
-  return {ModelClass, subscriptions}
+  return {ModelClass: FakeModelClass, subscriptions}
 }
 
 /**
  * @param {FakeSubscriptions} subscriptions - Callback sets.
  * @param {"create" | "destroy" | "update"} eventName - Event name.
- * @param {unknown} payload - Event payload.
+ * @param {FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload} payload - Event payload.
  * @returns {void}
  */
 function emitEvent(subscriptions, eventName, payload) {
+  if (eventName === "destroy") {
+    for (const callback of subscriptions.destroy) {
+      callback({id: payload.id})
+    }
+
+    return
+  }
+
+  if (!("model" in payload)) {
+    throw new Error(`Expected model payload for ${eventName}`)
+  }
+
   for (const callback of subscriptions[eventName]) {
     callback(payload)
   }
@@ -111,28 +155,49 @@ function emitEvent(subscriptions, eventName, payload) {
 /**
  * @param {string} id - Model id.
  * @param {FakeSubscriptions} subscriptions - Callback sets.
- * @returns {import("../frontend-models/base.js").default} - Fake model instance.
+ * @returns {FrontendModelBase} - Fake model instance.
  */
 function buildFakeModel(id, subscriptions) {
-  return /** @type {import("../frontend-models/base.js").default} */ (/** @type {unknown} */ ({
-    onDestroy: async (/** @type {(payload: unknown) => void} */ callback) => {
+  class FakeModel extends FrontendModelBase {
+    /**
+     * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
+     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @returns {Promise<() => void>} - Unsubscribe callback.
+     */
+    async onDestroy(callback, options = {}) {
       subscriptions.destroy.add(callback)
+      subscriptions.options.destroy.push(options)
 
       return () => subscriptions.destroy.delete(callback)
-    },
-    onUpdate: async (/** @type {(payload: unknown) => void} */ callback) => {
+    }
+
+    /**
+     * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
+     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @returns {Promise<() => void>} - Unsubscribe callback.
+     */
+    async onUpdate(callback, options = {}) {
       subscriptions.update.add(callback)
+      subscriptions.options.update.push(options)
 
       return () => subscriptions.update.delete(callback)
-    },
-    primaryKeyValue: () => id
-  }))
+    }
+
+    /** @returns {string} - Primary key value. */
+    primaryKeyValue() {
+      return id
+    }
+  }
+
+  return new FakeModel({id})
 }
 
 /** @returns {Promise<Record<string, number>>} - Scenario result. */
 async function classLifecycleScenario() {
   const {ModelClass, subscriptions} = buildFakeModelClass()
-  const receivedEvents = /** @type {unknown[]} */ ([])
+  const eventModel = buildFakeModel("1", buildFakeSubscriptions())
+  /** @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+  const receivedEvents = []
   let connectedCount = 0
 
   /** @returns {React.ReactElement} - Test element. */
@@ -153,8 +218,8 @@ async function classLifecycleScenario() {
   const mountedDestroySubscriptions = subscriptions.destroy.size
   const mountedConnectedCount = connectedCount
 
-  emitEvent(subscriptions, "create", {id: "1", model: {id: "1"}})
-  emitEvent(subscriptions, "update", {id: "1", model: {id: "1"}})
+  emitEvent(subscriptions, "create", {id: "1", model: eventModel})
+  emitEvent(subscriptions, "update", {id: "1", model: eventModel})
   emitEvent(subscriptions, "destroy", {id: "1"})
 
   const receivedEventsAfterEmit = receivedEvents.length
@@ -174,9 +239,10 @@ async function classLifecycleScenario() {
 
 /** @returns {Promise<Record<string, number>>} - Scenario result. */
 async function instanceLifecycleScenario() {
-  const subscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
+  const subscriptions = buildFakeSubscriptions()
   const model = buildFakeModel("task-1", subscriptions)
-  const receivedEvents = /** @type {unknown[]} */ ([])
+  /** @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+  const receivedEvents = []
   let connectedCount = 0
 
   /** @returns {React.ReactElement} - Test element. */
@@ -216,11 +282,55 @@ async function instanceLifecycleScenario() {
 }
 
 /** @returns {Promise<Record<string, number>>} - Scenario result. */
+async function projectionOptionsScenario() {
+  const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
+  const instanceSubscriptions = buildFakeSubscriptions()
+  const model = buildFakeModel("task-1", instanceSubscriptions)
+
+  /** @returns {React.ReactElement} - Test element. */
+  function TestComponent() {
+    useCreatedEvent(ModelClass, () => {}, {
+      preload: "project",
+      select: {Task: ["id", "nameUppercase"]}
+    })
+    useUpdatedEvent(model, () => {}, {
+      select: ["id"],
+      withCount: "comments"
+    })
+    useDestroyedEvent(model, () => {}, {
+      preload: "project",
+      select: ["id"]
+    })
+
+    return React.createElement("div")
+  }
+
+  const controls = await renderElement(React.createElement(TestComponent))
+  await waitFor(() => classSubscriptions.create.size === 1 && instanceSubscriptions.update.size === 1 && instanceSubscriptions.destroy.size === 1)
+
+  const createOptions = classSubscriptions.options.create[0] || {}
+  const updateOptions = instanceSubscriptions.options.update[0] || {}
+  const destroyOptions = instanceSubscriptions.options.destroy[0] || {}
+
+  await controls.unmount()
+
+  return {
+    classCreatePreloadProject: createOptions.preload === "project" ? 1 : 0,
+    classCreateSelectCount: createOptions.select && typeof createOptions.select === "object" && !Array.isArray(createOptions.select) && Array.isArray(createOptions.select.Task) ? createOptions.select.Task.length : 0,
+    instanceDestroyPreloadProject: destroyOptions.preload === "project" ? 1 : 0,
+    instanceDestroySelectCount: Array.isArray(destroyOptions.select) ? destroyOptions.select.length : 0,
+    instanceUpdateSelectCount: Array.isArray(updateOptions.select) ? updateOptions.select.length : 0,
+    instanceUpdateWithCountComments: updateOptions.withCount === "comments" ? 1 : 0
+  }
+}
+
+/** @returns {Promise<Record<string, number>>} - Scenario result. */
 async function debounceUnmountScenario() {
   const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
-  const instanceSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
+  const instanceSubscriptions = buildFakeSubscriptions()
   const model = buildFakeModel("task-1", instanceSubscriptions)
-  const receivedEvents = /** @type {unknown[]} */ ([])
+  /** @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+  const receivedEvents = []
 
   /** @returns {React.ReactElement} - Test element. */
   function TestComponent() {
@@ -246,11 +356,12 @@ async function debounceUnmountScenario() {
 
 /** @returns {Promise<Record<string, number>>} - Scenario result. */
 async function resubscribeInstanceScenario() {
-  const firstSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
-  const secondSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
+  const firstSubscriptions = buildFakeSubscriptions()
+  const secondSubscriptions = buildFakeSubscriptions()
   const firstModel = buildFakeModel("task-1", firstSubscriptions)
   const secondModel = buildFakeModel("task-1", secondSubscriptions)
-  const receivedEvents = /** @type {unknown[]} */ ([])
+  /** @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+  const receivedEvents = []
 
   /**
    * @param {{model: import("../frontend-models/base.js").default}} props - Component props.
@@ -300,6 +411,7 @@ const scenarios = {
   classLifecycle: classLifecycleScenario,
   debounceUnmount: debounceUnmountScenario,
   instanceLifecycle: instanceLifecycleScenario,
+  projectionOptions: projectionOptionsScenario,
   resubscribeInstance: resubscribeInstanceScenario
 }
 

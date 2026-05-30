@@ -1,6 +1,13 @@
 // @ts-check
 
 /**
+ * @typedef {null | boolean | number | string | object} WebsocketJsonValue
+ */
+/**
+ * @typedef {Record<string, WebsocketJsonValue>} WebsocketParams
+ */
+
+/**
  * Base class for app-defined 1:N pub/sub channels.
  *
  * Subclasses override:
@@ -12,7 +19,7 @@ export default class VelociousWebsocketChannel {
   /**
    * @param {object} args
    * @param {string} args.subscriptionId - Client-assigned id, unique within the session.
-   * @param {Record<string, any>} args.params - Subscribe params.
+   * @param {WebsocketParams} args.params - Subscribe params.
    * @param {import("./client/websocket-session.js").default} args.session - Owning session.
    */
   constructor({subscriptionId, params, session}) {
@@ -71,7 +78,7 @@ export default class VelociousWebsocketChannel {
    * sign-in / locale change). Override to react to session-level
    * metadata updates.
    *
-   * @param {Record<string, any>} _metadata - Updated metadata.
+   * @param {WebsocketParams} _metadata - Updated metadata.
    * @returns {void | Promise<void>}
    */
   onMetadataChanged(_metadata) {}
@@ -82,17 +89,30 @@ export default class VelociousWebsocketChannel {
    * `sendMessage`. Default matches all broadcasts regardless of
    * params; override for per-subscriber filtering.
    *
-   * @param {...any} _broadcastArgs - Params forwarded from `broadcastToChannel` (ignored by default).
+   * @param {...WebsocketJsonValue} _broadcastArgs - Params forwarded from `broadcastToChannel` (ignored by default).
    * @returns {boolean} - True to deliver the broadcast to this subscriber.
    */
   matches(..._broadcastArgs) { return true }
+
+  /**
+   * Delivers a matched broadcast to this subscriber. Subclasses can
+   * override when the outbound body must be tailored to subscription
+   * params before sending.
+   *
+   * @param {WebsocketJsonValue} body
+   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @returns {void | Promise<void>}
+   */
+  deliverBroadcast(body, meta) {
+    this.sendMessage(body, meta)
+  }
 
   /**
    * Sends a `channel-message` frame to THIS subscriber only.
    * When `meta.eventId` is provided, the client receives it so it
    * can track its checkpoint for `lastEventId` replay on reconnect.
    *
-   * @param {any} body
+   * @param {WebsocketJsonValue} body
    * @param {{eventId?: string}} [meta] - Optional event metadata.
    * @returns {void}
    */

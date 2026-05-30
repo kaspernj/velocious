@@ -11,6 +11,31 @@ import {isModelScopeDescriptor} from "../utils/model-scope.js"
  * @property {string[]} path - Relationship path from root model.
  * @property {unknown} value - Search value.
  */
+/**
+ * @typedef {null | boolean | number | string | object} FrontendModelTransportValue
+ */
+/**
+ * @typedef {{attributeName: string, relationshipName: string, where?: Record<string, FrontendModelTransportValue>}} FrontendModelWithCountPayloadEntry
+ */
+/**
+ * @typedef {{modelName: string, actions: string[]}} FrontendModelAbilitiesPayloadEntry
+ */
+/**
+ * @typedef {object} FrontendModelProjectionOptions
+ * @property {Record<string, string[] | string> | string | string[]} [select] - Model-aware attribute select map or root-model shorthand.
+ * @property {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} [preload] - Relationship preload tree.
+ * @property {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, FrontendModelTransportValue>}>} [withCount] - Association count spec.
+ * @property {string[] | Record<string, string[]>} [abilities] - Ability actions to compute per record.
+ * @property {string | Array<string | Record<string, FrontendModelTransportValue>> | Record<string, FrontendModelTransportValue>} [queryData] - Backend query data names/spec.
+ */
+/**
+ * @typedef {object} FrontendModelProjectionPayload
+ * @property {Record<string, string[]>} [select] - Normalized select map.
+ * @property {import("../database/query/index.js").NestedPreloadRecord} [preload] - Normalized preload tree.
+ * @property {FrontendModelWithCountPayloadEntry[]} [withCount] - Normalized count specs.
+ * @property {FrontendModelAbilitiesPayloadEntry[]} [abilities] - Normalized ability specs.
+ * @property {FrontendModelTransportValue} [queryData] - Normalized queryData spec.
+ */
 
 /**
  * @param {unknown} value - Candidate value.
@@ -1860,6 +1885,29 @@ export default class FrontendModelQuery {
     this.modelClass.assertFindByConditions(conditions)
 
     return normalizeFindConditions(conditions)
+  }
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Frontend model class.
+ * @param {FrontendModelProjectionOptions} [options] - Projection options.
+ * @returns {FrontendModelProjectionPayload} - Normalized frontend-model projection payload.
+ */
+export function frontendModelProjectionPayload(modelClass, options = {}) {
+  const query = new FrontendModelQuery({modelClass})
+
+  if (options.select !== undefined) query.select(options.select)
+  if (options.preload !== undefined) query.preload(options.preload)
+  if (options.withCount !== undefined) query.withCount(options.withCount)
+  if (options.abilities !== undefined) query.abilities(options.abilities)
+  if (options.queryData !== undefined) query.queryData(options.queryData)
+
+  return {
+    ...query.preloadPayload(),
+    ...query.selectPayload(),
+    ...query.withCountPayload(),
+    ...query.abilitiesPayload(),
+    ...query.queryDataPayload()
   }
 }
 

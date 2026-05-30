@@ -1282,7 +1282,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const event of events) {
       if (subscription.isClosed()) break
 
-      subscription.sendMessage(event.payload)
+      subscription.sendMessage(/** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
     }
   }
 

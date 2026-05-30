@@ -12,7 +12,7 @@ import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js
 /** @typedef {{id: string}} FrontendModelDestroyEventPayload */
 /** @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
 /** @typedef {(payload: FrontendModelClassEventPayload) => void} FrontendModelClassEventCallback */
-/** @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void}} UseModelClassEventOptions */
+/** @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelProjectionOptions} UseModelClassEventOptions */
 
 /**
  * @param {FrontendModelClassEventName | FrontendModelClassEventName[]} eventOrEvents - Event name or names.
@@ -31,7 +31,7 @@ function eventNamesDependencyKey(eventNames) {
 }
 
 /**
- * @param {Record<string, unknown>} restOptions - Unknown options object.
+ * @param {Record<string, import("./query.js").FrontendModelTransportValue | (() => void) | undefined>} restOptions - Unknown options object.
  * @returns {void}
  */
 function assertNoUnknownOptions(restOptions) {
@@ -46,12 +46,13 @@ function assertNoUnknownOptions(restOptions) {
  * @param {FrontendModelClass} modelClass - Frontend model class.
  * @param {FrontendModelClassEventName} eventName - Event name.
  * @param {FrontendModelClassEventCallback} callback - Event callback.
+ * @param {import("./query.js").FrontendModelProjectionOptions} options - Event record projection options.
  * @returns {Promise<() => void>} - Unsubscribe callback.
  */
-async function subscribeToModelClassEvent(modelClass, eventName, callback) {
-  if (eventName === "create") return await modelClass.onCreate(callback)
-  if (eventName === "update") return await modelClass.onUpdate(callback)
-  if (eventName === "destroy") return await modelClass.onDestroy(callback)
+async function subscribeToModelClassEvent(modelClass, eventName, callback, options) {
+  if (eventName === "create") return await modelClass.onCreate(callback, options)
+  if (eventName === "update") return await modelClass.onUpdate(callback, options)
+  if (eventName === "destroy") return await modelClass.onDestroy(callback, options)
 
   throw new Error(`Unsupported frontend model class event: ${eventName}`)
 }
@@ -65,11 +66,14 @@ async function subscribeToModelClassEvent(modelClass, eventName, callback) {
  * @returns {void}
  */
 export default function useModelClassEvent(modelClass, eventOrEvents, callback, options = {}) {
-  const {active = true, debounce = false, onConnected, ...restOptions} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount, ...restOptions} = options
   assertNoUnknownOptions(restOptions)
 
+  const projectionKey = JSON.stringify({abilities, preload, queryData, select, withCount})
+  const projectionOptionsRef = useRef({abilities, preload, queryData, select, withCount})
   const callbackRef = useRef(callback)
   const activeRef = useRef(active)
+  projectionOptionsRef.current = {abilities, preload, queryData, select, withCount}
   callbackRef.current = callback
   activeRef.current = active
 
@@ -98,7 +102,7 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
 
     void (async () => {
       for (const eventName of eventNames) {
-        const unsubscribe = await subscribeToModelClassEvent(modelClass, eventName, subscriptionCallback)
+        const unsubscribe = await subscribeToModelClassEvent(modelClass, eventName, subscriptionCallback, projectionOptionsRef.current)
 
         if (closed) {
           unsubscribe()
@@ -119,5 +123,5 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
 
       clearPendingDebouncedCallback(eventCallback)
     }
-  }, [active, eventsKey, eventCallback, modelClass, onConnected])
+  }, [active, eventsKey, eventCallback, modelClass, onConnected, projectionKey])
 }

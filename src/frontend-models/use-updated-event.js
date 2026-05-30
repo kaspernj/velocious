@@ -16,7 +16,7 @@ import useModelClassEvent from "./use-model-class-event.js"
 /** @typedef {(payload: FrontendModelUpdateEventPayload) => void} FrontendModelUpdateEventCallback */
 
 /**
- * @param {Record<string, unknown>} restOptions - Unknown options object.
+ * @param {Record<string, import("./query.js").FrontendModelTransportValue | (() => void) | undefined>} restOptions - Unknown options object.
  * @returns {void}
  */
 function assertNoUnknownOptions(restOptions) {
@@ -36,16 +36,17 @@ function assertNoUnknownOptions(restOptions) {
  * @returns {void}
  */
 export default function useUpdatedEvent(modelClassOrModels, callback, options = {}) {
-  const {active = true, debounce = false, onConnected, ...restOptions} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount, ...restOptions} = options
   assertNoUnknownOptions(restOptions)
 
   const classModel = typeof modelClassOrModels === "function" ? modelClassOrModels : null
   const instanceModels = typeof modelClassOrModels === "function" ? null : modelClassOrModels
+  const projectionOptions = {abilities, preload, queryData, select, withCount}
 
   useModelClassEvent(classModel, "update", (payload) => {
     callback(/** @type {FrontendModelClassUpdateEventPayload} */ (payload))
-  }, {active: active && Boolean(classModel), debounce, onConnected})
-  useInstanceUpdatedEvent(instanceModels, callback, {active: active && !classModel, debounce, onConnected})
+  }, {active: active && Boolean(classModel), debounce, onConnected, ...projectionOptions})
+  useInstanceUpdatedEvent(instanceModels, callback, {active: active && !classModel, debounce, onConnected, ...projectionOptions})
 }
 
 /**
@@ -55,9 +56,12 @@ export default function useUpdatedEvent(modelClassOrModels, callback, options = 
  * @returns {void}
  */
 function useInstanceUpdatedEvent(modelOrModels, callback, options) {
-  const {active = true, debounce = false, onConnected} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount} = options
+  const projectionKey = JSON.stringify({abilities, preload, queryData, select, withCount})
+  const projectionOptionsRef = useRef({abilities, preload, queryData, select, withCount})
   const callbackRef = useRef(callback)
   const activeRef = useRef(active)
+  projectionOptionsRef.current = {abilities, preload, queryData, select, withCount}
   callbackRef.current = callback
   activeRef.current = active
 
@@ -88,7 +92,7 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
 
     void (async () => {
       for (const model of models) {
-        const unsubscribe = await model.onUpdate(subscriptionCallback)
+        const unsubscribe = await model.onUpdate(subscriptionCallback, projectionOptionsRef.current)
 
         if (closed) {
           unsubscribe()
@@ -109,5 +113,5 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
 
       clearPendingDebouncedCallback(eventCallback)
     }
-  }, [active, eventCallback, modelsKey, onConnected])
+  }, [active, eventCallback, modelsKey, onConnected, projectionKey])
 }

@@ -1607,11 +1607,11 @@ export default class VelociousConfiguration {
 
       if (!matches) continue
 
-      try {
-        subscription.sendMessage(body, {eventId: meta?.eventId})
-      } catch (error) {
-        console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} sendMessage threw`, error)
-      }
+      void Promise
+        .resolve(subscription.deliverBroadcast(body, {eventId: meta?.eventId}))
+        .catch((error) => {
+          console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
+        })
     }
   }
 

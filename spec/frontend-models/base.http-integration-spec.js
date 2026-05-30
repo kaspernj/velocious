@@ -469,6 +469,51 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("serializes projected model lifecycle events for websocket subscribers", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await ProjectRecord.create({name: "Projected event project"})
+      const task = await TaskRecord.create({name: "Projected original", project})
+      await CommentRecord.create({body: "Projected comment", task})
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      /** @type {Array<{id: string, model: Task}>} */
+      const updates = []
+      const offUpdate = await Task.onUpdate((event) => {
+        updates.push({id: event.id, model: /** @type {Task} */ (event.model)})
+      }, {
+        preload: "project",
+        select: {
+          Project: ["id"],
+          Task: ["id", "nameUppercase"]
+        },
+        withCount: "comments"
+      })
+
+      try {
+        task.setName("Projected renamed")
+        await task.save()
+
+        await waitFor(() => {
+          if (updates.length < 1) throw new Error(`Expected projected onUpdate but got ${updates.length}`)
+        })
+
+        const projectedTask = updates[0].model
+        const projectedProject = projectedTask.getRelationshipByName("project").loaded()
+
+        expect(projectedTask.readAttribute("nameUppercase")).toEqual("PROJECTED RENAMED")
+        expect(projectedTask.readCount("commentsCount")).toEqual(1)
+        expect(projectedProject.id()).toEqual(project.id())
+        expect(() => projectedTask.name()).toThrow(/Task#name was not selected/)
+      } finally {
+        offUpdate()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
   it("auto-merges attributes on instance-level onUpdate and fires onDestroy once", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()

@@ -4,7 +4,7 @@ import SystemTest from "system-testing/build/system-test.js"
 
 import {describe, expect, it} from "../../src/testing/test.js"
 
-/** @typedef {"classLifecycle" | "debounceUnmount" | "instanceLifecycle" | "resubscribeInstance"} FrontendModelEventHookScenario */
+/** @typedef {"classLifecycle" | "debounceUnmount" | "instanceLifecycle" | "projectionOptions" | "resubscribeInstance"} FrontendModelEventHookScenario */
 
 /** @returns {boolean} - Whether the browser test runner is active. */
 function runBrowserHookScenarios() {
@@ -60,6 +60,18 @@ describe("Frontend model event hooks", () => {
     if (!result) return
 
     expect(result.receivedEventsAfterDebounceWindow).toEqual(0)
+  })
+
+  it("passes projection options through class and instance hooks", async () => {
+    const result = await runFrontendModelEventHookScenario("projectionOptions")
+    if (!result) return
+
+    expect(result.classCreatePreloadProject).toEqual(1)
+    expect(result.classCreateSelectCount).toEqual(2)
+    expect(result.instanceUpdateSelectCount).toEqual(1)
+    expect(result.instanceUpdateWithCountComments).toEqual(1)
+    expect(result.instanceDestroyPreloadProject).toEqual(1)
+    expect(result.instanceDestroySelectCount).toEqual(1)
   })
 
   it("resubscribes instance hooks when the model object changes", async () => {

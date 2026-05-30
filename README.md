@@ -417,7 +417,7 @@ useModelClassEvent(Subscription, ["create", "update"], () => {
 })
 ```
 
-`useCreatedEvent`, `useUpdatedEvent`, and `useDestroyedEvent` are also available. `useUpdatedEvent` and `useDestroyedEvent` accept either a model class or model instance.
+`useCreatedEvent`, `useUpdatedEvent`, and `useDestroyedEvent` are also available. `useUpdatedEvent` and `useDestroyedEvent` accept either a model class or model instance. Lifecycle subscriptions accept the same projection options as frontend-model queries for event records, including `select`, `preload`, `withCount`, `abilities`, and `queryData`.
 
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
