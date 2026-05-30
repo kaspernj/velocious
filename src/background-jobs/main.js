@@ -559,7 +559,7 @@ export default class BackgroundJobsMain {
   /** @returns {boolean} - Whether any ready worker can accept forked jobs. */
   readyWorkersAcceptForkedJobs() {
     for (const worker of this.readyWorkers) {
-      if (worker.acceptsForkedJobs) return true
+      if (worker.acceptsForkedJobs !== false) return true
     }
 
     return false
@@ -568,7 +568,7 @@ export default class BackgroundJobsMain {
   /** @returns {boolean} - Whether any ready worker can accept inline jobs. */
   readyWorkersAcceptInlineJobs() {
     for (const worker of this.readyWorkers) {
-      if (worker.acceptsInlineJobs) return true
+      if (worker.acceptsInlineJobs !== false) return true
     }
 
     return false
@@ -580,8 +580,8 @@ export default class BackgroundJobsMain {
    */
   readyWorkerForJob(job) {
     for (const worker of this.readyWorkers) {
-      if (job.forked && worker.acceptsForkedJobs) return worker
-      if (!job.forked && worker.acceptsInlineJobs) return worker
+      if (job.forked && worker.acceptsForkedJobs !== false) return worker
+      if (!job.forked && worker.acceptsInlineJobs !== false) return worker
     }
   }
 
