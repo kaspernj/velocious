@@ -93,7 +93,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     const projectedRecord = await this._projectedRecordForEventId(body.id)
 
     if (!projectedRecord) {
-      this.sendMessage(body, meta)
       return
     }
 

@@ -66,4 +66,27 @@ describe("FrontendModelWebsocketChannel", () => {
     expect(request.header("x-session-token")).toEqual(undefined)
     expect(request.metadata("X-Session-Token")).toEqual("metadata-token")
   })
+
+  it("skips projected lifecycle events when the record cannot be reloaded", async () => {
+    /** @type {Array<{body?: object, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "Task", select: {Task: ["id", "name"]}},
+      // @ts-expect-error Minimal sendJson-only session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: object, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "projected-missing-record"
+    })
+
+    channel._projectedRecordForEventId = async () => null
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: "missing-task",
+      record: {id: "missing-task", name: "Raw fallback"}
+    })
+
+    expect(sentFrames).toEqual([])
+  })
 })
