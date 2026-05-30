@@ -1,253 +1,77 @@
 // @ts-check
 
-import React from "react"
-import {createRoot} from "react-dom/client"
+import SystemTest from "system-testing/build/system-test.js"
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import useDestroyedEvent from "../../src/frontend-models/use-destroyed-event.js"
-import useCreatedEvent from "../../src/frontend-models/use-created-event.js"
-import useModelClassEvent from "../../src/frontend-models/use-model-class-event.js"
-import useUpdatedEvent from "../../src/frontend-models/use-updated-event.js"
 
-/**
- * @typedef {object} FakeSubscriptions
- * @property {Set<(payload: unknown) => void>} create - Create callbacks.
- * @property {Set<(payload: unknown) => void>} destroy - Destroy callbacks.
- * @property {Set<(payload: unknown) => void>} update - Update callbacks.
- */
+/** @typedef {"classLifecycle" | "debounceUnmount" | "instanceLifecycle" | "resubscribeInstance"} FrontendModelEventHookScenario */
 
-/** @returns {Promise<void>} - Resolves after React effects have run. */
-async function flushEffects() {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+/** @returns {boolean} - Whether the browser test runner is active. */
+function runBrowserHookScenarios() {
+  return process.env.VELOCIOUS_BROWSER_TESTS === "true"
 }
 
 /**
- * @param {number} milliseconds - Milliseconds to wait.
- * @returns {Promise<void>} - Resolves after the delay.
+ * @param {FrontendModelEventHookScenario} scenarioName - Browser scenario name.
+ * @returns {Promise<Record<string, number> | null>} - Scenario result, or null outside the browser runner.
  */
-async function sleep(milliseconds) {
-  await new Promise((resolve) => setTimeout(resolve, milliseconds))
-}
+async function runFrontendModelEventHookScenario(scenarioName) {
+  if (!runBrowserHookScenarios()) return null
 
-/**
- * @param {React.ReactElement} element - Element to render.
- * @returns {Promise<{rerender: (nextElement: React.ReactElement) => Promise<void>, unmount: () => Promise<void>}>} - Render controls.
- */
-async function renderElement(element) {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root = createRoot(container)
+  return /** @type {Promise<Record<string, number>>} */ (SystemTest.current().executeScript(`
+    const scenarioRunner = globalThis.velociousBrowserTest?.runFrontendModelEventHookScenario
 
-  root.render(element)
-  await flushEffects()
-
-  return {
-    rerender: async (nextElement) => {
-      root.render(nextElement)
-      await flushEffects()
-    },
-    unmount: async () => {
-      root.unmount()
-      container.remove()
-      await flushEffects()
+    if (!scenarioRunner) {
+      throw new Error("Frontend model event hook browser scenario runner is not installed")
     }
-  }
-}
 
-/** @returns {{ModelClass: typeof import("../../src/frontend-models/base.js").default, subscriptions: FakeSubscriptions}} - Fake model class setup. */
-function buildFakeModelClass() {
-  const subscriptions = {
-    create: new Set(),
-    destroy: new Set(),
-    update: new Set()
-  }
-  const ModelClass = /** @type {typeof import("../../src/frontend-models/base.js").default} */ ({
-    onCreate: async (callback) => {
-      subscriptions.create.add(callback)
-
-      return () => subscriptions.create.delete(callback)
-    },
-    onDestroy: async (callback) => {
-      subscriptions.destroy.add(callback)
-
-      return () => subscriptions.destroy.delete(callback)
-    },
-    onUpdate: async (callback) => {
-      subscriptions.update.add(callback)
-
-      return () => subscriptions.update.delete(callback)
-    }
-  })
-
-  return {ModelClass, subscriptions}
-}
-
-/**
- * @param {FakeSubscriptions} subscriptions - Callback sets.
- * @param {"create" | "destroy" | "update"} eventName - Event name.
- * @param {unknown} payload - Event payload.
- * @returns {void}
- */
-function emitEvent(subscriptions, eventName, payload) {
-  for (const callback of subscriptions[eventName]) {
-    callback(payload)
-  }
-}
-
-/**
- * @param {string} id - Model id.
- * @param {FakeSubscriptions} subscriptions - Callback sets.
- * @returns {import("../../src/frontend-models/base.js").default} - Fake model instance.
- */
-function buildFakeModel(id, subscriptions) {
-  return /** @type {import("../../src/frontend-models/base.js").default} */ ({
-    onDestroy: async (callback) => {
-      subscriptions.destroy.add(callback)
-
-      return () => subscriptions.destroy.delete(callback)
-    },
-    onUpdate: async (callback) => {
-      subscriptions.update.add(callback)
-
-      return () => subscriptions.update.delete(callback)
-    },
-    primaryKeyValue: () => id
-  })
+    return await scenarioRunner(arguments[0])
+  `, scenarioName))
 }
 
 describe("Frontend model event hooks", () => {
   it("subscribes to class lifecycle events and unsubscribes on unmount", async () => {
-    const {ModelClass, subscriptions} = buildFakeModelClass()
-    const receivedEvents = /** @type {unknown[]} */ ([])
-    let connectedCount = 0
+    const result = await runFrontendModelEventHookScenario("classLifecycle")
+    if (!result) return
 
-    /** @returns {React.ReactElement} */
-    function TestComponent() {
-      useModelClassEvent(ModelClass, ["create", "update"], (payload) => receivedEvents.push(payload), {
-        onConnected: () => { connectedCount += 1 }
-      })
-      useCreatedEvent(ModelClass, (payload) => receivedEvents.push(payload))
-
-      return React.createElement("div")
-    }
-
-    const controls = await renderElement(React.createElement(TestComponent))
-
-    expect(subscriptions.create.size).toEqual(2)
-    expect(subscriptions.update.size).toEqual(1)
-    expect(subscriptions.destroy.size).toEqual(0)
-    expect(connectedCount).toEqual(1)
-
-    emitEvent(subscriptions, "create", {id: "1", model: {id: "1"}})
-    emitEvent(subscriptions, "update", {id: "1", model: {id: "1"}})
-    emitEvent(subscriptions, "destroy", {id: "1"})
-
-    expect(receivedEvents.length).toEqual(3)
-
-    await controls.unmount()
-
-    expect(subscriptions.create.size).toEqual(0)
-    expect(subscriptions.update.size).toEqual(0)
+    expect(result.mountedCreateSubscriptions).toEqual(2)
+    expect(result.mountedUpdateSubscriptions).toEqual(1)
+    expect(result.mountedDestroySubscriptions).toEqual(0)
+    expect(result.mountedConnectedCount).toEqual(1)
+    expect(result.receivedEventsAfterEmit).toEqual(3)
+    expect(result.unmountedCreateSubscriptions).toEqual(0)
+    expect(result.unmountedUpdateSubscriptions).toEqual(0)
   })
 
   it("subscribes to instance update and destroy events", async () => {
-    const subscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
-    const model = buildFakeModel("task-1", subscriptions)
-    const receivedEvents = /** @type {unknown[]} */ ([])
-    let connectedCount = 0
+    const result = await runFrontendModelEventHookScenario("instanceLifecycle")
+    if (!result) return
 
-    /** @returns {React.ReactElement} */
-    function TestComponent() {
-      useUpdatedEvent(model, (payload) => receivedEvents.push(payload), {
-        onConnected: () => { connectedCount += 1 }
-      })
-      useDestroyedEvent([model], (payload) => receivedEvents.push(payload), {
-        onConnected: () => { connectedCount += 1 }
-      })
-
-      return React.createElement("div")
-    }
-
-    const controls = await renderElement(React.createElement(TestComponent))
-
-    expect(subscriptions.update.size).toEqual(1)
-    expect(subscriptions.destroy.size).toEqual(1)
-    expect(connectedCount).toEqual(2)
-
-    emitEvent(subscriptions, "update", {id: "task-1", model})
-    emitEvent(subscriptions, "destroy", {id: "task-1"})
-
-    expect(receivedEvents.length).toEqual(2)
-
-    await controls.unmount()
-
-    expect(subscriptions.update.size).toEqual(0)
-    expect(subscriptions.destroy.size).toEqual(0)
+    expect(result.mountedUpdateSubscriptions).toEqual(1)
+    expect(result.mountedDestroySubscriptions).toEqual(1)
+    expect(result.mountedConnectedCount).toEqual(2)
+    expect(result.receivedEventsAfterEmit).toEqual(2)
+    expect(result.unmountedUpdateSubscriptions).toEqual(0)
+    expect(result.unmountedDestroySubscriptions).toEqual(0)
   })
 
   it("clears pending debounced callbacks on unmount", async () => {
-    const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
-    const instanceSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
-    const model = buildFakeModel("task-1", instanceSubscriptions)
-    const receivedEvents = /** @type {unknown[]} */ ([])
+    const result = await runFrontendModelEventHookScenario("debounceUnmount")
+    if (!result) return
 
-    /** @returns {React.ReactElement} */
-    function TestComponent() {
-      useModelClassEvent(ModelClass, "update", (payload) => receivedEvents.push(payload), {debounce: 20})
-      useUpdatedEvent(model, (payload) => receivedEvents.push(payload), {debounce: 20})
-      useDestroyedEvent(model, (payload) => receivedEvents.push(payload), {debounce: 20})
-
-      return React.createElement("div")
-    }
-
-    const controls = await renderElement(React.createElement(TestComponent))
-
-    emitEvent(classSubscriptions, "update", {id: "task-1", model})
-    emitEvent(instanceSubscriptions, "update", {id: "task-1", model})
-    emitEvent(instanceSubscriptions, "destroy", {id: "task-1"})
-
-    await controls.unmount()
-    await sleep(30)
-
-    expect(receivedEvents.length).toEqual(0)
+    expect(result.receivedEventsAfterDebounceWindow).toEqual(0)
   })
 
   it("resubscribes instance hooks when the model object changes", async () => {
-    const firstSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
-    const secondSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
-    const firstModel = buildFakeModel("task-1", firstSubscriptions)
-    const secondModel = buildFakeModel("task-1", secondSubscriptions)
-    const receivedEvents = /** @type {unknown[]} */ ([])
+    const result = await runFrontendModelEventHookScenario("resubscribeInstance")
+    if (!result) return
 
-    /**
-     * @param {{model: import("../../src/frontend-models/base.js").default}} props - Component props.
-     * @returns {React.ReactElement}
-     */
-    function TestComponent({model}) {
-      useUpdatedEvent(model, (payload) => receivedEvents.push(payload))
-      useDestroyedEvent(model, (payload) => receivedEvents.push(payload))
-
-      return React.createElement("div")
-    }
-
-    const controls = await renderElement(React.createElement(TestComponent, {model: firstModel}))
-
-    expect(firstSubscriptions.update.size).toEqual(1)
-    expect(firstSubscriptions.destroy.size).toEqual(1)
-
-    await controls.rerender(React.createElement(TestComponent, {model: secondModel}))
-
-    expect(firstSubscriptions.update.size).toEqual(0)
-    expect(firstSubscriptions.destroy.size).toEqual(0)
-    expect(secondSubscriptions.update.size).toEqual(1)
-    expect(secondSubscriptions.destroy.size).toEqual(1)
-
-    emitEvent(firstSubscriptions, "update", {id: "task-1", model: firstModel})
-    emitEvent(secondSubscriptions, "update", {id: "task-1", model: secondModel})
-    emitEvent(secondSubscriptions, "destroy", {id: "task-1"})
-
-    expect(receivedEvents.length).toEqual(2)
-
-    await controls.unmount()
+    expect(result.firstMountedUpdateSubscriptions).toEqual(1)
+    expect(result.firstMountedDestroySubscriptions).toEqual(1)
+    expect(result.firstAfterRerenderUpdateSubscriptions).toEqual(0)
+    expect(result.firstAfterRerenderDestroySubscriptions).toEqual(0)
+    expect(result.secondAfterRerenderUpdateSubscriptions).toEqual(1)
+    expect(result.secondAfterRerenderDestroySubscriptions).toEqual(1)
+    expect(result.receivedEventsAfterEmit).toEqual(2)
   })
 })

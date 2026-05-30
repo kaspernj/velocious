@@ -2,6 +2,7 @@
 
 import SystemTestBrowserHelper from "system-testing/build/system-test-browser-helper.js"
 import BrowserEnvironmentHandler from "../environment-handlers/browser.js"
+import runFrontendModelEventHookScenario from "./browser-frontend-model-event-hook-scenarios.js"
 
 const root = document.getElementById("root") || (() => {
   const element = document.createElement("div")
@@ -26,5 +27,6 @@ systemTestBrowserHelper.enableOnBrowser()
 
 globalThis.velociousBrowserTest = {
   BrowserEnvironmentHandler,
+  runFrontendModelEventHookScenario,
   systemTestBrowserHelper
 }
