@@ -3,6 +3,8 @@
 import debounceFunction from "debounce"
 import {useEffect, useMemo, useRef} from "react"
 
+import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
+
 /** @typedef {typeof import("./base.js").default} FrontendModelClass */
 /** @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
 /** @typedef {"create" | "update" | "destroy"} FrontendModelClassEventName */
@@ -90,10 +92,13 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
     let closed = false
     /** @type {Array<() => void>} */
     const unsubscribeCallbacks = []
+    const subscriptionCallback = (/** @type {FrontendModelClassEventPayload} */ payload) => {
+      if (!closed) eventCallback(payload)
+    }
 
     void (async () => {
       for (const eventName of eventNames) {
-        const unsubscribe = await subscribeToModelClassEvent(modelClass, eventName, eventCallback)
+        const unsubscribe = await subscribeToModelClassEvent(modelClass, eventName, subscriptionCallback)
 
         if (closed) {
           unsubscribe()
@@ -111,6 +116,8 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
       for (const unsubscribe of unsubscribeCallbacks) {
         unsubscribe()
       }
+
+      clearPendingDebouncedCallback(eventCallback)
     }
   }, [active, eventsKey, eventCallback, modelClass, onConnected])
 }

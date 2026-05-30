@@ -3,6 +3,8 @@
 import debounceFunction from "debounce"
 import {useEffect, useMemo, useRef} from "react"
 
+import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
+import {modelsDependencyKey, modelsFromInput} from "./event-hook-models.js"
 import useModelClassEvent from "./use-model-class-event.js"
 
 /** @typedef {typeof import("./base.js").default} FrontendModelClass */
@@ -12,25 +14,6 @@ import useModelClassEvent from "./use-model-class-event.js"
 /** @typedef {FrontendModelClassUpdateEventPayload | FrontendModelInstanceUpdateEventPayload} FrontendModelUpdateEventPayload */
 /** @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseUpdatedEventOptions */
 /** @typedef {(payload: FrontendModelUpdateEventPayload) => void} FrontendModelUpdateEventCallback */
-
-/**
- * @param {FrontendModelInstance | FrontendModelInstance[] | null | undefined} modelOrModels - Model or models.
- * @returns {FrontendModelInstance[]} - Normalized model list.
- */
-function modelsFromInput(modelOrModels) {
-  if (!modelOrModels) return []
-  if (Array.isArray(modelOrModels)) return modelOrModels.filter(Boolean)
-
-  return [modelOrModels]
-}
-
-/**
- * @param {FrontendModelInstance | FrontendModelInstance[] | null | undefined} modelOrModels - Model or models.
- * @returns {string} - Stable dependency key.
- */
-function modelsDependencyKey(modelOrModels) {
-  return JSON.stringify(modelsFromInput(modelOrModels).map((model) => model.primaryKeyValue()))
-}
 
 /**
  * @param {Record<string, unknown>} restOptions - Unknown options object.
@@ -99,10 +82,13 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
     let closed = false
     /** @type {Array<() => void>} */
     const unsubscribeCallbacks = []
+    const subscriptionCallback = (/** @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
+      if (!closed) eventCallback(payload)
+    }
 
     void (async () => {
       for (const model of models) {
-        const unsubscribe = await model.onUpdate(eventCallback)
+        const unsubscribe = await model.onUpdate(subscriptionCallback)
 
         if (closed) {
           unsubscribe()
@@ -120,6 +106,8 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
       for (const unsubscribe of unsubscribeCallbacks) {
         unsubscribe()
       }
+
+      clearPendingDebouncedCallback(eventCallback)
     }
   }, [active, eventCallback, modelsKey, onConnected])
 }

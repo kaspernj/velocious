@@ -22,6 +22,14 @@ async function flushEffects() {
 }
 
 /**
+ * @param {number} milliseconds - Milliseconds to wait.
+ * @returns {Promise<void>} - Resolves after the delay.
+ */
+async function sleep(milliseconds) {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+/**
  * @param {React.ReactElement} element - Element to render.
  * @returns {Promise<{rerender: (nextElement: React.ReactElement) => Promise<void>, unmount: () => Promise<void>}>} - Render controls.
  */
@@ -175,5 +183,71 @@ describe("Frontend model event hooks", () => {
 
     expect(subscriptions.update.size).toEqual(0)
     expect(subscriptions.destroy.size).toEqual(0)
+  })
+
+  it("clears pending debounced callbacks on unmount", async () => {
+    const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
+    const instanceSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
+    const model = buildFakeModel("task-1", instanceSubscriptions)
+    const receivedEvents = /** @type {unknown[]} */ ([])
+
+    /** @returns {React.ReactElement} */
+    function TestComponent() {
+      useModelClassEvent(ModelClass, "update", (payload) => receivedEvents.push(payload), {debounce: 20})
+      useUpdatedEvent(model, (payload) => receivedEvents.push(payload), {debounce: 20})
+      useDestroyedEvent(model, (payload) => receivedEvents.push(payload), {debounce: 20})
+
+      return React.createElement("div")
+    }
+
+    const controls = await renderElement(React.createElement(TestComponent))
+
+    emitEvent(classSubscriptions, "update", {id: "task-1", model})
+    emitEvent(instanceSubscriptions, "update", {id: "task-1", model})
+    emitEvent(instanceSubscriptions, "destroy", {id: "task-1"})
+
+    await controls.unmount()
+    await sleep(30)
+
+    expect(receivedEvents.length).toEqual(0)
+  })
+
+  it("resubscribes instance hooks when the model object changes", async () => {
+    const firstSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
+    const secondSubscriptions = {create: new Set(), destroy: new Set(), update: new Set()}
+    const firstModel = buildFakeModel("task-1", firstSubscriptions)
+    const secondModel = buildFakeModel("task-1", secondSubscriptions)
+    const receivedEvents = /** @type {unknown[]} */ ([])
+
+    /**
+     * @param {{model: import("../../src/frontend-models/base.js").default}} props - Component props.
+     * @returns {React.ReactElement}
+     */
+    function TestComponent({model}) {
+      useUpdatedEvent(model, (payload) => receivedEvents.push(payload))
+      useDestroyedEvent(model, (payload) => receivedEvents.push(payload))
+
+      return React.createElement("div")
+    }
+
+    const controls = await renderElement(React.createElement(TestComponent, {model: firstModel}))
+
+    expect(firstSubscriptions.update.size).toEqual(1)
+    expect(firstSubscriptions.destroy.size).toEqual(1)
+
+    await controls.rerender(React.createElement(TestComponent, {model: secondModel}))
+
+    expect(firstSubscriptions.update.size).toEqual(0)
+    expect(firstSubscriptions.destroy.size).toEqual(0)
+    expect(secondSubscriptions.update.size).toEqual(1)
+    expect(secondSubscriptions.destroy.size).toEqual(1)
+
+    emitEvent(firstSubscriptions, "update", {id: "task-1", model: firstModel})
+    emitEvent(secondSubscriptions, "update", {id: "task-1", model: secondModel})
+    emitEvent(secondSubscriptions, "destroy", {id: "task-1"})
+
+    expect(receivedEvents.length).toEqual(2)
+
+    await controls.unmount()
   })
 })
