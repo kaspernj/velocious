@@ -63,7 +63,13 @@
     "strftime": "^0.10.2"
   },
   "peerDependencies": {
+    "react": ">=18",
     "smtp-connection": "^4.0.2"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -75,6 +81,7 @@
     "@types/pg": "^8.20.0",
     "@types/proxy-addr": "^2.0.3",
     "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/strftime": "^0.9.8",
     "chokidar-cli": "^3.0.0",
     "cpy-cli": "^7.0.0",
@@ -86,6 +93,8 @@
     "mysql": "^2.18.1",
     "node-fetch": "^3.3.1",
     "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "release-patch": "^1.0.0",
     "require-context": "^1.1.0",
     "sqlite": "^5.1.1",

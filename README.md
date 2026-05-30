@@ -407,6 +407,18 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `await task.projectOrLoad()`, `await project.tasks().toArray()`, `await project.tasks().load()`, and `project.tasks().build({...})`
 - Attachment helpers (when `attachments` are configured), for example `await task.descriptionFile().attach(file)`, `await task.descriptionFile().download()`, and `await task.update({descriptionFile: file})`
 
+React components can subscribe to lifecycle broadcasts without manual cleanup code:
+
+```js
+import useModelClassEvent from "velocious/build/src/frontend-models/use-model-class-event.js"
+
+useModelClassEvent(Subscription, ["create", "update"], () => {
+  void loadSubscriptionStatus()
+})
+```
+
+`useCreatedEvent`, `useUpdatedEvent`, and `useDestroyedEvent` are also available. `useUpdatedEvent` and `useDestroyedEvent` accept either a model class or model instance.
+
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
 Frontend-model `joins(...)` supports relationship-object descriptors only (for example `Task.joins({project: {creatingUser: true}})`) and rejects raw SQL join strings.
