@@ -68,6 +68,13 @@
 - Relationship parity helpers are available via `loadRelationship(name)` / `relationshipOrLoad(name)` / `setRelationship(name, value)` and generated `loadXxx` / `xxxOrLoad` / `setXxx` methods where applicable.
 - Has-many relationship helpers support `await model.relationshipName().toArray()` to reuse preloaded data and `await model.relationshipName().load()` to force a refresh.
 
+## React event hooks
+- Use `useModelClassEvent(ModelClass, "create" | "update" | "destroy", callback)` to subscribe to frontend-model lifecycle broadcasts from React components.
+- Pass an array of event names to subscribe one callback to several class-level events, for example `useModelClassEvent(Subscription, ["create", "update"], reloadStatus)`.
+- Convenience wrappers are available as `useCreatedEvent(ModelClass, callback)`, `useUpdatedEvent(ModelClassOrModel, callback)`, and `useDestroyedEvent(ModelClassOrModel, callback)`.
+- `useUpdatedEvent` and `useDestroyedEvent` accept a model instance or array of model instances for instance-level subscriptions.
+- Hook options support `{active, debounce, onConnected}`. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
+
 ## Attachment support
 - Frontend models can define `resourceConfig().attachments` and use generated attachment handles:
   - `await model.attachmentName().attach(fileLikeOrBase64Payload)`

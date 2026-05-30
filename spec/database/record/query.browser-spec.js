@@ -94,6 +94,31 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(loadedTasks[0].name()).toEqual("Built task")
   })
 
+  it("returns has-many size from loaded records", async () => {
+    const project = await Project.create({name: "Size project"})
+    const task = await Task.create({name: "Size task", project})
+    const preloadedProject = await Project.preload({tasks: true}).find(project.id())
+
+    expect(await preloadedProject.tasks().size()).toEqual(1)
+    expect(preloadedProject.tasksLoaded().map((loadedTask) => loadedTask.id())).toEqual([task.id()])
+  })
+
+  it("returns has-many size from a count query when records are not loaded", async () => {
+    const project = await Project.create({name: "Count project"})
+    await Task.create({name: "Count task 1", project})
+    await Task.create({name: "Count task 2", project})
+
+    expect(await project.tasks().size()).toEqual(2)
+  })
+
+  it("returns has-many size from in-memory built records", async () => {
+    const project = new Project({name: "Unsaved size project"})
+
+    project.tasks().build({name: "Unsaved size task"})
+
+    expect(await project.tasks().size()).toEqual(1)
+  })
+
   it("finds the first record", async () => {
     const taskIDs = []
     const project = await Project.create()
