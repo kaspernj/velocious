@@ -11,18 +11,12 @@ import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
+import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
 import {ensureFrontendModelWebsocketPublishersRegistered} from "./frontend-models/websocket-publishers.js"
 import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
-
-/** @type {{currentConfiguration: VelociousConfiguration | null}} */
-const shared = {
-  currentConfiguration: null
-}
-
-class CurrentConfigurationNotSetError extends Error {}
 
 export {CurrentConfigurationNotSetError}
 
@@ -64,9 +58,7 @@ export default class VelociousConfiguration {
   _closeDatabaseConnectionsPromise = null
   /** @returns {VelociousConfiguration} - The current.  */
   static current() {
-    if (!shared.currentConfiguration) throw new CurrentConfigurationNotSetError("A current configuration hasn't been set")
-
-    return shared.currentConfiguration
+    return currentConfiguration()
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
@@ -1114,7 +1106,7 @@ export default class VelociousConfiguration {
 
   /** @returns {void} - No return value.  */
   setCurrent() {
-    shared.currentConfiguration = this
+    setCurrentConfiguration(this)
   }
 
   /** @returns {import("./routes/index.js").default | undefined} - The routes.  */

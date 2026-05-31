@@ -1,8 +1,8 @@
 // @ts-check
 
-import Configuration from "./configuration.js"
 import LoggerConsoleOutput from "./logger/outputs/console-output.js"
 import LoggerFileOutput from "./logger/outputs/file-output.js"
+import {currentConfiguration} from "./current-configuration.js"
 import {formatValue} from "./utils/format-value.js"
 import restArgsError from "./utils/rest-args-error.js"
 
@@ -359,7 +359,7 @@ export default class Logger {
   getConfiguration() {
     if (!this._configuration) {
       const objectWithConfig = /** @type {{configuration?: import("./configuration.js").default}} */ (this._object)
-      this._configuration = objectWithConfig?.configuration || Configuration.current()
+      this._configuration = objectWithConfig?.configuration || currentConfiguration()
     }
 
     return this._configuration
