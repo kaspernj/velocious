@@ -10,6 +10,7 @@ import useModelClassEvent from "../frontend-models/use-model-class-event.js"
 import useUpdatedEvent from "../frontend-models/use-updated-event.js"
 
 /** @typedef {import("../frontend-models/query.js").FrontendModelProjectionOptions} FrontendModelProjectionOptions */
+/** @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
 /** @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
 /** @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
 /**
@@ -59,6 +60,18 @@ function buildFakeSubscriptions() {
 }
 
 /**
+ * @param {string} modelName - Fake frontend model name.
+ * @returns {FrontendModelResourceConfig} - Minimal resource config for fake subclasses.
+ */
+function fakeResourceConfig(modelName) {
+  return {
+    attributes: ["id"],
+    modelName,
+    primaryKey: "id"
+  }
+}
+
+/**
  * @param {React.ReactElement} element - Element to render.
  * @returns {Promise<{rerender: (nextElement: React.ReactElement) => Promise<void>, unmount: () => Promise<void>}>} - Render controls.
  */
@@ -88,6 +101,11 @@ function buildFakeModelClass() {
   const subscriptions = buildFakeSubscriptions()
 
   class FakeModelClass extends FrontendModelBase {
+    /** @returns {FrontendModelResourceConfig} - Fake resource config. */
+    static resourceConfig() {
+      return fakeResourceConfig("HookFakeClassModel")
+    }
+
     /**
      * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
      * @param {FrontendModelProjectionOptions} [options] - Projection options.
@@ -159,6 +177,11 @@ function emitEvent(subscriptions, eventName, payload) {
  */
 function buildFakeModel(id, subscriptions) {
   class FakeModel extends FrontendModelBase {
+    /** @returns {FrontendModelResourceConfig} - Fake resource config. */
+    static resourceConfig() {
+      return fakeResourceConfig("HookFakeInstanceModel")
+    }
+
     /**
      * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
      * @param {FrontendModelProjectionOptions} [options] - Projection options.
