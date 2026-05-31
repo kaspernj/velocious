@@ -25,6 +25,7 @@ function makeSubscription({matches} = {}) {
     subscriptionId: `s-${Math.random().toString(36).slice(2)}`,
     received,
     matches: matches || (() => true),
+    deliverBroadcast: (body) => received.push(body),
     sendMessage: (body) => received.push(body),
     isClosed: () => false
   }
@@ -186,6 +187,28 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
 
     configuration.broadcastToChannel("frontend-models", {}, {hello: "world"})
 
+    await wait(0.01)
+
     expect(subscription.received).toEqual([{hello: "world"}])
+  })
+
+  it("continues broadcasting when one subscriber throws synchronously during delivery", async () => {
+    const configuration = buildConfiguration()
+    const throwingSubscription = {
+      ...makeSubscription(),
+      deliverBroadcast: () => {
+        throw new Error("sync delivery failed")
+      }
+    }
+    const receivingSubscription = makeSubscription()
+
+    configuration._registerWebsocketChannelSubscription("frontend-models", /** @type {import("../../src/http-server/websocket-channel.js").default} */ (throwingSubscription))
+    configuration._registerWebsocketChannelSubscription("frontend-models", /** @type {import("../../src/http-server/websocket-channel.js").default} */ (receivingSubscription))
+
+    configuration.broadcastToChannel("frontend-models", {}, {hello: "after throw"})
+
+    await wait(0.01)
+
+    expect(receivingSubscription.received).toEqual([{hello: "after throw"}])
   })
 })

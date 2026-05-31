@@ -2,7 +2,7 @@
 
 import * as inflection from "inflection"
 import timeout from "awaitery/build/timeout.js"
-import FrontendModelQuery from "./query.js"
+import FrontendModelQuery, {frontendModelProjectionPayload} from "./query.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
@@ -726,6 +726,112 @@ function cloneFrontendModelAttributes(value) {
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
+ * @typedef {{callback: (payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
+ */
+/**
+ * @typedef {{callback: (payload: {id: string}) => void}} FrontendModelDestroyEventCallbackEntry
+ */
+
+/**
+ * @param {Record<string, import("./query.js").FrontendModelTransportValue>} target - Target preload payload.
+ * @param {Record<string, import("./query.js").FrontendModelTransportValue>} source - Source preload payload.
+ * @returns {void}
+ */
+function mergeFrontendModelEventPreload(target, source) {
+  for (const [relationshipName, value] of Object.entries(source)) {
+    const existingValue = target[relationshipName]
+
+    if (value === true || value === false) {
+      if (existingValue === undefined) target[relationshipName] = value
+      continue
+    }
+
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      target[relationshipName] = value
+      continue
+    }
+
+    if (!existingValue || typeof existingValue !== "object" || Array.isArray(existingValue)) {
+      target[relationshipName] = {}
+    }
+
+    mergeFrontendModelEventPreload(
+      /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (target[relationshipName]),
+      /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (value)
+    )
+  }
+}
+
+/**
+ * @param {Record<string, string[]>} target - Target select map.
+ * @param {Record<string, string[]>} source - Source select map.
+ * @returns {void}
+ */
+function mergeFrontendModelEventSelect(target, source) {
+  for (const [modelName, attributes] of Object.entries(source)) {
+    const existingAttributes = target[modelName] || []
+
+    target[modelName] = Array.from(new Set(existingAttributes.concat(attributes)))
+  }
+}
+
+/**
+ * @param {Array<import("./query.js").FrontendModelWithCountPayloadEntry | import("./query.js").FrontendModelAbilitiesPayloadEntry>} target - Target array.
+ * @param {Array<import("./query.js").FrontendModelWithCountPayloadEntry | import("./query.js").FrontendModelAbilitiesPayloadEntry>} source - Source array.
+ * @returns {void}
+ */
+function mergeUniqueFrontendModelEventEntries(target, source) {
+  const existingKeys = new Set(target.map((entry) => JSON.stringify(entry)))
+
+  for (const entry of source) {
+    const key = JSON.stringify(entry)
+
+    if (existingKeys.has(key)) continue
+
+    target.push(entry)
+    existingKeys.add(key)
+  }
+}
+
+/**
+ * @param {import("./query.js").FrontendModelProjectionPayload} target - Target payload.
+ * @param {import("./query.js").FrontendModelProjectionPayload} source - Source payload.
+ * @returns {void}
+ */
+function mergeFrontendModelEventProjectionPayload(target, source) {
+  if (source.preload) {
+    if (!target.preload) target.preload = {}
+    mergeFrontendModelEventPreload(target.preload, source.preload)
+  }
+
+  if (source.select) {
+    if (!target.select) target.select = {}
+    mergeFrontendModelEventSelect(target.select, source.select)
+  }
+
+  if (source.withCount) {
+    if (!target.withCount) target.withCount = []
+    mergeUniqueFrontendModelEventEntries(target.withCount, source.withCount)
+  }
+
+  if (source.abilities) {
+    if (!target.abilities) target.abilities = []
+    mergeUniqueFrontendModelEventEntries(target.abilities, source.abilities)
+  }
+
+  if (source.queryData !== undefined) {
+    const targetQueryData = Array.isArray(target.queryData) ? target.queryData : []
+
+    target.queryData = targetQueryData
+    const queryDataEntries = Array.isArray(source.queryData) ? source.queryData : [source.queryData]
+
+    for (const entry of queryDataEntries) {
+      targetQueryData.push(entry)
+    }
+  }
+}
+
+/**
  * Per-model class singleton that multiplexes all registered onCreate /
  * onUpdate / onDestroy callbacks — class-level + instance-level —
  * over one WebsocketChannelV2 subscription. Subscription opens on the
@@ -740,25 +846,65 @@ class FrontendModelEventSubscription {
   /** @param {typeof FrontendModelBase} ModelClass - Frontend model class for this subscription bucket. */
   constructor(ModelClass) {
     this.ModelClass = ModelClass
-    /** @type {Set<(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void>} */
+    /** @type {Set<FrontendModelModelEventCallbackEntry>} */
     this.classCreateCallbacks = new Set()
-    /** @type {Set<(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void>} */
+    /** @type {Set<FrontendModelModelEventCallbackEntry>} */
     this.classUpdateCallbacks = new Set()
-    /** @type {Set<(payload: {id: string}) => void>} */
+    /** @type {Set<FrontendModelDestroyEventCallbackEntry>} */
     this.classDestroyCallbacks = new Set()
-    /** @type {Map<string, {instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void>, destroyCallbacks: Set<(payload: {id: string}) => void>}>} */
+    /** @type {Map<string, {instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}>} */
     this.instanceListeners = new Map()
     /** @type {any} */
     this.channelHandle = null
     /** @type {Promise<void> | null} */
     this.readyPromise = null
+    /** @type {string | null} */
+    this.subscriptionParamsKey = null
+  }
+
+  /**
+   * @returns {{model: string} & import("./query.js").FrontendModelProjectionPayload} - Current websocket subscription params.
+   */
+  subscriptionParams() {
+    /** @type {import("./query.js").FrontendModelProjectionPayload} */
+    const projectionPayload = {}
+    const projectionEntries = []
+
+    for (const entry of this.classCreateCallbacks) projectionEntries.push(entry)
+    for (const entry of this.classUpdateCallbacks) projectionEntries.push(entry)
+
+    for (const listener of this.instanceListeners.values()) {
+      for (const entry of listener.updateCallbacks) projectionEntries.push(entry)
+    }
+
+    for (const entry of projectionEntries) {
+      mergeFrontendModelEventProjectionPayload(projectionPayload, entry.projectionPayload)
+    }
+
+    return {
+      model: this.ModelClass.getModelName(),
+      ...projectionPayload
+    }
+  }
+
+  /** @returns {string} - Stable key for current subscription params. */
+  subscriptionParamsJson() {
+    return JSON.stringify(this.subscriptionParams())
   }
 
   /** @returns {Promise<void>} */
   async ensureSubscribed() {
+    const paramsJson = this.subscriptionParamsJson()
+
     if (this.channelHandle && !this.channelHandle.isClosed()) {
-      if (this.readyPromise) await this.readyPromise
-      return
+      if (this.subscriptionParamsKey !== paramsJson) {
+        this.channelHandle.close()
+        this.channelHandle = null
+        this.readyPromise = null
+      } else {
+        if (this.readyPromise) await this.readyPromise
+        return
+      }
     }
 
     // Serialize parallel calls (e.g. Promise.all([onCreate, onUpdate,
@@ -778,12 +924,16 @@ class FrontendModelEventSubscription {
     this.readyPromise = (async () => {
       if (typeof client.connect === "function") await client.connect()
 
+      const params = this.subscriptionParams()
+
+      this.subscriptionParamsKey = JSON.stringify(params)
       this.channelHandle = client.subscribeChannel(FRONTEND_MODELS_CHANNEL_NAME, {
-        params: {model: this.ModelClass.getModelName()},
+        params,
         onMessage: (/** @type {any} */ body) => this._dispatchEvent(body),
         onClose: () => {
           this.channelHandle = null
           this.readyPromise = null
+          this.subscriptionParamsKey = null
           this.instanceListeners.clear()
 
           const hasCallbacks = this.classCreateCallbacks.size > 0
@@ -817,13 +967,13 @@ class FrontendModelEventSubscription {
       const listener = this.instanceListeners.get(id)
 
       if (listener) {
-        for (const cb of listener.destroyCallbacks) {
-          try { cb({id}) } catch (error) { console.error(error) }
+        for (const entry of listener.destroyCallbacks) {
+          try { entry.callback({id}) } catch (error) { console.error(error) }
         }
         this.instanceListeners.delete(id)
       }
-      for (const cb of this.classDestroyCallbacks) {
-        try { cb({id}) } catch (error) { console.error(error) }
+      for (const entry of this.classDestroyCallbacks) {
+        try { entry.callback({id}) } catch (error) { console.error(error) }
       }
       return
     }
@@ -842,15 +992,15 @@ class FrontendModelEventSubscription {
       instanceAny.assignAttributes(freshModel.attributes())
       instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
 
-      for (const cb of listener.updateCallbacks) {
-        try { cb({id, model: listener.instance}) } catch (error) { console.error(error) }
+      for (const entry of listener.updateCallbacks) {
+        try { entry.callback({id, model: listener.instance}) } catch (error) { console.error(error) }
       }
     }
 
     const classCallbacks = action === "create" ? this.classCreateCallbacks : this.classUpdateCallbacks
 
-    for (const cb of classCallbacks) {
-      try { cb({id, model: freshModel}) } catch (error) { console.error(error) }
+    for (const entry of classCallbacks) {
+      try { entry.callback({id, model: freshModel}) } catch (error) { console.error(error) }
     }
   }
 
@@ -872,6 +1022,7 @@ class FrontendModelEventSubscription {
 
     this.channelHandle = null
     this.readyPromise = null
+    this.subscriptionParamsKey = null
   }
 }
 
@@ -2496,16 +2647,18 @@ export default class FrontendModelBase {
    * without re-checking per-record visibility.
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @param {import("./query.js").FrontendModelProjectionOptions} [options] - Event record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  static async onCreate(callback) {
+  static async onCreate(callback, options = {}) {
     const sub = ensureFrontendModelEventSubscription(this)
+    const entry = {callback, projectionPayload: frontendModelProjectionPayload(this, options)}
 
-    sub.classCreateCallbacks.add(callback)
+    sub.classCreateCallbacks.add(entry)
     await sub.ensureSubscribed()
 
     return () => {
-      sub.classCreateCallbacks.delete(callback)
+      sub.classCreateCallbacks.delete(entry)
       sub.maybeTeardown()
     }
   }
@@ -2514,16 +2667,18 @@ export default class FrontendModelBase {
    * Class-level hook fired when any record of this model is updated.
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @param {import("./query.js").FrontendModelProjectionOptions} [options] - Event record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  static async onUpdate(callback) {
+  static async onUpdate(callback, options = {}) {
     const sub = ensureFrontendModelEventSubscription(this)
+    const entry = {callback, projectionPayload: frontendModelProjectionPayload(this, options)}
 
-    sub.classUpdateCallbacks.add(callback)
+    sub.classUpdateCallbacks.add(entry)
     await sub.ensureSubscribed()
 
     return () => {
-      sub.classUpdateCallbacks.delete(callback)
+      sub.classUpdateCallbacks.delete(entry)
       sub.maybeTeardown()
     }
   }
@@ -2532,16 +2687,18 @@ export default class FrontendModelBase {
    * Class-level hook fired when any record of this model is destroyed.
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string}) => void} callback - Event callback.
+   * @param {import("./query.js").FrontendModelProjectionOptions} [_options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  static async onDestroy(callback) {
+  static async onDestroy(callback, _options = {}) {
     const sub = ensureFrontendModelEventSubscription(this)
+    const entry = {callback}
 
-    sub.classDestroyCallbacks.add(callback)
+    sub.classDestroyCallbacks.add(entry)
     await sub.ensureSubscribed()
 
     return () => {
-      sub.classDestroyCallbacks.delete(callback)
+      sub.classDestroyCallbacks.delete(entry)
       sub.maybeTeardown()
     }
   }
@@ -2552,13 +2709,15 @@ export default class FrontendModelBase {
    * before the callback runs, so callers can read fresh values via
    * `this.someAttr()` without re-fetching.
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @param {import("./query.js").FrontendModelProjectionOptions} [options] - Event record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  async onUpdate(callback) {
+  async onUpdate(callback, options = {}) {
     const self = /** @type {any} */ (this)
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
+    const entry = {callback, projectionPayload: frontendModelProjectionPayload(ModelClass, options)}
     let listener = sub.instanceListeners.get(id)
 
     if (!listener) {
@@ -2568,14 +2727,14 @@ export default class FrontendModelBase {
       listener.instance = this
     }
 
-    listener.updateCallbacks.add(callback)
+    listener.updateCallbacks.add(entry)
     await sub.ensureSubscribed()
 
     return () => {
       const current = sub.instanceListeners.get(id)
 
       if (!current) return
-      current.updateCallbacks.delete(callback)
+      current.updateCallbacks.delete(entry)
 
       if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
         sub.instanceListeners.delete(id)
@@ -2587,13 +2746,15 @@ export default class FrontendModelBase {
   /**
    * Instance-level hook fired when THIS record is destroyed.
    * @param {(payload: {id: string}) => void} callback - Event callback.
+   * @param {import("./query.js").FrontendModelProjectionOptions} [_options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  async onDestroy(callback) {
+  async onDestroy(callback, _options = {}) {
     const self = /** @type {any} */ (this)
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
+    const entry = {callback}
     let listener = sub.instanceListeners.get(id)
 
     if (!listener) {
@@ -2603,14 +2764,14 @@ export default class FrontendModelBase {
       listener.instance = this
     }
 
-    listener.destroyCallbacks.add(callback)
+    listener.destroyCallbacks.add(entry)
     await sub.ensureSubscribed()
 
     return () => {
       const current = sub.instanceListeners.get(id)
 
       if (!current) return
-      current.destroyCallbacks.delete(callback)
+      current.destroyCallbacks.delete(entry)
 
       if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
         sub.instanceListeners.delete(id)

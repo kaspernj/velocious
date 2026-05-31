@@ -73,7 +73,14 @@
 - Pass an array of event names to subscribe one callback to several class-level events, for example `useModelClassEvent(Subscription, ["create", "update"], reloadStatus)`.
 - Convenience wrappers are available as `useCreatedEvent(ModelClass, callback)`, `useUpdatedEvent(ModelClassOrModel, callback)`, and `useDestroyedEvent(ModelClassOrModel, callback)`.
 - `useUpdatedEvent` and `useDestroyedEvent` accept a model instance or array of model instances for instance-level subscriptions.
-- Hook options support `{active, debounce, onConnected}`. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
+- Hook options support `{active, debounce, onConnected}` plus event record projection options: `select`, `preload`, `withCount`, `abilities`, and `queryData`. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
+
+```js
+useUpdatedEvent(BuildGroup, onBuildGroupUpdated, {
+  select: {BuildGroup: ["id", "status", "rebuildableBuildsCount"]},
+  withCount: "builds"
+})
+```
 
 ## Attachment support
 - Frontend models can define `resourceConfig().attachments` and use generated attachment handles:
