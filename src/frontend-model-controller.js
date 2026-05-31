@@ -7,6 +7,7 @@ import FrontendModelBaseResource from "./frontend-model-resource/base-resource.j
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import RoutesResolver from "./routes/resolver.js"
+import {ValidationError} from "./database/record/index.js"
 import VelociousError from "./velocious-error.js"
 
 /**
@@ -3049,6 +3050,29 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelClientErrorPayloadForError(error) {
     const velociousMetadata = frontendModelVelociousMetadataForError(error)
+
+    let validationErrorsPayload = {}
+
+    if (error instanceof ValidationError) {
+      const validationErrors = error.getValidationErrors()
+      const model = error.getModel()
+      /** @type {Record<string, {type: string, message: string, fullMessage: string}[]>} */
+      const structuredErrors = {}
+
+      for (const attributeName in validationErrors) {
+        structuredErrors[attributeName] = validationErrors[attributeName].map(err => ({
+          type: err.type,
+          message: err.message,
+          fullMessage: `${model.getModelClass().humanAttributeName(attributeName)} ${err.message}`
+        }))
+      }
+
+      validationErrorsPayload = {
+        errorType: "validation_error",
+        validationErrors: structuredErrors
+      }
+    }
+
     return {
       ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error)),
       ...frontendModelDebugPayloadForError({
@@ -3056,7 +3080,8 @@ export default class FrontendModelController extends Controller {
         environment: this.getConfiguration().getEnvironment(),
         error
       }),
-      ...(velociousMetadata ? {velocious: velociousMetadata} : {})
+      ...(velociousMetadata ? {velocious: velociousMetadata} : {}),
+      ...validationErrorsPayload
     }
   }
 

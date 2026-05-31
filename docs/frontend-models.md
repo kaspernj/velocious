@@ -6,11 +6,34 @@
 - `FrontendModelBase.waitForIdle()` waits until queued, scheduled, and active frontend-model transport requests have resolved. Browser/system-test harnesses can call it during teardown before resetting app state.
 - Keep request execution centralized in Velocious instead of per-project endpoint overrides.
 
-## Unexpected error payloads
+## Error payloads
+
+### Unexpected errors
 - Unexpected frontend-model endpoint failures return `errorMessage: "Request failed."` by default so internal exception details are not exposed to clients.
 - `development` and `test` responses also include `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` for faster browser/system-test diagnosis.
 - Other non-production environments, such as `staging`, can opt into the same debug fields with `exposeInternalErrorsToClients: true` on the app `Configuration`.
 - `production` always keeps the generic response, even if `exposeInternalErrorsToClients` is set.
+
+### Validation errors
+- When a record validation fails during `create` or `update`, the frontend-model response includes structured per-attribute validation errors.
+- The response shape is:
+  ```json
+  {
+    "status": "error",
+    "errorType": "validation_error",
+    "errorMessage": "Name can't be blank",
+    "validationErrors": {
+      "name": [
+        {"type": "presence", "message": "can't be blank", "fullMessage": "Name can't be blank"}
+      ]
+    }
+  }
+  ```
+- `errorMessage` contains the human-readable joined message.
+- `errorType` is `"validation_error"` to distinguish validation failures from unexpected internal errors.
+- `validationErrors` is keyed by attribute name; each entry is an array of objects with `type` (validator name), `message` (short description), and `fullMessage` (human-readable error including the attribute label).
+- Unlike unexpected errors, validation errors are safe to expose in all environments (including production) because they only carry user-fixable input errors.
+- Internal details (stack traces, SQL errors) are never leaked through validation error responses.
 
 ## Frontend vs backend model API differences
 - Frontend models expose a narrower query surface (mainly `find`, `findBy`, `findByOrFail`, `findOrInitializeBy`, `findOrCreateBy`, `toArray`, `where`, `joins`, `sort`, `order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`) and do not expose the full backend query API (raw SQL joins, etc.).

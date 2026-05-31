@@ -35,6 +35,9 @@ import UUID from "pure-uuid"
  */
 
 class ValidationError extends Error {
+  /** @type {Record<string, any> | undefined} - Velocious metadata for frontend-model error reporting. */
+  velocious
+
   /**
    * @returns {VelociousDatabaseRecord} - The model.
    */
@@ -3391,6 +3394,8 @@ class VelociousDatabaseRecord {
 
       validationError.setValidationErrors(this._validationErrors)
       validationError.setModel(this)
+
+      validationError.velocious = {type: "validation_error"}
 
       throw validationError
     }

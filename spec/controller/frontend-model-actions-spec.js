@@ -1399,4 +1399,49 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.models[0].name).toEqual(undefined)
     })
   })
+
+  it("returns structured validation errors for frontend-model update with invalid attributes", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Valid task name")
+
+      const payload = await postSharedTaskFrontendModelCommand("update", {
+        attributes: {name: ""},
+        id: task.id()
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorType).toEqual("validation_error")
+      expect(payload.errorMessage).toEqual("Name can't be blank")
+      expect(payload.validationErrors).toBeDefined()
+      expect(payload.validationErrors.name).toBeDefined()
+      expect(payload.validationErrors.name.length).toEqual(1)
+      expect(payload.validationErrors.name[0].type).toEqual("presence")
+      expect(payload.validationErrors.name[0].message).toEqual("can't be blank")
+      expect(payload.validationErrors.name[0].fullMessage).toEqual("Name can't be blank")
+    })
+  })
+
+  it("masks non-validation internal errors as generic in production frontend-model responses", async () => {
+    await Dummy.run(async () => {
+      const configuration = buildFrontendModelControllerConfiguration("production")
+      const params = {
+        modelName: "Task",
+        requests: [{
+          commandType: "find",
+          model: "Task",
+          payload: {id: -1},
+          requestId: "find-request"
+        }]
+      }
+
+      const payload = await runFrontendApi({configuration, params})
+      const response = /** @type {Record<string, any>} */ (payload.responses?.[0]?.response || payload)
+
+      expect(response.status).toEqual("error")
+      expect(response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(response.errorType).toBeUndefined()
+      expect(response.validationErrors).toBeUndefined()
+      expect(response.debugErrorClass).toBeUndefined()
+    })
+  })
 })
