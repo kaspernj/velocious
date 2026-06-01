@@ -50,30 +50,39 @@ export default class VelociousDatabaseMigrator {
     for (const dbIdentifier in dbs) {
       if (!this.handlesDatabaseIdentifier(dbIdentifier)) continue
 
-      const db = dbs[dbIdentifier]
-      const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
+      await this.createMigrationsTableForDatabase({dbIdentifier, db: dbs[dbIdentifier]})
+    }
+  }
 
-      if (!databaseConfiguration.migrations) {
-        this.logger.debug(`${dbIdentifier} isn't configured for migrations - skipping creating migrations table for it`)
-        continue
-      }
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.dbIdentifier - Database identifier.
+   * @param {import("./drivers/base.js").default} args.db - Database connection.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async createMigrationsTableForDatabase({dbIdentifier, db}) {
+    const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
 
-      const exists = await this.migrationsTableExist(db)
+    if (!databaseConfiguration.migrations) {
+      this.logger.debug(`${dbIdentifier} isn't configured for migrations - skipping creating migrations table for it`)
+      return
+    }
 
-      if (exists) {
-        this.logger.debug(`${dbIdentifier} migrations table already exists - skipping`)
-      } else {
-        this.logger.debug("New TableData for schema_migrations")
-        const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
+    const exists = await this.migrationsTableExist(db)
 
-        schemaMigrationsTable.string("version", {null: false, primaryKey: true})
+    if (exists) {
+      this.logger.debug(`${dbIdentifier} migrations table already exists - skipping`)
+    } else {
+      this.logger.debug("New TableData for schema_migrations")
+      const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
 
-        const createSchemaMigrationsTableSqls = await db.createTableSql(schemaMigrationsTable)
+      schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
-        for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
-          this.logger.debug(`Creating migrations table with SQL`, createSchemaMigrationsTableSql)
-          await db.query(createSchemaMigrationsTableSql)
-        }
+      const createSchemaMigrationsTableSqls = await db.createTableSql(schemaMigrationsTable)
+
+      for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
+        this.logger.debug(`Creating migrations table with SQL`, createSchemaMigrationsTableSql)
+        await db.query(createSchemaMigrationsTableSql)
       }
     }
   }
@@ -194,28 +203,38 @@ export default class VelociousDatabaseMigrator {
     for (const dbIdentifier in dbs) {
       if (!this.handlesDatabaseIdentifier(dbIdentifier)) continue
 
-      const db = dbs[dbIdentifier]
-      const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
+      await this.loadMigrationsVersionsForDatabase({dbIdentifier, db: dbs[dbIdentifier]})
+    }
+  }
 
-      if (!databaseConfiguration.migrations) {
-        this.logger.debug(`${dbIdentifier} isn't configured for migrations - skipping loading migrations versions for it`)
-        continue
-      }
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.dbIdentifier - Database identifier.
+   * @param {import("./drivers/base.js").default} args.db - Database connection.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async loadMigrationsVersionsForDatabase({dbIdentifier, db}) {
+    const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
 
-      if (!await this.migrationsTableExist(db)) {
-        this.logger.info(`Migration table does not exist for ${dbIdentifier} - skipping loading migrations versions for it`)
-        continue
-      }
+    if (!databaseConfiguration.migrations) {
+      this.logger.debug(`${dbIdentifier} isn't configured for migrations - skipping loading migrations versions for it`)
+      return
+    }
 
-      const rows = await db.select("schema_migrations")
+    if (!await this.migrationsTableExist(db)) {
+      this.logger.info(`Migration table does not exist for ${dbIdentifier} - skipping loading migrations versions for it`)
+      delete this.migrationsVersions[dbIdentifier]
+      return
+    }
 
-      this.migrationsVersions[dbIdentifier] = {}
+    const rows = await db.select("schema_migrations")
 
-      for (const row of rows) {
-        const version = digg(row, "version")
+    this.migrationsVersions[dbIdentifier] = {}
 
-        this.migrationsVersions[dbIdentifier][version] = true
-      }
+    for (const row of rows) {
+      const version = digg(row, "version")
+
+      this.migrationsVersions[dbIdentifier][version] = true
     }
   }
 
@@ -373,7 +392,8 @@ export default class VelociousDatabaseMigrator {
 
     const dbs = await this.configuration.getCurrentConnections()
 
-    let shouldReloadMigrationVersions = false
+    /** @type {string[]} */
+    const dbIdentifiersNeedingMigrationVersions = []
 
     // migrateFiles() wraps execution in ensureConnections(), so the current
     // async context can expose DB identifiers not loaded by prepare().
@@ -385,13 +405,14 @@ export default class VelociousDatabaseMigrator {
       if (!databaseConfiguration.migrations) continue
       if (this.migrationsVersions[dbIdentifier]) continue
 
-      shouldReloadMigrationVersions = true
-      break
+      dbIdentifiersNeedingMigrationVersions.push(dbIdentifier)
     }
 
-    if (shouldReloadMigrationVersions) {
-      await this.createMigrationsTable()
-      await this.loadMigrationsVersions()
+    for (const dbIdentifier of dbIdentifiersNeedingMigrationVersions) {
+      const db = dbs[dbIdentifier]
+
+      await this.createMigrationsTableForDatabase({dbIdentifier, db})
+      await this.loadMigrationsVersionsForDatabase({dbIdentifier, db})
     }
 
     const migrationClass = await requireMigration()
