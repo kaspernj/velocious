@@ -16,6 +16,7 @@
  */
 /**
  * @typedef {object} CreateTableArgsType
+ * @property {boolean} [ifNotExists] - Skip creation if the table already exists.
  * @property {CreateTableIdArgsType | false} [id] - ID column options or false to skip ID.
  */
 /**
@@ -324,7 +325,7 @@ export default class VelociousDatabaseMigration {
       callback = arg2
     }
 
-    const {id = {}, ...restArgs} = args
+    const {id = {}, ifNotExists = false, ...restArgs} = args
     const databaseIdentifier = this._getDatabaseIdentifier()
     const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
     let idDefault, idType, restArgsId
@@ -358,7 +359,7 @@ export default class VelociousDatabaseMigration {
       // If driver doesn't support UUID() but the caller explicitly set a default, respect it.
     }
 
-    const tableData = new TableData(tableName)
+    const tableData = new TableData(tableName, {ifNotExists})
 
     restArgsError(restArgs)
 
