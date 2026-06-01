@@ -158,7 +158,7 @@ describe("database - pool - async tracked multi connection reuse", () => {
     }, {fresh: true})
   })
 
-  it("does not hand open transaction connections to pending checkouts", async () => {
+  it("rolls back a transaction left open on a connection being checked in and hands the cleaned connection to a pending checkout", async () => {
     await Dummy.run(async () => {
       const pool = getPool()
 
@@ -177,21 +177,23 @@ describe("database - pool - async tracked multi connection reuse", () => {
       })
 
       await wait(0.02)
+
+      // Checking the connection back in must roll back the transaction the holder
+      // left open, so it never re-enters the pool dirty and can be reused safely.
       await pool.checkin(transactionConnection)
       await wait(0.02)
 
-      expect(pendingResolved).toBe(false)
-
-      const rollbackConnection = await pool.checkout()
-
-      expect(rollbackConnection).toBe(transactionConnection)
-
-      await rollbackConnection.rollbackTransaction()
-      await pool.checkin(rollbackConnection)
+      expect(pool.connectionHasOpenTransaction(transactionConnection)).toBe(false)
+      expect(pendingResolved).toBe(true)
 
       const pendingConnection = await pendingCheckoutPromise
 
       expect(pendingConnection).toBe(transactionConnection)
+
+      // The cleaned connection accepts a fresh transaction without throwing
+      // "A transaction is already running".
+      await pendingConnection.startTransaction()
+      await pendingConnection.rollbackTransaction()
 
       await pool.checkin(pendingConnection)
     }, {fresh: true})
