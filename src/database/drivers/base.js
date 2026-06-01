@@ -1070,6 +1070,13 @@ export default class VelociousDatabaseDriversBase {
         await this._rollbackTransactionAction()
       } finally {
         this._transactionsCount--
+
+        // A rolled-back transaction may have reverted DDL (e.g. a CREATE TABLE
+        // run lazily inside the transaction), so any cached schema metadata is
+        // now stale and must be invalidated. Without this, a later tableExists()
+        // check can report a table that the rollback already removed, so callers
+        // skip recreating it and then fail with "no such table".
+        this.clearSchemaCache()
       }
     })
   }
