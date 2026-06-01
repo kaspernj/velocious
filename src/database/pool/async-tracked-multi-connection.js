@@ -108,7 +108,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (connection) return this.activateConnection(connection)
 
     if (this.canSpawnConnection()) {
-      connection = await this.spawnConnectionForCheckout(databaseConfig, reuseKey)
+      // Spawn via spawnConnection() so the tenant-aware configuration is resolved FRESH at
+      // spawn time for the current caller. Reusing the databaseConfig captured at the top of
+      // checkout() could bind the connection to a stale tenant/database, which breaks
+      // per-request isolation (e.g. test truncation appearing not to take effect). The queued
+      // path below keeps the waiting caller's captured config via waitForCheckout().
+      connection = await this.spawnConnection()
 
       return this.activateConnection(connection)
     }
