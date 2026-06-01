@@ -474,4 +474,18 @@ export default class VelociousEnvironmentHandlerBase {
   async writeLogToFile(_args) { // eslint-disable-line no-unused-vars
     return
   }
+
+  /**
+   * Registers frontend-model websocket channel publishers so lifecycle
+   * event hooks (create/update/destroy) broadcast over the shared
+   * "frontend-models" channel. The base handler is a no-op — only the
+   * Node handler performs the registration because the required
+   * `frontend-model-controller` and `routes/resolver` imports pull in
+   * server-only modules that break browser bundlers.
+   * @param {import("../configuration.js").default} _configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializeFrontendModelWebsocketPublishers(_configuration) { // eslint-disable-line no-unused-vars
+    // No-op in base handler; Node handler does the real registration.
+  }
 }

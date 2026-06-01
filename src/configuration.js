@@ -12,7 +12,6 @@ import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
-import {ensureFrontendModelWebsocketPublishersRegistered} from "./frontend-models/websocket-publishers.js"
 import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
@@ -1011,7 +1010,7 @@ export default class VelociousConfiguration {
         await this._initializeModels({configuration: this, type: args.type})
       }
 
-      await ensureFrontendModelWebsocketPublishersRegistered(this)
+      await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
     }
   }
 
