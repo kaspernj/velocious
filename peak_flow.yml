@@ -39,6 +39,7 @@ services:
       timeout: 10s
       retries: 20
       start_period: 300s
+    healthcheck_restart_limit: 20
     image: mcr.microsoft.com/mssql/server:2022-latest
     expose:
       - 1433
