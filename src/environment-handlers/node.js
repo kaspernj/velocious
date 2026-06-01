@@ -787,4 +787,19 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     return sqlByIdentifier
   }
+
+  /**
+   * Registers frontend-model websocket channel publishers so lifecycle
+   * event hooks broadcast over the shared "frontend-models" channel.
+   * This is only implemented by the Node handler because the required
+   * modules (`frontend-model-controller`, `routes/resolver`) pull in
+   * server-only Node APIs that break browser bundlers.
+   * @param {import("../configuration.js").default} configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializeFrontendModelWebsocketPublishers(configuration) {
+    const {ensureFrontendModelWebsocketPublishersRegistered} = await import("../frontend-models/websocket-publishers.js")
+
+    await ensureFrontendModelWebsocketPublishersRegistered(configuration)
+  }
 }
