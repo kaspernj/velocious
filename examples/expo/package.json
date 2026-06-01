@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "export": "npx expo export --platform all --output-dir dist",
-    "start": "expo start"
+    "start": "expo start",
+    "test:dist": "node scripts/run-export-tests.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.11",

@@ -10,7 +10,9 @@ Run the Expo compatibility build from the repository root:
 npm run test:expo
 ```
 
-The script builds Velocious first, installs the example app from its lockfile, and runs `expo export --platform all` from `examples/expo`. The all-platform export is intentional: native bundles resolve `velocious/build/src/database/drivers/sqlite/index` to `index.native.js`, while web resolves it to `index.web.js`.
+The script builds Velocious first, installs the example app from its lockfile, runs `expo export --platform all` from `examples/expo`, and then boots the exported web app with System Testing. The exported app runs in-app compatibility checks for configuration setup, frontend-model basics, event-hook imports, and the SQLite driver query path.
+
+The all-platform export is intentional: native bundles resolve `velocious/build/src/database/drivers/sqlite/index` to `index.native.js`, while web resolves it to `index.web.js`.
 
 ## App Integration Rules
 
