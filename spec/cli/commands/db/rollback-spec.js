@@ -226,6 +226,7 @@ describe("Cli - Commands - db:rollback", () => {
       expect(filteredNewTablesResult.sort()).toEqual(
         [
           "accounts",
+          "acts_as_list_items",
           "authentication_tokens",
           "comments",
           "interactions",
