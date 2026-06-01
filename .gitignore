@@ -12,3 +12,4 @@ spec/support/mysql.json
 log
 spec/dummy/log
 tmp/
+examples/expo/.expo/

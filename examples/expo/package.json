@@ -1,0 +1,23 @@
+{
+  "name": "velocious-expo-example",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "export": "npx expo export --platform all --output-dir dist",
+    "start": "expo start"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~55.0.11",
+    "expo": "~55.0.26",
+    "expo-sqlite": "~55.0.16",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.6",
+    "react-native-web": "~0.21.2",
+    "velocious": "file:../.."
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.5"
+  }
+}
