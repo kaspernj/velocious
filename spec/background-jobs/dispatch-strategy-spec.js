@@ -10,7 +10,7 @@ import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
-describe("Background jobs - dispatch strategy", {databaseCleaning: {transaction: true}}, () => {
+describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: true}}, () => {
   it("does not start a polling interval in the default (beacon) mode", async () => {
     dummyConfiguration.setCurrent()
     const store = new BackgroundJobsStore({configuration: dummyConfiguration})

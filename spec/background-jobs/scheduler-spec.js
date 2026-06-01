@@ -3,7 +3,7 @@
 import BackgroundJobsScheduler, {parseScheduledDuration} from "../../src/background-jobs/scheduler.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
-describe("Background jobs - scheduler", {databaseCleaning: {transaction: true}}, () => {
+describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, () => {
   it("parses sidekiq-style duration strings", () => {
     expect(parseScheduledDuration("1m", "example.every")).toEqual(60000)
     expect(parseScheduledDuration("5 seconds", "example.first_in")).toEqual(5000)
