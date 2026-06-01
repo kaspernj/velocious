@@ -85,7 +85,7 @@ export default class VelociousDatabaseMigrator {
    */
   hasRunMigrationVersion(dbIdentifier, version) {
     if (!this.migrationsVersions) throw new Error("Migrations versions hasn't been loaded yet")
-    if (!this.migrationsVersions[dbIdentifier]) return false
+    if (!this.migrationsVersions[dbIdentifier]) throw new Error(`Migrations versions hasn't been loaded yet for db: ${dbIdentifier}`)
 
     if (version in this.migrationsVersions[dbIdentifier]) {
       return true
@@ -203,7 +203,8 @@ export default class VelociousDatabaseMigrator {
       }
 
       if (!await this.migrationsTableExist(db)) {
-        this.logger.info(`Migration table does not exist for ${dbIdentifier} - skipping loading migrations versions for it`)
+        this.logger.info(`Migration table does not exist for ${dbIdentifier} - no versions tracked yet`)
+        this.migrationsVersions[dbIdentifier] = {}
         continue
       }
 
@@ -369,7 +370,7 @@ export default class VelociousDatabaseMigrator {
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
-    if (!this.migrationsVersions) await this.loadMigrationsVersions()
+    await this.loadMigrationsVersions()
 
     const dbs = await this.configuration.getCurrentConnections()
     const migrationClass = await requireMigration()
