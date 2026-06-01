@@ -85,7 +85,7 @@ export default class VelociousDatabaseMigrator {
    */
   hasRunMigrationVersion(dbIdentifier, version) {
     if (!this.migrationsVersions) throw new Error("Migrations versions hasn't been loaded yet")
-    if (!this.migrationsVersions[dbIdentifier]) throw new Error(`Migrations versions hasn't been loaded yet for db: ${dbIdentifier}`)
+    if (!this.migrationsVersions[dbIdentifier]) return false
 
     if (version in this.migrationsVersions[dbIdentifier]) {
       return true
