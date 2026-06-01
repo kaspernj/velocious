@@ -387,7 +387,6 @@ export default class VelociousDatabaseMigrator {
       }
     }
 
-    const dbs = await this.configuration.getCurrentConnections()
     const migrationClass = await requireMigration()
 
     if (!migrationClass || typeof migrationClass !== "function") {
