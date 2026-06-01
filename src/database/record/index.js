@@ -3414,7 +3414,6 @@ class VelociousDatabaseRecord {
 
       validationError.setValidationErrors(this._validationErrors)
       validationError.setModel(this)
-
       validationError.velocious = {type: "validation_error"}
 
       throw validationError
