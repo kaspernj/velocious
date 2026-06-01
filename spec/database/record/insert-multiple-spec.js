@@ -5,7 +5,7 @@ import Record from "../../../src/database/record/index.js"
 import Task from "../../dummy/src/models/task.js"
 import User from "../../dummy/src/models/user.js"
 
-describe("Record - insertMultiple", {tags: ["dummy"]}, () => {
+describe("Record - insertMultiple", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   it("casts insertMultiple values based on column types", async () => {
     const project = await Project.create({name: "InsertMultiple project"})
     const createdAtIso = "2025-12-26T16:18:50.641Z"

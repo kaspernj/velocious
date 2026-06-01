@@ -1,7 +1,7 @@
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 
-describe("Record - attachments", {tags: ["dummy"]}, () => {
+describe("Record - attachments", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   class InlineMemoryAttachmentDriver {
     constructor() {
       /** @type {Map<string, Buffer>} */

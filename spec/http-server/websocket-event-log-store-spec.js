@@ -5,7 +5,7 @@ import VelociousHttpServerWebsocketEventLogStore from "../../src/http-server/web
 import {websocketEventLogStoreForConfiguration} from "../../src/http-server/websocket-event-log-store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
-describe("websocket event log store", {tags: ["dummy"]}, () => {
+describe("websocket event log store", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   it("returns false from shouldPersistChannel without DB calls when no channels are interested", async () => {
     const store = new VelociousHttpServerWebsocketEventLogStore({configuration: dummyConfiguration})
 
