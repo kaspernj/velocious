@@ -203,8 +203,7 @@ export default class VelociousDatabaseMigrator {
       }
 
       if (!await this.migrationsTableExist(db)) {
-        this.logger.info(`Migration table does not exist for ${dbIdentifier} - no versions tracked yet`)
-        this.migrationsVersions[dbIdentifier] = {}
+        this.logger.info(`Migration table does not exist for ${dbIdentifier} - skipping loading migrations versions for it`)
         continue
       }
 
@@ -374,17 +373,25 @@ export default class VelociousDatabaseMigrator {
 
     const dbs = await this.configuration.getCurrentConnections()
 
-    // Reload if any current DB identifier isn't tracked — migrateFiles()
-    // wraps execution in ensureConnections() which creates a new async
-    // context where getCurrentConnections() may return different
-    // identifiers than the outer prepare() loaded.
-    if (this.migrationsVersions) {
-      for (const dbIdentifier in dbs) {
-        if (this.handlesDatabaseIdentifier(dbIdentifier) && !this.migrationsVersions[dbIdentifier]) {
-          await this.loadMigrationsVersions()
-          break
-        }
-      }
+    let shouldReloadMigrationVersions = false
+
+    // migrateFiles() wraps execution in ensureConnections(), so the current
+    // async context can expose DB identifiers not loaded by prepare().
+    for (const dbIdentifier in dbs) {
+      if (!this.handlesDatabaseIdentifier(dbIdentifier)) continue
+
+      const databaseConfiguration = this.configuration.getDatabaseIdentifier(dbIdentifier)
+
+      if (!databaseConfiguration.migrations) continue
+      if (this.migrationsVersions[dbIdentifier]) continue
+
+      shouldReloadMigrationVersions = true
+      break
+    }
+
+    if (shouldReloadMigrationVersions) {
+      await this.createMigrationsTable()
+      await this.loadMigrationsVersions()
     }
 
     const migrationClass = await requireMigration()
