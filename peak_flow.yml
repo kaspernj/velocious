@@ -18,7 +18,7 @@ services:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: velocious_test
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$MYSQL_ROOT_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -34,7 +34,7 @@ services:
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: Super-Secret-Password
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $$MSSQL_SA_PASSWORD -C -Q \"SELECT 1\" -b -o /dev/null || exit 1"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -C -Q \"SELECT 1\" -b -o /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -54,7 +54,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: velocious_test
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $POSTGRES_USER -d $POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 12
