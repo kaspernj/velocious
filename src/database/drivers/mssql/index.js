@@ -144,6 +144,46 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+   * Drops the foreign key constraints that reference the given table. MSSQL
+   * refuses to drop a table that is still referenced by a FOREIGN KEY
+   * constraint even when constraints are disabled via NOCHECK, so the
+   * referencing constraints must be removed before the table can be dropped.
+   * This lets callers drop tables in any order (e.g. wiping a whole schema)
+   * without first dropping every dependent table.
+   * @param {string} tableName - Table name.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _dropReferencingForeignKeys(tableName) {
+    const rows = await this.query(
+      "SELECT fk.name AS constraint_name, OBJECT_NAME(fk.parent_object_id) AS parent_table " +
+      `FROM sys.foreign_keys fk WHERE fk.referenced_object_id = OBJECT_ID(${this.quote(tableName)})`
+    )
+
+    for (const row of rows) {
+      const constraintName = row.constraint_name ?? row.CONSTRAINT_NAME
+      const parentTable = row.parent_table ?? row.PARENT_TABLE
+
+      await this.query(`ALTER TABLE [${parentTable}] DROP CONSTRAINT [${constraintName}]`)
+    }
+  }
+
+  /**
+   * @param {string} tableName - Table name.
+   * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async dropTable(tableName, args = {}) {
+    this._assertNotReadOnly()
+    await this._dropReferencingForeignKeys(tableName)
+
+    const sqls = await this.dropTableSQLs(tableName, args)
+
+    for (const sql of sqls) {
+      await this.query(sql)
+    }
+  }
+
+  /**
    * @returns {string} - The type.
    */
   getType() { return "mssql" }
