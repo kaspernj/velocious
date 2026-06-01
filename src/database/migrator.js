@@ -370,7 +370,22 @@ export default class VelociousDatabaseMigrator {
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
-    await this.loadMigrationsVersions()
+    if (!this.migrationsVersions) await this.loadMigrationsVersions()
+
+    const dbs = await this.configuration.getCurrentConnections()
+
+    // Reload if any current DB identifier isn't tracked — migrateFiles()
+    // wraps execution in ensureConnections() which creates a new async
+    // context where getCurrentConnections() may return different
+    // identifiers than the outer prepare() loaded.
+    if (this.migrationsVersions) {
+      for (const dbIdentifier in dbs) {
+        if (this.handlesDatabaseIdentifier(dbIdentifier) && !this.migrationsVersions[dbIdentifier]) {
+          await this.loadMigrationsVersions()
+          break
+        }
+      }
+    }
 
     const dbs = await this.configuration.getCurrentConnections()
     const migrationClass = await requireMigration()
