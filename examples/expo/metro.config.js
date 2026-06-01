@@ -6,6 +6,10 @@ const velociousRoot = path.resolve(__dirname, "../..")
 const minifierConfig = config.transformer.minifierConfig || {}
 const existingBlockList = config.resolver.blockList
 
+function pathPattern(filePath) {
+  return new RegExp(filePath.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&"))
+}
+
 config.transformer.minifierConfig = {
   ...minifierConfig,
   keep_classnames: true,
@@ -19,10 +23,10 @@ config.transformer.minifierConfig = {
 
 config.resolver.blockList = [
   ...(Array.isArray(existingBlockList) ? existingBlockList : existingBlockList ? [existingBlockList] : []),
-  new RegExp(path.resolve(velociousRoot, "node_modules", "react")),
-  new RegExp(path.resolve(velociousRoot, "node_modules", "react-dom")),
-  new RegExp(path.resolve(velociousRoot, "node_modules", "react-native")),
-  new RegExp(path.resolve(velociousRoot, "node_modules", "react-native-web")),
+  pathPattern(path.resolve(velociousRoot, "node_modules", "react")),
+  pathPattern(path.resolve(velociousRoot, "node_modules", "react-dom")),
+  pathPattern(path.resolve(velociousRoot, "node_modules", "react-native")),
+  pathPattern(path.resolve(velociousRoot, "node_modules", "react-native-web")),
   /\.velocious-advisory-locks[/\\]/
 ]
 
