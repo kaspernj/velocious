@@ -54,6 +54,7 @@
 /**
  * @typedef {object} DatabasePoolConfiguration
  * @property {number | null} [idleTimeoutMillis] - Idle timeout before closing a checked-in async-tracked connection. Set null to disable idle reaping. Default: 5000.
+ * @property {number} [max] - Maximum live async-tracked connections for this pool. Extra checkouts wait until a matching connection is checked in or capacity is freed.
  */
 
 /**

@@ -1,11 +1,18 @@
 // @ts-check
 
 import {AsyncLocalStorage} from "async_hooks"
-import BasePool from "./base.js"
+import BasePool, {POOL_CONFIGURATION_KEY} from "./base.js"
 
 export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
 const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
 const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
+
+/**
+ * @typedef {object} PendingCheckout
+ * @property {string} reuseKey - Database configuration reuse key needed by the checkout.
+ * @property {(connection: import("../drivers/base.js").default) => void} resolve - Resolves with an activated connection.
+ * @property {(error: Error) => void} reject - Rejects when checkout cannot complete.
+ */
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
   /**
@@ -30,6 +37,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /** @type {Record<number, import("../drivers/base.js").default>} */
   connectionsInUse = {}
 
+  /** @type {PendingCheckout[]} */
+  pendingCheckouts = []
+
+  /** @type {number} */
+  connectionsBeingSpawned = 0
+
+  /** @type {Promise<void> | undefined} */
+  pendingCheckoutDrainPromise = undefined
+
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   idleConnectionReaperTimer = undefined
 
@@ -44,8 +60,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     super({configuration, identifier})
   }
 
-  /** @param {import("../drivers/base.js").default} connection - Database connection instance. */
-  checkin(connection) {
+  /**
+   * @param {import("../drivers/base.js").default} connection - Database connection instance.
+   * @returns {Promise<void>} - Resolves when the connection is checked in or closed.
+   */
+  async checkin(connection) {
     const id = connection.getIdSeq()
 
     if (typeof id !== "number") {
@@ -64,21 +83,70 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
     this.connections.push(connection)
-    this.scheduleIdleConnectionReaper()
+    await this.drainPendingCheckouts()
+
+    if (this.idleTimeoutMillis() === 0) {
+      await this.reapIdleConnections()
+    } else {
+      this.scheduleIdleConnectionReaper()
+    }
 
   }
 
   /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
   async checkout() {
+    const reuseKey = this.getConfigurationReuseKey()
+    let connection = this.takeIdleConnectionForReuseKey(reuseKey)
+
+    if (connection) return this.activateConnection(connection)
+
     await this.reapIdleConnections()
+    connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
-    const connectionIndex = this.connections.findIndex((queuedConnection) => this.connectionMatchesCurrentConfiguration(queuedConnection))
-    let connection = connectionIndex === -1 ? undefined : this.connections.splice(connectionIndex, 1)[0]
+    if (connection) return this.activateConnection(connection)
 
-    if (!connection) {
-      connection = await this.spawnConnection()
+    if (this.canSpawnConnection()) {
+      connection = await this.spawnConnectionForCheckout()
+
+      return this.activateConnection(connection)
     }
 
+    return await this.waitForCheckout(reuseKey)
+  }
+
+  /**
+   * @param {string} reuseKey - Database configuration reuse key.
+   * @param {object} [args] - Options.
+   * @param {boolean} [args.includeOpenTransactions] - Whether connections with open transactions may be returned.
+   * @returns {import("../drivers/base.js").default | undefined} - Matching idle connection.
+   */
+  takeIdleConnectionForReuseKey(reuseKey, {includeOpenTransactions = true} = {}) {
+    const connectionIndex = this.connections.findIndex((queuedConnection) => {
+      if (!includeOpenTransactions && this.connectionHasOpenTransaction(queuedConnection)) return false
+
+      return this.connectionMatchesReuseKey(queuedConnection, reuseKey)
+    })
+    const connection = connectionIndex === -1 ? undefined : this.connections.splice(connectionIndex, 1)[0]
+
+    return connection
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Connection.
+   * @param {string} reuseKey - Database configuration reuse key.
+   * @returns {boolean} - Whether the connection matches the reuse key.
+   */
+  connectionMatchesReuseKey(connection, reuseKey) {
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+
+    return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === reuseKey
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Connection.
+   * @returns {import("../drivers/base.js").default} - Activated connection.
+   */
+  activateConnection(connection) {
     if (connection.getIdSeq() !== undefined) throw new Error(`Connection already has an ID-seq - is it in use? ${connection.getIdSeq()}`)
 
     const id = this.idSeq++
@@ -90,6 +158,119 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.connectionsInUse[id] = connection
 
     return connection
+  }
+
+  /** @returns {number | undefined} - Configured max live connections. */
+  maxConnections() {
+    const value = this.getConfiguration().pool?.max
+
+    if (typeof value === "number" && Number.isFinite(value) && value >= 1) return value
+
+    return
+  }
+
+  /** @returns {number} - Number of live and in-progress connections. */
+  liveConnectionCount() {
+    return this.connections.length + Object.keys(this.connectionsInUse).length + this.connectionsBeingSpawned
+  }
+
+  /** @returns {boolean} - Whether a new connection can be spawned. */
+  canSpawnConnection() {
+    const maxConnections = this.maxConnections()
+
+    return maxConnections === undefined || this.liveConnectionCount() < maxConnections
+  }
+
+  /** @returns {Promise<import("../drivers/base.js").default>} - Spawned connection. */
+  async spawnConnectionForCheckout() {
+    this.connectionsBeingSpawned++
+
+    try {
+      return await this.spawnConnection()
+    } finally {
+      this.connectionsBeingSpawned--
+    }
+  }
+
+  /**
+   * @param {string} reuseKey - Database configuration reuse key.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with an activated connection.
+   */
+  async waitForCheckout(reuseKey) {
+    return await new Promise((resolve, reject) => {
+      this.pendingCheckouts.push({reject, resolve, reuseKey})
+      void this.drainPendingCheckouts().catch((error) => {
+        const checkoutError = error instanceof Error ? error : new Error("Failed to drain pending database connection checkouts.", {cause: error})
+
+        this.rejectPendingCheckouts(checkoutError)
+      })
+    })
+  }
+
+  /** @returns {Promise<void>} - Resolves when pending checkouts have been drained as far as possible. */
+  async drainPendingCheckouts() {
+    if (this.pendingCheckoutDrainPromise) {
+      await this.pendingCheckoutDrainPromise
+      return
+    }
+
+    this.pendingCheckoutDrainPromise = this.drainPendingCheckoutsActual()
+
+    try {
+      await this.pendingCheckoutDrainPromise
+    } finally {
+      this.pendingCheckoutDrainPromise = undefined
+    }
+  }
+
+  /** @returns {Promise<void>} - Resolves when pending checkouts have been drained as far as possible. */
+  async drainPendingCheckoutsActual() {
+    while (this.pendingCheckouts.length > 0) {
+      const checkout = this.pendingCheckouts[0]
+      let connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+
+      if (!connection) {
+        await this.reapIdleConnections()
+        connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+      }
+
+      if (!connection && !this.canSpawnConnection()) {
+        const closedConnection = await this.closeOneIdleConnectionForCapacity()
+
+        if (closedConnection) continue
+      }
+
+      if (!connection && this.canSpawnConnection()) {
+        this.pendingCheckouts.shift()
+
+        try {
+          connection = await this.spawnConnectionForCheckout()
+        } catch (error) {
+          checkout.reject(error instanceof Error ? error : new Error("Failed to spawn database connection.", {cause: error}))
+          continue
+        }
+
+        checkout.resolve(this.activateConnection(connection))
+        continue
+      }
+
+      if (!connection) return
+
+      this.pendingCheckouts.shift()
+      checkout.resolve(this.activateConnection(connection))
+    }
+  }
+
+  /** @returns {Promise<boolean>} - Whether an idle connection was closed to free capacity. */
+  async closeOneIdleConnectionForCapacity() {
+    const connection = this.connections.find((candidate) => !this.connectionHasOpenTransaction(candidate))
+
+    if (!connection) return false
+
+    this.connections = this.connections.filter((candidate) => candidate !== connection)
+    await this.closeConnection(connection)
+
+    return true
   }
 
   /**
@@ -105,7 +286,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       try {
         return await callback(connection)
       } finally {
-        this.checkin(connection)
+        await this.checkin(connection)
       }
     })
   }
@@ -372,6 +553,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   async closeAll() {
     this.clearIdleConnectionReaperTimer()
+    this.rejectPendingCheckouts(new Error("Database pool was closed before checkout completed."))
 
     const connections = new Set([
       ...this.connections,
@@ -388,6 +570,20 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       await this.closeConnection(connection)
     }
 
+  }
+
+  /**
+   * @param {Error} error - Error to reject pending checkouts with.
+   * @returns {void}
+   */
+  rejectPendingCheckouts(error) {
+    const pendingCheckouts = this.pendingCheckouts
+
+    this.pendingCheckouts = []
+
+    for (const checkout of pendingCheckouts) {
+      checkout.reject(error)
+    }
   }
 
   /**

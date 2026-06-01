@@ -1368,7 +1368,7 @@ To prime *all* configured pools at once, call `configuration.ensureGlobalConnect
 
 When an async context exists, that connection is still preferred over the global one.
 
-Checked-in `AsyncTrackedMultiConnection` connections are closed after 5 seconds of idle time by default. This keeps tenant-scoped and short-lived background-job connections from accumulating in long-running processes while still allowing immediate reuse by nearby async work. Configure `database.<environment>.<identifier>.pool.idleTimeoutMillis` to change the timeout, or set it to `null` to disable idle reaping for that pool:
+Checked-in `AsyncTrackedMultiConnection` connections are closed after 5 seconds of idle time by default. This keeps tenant-scoped and short-lived background-job connections from accumulating in long-running processes while still allowing immediate reuse by nearby async work. Configure `database.<environment>.<identifier>.pool.idleTimeoutMillis` to change the timeout, set it to `0` to close idle connections immediately unless a matching checkout is already waiting, or set it to `null` to disable idle reaping for that pool. A matching idle connection is reused before expired idle connections are reaped.
 
 ```js
 database: {
@@ -1378,12 +1378,15 @@ database: {
       poolType: AsyncTrackedMultiConnection,
       type: "mysql",
       pool: {
-        idleTimeoutMillis: 10000
+        idleTimeoutMillis: 10000,
+        max: 25
       }
     }
   }
 }
 ```
+
+`pool.max` caps live async-tracked connections for that pool. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed.
 
 # Websockets
 
