@@ -3,6 +3,7 @@
 import AsyncTrackedMultiConnection from "../../../src/database/pool/async-tracked-multi-connection.js"
 import Dummy from "../../dummy/index.js"
 import wait from "awaitery/build/wait.js"
+import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.js"
 import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
@@ -77,6 +78,61 @@ describe("database - pool - async tracked multi connection reuse", () => {
 
       await pool.checkin(secondConnection)
       expect(pool.connections.includes(secondConnection)).toBe(false)
+    }, {fresh: true})
+  })
+
+  it("spawns pending tenant checkouts with the queued checkout configuration", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-pending-tenant")
+
+    try {
+      configuration.getDatabaseConfiguration().projectTenant.pool = {max: 1}
+      const pool = configuration.getDatabasePool("projectTenant")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      const betaConnection = await configuration.runWithTenant({slug: "beta"}, async () => {
+        return await pool.checkout()
+      })
+
+      let alphaResolved = false
+      const alphaConnectionPromise = configuration.runWithTenant({slug: "alpha"}, async () => {
+        const connection = await pool.checkout()
+
+        alphaResolved = true
+
+        return connection
+      })
+
+      await wait(0.02)
+      expect(alphaResolved).toBe(false)
+
+      await configuration.runWithTenant({slug: "beta"}, async () => {
+        await pool.checkin(betaConnection)
+      })
+
+      const alphaConnection = await alphaConnectionPromise
+
+      expect(alphaConnection.getArgs().name).toEqual("velocious-pool-pending-tenant-projectTenant-alpha")
+
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await pool.checkin(alphaConnection)
+      })
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("counts global fallback connections against the max connection cap", async () => {
+    await Dummy.run(async () => {
+      const pool = getPool()
+
+      if (!pool) return
+
+      pool.getConfiguration().pool = {max: 1}
+      await pool.ensureGlobalConnection()
+
+      expect(pool.liveConnectionCount()).toEqual(1)
+      expect(pool.canSpawnConnection()).toBe(false)
     }, {fresh: true})
   })
 
