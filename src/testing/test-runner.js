@@ -708,25 +708,35 @@ export default class TestRunner {
 
           try {
             await this.runWithDummyIfNeeded(testArgs, async () => {
-              try {
-                clearDeliveries()
-                for (const beforeEachData of newBeforeEaches) {
-                  await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                }
+              // Pin one connection per test so beforeEach, the test body and afterEach
+              // all run on the SAME connection. This is required for transaction-based
+              // database cleaning (beforeEach starts a transaction, afterEach rolls it
+              // back). ensureConnections reuses the suite-level pinned connection while
+              // it is healthy and transparently re-establishes a per-test pin if an
+              // earlier spec closed the suite connection (which would otherwise leave a
+              // stale async-context pin and force every later test onto a fresh checkout,
+              // breaking isolation).
+              await this.getConfiguration().ensureConnections(async () => {
+                try {
+                  clearDeliveries()
+                  for (const beforeEachData of newBeforeEaches) {
+                    await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                  }
 
-                const testPromise = testData.function(testArgs)
+                  const testPromise = testData.function(testArgs)
 
-                if (useTimeout && timeoutMs !== undefined) {
-                  await runWithTimeout(testPromise, timeoutMs, testDescription)
-                } else {
-                  await testPromise
+                  if (useTimeout && timeoutMs !== undefined) {
+                    await runWithTimeout(testPromise, timeoutMs, testDescription)
+                  } else {
+                    await testPromise
+                  }
+                  this._successfulTests++
+                } finally {
+                  for (const afterEachData of newAfterEaches) {
+                    await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                  }
                 }
-                this._successfulTests++
-              } finally {
-                for (const afterEachData of newAfterEaches) {
-                  await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                }
-              }
+              })
             })
           } catch (error) {
             caughtError = error

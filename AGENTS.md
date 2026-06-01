@@ -54,7 +54,9 @@ Run as needed while iterating:
    `npm run typecheck`
 
 ### Normal check (full validation, slower)
-Skip full local suites; Peakflow will run the full test matrix for all database types on PRs.
+**NEVER run the full local suite OR any shard/group locally** — no `npm run test` with no path, no `npm run test -- --groups N --group-number M`, no whole `spec/` or sub-directory path, no many-file globs. Peakflow (CI) — and only CI — runs the full matrix and its shards/groups for every database type on PRs.
+
+**Reproducing a CI failure is NOT an exception.** Even when a failure (e.g. an MS-SQL group) only shows up "in the full group", do NOT re-run that group/shard locally to reproduce or confirm a fix. Isolate the one or few relevant spec files (`npx velocious test <path-or-example>`), reproduce and fix with those plus targeted instrumentation, and let CI render the group/shard verdict. Running a group locally wastes time, burns the cache, and monopolizes the shared DBs.
 
 If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.
