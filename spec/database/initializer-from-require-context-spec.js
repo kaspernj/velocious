@@ -34,7 +34,7 @@ function buildConfiguration() {
   })
 }
 
-describe("Database - initializer from require context", () => {
+describe("Database - initializer from require context", {databaseCleaning: {transaction: true}}, () => {
   it("eager-loads record metadata by default", async () => {
     class EagerMetadataRecord extends DatabaseRecord {
       static initializeRecordCalls = 0

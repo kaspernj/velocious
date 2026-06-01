@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toBeUndefined", () => {
+describe("Expect#toBeUndefined", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the value is undefined", () => {
     expect(undefined).toBeUndefined()
   })

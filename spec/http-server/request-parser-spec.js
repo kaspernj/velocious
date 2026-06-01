@@ -7,7 +7,7 @@ import ParamsToObject from "../../src/http-server/client/params-to-object.js"
 import RequestParser from "../../src/http-server/client/request-parser.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("HttpServer - request parser", async () => {
+describe("HttpServer - request parser", {databaseCleaning: {transaction: true}}, async () => {
   it("does not accept multiple requests in one parser", async () => {
     const configuration = new Configuration({
       database: {test: {}},

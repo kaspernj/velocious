@@ -4,7 +4,7 @@ import path from "path"
 import TestFilesFinder from "../../src/testing/test-files-finder.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("testing - test files finder", async () => {
+describe("testing - test files finder", {databaseCleaning: {transaction: true}}, async () => {
   it("accepts file args that include the base directory name", async () => {
     const directory = path.resolve(process.cwd(), "..")
     const testFilesFinder = new TestFilesFinder({

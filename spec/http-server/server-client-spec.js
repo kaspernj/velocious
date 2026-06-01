@@ -52,7 +52,7 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-describe("HttpServer - server client", () => {
+describe("HttpServer - server client", {databaseCleaning: {transaction: true}}, () => {
   it("handles socket errors without crashing and emits close once", async () => {
     const configuration = new Configuration({
       database: {test: {}},

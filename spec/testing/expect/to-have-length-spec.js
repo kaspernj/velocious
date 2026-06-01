@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toHaveLength", () => {
+describe("Expect#toHaveLength", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the value has the expected length", () => {
     expect([1, 2, 3]).toHaveLength(3)
     expect("abc").toHaveLength(3)

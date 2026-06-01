@@ -164,7 +164,7 @@ async function startFakeSmtpServer({holdQuitResponse = false, requireAuth = true
   }
 }
 
-describe("SmtpMailerBackend", () => {
+describe("SmtpMailerBackend", {databaseCleaning: {transaction: true}}, () => {
   it("authenticates before sending through authenticated SMTP servers", async () => {
     const fakeServer = await startFakeSmtpServer()
 

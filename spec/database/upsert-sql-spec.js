@@ -25,7 +25,7 @@ function buildDriver({quoteColumn, quoteTable, quoteValue}) {
   }))
 }
 
-describe("database - drivers - upsert sql", () => {
+describe("database - drivers - upsert sql", {databaseCleaning: {transaction: true}}, () => {
   it("generates mysql upsert sql", () => {
     const sql = new MysqlUpsert({
       conflictColumns: ["channel"],

@@ -25,7 +25,7 @@ function buildTestRunner(options = {}) {
   return new TestRunner({configuration, testFiles: [], ...options})
 }
 
-describe("TestRunner tags", () => {
+describe("TestRunner tags", {databaseCleaning: {transaction: true}}, () => {
   it("skips tests with excluded tags", async () => {
     const testRunner = buildTestRunner({excludeTags: ["slow"]})
     const counts = {fast: 0, slow: 0, untagged: 0}

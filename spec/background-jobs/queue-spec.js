@@ -13,7 +13,7 @@ import DelayedJob from "../dummy/src/jobs/delayed-job.js"
 import FailingJob from "../dummy/src/jobs/failing-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 
-describe("Background jobs - queue", () => {
+describe("Background jobs - queue", {databaseCleaning: {transaction: true}}, () => {
   it("processes inline jobs in order", async () => {
     dummyConfiguration.setCurrent()
     const store = new BackgroundJobsStore({configuration: dummyConfiguration})

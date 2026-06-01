@@ -51,7 +51,7 @@ function requestLinesForPath(path) {
   ].join("\r\n")
 }
 
-describe("routes - resolver frontend model autoroute", async () => {
+describe("routes - resolver frontend model autoroute", {databaseCleaning: {transaction: true}}, async () => {
   it("resolves frontend model commands from backendProjects.frontendModels without explicit routes", async () => {
     const configuration = new Configuration({
       backendProjects: [{

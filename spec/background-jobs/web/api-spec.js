@@ -99,7 +99,7 @@ async function resolveGet({configuration, path, remoteAddress}) {
   return response
 }
 
-describe("Background jobs - web API", () => {
+describe("Background jobs - web API", {databaseCleaning: {transaction: true}}, () => {
   it("requires authentication", async () => {
     await Dummy.run(async () => {
       await seedJobs()

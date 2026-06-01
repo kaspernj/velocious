@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toMatch", () => {
+describe("Expect#toMatch", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the string matches the regex", () => {
     expect("hello").toMatch(/ell/)
   })

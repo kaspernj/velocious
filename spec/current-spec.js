@@ -2,7 +2,7 @@ import Ability from "../src/authorization/ability.js"
 import Current from "../src/current.js"
 import dummyConfiguration from "./dummy/src/config/configuration.js"
 
-describe("Current", () => {
+describe("Current", {databaseCleaning: {transaction: true}}, () => {
   beforeEach(() => {
     dummyConfiguration.setCurrent()
     Current.setAbility(undefined)

@@ -64,7 +64,7 @@ async function runWebsocketRequest(configuration, path) {
   return JSON.parse(response.getBody())
 }
 
-describe("routes - resolver tenant", () => {
+describe("routes - resolver tenant", {databaseCleaning: {transaction: true}}, () => {
   it("runs HTTP and websocket requests inside the resolved tenant context", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-routes-tenant")
     let previousConfiguration

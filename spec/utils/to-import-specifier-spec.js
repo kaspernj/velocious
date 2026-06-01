@@ -5,7 +5,7 @@ import {pathToFileURL} from "url"
 import {describe, expect, it} from "../../src/testing/test.js"
 import toImportSpecifier from "../../src/utils/to-import-specifier.js"
 
-describe("toImportSpecifier", () => {
+describe("toImportSpecifier", {databaseCleaning: {transaction: true}}, () => {
   it("keeps package and relative specifiers unchanged", () => {
     expect(toImportSpecifier("smtp-connection")).toBe("smtp-connection")
     expect(toImportSpecifier("./controller.js")).toBe("./controller.js")

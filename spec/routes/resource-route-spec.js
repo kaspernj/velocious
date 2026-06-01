@@ -5,7 +5,7 @@ import singularizeModelName from "../../src/utils/singularize-model-name.js"
 import * as inflection from "inflection"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("routes - resource route", async () => {
+describe("routes - resource route", {databaseCleaning: {transaction: true}}, async () => {
   it("does not include query parameters in the id", async () => {
     const route = new ResourceRoute({name: "partners/events"})
     /** @type {Record<string, any>} */

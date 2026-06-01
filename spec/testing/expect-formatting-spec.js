@@ -17,7 +17,7 @@ function captureError(callback) {
   throw new Error("Expected callback to throw")
 }
 
-describe("Expect formatting", async () => {
+describe("Expect formatting", {databaseCleaning: {transaction: true}}, async () => {
   it("prints minified plain objects and handles circular references", () => {
     /** @type {any} */
     const circular = {foo: "bar"}

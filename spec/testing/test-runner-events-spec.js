@@ -9,7 +9,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {configureTests, describe, expect, it, testConfig, testEvents} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
-describe("TestRunner events", () => {
+describe("TestRunner events", {databaseCleaning: {transaction: true}}, () => {
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   const buildTestRunner = () => {
     const environmentHandler = new EnvironmentHandlerNode()

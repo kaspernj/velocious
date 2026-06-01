@@ -12,7 +12,7 @@ class ResumableChannel extends WebsocketChannel {
   canSubscribe() { return true }
 }
 
-describe("WebsocketSession close handling", () => {
+describe("WebsocketSession close handling", {databaseCleaning: {transaction: true}}, () => {
   it("emits the websocket goodbye frame before the resumable session close event", async () => {
     /** @type {string[]} */
     const eventOrder = []

@@ -40,7 +40,7 @@ function buildResolver(configuration) {
   return new RoutesResolver({configuration, request, response})
 }
 
-describe("routes - resolver controller class resolution", () => {
+describe("routes - resolver controller class resolution", {databaseCleaning: {transaction: true}}, () => {
   it("falls back to route hook controller class when local controller file is missing", async () => {
     const configuration = buildConfiguration()
     const resolver = buildResolver(configuration)

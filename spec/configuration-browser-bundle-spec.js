@@ -7,7 +7,7 @@ import {build} from "esbuild"
 
 import {describe, expect, it} from "../src/testing/test.js"
 
-describe("Configuration browser bundle", () => {
+describe("Configuration browser bundle", {databaseCleaning: {transaction: true}}, () => {
   it("bundles without pulling in the server route resolver", async () => {
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 

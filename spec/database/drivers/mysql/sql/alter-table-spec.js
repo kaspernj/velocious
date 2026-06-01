@@ -10,7 +10,7 @@ function buildDriver() {
   return new MysqlDriver({type: "mysql"})
 }
 
-describe("database/drivers/mysql/sql/alter-table", () => {
+describe("database/drivers/mysql/sql/alter-table", {databaseCleaning: {transaction: true}}, () => {
   it("does not force an algorithm for simple add-column alters", async () => {
     const tableData = new TableData("builds")
 

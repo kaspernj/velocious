@@ -14,7 +14,7 @@ import {describe, expect, it} from "../src/testing/test.js"
 import Configuration from "../src/configuration.js"
 import EnvironmentHandlerNode from "../src/environment-handlers/node.js"
 
-describe("Logger", async () => {
+describe("Logger", {databaseCleaning: {transaction: true}}, async () => {
   it("separates subject and message with a space", async () => {
     /** @type {string[]} */
     const writes = []

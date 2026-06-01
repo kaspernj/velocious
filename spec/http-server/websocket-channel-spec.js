@@ -29,7 +29,7 @@ async function waitFor(predicate, timeoutMs = 2000) {
   throw new Error(`waitFor timeout after ${timeoutMs}ms`)
 }
 
-describe("WebsocketChannelV2 ()", () => {
+describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () => {
   it("queues channel subscriptions until the network monitor reports online", async () => {
     await Dummy.run(async () => {
       let isOnline = false

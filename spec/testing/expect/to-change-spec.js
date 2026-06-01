@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toChange", () => {
+describe("Expect#toChange", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the change count matches", async () => {
     let count = 1
 

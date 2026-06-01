@@ -2,7 +2,7 @@
 
 import {nextCronFireDate, parseCronExpression} from "../../src/background-jobs/cron-expression.js"
 
-describe("Background jobs - cron expression", () => {
+describe("Background jobs - cron expression", {databaseCleaning: {transaction: true}}, () => {
   it("parses a basic 5-field expression", () => {
     const parsed = parseCronExpression("0 9 * * 1-5")
 

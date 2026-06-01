@@ -71,7 +71,7 @@ async function readHttpResponseFromSocket(socket, initialBuffer = Buffer.alloc(0
   })
 }
 
-describe("plugins - sqljs wasm route", () => {
+describe("plugins - sqljs wasm route", {databaseCleaning: {transaction: true}}, () => {
   it("serves sql-wasm.wasm from backend route hook", async () => {
     const configuration = new Configuration({
       database: {test: {}},

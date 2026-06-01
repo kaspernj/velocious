@@ -4,7 +4,7 @@ import Current from "../../src/current.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import {createTenantTestConfiguration, readTenantValue, seedTenantValue} from "../helpers/tenant-test-helpers.js"
 
-describe("Configuration tenant support", () => {
+describe("Configuration tenant support", {databaseCleaning: {transaction: true}}, () => {
   it("switches database configs and current tenant across multiple databases", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-config-tenant")
     let previousConfiguration

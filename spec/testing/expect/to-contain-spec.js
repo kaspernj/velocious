@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toContain", () => {
+describe("Expect#toContain", {databaseCleaning: {transaction: true}}, () => {
   it("passes for arrays and strings that contain the value", () => {
     expect([1, 2, 3]).toContain(2)
     expect("hello").toContain("ell")

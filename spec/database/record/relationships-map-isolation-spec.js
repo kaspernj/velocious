@@ -2,7 +2,7 @@
 
 import DatabaseRecord from "../../../src/database/record/index.js"
 
-describe("Record - getRelationshipsMap isolation", () => {
+describe("Record - getRelationshipsMap isolation", {databaseCleaning: {transaction: true}}, () => {
   it("does not share relationships between sibling model classes", () => {
     class BaseA extends DatabaseRecord {}
     class BaseB extends DatabaseRecord {}

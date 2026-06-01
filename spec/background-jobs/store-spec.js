@@ -3,7 +3,7 @@
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
-describe("Background jobs - store", () => {
+describe("Background jobs - store", {databaseCleaning: {transaction: true}}, () => {
   it("requeues failed jobs and honors max retries", async () => {
     dummyConfiguration.setCurrent()
     const store = new BackgroundJobsStore({configuration: dummyConfiguration})

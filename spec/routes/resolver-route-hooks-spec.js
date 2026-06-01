@@ -12,7 +12,7 @@ import RoutesResolver from "../../src/routes/resolver.js"
 import Task from "../dummy/src/models/task.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("routes - resolver hooks", async () => {
+describe("routes - resolver hooks", {databaseCleaning: {transaction: true}}, async () => {
   it("allows custom hooks to hijack unresolved routes", async () => {
     const configuration = new Configuration({
       database: {test: {}},

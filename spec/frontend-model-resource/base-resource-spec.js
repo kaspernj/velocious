@@ -4,7 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import DatabaseRecord from "../../src/database/record/index.js"
 
-describe("FrontendModelBaseResource.permittedParams", () => {
+describe("FrontendModelBaseResource.permittedParams", {databaseCleaning: {transaction: true}}, () => {
   it("defaults to permitting nothing — subclasses must override to enable writes", () => {
     class ProjectResource extends FrontendModelBaseResource {
       static attributes = ["id", "name", "description"]

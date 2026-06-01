@@ -86,7 +86,7 @@ async function buildController() {
   return {controller, response}
 }
 
-describe("Controller JSON render frontend models", () => {
+describe("Controller JSON render frontend models", {databaseCleaning: {transaction: true}}, () => {
   it("auto-serializes backend models rendered in json payloads", async () => {
     const {controller, response} = await buildController()
     const task = {

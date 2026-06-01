@@ -12,7 +12,7 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
-describe("Background jobs", () => {
+describe("Background jobs", {databaseCleaning: {transaction: true}}, () => {
   it("enqueues and runs a job in a worker", async () => {
     dummyConfiguration.setCurrent()
     const store = new BackgroundJobsStore({configuration: dummyConfiguration})

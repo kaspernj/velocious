@@ -282,7 +282,7 @@ function resetFrontendModelTransport() {
   })
 }
 
-describe("Frontend models - base", () => {
+describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () => {
   it("defines root scopes on frontend model classes", () => {
     const Task = buildScopedTestModelClass()
 

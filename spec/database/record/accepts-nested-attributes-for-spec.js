@@ -2,7 +2,7 @@
 
 import DatabaseRecord from "../../../src/database/record/index.js"
 
-describe("Record - acceptsNestedAttributesFor", () => {
+describe("Record - acceptsNestedAttributesFor", {databaseCleaning: {transaction: true}}, () => {
   it("stores per-relationship policy and returns it via acceptedNestedAttributesFor", () => {
     class Project extends DatabaseRecord {}
 

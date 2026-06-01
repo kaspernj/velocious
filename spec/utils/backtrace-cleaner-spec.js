@@ -9,7 +9,7 @@ import {fileURLToPath} from "url"
 
 const repositoryDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
-describe("BacktraceCleaner", () => {
+describe("BacktraceCleaner", {databaseCleaning: {transaction: true}}, () => {
   it("keeps the browser-safe shared cleaner free from raw import.meta syntax", async () => {
     const source = await fs.readFile(path.join(repositoryDirectory, "src/utils/backtrace-cleaner.js"), "utf8")
 

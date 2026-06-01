@@ -41,7 +41,7 @@ async function initializeTenantAnalyticsRecord(configuration) {
   })
 }
 
-describe("DatabaseRecord tenant database switching", () => {
+describe("DatabaseRecord tenant database switching", {databaseCleaning: {transaction: true}}, () => {
   it("throws before tenant-switched model queries fall back to the configured database", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-record-tenant")
     let previousConfiguration

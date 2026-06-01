@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toBeInstanceOf", () => {
+describe("Expect#toBeInstanceOf", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the value is an instance of the class", () => {
     expect([]).toBeInstanceOf(Array)
   })

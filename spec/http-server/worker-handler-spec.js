@@ -5,7 +5,7 @@ import HttpServer from "../../src/http-server/index.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import websocketEventsHost from "../../src/http-server/websocket-events-host.js"
 
-describe("HttpServer - worker handler", () => {
+describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}}, () => {
   it("closes client connections when the worker exits unexpectedly", () => {
     const configuration = {debug: false}
     const handler = new WorkerHandler({configuration, workerCount: 1})

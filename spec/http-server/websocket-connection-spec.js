@@ -32,7 +32,7 @@ async function waitFor(predicate, timeoutMs = 2000) {
   throw new Error(`waitFor timeout after ${timeoutMs}ms`)
 }
 
-describe("WebsocketConnection (Phase 1A)", () => {
+describe("WebsocketConnection (Phase 1A)", {databaseCleaning: {transaction: true}}, () => {
   it("routes connection-open → onConnect and echoes the welcome message", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()

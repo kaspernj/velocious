@@ -4,7 +4,7 @@ import Dummy from "../dummy/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("Configuration.ensureGlobalConnections", () => {
+describe("Configuration.ensureGlobalConnections", {databaseCleaning: {transaction: true}}, () => {
   it("ensures global or fallback connections for all pools", async () => {
     await Dummy.run(async () => {
       await dummyConfiguration.ensureGlobalConnections()

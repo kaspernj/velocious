@@ -5,7 +5,7 @@ import VelociousHttpServerClientResponse from "../../src/http-server/client/resp
 
 const stubConfiguration = /** @type {any} */ ({})
 
-describe("VelociousHttpServerClientResponse#setStatus", () => {
+describe("VelociousHttpServerClientResponse#setStatus", {databaseCleaning: {transaction: true}}, () => {
   it("accepts the existing named aliases", () => {
     const response = new VelociousHttpServerClientResponse({configuration: stubConfiguration})
 

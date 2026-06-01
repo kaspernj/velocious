@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect.arrayContaining", () => {
+describe("Expect.arrayContaining", {databaseCleaning: {transaction: true}}, () => {
   it("matches array subsets in toEqual", () => {
     expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 3]))
   })

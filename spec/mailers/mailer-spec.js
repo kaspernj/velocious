@@ -40,7 +40,7 @@ class TasksMailer extends VelociousMailer {
   }
 }
 
-describe("Mailers", () => {
+describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
   /**
    * @returns {Promise<{directory: string, cleanup: () => Promise<void>}>}
    */

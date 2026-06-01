@@ -76,7 +76,7 @@ async function runFrontendApi(params) {
   return /** @type {Record<string, any>} */ (deserializeFrontendModelTransportValue(JSON.parse(controller.response().getBody())))
 }
 
-describe("Controller frontend model tenant context", () => {
+describe("Controller frontend model tenant context", {databaseCleaning: {transaction: true}}, () => {
   it("resolves tenant context from each batched shared frontend-model request entry", async () => {
     const response = await runFrontendApi(serializeFrontendModelTransportValue({
       requests: [{

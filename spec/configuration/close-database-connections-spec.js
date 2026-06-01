@@ -24,7 +24,7 @@ class FakePool {
   }
 }
 
-describe("Configuration.closeDatabaseConnections", () => {
+describe("Configuration.closeDatabaseConnections", {databaseCleaning: {transaction: true}}, () => {
   it("closes connections and clears global connections", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({

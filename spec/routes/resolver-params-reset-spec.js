@@ -9,7 +9,7 @@ import Response from "../../src/http-server/client/response.js"
 import RoutesResolver from "../../src/routes/resolver.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("routes - resolver params reset", async () => {
+describe("routes - resolver params reset", {databaseCleaning: {transaction: true}}, async () => {
   it("resolves abilities inside ensureConnections", async () => {
     let inEnsureConnections = false
 

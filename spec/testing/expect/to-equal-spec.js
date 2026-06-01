@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toEqual", () => {
+describe("Expect#toEqual", {databaseCleaning: {transaction: true}}, () => {
   it("reports missing and unexpected array items on failure", async () => {
     await expect(() => {
       expect(["a", "b"]).toEqual(["a", "c"])

@@ -27,7 +27,7 @@ async function waitFor(predicate, timeoutMs = 2000) {
   throw new Error(`waitFor timeout after ${timeoutMs}ms`)
 }
 
-describe("WebsocketSession resumption (Phase 2)", () => {
+describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transaction: true}}, () => {
   it("sends session-established with a sessionId on first connect", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()

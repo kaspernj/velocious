@@ -7,7 +7,7 @@ import {build} from "esbuild"
 
 import {describe, it} from "../src/testing/test.js"
 
-describe("Logger browser bundle", () => {
+describe("Logger browser bundle", {databaseCleaning: {transaction: true}}, () => {
   it("bundles without pulling in the server configuration graph", async () => {
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
