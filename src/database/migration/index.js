@@ -16,6 +16,7 @@
  */
 /**
  * @typedef {object} CreateTableArgsType
+ * @property {boolean} [ifNotExists] - Skip creation if the table already exists.
  * @property {CreateTableIdArgsType | false} [id] - ID column options or false to skip ID.
  */
 /**
@@ -272,6 +273,28 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Sets up the database schema for a gap-less positional list. Adds the
+   * position column (INT NOT NULL) if absent and creates a UNIQUE index on
+   * (scope, position). This is the schema-side counterpart of
+   * `Model.actsAsList()`.
+   *
+   * @param {string} tableName - Table name.
+   * @param {string} positionColumn - Column name for the position (e.g. "row_number").
+   * @param {object} options - Options.
+   * @param {string} options.scope - Column name for the scope (e.g. "board_column_id").
+   * @returns {Promise<void>}
+   */
+  async addActsAsList(tableName, positionColumn, {scope}) {
+    if (!(await this.columnExists(tableName, positionColumn))) {
+      await this.addColumn(tableName, positionColumn, "integer", {null: false})
+    } else {
+      await this.changeColumnNull(tableName, positionColumn, false)
+    }
+
+    await this.addIndex(tableName, [scope, positionColumn], {unique: true})
+  }
+
+  /**
    * @overload
    * @param {string} tableName - Table name.
    * @param {CreateTableCallbackType} callback - Callback function.
@@ -302,7 +325,7 @@ export default class VelociousDatabaseMigration {
       callback = arg2
     }
 
-    const {id = {}, ...restArgs} = args
+    const {id = {}, ifNotExists = false, ...restArgs} = args
     const databaseIdentifier = this._getDatabaseIdentifier()
     const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
     let idDefault, idType, restArgsId
@@ -336,7 +359,7 @@ export default class VelociousDatabaseMigration {
       // If driver doesn't support UUID() but the caller explicitly set a default, respect it.
     }
 
-    const tableData = new TableData(tableName)
+    const tableData = new TableData(tableName, {ifNotExists})
 
     restArgsError(restArgs)
 

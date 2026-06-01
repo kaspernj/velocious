@@ -323,9 +323,7 @@ describe("Background jobs - queue", () => {
 
       await timeout({timeout: 2000}, async () => {
         while (true) {
-          const job = await store.getJob(jobId)
-
-          if (job?.status === "failed") break
+          if (failureEvents.length >= 1) break
 
           await wait(0.05)
         }

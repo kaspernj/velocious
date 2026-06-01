@@ -56,22 +56,23 @@ describe("Cli - Commands - db:migrate", () => {
       defaultDatabaseType = dbs.default.getType()
 
       const tableNames = [
+        "accounts",
+        "acts_as_list_items",
+        "authentication_tokens",
+        "autoindex_test",
         "comments",
         "interactions",
-        "string_subject_interactions",
         "project_details",
         "project_translations",
-        "tasks",
-        "authentication_tokens",
         "projects",
-        "users",
-        "accounts",
+        "schema_migrations",
+        "string_subject_interactions",
         "string_subjects",
-        "uuid_interactions",
-        "uuid_items",
-        "autoindex_test",
+        "tasks",
+        "users",
         "uuid_default_test",
-        "schema_migrations"
+        "uuid_interactions",
+        "uuid_items"
       ]
 
       const dropTables = async (db) => {
@@ -176,6 +177,7 @@ describe("Cli - Commands - db:migrate", () => {
       expect(uniqunize(filteredTables.sort())).toEqual(
         [
           "accounts",
+          "acts_as_list_items",
           "authentication_tokens",
           "comments",
           "interactions",
@@ -214,6 +216,7 @@ describe("Cli - Commands - db:migrate", () => {
       expect(filteredTables.sort()).toEqual(
         [
           "accounts",
+          "acts_as_list_items",
           "authentication_tokens",
           "comments",
           "interactions",
@@ -247,7 +250,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20251225230806",
         "20251228090000",
         "20251228090010",
-        "20260418090000"
+        "20260418090000",
+        "20260601052206"
       ])
     }
   })

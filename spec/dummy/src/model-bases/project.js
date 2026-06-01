@@ -72,12 +72,12 @@ export default class ProjectBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @returns {number | null}
+   * @returns {number}
    */
   tasksCount() { return this.readAttribute("tasksCount") }
 
   /**
-   * @param {number | null} newValue
+   * @param {number} newValue
    * @returns {void}
    */
   setTasksCount(newValue) { return this._setColumnAttribute("tasksCount", newValue) }
@@ -397,4 +397,34 @@ export default class ProjectBase extends DatabaseRecord {
    * @returns {void}
    */
   setTranslations(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @returns {import("../model-bases/project-translation.js").default}
+   */
+  currentTranslation() { return /** @type {import("../model-bases/project-translation.js").default} */ (this.getRelationshipByName("currentTranslation").loaded()) }
+
+  /**
+   * @abstract
+   * @param {Record<string, any>} [attributes]
+   * @returns {import("../model-bases/project-translation.js").default}
+   */
+  buildCurrentTranslation(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * @abstract
+   * @returns {Promise<import("../model-bases/project-translation.js").default | undefined>}
+   */
+  loadCurrentTranslation() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../model-bases/project-translation.js").default | undefined>}
+   */
+  currentTranslationOrLoad() { return this.relationshipOrLoad("currentTranslation") }
+
+  /**
+   * @abstract
+   * @param {import("../model-bases/project-translation.js").default} newModel
+   * @returns {void}
+   */
+  setCurrentTranslation(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
 }

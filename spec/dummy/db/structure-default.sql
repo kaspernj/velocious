@@ -1,4 +1,6 @@
-CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT REFERENCES `users`(`id`), `created_at` DATETIME, `updated_at` DATETIME);
+CREATE TABLE `acts_as_list_items` (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `position` INTEGER, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT, `created_at` DATETIME, `updated_at` DATETIME, CONSTRAINT `authentication_tokens_user_id_0` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`));
 
 CREATE TABLE `background_jobs` (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `forked` BOOLEAN NOT NULL, `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT);
 
@@ -6,11 +8,11 @@ CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT
 
 CREATE TABLE `interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id` BIGINT NOT NULL, `subject_type` VARCHAR(255), `kind` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE "project_details" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL REFERENCES `projects`(`id`), `note` TEXT, `created_at` DATETIME, `updated_at` DATETIME, `is_active` BOOLEAN);
+CREATE TABLE "project_details" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `note` TEXT, `created_at` DATETIME, `updated_at` DATETIME, `is_active` BOOLEAN, CONSTRAINT `project_details_project_id_0` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`));
 
 CREATE TABLE `project_translations` (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL REFERENCES `projects`(`id`), `locale` VARCHAR(255) NOT NULL, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE "projects" (`id` INTEGER PRIMARY KEY NOT NULL, `creating_user_reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME, `tasks_count` INTEGER);
+CREATE TABLE "projects" (`id` INTEGER PRIMARY KEY NOT NULL, `creating_user_reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME, `tasks_count` INTEGER NOT NULL);
 
 CREATE TABLE `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL);
 
@@ -18,11 +20,9 @@ CREATE TABLE `string_subject_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `
 
 CREATE TABLE `string_subjects` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE "tasks" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL REFERENCES `projects`(`id`), `name` VARCHAR(255), `description` TEXT, `created_at` DATETIME, `updated_at` DATETIME, `is_done` BOOLEAN);
+CREATE TABLE "tasks" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `name` VARCHAR(255), `description` TEXT, `created_at` DATETIME, `updated_at` DATETIME, `is_done` BOOLEAN, CONSTRAINT `tasks_project_id_0` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`));
 
 CREATE TABLE `users` (`id` INTEGER PRIMARY KEY NOT NULL, `email` VARCHAR(255) NOT NULL, `encrypted_password` VARCHAR(255) NOT NULL, `reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
-
-CREATE TABLE uuid_default_test(id UUID PRIMARY KEY, name TEXT);
 
 CREATE TABLE `uuid_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id` UUID NOT NULL, `subject_type` VARCHAR(255), `kind` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
@@ -35,6 +35,10 @@ CREATE TABLE `velocious_internal_migrations` (`key` VARCHAR(255) PRIMARY KEY NOT
 CREATE TABLE `websocket_channel_events` (`sequence` INTEGER PRIMARY KEY NOT NULL, `id` VARCHAR(255) NOT NULL, `channel` VARCHAR(255) NOT NULL, `payload_json` TEXT NOT NULL, `created_at` DATETIME NOT NULL);
 
 CREATE TABLE `websocket_replay_channels` (`channel` VARCHAR(255) PRIMARY KEY NOT NULL, `interested_until` DATETIME NOT NULL);
+
+CREATE INDEX `index_on_acts_as_list_items_project_id` ON `acts_as_list_items` (`project_id`);
+
+CREATE UNIQUE INDEX `index_on_acts_as_list_items_project_id_and_position` ON `acts_as_list_items` (`project_id`, `position`);
 
 CREATE UNIQUE INDEX `index_on_authentication_tokens_token` ON `authentication_tokens` (`user_token`);
 

@@ -28,6 +28,7 @@ import {defineModelScope} from "../../utils/model-scope.js"
 import ValidatorsFormat from "./validators/format.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
+import registerActsAsListCallbacks from "./acts-as-list.js"
 import UUID from "pure-uuid"
 
 /**
@@ -35,6 +36,9 @@ import UUID from "pure-uuid"
  */
 
 class ValidationError extends Error {
+  /** @type {Record<string, any> | undefined} - Velocious metadata for frontend-model error reporting. */
+  velocious
+
   /**
    * @returns {VelociousDatabaseRecord} - The model.
    */
@@ -2282,6 +2286,25 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Registers gap-less positional list callbacks for a column scoped by
+   * another column. Inserts and moves shift surrounding positions so the
+   * list stays compact (1,2,3,...). Destroys close the resulting gap.
+   *
+   * Callers must ensure a UNIQUE index on (scopeColumn, positionColumn)
+   * exists in the database — use `Migration.addActsAsList()` for the
+   * schema half.
+   *
+   * @param {string} positionColumn - camelCase position attribute (e.g. "rowNumber").
+   * @param {object} options - Options with a required scope attribute.
+   * @param {string} options.scope - camelCase scope attribute (e.g. "boardColumnId").
+   */
+  static actsAsList(positionColumn, options) {
+    const {scope} = options
+
+    registerActsAsListCallbacks(this, positionColumn, {scope})
+  }
+
+  /**
    * @abstract
    * @returns {TranslationBase[]} - The translations loaded.
    */
@@ -3391,6 +3414,7 @@ class VelociousDatabaseRecord {
 
       validationError.setValidationErrors(this._validationErrors)
       validationError.setModel(this)
+      validationError.velocious = {type: "validation_error"}
 
       throw validationError
     }

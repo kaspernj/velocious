@@ -3489,9 +3489,15 @@ export default class FrontendModelBase {
       ? response.errorMessage
       : `Request failed for ${this.name}#${commandType}`
 
-    const error = /** @type {Error & {velocious?: Record<string, any>}} */ (new Error(errorMessage))
+    const error = /** @type {Error & {velocious?: Record<string, any>, errorType?: string, validationErrors?: Record<string, any>}} */ (new Error(errorMessage))
     if (response.velocious && typeof response.velocious === "object") {
       error.velocious = response.velocious
+    }
+    if (typeof response.errorType === "string") {
+      error.errorType = response.errorType
+    }
+    if (response.validationErrors && typeof response.validationErrors === "object") {
+      error.validationErrors = response.validationErrors
     }
     throw error
   }

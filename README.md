@@ -7,6 +7,8 @@
 * Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes
 * Controllers and views for HTTP endpoints
+* Frontend-model transport for creating, updating, and querying records over HTTP, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
+* Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Per-row association counts via `.withCount(...)` on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)` on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
@@ -1368,7 +1370,7 @@ To prime *all* configured pools at once, call `configuration.ensureGlobalConnect
 
 When an async context exists, that connection is still preferred over the global one.
 
-Checked-in `AsyncTrackedMultiConnection` connections are closed after 5 seconds of idle time by default. This keeps tenant-scoped and short-lived background-job connections from accumulating in long-running processes while still allowing immediate reuse by nearby async work. Configure `database.<environment>.<identifier>.pool.idleTimeoutMillis` to change the timeout, or set it to `null` to disable idle reaping for that pool:
+Checked-in `AsyncTrackedMultiConnection` connections are closed after 5 seconds of idle time by default. This keeps tenant-scoped and short-lived background-job connections from accumulating in long-running processes while still allowing immediate reuse by nearby async work. Configure `database.<environment>.<identifier>.pool.idleTimeoutMillis` to change the timeout, set it to `0` to close idle connections immediately unless a matching checkout is already waiting, or set it to `null` to disable idle reaping for that pool. A matching idle connection is reused before expired idle connections are reaped.
 
 ```js
 database: {
@@ -1378,12 +1380,15 @@ database: {
       poolType: AsyncTrackedMultiConnection,
       type: "mysql",
       pool: {
-        idleTimeoutMillis: 10000
+        idleTimeoutMillis: 10000,
+        max: 25
       }
     }
   }
 }
 ```
+
+`pool.max` caps live async-tracked connections for that pool. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed.
 
 # Websockets
 

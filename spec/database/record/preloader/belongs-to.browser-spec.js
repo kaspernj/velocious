@@ -12,6 +12,21 @@ describe("Record - preloader - belongs to", {tags: ["dummy"]}, () => {
     expect(foundProject.creatingUser().id()).toEqual(user.id())
   })
 
+  it("skips null foreign keys instead of querying for them", async () => {
+    const projectWithUser = await Project.create({creating_user_reference: "User-77"})
+    const projectWithoutUser = await Project.create({})
+    const user = await User.create({email: "user77@example.com", encrypted_password: "password", reference: "User-77"})
+    const projects = /** @type {Project[]} */ (
+      await Project.preload({creatingUser: true}).where({id: [projectWithUser.id(), projectWithoutUser.id()]}).toArray()
+    )
+
+    const loadedWithUser = projects.find((project) => project.id() === projectWithUser.id())
+    const loadedWithoutUser = projects.find((project) => project.id() === projectWithoutUser.id())
+
+    expect(loadedWithUser?.creatingUser()?.id()).toEqual(user.id())
+    expect(loadedWithoutUser?.creatingUser()).toBeUndefined()
+  })
+
   it("preloads polymorphic belongs to relationships", async () => {
     const project = await Project.create({})
     const task = await Task.create({name: "Poly belongs to task", project})

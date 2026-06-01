@@ -6,6 +6,36 @@ import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.j
 import {describe, expect, it} from "../../../src/testing/test.js"
 
 describe("database - pool - async tracked multi connection idle reaper", () => {
+  it("reuses matching idle connections before reaping expired connections", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-reuse-before-reap")
+
+    try {
+      configuration.getDatabaseConfiguration().default.pool = {idleTimeoutMillis: 1}
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      let firstConnection
+
+      await pool.withConnection(async (connection) => {
+        firstConnection = connection
+      })
+
+      pool.clearIdleConnectionReaperTimer()
+      await wait(0.02)
+
+      let secondConnection
+
+      await pool.withConnection(async (connection) => {
+        secondConnection = connection
+      })
+
+      expect(secondConnection).toBe(firstConnection)
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("closes checked-in idle connections after the configured idle timeout", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-reaper")
 
@@ -32,6 +62,27 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
       await pool.reapIdleConnections()
 
       expect(checkedInConnection.connection).toEqual(undefined)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("closes checked-in idle connections immediately when idle timeout is zero", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-reaper-zero")
+
+    try {
+      configuration.getDatabaseConfiguration().default.pool = {idleTimeoutMillis: 0}
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      let checkedInConnection
+
+      await pool.withConnection(async (connection) => {
+        checkedInConnection = connection
+      })
+
+      expect(pool.connections.includes(checkedInConnection)).toBe(false)
     } finally {
       await cleanup()
     }
@@ -65,6 +116,37 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
         expect(connection).toBe(transactionConnection)
         await connection.rollbackTransaction()
       })
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("keeps checked-in transaction connections when idle timeout is zero", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-transaction-zero")
+
+    try {
+      configuration.getDatabaseConfiguration().default.pool = {idleTimeoutMillis: 0}
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      let transactionConnection
+
+      await pool.withConnection(async (connection) => {
+        transactionConnection = connection
+        await connection.startTransaction()
+      })
+
+      if (!transactionConnection) throw new Error("Expected transaction connection")
+
+      expect(pool.connections.includes(transactionConnection)).toBe(true)
+
+      await pool.withConnection(async (connection) => {
+        expect(connection).toBe(transactionConnection)
+        await connection.rollbackTransaction()
+      })
+
+      expect(pool.connections.includes(transactionConnection)).toBe(false)
     } finally {
       await cleanup()
     }
