@@ -18,4 +18,19 @@ describe("Database - drivers - mysql - quote", {databaseCleaning: {transaction: 
     expect(driver.quote({new: 984123})).toEqual("'{\\\"new\\\":984123}'")
     expect(driver.quote([1, 2])).toEqual("'[1,2]'")
   })
+
+  it("does not JSON-encode class instances such as circular model records", () => {
+    const driver = new MysqlDriver({}, configuration)
+
+    // Model records are class instances with circular references (e.g. _changes
+    // pointing back at the record). JSON-encoding them would throw "Converting
+    // circular structure to JSON"; only plain objects/arrays get encoded.
+    class FakeRecord {}
+    const record = new FakeRecord()
+
+    record._changes = {value: record}
+
+    expect(() => driver._convertValue(record)).not.toThrow()
+    expect(driver._convertValue(record)).toBe(record)
+  })
 })
