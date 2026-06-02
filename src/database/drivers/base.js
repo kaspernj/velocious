@@ -542,7 +542,11 @@ export default class VelociousDatabaseDriversBase {
     // JSON. Without this, drivers like mysql's escape() turn an object into
     // `key` = value assignment pairs (its `SET ?` form), producing invalid SQL in
     // a value position. Buffers (binary columns) and Dates are left untouched.
-    if (value !== null && typeof value === "object" && !Buffer.isBuffer(value)) {
+    // `Buffer` is not defined in browser/Expo contexts, so guard before using it
+    // (this base method is inherited by the sqlite/browser driver too).
+    const isBuffer = typeof Buffer !== "undefined" && Buffer.isBuffer(value)
+
+    if (value !== null && typeof value === "object" && !isBuffer) {
       return JSON.stringify(value)
     }
 
