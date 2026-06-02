@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toBeNull", () => {
+describe("Expect#toBeNull", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the value is null", () => {
     expect(null).toBeNull()
   })

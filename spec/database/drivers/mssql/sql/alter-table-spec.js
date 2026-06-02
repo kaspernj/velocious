@@ -9,7 +9,7 @@ function buildDriver() {
   return new MssqlDriver({sqlConfig: {}})
 }
 
-describe("database/drivers/mssql/sql/alter-table", () => {
+describe("database/drivers/mssql/sql/alter-table", {databaseCleaning: {transaction: true}}, () => {
   it("emits add-column alters without the COLUMN keyword", async () => {
     const tableData = new TableData("builds")
 

@@ -17,7 +17,7 @@ class PluginRouteController extends Controller {
   }
 }
 
-describe("routes - plugin routes", () => {
+describe("routes - plugin routes", {databaseCleaning: {transaction: true}}, () => {
   it("supports configuration.routes((routes) => routes.get(path, {to}))", async () => {
     const configuration = new Configuration({
       database: {test: {}},

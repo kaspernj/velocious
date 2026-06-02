@@ -56,7 +56,7 @@ async function buildRequest({forwardedFor, socketRemoteAddress = "42.0.0.4", tru
   return request
 }
 
-describe("HttpServer - request remote address", () => {
+describe("HttpServer - request remote address", {databaseCleaning: {transaction: true}}, () => {
   it("ignores forwarded headers when trusted proxies are not configured", async () => {
     const request = await buildRequest({forwardedFor: "78.46.21.37"})
 

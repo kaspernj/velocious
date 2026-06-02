@@ -17,7 +17,7 @@ async function createUser(email, reference) {
   }))
 }
 
-describe("Authorization - ability", {tags: ["dummy"]}, () => {
+describe("Authorization - ability", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   it("filters records by resource-defined hash conditions", async () => {
     const allowedUser = await createUser("allowed@example.com", "allowed")
     const blockedUser = await createUser("blocked@example.com", "blocked")

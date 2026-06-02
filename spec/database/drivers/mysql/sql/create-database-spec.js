@@ -15,7 +15,7 @@ function buildDriver() {
   return new MysqlDriver({type: "mysql"})
 }
 
-describe("database/drivers/mysql/sql/create-database", () => {
+describe("database/drivers/mysql/sql/create-database", {databaseCleaning: {transaction: true}}, () => {
   it("emits CREATE DATABASE IF NOT EXISTS without charset or collation by default", () => {
     const driver = buildDriver()
     const createDatabase = new CreateDatabase({databaseName: "awesome_tasks_test", driver, ifNotExists: true})

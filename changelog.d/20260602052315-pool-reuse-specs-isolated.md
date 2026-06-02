@@ -1,0 +1,3 @@
+## Fixed
+
+- The `async-tracked-multi-connection` pool-reuse specs that drive the `max`-connection cap directly now run against their own isolated pool instead of the shared dummy `default` pool. The test harness holds one ambient connection on the shared pool for the whole run, so a spec setting `max: 1` on it deadlocked its own first checkout (and leaked a pending checkout into later specs). They no longer stop/start the dummy app either, so they are faster and run on every database (previously skipped on SQLite, deadlocked on MariaDB/PostgreSQL/MSSQL). The "rejects pending checkouts when the pool is closed" spec now attaches its rejection handler eagerly so closing the pool can't surface an unhandled rejection.

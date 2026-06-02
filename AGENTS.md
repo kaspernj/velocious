@@ -54,7 +54,7 @@ Run as needed while iterating:
    `npm run typecheck`
 
 ### Normal check (full validation, slower)
-Skip full local suites; Peakflow will run the full test matrix for all database types on PRs.
+Skip full local suites; Peakflow will run the full test matrix for all database types on PRs. (General rule for local vs CI runs — including never running shards/groups locally — lives in the `test-and-lint-runs` skill.)
 
 If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.

@@ -34,7 +34,7 @@ class CustomFrontendModelCommandController extends Controller {
   }
 }
 
-describe("Controller frontend model custom commands", () => {
+describe("Controller frontend model custom commands", {databaseCleaning: {transaction: true}}, () => {
   it("dispatches custom frontend-model command paths through configured routes", async () => {
     const configuration = new Configuration({
       database: {test: {}},

@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect.objectContaining", () => {
+describe("Expect.objectContaining", {databaseCleaning: {transaction: true}}, () => {
   it("matches object subsets in toEqual", () => {
     const actual = {a: 1, b: 2}
 

@@ -20,6 +20,7 @@
     "release:patch": "release-patch",
     "test": "node scripts/run-tests.js",
     "test:browser": "node scripts/test-browser.js",
+    "test:expo": "npm run build && npm ci --prefix examples/expo && npm run export --prefix examples/expo && npm run test:dist --prefix examples/expo",
     "prepublishOnly": "npm run build && node scripts/ensure-bin-executable.js",
     "typecheck": "tsc --noEmit",
     "velocious": "asd",

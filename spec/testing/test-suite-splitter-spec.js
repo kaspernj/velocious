@@ -3,7 +3,7 @@
 import TestSuiteSplitter from "../../src/testing/test-suite-splitter.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("TestSuiteSplitter", () => {
+describe("TestSuiteSplitter", {databaseCleaning: {transaction: true}}, () => {
   it("distributes files across groups with no duplicates and no missing files", () => {
     const testFiles = [
       "/project/spec/database/migrations-spec.js",

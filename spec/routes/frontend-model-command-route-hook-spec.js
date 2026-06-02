@@ -44,7 +44,7 @@ function configurationForBackendProjects(backendProjects) {
   }
 }
 
-describe("routes - frontend model command route hook", () => {
+describe("routes - frontend model command route hook", {databaseCleaning: {transaction: true}}, () => {
   const expectedControllerPath = new URL("../../src/frontend-model-controller.js", import.meta.url).href
 
   it("returns frontend model controller path for shared API path", async () => {

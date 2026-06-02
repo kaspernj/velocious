@@ -8,6 +8,7 @@
 * Migrations for schema changes
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, and querying records over HTTP, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
+* Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Per-row association counts via `.withCount(...)` on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
@@ -40,6 +41,7 @@ When working on Velocious itself, npm scripts are cross-platform (Windows `cmd`/
 ```bash
 npm run build
 npm run test
+npm run test:expo
 ```
 
 # Testing

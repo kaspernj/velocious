@@ -82,6 +82,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (trackedConnection[CLOSED_CONNECTION]) return
 
+    await this.rollbackLeftOpenTransaction(connection)
+
     trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
     this.connections.push(connection)
     await this.drainPendingCheckouts()
@@ -108,7 +110,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (connection) return this.activateConnection(connection)
 
     if (this.canSpawnConnection()) {
-      connection = await this.spawnConnectionForCheckout(databaseConfig, reuseKey)
+      // Spawn via spawnConnection() so the tenant-aware configuration is resolved FRESH at
+      // spawn time for the current caller. Reusing the databaseConfig captured at the top of
+      // checkout() could bind the connection to a stale tenant/database, which breaks
+      // per-request isolation (e.g. test truncation appearing not to take effect). The queued
+      // path below keeps the waiting caller's captured config via waitForCheckout().
+      connection = await this.spawnConnection()
 
       return this.activateConnection(connection)
     }
@@ -547,6 +554,25 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   connectionHasOpenTransaction(connection) {
     return connection._transactionsCount > 0
+  }
+
+  /**
+   * Rolls back any transaction a previous holder left open before a connection
+   * re-enters the idle pool. A connection returned to the pool with an open
+   * transaction would otherwise be handed to an unrelated checkout, whose
+   * startTransaction() then fails with "A transaction is already running" and
+   * poisons every following caller that reuses it.
+   * @param {import("../drivers/base.js").default} connection - Connection being checked in.
+   * @returns {Promise<void>} - Resolves when the connection holds no open transaction.
+   */
+  async rollbackLeftOpenTransaction(connection) {
+    if (!this.connectionHasOpenTransaction(connection)) return
+
+    this.logger.warn(() => [`Rolling back a transaction left open on a connection being checked in (identifier=${this.identifier}).`])
+
+    while (this.connectionHasOpenTransaction(connection)) {
+      await connection.rollbackTransaction()
+    }
   }
 
   /**

@@ -5,7 +5,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
-describe("TestRunner retry", () => {
+describe("TestRunner retry", {databaseCleaning: {transaction: true}}, () => {
   it("retries a failing test until it succeeds", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({

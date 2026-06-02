@@ -24,7 +24,7 @@ class TransportTask extends FrontendModelBase {
 
 FrontendModelBase.registerModel(TransportTask)
 
-describe("Frontend models - transport serialization", () => {
+describe("Frontend models - transport serialization", {databaseCleaning: {transaction: true}}, () => {
   it("does not prototype-pollute during deserialize for __proto__ keys", () => {
     const payload = /** @type {Record<string, any>} */ (JSON.parse("{\"safe\":1,\"__proto__\":{\"polluted\":true}}"))
 

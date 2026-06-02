@@ -3,7 +3,7 @@
 import Application from "../../src/application.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("Application.stop", () => {
+describe("Application.stop", {databaseCleaning: {transaction: true}}, () => {
   it("closes database connections", async () => {
     let closedConnections = false
 

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Velocious Expo Compatibility",
+    "slug": "velocious-expo-compatibility",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

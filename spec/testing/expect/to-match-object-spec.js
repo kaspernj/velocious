@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toMatchObject", () => {
+describe("Expect#toMatchObject", {databaseCleaning: {transaction: true}}, () => {
   it("matches nested object subsets", () => {
     const actual = {a: 1, b: {c: 2, d: 3}, extra: true}
 

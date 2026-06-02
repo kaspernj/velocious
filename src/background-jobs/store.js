@@ -448,9 +448,17 @@ export default class BackgroundJobsStore {
 
       const alreadyApplied = await this._hasMigration(db)
 
-      if (alreadyApplied) return
+      // Even when the migration row is present, the jobs table itself can have
+      // been dropped underneath us by a transaction rollback in another caller
+      // (DDL is transactional on SQLite/MSSQL). Verify the table physically
+      // exists and recreate it when missing rather than trusting the migration
+      // row alone, otherwise later callers fail with "no such table".
+      if (alreadyApplied && await db.tableExists(JOBS_TABLE)) return
 
       await this._applyMigrations(db)
+
+      if (alreadyApplied) return
+
       await db.insert({
         tableName: MIGRATIONS_TABLE,
         data: {

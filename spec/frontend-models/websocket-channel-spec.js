@@ -3,7 +3,7 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelWebsocketChannel from "../../src/frontend-models/websocket-channel.js"
 
-describe("FrontendModelWebsocketChannel", () => {
+describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}}, () => {
   it("exposes websocket metadata separately from upgrade request headers", () => {
     const channel = new FrontendModelWebsocketChannel({
       params: {model: "Task"},

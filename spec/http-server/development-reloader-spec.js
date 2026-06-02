@@ -4,7 +4,7 @@ import DevelopmentReloader from "../../src/http-server/development-reloader.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import path from "path"
 
-describe("HttpServer development reloader", () => {
+describe("HttpServer development reloader", {databaseCleaning: {transaction: true}}, () => {
   it("watches nested source directories and reloads changed JS files", async () => {
     const callbacks = new Map()
     const closed = new Set()

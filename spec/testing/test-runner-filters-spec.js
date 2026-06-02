@@ -21,7 +21,7 @@ function buildConfiguration() {
   })
 }
 
-describe("TestRunner filters", () => {
+describe("TestRunner filters", {databaseCleaning: {transaction: true}}, () => {
   it("filters by example patterns", async () => {
     const configuration = buildConfiguration()
     const testRunner = new TestRunner({

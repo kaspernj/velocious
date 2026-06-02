@@ -99,7 +99,7 @@ class MockModelBase {
   }
 }
 
-describe("stateMachine", () => {
+describe("stateMachine", {databaseCleaning: {transaction: true}}, () => {
   it("registers event methods on the model prototype", () => {
     class TestBuild extends MockModelBase {
       /** @param {string} value */

@@ -28,7 +28,7 @@ function expectNoPosixOnlyCommands(scripts) {
   expect(scripts.test.includes("VELOCIOUS_TEST_DIR=$(pwd)/..")).toEqual(false)
 }
 
-describe("package scripts", () => {
+describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
   it("uses cross-platform scripts for build and test", async () => {
     const scripts = await readPackageScripts()
 

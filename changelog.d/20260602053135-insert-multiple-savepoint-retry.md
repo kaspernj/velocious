@@ -1,0 +1,3 @@
+## Fixed
+
+- `Record.insertMultiple({retryIndividuallyOnFailure: true})` now wraps the batch attempt and each individual row retry in a savepoint (via the driver's `transaction()` helper). On PostgreSQL a failed statement aborts the whole surrounding transaction, so after the batch failed every individual retry previously failed with "current transaction is aborted, commands ignored until end of transaction block" — making it report all rows as failed instead of just the offending one. Rolling each attempt back to its own savepoint keeps the surrounding transaction usable so the valid rows still insert.

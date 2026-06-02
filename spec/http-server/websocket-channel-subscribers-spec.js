@@ -3,7 +3,7 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import VelociousWebsocketChannelSubscribers from "../../src/http-server/websocket-channel-subscribers.js"
 
-describe("websocket channel subscribers", () => {
+describe("websocket channel subscribers", {databaseCleaning: {transaction: true}}, () => {
   it("dispatches events to subscribed callbacks", async () => {
     const subscribers = new VelociousWebsocketChannelSubscribers()
     const received = []

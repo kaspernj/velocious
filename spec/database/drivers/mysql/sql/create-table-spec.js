@@ -9,7 +9,7 @@ function buildDriver() {
   return new MysqlDriver({type: "mysql"})
 }
 
-describe("database/drivers/mysql/sql/create-table", () => {
+describe("database/drivers/mysql/sql/create-table", {databaseCleaning: {transaction: true}}, () => {
   it("renders boolean columns as tinyint(1) with a boolean type hint", async () => {
     const tableData = new TableData("feature_flags")
 

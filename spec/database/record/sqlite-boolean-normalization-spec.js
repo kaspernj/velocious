@@ -15,7 +15,7 @@ MysqlBooleanRecord._columnTypeByName = {flag: "boolean"}
 MysqlBooleanRecord._columns = [{getName: () => "flag", getType: () => "boolean"}]
 MysqlBooleanRecord._databaseType = "mysql"
 
-describe("Record - sqlite boolean normalization", () => {
+describe("Record - sqlite boolean normalization", {databaseCleaning: {transaction: true}}, () => {
   it("stores booleans as 1/0 for sqlite", () => {
     const record = new SqliteBooleanRecord()
 

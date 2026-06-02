@@ -18,7 +18,7 @@ class BackendMailer extends VelociousMailer {
   }
 }
 
-describe("Mailers - backend", () => {
+describe("Mailers - backend", {databaseCleaning: {transaction: true}}, () => {
   /**
    * @returns {Promise<{directory: string, cleanup: () => Promise<void>}>}
    */

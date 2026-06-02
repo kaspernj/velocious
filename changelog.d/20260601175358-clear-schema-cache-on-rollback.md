@@ -1,0 +1,3 @@
+## Fixed
+
+- Database drivers now invalidate their cached schema metadata when a transaction is rolled back. A rolled-back transaction can revert DDL run lazily inside it (e.g. the background-jobs store creating `velocious_internal_migrations`/`background_jobs` on first use). Previously the schema cache still reported those tables as existing after the rollback removed them, so the next caller skipped recreating them and failed with `SQLITE_ERROR: no such table`, and `truncateAllTables()` tried to delete tables that were no longer there. This surfaced under transaction-based test cleaning on SQLite.

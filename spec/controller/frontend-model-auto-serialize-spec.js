@@ -65,7 +65,7 @@ function makeFakeRecord(id, modelName = "Build") {
   }
 }
 
-describe("FrontendModelController autoSerializeFrontendModelsInPayload", () => {
+describe("FrontendModelController autoSerializeFrontendModelsInPayload", {databaseCleaning: {transaction: true}}, () => {
   it("replaces a top-level backend Record with a frontend_model marker carrying resource.serialize output", async () => {
     const controller = await buildController()
     /** @type {Array<{model: any, action: string}>} */

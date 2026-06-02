@@ -4,7 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import {frontendModelResourceConfigurationFromDefinition} from "../../src/frontend-models/resource-definition.js"
 
-describe("frontendModelResourceConfigurationFromDefinition abilities normalization", () => {
+describe("frontendModelResourceConfigurationFromDefinition abilities normalization", {databaseCleaning: {transaction: true}}, () => {
   it("defaults to full CRUD when abilities are not declared", () => {
     class FooResource extends FrontendModelBaseResource {
       static attributes = ["id"]

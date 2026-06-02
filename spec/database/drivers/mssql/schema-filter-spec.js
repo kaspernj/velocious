@@ -3,7 +3,7 @@
 import MssqlDriver from "../../../../src/database/drivers/mssql/index.js"
 import { describe, expect, it } from "../../../../src/testing/test.js"
 
-describe("Database - drivers - mssql schema filter", () => {
+describe("Database - drivers - mssql schema filter", {databaseCleaning: {transaction: true}}, () => {
   it("applies the schema when provided", async () => {
     const driver = new MssqlDriver({schema: "pyt18", sqlConfig: {}}, {debug: false})
     let lastSql = null

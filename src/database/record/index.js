@@ -1535,7 +1535,15 @@ class VelociousDatabaseRecord {
     }
 
     try {
-      await this.connection().insertMultiple(tableName, columns, normalizedRows)
+      // Wrap the batch in a transaction/savepoint. On databases that abort the
+      // whole transaction when a statement fails (PostgreSQL), a failed batch
+      // would otherwise poison the surrounding transaction so that the
+      // individual retries below all fail with "current transaction is aborted".
+      // transaction() opens a savepoint when already inside a transaction and a
+      // real transaction otherwise, so a failure rolls back only this attempt.
+      await this.connection().transaction(async () => {
+        await this.connection().insertMultiple(tableName, columns, normalizedRows)
+      })
       if (returnResults) return {succeededRows: normalizedRows.slice(), failedRows: [], errors: []}
       return
     } catch {
@@ -1548,7 +1556,11 @@ class VelociousDatabaseRecord {
 
       for (const row of normalizedRows) {
         try {
-          await this.connection().insertMultiple(tableName, columns, [row])
+          // Each retry runs in its own savepoint so a failed row rolls back only
+          // that row and leaves the surrounding transaction usable for the rest.
+          await this.connection().transaction(async () => {
+            await this.connection().insertMultiple(tableName, columns, [row])
+          })
           results.succeededRows.push(row)
         } catch (rowError) {
           results.failedRows.push(row)

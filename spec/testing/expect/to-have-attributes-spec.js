@@ -21,7 +21,7 @@ class Person {
   }
 }
 
-describe("Expect#toHaveAttributes", () => {
+describe("Expect#toHaveAttributes", {databaseCleaning: {transaction: true}}, () => {
   it("passes when attributes match", () => {
     expect(new Person("Ada", 5)).toHaveAttributes({name: "Ada", age: 5})
   })

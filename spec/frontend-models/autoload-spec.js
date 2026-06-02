@@ -156,7 +156,7 @@ function resetFrontendModelTransport() {
   })
 }
 
-describe("Frontend models - autoload", () => {
+describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, () => {
   it("batch-loads a belongsTo relationship for every cohort sibling in one request", async () => {
     const {Task} = buildAutoloadTestModelClasses()
 

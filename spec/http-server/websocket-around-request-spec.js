@@ -23,7 +23,7 @@ async function waitFor(predicate, timeoutMs = 2000) {
   throw new Error(`waitFor timeout after ${timeoutMs}ms`)
 }
 
-describe("Configuration.setWebsocketAroundRequest (Phase 2)", () => {
+describe("Configuration.setWebsocketAroundRequest (Phase 2)", {databaseCleaning: {transaction: true}}, () => {
   it("wraps every WS-borne message through the registered around-request hook", async () => {
     /** @type {string[]} */
     const callLog = []

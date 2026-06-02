@@ -29,7 +29,7 @@ function buildDriver(databaseType) {
   }))
 }
 
-describe("database - query - create-table foreign-key SQL", () => {
+describe("database - query - create-table foreign-key SQL", {databaseCleaning: {transaction: true}}, () => {
   it("emits a named CONSTRAINT FOREIGN KEY clause when the table has a named foreign key", async () => {
     const tableData = new TableData("posts")
 

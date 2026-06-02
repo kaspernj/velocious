@@ -3,7 +3,7 @@
 import {parseFilters} from "../../src/testing/test-filter-parser.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("parseFilters", () => {
+describe("parseFilters", {databaseCleaning: {transaction: true}}, () => {
   describe("group splitting flags", () => {
     it("parses --groups and --group-number with = syntax", () => {
       const result = parseFilters(["test", "--groups=4", "--group-number=2"])

@@ -1,0 +1,3 @@
+## Fixed
+
+- `AsyncTrackedMultiConnection.checkin()` now rolls back any transaction a previous holder left open before the connection re-enters the idle pool. Previously such a connection could be handed to an unrelated checkout, whose `startTransaction()` then failed with "A transaction is already running" and poisoned every following caller that reused it — observed as a cascade of `A transaction is already running` failures across an MS-SQL test suite using transaction-based database cleaning once one connection's transaction leaked (e.g. after a mid-suite connection timeout). A connection now always re-enters the pool clean.

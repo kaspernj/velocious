@@ -63,7 +63,7 @@ async function listenOnRandomPort(server) {
   return address.port
 }
 
-describe("HttpServer - listen errors", () => {
+describe("HttpServer - listen errors", {databaseCleaning: {transaction: true}}, () => {
   it("rejects startup and stops workers when the port is already in use", async () => {
     const occupiedServer = Net.createServer()
     const port = await listenOnRandomPort(occupiedServer)

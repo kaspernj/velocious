@@ -1,6 +1,6 @@
 import SqliteWebDriver from "../../../../src/database/drivers/sqlite/index.web.js"
 
-describe("database - sqlite web driver - locateFile", () => {
+describe("database - sqlite web driver - locateFile", {databaseCleaning: {transaction: true}}, () => {
   it("uses sql.js CDN locateFile fallback by default", () => {
     const driver = new SqliteWebDriver({name: "test-db"}, {debug: false})
     const locateFile = driver.sqlJsLocateFile()

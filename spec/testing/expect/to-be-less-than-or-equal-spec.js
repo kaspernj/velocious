@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toBeLessThanOrEqual", () => {
+describe("Expect#toBeLessThanOrEqual", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the value is less than or equal to the expected", () => {
     expect(2).toBeLessThanOrEqual(3)
     expect(3).toBeLessThanOrEqual(3)

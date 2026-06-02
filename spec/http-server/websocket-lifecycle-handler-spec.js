@@ -7,7 +7,7 @@ import WebsocketClient from "../../src/http-client/websocket-client.js"
 import WebsocketSession from "../../src/http-server/client/websocket-session.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
-describe("WebsocketSession lifecycle-only message handler", () => {
+describe("WebsocketSession lifecycle-only message handler", {databaseCleaning: {transaction: true}}, () => {
   it("falls through to default routing for channel-subscribe when handler has no onMessage", async () => {
     const session = new WebsocketSession({
       client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),

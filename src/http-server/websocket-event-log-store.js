@@ -60,7 +60,22 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<void>} - Resolves when ready.
    */
   async ensureReady() {
-    if (this._isReady) return
+    // The lazily-created event-log tables can be dropped underneath this
+    // per-configuration singleton by a transaction rollback in another caller
+    // (DDL is transactional on SQLite/MSSQL, so a test that touches the store
+    // inside a rolled-back transaction reverts the CREATE TABLE). Re-verify the
+    // tables physically exist before trusting the cached ready flag, otherwise
+    // later callers skip schema creation and fail with "no such table".
+    if (this._isReady) {
+      if (await this._schemaPresent()) return
+
+      // Schema vanished underneath us. Reset both the ready flag and the
+      // resolved ready promise so the re-creation path below actually runs
+      // instead of returning the stale promise from the first ensureReady.
+      this._isReady = false
+      this._readyPromise = null
+    }
+
     if (this._readyPromise) return await this._readyPromise
 
     this._readyPromise = (async () => {
@@ -76,6 +91,15 @@ export default class VelociousHttpServerWebsocketEventLogStore {
         this._readyPromise = null
       }
     }
+  }
+
+  /**
+   * @returns {Promise<boolean>} - Whether both event-log tables physically exist.
+   */
+  async _schemaPresent() {
+    return await this._withDb(async (db) =>
+      await db.tableExists(EVENTS_TABLE) && await db.tableExists(REPLAY_CHANNELS_TABLE)
+    )
   }
 
   /**

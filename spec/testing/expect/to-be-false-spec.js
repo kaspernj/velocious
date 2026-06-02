@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toBeFalse", () => {
+describe("Expect#toBeFalse", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the value is false", () => {
     expect(false).toBeFalse()
   })

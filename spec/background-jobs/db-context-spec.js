@@ -10,7 +10,7 @@ import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import DbQueryJob from "../dummy/src/jobs/db-query-job.js"
 
-describe("Background jobs - DB context", {tags: ["dummy"]}, () => {
+describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
   it("wraps inline job perform calls in a database connection context", async () => {
     dummyConfiguration.setCurrent()
     const store = new BackgroundJobsStore({configuration: dummyConfiguration})

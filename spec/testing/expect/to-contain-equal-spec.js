@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toContainEqual", () => {
+describe("Expect#toContainEqual", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the array contains an equal value", () => {
     expect([{id: 1}, {id: 2}]).toContainEqual({id: 2})
   })

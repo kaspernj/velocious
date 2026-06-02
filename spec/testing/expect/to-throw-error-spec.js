@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../../src/testing/test.js"
 
-describe("Expect#toThrowError", () => {
+describe("Expect#toThrowError", {databaseCleaning: {transaction: true}}, () => {
   it("passes when the error message matches", async () => {
     await expect(() => {
       throw new Error("boom")

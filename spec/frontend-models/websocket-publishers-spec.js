@@ -8,7 +8,7 @@ import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 import Ability from "../../src/authorization/ability.js"
 
-describe("Frontend models - websocket publishers", () => {
+describe("Frontend models - websocket publishers", {databaseCleaning: {transaction: true}}, () => {
   it("auto-discovers frontend model resources from ability resolver when no explicit config exists", async () => {
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task

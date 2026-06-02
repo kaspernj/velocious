@@ -4,7 +4,7 @@ import StringSubjectInteraction from "../../dummy/src/models/string-subject-inte
 import UuidInteraction from "../../dummy/src/models/uuid-interaction.js"
 import UuidItem from "../../dummy/src/models/uuid-item.js"
 
-describe("Record - polymorphic id types", () => {
+describe("Record - polymorphic id types", {databaseCleaning: {transaction: true}}, () => {
   it("supports polymorphic references with string and uuid ids", async () => {
     await Dummy.run(async () => {
       const stringSubject = await StringSubject.create({id: "subject-1", name: "String subject"})

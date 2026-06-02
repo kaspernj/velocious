@@ -707,27 +707,45 @@ export default class TestRunner {
           })
 
           try {
-            await this.runWithDummyIfNeeded(testArgs, async () => {
-              try {
-                clearDeliveries()
-                for (const beforeEachData of newBeforeEaches) {
-                  await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                }
+            // Run the whole per-test lifecycle (dummy/server startup, connection
+            // acquisition, beforeEach hooks, the test body and afterEach hooks) as
+            // one promise so the timeout below can cover all of it.
+            const testLifecycle = this.runWithDummyIfNeeded(testArgs, async () => {
+              // Pin one connection per test so beforeEach, the test body and afterEach
+              // all run on the SAME connection. This is required for transaction-based
+              // database cleaning (beforeEach starts a transaction, afterEach rolls it
+              // back). ensureConnections reuses the suite-level pinned connection while
+              // it is healthy and transparently re-establishes a per-test pin if an
+              // earlier spec closed the suite connection (which would otherwise leave a
+              // stale async-context pin and force every later test onto a fresh checkout,
+              // breaking isolation).
+              await this.getConfiguration().ensureConnections(async () => {
+                try {
+                  clearDeliveries()
+                  for (const beforeEachData of newBeforeEaches) {
+                    await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                  }
 
-                const testPromise = testData.function(testArgs)
-
-                if (useTimeout && timeoutMs !== undefined) {
-                  await runWithTimeout(testPromise, timeoutMs, testDescription)
-                } else {
-                  await testPromise
+                  await testData.function(testArgs)
+                  this._successfulTests++
+                } finally {
+                  for (const afterEachData of newAfterEaches) {
+                    await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                  }
                 }
-                this._successfulTests++
-              } finally {
-                for (const afterEachData of newAfterEaches) {
-                  await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                }
-              }
+              })
             })
+
+            // Time out the ENTIRE lifecycle, not just the test body. A hang in any
+            // phase — a connection checkout that never resolves, a beforeEach/afterEach
+            // waiting on a lock, or dummy server startup — would otherwise stall the
+            // whole run indefinitely (until CI kills the build) instead of failing the
+            // single offending test.
+            if (useTimeout && timeoutMs !== undefined) {
+              await runWithTimeout(testLifecycle, timeoutMs, testDescription)
+            } else {
+              await testLifecycle
+            }
           } catch (error) {
             caughtError = error
             lastError = error

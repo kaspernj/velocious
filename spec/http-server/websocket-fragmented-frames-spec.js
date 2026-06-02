@@ -41,7 +41,7 @@ function buildClientFrame({fin, opcode, payload}) {
   return Buffer.concat([header, mask, maskedPayload])
 }
 
-describe("WebsocketSession fragmented frames", () => {
+describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: true}}, () => {
   it("reassembles a channel-subscribe split across continuation frames", async () => {
     const session = new WebsocketSession({
       client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),

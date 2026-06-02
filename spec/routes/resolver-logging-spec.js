@@ -9,7 +9,7 @@ import Response from "../../src/http-server/client/response.js"
 import RoutesResolver from "../../src/routes/resolver.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("routes - resolver logging", async () => {
+describe("routes - resolver logging", {databaseCleaning: {transaction: true}}, async () => {
   it("logs request start at debug level in test environment", async () => {
     /** @type {string[]} */
     const writes = []

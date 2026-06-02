@@ -10,7 +10,7 @@ import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
 
-describe("Background jobs - registry", () => {
+describe("Background jobs - registry", {databaseCleaning: {transaction: true}}, () => {
   /**
    * @returns {Promise<{directory: string, cleanup: () => Promise<void>}>}
    */
