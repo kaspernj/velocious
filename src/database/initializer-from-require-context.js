@@ -78,20 +78,21 @@ export default class VelociousDatabaseInitializerFromRequireContext {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _bestEffortInitializeDeferredModel({configuration, modelClass}) {
-    let table
-
     try {
       const connection = modelClass.connection({enforceTenantDatabaseScope: false})
+      const table = await connection.getTableByName(modelClass.tableName(), {throwError: false})
 
-      table = await connection.getTableByName(modelClass.tableName(), {throwError: false})
+      if (!table) return
+
+      await this._initializeModelRecord({configuration, modelClass})
     } catch (error) {
+      // The optional table - or, for a translated model, its <table>_translations
+      // table (initializeRecord -> _defineTranslationMethods initializes the
+      // translation class) - is missing, or its connection is unavailable. Re-register
+      // to drop any partial metadata and leave the model deferred so startup still
+      // succeeds; it initializes lazily on first terminal use.
       this.logger.debug(`Leaving ${modelClass.name} deferred - table metadata unavailable at startup`, error)
-
-      return
+      modelClass.registerRecordClass({configuration})
     }
-
-    if (!table) return
-
-    await this._initializeModelRecord({configuration, modelClass})
   }
 }
