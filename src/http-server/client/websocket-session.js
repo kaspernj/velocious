@@ -1206,7 +1206,16 @@ export default class VelociousHttpServerClientWebsocketSession {
     const subscription = new ChannelClass({subscriptionId, params, session: this})
 
     try {
-      const tenant = await this._resolveTenant({channel: channelType, params})
+      // Resolving the tenant can run database queries (e.g. looking up the
+      // record's project and the caller's access), so it must happen inside a
+      // connection scope. Without this the resolver borrows a connection that
+      // is checked back in before/while it queries, intermittently surfacing as
+      // "Connection … doesn't exist any more" or a falsely unauthorized
+      // subscription.
+      let tenant
+      await this._withConnections(async () => {
+        tenant = await this._resolveTenant({channel: channelType, params})
+      })
 
       await this.configuration.runWithTenant(tenant, async () => {
         let allowed = false
@@ -1419,7 +1428,12 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (!resolver) return
 
     try {
-      const tenant = await this._resolveTenant({channel, params})
+      // Tenant resolution can run database queries, so it must happen inside a
+      // connection scope (see _handleChannelSubscribe).
+      let tenant
+      await this._withConnections(async () => {
+        tenant = await this._resolveTenant({channel, params})
+      })
       const resolved = await this.configuration.runWithTenant(tenant, async () => {
         return await resolver({
           client: this.client,
