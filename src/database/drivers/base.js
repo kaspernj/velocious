@@ -538,6 +538,14 @@ export default class VelociousDatabaseDriversBase {
       return strftime("%F %T.%L", value)
     }
 
+    // JSON-encode plain objects/arrays so they land in JSON/text columns as valid
+    // JSON. Without this, drivers like mysql's escape() turn an object into
+    // `key` = value assignment pairs (its `SET ?` form), producing invalid SQL in
+    // a value position. Buffers (binary columns) and Dates are left untouched.
+    if (value !== null && typeof value === "object" && !Buffer.isBuffer(value)) {
+      return JSON.stringify(value)
+    }
+
     return value
   }
 
