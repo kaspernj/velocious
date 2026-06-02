@@ -541,16 +541,31 @@ export default class VelociousDatabaseDriversBase {
     // JSON-encode plain objects/arrays so they land in JSON/text columns as valid
     // JSON. Without this, drivers like mysql's escape() turn an object into
     // `key` = value assignment pairs (its `SET ?` form), producing invalid SQL in
-    // a value position. Buffers (binary columns) and Dates are left untouched.
-    // `Buffer` is not defined in browser/Expo contexts, so guard before using it
-    // (this base method is inherited by the sqlite/browser driver too).
-    const isBuffer = typeof Buffer !== "undefined" && Buffer.isBuffer(value)
-
-    if (value !== null && typeof value === "object" && !isBuffer) {
+    // a value position. Only PLAIN objects and arrays are encoded — class
+    // instances (e.g. model records, which are circular via _changes) and Buffers
+    // pass through untouched, since JSON.stringify on a record throws on its
+    // circular structure and a record is never a valid column value to serialize.
+    if (this._isJsonEncodableValue(value)) {
       return JSON.stringify(value)
     }
 
     return value
+  }
+
+  /**
+   * Whether a value is a plain object or array that should be JSON-encoded for a
+   * JSON/text column. Excludes Buffers and class instances (e.g. model records).
+   * @param {any} value - Value to test.
+   * @returns {boolean} - Whether to JSON-encode the value.
+   */
+  _isJsonEncodableValue(value) {
+    if (value === null || typeof value !== "object") return false
+    if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) return false
+    if (Array.isArray(value)) return true
+
+    const prototype = Object.getPrototypeOf(value)
+
+    return prototype === Object.prototype || prototype === null
   }
 
   /**
