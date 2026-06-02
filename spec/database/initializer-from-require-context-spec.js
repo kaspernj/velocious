@@ -94,6 +94,76 @@ describe("Database - initializer from require context", {databaseCleaning: {tran
     expect(configuration.getModelClasses().LazyMetadataRecord).toEqual(LazyMetadataRecord)
   })
 
+  it("best-effort initializes opted-out models at startup when their table exists", async () => {
+    class PresentLazyMetadataRecord extends DatabaseRecord {
+      static initializeRecordCalls = 0
+
+      /** @returns {{getTableByName: () => Promise<object>}} - Connection whose table exists. */
+      static connection() {
+        return /** @type {any} */ ({getTableByName: async () => ({})})
+      }
+
+      /**
+       * @param {object} args - Options object.
+       * @param {Configuration} args.configuration - Configuration instance.
+       * @returns {Promise<void>} - Resolves when complete.
+       */
+      static async initializeRecord({configuration}) {
+        this.initializeRecordCalls += 1
+        this.registerRecordClass({configuration})
+        this._initialized = true
+      }
+
+      /** @returns {Promise<boolean>} - Whether the model has a translations table. */
+      static async hasTranslationsTable() {
+        return false
+      }
+    }
+
+    PresentLazyMetadataRecord.setEagerLoadRecordMetadata(false)
+
+    const configuration = buildConfiguration()
+    const initializer = new InitializerFromRequireContext({
+      requireContext: buildRequireContext({"./present-lazy-metadata-record.js": {default: PresentLazyMetadataRecord}})
+    })
+
+    await initializer.initialize({configuration})
+
+    expect(PresentLazyMetadataRecord.initializeRecordCalls).toEqual(1)
+    expect(PresentLazyMetadataRecord.isInitialized()).toEqual(true)
+  })
+
+  it("keeps an opted-out model deferred when startup metadata initialization fails", async () => {
+    class TranslatedLazyMetadataRecord extends DatabaseRecord {
+      /** @returns {{getTableByName: () => Promise<object>}} - Connection whose base table exists. */
+      static connection() {
+        return /** @type {any} */ ({getTableByName: async () => ({})})
+      }
+
+      /**
+       * Simulates a translated model whose <table>_translations table is missing:
+       * initializeRecord (via _defineTranslationMethods) raises during startup.
+       * @returns {Promise<void>} - Never resolves; always throws.
+       */
+      static async initializeRecord() {
+        throw new Error("Couldn't find a table by that name \"translated_lazy_metadata_records_translations\"")
+      }
+    }
+
+    TranslatedLazyMetadataRecord.setEagerLoadRecordMetadata(false)
+
+    const configuration = buildConfiguration()
+    const initializer = new InitializerFromRequireContext({
+      requireContext: buildRequireContext({"./translated-lazy-metadata-record.js": {default: TranslatedLazyMetadataRecord}})
+    })
+
+    // Startup must succeed (not throw) even though the optional table's metadata fails to load.
+    await initializer.initialize({configuration})
+
+    expect(TranslatedLazyMetadataRecord.isInitialized()).toEqual(false)
+    expect(configuration.getModelClasses().TranslatedLazyMetadataRecord).toEqual(TranslatedLazyMetadataRecord)
+  })
+
   it("clears stale metadata when an opted-out model is re-registered", async () => {
     class ReRegisteredLazyMetadataRecord extends DatabaseRecord {
       /**
