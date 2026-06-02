@@ -23,6 +23,8 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    healthcheck_restart_delay: 30
+    healthcheck_restart_limit: 20
     image: mariadb:latest
     expose:
       - 3306
@@ -61,6 +63,8 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10s
+    healthcheck_restart_delay: 30
+    healthcheck_restart_limit: 20
     image: postgres:17.6
     expose:
       - 5432
