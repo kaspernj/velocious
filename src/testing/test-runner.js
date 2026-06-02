@@ -707,7 +707,10 @@ export default class TestRunner {
           })
 
           try {
-            await this.runWithDummyIfNeeded(testArgs, async () => {
+            // Run the whole per-test lifecycle (dummy/server startup, connection
+            // acquisition, beforeEach hooks, the test body and afterEach hooks) as
+            // one promise so the timeout below can cover all of it.
+            const testLifecycle = this.runWithDummyIfNeeded(testArgs, async () => {
               // Pin one connection per test so beforeEach, the test body and afterEach
               // all run on the SAME connection. This is required for transaction-based
               // database cleaning (beforeEach starts a transaction, afterEach rolls it
@@ -723,13 +726,7 @@ export default class TestRunner {
                     await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
                   }
 
-                  const testPromise = testData.function(testArgs)
-
-                  if (useTimeout && timeoutMs !== undefined) {
-                    await runWithTimeout(testPromise, timeoutMs, testDescription)
-                  } else {
-                    await testPromise
-                  }
+                  await testData.function(testArgs)
                   this._successfulTests++
                 } finally {
                   for (const afterEachData of newAfterEaches) {
@@ -738,6 +735,17 @@ export default class TestRunner {
                 }
               })
             })
+
+            // Time out the ENTIRE lifecycle, not just the test body. A hang in any
+            // phase — a connection checkout that never resolves, a beforeEach/afterEach
+            // waiting on a lock, or dummy server startup — would otherwise stall the
+            // whole run indefinitely (until CI kills the build) instead of failing the
+            // single offending test.
+            if (useTimeout && timeoutMs !== undefined) {
+              await runWithTimeout(testLifecycle, timeoutMs, testDescription)
+            } else {
+              await testLifecycle
+            }
           } catch (error) {
             caughtError = error
             lastError = error
