@@ -1,6 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import wait from "awaitery/build/wait.js"
 import Dummy from "../dummy/index.js"
 import EventEmitter from "../../src/utils/event-emitter.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
@@ -163,7 +164,7 @@ describe("WebsocketClient - metadata", () => {
 
         try {
           await client.dropConnection()
-          await new Promise((resolve) => setTimeout(resolve, 300))
+          await wait(300)
         } finally {
           WebSocket.prototype.send = originalSend
         }
@@ -305,7 +306,7 @@ describe("WebSocket metadata integration", {databaseCleaning: {transaction: fals
         socket.send(JSON.stringify({type: "metadata", data: {locale: "en", userId: "abc-123"}}))
 
         // Give the server time to process the metadata message
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await wait(100)
 
         // Verify via a request that triggers metadata echo
         const client = new WebsocketClient()

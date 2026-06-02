@@ -8,6 +8,7 @@ import useCreatedEvent from "../frontend-models/use-created-event.js"
 import FrontendModelBase from "../frontend-models/base.js"
 import useModelClassEvent from "../frontend-models/use-model-class-event.js"
 import useUpdatedEvent from "../frontend-models/use-updated-event.js"
+import wait from "awaitery/build/wait.js"
 
 /** @typedef {import("../frontend-models/query.js").FrontendModelProjectionOptions} FrontendModelProjectionOptions */
 /** @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
@@ -28,14 +29,6 @@ async function flushEffects() {
 }
 
 /**
- * @param {number} milliseconds - Milliseconds to wait.
- * @returns {Promise<void>} - Resolves after the delay.
- */
-async function sleep(milliseconds) {
-  await new Promise((resolve) => setTimeout(resolve, milliseconds))
-}
-
-/**
  * @param {() => boolean} callback - Predicate to wait for.
  * @returns {Promise<void>} - Resolves when the predicate returns true.
  */
@@ -45,7 +38,7 @@ async function waitFor(callback) {
   while (!callback()) {
     if (Date.now() - startedAt > 1000) return
 
-    await sleep(10)
+    await wait(10)
   }
 }
 
@@ -372,7 +365,7 @@ async function debounceUnmountScenario() {
   emitEvent(instanceSubscriptions, "destroy", {id: "task-1"})
 
   await controls.unmount()
-  await sleep(30)
+  await wait(30)
 
   return {receivedEventsAfterDebounceWindow: receivedEvents.length}
 }

@@ -8,9 +8,9 @@ import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {configureTests, describe, expect, it, testConfig, testEvents} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
+import wait from "awaitery/build/wait.js"
 
 describe("TestRunner events", {databaseCleaning: {transaction: true}}, () => {
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   const buildTestRunner = () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({
@@ -136,7 +136,7 @@ describe("TestRunner events", {databaseCleaning: {transaction: true}}, () => {
 
     let handlerCompleted = false
     const handler = async () => {
-      await delay(20)
+      await wait(20)
       handlerCompleted = true
     }
 
@@ -313,7 +313,7 @@ describe("TestRunner events", {databaseCleaning: {transaction: true}}, () => {
       attemptFailedEvents.push(payload)
 
       if (payload.attemptNumber === 1) {
-        await delay(20)
+        await wait(20)
         firstAttemptFailureHandled = true
       }
     }

@@ -4,9 +4,9 @@ import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {configureTests, describe, expect, it, testConfig, testEvents} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
+import wait from "awaitery/build/wait.js"
 
 describe("TestRunner timeouts", {databaseCleaning: {transaction: true}}, () => {
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
   it("times out tests using the configured default", async () => {
     const previousTimeoutSeconds = testConfig.defaultTimeoutSeconds
@@ -42,7 +42,7 @@ describe("TestRunner timeouts", {databaseCleaning: {transaction: true}}, () => {
           "uses default timeout": {
             args: {},
             function: async () => {
-              await delay(20)
+              await wait(5000)
             }
           }
         }
@@ -98,7 +98,7 @@ describe("TestRunner timeouts", {databaseCleaning: {transaction: true}}, () => {
           "uses override timeout": {
             args: {timeoutSeconds: 0.005},
             function: async () => {
-              await delay(20)
+              await wait(5000)
             }
           }
         }

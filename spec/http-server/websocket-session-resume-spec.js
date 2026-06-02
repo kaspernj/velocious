@@ -4,12 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-
-/**
- * @param {number} ms
- * @returns {Promise<void>}
- */
-function wait(ms) { return new Promise((resolve) => setTimeout(resolve, ms)) }
+import wait from "awaitery/build/wait.js"
 
 /**
  * @param {() => boolean} predicate
@@ -252,7 +247,7 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
           }, 3000)
 
           // Yield past the microtask that resolves the identity-capture promise.
-          await new Promise((resolve) => setTimeout(resolve, 20))
+          await wait(20)
 
           // Simulate sign-out / different user before the auto-
           // reconnect fires.

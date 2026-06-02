@@ -1,4 +1,5 @@
 import "../../../../src/utils/with-tracked-stack-async-hooks.js"
+import wait from "awaitery/build/wait.js"
 import AsyncTrackedMultiConnection from "../../../../src/database/pool/async-tracked-multi-connection.js"
 import Configuration from "../../../../src/configuration.js"
 import FilesystemAttachmentStorageDriver from "../../../../src/database/record/attachments/storage-drivers/filesystem.js"
@@ -27,7 +28,7 @@ async function websocketMessageHandlerResolver({request}) {
   }
 
   if (pathValue === "/raw-async-socket") {
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await wait(10)
 
     return {
       onOpen: ({session}) => {

@@ -1,6 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../../../../src/testing/test.js"
+import wait from "awaitery/build/wait.js"
 import AsyncTrackedMultiConnection from "../../../../../src/database/pool/async-tracked-multi-connection.js"
 import Cli from "../../../../../src/cli/index.js"
 import Configuration from "../../../../../src/configuration.js"
@@ -337,7 +338,7 @@ export default CreateTenantWidgets
             activeTenantCount++
             maximumActiveTenantCount = Math.max(maximumActiveTenantCount, activeTenantCount)
 
-            await new Promise((resolve) => setTimeout(resolve, 25))
+            await wait(25)
 
             checkedTenantSlugs.push(tenantObject.slug)
             activeTenantCount--

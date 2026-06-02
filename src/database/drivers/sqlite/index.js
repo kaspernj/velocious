@@ -1,6 +1,7 @@
 // @ts-check
 
 import {createHash} from "node:crypto"
+import wait from "awaitery/build/wait.js"
 import fs from "fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -246,9 +247,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
           if (remaining <= 0) return false
 
-          await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remaining)))
+          await wait(Math.min(pollIntervalMs, remaining))
         } else {
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+          await wait(pollIntervalMs)
         }
       }
     }

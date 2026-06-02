@@ -1,6 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import wait from "awaitery/build/wait.js"
 import {websocketEventLogStoreForConfiguration} from "../../src/http-server/websocket-event-log-store.js"
 import Dummy from "../dummy/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
@@ -495,7 +496,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
       try {
         await openPromise
         socket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "s1", params: {subscribe: "updates", token: "deny"}}))
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await wait(300)
 
         expect(receivedPayload).toEqual(undefined)
       } finally {

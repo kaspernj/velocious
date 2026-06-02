@@ -2,6 +2,7 @@
 
 import * as inflection from "inflection"
 import timeout from "awaitery/build/timeout.js"
+import wait from "awaitery/build/wait.js"
 import FrontendModelQuery, {frontendModelProjectionPayload} from "./query.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
@@ -78,7 +79,7 @@ function resolveFrontendModelIdleWaiters() {
 async function waitForFrontendModelTransportQuietPeriod(milliseconds) {
   if (milliseconds <= 0) return
 
-  await new Promise((resolve) => setTimeout(resolve, milliseconds))
+  await wait(milliseconds)
 }
 
 /**

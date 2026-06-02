@@ -1,6 +1,7 @@
 // @ts-check
 
 import DevelopmentReloader from "../../src/http-server/development-reloader.js"
+import wait from "awaitery/build/wait.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import path from "path"
 
@@ -65,13 +66,13 @@ describe("HttpServer development reloader", {databaseCleaning: {transaction: tru
 
     rootCallback("change", "models/user.js")
 
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await wait(10)
 
     expect(reloads).toEqual([path.resolve("/app/src/models/user.js")])
 
     rootCallback("rename", "tasks")
 
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await wait(10)
 
     expect(Array.from(callbacks.keys()).sort()).toEqual([
       path.resolve("/app/src"),
@@ -121,7 +122,7 @@ describe("HttpServer development reloader", {databaseCleaning: {transaction: tru
 
     rootCallback("change", null)
 
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await wait(10)
 
     expect(reloads).toEqual([path.resolve("/app/src")])
 
