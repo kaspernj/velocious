@@ -4,14 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-
-/**
- * @param {number} ms
- * @returns {Promise<void>}
- */
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+import wait from "awaitery/build/wait.js"
 
 /**
  * @param {() => boolean} predicate
