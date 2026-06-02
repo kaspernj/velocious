@@ -15,6 +15,33 @@ function getPool() {
   return pool
 }
 
+/**
+ * Runs `callback` with an isolated AsyncTrackedMultiConnection pool backed by its
+ * own throwaway sqlite configuration, tearing it down afterwards.
+ *
+ * Pool-internals specs that drive checkout/checkin and the max-connection cap
+ * directly must NOT use the shared dummy `default` pool: the test harness holds
+ * one ambient connection on it for the whole run (TestRunner.run wraps everything
+ * in ensureConnections), so a spec that sets `max: 1` on the shared pool would
+ * deadlock its own first checkout and leak a pending checkout into later specs.
+ * An isolated pool also means these specs don't have to stop/start the dummy app.
+ * @param {(pool: AsyncTrackedMultiConnection) => Promise<void>} callback - Receives the isolated pool.
+ * @returns {Promise<void>} - Resolves when complete.
+ */
+async function withIsolatedPool(callback) {
+  const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-reuse")
+
+  try {
+    const pool = configuration.getDatabasePool("default")
+
+    if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+    await callback(pool)
+  } finally {
+    await cleanup()
+  }
+}
+
 // Mutates `pool.connections` and asserts on a snapshot of `connectionsInUse`,
 // so run against a freshly restarted Dummy to isolate from other pool specs.
 describe("database - pool - async tracked multi connection reuse", () => {
@@ -51,11 +78,7 @@ describe("database - pool - async tracked multi connection reuse", () => {
   })
 
   it("waits when max connections are checked out and hands checked-in connections to waiters", async () => {
-    await Dummy.run(async () => {
-      const pool = getPool()
-
-      if (!pool) return
-
+    await withIsolatedPool(async (pool) => {
       pool.getConfiguration().pool = {idleTimeoutMillis: 0, max: 1}
 
       const firstConnection = await pool.checkout()
@@ -78,7 +101,7 @@ describe("database - pool - async tracked multi connection reuse", () => {
 
       await pool.checkin(secondConnection)
       expect(pool.connections.includes(secondConnection)).toBe(false)
-    }, {fresh: true})
+    })
   })
 
   it("spawns pending tenant checkouts with the queued checkout configuration", async () => {
@@ -123,47 +146,45 @@ describe("database - pool - async tracked multi connection reuse", () => {
   })
 
   it("counts global fallback connections against the max connection cap", async () => {
-    await Dummy.run(async () => {
-      const pool = getPool()
-
-      if (!pool) return
-
+    await withIsolatedPool(async (pool) => {
       pool.getConfiguration().pool = {max: 1}
       await pool.ensureGlobalConnection()
 
       expect(pool.liveConnectionCount()).toEqual(1)
       expect(pool.canSpawnConnection()).toBe(false)
-    }, {fresh: true})
+    })
   })
 
   it("rejects pending checkouts when the pool is closed", async () => {
-    await Dummy.run(async () => {
-      const pool = getPool()
-
-      if (!pool) return
-
+    await withIsolatedPool(async (pool) => {
       pool.getConfiguration().pool = {max: 1}
 
       const firstConnection = await pool.checkout()
       const secondConnectionPromise = pool.checkout()
 
+      // Attach the rejection handler eagerly: closeAll() rejects the pending
+      // checkout, and without a handler already in place that surfaces as an
+      // unhandled rejection before the assertion below can observe it.
+      const secondCheckoutRejection = secondConnectionPromise.then(
+        () => { throw new Error("Expected the pending checkout to be rejected when the pool closed") },
+        (error) => error
+      )
+
       await wait(0.02)
       await pool.closeAll()
 
-      await expect(async () => secondConnectionPromise).toThrow("Database pool was closed before checkout completed.")
+      const rejectionError = await secondCheckoutRejection
+
+      expect(rejectionError.message).toEqual("Database pool was closed before checkout completed.")
 
       if (firstConnection.getIdSeq() !== undefined) {
         firstConnection.setIdSeq(undefined)
       }
-    }, {fresh: true})
+    })
   })
 
   it("rolls back a transaction left open on a connection being checked in and hands the cleaned connection to a pending checkout", async () => {
-    await Dummy.run(async () => {
-      const pool = getPool()
-
-      if (!pool) return
-
+    await withIsolatedPool(async (pool) => {
       pool.getConfiguration().pool = {idleTimeoutMillis: 0, max: 1}
 
       const transactionConnection = await pool.checkout()
@@ -196,6 +217,6 @@ describe("database - pool - async tracked multi connection reuse", () => {
       await pendingConnection.rollbackTransaction()
 
       await pool.checkin(pendingConnection)
-    }, {fresh: true})
+    })
   })
 })
