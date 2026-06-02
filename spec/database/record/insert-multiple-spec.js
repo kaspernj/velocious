@@ -4,6 +4,7 @@ import Project from "../../dummy/src/models/project.js"
 import Record from "../../../src/database/record/index.js"
 import Task from "../../dummy/src/models/task.js"
 import User from "../../dummy/src/models/user.js"
+import {describe, expect, it} from "../../../src/testing/test.js"
 
 describe("Record - insertMultiple", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   it("casts insertMultiple values based on column types", async () => {
@@ -39,10 +40,10 @@ describe("Record - insertMultiple", {tags: ["dummy"], databaseCleaning: {transac
 
     NumericInsertRecord._initialized = true
     NumericInsertRecord._databaseType = "mysql"
-    NumericInsertRecord._columnsAsHash = {
+    NumericInsertRecord._columnsAsHash = /** @type {any} */ ({
       amount: {getType: () => "decimal", getNull: () => true},
       bigCount: {getType: () => "bigint", getNull: () => true}
-    }
+    })
 
     const normalized = NumericInsertRecord._normalizeInsertMultipleRows({
       columns: ["amount", "bigCount"],
@@ -66,6 +67,8 @@ describe("Record - insertMultiple", {tags: ["dummy"], databaseCleaning: {transac
       {retryIndividuallyOnFailure: true, returnResults: true}
     )
 
+    if (!results) throw new Error("Expected insertMultiple to return results when returnResults is set")
+
     expect(results.succeededRows.length).toBe(1)
     expect(results.failedRows.length).toBe(1)
     expect(results.errors.length).toBe(1)
@@ -82,6 +85,7 @@ describe("Record - insertMultiple", {tags: ["dummy"], databaseCleaning: {transac
       ["retry-user-2@example.com", "secret", createdAtIso, createdAtIso]
     ]
 
+    /** @type {any} */
     let error
 
     try {

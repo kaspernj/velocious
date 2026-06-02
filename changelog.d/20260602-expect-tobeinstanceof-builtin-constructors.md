@@ -1,0 +1,1 @@
+- Widen `expect(...).toBeInstanceOf` parameter type so spec files type-check cleanly when asserting against built-in constructors like `Error` (the previous `new (...args: unknown[]) => unknown` signature rejected `ErrorConstructor`).

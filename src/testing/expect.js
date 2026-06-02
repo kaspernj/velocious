@@ -247,7 +247,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {new (...args: unknown[]) => unknown} klass - Class constructor to check against.
+   * @param {new (...args: any[]) => any} klass - Class constructor to check against (e.g. a built-in like Error).
    * @returns {void} - No return value.
    */
   toBeInstanceOf(klass) {
