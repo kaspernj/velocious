@@ -1,6 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import wait from "awaitery/build/wait.js"
 import Dummy from "../dummy/index.js"
 import EventEmitter from "../../src/utils/event-emitter.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
@@ -68,7 +69,7 @@ describe("WebsocketSession lifecycle-only message handler", {databaseCleaning: {
       configuration: dummyConfiguration,
       messageHandlerPromise: Promise.resolve({
         onOpen: async () => {
-          await new Promise((resolve) => setTimeout(resolve, 20))
+          await wait(20)
           callOrder.push("onOpen:done")
         }
       })

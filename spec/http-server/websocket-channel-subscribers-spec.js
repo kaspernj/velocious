@@ -1,6 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import wait from "awaitery/build/wait.js"
 import VelociousWebsocketChannelSubscribers from "../../src/http-server/websocket-channel-subscribers.js"
 
 describe("websocket channel subscribers", {databaseCleaning: {transaction: true}}, () => {
@@ -74,7 +75,7 @@ describe("websocket channel subscribers", {databaseCleaning: {transaction: true}
     let asyncDone = false
 
     subscribers.subscribe("async-ch", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5))
+      await wait(5)
       asyncDone = true
     })
 

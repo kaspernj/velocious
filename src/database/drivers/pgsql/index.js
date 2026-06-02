@@ -1,6 +1,7 @@
 // @ts-check
 
 import AlterTable from "./sql/alter-table.js"
+import wait from "awaitery/build/wait.js"
 import Base from "../base.js"
 import {Client} from "pg"
 import CreateDatabase from "./sql/create-database.js"
@@ -357,7 +358,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
       const remaining = deadline - Date.now()
 
-      await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remaining)))
+      await wait(Math.min(pollIntervalMs, remaining))
     }
   }
 
