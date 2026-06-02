@@ -36,6 +36,10 @@ class SchemaCacheTestDriver extends DatabaseDriverBase {
  */
 function buildConfiguration(databaseConfig) {
   return /** @type {import("../../../src/configuration.js").default} */ (/** @type {unknown} */ ({
+    clearSchemaCachesForReuseKey() {
+      // This stub configuration owns no pool registry, so cross-pool invalidation
+      // is a no-op here; the pool clears its own connections directly.
+    },
     getCurrentRequestTiming() {
       return undefined
     },

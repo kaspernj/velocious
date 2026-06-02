@@ -283,6 +283,22 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Clears the schema metadata cached by every initialized pool that targets the
+   * same physical database (matched by connection reuse key). Separate pools that
+   * point at one database keep independent schema caches, so DDL run through one
+   * pool would otherwise leave the others reporting stale tables/columns.
+   * @param {string} reuseKey - Connection reuse key identifying the shared database.
+   * @returns {void} - No return value.
+   */
+  clearSchemaCachesForReuseKey(reuseKey) {
+    for (const pool of Object.values(this.databasePools)) {
+      if (pool.getConfigurationReuseKey() === reuseKey) {
+        pool.clearSchemaCache()
+      }
+    }
+  }
+
+  /**
    * @param {string} identifier - Identifier.
    * @returns {typeof import("./database/pool/base.js").default} - The database pool type.
    */

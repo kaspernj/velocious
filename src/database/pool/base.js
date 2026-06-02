@@ -184,7 +184,10 @@ class VelociousDatabasePoolBase {
 
     const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
     connectionWithPoolKey[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
-    connection.setSchemaCacheInvalidator(() => this.clearSchemaCache())
+    connection.setSchemaCacheInvalidator(() => {
+      this.clearSchemaCache()
+      this.configuration.clearSchemaCachesForReuseKey(this.getConfigurationReuseKey())
+    })
 
     return connection
   }
