@@ -94,6 +94,45 @@ describe("Database - initializer from require context", {databaseCleaning: {tran
     expect(configuration.getModelClasses().LazyMetadataRecord).toEqual(LazyMetadataRecord)
   })
 
+  it("best-effort initializes opted-out models at startup when their table exists", async () => {
+    class PresentLazyMetadataRecord extends DatabaseRecord {
+      static initializeRecordCalls = 0
+
+      /** @returns {{getTableByName: () => Promise<object>}} - Connection whose table exists. */
+      static connection() {
+        return /** @type {any} */ ({getTableByName: async () => ({})})
+      }
+
+      /**
+       * @param {object} args - Options object.
+       * @param {Configuration} args.configuration - Configuration instance.
+       * @returns {Promise<void>} - Resolves when complete.
+       */
+      static async initializeRecord({configuration}) {
+        this.initializeRecordCalls += 1
+        this.registerRecordClass({configuration})
+        this._initialized = true
+      }
+
+      /** @returns {Promise<boolean>} - Whether the model has a translations table. */
+      static async hasTranslationsTable() {
+        return false
+      }
+    }
+
+    PresentLazyMetadataRecord.setEagerLoadRecordMetadata(false)
+
+    const configuration = buildConfiguration()
+    const initializer = new InitializerFromRequireContext({
+      requireContext: buildRequireContext({"./present-lazy-metadata-record.js": {default: PresentLazyMetadataRecord}})
+    })
+
+    await initializer.initialize({configuration})
+
+    expect(PresentLazyMetadataRecord.initializeRecordCalls).toEqual(1)
+    expect(PresentLazyMetadataRecord.isInitialized()).toEqual(true)
+  })
+
   it("clears stale metadata when an opted-out model is re-registered", async () => {
     class ReRegisteredLazyMetadataRecord extends DatabaseRecord {
       /**

@@ -8,6 +8,7 @@
  * }} ModelClassRequireContextType
  */
 
+import Logger from "../logger.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousDatabaseInitializerFromRequireContext {
@@ -19,6 +20,7 @@ export default class VelociousDatabaseInitializerFromRequireContext {
     restArgsError(restArgs)
 
     this.requireContext = requireContext
+    this.logger = new Logger(this)
   }
 
   /**
@@ -40,16 +42,56 @@ export default class VelociousDatabaseInitializerFromRequireContext {
 
       if (!modelClass.getEagerLoadRecordMetadata()) {
         modelClass.registerRecordClass({configuration})
+        await this._bestEffortInitializeDeferredModel({configuration, modelClass})
         continue
       }
 
-      await modelClass.initializeRecord({configuration})
-
-      if (await modelClass.hasTranslationsTable()) {
-        const translationClass = modelClass.getTranslationClass()
-
-        await translationClass.initializeRecord({configuration})
-      }
+      await this._initializeModelRecord({configuration, modelClass})
     }
+  }
+
+  /**
+   * Initializes a model's record metadata and its translation table (if any).
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {typeof import("./record/index.js").default} args.modelClass - Model class to initialize.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _initializeModelRecord({configuration, modelClass}) {
+    await modelClass.initializeRecord({configuration})
+
+    if (await modelClass.hasTranslationsTable()) {
+      await modelClass.getTranslationClass().initializeRecord({configuration})
+    }
+  }
+
+  /**
+   * Models opting out of eager metadata loading (`setEagerLoadRecordMetadata(false)`)
+   * are still initialized at startup when their (optional) table is present, so that
+   * synchronous query building such as `.where(...)` works without callers having to
+   * call `ensureInitialized()` first. When the table — or its connection — is not
+   * available the model is left deferred so startup still succeeds; it can then
+   * initialize lazily the first time a terminal query method (find/create/etc.) runs.
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {typeof import("./record/index.js").default} args.modelClass - Model class to initialize.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _bestEffortInitializeDeferredModel({configuration, modelClass}) {
+    let table
+
+    try {
+      const connection = modelClass.connection({enforceTenantDatabaseScope: false})
+
+      table = await connection.getTableByName(modelClass.tableName(), {throwError: false})
+    } catch (error) {
+      this.logger.debug(`Leaving ${modelClass.name} deferred - table metadata unavailable at startup`, error)
+
+      return
+    }
+
+    if (!table) return
+
+    await this._initializeModelRecord({configuration, modelClass})
   }
 }
