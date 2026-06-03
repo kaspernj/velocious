@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "index.js",
+    "bin/velocious.js",
+    "src/cli/**/*.js",
+    "src/environment-handlers/**/*.js",
+    "src/database/migration/**/*.js",
+    "spec/**/*-spec.js",
+    "spec/**/*.browser-spec.js"
+  ],
+  "ignorePatterns": [
+    "build/**",
+    "dist/**",
+    "examples/**",
+    "spec/dummy/tmp/**",
+    "spec/dummy/db/**",
+    "spec/dummy/src/model-bases/**",
+    "src/templates/**",
+    "**/*.ejs"
+  ],
+  "ignoreUnresolvedImports": [
+    "velocious",
+    "velocious/**"
+  ]
+}

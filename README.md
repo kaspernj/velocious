@@ -44,6 +44,20 @@ npm run test
 npm run test:expo
 ```
 
+# Code quality (fallow)
+
+[fallow](https://github.com/fallow-rs/fallow) analyzes the codebase for unused/dead code, duplication, and complexity. CI runs it as a **regression gate**: it fails only on findings beyond the committed baseline in `fallow-baselines/`, so existing backlog never blocks a PR but new issues do.
+
+```bash
+# Regression gate (what CI runs) — fails on new dead code / dupes / complexity beyond the baseline
+npm run fallow
+
+# Refresh the baseline after intentionally adding/removing code (commit the updated fallow-baselines/*.json)
+npm run fallow:baseline
+```
+
+Baselines are generated against a fresh checkout (no generated dummy `configuration.js`), so the gate is deterministic in CI and locally. Tuning (entry points, ignores) lives in `.fallowrc.json`.
+
 # Testing
 
 Tag tests to filter runs.

@@ -56,6 +56,9 @@ Run as needed while iterating:
 ### Normal check (full validation, slower)
 Skip full local suites; Peakflow will run the full test matrix for all database types on PRs. (General rule for local vs CI runs — including never running shards/groups locally — lives in the `test-and-lint-runs` skill.)
 
+### fallow regression gate
+The `Fallow` Peakflow build runs `npm run fallow`, which fails on dead-code / duplication / complexity findings beyond the committed baseline in `fallow-baselines/`. If you intentionally add code that fallow flags (e.g. new public API, an accepted complexity increase), refresh the baseline with `npm run fallow:baseline` and commit the updated `fallow-baselines/*.json`. Baselines are generated against a fresh checkout (no dummy `configuration.js`); tuning lives in `.fallowrc.json`.
+
 If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.
 - Repeat until the command succeeds (or clearly explain why it cannot be made to pass).

@@ -248,6 +248,10 @@ builds:
       - sleep 5
       - npm run lint
       - npm run typecheck
+  fallow:
+    name: Fallow
+    script:
+      - npm run fallow
   browser_tests:
     name: Browser Tests
     script:

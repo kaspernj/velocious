@@ -1,0 +1,1609 @@
+{
+  "finding_counts": {
+    "scripts/test-browser.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/background-jobs/basic-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/background-jobs/db-context-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/background-jobs/queue-spec.js": {
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "spec/background-jobs/store-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/cli/commands/db/migrate-spec.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      }
+    },
+    "spec/cli/commands/generate/base-models-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/controller/frontend-model-tenant-context-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/database/drivers/mssql/transaction-abort-recovery-spec.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "spec/database/drivers/schema-cache.browser-spec.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/database/drivers/sqlite/node-advisory-locks-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/database/migration/uuid-primary-key.browser-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/database/record/advisory-locks.browser-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/dummy/src/config/configuration.example.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/dummy/src/config/configuration.peakflow.sqlite.js": {
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "spec/dummy/src/config/frontend-model-ability-request.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/dummy/src/config/testing.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/dummy/src/resources/task-frontend-model-ability-resource.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/dummy/src/routes/_root/controller.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "spec/environment-handlers/node-structure-mssql-spec.js": {
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "spec/environment-handlers/node-structure-mysql-spec.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "spec/environment-handlers/node-structure-pgsql-spec.js": {
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "spec/frontend-model-resource/base-resource-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/frontend-models/autoload-spec.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "spec/frontend-models/base-spec.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "spec/frontend-models/model-preload-spec.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "spec/helpers/tenant-test-helpers.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "spec/http-server/request-behavior-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/http-server/websocket-fragmented-frames-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/http-server/websocket-session-resume-spec.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "spec/http-server/websocket-spec.js": {
+      "crap_moderate": {
+        "count": 7
+      }
+    },
+    "spec/http-server/websocket-tenant-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "spec/mailers/smtp-mailer-backend-spec.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "spec/routes/frontend-model-command-route-hook-spec.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/authorization/ability.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/background-jobs/client.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/background-jobs/cron-expression.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/background-jobs/job-registry.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/background-jobs/job.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/background-jobs/json-socket.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/background-jobs/main.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 3
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 5
+      }
+    },
+    "src/background-jobs/scheduler.js": {
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/background-jobs/status-reporter.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/background-jobs/store.js": {
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/background-jobs/web/authorization.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/background-jobs/web/controller.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/background-jobs/web/path-matcher.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/background-jobs/worker.js": {
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/beacon/client.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/beacon/server.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/cli/commands/db/create.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/cli/commands/db/drop.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/cli/index.js": {
+      "crap_high": {
+        "count": 2
+      }
+    },
+    "src/cli/tenant-database-command-helper.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/configuration-resolver.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/configuration.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "complexity_high": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 5
+      },
+      "crap_high": {
+        "count": 7
+      },
+      "crap_moderate": {
+        "count": 8
+      }
+    },
+    "src/controller.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/database/drivers/base-table.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/drivers/base.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 3
+      },
+      "crap_high": {
+        "count": 4
+      },
+      "crap_moderate": {
+        "count": 7
+      }
+    },
+    "src/database/drivers/mssql/index.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/database/drivers/mssql/sql/update.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/mssql/structure-sql.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      }
+    },
+    "src/database/drivers/mysql/column.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/mysql/index.js": {
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/database/drivers/mysql/query.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/mysql/sql/update.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/mysql/structure-sql.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/mysql/table.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/pgsql/index.js": {
+      "crap_moderate": {
+        "count": 5
+      }
+    },
+    "src/database/drivers/pgsql/sql/update.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/pgsql/structure-sql.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 3
+      }
+    },
+    "src/database/drivers/sqlite/base.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/database/drivers/sqlite/index.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/index.native.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/query.native.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/query.web.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/sql/alter-table.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/sql/delete.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/sql/update.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/structure-sql.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/table-rebuilder.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/drivers/sqlite/table.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/initializer-from-require-context.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/migration/index.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/migrator.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/pool/async-tracked-multi-connection.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 6
+      }
+    },
+    "src/database/pool/single-multi-use.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/query-parser/from-parser.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/query-parser/group-parser.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/query-parser/limit-parser.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/query-parser/order-parser.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/query-parser/select-parser.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/query-parser/where-parser.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/query/alter-table-base.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/query/create-index-base.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/query/create-table-base.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/query/drop-table-base.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/query/index.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 5
+      }
+    },
+    "src/database/query/insert-base.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/query/join-object.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/query/model-class-query.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 3
+      },
+      "crap_high": {
+        "count": 9
+      },
+      "crap_moderate": {
+        "count": 7
+      }
+    },
+    "src/database/query/preloader.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/query/preloader/belongs-to.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      }
+    },
+    "src/database/query/preloader/has-many.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      }
+    },
+    "src/database/query/preloader/has-one.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/query/preloader/selection.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/query/query-data.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/query/upsert-base.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/query/where-hash.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/query/where-model-class-hash.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/database/query/with-count.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 2
+      }
+    },
+    "src/database/record/acts-as-list.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/database/record/attachments/handle.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/record/attachments/normalize-input.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/record/attachments/storage-drivers/filesystem.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/record/attachments/storage-drivers/native.js": {
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/database/record/attachments/storage-drivers/s3.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/record/attachments/store.js": {
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 5
+      }
+    },
+    "src/database/record/index.js": {
+      "complexity_critical": {
+        "count": 5
+      },
+      "complexity_high": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 7
+      },
+      "crap_high": {
+        "count": 8
+      },
+      "crap_moderate": {
+        "count": 23
+      }
+    },
+    "src/database/record/instance-relationships/base.js": {
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/record/instance-relationships/has-many.js": {
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/record/relationships/base.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/database/record/relationships/belongs-to.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/database/record/relationships/has-many.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/record/relationships/has-one.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/database/record/state-machine.js": {
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/database/record/validators/format.js": {
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/database/record/validators/uniqueness.js": {
+      "crap_high": {
+        "count": 2
+      }
+    },
+    "src/database/table-data/table-column.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      }
+    },
+    "src/environment-handlers/browser.js": {
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 6
+      }
+    },
+    "src/environment-handlers/node/cli/commands/console.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/db/schema/dump.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/db/schema/load.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/destroy/migration.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/generate/base-models.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/generate/frontend-models.js": {
+      "complexity_critical": {
+        "count": 3
+      },
+      "crap_critical": {
+        "count": 6
+      },
+      "crap_high": {
+        "count": 2
+      }
+    },
+    "src/environment-handlers/node/cli/commands/generate/migration.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/generate/model.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/init.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/server.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/environment-handlers/node/cli/commands/test.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/frontend-model-controller.js": {
+      "complexity_critical": {
+        "count": 16
+      },
+      "complexity_high": {
+        "count": 3
+      },
+      "crap_critical": {
+        "count": 24
+      },
+      "crap_high": {
+        "count": 14
+      },
+      "crap_moderate": {
+        "count": 16
+      }
+    },
+    "src/frontend-model-resource/base-resource.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 4
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/frontend-models/base.js": {
+      "complexity_critical": {
+        "count": 10
+      },
+      "crap_critical": {
+        "count": 16
+      },
+      "crap_high": {
+        "count": 14
+      },
+      "crap_moderate": {
+        "count": 13
+      }
+    },
+    "src/frontend-models/preloader.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      }
+    },
+    "src/frontend-models/query.js": {
+      "complexity_critical": {
+        "count": 6
+      },
+      "complexity_high": {
+        "count": 3
+      },
+      "crap_critical": {
+        "count": 8
+      },
+      "crap_high": {
+        "count": 11
+      },
+      "crap_moderate": {
+        "count": 9
+      }
+    },
+    "src/frontend-models/resource-config-validation.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/frontend-models/resource-definition.js": {
+      "complexity_high": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/frontend-models/transport-serialization.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/frontend-models/use-destroyed-event.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/frontend-models/use-model-class-event.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/frontend-models/use-updated-event.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/frontend-models/websocket-channel.js": {
+      "crap_high": {
+        "count": 4
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/frontend-models/websocket-publishers.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 2
+      }
+    },
+    "src/http-client/index.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-client/response.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/index.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/params-to-object.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/request-buffer/form-data-part.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/http-server/client/request-buffer/index.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 3
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/request-parser.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/request-runner.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/request.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/response.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/websocket-request.js": {
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/http-server/client/websocket-session.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 6
+      },
+      "crap_high": {
+        "count": 9
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/http-server/cookie.js": {
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/http-server/development-reloader.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/index.js": {
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/http-server/remote-address.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/websocket-channel-subscribers.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/http-server/websocket-event-log-store.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/http-server/worker-handler/index.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/http-server/worker-handler/worker-thread.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/logger.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/logger/outputs/console-output.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/logger/outputs/file-output.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/logger/outputs/stdout-output.js": {
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/mailer/backends/smtp.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/mailer/base.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/plugins/sqljs-wasm-route-controller.js": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/routes/basic-route.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/routes/get-route.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/routes/hooks/frontend-model-command-route-hook.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/routes/plugin-routes.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/routes/post-route.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/routes/resolver.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/routes/resource-route.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/testing/browser-frontend-model-event-hook-scenarios.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/testing/expect-utils.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/testing/expect.js": {
+      "complexity_critical": {
+        "count": 2
+      },
+      "crap_critical": {
+        "count": 4
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 8
+      }
+    },
+    "src/testing/test-files-finder.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/testing/test-filter-parser.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/testing/test-runner.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 3
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/testing/test-suite-splitter.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/testing/test.js": {
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/utils/backtrace-cleaner-node.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/utils/backtrace-cleaner.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/utils/format-value.js": {
+      "crap_critical": {
+        "count": 2
+      }
+    },
+    "src/utils/ransack.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 3
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 6
+      }
+    },
+    "src/utils/split-sql-statements.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/utils/to-import-specifier.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/utils/with-tracked-stack-async-hooks.js": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/utils/with-tracked-stack.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    }
+  },
+  "runtime_coverage_findings": [],
+  "target_keys": [
+    "src/frontend-models/base.js:dead code",
+    "spec/dummy/src/config/testing.js:untested risk",
+    "src/frontend-models/websocket-publishers.js:dead code",
+    "src/utils/split-sql-statements.js:complexity",
+    "src/database/table-data/table-column.js:high impact",
+    "src/frontend-model-controller.js:complexity",
+    "src/database/record/index.js:complexity",
+    "src/testing/test.js:dead code",
+    "src/routes/resolver.js:complexity",
+    "src/database/query/model-class-query.js:complexity",
+    "src/http-server/client/websocket-session.js:complexity",
+    "src/database/drivers/base.js:complexity",
+    "src/database/drivers/pgsql/structure-sql.js:untested risk",
+    "src/database/query/preloader.js:complexity",
+    "src/frontend-model-resource/base-resource.js:complexity",
+    "src/testing/test-runner.js:complexity",
+    "src/database/query/create-table-base.js:complexity",
+    "src/database/drivers/mssql/structure-sql.js:complexity",
+    "src/http-server/worker-handler/index.js:complexity",
+    "src/routes/resource-route.js:complexity",
+    "src/database/query/insert-base.js:complexity",
+    "src/database/query/alter-table-base.js:complexity",
+    "src/database/drivers/sqlite/sql/alter-table.js:complexity",
+    "src/testing/test-files-finder.js:complexity",
+    "src/database/migrator.js:complexity",
+    "src/database/drivers/mysql/structure-sql.js:untested risk",
+    "src/database/record/attachments/normalize-input.js:complexity",
+    "src/frontend-models/outgoing-event-buffer.js:dead code",
+    "src/database/query/where-model-class-hash.js:complexity",
+    "src/environment-handlers/node/cli/commands/test.js:complexity",
+    "src/database/query/preloader/belongs-to.js:complexity",
+    "src/utils/format-value.js:untested risk",
+    "src/mailer/base.js:circular dependency",
+    "src/database/query/preloader/has-many.js:complexity",
+    "src/jobs/mail-delivery.js:circular dependency",
+    "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
+    "src/database/query/query-data.js:complexity",
+    "src/environment-handlers/node/cli/commands/generate/frontend-models.js:complexity",
+    "src/http-server/client/request-buffer/index.js:complexity",
+    "src/testing/expect.js:complexity",
+    "src/testing/test-filter-parser.js:complexity",
+    "src/http-client/response.js:complexity",
+    "spec/mailers/smtp-mailer-backend-spec.js:complexity"
+  ]
+}
