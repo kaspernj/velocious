@@ -296,11 +296,11 @@
       }
     },
     "src/background-jobs/worker.js": {
-      "crap_high": {
-        "count": 2
+      "crap_critical": {
+        "count": 1
       },
       "crap_moderate": {
-        "count": 3
+        "count": 5
       }
     },
     "src/beacon/client.js": {
@@ -961,6 +961,11 @@
         "count": 6
       }
     },
+    "src/environment-handlers/node/cli/commands/background-jobs-worker.js": {
+      "crap_high": {
+        "count": 1
+      }
+    },
     "src/environment-handlers/node/cli/commands/console.js": {
       "complexity_critical": {
         "count": 1
@@ -1563,7 +1568,6 @@
   "runtime_coverage_findings": [],
   "target_keys": [
     "src/frontend-models/base.js:dead code",
-    "spec/dummy/src/config/testing.js:untested risk",
     "src/frontend-models/websocket-publishers.js:dead code",
     "src/utils/split-sql-statements.js:complexity",
     "src/database/table-data/table-column.js:high impact",
@@ -1595,6 +1599,7 @@
     "src/database/query/preloader/belongs-to.js:complexity",
     "src/utils/format-value.js:untested risk",
     "src/mailer/base.js:circular dependency",
+    "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/has-many.js:complexity",
     "src/jobs/mail-delivery.js:circular dependency",
     "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
