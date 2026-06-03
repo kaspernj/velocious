@@ -151,3 +151,57 @@ The batch preloader for through relationships uses a two-query strategy:
 3. Map target records back to their parent models via the intermediate mapping.
 
 This avoids JOIN-based column projection issues and works consistently across all supported database drivers (MySQL/MariaDB, PostgreSQL, SQLite, MSSQL).
+
+## Preloading onto already-loaded records
+
+`Query#preload` loads relationships while a query runs. The same machinery can be pointed at records you already have in memory, so the loaded data lands on the relationship cache and later accessors reuse it instead of issuing their own identical queries.
+
+Call `preload` on a single record with a query built from the model class (or a raw preload spec):
+
+```js
+const serviceToken = await ServiceToken.find(id)
+
+await serviceToken.preload(ServiceToken.preload({account: "projects"}))
+
+const projects = serviceToken.account()?.projects()
+
+// Raw spec forms are accepted too.
+await serviceToken.preload("account")
+await serviceToken.preload({account: "projects"})
+```
+
+Preload across many records at once with the `Preloader.preload` static:
+
+```js
+import Preloader from "velocious/build/src/database/query/preloader.js"
+
+await Preloader.preload(serviceTokens, ServiceToken.preload({account: "projects"}))
+```
+
+### Limiting loaded columns
+
+Pass an object keyed by **target model name** to `select(...)` to narrow the columns loaded for a preloaded relationship. The primary/foreign keys needed to map results back to their parents are always included:
+
+```js
+await serviceToken.preload(
+  ServiceToken.preload({account: "projects"}).select({Account: ["id"], Project: ["id", "name"]})
+)
+```
+
+Reading a non-selected attribute on a partially-loaded target raises the usual "attribute hasn't been loaded" error.
+
+Use `selectsExtra(...)` (same object-by-model-name shape) to keep the default `SELECT *` columns and load extra computed selects in addition:
+
+```js
+await serviceToken.preload(
+  ServiceToken.preload({account: true}).selectsExtra({Account: ["(SELECT count(*) FROM projects WHERE projects.account_id = accounts.id) AS projects_count"]})
+)
+```
+
+### Idempotency and forcing a reload
+
+A relationship that is already preloaded with all the required columns present is left untouched — no query runs. Requesting a wider column set than was previously loaded re-queries to fetch the missing columns. Pass `{force: true}` to reload regardless, for example when the underlying rows are known to have changed:
+
+```js
+await serviceToken.preload(ServiceToken.preload({account: true}), {force: true})
+```

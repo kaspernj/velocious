@@ -3,6 +3,7 @@
 import BelongsToPreloader from "./preloader/belongs-to.js"
 import HasManyPreloader from "./preloader/has-many.js"
 import HasOnePreloader from "./preloader/has-one.js"
+import PreloaderSelection from "./preloader/selection.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 /**
@@ -70,17 +71,56 @@ function normalizeNestedPreload(preload) {
 
 export default class VelociousDatabaseQueryPreloader {
   /**
+   * Preloads relationship(s) onto one or more already-loaded model instances.
+   * Accepts either a query built via `Model.preload(...).select(...)` (its
+   * preload graph and selects are used) or a raw preload spec
+   * (string / array / nested object).
+   * @param {Array<import("../record/index.js").default>} models - Model instances to preload onto.
+   * @param {import("./model-class-query.js").default | import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} queryOrSpec - Preload source.
+   * @param {{force?: boolean}} [options] - Options.
+   * @returns {Promise<void>} - Resolves when preloading completes.
+   */
+  static async preload(models, queryOrSpec, {force = false} = {}) {
+    if (models.length == 0) return
+
+    const modelClass = /** @type {typeof import("../record/index.js").default} */ (models[0].constructor)
+    const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec == "object" && "_preload" in queryOrSpec
+    // Reuse the query builder's preload/select normalization for raw specs
+    // instead of duplicating it here.
+    const query = isQuery
+      ? /** @type {import("./model-class-query.js").default} */ (queryOrSpec)
+      : modelClass.preload(/** @type {any} */ (queryOrSpec))
+
+    const preloader = new VelociousDatabaseQueryPreloader({
+      modelClass,
+      models,
+      preload: query._preload,
+      selection: new PreloaderSelection({
+        preloadSelects: query._preloadSelects,
+        preloadSelectsExtra: query._preloadSelectsExtra,
+        force
+      })
+    })
+
+    await preloader.run()
+  }
+
+  /**
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {import("../record/index.js").default[]} args.models - Model instances.
    * @param {import("../query/index.js").NestedPreloadRecord} args.preload - Preload.
+   * @param {Record<string, string[]>} [args.preloadSelects] - Narrowing selects keyed by target model name.
+   * @param {Record<string, string[]>} [args.preloadSelectsExtra] - Extra selects keyed by target model name.
+   * @param {PreloaderSelection} [args.selection] - Pre-built selection (takes precedence over the select maps when given).
    */
-  constructor({modelClass, models, preload, ...restArgs}) {
+  constructor({modelClass, models, preload, preloadSelects = {}, preloadSelectsExtra = {}, selection, ...restArgs}) {
     restArgsError(restArgs)
 
     this.modelClass = modelClass
     this.models = models
     this.preload = preload
+    this.selection = selection || new PreloaderSelection({preloadSelects, preloadSelectsExtra})
   }
 
   async run() {
@@ -90,17 +130,17 @@ export default class VelociousDatabaseQueryPreloader {
 
       if (relationship.getType() == "belongsTo") {
         const belongsToRelationship = /** @type {import("../record/relationships/belongs-to.js").default} */ (relationship)
-        const hasManyPreloader = new BelongsToPreloader({models: this.models, relationship: belongsToRelationship})
+        const hasManyPreloader = new BelongsToPreloader({models: this.models, relationship: belongsToRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasMany") {
         const hasManyRelationship = /** @type {import("../record/relationships/has-many.js").default} */ (relationship)
-        const hasManyPreloader = new HasManyPreloader({models: this.models, relationship: hasManyRelationship})
+        const hasManyPreloader = new HasManyPreloader({models: this.models, relationship: hasManyRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasOne") {
         const hasOneRelationship = /** @type {import("../record/relationships/has-one.js").default} */ (relationship)
-        const hasOnePreloader = new HasOnePreloader({models: this.models, relationship: hasOneRelationship})
+        const hasOnePreloader = new HasOnePreloader({models: this.models, relationship: hasOneRelationship, selection: this.selection})
 
         preloadResult = await hasOnePreloader.run()
       } else {
@@ -124,7 +164,7 @@ export default class VelociousDatabaseQueryPreloader {
             if (models.length == 0) continue
 
             const targetModelClass = configuration.getModelClass(className)
-            const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models, preload: normalizedPreload})
+            const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models, preload: normalizedPreload, selection: this.selection})
 
             await preloader.run()
           }
@@ -133,7 +173,7 @@ export default class VelociousDatabaseQueryPreloader {
 
           if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
-          const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models: targetModels, preload: normalizedPreload})
+          const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models: targetModels, preload: normalizedPreload, selection: this.selection})
 
           await preloader.run()
         }
