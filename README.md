@@ -409,7 +409,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - State helpers like `user.isNewRecord()`, `user.isPersisted()`, `user.isChanged()`, and `user.changes()`
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `await task.projectOrLoad()`, `await project.tasks().toArray()`, `await project.tasks().load()`, and `project.tasks().build({...})`
-- Preload relationships onto records you already have with `await record.preload(Model.preload({...}).select({...}))` (or `Preloader.preload(records, ...)` for arrays) — see [docs/relationships.md](docs/relationships.md#preloading-onto-already-loaded-records)
+- Preload relationships onto records you already have with `await record.preload(Model.preload({...}).select({...}))` (or `Preloader.preload(records, ...)` for arrays), including `selectsExtra(...)` and a `{force: true}` reload option — see [docs/frontend-models.md](docs/frontend-models.md#preloading-onto-loaded-records)
 - Attachment helpers (when `attachments` are configured), for example `await task.descriptionFile().attach(file)`, `await task.descriptionFile().download()`, and `await task.update({descriptionFile: file})`
 
 React components can subscribe to lifecycle broadcasts without manual cleanup code:

@@ -1593,6 +1593,13 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * @returns {Record<string, string[]> | null} - Frontend extra-select data (defaults plus these), keyed by model name.
+   */
+  frontendModelSelectsExtra() {
+    return normalizeFrontendModelSelect(this.frontendModelParams().selectsExtra, this.frontendModelClass().getModelName())
+  }
+
+  /**
    * @returns {FrontendModelSearch[]} - Frontend search filters.
    */
   frontendModelSearches() {
@@ -2469,7 +2476,7 @@ export default class FrontendModelController extends Controller {
    */
   applyFrontendModelTranslatedAttributePreloads({query}) {
     const modelClass = this.frontendModelClass()
-    const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+    const selectedAttributes = this.frontendModelEffectiveSelectedAttributesForModelClass(modelClass, this.frontendModelDefaultAttributesForModelClass(modelClass) || [])
       || this.frontendModelDefaultAttributesForModelClass(modelClass)
 
     if (!selectedAttributes) return query
@@ -2598,6 +2605,40 @@ export default class FrontendModelController extends Controller {
 
   /**
    * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {string[] | null} - Extra attributes (loaded in addition to the defaults) for the model class.
+   */
+  frontendModelSelectsExtraForModelClass(modelClass) {
+    const selectsExtra = this.frontendModelSelectsExtra()
+
+    if (!selectsExtra) return null
+
+    return selectsExtra[modelClass.getModelName()] || null
+  }
+
+  /**
+   * Resolves the final set of attribute names to serialize for a model class:
+   * an explicit narrowing `select` wins; otherwise, when `selectsExtra` is given,
+   * the default attributes plus the extras; otherwise null (default behavior).
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @param {string[]} fallbackAttributeNames - Attribute names to treat as the defaults when the resource declares none.
+   * @returns {string[] | null} - Effective selected attribute names, or null for default serialization.
+   */
+  frontendModelEffectiveSelectedAttributesForModelClass(modelClass, fallbackAttributeNames) {
+    const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
+
+    if (selectedAttributes) return selectedAttributes
+
+    const extraAttributes = this.frontendModelSelectsExtraForModelClass(modelClass)
+
+    if (!extraAttributes) return null
+
+    const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass) || fallbackAttributeNames
+
+    return Array.from(new Set([...defaultAttributes, ...extraAttributes]))
+  }
+
+  /**
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
    * @returns {string[] | null} - Default frontend-model attributes declared on the resource.
    */
   frontendModelDefaultAttributesForModelClass(modelClass) {
@@ -2668,9 +2709,9 @@ export default class FrontendModelController extends Controller {
    */
   async serializeFrontendModelAttributes(model) {
     const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
-    const selectedAttributes = this.frontendModelSelectedAttributesForModelClass(modelClass)
-    const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass)
     const modelAttributes = model.attributes()
+    const selectedAttributes = this.frontendModelEffectiveSelectedAttributesForModelClass(modelClass, Object.keys(modelAttributes))
+    const defaultAttributes = this.frontendModelDefaultAttributesForModelClass(modelClass)
     const resourceInstance = this._serializationResourceInstanceForModel(model)
 
     /** @param {string} attributeName - Attribute name. */

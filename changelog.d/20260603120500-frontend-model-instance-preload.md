@@ -1,0 +1,1 @@
+Add `record.preload(...)` and `Preloader.preload(records, ...)` to frontend models so relationships can be preloaded onto already-loaded records, plus a `selectsExtra(...)` query helper that loads the default serialized attributes plus named extras. Preloads carry select/selectsExtra/withCount/abilities/queryData, skip already-loaded relationships, and support `{force: true}`.

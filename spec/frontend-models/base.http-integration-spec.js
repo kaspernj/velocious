@@ -3,6 +3,7 @@
 import {waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
+import FrontendModelPreloader from "../../src/frontend-models/preloader.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import Dummy from "../dummy/index.js"
 import CommentRecord from "../dummy/src/models/comment.js"
@@ -1096,6 +1097,98 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         }
 
         expect(thrownError instanceof AttributeNotSelectedError).toEqual(true)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("preloads relationships onto an already-loaded frontend record over HTTP", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {project} = await seedHttpPreloadModels()
+        const loadedProject = await Project.findBy({id: project.id()})
+
+        await loadedProject?.preload(Project.preload({tasks: ["comments"]}))
+
+        const tasks = loadedProject?.getRelationshipByName("tasks").loaded() || []
+        const comments = tasks[0]?.getRelationshipByName("comments").loaded() || []
+
+        expect(tasks.length).toEqual(1)
+        expect(comments.length).toEqual(1)
+        expect(comments[0].readAttribute("body")).toEqual("HTTP preload comment")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("preloads across an array of frontend records via Preloader.preload over HTTP", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {project, task} = await seedHttpPreloadModels()
+        const secondTask = await TaskRecord.create({name: "HTTP preload task 2", projectId: project.id()})
+        const loadedTasks = await Task.where({id: [task.id(), secondTask.id()]}).toArray()
+
+        await FrontendModelPreloader.preload(loadedTasks, Task.preload({project: true}))
+
+        expect(loadedTasks.length).toEqual(2)
+
+        for (const loadedTask of loadedTasks) {
+          expect(loadedTask.getRelationshipByName("project").loaded().readAttribute("id")).toEqual(project.id())
+        }
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("limits preloaded columns via select over HTTP", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {task} = await seedHttpPreloadModels()
+        const loadedTask = await Task.findBy({id: task.id()})
+
+        await loadedTask?.preload(Task.preload({comments: true}).select({Comment: ["body"]}))
+
+        const comments = loadedTask?.getRelationshipByName("comments").loaded() || []
+
+        expect(comments[0].readAttribute("body")).toEqual("HTTP preload comment")
+        expect(() => comments[0].readAttribute("id")).toThrow(/Comment#id was not selected/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("loads default columns plus extras via selectsExtra over HTTP", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {project} = await seedHttpPreloadModels()
+
+        // `name` is selectedByDefault: false on the backend Project resource, so
+        // a default load excludes it while selectsExtra keeps the defaults and
+        // loads it in addition.
+        const baselineProject = await Project.findBy({id: project.id()})
+
+        expect(baselineProject?.readAttribute("id")).toEqual(project.id())
+        expect(() => baselineProject?.readAttribute("name")).toThrow(/Project#name was not selected/)
+
+        const loadedProjects = await Project
+          .selectsExtra({Project: ["name"]})
+          .where({id: project.id()})
+          .toArray()
+
+        expect(loadedProjects[0].readAttribute("id")).toEqual(project.id())
+        expect(loadedProjects[0].readAttribute("name")).toEqual("HTTP preload project")
       } finally {
         resetFrontendModelTransport()
       }

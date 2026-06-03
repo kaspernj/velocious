@@ -77,6 +77,13 @@
 - `search(path, column, operator, value)` supports both named operators (`gt`, `lt`, `gteq`, `lteq`) and symbolic aliases (`>`, `<`, `>=`, `<=`).
 - `defineScope(...)` creates reusable named query scopes. Call `Model.scopeName(args...)` to start a new query, or `query.scope(Model.scopeName.scope(args...))` to apply the same scope to an existing frontend query.
 - Frontend scope callbacks receive `{query, modelClass}` plus `table: null` and `driver: null`; frontend scopes should stay descriptor-based (`where`, `joins`, `sort`, etc.) rather than building raw SQL.
+- `select({Model: ["attr"]})` narrows the serialized attributes per model (keyed by model name, or root-model shorthand). `selectsExtra({Model: ["attr"]})` keeps the default serialized attributes and loads the listed extras in addition — useful for attributes declared `selectedByDefault: false` on the backend resource.
+
+## Preloading onto loaded records
+- `await record.preload(Model.preload({...}).select({...}))` preloads relationship(s) onto a record already in memory, re-fetching the parent through its endpoint and caching the result so later accessors reuse it. Accepts a query or a raw preload spec (`"comments"`, `["comments", {project: true}]`).
+- `await Preloader.preload(records, Model.preload({...}))` (from `velocious/build/src/frontend-models/preloader.js`) does the same across an array of records in a single batched request.
+- The passed query's `preload`, `select`, `selectsExtra`, `withCount`, `abilities`, and `queryData` are all applied when re-fetching.
+- Idempotent: a relationship already preloaded is skipped (no request); when `select`/`selectsExtra` name attributes that are not yet loaded on the cached target, it re-fetches to widen them. Pass `{force: true}` to always re-fetch.
 
 ## Nested attributes on `save()`
 - Parents can save dirty `hasMany` children in the same request via Rails-style nested-attribute writes. See [nested-attributes.md](nested-attributes.md) for the full feature doc.
