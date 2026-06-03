@@ -31,7 +31,7 @@ export default class FrontendModelPreloader {
 
     if (topLevelRelationships.length === 0) return
 
-    const modelsToLoad = models.filter((model) => this._modelNeedsReload({modelClass, model, topLevelRelationships, query, force}))
+    const modelsToLoad = models.filter((model) => this._modelNeedsReload({modelClass, model, preload: query._preload, query, force}))
 
     if (modelsToLoad.length === 0) return
 
@@ -75,49 +75,70 @@ export default class FrontendModelPreloader {
 
   /**
    * @param {object} args - Options object.
-   * @param {typeof import("./base.js").default} args.modelClass - Root model class.
+   * @param {typeof import("./base.js").default} args.modelClass - Model class the preload graph is rooted at.
    * @param {import("./base.js").default} args.model - Model instance.
-   * @param {string[]} args.topLevelRelationships - Relationship names to preload.
+   * @param {import("../database/query/index.js").NestedPreloadRecord} args.preload - Preload sub-graph to satisfy.
    * @param {import("./query.js").default<any>} args.query - Source query carrying select/selectsExtra.
    * @param {boolean} args.force - Whether to reload regardless of cached state.
    * @returns {boolean} - Whether the model needs a reload request.
    */
-  static _modelNeedsReload({modelClass, model, topLevelRelationships, query, force}) {
+  static _modelNeedsReload({modelClass, model, preload, query, force}) {
     if (force) return true
 
-    for (const relationshipName of topLevelRelationships) {
-      if (!this._relationshipSatisfied({modelClass, model, relationshipName, query})) return true
+    for (const relationshipName of Object.keys(preload)) {
+      if (!this._relationshipSatisfied({modelClass, model, relationshipName, subPreload: preload[relationshipName], query})) return true
     }
 
     return false
   }
 
   /**
-   * A relationship is satisfied when it is already preloaded and every required
-   * attribute (from `select`/`selectsExtra` for the target model) is present on
-   * each loaded target. With no select, being preloaded is enough.
+   * A relationship is satisfied when it is already preloaded, every required
+   * `select` attribute is present on each loaded target, and any nested preload
+   * sub-graph is recursively satisfied on those targets. `selectsExtra` can
+   * never be proven satisfied from the cache (the backend serializes the
+   * client-unknown default attributes plus the extras), so it always reloads.
+   * With no select and no nested preload, being preloaded is enough.
    * @param {object} args - Options object.
-   * @param {typeof import("./base.js").default} args.modelClass - Root model class.
+   * @param {typeof import("./base.js").default} args.modelClass - Model class owning the relationship.
    * @param {import("./base.js").default} args.model - Model instance.
    * @param {string} args.relationshipName - Relationship name.
+   * @param {import("../database/query/index.js").NestedPreloadRecord[string]} args.subPreload - Preload value for this relationship (`true` or a nested record).
    * @param {import("./query.js").default<any>} args.query - Source query carrying select/selectsExtra.
    * @returns {boolean} - Whether the relationship is already satisfied.
    */
-  static _relationshipSatisfied({modelClass, model, relationshipName, query}) {
+  static _relationshipSatisfied({modelClass, model, relationshipName, subPreload, query}) {
     const relationship = model.getRelationshipByName(relationshipName)
 
     if (!relationship.getPreloaded()) return false
 
-    const required = this._requiredAttributesFor({modelClass, relationshipName, query})
-
-    if (required.length === 0) return true
-
+    const targetModelClass = modelClass.relationshipModelClass(relationshipName)
     const loaded = relationship.loaded()
     const targets = loaded == null ? [] : (Array.isArray(loaded) ? loaded : [loaded])
 
-    for (const target of targets) {
-      for (const attributeName of required) {
-        if (!target.hasLoadedAttribute(attributeName)) return false
+    if (targetModelClass) {
+      const targetModelName = targetModelClass.getModelName()
+
+      // `selectsExtra` serializes the default attributes (unknown to the client)
+      // plus the extras, so a cached target can't be proven complete.
+      if (query._selectsExtra[targetModelName]) return false
+
+      const required = query._select[targetModelName] || []
+
+      for (const target of targets) {
+        for (const attributeName of required) {
+          if (!target.hasLoadedAttribute(attributeName)) return false
+        }
+      }
+    }
+
+    const nestedPreload = this._nestedPreloadRecord(subPreload)
+
+    if (nestedPreload && targetModelClass) {
+      for (const target of targets) {
+        if (this._modelNeedsReload({modelClass: targetModelClass, model: target, preload: nestedPreload, query, force: false})) {
+          return false
+        }
       }
     }
 
@@ -125,19 +146,13 @@ export default class FrontendModelPreloader {
   }
 
   /**
-   * @param {object} args - Options object.
-   * @param {typeof import("./base.js").default} args.modelClass - Root model class.
-   * @param {string} args.relationshipName - Relationship name.
-   * @param {import("./query.js").default<any>} args.query - Source query carrying select/selectsExtra.
-   * @returns {string[]} - Attribute names that must be present for the relationship to count as satisfied.
+   * @param {import("../database/query/index.js").NestedPreloadRecord[string]} subPreload - Preload value for a relationship.
+   * @returns {import("../database/query/index.js").NestedPreloadRecord | null} - Nested preload record, or null when there is no deeper graph.
    */
-  static _requiredAttributesFor({modelClass, relationshipName, query}) {
-    const targetModelClass = modelClass.relationshipModelClass(relationshipName)
+  static _nestedPreloadRecord(subPreload) {
+    if (!subPreload || typeof subPreload !== "object") return null
+    if (Object.keys(subPreload).length === 0) return null
 
-    if (!targetModelClass) return []
-
-    const targetModelName = targetModelClass.getModelName()
-
-    return query._select[targetModelName] || query._selectsExtra[targetModelName] || []
+    return /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (subPreload)
   }
 }

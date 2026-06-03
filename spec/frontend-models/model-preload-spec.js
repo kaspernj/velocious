@@ -23,6 +23,16 @@ function buildModelClasses() {
     static resourceConfig() {
       return {attributes: ["id", "name"], commands: ["index"], primaryKey: "id"}
     }
+
+    /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */
+    static relationshipModelClasses() {
+      return {tasks: Task}
+    }
+
+    /** @returns {Record<string, {type: "hasMany"}>} - Relationship definitions. */
+    static relationshipDefinitions() {
+      return {tasks: {type: "hasMany"}}
+    }
   }
 
   /** Frontend model task test class. */
@@ -262,6 +272,60 @@ describe("Frontend models - model preload", () => {
 
       expect(fetchStub.calls.length).toEqual(2)
       expect(task.getRelationshipByName("comments").loaded()[0].readAttribute("id")).toEqual("5")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("reloads to populate a nested relationship even when the top-level relationship is already cached", async () => {
+    const {Project} = buildModelClasses()
+    const fetchStub = stubFetch({
+      models: [{
+        id: "1",
+        __preloadedRelationships: {
+          tasks: [{id: "1", name: "T", __preloadedRelationships: {comments: [{id: "9", body: "nested"}]}}]
+        }
+      }]
+    })
+
+    try {
+      // `tasks` is already preloaded, but its `comments` are not.
+      const project = Project.instantiateFromResponse({
+        id: "1",
+        __preloadedRelationships: {tasks: [{id: "1", name: "T"}]}
+      })
+
+      await project.preload(Project.preload({tasks: "comments"}))
+
+      const tasks = project.getRelationshipByName("tasks").loaded()
+      const comments = tasks[0].getRelationshipByName("comments").loaded()
+
+      expect(fetchStub.calls.length).toEqual(1)
+      expect(comments.length).toEqual(1)
+      expect(comments[0].readAttribute("body")).toEqual("nested")
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("always reloads for selectsExtra since defaults cannot be proven present", async () => {
+    const {Task} = buildModelClasses()
+    const fetchStub = stubFetch({
+      models: [{id: "1", name: "T", __preloadedRelationships: {comments: [{id: "5", body: "hi"}]}}]
+    })
+
+    try {
+      const task = Task.instantiateFromResponse({id: "1", name: "T"})
+
+      await task.preload(Task.preload("comments").selectsExtra({Comment: ["body"]}))
+      expect(fetchStub.calls.length).toEqual(1)
+
+      // Even though comments are already preloaded with `body`, selectsExtra can't
+      // be proven complete from the cache, so it reloads.
+      await task.preload(Task.preload("comments").selectsExtra({Comment: ["body"]}))
+      expect(fetchStub.calls.length).toEqual(2)
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
