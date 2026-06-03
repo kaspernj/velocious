@@ -241,13 +241,14 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test -- --groups 3 --group-number 3
-  eslint:
-    name: ESLint
+  lint:
+    name: Lint
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - sleep 5
       - npm run lint
       - npm run typecheck
+      - npm run fallow
   browser_tests:
     name: Browser Tests
     script:

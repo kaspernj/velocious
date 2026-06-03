@@ -2,6 +2,7 @@
 dist
 db/structure-default.sql
 node_modules
+/.fallow
 spec/dummy/db/*.sqlite
 spec/dummy/src/config/configuration.js
 spec/dummy/src/config/configuration.mariadb.js
