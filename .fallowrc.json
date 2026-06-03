@@ -7,7 +7,16 @@
     "src/environment-handlers/**/*.js",
     "src/database/migration/**/*.js",
     "spec/**/*-spec.js",
-    "spec/**/*.browser-spec.js"
+    "spec/**/*.browser-spec.js",
+    "spec/dummy/src/database/migrations/**/*.js",
+    "spec/dummy/src/models/**/*.js",
+    "spec/dummy/src/resources/**/*.js",
+    "spec/dummy/src/jobs/**/*.js",
+    "spec/dummy/src/channels/**/*.js",
+    "spec/dummy/src/frontend-models/**/*.js",
+    "spec/dummy/src/connections/**/*.js",
+    "spec/dummy/src/routes/**/*.js",
+    "spec/dummy/src/config/**/*.js"
   ],
   "ignorePatterns": [
     "build/**",
