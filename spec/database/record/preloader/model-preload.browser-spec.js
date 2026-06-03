@@ -103,6 +103,14 @@ describe("Record - preloader - model preload", {tags: ["dummy"]}, () => {
     expect(found.project().readColumn("creating_user_reference")).toEqual("ref-after")
   })
 
+  it("keeps preload selects independent across cloned queries", async () => {
+    const base = Task.preload("project").select({Project: ["id"]})
+    const branch = base.clone().select({Project: ["name"]})
+
+    expect(base._preloadSelects.Project).toEqual(["id"])
+    expect(branch._preloadSelects.Project).toEqual(["id", "name"])
+  })
+
   it("re-loads when a wider column set is requested than was previously preloaded", async () => {
     const project = await Project.create({creatingUserReference: "ref-widen"})
     const task = await Task.create({projectId: project.id(), name: "Widen preload"})

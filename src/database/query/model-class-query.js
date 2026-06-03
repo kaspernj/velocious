@@ -78,6 +78,23 @@ function normalizeScopePath(path) {
 }
 
 /**
+ * Deep-copies a preload select map (keyed by model name with attribute arrays)
+ * so a cloned query's selections can be mutated without affecting the original.
+ * @param {Record<string, string[]>} map - Preload select map to copy.
+ * @returns {Record<string, string[]>} - A copy with independent arrays.
+ */
+function clonePreloadSelectMap(map) {
+  /** @type {Record<string, string[]>} */
+  const result = {}
+
+  for (const [modelName, attributes] of Object.entries(map)) {
+    result[modelName] = [...attributes]
+  }
+
+  return result
+}
+
+/**
  * @param {import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} preload - Preload data in shorthand or nested form.
  * @returns {import("./index.js").NestedPreloadRecord} - Normalized preload record.
  */
@@ -185,8 +202,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       page: this._page,
       perPage: this._perPage,
       preload: {...this._preload},
-      preloadSelects: {...this._preloadSelects},
-      preloadSelectsExtra: {...this._preloadSelectsExtra},
+      preloadSelects: clonePreloadSelectMap(this._preloadSelects),
+      preloadSelectsExtra: clonePreloadSelectMap(this._preloadSelectsExtra),
       distinct: this._distinct,
       selects: [...this._selects],
       wheres: [...this._wheres],
