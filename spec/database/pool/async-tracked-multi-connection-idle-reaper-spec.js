@@ -67,6 +67,50 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
     }
   })
 
+  it("closes a connection only once when reaped concurrently", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-double-close")
+
+    try {
+      // A large timeout keeps the scheduled reaper from firing on its own, so the
+      // test drives the concurrent closes explicitly (mirroring a fire-and-forget
+      // scheduled reap racing an explicit reap).
+      configuration.getDatabaseConfiguration().default.pool = {idleTimeoutMillis: 60000}
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      /** @type {(import("../../../src/database/drivers/base.js").default & {connection?: unknown}) | undefined} */
+      let checkedInConnection
+
+      await pool.withConnection(async (connection) => {
+        checkedInConnection = connection
+      })
+
+      if (!checkedInConnection) throw new Error("Expected checked-in connection")
+
+      let closeCalls = 0
+      const originalClose = checkedInConnection.close.bind(checkedInConnection)
+
+      checkedInConnection.close = async () => {
+        closeCalls++
+
+        return await originalClose()
+      }
+
+      // Two concurrent closes of the same connection must close the driver handle
+      // exactly once and leave it fully closed.
+      await Promise.all([
+        pool.closeConnection(checkedInConnection),
+        pool.closeConnection(checkedInConnection)
+      ])
+
+      expect(closeCalls).toEqual(1)
+      expect(checkedInConnection.connection).toEqual(undefined)
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("closes checked-in idle connections immediately when idle timeout is zero", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-reaper-zero")
 

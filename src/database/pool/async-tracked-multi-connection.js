@@ -50,6 +50,24 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   idleConnectionReaperTimer = undefined
 
+  /**
+   * In-flight connection-close promises. The idle reaper is armed on check-in
+   * and runs fire-and-forget when its timer fires, so a scheduled reap can be
+   * closing a connection while an explicit `reapIdleConnections()` (or
+   * `clearIdleConnectionReaperTimer()`) runs. Tracking the in-flight closes lets
+   * those callers await them, so once a reap resolves the connections it
+   * expired are fully closed instead of half-closed mid-`close()`.
+   * @type {Set<Promise<void>>}
+   */
+  inflightConnectionCloses = new Set()
+
+  /**
+   * In-flight close promise per connection, so concurrent closes of the same
+   * connection await the same close rather than closing the driver handle twice.
+   * @type {WeakMap<object, Promise<void>>}
+   */
+  connectionClosePromises = new WeakMap()
+
   idSeq = 0
 
   /**
@@ -543,6 +561,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       await this.closeConnection(connection)
     }
 
+    // A concurrent fire-and-forget scheduled reap may already be closing
+    // connections this call did not expire itself (it may have removed them from
+    // `this.connections` first). Await those in-flight closes too so a caller
+    // that awaits `reapIdleConnections()` is guaranteed the pool's idle
+    // connections are fully closed, not mid-`close()`.
+    if (this.inflightConnectionCloses.size > 0) {
+      await Promise.allSettled([...this.inflightConnectionCloses])
+    }
+
     if (this.connections.length > 0) {
       this.scheduleIdleConnectionReaper()
     }
@@ -580,15 +607,36 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<void>} - Resolves when complete.
    */
   async closeConnection(connection) {
+    // Idempotent: a fire-and-forget scheduled reap and an explicit reap can both
+    // target the same connection. Await the in-flight close instead of closing
+    // twice (which can throw on the driver) or returning while the underlying
+    // handle is still open.
+    const existingClose = this.connectionClosePromises.get(connection)
+
+    if (existingClose) {
+      return await existingClose
+    }
+
     const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
     trackedConnection[CLOSED_CONNECTION] = true
     delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
 
-    if (typeof trackedConnection.close === "function") {
-      await trackedConnection.close()
-    } else if (typeof trackedConnection.disconnect === "function") {
-      await trackedConnection.disconnect()
+    const closePromise = (async () => {
+      if (typeof trackedConnection.close === "function") {
+        await trackedConnection.close()
+      } else if (typeof trackedConnection.disconnect === "function") {
+        await trackedConnection.disconnect()
+      }
+    })()
+
+    this.connectionClosePromises.set(connection, closePromise)
+    this.inflightConnectionCloses.add(closePromise)
+
+    try {
+      await closePromise
+    } finally {
+      this.inflightConnectionCloses.delete(closePromise)
     }
   }
 

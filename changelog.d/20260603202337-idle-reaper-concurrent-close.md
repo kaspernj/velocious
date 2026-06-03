@@ -1,0 +1,1 @@
+The async-tracked connection pool now closes each idle connection only once and `reapIdleConnections()` awaits any in-flight closes before resolving, so a fire-and-forget scheduled reap can no longer race an explicit reap into a double `close()` or leave a connection observable as reaped while its driver handle is still open.
