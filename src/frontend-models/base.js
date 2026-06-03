@@ -4,6 +4,7 @@ import * as inflection from "inflection"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import FrontendModelQuery, {frontendModelProjectionPayload} from "./query.js"
+import FrontendModelPreloader from "./preloader.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
@@ -1698,6 +1699,21 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Preloads relationship(s) onto this already-loaded record. Accepts either a
+   * query built via `Model.preload(...).select(...)` or a raw preload spec
+   * (string / array / nested object). Relationships already preloaded with the
+   * required columns present are left untouched unless `force` is set. Carries
+   * the query's preload graph, select, selectsExtra, withCount, abilities, and
+   * queryData when re-fetching.
+   * @param {import("./query.js").default<any> | import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} queryOrSpec - Preload source.
+   * @param {{force?: boolean}} [options] - Options.
+   * @returns {Promise<void>} - Resolves when preloading completes.
+   */
+  async preload(queryOrSpec, options = {}) {
+    await FrontendModelPreloader.preload([this], queryOrSpec, options)
+  }
+
+  /**
    * @param {string} relationshipName - Relationship name.
    * @returns {Promise<any>} - Loaded relationship value.
    */
@@ -1864,6 +1880,19 @@ export default class FrontendModelBase {
     }
 
     return this._attributes[attributeName]
+  }
+
+  /**
+   * Whether an attribute value is currently loaded on this record. Used by the
+   * preloader to decide whether a relationship can be skipped because the
+   * requested columns are already present.
+   * @param {string} attributeName - Attribute name.
+   * @returns {boolean} - Whether the attribute is loaded.
+   */
+  hasLoadedAttribute(attributeName) {
+    if (!this._selectedAttributes) return true
+
+    return this._selectedAttributes.has(attributeName)
   }
 
   /**
@@ -2881,6 +2910,16 @@ export default class FrontendModelBase {
    */
   static select(select) {
     return /** @type {FrontendModelQuery<T>} */ (this.query().select(select))
+  }
+
+  /**
+   * @template {typeof FrontendModelBase} T
+   * @this {T}
+   * @param {Record<string, string[] | string> | string | string[]} select - Extra attributes to load in addition to the defaults, keyed by model name or root-model shorthand.
+   * @returns {FrontendModelQuery<T>} - Query with extra selected attributes.
+   */
+  static selectsExtra(select) {
+    return /** @type {FrontendModelQuery<T>} */ (this.query().selectsExtra(select))
   }
 
   /**

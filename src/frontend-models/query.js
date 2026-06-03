@@ -23,6 +23,7 @@ import {isModelScopeDescriptor} from "../utils/model-scope.js"
 /**
  * @typedef {object} FrontendModelProjectionOptions
  * @property {Record<string, string[] | string> | string | string[]} [select] - Model-aware attribute select map or root-model shorthand.
+ * @property {Record<string, string[] | string> | string | string[]} [selectsExtra] - Extra attributes to load in addition to the defaults, keyed by model name or root-model shorthand.
  * @property {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} [preload] - Relationship preload tree.
  * @property {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, FrontendModelTransportValue>}>} [withCount] - Association count spec.
  * @property {string[] | Record<string, string[]>} [abilities] - Ability actions to compute per record.
@@ -31,6 +32,7 @@ import {isModelScopeDescriptor} from "../utils/model-scope.js"
 /**
  * @typedef {object} FrontendModelProjectionPayload
  * @property {Record<string, string[]>} [select] - Normalized select map.
+ * @property {Record<string, string[]>} [selectsExtra] - Normalized extra select map.
  * @property {import("../database/query/index.js").NestedPreloadRecord} [preload] - Normalized preload tree.
  * @property {FrontendModelWithCountPayloadEntry[]} [withCount] - Normalized count specs.
  * @property {FrontendModelAbilitiesPayloadEntry[]} [abilities] - Normalized ability specs.
@@ -1047,7 +1049,10 @@ export default class FrontendModelQuery {
     this._joins = {}
     this._where = {}
     this._searches = []
+    /** @type {Record<string, string[]>} */
     this._select = {}
+    /** @type {Record<string, string[]>} */
+    this._selectsExtra = {}
     this._sort = []
     this._group = []
     this._distinct = false
@@ -1269,6 +1274,19 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * Like `select(...)`, but keeps the default serialized attributes and loads
+   * the given extras in addition (for example attributes declared
+   * `selectedByDefault: false`). Keyed by model name, with root-model shorthand.
+   * @param {Record<string, string[] | string> | string | string[]} select - Extra attributes to load, keyed by model name or root-model shorthand.
+   * @returns {this} - Query with merged extra selected attributes.
+   */
+  selectsExtra(select) {
+    mergeSelectRecord(this._selectsExtra, normalizeSelect(select, this.modelClass.getModelName()))
+
+    return this
+  }
+
+  /**
    * @param {Record<string, any> | Array<Record<string, any>>} joins - Relationship descriptor joins.
    * @returns {this} - Query with merged joins.
    */
@@ -1427,6 +1445,7 @@ export default class FrontendModelQuery {
       value: search.value
     }))
     newQuery._select = normalizeSelect(this._select)
+    newQuery._selectsExtra = normalizeSelect(this._selectsExtra)
     newQuery._sort = this._sort.map((sortEntry) => ({
       column: sortEntry.column,
       direction: sortEntry.direction,
@@ -1524,6 +1543,15 @@ export default class FrontendModelQuery {
     if (Object.keys(select).length === 0) return {}
 
     return {select}
+  }
+
+  /**
+   * @returns {Record<string, any>} - Payload selectsExtra hash when present.
+   */
+  selectsExtraPayload() {
+    if (Object.keys(this._selectsExtra).length === 0) return {}
+
+    return {selectsExtra: this._selectsExtra}
   }
 
   /**
@@ -1628,6 +1656,7 @@ export default class FrontendModelQuery {
       ...this.joinsPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(),
+      ...this.selectsExtraPayload(),
       ...this.groupPayload(),
       ...this.distinctPayload(),
       ...this.sortPayload(),
@@ -1803,6 +1832,7 @@ export default class FrontendModelQuery {
       ...this.joinsPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(Object.keys(mergedWhere)),
+      ...this.selectsExtraPayload(),
       ...this.groupPayload(),
       ...this.distinctPayload(),
       ...this.sortPayload(),
@@ -1897,6 +1927,7 @@ export function frontendModelProjectionPayload(modelClass, options = {}) {
   const query = new FrontendModelQuery({modelClass})
 
   if (options.select !== undefined) query.select(options.select)
+  if (options.selectsExtra !== undefined) query.selectsExtra(options.selectsExtra)
   if (options.preload !== undefined) query.preload(options.preload)
   if (options.withCount !== undefined) query.withCount(options.withCount)
   if (options.abilities !== undefined) query.abilities(options.abilities)
@@ -1905,6 +1936,7 @@ export function frontendModelProjectionPayload(modelClass, options = {}) {
   return {
     ...query.preloadPayload(),
     ...query.selectPayload(),
+    ...query.selectsExtraPayload(),
     ...query.withCountPayload(),
     ...query.abilitiesPayload(),
     ...query.queryDataPayload()
