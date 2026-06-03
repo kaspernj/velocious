@@ -8,6 +8,9 @@ import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
 import {randomUUID} from "crypto"
 
+/** Grace period after SIGTERM before a lingering forked runner is SIGKILLed. */
+const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
+
 export default class BackgroundJobsWorker {
   /**
    * @param {object} [args] - Options.
@@ -16,8 +19,9 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.port] - Port.
    * @param {number} [args.maxConcurrentForkedJobs] - Override the forked runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
+   * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering forked runners on stop.
    */
-  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs} = {}) {
+  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs} = {}) {
     /** @type {Promise<import("../configuration.js").default>} */
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
     /** @type {import("../configuration.js").default | undefined} */
@@ -45,6 +49,14 @@ export default class BackgroundJobsWorker {
     this.maxConcurrentInlineJobs = this.maxConcurrentInlineJobsOverride || 4
     /** @type {number} */
     this.maxConcurrentForkedJobs = this.maxConcurrentForkedJobsOverride || 4
+    /**
+     * Grace period between SIGTERM and SIGKILL when reaping forked runners that
+     * outlast a bounded shutdown drain.
+     * @type {number}
+     */
+    this.forkedChildSigkillGraceMs = typeof forkedChildSigkillGraceMs === "number" && forkedChildSigkillGraceMs >= 0
+      ? forkedChildSigkillGraceMs
+      : FORKED_CHILD_SIGKILL_GRACE_MS
     this.shouldStop = false
     this.workerId = randomUUID()
     /** @type {JsonSocket | undefined} */
@@ -60,12 +72,19 @@ export default class BackgroundJobsWorker {
      */
     this.inflightInlineJobs = new Set()
     /**
-     * In-flight detached runner processes. The worker does not wait for
-     * them during shutdown, but it does track exits while running so
-     * forked job handoff stays bounded.
+     * In-flight detached runner exit promises. Tracked so forked-job handoff
+     * stays bounded while running and so a graceful `stop()` can drain them.
      * @type {Set<Promise<void>>}
      */
     this.inflightForkedJobs = new Set()
+    /**
+     * Live forked runner child processes, kept so a graceful `stop()` can
+     * terminate any that outlast the shutdown drain instead of orphaning them
+     * across a deploy (where they would keep running against deleted release
+     * code and holding database connections).
+     * @type {Set<import("node:child_process").ChildProcess>}
+     */
+    this.inflightForkedChildren = new Set()
   }
 
   /**
@@ -99,15 +118,18 @@ export default class BackgroundJobsWorker {
 
   /**
    * Gracefully stops the worker: announces draining to the main process so
-   * no new jobs are dispatched, waits for any in-flight inline jobs to
-   * finish (so their results can be reported), then closes the socket and
-   * disconnects from the beacon. Forked jobs are detached child processes
-   * and continue running on their own across the worker exit.
+   * no new jobs are dispatched, waits for in-flight inline jobs and forked
+   * runners to finish (so their results can be reported), then closes the
+   * socket and disconnects from the beacon.
    *
-   * Pass `{timeoutMs}` to bound how long to wait for in-flight inline jobs
-   * before forcing the socket closed.
+   * Forked runners are detached child processes. When a `timeoutMs` is given
+   * (e.g. a deploy draining the old release) any runner still alive after the
+   * drain window is terminated (SIGTERM, then SIGKILL) rather than left to
+   * orphan across the deploy — otherwise it would keep running against deleted
+   * release code and holding database connections. With no `timeoutMs` the
+   * drain waits for runners to finish on their own.
    * @param {object} [args] - Options.
-   * @param {number} [args.timeoutMs] - Max wait for in-flight inline jobs in ms.
+   * @param {number} [args.timeoutMs] - Max wait for in-flight jobs (per phase) in ms.
    * @returns {Promise<void>} - Resolves when stopped.
    */
   async stop({timeoutMs} = {}) {
@@ -124,20 +146,63 @@ export default class BackgroundJobsWorker {
       }
     }
 
-    if (this.inflightInlineJobs.size > 0) {
-      const drain = Promise.allSettled([...this.inflightInlineJobs])
-      if (typeof timeoutMs === "number" && timeoutMs >= 0) {
-        let timer
-        const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs) })
-        await Promise.race([drain, timeout])
-        clearTimeout(timer)
-      } else {
-        await drain
-      }
-    }
+    await this._drainInflight(this.inflightInlineJobs, timeoutMs)
+    await this._drainInflight(this.inflightForkedJobs, timeoutMs)
+    await this._terminateForkedChildren()
 
     if (this.jsonSocket) this.jsonSocket.close()
     if (this.configuration) await this.configuration.disconnectBeacon()
+  }
+
+  /**
+   * Waits for a set of in-flight job promises to settle, optionally bounded by
+   * `timeoutMs`.
+   * @param {Set<Promise<void>>} inflight - In-flight job promises.
+   * @param {number} [timeoutMs] - Max wait in ms; unbounded when omitted.
+   * @returns {Promise<void>} - Resolves when settled or the timeout elapses.
+   */
+  async _drainInflight(inflight, timeoutMs) {
+    if (inflight.size === 0) return
+
+    const drain = Promise.allSettled([...inflight])
+
+    if (typeof timeoutMs === "number" && timeoutMs >= 0) {
+      let timer
+      const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs) })
+
+      await Promise.race([drain, timeout])
+      clearTimeout(timer)
+    } else {
+      await drain
+    }
+  }
+
+  /**
+   * Terminates any forked runner children still alive after the drain window so
+   * they don't outlive the worker as orphans. SIGTERM lets the runner close its
+   * connections cleanly; survivors are SIGKILLed after a short grace.
+   * @returns {Promise<void>} - Resolves once survivors have been signalled.
+   */
+  async _terminateForkedChildren() {
+    if (this.inflightForkedChildren.size === 0) return
+
+    for (const child of this.inflightForkedChildren) {
+      try {
+        child.kill("SIGTERM")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, this.forkedChildSigkillGraceMs))
+
+    for (const child of this.inflightForkedChildren) {
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }
   }
 
   async _connect() {
@@ -321,9 +386,16 @@ export default class BackgroundJobsWorker {
         VELOCIOUS_JOB_PAYLOAD: encodedPayload
       })
     })
+
+    this.inflightForkedChildren.add(child)
+
     const finished = new Promise((resolve) => {
-      child.once("exit", () => resolve(undefined))
+      child.once("exit", () => {
+        this.inflightForkedChildren.delete(child)
+        resolve(undefined)
+      })
       child.once("error", (error) => {
+        this.inflightForkedChildren.delete(child)
         console.error("Background jobs forked runner spawn error:", error)
         resolve(undefined)
       })
