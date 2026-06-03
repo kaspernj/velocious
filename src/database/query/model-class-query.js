@@ -185,6 +185,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       page: this._page,
       perPage: this._perPage,
       preload: {...this._preload},
+      preloadSelects: {...this._preloadSelects},
+      preloadSelectsExtra: {...this._preloadSelectsExtra},
       distinct: this._distinct,
       selects: [...this._selects],
       wheres: [...this._wheres],
@@ -344,7 +346,50 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       }
     }
 
+    // Object form keyed by target model name, e.g. `.select({Account: ["id"]})`.
+    // These limit the attributes loaded for preloaded relationship targets
+    // rather than the root query's SELECT clause.
+    if (isPlainObject(select)) {
+      this._mergePreloadSelect(this._preloadSelects, select)
+
+      return this
+    }
+
     return super.select(select)
+  }
+
+  /**
+   * Loads the default columns plus the given extra selects for preloaded
+   * relationship targets, keyed by target model name, e.g.
+   * `.selectsExtra({Account: ["(SELECT count(*) FROM projects) AS projects_count"]})`.
+   * Unlike `select({...})`, which narrows to only the listed columns, this keeps
+   * the default `SELECT *` columns and adds the extras on top.
+   * @param {Record<string, string | string[]>} select - Extra selects keyed by target model name.
+   * @returns {this} - This query, for chaining.
+   */
+  selectsExtra(select) {
+    this._mergePreloadSelect(this._preloadSelectsExtra, select)
+
+    return this
+  }
+
+  /**
+   * Merges an object-form preload select (keyed by target model name) into the
+   * given target map, de-duplicating attribute/expression entries.
+   * @param {Record<string, string[]>} target - Map to merge into.
+   * @param {Record<string, string | string[]>} select - Object-form select.
+   * @returns {void} - No return value.
+   */
+  _mergePreloadSelect(target, select) {
+    for (const [modelName, attributes] of Object.entries(select)) {
+      const normalizedAttributes = Array.isArray(attributes) ? attributes : [attributes]
+
+      if (!target[modelName]) target[modelName] = []
+
+      for (const attribute of normalizedAttributes) {
+        if (!target[modelName].includes(attribute)) target[modelName].push(attribute)
+      }
+    }
   }
 
   /**
@@ -782,7 +827,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       const preloader = new Preloader({
         modelClass: this.modelClass,
         models,
-        preload: this._preload
+        preload: this._preload,
+        preloadSelects: this._preloadSelects,
+        preloadSelectsExtra: this._preloadSelectsExtra
       })
 
       await preloader.run()

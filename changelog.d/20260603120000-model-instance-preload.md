@@ -1,0 +1,1 @@
+Add `record.preload(...)` and `Preloader.preload(records, ...)` to preload relationships onto already-loaded records, with per-target-model `select`/`selectsExtra` column control, idempotent skipping when already loaded, and a `force` option to reload.

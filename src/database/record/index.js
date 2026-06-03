@@ -22,6 +22,7 @@ import HasOneRelationship from "./relationships/has-one.js"
 import RecordAttachmentHandle from "./attachments/handle.js"
 import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
+import Preloader from "../query/preloader.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
@@ -770,6 +771,21 @@ class VelociousDatabaseRecord {
     }
 
     return this._instanceRelationships[relationshipName]
+  }
+
+  /**
+   * Preloads relationship(s) onto this already-loaded record. Accepts either a
+   * query built via `Model.preload(...).select(...)` or a raw preload spec
+   * (string / array / nested object). A relationship that is already preloaded
+   * with all the required columns present is left untouched unless `force` is
+   * set. Preloading onto the relationship cache lets later accessors reuse the
+   * loaded data instead of issuing identical queries.
+   * @param {import("../query/model-class-query.js").default | import("../query/index.js").NestedPreloadRecord | string | Array<string | import("../query/index.js").NestedPreloadRecord>} queryOrSpec - Preload source.
+   * @param {{force?: boolean}} [options] - Options.
+   * @returns {Promise<void>} - Resolves when preloading completes.
+   */
+  async preload(queryOrSpec, options = {}) {
+    await Preloader.preload([this], queryOrSpec, options)
   }
 
   /**
@@ -3161,6 +3177,17 @@ class VelociousDatabaseRecord {
     result = this._normalizeBooleanValueForRead({columnType, value: result})
 
     return result
+  }
+
+  /**
+   * Whether a column value is currently loaded on this record (either as a
+   * persisted attribute or a pending change). Used to decide whether a preload
+   * can be skipped because the required columns are already present.
+   * @param {string} columnName - The column name to check.
+   * @returns {boolean} - Whether the column is loaded.
+   */
+  hasLoadedColumn(columnName) {
+    return columnName in this._changes || columnName in this._attributes
   }
 
   /**

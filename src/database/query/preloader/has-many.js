@@ -1,6 +1,7 @@
 // @ts-check
 
 import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
+import PreloaderSelection from "./selection.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasMany {
@@ -8,12 +9,14 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
    * @param {object} args - Options object.
    * @param {import("../../record/index.js").default[]} args.models - Model instances.
    * @param {import("../../record/relationships/has-many.js").default} args.relationship - Relationship.
+   * @param {PreloaderSelection} [args.selection] - Column selection and idempotency rules.
    */
-  constructor({models, relationship, ...restArgs}) {
+  constructor({models, relationship, selection, ...restArgs}) {
     restArgsError(restArgs)
 
     this.models = models
     this.relationship = relationship
+    this.selection = selection || new PreloaderSelection()
   }
 
   /** @returns {Promise<import("../../record/index.js").default[]>} - Loaded target models. */
@@ -23,6 +26,36 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     }
 
     return await this._runDirect()
+  }
+
+  /**
+   * Partitions `this.models` into those already satisfied by the current
+   * selection (skip) and those that still need loading. Satisfied models'
+   * already-loaded targets are collected so nested preloads keep working.
+   * @param {typeof import("../../record/index.js").default} targetModelClass - Target model class.
+   * @param {string[]} mappingColumns - Columns required for mapping (foreign key).
+   * @returns {{modelsToLoad: import("../../record/index.js").default[], satisfiedTargets: import("../../record/index.js").default[]}} - The partition.
+   */
+  _partition(targetModelClass, mappingColumns) {
+    const relationshipName = this.relationship.getRelationshipName()
+    /** @type {import("../../record/index.js").default[]} */
+    const modelsToLoad = []
+    /** @type {import("../../record/index.js").default[]} */
+    const satisfiedTargets = []
+
+    for (const model of this.models) {
+      const instanceRelationship = model.getRelationshipByName(relationshipName)
+
+      if (this.selection.isSatisfied({instanceRelationship, targetModelClass, mappingColumns})) {
+        const loaded = instanceRelationship.getLoadedOrUndefined()
+
+        if (Array.isArray(loaded)) satisfiedTargets.push(...loaded)
+      } else {
+        modelsToLoad.push(model)
+      }
+    }
+
+    return {modelsToLoad, satisfiedTargets}
   }
 
   /**
@@ -48,6 +81,11 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
+    const targetForeignKey = this.relationship.getForeignKey()
+    const {modelsToLoad, satisfiedTargets} = this._partition(targetModelClass, [targetForeignKey])
+
+    if (modelsToLoad.length == 0) return satisfiedTargets
+
     const configuration = this.relationship.getConfiguration()
 
     await ensureModelClassInitialized(throughModelClass, configuration)
@@ -64,7 +102,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     /** @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const preloadCollections = {}
 
-    for (const model of this.models) {
+    for (const model of modelsToLoad) {
       const primaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = []
@@ -86,8 +124,6 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     /** @type {Set<string | number>} */
     const allTargetIds = new Set()
 
-    const targetForeignKey = this.relationship.getForeignKey()
-
     for (const throughModel of throughModels) {
       const parentId = /** @type {string | number} */ (throughModel.readColumn(throughForeignKey))
       const throughId = /** @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
@@ -106,6 +142,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       let query = targetModelClass.where({[targetForeignKey]: [...allTargetIds]})
 
       query = this.relationship.applyScope(query)
+      query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [targetForeignKey]})
       targetModels = await query.toArray()
     }
 
@@ -142,17 +179,14 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       for (const model of modelsByPrimaryKeyValue[modelValue]) {
         const modelRelationship = model.getRelationshipByName(this.relationship.getRelationshipName())
 
-        if (preloadedCollection.length == 0) {
-          modelRelationship.setLoaded([])
-        } else {
-          modelRelationship.addToLoaded(preloadedCollection)
-        }
-
+        // Replace rather than append: `modelsToLoad` are exactly the records we
+        // intend to (re)load, so a forced re-preload must not duplicate entries.
+        modelRelationship.setLoaded(preloadedCollection)
         modelRelationship.setPreloaded(true)
       }
     }
 
-    return targetModels
+    return [...satisfiedTargets, ...targetModels]
   }
 
   /**
@@ -161,23 +195,31 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
    * @returns {Promise<import("../../record/index.js").default[]>} - Loaded target models.
    */
   async _runDirect() {
+    const foreignKey = this.relationship.getForeignKey()
+    const primaryKey = this.relationship.getPrimaryKey()
+
+    if (!primaryKey) {
+      throw new Error(`${this.relationship.getModelClass().name}#${this.relationship.getRelationshipName()} doesn't have a primary key`)
+    }
+
+    const targetModelClass = this.relationship.getTargetModelClass()
+
+    if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    const {modelsToLoad, satisfiedTargets} = this._partition(targetModelClass, [foreignKey])
+
+    if (modelsToLoad.length == 0) return satisfiedTargets
+
     /** @type {Array<number | string>} */
     const modelsPrimaryKeyValues = []
 
     /** @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const modelsByPrimaryKeyValue = {}
 
-    const foreignKey = this.relationship.getForeignKey()
-    const primaryKey = this.relationship.getPrimaryKey()
-
     /** @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const preloadCollections = {}
 
-    if (!primaryKey) {
-      throw new Error(`${this.relationship.getModelClass().name}#${this.relationship.getRelationshipName()} doesn't have a primary key`)
-    }
-
-    for (const model of this.models) {
+    for (const model of modelsToLoad) {
       const primaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = []
@@ -199,15 +241,12 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       whereArgs[typeColumn] = this.relationship.getModelClass().getModelName()
     }
 
-    const targetModelClass = this.relationship.getTargetModelClass()
-
-    if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
-
     await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
 
     let query = targetModelClass.where(whereArgs)
 
     query = this.relationship.applyScope(query)
+    query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [foreignKey]})
 
     const targetModels = await query.toArray()
 
@@ -223,16 +262,13 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       for (const model of modelsByPrimaryKeyValue[modelValue]) {
         const modelRelationship = model.getRelationshipByName(this.relationship.getRelationshipName())
 
-        if (preloadedCollection.length == 0) {
-          modelRelationship.setLoaded([])
-        } else {
-          modelRelationship.addToLoaded(preloadedCollection)
-        }
-
+        // Replace rather than append: `modelsToLoad` are exactly the records we
+        // intend to (re)load, so a forced re-preload must not duplicate entries.
+        modelRelationship.setLoaded(preloadedCollection)
         modelRelationship.setPreloaded(true)
       }
     }
 
-    return targetModels
+    return [...satisfiedTargets, ...targetModels]
   }
 }

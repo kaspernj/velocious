@@ -17,7 +17,7 @@ import WherePlain from "./where-plain.js"
 /**
  * @typedef {{[key: string]: boolean | string | string[] | NestedPreloadRecord }} NestedPreloadRecord
  * @typedef {string | number | import("./order-base.js").default | import("./order-column.js").OrderColumnInput} OrderArgumentType
- * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[]} SelectArgumentType
+ * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[] | Record<string, string | string[]>} SelectArgumentType
  * @typedef {object | string} WhereArgumentType
  */
 
@@ -114,6 +114,8 @@ function mergeJoinValue(existing, incoming) {
  * @property {number | null} [page] - Page number for pagination.
  * @property {number} [perPage] - Records per page for pagination.
  * @property {NestedPreloadRecord} [preload] - Preload graph for related records.
+ * @property {Record<string, string[]>} [preloadSelects] - Attribute names to load for preloaded relationships, keyed by target model name.
+ * @property {Record<string, string[]>} [preloadSelectsExtra] - Extra selects to load in addition to the defaults for preloaded relationships, keyed by target model name.
  * @property {Array<import("./select-base.js").default>} [selects] - SELECT clauses for the query.
  * @property {boolean} [distinct] - Whether the query should use DISTINCT.
  * @property {Array<import("./where-base.js").default>} [wheres] - WHERE conditions for the query.
@@ -135,6 +137,8 @@ export default class VelociousDatabaseQuery {
     page = null,
     perPage,
     preload = {},
+    preloadSelects = {},
+    preloadSelectsExtra = {},
     distinct = false,
     selects = [],
     wheres = []
@@ -155,6 +159,12 @@ export default class VelociousDatabaseQuery {
     this._page = page
     this._perPage = perPage
     this._preload = preload
+
+    /** @type {Record<string, string[]>} */
+    this._preloadSelects = preloadSelects
+
+    /** @type {Record<string, string[]>} */
+    this._preloadSelectsExtra = preloadSelectsExtra
     this._distinct = distinct
     this._selects = selects
 
