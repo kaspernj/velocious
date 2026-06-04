@@ -303,6 +303,14 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     expect(query.wherePayload()).toEqual({where: {isDone: false, name: "Keep me"}})
   })
 
+  it("rejects query filters for destroy event subscriptions", async () => {
+    const Task = buildTestModelClass()
+
+    await expect(async () => {
+      await Task.onDestroy(() => {}, Task.where({id: 1}))
+    }).toThrow(/destroy event subscriptions do not support query filters/)
+  })
+
   it("uses the shared frontend-model API and batches requests by default", async () => {
     const originalFetch = globalThis.fetch
     /** @type {FetchCall[]} */

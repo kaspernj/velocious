@@ -22,9 +22,19 @@ import useModelClassEvent from "./use-model-class-event.js"
 function assertNoUnknownOptions(restOptions) {
   const unknownOptionNames = Object.keys(restOptions)
 
-  if (unknownOptionNames.length > 0) {
-    throw new Error(`Unknown options given to useDestroyedEvent: ${unknownOptionNames.join(", ")}`)
-  }
+  if (unknownOptionNames.length === 0) return
+
+  throw new Error(`Unknown options given to useDestroyedEvent: ${unknownOptionNames.join(", ")}`)
+}
+
+/**
+ * @param {import("./query.js").default<FrontendModelClass> | undefined} query - Event query option.
+ * @returns {import("./query.js").FrontendModelEventOptionsPayload | null} Stable dependency payload.
+ */
+function eventQueryDependencyPayload(query) {
+  if (!query) return null
+
+  return query.eventOptionsPayload()
 }
 
 /**
@@ -36,12 +46,12 @@ function assertNoUnknownOptions(restOptions) {
  * @returns {void}
  */
 export default function useDestroyedEvent(modelClassOrModels, callback, options = {}) {
-  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount, ...restOptions} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount, ...restOptions} = options
   assertNoUnknownOptions(restOptions)
 
   const classModel = typeof modelClassOrModels === "function" ? modelClassOrModels : null
   const instanceModels = typeof modelClassOrModels === "function" ? null : modelClassOrModels
-  const projectionOptions = {abilities, preload, queryData, select, withCount}
+  const projectionOptions = {abilities, preload, query, queryData, select, selectsExtra, withCount}
 
   useModelClassEvent(classModel, "destroy", callback, {active: active && Boolean(classModel), debounce, onConnected, ...projectionOptions})
   useInstanceDestroyedEvent(instanceModels, callback, {active: active && !classModel, debounce, onConnected, ...projectionOptions})
@@ -54,12 +64,12 @@ export default function useDestroyedEvent(modelClassOrModels, callback, options 
  * @returns {void}
  */
 function useInstanceDestroyedEvent(modelOrModels, callback, options) {
-  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount} = options
-  const projectionKey = JSON.stringify({abilities, preload, queryData, select, withCount})
-  const projectionOptionsRef = useRef({abilities, preload, queryData, select, withCount})
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount} = options
+  const projectionKey = JSON.stringify({abilities, preload, query: eventQueryDependencyPayload(query), queryData, select, selectsExtra, withCount})
+  const projectionOptionsRef = useRef({abilities, preload, query, queryData, select, selectsExtra, withCount})
   const callbackRef = useRef(callback)
   const activeRef = useRef(active)
-  projectionOptionsRef.current = {abilities, preload, queryData, select, withCount}
+  projectionOptionsRef.current = {abilities, preload, query, queryData, select, selectsExtra, withCount}
   callbackRef.current = callback
   activeRef.current = active
 

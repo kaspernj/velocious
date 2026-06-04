@@ -103,13 +103,22 @@
 - Pass an array of event names to subscribe one callback to several class-level events, for example `useModelClassEvent(Subscription, ["create", "update"], reloadStatus)`.
 - Convenience wrappers are available as `useCreatedEvent(ModelClass, callback)`, `useUpdatedEvent(ModelClassOrModel, callback)`, and `useDestroyedEvent(ModelClassOrModel, callback)`.
 - `useUpdatedEvent` and `useDestroyedEvent` accept a model instance or array of model instances for instance-level subscriptions.
-- Hook options support `{active, debounce, onConnected}` plus event record projection options: `select`, `preload`, `withCount`, `abilities`, and `queryData`. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
+- Hook options support `{active, debounce, onConnected}` plus event record projection options: `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData`. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
+- `onCreate` and `onUpdate` can receive a frontend-model query instead of a plain options object. React hooks can receive the same query through the `query` option. The query's `where`, `joins`, and `search` predicates narrow which create/update events reach that callback. The same query's `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData` control the event payload.
+- Event queries intentionally reject list-only options such as `limit`, `offset`, `page`, `perPage`, `sort`, `group`, and `distinct` because lifecycle events match one saved record at a time.
+- Destroy events carry only ids after the row is gone, so query-filtered destroy subscriptions are not supported. Use an unfiltered destroy listener and check local ids when a screen needs deletion cleanup.
 
 ```js
-useUpdatedEvent(BuildGroup, onBuildGroupUpdated, {
-  select: {BuildGroup: ["id", "status", "rebuildableBuildsCount"]},
-  withCount: "builds"
-})
+useUpdatedEvent(
+  BuildGroup,
+  onBuildGroupUpdated,
+  {
+    query: BuildGroup
+      .where({projectId})
+      .select({BuildGroup: ["id", "status", "rebuildableBuildsCount"]})
+      .withCount("builds")
+  }
+)
 ```
 
 ## Attachment support

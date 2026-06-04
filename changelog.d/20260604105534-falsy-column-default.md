@@ -1,0 +1,1 @@
+Fixed column DEFAULT generation dropping falsy defaults (`default: 0`, `default: false`, `default: ""`). The column SQL builder used a truthiness check, so a falsy default was omitted and the column was created NOT NULL with no default — making inserts that rely on the default fail in strict mode. Falsy defaults are now emitted for both `createTable` and `addColumn`.
