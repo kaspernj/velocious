@@ -4,6 +4,7 @@ import debounceFunction from "debounce"
 import {useEffect, useMemo, useRef} from "react"
 
 import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
+import {frontendModelEventOptionsPayload} from "./query.js"
 
 /** @typedef {typeof import("./base.js").default} FrontendModelClass */
 /** @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
@@ -49,7 +50,7 @@ function assertNoUnknownOptions(restOptions) {
 function eventQueryDependencyPayload(query) {
   if (!query) return null
 
-  return query.eventOptionsPayload()
+  return frontendModelEventOptionsPayload(query.modelClass, query)
 }
 
 /**
