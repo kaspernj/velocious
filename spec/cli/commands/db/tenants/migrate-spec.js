@@ -572,6 +572,105 @@ export default CreateTenantGadgets
     }
   })
 
+  it("reports how many migrations were applied to each tenant via afterMigrateTenant", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenants-applied-count-"))
+    const migrationsDirectory = path.join(directory, "src", "database", "migrations")
+    const migrationModuleUrl = new URL("../../../../../src/database/migration/index.js", import.meta.url).href
+    /** @type {Array<number | undefined>} */
+    const migrationsAppliedReports = []
+
+    await fs.mkdir(migrationsDirectory, {recursive: true})
+    await fs.writeFile(path.join(migrationsDirectory, "20260517000000-create-tenant-widgets.js"), `
+import Migration from ${JSON.stringify(migrationModuleUrl)}
+
+class CreateTenantWidgets extends Migration {
+  async change() {
+    await this.createTable("tenant_widgets", (table) => {
+      table.string("name", {null: false})
+    })
+  }
+}
+
+CreateTenantWidgets.onDatabases(["projectTenant"])
+
+export default CreateTenantWidgets
+`, "utf8")
+
+    const configuration = new Configuration({
+      database: {
+        test: {
+          default: {
+            driver: SqliteDriver,
+            migrations: false,
+            name: "velocious-cli-tenants-applied-count-default",
+            poolType: AsyncTrackedMultiConnection,
+            type: "sqlite"
+          },
+          projectTenant: {
+            driver: SqliteDriver,
+            migrations: true,
+            name: "velocious-cli-tenants-applied-count-project-default",
+            poolType: AsyncTrackedMultiConnection,
+            tenantOnly: true,
+            type: "sqlite"
+          }
+        }
+      },
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      tenantDatabaseProviders: {
+        projectTenant: {
+          afterMigrateTenant: async ({migrationsApplied}) => {
+            migrationsAppliedReports.push(migrationsApplied)
+          },
+          listTenants: async () => [{slug: "alpha"}]
+        }
+      },
+      tenantDatabaseResolver: ({identifier, tenant}) => {
+        const tenantObject = /** @type {{slug?: string}} */ (tenant)
+
+        if (identifier != "projectTenant" || !tenantObject.slug) return
+
+        return {name: `velocious-cli-tenants-applied-count-project-${tenantObject.slug}`}
+      }
+    })
+
+    try {
+      const firstCli = new Cli({
+        configuration,
+        directory,
+        environmentHandler: new EnvironmentHandlerNode(),
+        processArgs: ["db:tenants:migrate", "projectTenant"],
+        testing: true
+      })
+
+      await firstCli.execute()
+
+      const secondCli = new Cli({
+        configuration,
+        directory,
+        environmentHandler: new EnvironmentHandlerNode(),
+        processArgs: ["db:tenants:migrate", "projectTenant"],
+        testing: true
+      })
+
+      await secondCli.execute()
+
+      // First migrate applies the one pending migration; the re-run has nothing
+      // pending so the hook is told zero migrations were applied (lets the
+      // provider skip expensive per-tenant schema work on no-op deploys).
+      expect(migrationsAppliedReports).toEqual([1, 0])
+    } finally {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
+
   it("rejects disabled tenant database identifiers", async () => {
     const previousDisabledIdentifiers = process.env.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS
     const configuration = new Configuration({

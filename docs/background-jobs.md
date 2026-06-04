@@ -46,3 +46,27 @@ The `background-job-failed` payload has:
 - `context.workerId`: the worker id included in the accepted report.
 
 The mirrored `all-error` payload includes the same `error` and `context` plus `errorType: "background-job-failed"`.
+
+## Worker Shutdown And Forked-Job Draining
+
+When a `background-jobs-worker` receives `SIGTERM`/`SIGINT` it stops accepting new
+work, drains in-flight jobs, and exits. Forked jobs run as detached
+`background-jobs-runner` child processes; on a graceful stop the worker now waits
+for those runners and then terminates any that outlast the drain window
+(`SIGTERM`, then `SIGKILL` after a short grace) so they are not orphaned across a
+deploy — an orphaned runner keeps running against deleted release code and holds
+its database connections open.
+
+The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
+
+- unset, `"indefinite"`, or `"0"` (default): wait for in-flight jobs to finish
+  and never interrupt a running job. Use this when jobs may run for a long time
+  (e.g. builds) and a deploy must not cut them off.
+- a positive integer (milliseconds): finish in-flight jobs for up to that long,
+  then reap any forked runners still in flight.
+
+When a process supervisor force-kills the worker after its own graceful-stop
+window, set this timeout shorter than that window so the worker reaps its forked
+runners itself before the supervisor's `SIGKILL` (which would orphan them). With
+the indefinite default, give the supervisor a graceful-stop window at least as
+long as your longest job instead.

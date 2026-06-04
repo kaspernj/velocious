@@ -106,11 +106,14 @@ export default class VelociousDatabaseMigrator {
   /**
    * @param {import("./migrator/types.js").MigrationObjectType[]} files - Files.
    * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback - Import callback.
+   * @returns {Promise<number>} - Number of migrations actually applied (not skipped as already-run).
    */
   async migrateFiles(files, importCallback) {
+    let appliedCount = 0
+
     await this.configuration.ensureConnections(async () => {
       for (const migration of files) {
-        await this.runMigrationFile({
+        const applied = await this.runMigrationFile({
           migration,
           requireMigration: async () => {
             if (!migration.fullPath) throw new Error(`Migration didn't have a fullPath key: ${Object.keys(migration).join(", ")}`)
@@ -124,10 +127,14 @@ export default class VelociousDatabaseMigrator {
             return migrationImport
           }
         })
+
+        if (applied) appliedCount++
       }
 
       await this._afterMigrations()
     })
+
+    return appliedCount
   }
 
   /**
@@ -384,12 +391,14 @@ export default class VelociousDatabaseMigrator {
    * @param {import("./migrator/types.js").MigrationObjectType} args.migration - Migration.
    * @param {import("./migrator/types.js").RequireMigrationType} args.requireMigration - Require migration.
    * @param {string} [args.direction] - Direction.
+   * @returns {Promise<boolean>} - Whether the migration ran on at least one database (false if skipped as already-run everywhere).
    */
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
     if (!this.migrationsVersions) await this.loadMigrationsVersions()
 
+    let applied = false
     const dbs = await this.configuration.getCurrentConnections()
 
     /** @type {string[]} */
@@ -454,6 +463,7 @@ export default class VelociousDatabaseMigrator {
 
       this.logger.debug(`Running migration on ${dbIdentifier}: ${migration.file}`, {migrationDatabaseIdentifiers})
 
+      applied = true
       const db = dbs[dbIdentifier]
       const MigrationClass = migrationClass
       const migrationInstance = new MigrationClass({
@@ -506,5 +516,7 @@ export default class VelociousDatabaseMigrator {
         throw new Error(`Unknown direction: ${direction}`)
       }
     }
+
+    return applied
   }
 }

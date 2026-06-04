@@ -1886,7 +1886,10 @@ VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS=4
 VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS=4
 VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY=beacon
 VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
+VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
 ```
+
+`VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked `background-jobs-runner` children still running, so they are not orphaned across a deploy. The default waits for jobs to finish and never interrupts a running job; set a positive number of milliseconds for a finite cap (keep it shorter than your process supervisor's graceful-stop window so the worker reaps its own runners first). See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-forked-job-draining).
 
 `maxConcurrentInlineJobs` (default: `4`) caps how many `forked: false` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores.
 

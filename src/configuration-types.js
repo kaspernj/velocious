@@ -355,7 +355,7 @@
  * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [createDatabase] - Creates the tenant database/schema for one tenant.
  * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [dropDatabase] - Drops the tenant database/schema for one tenant.
  * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [checkTenant] - Checks one tenant database before generic connection validation.
- * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [afterMigrateTenant] - Runs app-owned tenant work after generic migrations for one tenant.
+ * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, migrationsApplied: number, tenant: unknown}) : void | Promise<void>} [afterMigrateTenant] - Runs app-owned tenant work after generic migrations for one tenant. `migrationsApplied` is how many migrations actually ran (0 when the tenant was already up to date), so the app can skip expensive per-tenant work on no-op deploys.
  */
 
 /**

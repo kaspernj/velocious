@@ -1,0 +1,1 @@
+`db:tenants:migrate` now passes `migrationsApplied` (the number of migrations actually run for that tenant, 0 when already up to date) to the `afterMigrateTenant` provider hook, so apps can skip expensive per-tenant work on no-op runs. `Migrator.migrateFiles` returns the applied-migration count to support this. See `docs/tenant-databases.md`.

@@ -43,8 +43,11 @@ export default new Configuration({
       checkTenant: async ({databaseConfiguration, tenant}) => {
         // Optional preflight checks before generic connection validation.
       },
-      afterMigrateTenant: async ({configuration, databaseConfiguration, tenant}) => {
+      afterMigrateTenant: async ({configuration, databaseConfiguration, migrationsApplied, tenant}) => {
         // Optional app-owned schema or data work after generic migrations.
+        // `migrationsApplied` is how many migrations actually ran for this tenant
+        // (0 when it was already up to date) — skip expensive work on no-op runs.
+        if (migrationsApplied === 0) return
       }
     }
   }
@@ -67,6 +70,8 @@ npx velocious db:tenants:migrate projectTenant --parallel 20
 ```
 
 `afterMigrateTenant` runs inside the tenant command's active connection scope after generic migrations finish for that tenant. Hooks can read `configuration.getCurrentConnections()` or run model/database queries against both the default database and the active tenant database without opening another connection scope.
+
+The hook receives `migrationsApplied`, the number of migrations actually applied to that tenant during this run (0 when the tenant was already up to date, because already-run migrations are skipped). Use it to make the hook proportional to pending work — for example, return early when `migrationsApplied === 0` so a no-op `db:tenants:migrate` (such as one run on every deploy) does not repeat expensive per-tenant schema reconciliation across every tenant.
 
 Tenant migrations should explicitly target the tenant identifier:
 
