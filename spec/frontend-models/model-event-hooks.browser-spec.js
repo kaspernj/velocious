@@ -67,6 +67,7 @@ describe("Frontend model event hooks", () => {
     if (!result) return
 
     expect(result.classCreatePreloadProject).toEqual(1)
+    expect(result.classCreateQueryPassed).toEqual(1)
     expect(result.classCreateSelectCount).toEqual(2)
     expect(result.instanceUpdateSelectCount).toEqual(1)
     expect(result.instanceUpdateWithCountComments).toEqual(1)

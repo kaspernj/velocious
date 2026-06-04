@@ -1,6 +1,6 @@
 // @ts-check
 
-import {waitFor} from "awaitery"
+import {wait, waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 import FrontendModelPreloader from "../../src/frontend-models/preloader.js"
@@ -507,6 +507,51 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         expect(projectedTask.readCount("commentsCount")).toEqual(1)
         expect(projectedProject.id()).toEqual(project.id())
         expect(() => projectedTask.name()).toThrow(/Task#name was not selected/)
+      } finally {
+        offUpdate()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("filters model lifecycle update events with a frontend query", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const matchingProject = await ProjectRecord.create({name: "Filtered event project"})
+      const otherProject = await ProjectRecord.create({name: "Filtered event other project"})
+      const matchingTask = await TaskRecord.create({name: "Filtered matching original", project: matchingProject})
+      const otherTask = await TaskRecord.create({name: "Filtered other original", project: otherProject})
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      /** @type {Array<{id: string, model: Task}>} */
+      const updates = []
+      const offUpdate = await Task.onUpdate((event) => {
+        updates.push({id: event.id, model: /** @type {Task} */ (event.model)})
+      }, Task
+        .where({project: {id: matchingProject.id()}})
+        .select(["id"])
+      )
+
+      try {
+        otherTask.setName("Filtered other renamed")
+        await otherTask.save()
+        await wait(100)
+
+        expect(updates).toEqual([])
+
+        matchingTask.setName("Filtered matching renamed")
+        await matchingTask.save()
+
+        await waitFor(() => {
+          if (updates.length < 1) throw new Error(`Expected filtered onUpdate but got ${updates.length}`)
+        })
+        await wait(100)
+
+        expect(updates.map((update) => update.id)).toEqual([String(matchingTask.id())])
+        expect(updates[0].model.id()).toEqual(matchingTask.id())
+        expect(() => updates[0].model.name()).toThrow(/Task#name was not selected/)
       } finally {
         offUpdate()
         resetFrontendModelTransport()

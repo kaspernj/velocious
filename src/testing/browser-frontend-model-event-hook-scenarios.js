@@ -10,7 +10,6 @@ import useModelClassEvent from "../frontend-models/use-model-class-event.js"
 import useUpdatedEvent from "../frontend-models/use-updated-event.js"
 import wait from "awaitery/build/wait.js"
 
-/** @typedef {import("../frontend-models/query.js").FrontendModelProjectionOptions} FrontendModelProjectionOptions */
 /** @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
 /** @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
 /** @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
@@ -18,7 +17,7 @@ import wait from "awaitery/build/wait.js"
  * @typedef {object} FakeSubscriptions
  * @property {Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>} create - Create callbacks.
  * @property {Set<(payload: FrontendModelHookTestDestroyPayload) => void>} destroy - Destroy callbacks.
- * @property {{create: FrontendModelProjectionOptions[], destroy: FrontendModelProjectionOptions[], update: FrontendModelProjectionOptions[]}} options - Subscription options.
+ * @property {{create: import("../frontend-models/query.js").FrontendModelEventOptionsObject[], destroy: import("../frontend-models/query.js").FrontendModelEventOptionsObject[], update: import("../frontend-models/query.js").FrontendModelEventOptionsObject[]}} options - Subscription options.
  * @property {Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>} update - Update callbacks.
  */
 
@@ -101,7 +100,7 @@ function buildFakeModelClass() {
 
     /**
      * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
-     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
     static async onCreate(callback, options = {}) {
@@ -113,7 +112,7 @@ function buildFakeModelClass() {
 
     /**
      * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
-     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
     static async onDestroy(callback, options = {}) {
@@ -125,7 +124,7 @@ function buildFakeModelClass() {
 
     /**
      * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
-     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
     static async onUpdate(callback, options = {}) {
@@ -177,7 +176,7 @@ function buildFakeModel(id, subscriptions) {
 
     /**
      * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
-     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
     async onDestroy(callback, options = {}) {
@@ -189,7 +188,7 @@ function buildFakeModel(id, subscriptions) {
 
     /**
      * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
-     * @param {FrontendModelProjectionOptions} [options] - Projection options.
+     * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
     async onUpdate(callback, options = {}) {
@@ -302,11 +301,15 @@ async function projectionOptionsScenario() {
   const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
   const instanceSubscriptions = buildFakeSubscriptions()
   const model = buildFakeModel("task-1", instanceSubscriptions)
+  const classQuery = ModelClass
+    .where({id: "task-1"})
+    .select(["id"])
 
   /** @returns {React.ReactElement} - Test element. */
   function TestComponent() {
     useCreatedEvent(ModelClass, () => {}, {
       preload: "project",
+      query: classQuery,
       select: {Task: ["id", "nameUppercase"]}
     })
     useUpdatedEvent(model, () => {}, {
@@ -332,6 +335,7 @@ async function projectionOptionsScenario() {
 
   return {
     classCreatePreloadProject: createOptions.preload === "project" ? 1 : 0,
+    classCreateQueryPassed: createOptions.query === classQuery ? 1 : 0,
     classCreateSelectCount: createOptions.select && typeof createOptions.select === "object" && !Array.isArray(createOptions.select) && Array.isArray(createOptions.select.Task) ? createOptions.select.Task.length : 0,
     instanceDestroyPreloadProject: destroyOptions.preload === "project" ? 1 : 0,
     instanceDestroySelectCount: Array.isArray(destroyOptions.select) ? destroyOptions.select.length : 0,

@@ -28,6 +28,16 @@ function assertNoUnknownOptions(restOptions) {
 }
 
 /**
+ * @param {import("./query.js").default<FrontendModelClass> | undefined} query - Event query option.
+ * @returns {import("./query.js").FrontendModelEventOptionsPayload | null} Stable dependency payload.
+ */
+function eventQueryDependencyPayload(query) {
+  if (!query) return null
+
+  return query.eventOptionsPayload()
+}
+
+/**
  * React hook for frontend-model update events. Pass a model class for class-level
  * update events, or a model / model array for instance-level update events.
  * @param {FrontendModelClass | FrontendModelInstance | FrontendModelInstance[] | null | undefined} modelClassOrModels - Model class, model, or models.
@@ -36,12 +46,12 @@ function assertNoUnknownOptions(restOptions) {
  * @returns {void}
  */
 export default function useUpdatedEvent(modelClassOrModels, callback, options = {}) {
-  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount, ...restOptions} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount, ...restOptions} = options
   assertNoUnknownOptions(restOptions)
 
   const classModel = typeof modelClassOrModels === "function" ? modelClassOrModels : null
   const instanceModels = typeof modelClassOrModels === "function" ? null : modelClassOrModels
-  const projectionOptions = {abilities, preload, queryData, select, withCount}
+  const projectionOptions = {abilities, preload, query, queryData, select, selectsExtra, withCount}
 
   useModelClassEvent(classModel, "update", (payload) => {
     callback(/** @type {FrontendModelClassUpdateEventPayload} */ (payload))
@@ -56,12 +66,12 @@ export default function useUpdatedEvent(modelClassOrModels, callback, options = 
  * @returns {void}
  */
 function useInstanceUpdatedEvent(modelOrModels, callback, options) {
-  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount} = options
-  const projectionKey = JSON.stringify({abilities, preload, queryData, select, withCount})
-  const projectionOptionsRef = useRef({abilities, preload, queryData, select, withCount})
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount} = options
+  const projectionKey = JSON.stringify({abilities, preload, query: eventQueryDependencyPayload(query), queryData, select, selectsExtra, withCount})
+  const projectionOptionsRef = useRef({abilities, preload, query, queryData, select, selectsExtra, withCount})
   const callbackRef = useRef(callback)
   const activeRef = useRef(active)
-  projectionOptionsRef.current = {abilities, preload, queryData, select, withCount}
+  projectionOptionsRef.current = {abilities, preload, query, queryData, select, selectsExtra, withCount}
   callbackRef.current = callback
   activeRef.current = active
 

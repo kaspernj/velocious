@@ -12,7 +12,7 @@ import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js
 /** @typedef {{id: string}} FrontendModelDestroyEventPayload */
 /** @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
 /** @typedef {(payload: FrontendModelClassEventPayload) => void} FrontendModelClassEventCallback */
-/** @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelProjectionOptions} UseModelClassEventOptions */
+/** @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelEventOptionsObject} UseModelClassEventOptions */
 
 /**
  * @param {FrontendModelClassEventName | FrontendModelClassEventName[]} eventOrEvents - Event name or names.
@@ -43,10 +43,20 @@ function assertNoUnknownOptions(restOptions) {
 }
 
 /**
+ * @param {import("./query.js").default<FrontendModelClass> | undefined} query - Event query option.
+ * @returns {import("./query.js").FrontendModelEventOptionsPayload | null} Stable dependency payload.
+ */
+function eventQueryDependencyPayload(query) {
+  if (!query) return null
+
+  return query.eventOptionsPayload()
+}
+
+/**
  * @param {FrontendModelClass} modelClass - Frontend model class.
  * @param {FrontendModelClassEventName} eventName - Event name.
  * @param {FrontendModelClassEventCallback} callback - Event callback.
- * @param {import("./query.js").FrontendModelProjectionOptions} options - Event record projection options.
+ * @param {import("./query.js").FrontendModelEventOptionsObject} options - Event query or record projection options.
  * @returns {Promise<() => void>} - Unsubscribe callback.
  */
 async function subscribeToModelClassEvent(modelClass, eventName, callback, options) {
@@ -66,14 +76,14 @@ async function subscribeToModelClassEvent(modelClass, eventName, callback, optio
  * @returns {void}
  */
 export default function useModelClassEvent(modelClass, eventOrEvents, callback, options = {}) {
-  const {active = true, abilities, debounce = false, onConnected, preload, queryData, select, withCount, ...restOptions} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount, ...restOptions} = options
   assertNoUnknownOptions(restOptions)
 
-  const projectionKey = JSON.stringify({abilities, preload, queryData, select, withCount})
-  const projectionOptionsRef = useRef({abilities, preload, queryData, select, withCount})
+  const projectionKey = JSON.stringify({abilities, preload, query: eventQueryDependencyPayload(query), queryData, select, selectsExtra, withCount})
+  const projectionOptionsRef = useRef({abilities, preload, query, queryData, select, selectsExtra, withCount})
   const callbackRef = useRef(callback)
   const activeRef = useRef(active)
-  projectionOptionsRef.current = {abilities, preload, queryData, select, withCount}
+  projectionOptionsRef.current = {abilities, preload, query, queryData, select, selectsExtra, withCount}
   callbackRef.current = callback
   activeRef.current = active
 

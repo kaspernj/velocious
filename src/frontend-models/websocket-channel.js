@@ -5,7 +5,7 @@ import Response from "../http-server/client/response.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
 /**
- * @typedef {{action?: string, id?: string | number, record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | undefined}} FrontendModelLifecycleBroadcastBody
+ * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
  */
 /**
  * @typedef {{headers?: () => Record<string, string | string[] | undefined>, remoteAddress?: () => string | undefined}} FrontendModelWebsocketUpgradeRequest
@@ -20,10 +20,13 @@ import {serializeFrontendModelTransportValue} from "./transport-serialization.js
  *
  * Auth model: subscribe-time only. `canSubscribe` resolves the caller's
  * ability once, checks that at least one `allow` rule exists for
- * `read` on the requested model class, and then delivers every future
- * lifecycle broadcast for that model without re-authorizing per event.
+ * `read` on the requested model class, and then delivers future
+ * lifecycle broadcasts for that model without re-authorizing per event.
  * This matches the explicit design decision in Phase 3 to trade
  * per-record visibility guarantees for massively cheaper broadcast fan-out.
+ * Subscriber-provided event filters can still narrow which create/update
+ * events are delivered, but they are matching predicates rather than
+ * per-record authorization checks.
  *
  * Wire: subscribe with `subscribeChannel("frontend-models", {params: {model: ModelName}})`.
  * Backend publishes `{action, id, record}` via
@@ -39,6 +42,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     const modelName = this._modelName()
 
     if (!modelName) return false
+    this._eventFilters()
 
     const configuration = this.session.configuration
     const modelClasses = configuration.getModelClasses?.() || {}
@@ -75,31 +79,77 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @returns {Promise<void>} Resolves after delivery.
    */
   async deliverBroadcast(body, meta) {
-    if (!this._hasProjectionParams()) {
+    const configuration = this.session.configuration
+
+    if (configuration && typeof configuration.ensureConnections === "function") {
+      await configuration.ensureConnections(async () => {
+        await this._deliverBroadcast(body, meta)
+      })
+      return
+    }
+
+    await this._deliverBroadcast(body, meta)
+  }
+
+  /**
+   * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
+   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @returns {Promise<void>} Resolves after delivery.
+   */
+  async _deliverBroadcast(body, meta) {
+    const hasEventFilters = this._hasEventFilterParams()
+
+    if (!this._hasProjectionParams() && !hasEventFilters) {
       this.sendMessage(body, meta)
       return
     }
 
-    if (!body || typeof body !== "object" || body.action === "destroy") {
-      this.sendMessage(body, meta)
+    if (!body || typeof body !== "object") {
+      if (!hasEventFilters || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
+      return
+    }
+
+    if (body.action === "destroy") {
+      if (!hasEventFilters || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
       return
     }
 
     if (body.id === undefined || body.id === null) {
-      this.sendMessage(body, meta)
+      if (!hasEventFilters || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
       return
     }
 
-    const projectedRecord = await this._projectedRecordForEventId(body.id)
+    const FrontendModelController = await this._frontendModelControllerClass()
+    const matchedEventFilterKeys = await this._matchedEventFilterKeysForEventId(body.id, FrontendModelController)
 
-    if (!projectedRecord) {
+    if (hasEventFilters && matchedEventFilterKeys.length === 0 && !this._hasUnfilteredEventDelivery()) {
       return
     }
 
-    this.sendMessage({
-      ...body,
-      record: serializeFrontendModelTransportValue(projectedRecord)
-    }, meta)
+    /** @type {FrontendModelLifecycleBroadcastBody} */
+    let deliverBody = body
+
+    if (this._hasProjectionParams()) {
+      const projectedRecord = await this._projectedRecordForEventId(body.id, FrontendModelController)
+
+      if (!projectedRecord) {
+        return
+      }
+
+      deliverBody = {
+        ...deliverBody,
+        record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord))
+      }
+    }
+
+    if (hasEventFilters) {
+      deliverBody = {
+        ...deliverBody,
+        matchedEventFilterKeys
+      }
+    }
+
+    this.sendMessage(deliverBody, meta)
   }
 
   /**
@@ -120,17 +170,59 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /** @returns {boolean} - Whether this subscription requested per-event record projection. */
   _hasProjectionParams() {
     return this.params.select !== undefined
+      || this.params.selectsExtra !== undefined
       || this.params.preload !== undefined
       || this.params.withCount !== undefined
       || this.params.abilities !== undefined
       || this.params.queryData !== undefined
   }
 
+  /** @returns {boolean} - Whether this subscription requested event query filters. */
+  _hasEventFilterParams() {
+    return this._eventFilters().length > 0
+  }
+
+  /** @returns {boolean} - Whether unfiltered callbacks should receive every event. */
+  _hasUnfilteredEventDelivery() {
+    return this.params.unfilteredEventDelivery === true
+  }
+
+  /** @returns {import("./query.js").FrontendModelEventFilterPayloadEntry[]} - Valid event filters. */
+  _eventFilters() {
+    if (this.params.eventFilters === undefined) return []
+    if (!Array.isArray(this.params.eventFilters)) {
+      throw new Error("Frontend model eventFilters must be an array")
+    }
+
+    return this.params.eventFilters.map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new Error("Frontend model eventFilters entries must be objects")
+      }
+
+      const eventFilter = /** @type {Record<string, unknown>} */ (entry)
+
+      if (typeof eventFilter.key !== "string" || eventFilter.key.length === 0) {
+        throw new Error("Frontend model eventFilters entries require a key")
+      }
+
+      return /** @type {import("./query.js").FrontendModelEventFilterPayloadEntry} */ (eventFilter)
+    })
+  }
+
+  /** @returns {Promise<typeof import("../frontend-model-controller.js").default>} - Frontend model controller class. */
+  async _frontendModelControllerClass() {
+    const frontendModelControllerPath = "../frontend-model-controller.js"
+    const {default: FrontendModelController} = await import(frontendModelControllerPath)
+
+    return FrontendModelController
+  }
+
   /**
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+   * @param {Record<string, unknown>} [params] - Optional params override.
    * @returns {import("../frontend-model-controller.js").default} - Synthetic controller used for resource serialization.
    */
-  _frontendModelController(FrontendModelController) {
+  _frontendModelController(FrontendModelController, params = {}) {
     const configuration = this.session.configuration
     const controller = new FrontendModelController({
       action: "websocketEvent",
@@ -138,10 +230,15 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       controller: "frontend-models",
       params: {
         abilities: this.params.abilities,
+        joins: this.params.joins,
         model: this._modelName(),
         preload: this.params.preload,
         queryData: this.params.queryData,
+        searches: this.params.searches,
         select: this.params.select,
+        selectsExtra: this.params.selectsExtra,
+        where: this.params.where,
+        ...params,
         withCount: this.params.withCount
       },
       request: /** @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
@@ -156,18 +253,67 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * @param {string | number} id - Event record id.
+   * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+   * @returns {Promise<string[]>} - Event filter keys matched by the record.
+   */
+  async _matchedEventFilterKeysForEventId(id, FrontendModelController) {
+    /** @type {string[]} */
+    const matchedEventFilterKeys = []
+
+    for (const eventFilter of this._eventFilters()) {
+      const matches = await this._eventMatchesFilter({
+        FrontendModelController,
+        eventFilter,
+        id
+      })
+
+      if (matches) matchedEventFilterKeys.push(eventFilter.key)
+    }
+
+    return matchedEventFilterKeys
+  }
+
+  /**
+   * @param {object} args - Filter args.
+   * @param {typeof import("../frontend-model-controller.js").default} args.FrontendModelController - Server-side frontend-model controller class.
+   * @param {import("./query.js").FrontendModelEventFilterPayloadEntry} args.eventFilter - Event filter payload.
+   * @param {string | number} args.id - Event record id.
+   * @returns {Promise<boolean>} Whether the record matches the filter.
+   */
+  async _eventMatchesFilter({FrontendModelController, eventFilter, id}) {
+    const controller = this._frontendModelController(FrontendModelController, eventFilter)
+
+    await controller.ensureFrontendModelClassInitialized()
+
+    const ModelClass = controller.frontendModelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const where = controller.frontendModelWhere()
+    const joins = controller.frontendModelJoins()
+    let query = ModelClass.where({[ModelClass.tableName()]: {[primaryKey]: id}})
+
+    if (where) controller.applyFrontendModelWhere({query, where})
+    if (joins) controller.applyFrontendModelJoins({joins, query})
+
+    for (const search of controller.frontendModelSearches()) {
+      controller.applyFrontendModelSearch({query, search})
+    }
+
+    return Boolean(await query.first())
+  }
+
+  /**
+   * @param {string | number} id - Event record id.
+   * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
    * @returns {Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>} - Serialized projected record.
    */
-  async _projectedRecordForEventId(id) {
-    const frontendModelControllerPath = "../frontend-model-controller.js"
-    const {default: FrontendModelController} = await import(frontendModelControllerPath)
+  async _projectedRecordForEventId(id, FrontendModelController) {
     const controller = this._frontendModelController(FrontendModelController)
 
     await controller.ensureFrontendModelClassInitialized()
 
     const ModelClass = controller.frontendModelClass()
     const primaryKey = ModelClass.primaryKey()
-    let query = ModelClass.where({[primaryKey]: id})
+    let query = ModelClass.where({[ModelClass.tableName()]: {[primaryKey]: id}})
     const preload = controller.frontendModelPreload()
 
     if (preload) query = query.preload(preload)

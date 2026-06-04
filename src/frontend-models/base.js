@@ -3,7 +3,7 @@
 import * as inflection from "inflection"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
-import FrontendModelQuery, {frontendModelProjectionPayload} from "./query.js"
+import FrontendModelQuery, {frontendModelEventOptionsPayload} from "./query.js"
 import FrontendModelPreloader from "./preloader.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
@@ -728,7 +728,7 @@ function cloneFrontendModelAttributes(value) {
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
- * @typedef {{callback: (payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
+ * @typedef {{callback: (payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
  */
 /**
  * @typedef {{callback: (payload: {id: string}) => void}} FrontendModelDestroyEventCallbackEntry
@@ -811,6 +811,11 @@ function mergeFrontendModelEventProjectionPayload(target, source) {
     mergeFrontendModelEventSelect(target.select, source.select)
   }
 
+  if (source.selectsExtra) {
+    if (!target.selectsExtra) target.selectsExtra = {}
+    mergeFrontendModelEventSelect(target.selectsExtra, source.selectsExtra)
+  }
+
   if (source.withCount) {
     if (!target.withCount) target.withCount = []
     mergeUniqueFrontendModelEventEntries(target.withCount, source.withCount)
@@ -831,6 +836,44 @@ function mergeFrontendModelEventProjectionPayload(target, source) {
       targetQueryData.push(entry)
     }
   }
+}
+
+/**
+ * @param {unknown} body - Raw websocket event body.
+ * @returns {Set<string>} - Matched event filter keys delivered by the backend.
+ */
+function frontendModelMatchedEventFilterKeys(body) {
+  if (!body || typeof body !== "object") return new Set()
+
+  const keys = /** @type {{matchedEventFilterKeys?: unknown}} */ (body).matchedEventFilterKeys
+
+  if (!Array.isArray(keys)) return new Set()
+
+  return new Set(keys.map((key) => String(key)))
+}
+
+/**
+ * @param {FrontendModelModelEventCallbackEntry} entry - Callback entry.
+ * @param {Set<string>} matchedEventFilterKeys - Backend matched filter keys.
+ * @returns {boolean} Whether the callback should receive the event.
+ */
+function frontendModelEventEntryMatches(entry, matchedEventFilterKeys) {
+  if (!entry.eventFilterKey) return true
+
+  return matchedEventFilterKeys.has(entry.eventFilterKey)
+}
+
+/**
+ * @param {typeof FrontendModelBase} ModelClass - Event model class.
+ * @param {import("./query.js").FrontendModelEventOptions} options - Event options.
+ * @returns {void}
+ */
+function assertNoDestroyEventFilter(ModelClass, options) {
+  const eventOptionsPayload = frontendModelEventOptionsPayload(ModelClass, options)
+
+  if (!eventOptionsPayload.eventFilterKey) return
+
+  throw new Error("Frontend model destroy event subscriptions do not support query filters")
 }
 
 /**
@@ -865,26 +908,48 @@ class FrontendModelEventSubscription {
   }
 
   /**
-   * @returns {{model: string} & import("./query.js").FrontendModelProjectionPayload} - Current websocket subscription params.
+   * @returns {{model: string, eventFilters?: import("./query.js").FrontendModelEventFilterPayloadEntry[], unfilteredEventDelivery?: boolean} & import("./query.js").FrontendModelProjectionPayload} - Current websocket subscription params.
    */
   subscriptionParams() {
     /** @type {import("./query.js").FrontendModelProjectionPayload} */
     const projectionPayload = {}
+    /** @type {Record<string, import("./query.js").FrontendModelEventFilterPayloadEntry>} */
+    const eventFiltersByKey = {}
     const projectionEntries = []
+    let hasUnfilteredEventDelivery = this.classDestroyCallbacks.size > 0
 
     for (const entry of this.classCreateCallbacks) projectionEntries.push(entry)
     for (const entry of this.classUpdateCallbacks) projectionEntries.push(entry)
 
     for (const listener of this.instanceListeners.values()) {
       for (const entry of listener.updateCallbacks) projectionEntries.push(entry)
+      if (listener.destroyCallbacks.size > 0) hasUnfilteredEventDelivery = true
     }
 
     for (const entry of projectionEntries) {
       mergeFrontendModelEventProjectionPayload(projectionPayload, entry.projectionPayload)
+
+      if (entry.eventFilterKey && entry.eventFilterPayload) {
+        eventFiltersByKey[entry.eventFilterKey] = {
+          ...entry.eventFilterPayload,
+          key: entry.eventFilterKey
+        }
+      } else {
+        hasUnfilteredEventDelivery = true
+      }
     }
+
+    const eventFilters = Object.values(eventFiltersByKey)
+    const eventFilterParams = eventFilters.length > 0
+      ? {
+          eventFilters,
+          ...(hasUnfilteredEventDelivery ? {unfilteredEventDelivery: true} : {})
+        }
+      : {}
 
     return {
       model: this.ModelClass.getModelName(),
+      ...eventFilterParams,
       ...projectionPayload
     }
   }
@@ -964,6 +1029,7 @@ class FrontendModelEventSubscription {
     if (rawId === undefined || rawId === null) return
 
     const id = String(rawId)
+    const matchedEventFilterKeys = frontendModelMatchedEventFilterKeys(body)
 
     if (action === "destroy") {
       const listener = this.instanceListeners.get(id)
@@ -987,21 +1053,29 @@ class FrontendModelEventSubscription {
     const listener = this.instanceListeners.get(id)
 
     if (action === "update" && listener) {
-      // Auto-merge into the registered instance so callers reading
-      // through the same handle see fresh attributes.
-      const instanceAny = /** @type {any} */ (listener.instance)
+      const matchingUpdateCallbacks = Array.from(listener.updateCallbacks).filter((entry) =>
+        frontendModelEventEntryMatches(entry, matchedEventFilterKeys)
+      )
 
-      instanceAny.assignAttributes(freshModel.attributes())
-      instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
+      if (matchingUpdateCallbacks.length > 0) {
+        // Auto-merge into the registered instance so callers reading
+        // through the same handle see fresh attributes.
+        const instanceAny = /** @type {any} */ (listener.instance)
 
-      for (const entry of listener.updateCallbacks) {
-        try { entry.callback({id, model: listener.instance}) } catch (error) { console.error(error) }
+        instanceAny.assignAttributes(freshModel.attributes())
+        instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
+
+        for (const entry of matchingUpdateCallbacks) {
+          try { entry.callback({id, model: listener.instance}) } catch (error) { console.error(error) }
+        }
       }
     }
 
     const classCallbacks = action === "create" ? this.classCreateCallbacks : this.classUpdateCallbacks
 
     for (const entry of classCallbacks) {
+      if (!frontendModelEventEntryMatches(entry, matchedEventFilterKeys)) continue
+
       try { entry.callback({id, model: freshModel}) } catch (error) { console.error(error) }
     }
   }
@@ -2673,16 +2747,17 @@ export default class FrontendModelBase {
   /**
    * Class-level hook fired when any record of this model is created.
    * Subscribe-time authorization only — once a subscription is
-   * accepted, every future `create` event for this model is delivered
-   * without re-checking per-record visibility.
+   * accepted, future `create` events for this model are delivered
+   * without re-checking per-record visibility. Query options can still
+   * narrow which events reach this callback.
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
-   * @param {import("./query.js").FrontendModelProjectionOptions} [options] - Event record projection options.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onCreate(callback, options = {}) {
     const sub = ensureFrontendModelEventSubscription(this)
-    const entry = {callback, projectionPayload: frontendModelProjectionPayload(this, options)}
+    const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
 
     sub.classCreateCallbacks.add(entry)
     await sub.ensureSubscribed()
@@ -2697,12 +2772,12 @@ export default class FrontendModelBase {
    * Class-level hook fired when any record of this model is updated.
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
-   * @param {import("./query.js").FrontendModelProjectionOptions} [options] - Event record projection options.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onUpdate(callback, options = {}) {
     const sub = ensureFrontendModelEventSubscription(this)
-    const entry = {callback, projectionPayload: frontendModelProjectionPayload(this, options)}
+    const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
 
     sub.classUpdateCallbacks.add(entry)
     await sub.ensureSubscribed()
@@ -2717,10 +2792,12 @@ export default class FrontendModelBase {
    * Class-level hook fired when any record of this model is destroyed.
    * @this {typeof FrontendModelBase}
    * @param {(payload: {id: string}) => void} callback - Event callback.
-   * @param {import("./query.js").FrontendModelProjectionOptions} [_options] - Accepted for API symmetry; destroy events carry ids only.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  static async onDestroy(callback, _options = {}) {
+  static async onDestroy(callback, options = {}) {
+    assertNoDestroyEventFilter(this, options)
+
     const sub = ensureFrontendModelEventSubscription(this)
     const entry = {callback}
 
@@ -2739,7 +2816,7 @@ export default class FrontendModelBase {
    * before the callback runs, so callers can read fresh values via
    * `this.someAttr()` without re-fetching.
    * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
-   * @param {import("./query.js").FrontendModelProjectionOptions} [options] - Event record projection options.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   async onUpdate(callback, options = {}) {
@@ -2747,7 +2824,7 @@ export default class FrontendModelBase {
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
-    const entry = {callback, projectionPayload: frontendModelProjectionPayload(ModelClass, options)}
+    const entry = {callback, ...frontendModelEventOptionsPayload(ModelClass, options)}
     let listener = sub.instanceListeners.get(id)
 
     if (!listener) {
@@ -2776,12 +2853,15 @@ export default class FrontendModelBase {
   /**
    * Instance-level hook fired when THIS record is destroyed.
    * @param {(payload: {id: string}) => void} callback - Event callback.
-   * @param {import("./query.js").FrontendModelProjectionOptions} [_options] - Accepted for API symmetry; destroy events carry ids only.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
-  async onDestroy(callback, _options = {}) {
+  async onDestroy(callback, options = {}) {
     const self = /** @type {any} */ (this)
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+
+    assertNoDestroyEventFilter(ModelClass, options)
+
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
     const entry = {callback}
