@@ -1671,6 +1671,69 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {void}
+   * @throws {Error} When the query contains list-only options that cannot filter a single lifecycle event.
+   */
+  assertEventQuerySupported() {
+    /** @type {string[]} */
+    const unsupportedOptions = []
+
+    if (this._sort.length > 0) unsupportedOptions.push("sort")
+    if (this._group.length > 0) unsupportedOptions.push("group")
+    if (this._distinct) unsupportedOptions.push("distinct")
+    if (this._limit !== null || this._offset !== null || this._page !== null || this._perPage !== null) unsupportedOptions.push("pagination")
+
+    if (unsupportedOptions.length === 0) return
+
+    throw new Error(`Frontend model event queries do not support ${unsupportedOptions.join(", ")}`)
+  }
+
+  /**
+   * @returns {FrontendModelProjectionPayload} - Projection payload used when serializing lifecycle events.
+   */
+  eventProjectionPayload() {
+    this.assertEventQuerySupported()
+
+    return {
+      ...this.preloadPayload(),
+      ...this.selectPayload(),
+      ...this.selectsExtraPayload(),
+      ...this.withCountPayload(),
+      ...this.abilitiesPayload(),
+      ...this.queryDataPayload()
+    }
+  }
+
+  /**
+   * @returns {FrontendModelEventFilterPayload | null} - Query pieces used to match lifecycle events.
+   */
+  eventFilterPayload() {
+    this.assertEventQuerySupported()
+
+    const payload = {
+      ...this.joinsPayload(),
+      ...this.searchPayload(),
+      ...this.wherePayload()
+    }
+
+    return Object.keys(payload).length === 0 ? null : payload
+  }
+
+  /**
+   * @returns {FrontendModelEventOptionsPayload} - Combined event filter and projection payload.
+   */
+  // fallow-ignore-next-line unused-class-member
+  eventOptionsPayload() {
+    const eventFilterPayload = this.eventFilterPayload()
+
+    return {
+      eventFilterKey: eventFilterPayload ? frontendModelEventFilterKey(eventFilterPayload) : null,
+      eventFilterPayload,
+      projectionPayload: this.eventProjectionPayload()
+    }
+  }
+
+  /**
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async load() {
@@ -1950,72 +2013,6 @@ function frontendModelEventFilterKey(payload) {
 }
 
 /**
- * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
- * @returns {void}
- * @throws {Error} When the query contains list-only options that cannot filter a single lifecycle event.
- */
-function assertFrontendModelEventQuerySupported(query) {
-  /** @type {string[]} */
-  const unsupportedOptions = []
-
-  if (query._sort.length > 0) unsupportedOptions.push("sort")
-  if (query._group.length > 0) unsupportedOptions.push("group")
-  if (query._distinct) unsupportedOptions.push("distinct")
-  if (query._limit !== null || query._offset !== null || query._page !== null || query._perPage !== null) unsupportedOptions.push("pagination")
-
-  if (unsupportedOptions.length === 0) return
-
-  throw new Error(`Frontend model event queries do not support ${unsupportedOptions.join(", ")}`)
-}
-
-/**
- * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
- * @returns {FrontendModelProjectionPayload} - Projection payload used when serializing lifecycle events.
- */
-function frontendModelEventProjectionPayload(query) {
-  assertFrontendModelEventQuerySupported(query)
-
-  return {
-    ...query.preloadPayload(),
-    ...query.selectPayload(),
-    ...query.selectsExtraPayload(),
-    ...query.withCountPayload(),
-    ...query.abilitiesPayload(),
-    ...query.queryDataPayload()
-  }
-}
-
-/**
- * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
- * @returns {FrontendModelEventFilterPayload | null} - Query pieces used to match lifecycle events.
- */
-function frontendModelEventFilterPayload(query) {
-  assertFrontendModelEventQuerySupported(query)
-
-  const payload = {
-    ...query.joinsPayload(),
-    ...query.searchPayload(),
-    ...query.wherePayload()
-  }
-
-  return Object.keys(payload).length === 0 ? null : payload
-}
-
-/**
- * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
- * @returns {FrontendModelEventOptionsPayload} - Combined event filter and projection payload.
- */
-function frontendModelEventOptionsPayloadFromQuery(query) {
-  const eventFilterPayload = frontendModelEventFilterPayload(query)
-
-  return {
-    eventFilterKey: eventFilterPayload ? frontendModelEventFilterKey(eventFilterPayload) : null,
-    eventFilterPayload,
-    projectionPayload: frontendModelEventProjectionPayload(query)
-  }
-}
-
-/**
  * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Query receiving projection options.
  * @param {FrontendModelProjectionOptions} options - Projection options.
  * @returns {void}
@@ -2030,23 +2027,43 @@ function applyFrontendModelProjectionOptions(query, options) {
 }
 
 /**
- * @param {typeof import("./base.js").default} modelClass - Frontend model class.
- * @param {FrontendModelEventOptions} [options] - Event query or projection options.
- * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Normalized query used by event subscriptions.
+ * @param {typeof import("./base.js").default} modelClass - Expected frontend model class.
+ * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
+ * @returns {void}
  */
-function frontendModelEventQuery(modelClass, options = {}) {
-  if (options instanceof FrontendModelQuery) {
-    if (options.modelClass !== modelClass) {
-      throw new Error(`Cannot subscribe ${modelClass.name} events with a ${options.modelClass.name} query`)
-    }
+function assertFrontendModelEventQueryClass(modelClass, query) {
+  if (query.modelClass === modelClass) return
 
-    return options.clone()
-  }
+  throw new Error(`Cannot subscribe ${modelClass.name} events with a ${query.modelClass.name} query`)
+}
 
-  if (!options || typeof options !== "object" || Array.isArray(options)) {
-    throw new Error(`Frontend model event options must be a query or an options object, got: ${options}`)
-  }
+/**
+ * @param {FrontendModelEventOptions} options - Candidate event options.
+ * @returns {void}
+ */
+function assertFrontendModelEventOptionsObject(options) {
+  if (options && typeof options === "object" && !Array.isArray(options)) return
 
+  throw new Error(`Frontend model event options must be a query or an options object, got: ${options}`)
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Frontend model class.
+ * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
+ * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Cloned query used by event subscriptions.
+ */
+function clonedFrontendModelEventQuery(modelClass, query) {
+  assertFrontendModelEventQueryClass(modelClass, query)
+
+  return query.clone()
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Frontend model class.
+ * @param {FrontendModelEventOptionsObject} options - Event options object.
+ * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Query used by event subscriptions.
+ */
+function frontendModelEventQueryFromOptionsObject(modelClass, options) {
   if (options.query !== undefined && !(options.query instanceof FrontendModelQuery)) {
     throw new Error("Frontend model event option query must be a FrontendModelQuery")
   }
@@ -2055,11 +2072,25 @@ function frontendModelEventQuery(modelClass, options = {}) {
     ? options.query.clone()
     : new FrontendModelQuery({modelClass})
 
-  if (query.modelClass !== modelClass) {
-    throw new Error(`Cannot subscribe ${modelClass.name} events with a ${query.modelClass.name} query`)
-  }
+  assertFrontendModelEventQueryClass(modelClass, query)
 
-  applyFrontendModelProjectionOptions(query, options)
+  return query
+}
+
+/**
+ * @param {typeof import("./base.js").default} modelClass - Frontend model class.
+ * @param {FrontendModelEventOptions} [options] - Event query or projection options.
+ * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Normalized query used by event subscriptions.
+ */
+function frontendModelEventQuery(modelClass, options = {}) {
+  if (options instanceof FrontendModelQuery) return clonedFrontendModelEventQuery(modelClass, options)
+
+  assertFrontendModelEventOptionsObject(options)
+
+  const optionsObject = /** @type {FrontendModelEventOptionsObject} */ (options)
+  const query = frontendModelEventQueryFromOptionsObject(modelClass, optionsObject)
+
+  applyFrontendModelProjectionOptions(query, optionsObject)
 
   return query
 }
@@ -2070,7 +2101,7 @@ function frontendModelEventQuery(modelClass, options = {}) {
  * @returns {FrontendModelEventOptionsPayload} - Normalized event subscription payload.
  */
 export function frontendModelEventOptionsPayload(modelClass, options = {}) {
-  return frontendModelEventOptionsPayloadFromQuery(frontendModelEventQuery(modelClass, options))
+  return frontendModelEventQuery(modelClass, options).eventOptionsPayload()
 }
 
 /**

@@ -4,7 +4,6 @@ import debounceFunction from "debounce"
 import {useEffect, useMemo, useRef} from "react"
 
 import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
-import {frontendModelEventOptionsPayload} from "./query.js"
 
 /** @typedef {typeof import("./base.js").default} FrontendModelClass */
 /** @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
@@ -14,22 +13,6 @@ import {frontendModelEventOptionsPayload} from "./query.js"
 /** @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
 /** @typedef {(payload: FrontendModelClassEventPayload) => void} FrontendModelClassEventCallback */
 /** @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelEventOptionsObject} UseModelClassEventOptions */
-
-/**
- * @param {FrontendModelClassEventName | FrontendModelClassEventName[]} eventOrEvents - Event name or names.
- * @returns {FrontendModelClassEventName[]} - Normalized event names.
- */
-function normalizeEventNames(eventOrEvents) {
-  return Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents]
-}
-
-/**
- * @param {FrontendModelClassEventName[]} eventNames - Event names.
- * @returns {string} - Stable dependency key.
- */
-function eventNamesDependencyKey(eventNames) {
-  return eventNames.join("|")
-}
 
 /**
  * @param {Record<string, import("./query.js").FrontendModelTransportValue | (() => void) | undefined>} restOptions - Unknown options object.
@@ -50,7 +33,23 @@ function assertNoUnknownOptions(restOptions) {
 function eventQueryDependencyPayload(query) {
   if (!query) return null
 
-  return frontendModelEventOptionsPayload(query.modelClass, query)
+  return query.eventOptionsPayload()
+}
+
+/**
+ * @param {FrontendModelClassEventName | FrontendModelClassEventName[]} eventOrEvents - Event name or names.
+ * @returns {FrontendModelClassEventName[]} - Normalized event names.
+ */
+function normalizeEventNames(eventOrEvents) {
+  return Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents]
+}
+
+/**
+ * @param {FrontendModelClassEventName[]} eventNames - Event names.
+ * @returns {string} - Stable dependency key.
+ */
+function eventNamesDependencyKey(eventNames) {
+  return eventNames.join("|")
 }
 
 /**

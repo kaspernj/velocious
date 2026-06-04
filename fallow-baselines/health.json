@@ -1075,13 +1075,13 @@
         "count": 10
       },
       "crap_critical": {
-        "count": 16
+        "count": 17
       },
       "crap_high": {
         "count": 14
       },
       "crap_moderate": {
-        "count": 13
+        "count": 12
       }
     },
     "src/frontend-models/preloader.js": {
@@ -1103,7 +1103,7 @@
         "count": 8
       },
       "crap_high": {
-        "count": 11
+        "count": 12
       },
       "crap_moderate": {
         "count": 9
@@ -1155,8 +1155,14 @@
       }
     },
     "src/frontend-models/websocket-channel.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
       "crap_high": {
-        "count": 4
+        "count": 3
       },
       "crap_moderate": {
         "count": 1
@@ -1596,8 +1602,8 @@
     "src/frontend-models/outgoing-event-buffer.js:dead code",
     "src/database/query/where-model-class-hash.js:complexity",
     "src/environment-handlers/node/cli/commands/test.js:complexity",
-    "src/database/query/preloader/belongs-to.js:complexity",
     "src/utils/format-value.js:untested risk",
+    "src/database/query/preloader/belongs-to.js:complexity",
     "src/mailer/base.js:circular dependency",
     "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/has-many.js:complexity",

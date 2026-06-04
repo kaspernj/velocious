@@ -5,7 +5,6 @@ import {useEffect, useMemo, useRef} from "react"
 
 import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
 import {modelsDependencyKey, modelsFromInput} from "./event-hook-models.js"
-import {frontendModelEventOptionsPayload} from "./query.js"
 import useModelClassEvent from "./use-model-class-event.js"
 
 /** @typedef {typeof import("./base.js").default} FrontendModelClass */
@@ -23,9 +22,9 @@ import useModelClassEvent from "./use-model-class-event.js"
 function assertNoUnknownOptions(restOptions) {
   const unknownOptionNames = Object.keys(restOptions)
 
-  if (unknownOptionNames.length > 0) {
-    throw new Error(`Unknown options given to useDestroyedEvent: ${unknownOptionNames.join(", ")}`)
-  }
+  if (unknownOptionNames.length === 0) return
+
+  throw new Error(`Unknown options given to useDestroyedEvent: ${unknownOptionNames.join(", ")}`)
 }
 
 /**
@@ -35,7 +34,7 @@ function assertNoUnknownOptions(restOptions) {
 function eventQueryDependencyPayload(query) {
   if (!query) return null
 
-  return frontendModelEventOptionsPayload(query.modelClass, query)
+  return query.eventOptionsPayload()
 }
 
 /**
