@@ -344,7 +344,10 @@ export default class TableColumn {
       }
 
       sql += ")"
-    } else if (defaultValue) {
+    } else if (defaultValue !== undefined && defaultValue !== null) {
+      // Emit falsy defaults too (`0`, `false`, `""`). A truthiness check here
+      // silently dropped `default: 0`, leaving the column NOT NULL with no
+      // default so inserts that omit it fail in strict mode.
       sql += ` DEFAULT ${options.quote(defaultValue)}`
     }
 

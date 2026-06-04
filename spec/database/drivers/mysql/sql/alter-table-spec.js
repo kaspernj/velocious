@@ -23,6 +23,18 @@ describe("database/drivers/mysql/sql/alter-table", {databaseCleaning: {transacti
     ])
   })
 
+  it("emits a falsy default of 0 when adding a column", async () => {
+    const tableData = new TableData("github_webhooks")
+
+    tableData.integer("attempt_count", {default: 0, null: false})
+
+    const sqls = await buildDriver().alterTableSQLs(tableData)
+
+    expect(sqls).toEqual([
+      "ALTER TABLE `github_webhooks` ADD COLUMN `attempt_count` INTEGER DEFAULT 0 NOT NULL"
+    ])
+  })
+
   it("does not force an algorithm for foreign-key alters", async () => {
     const tableData = new TableData("build_artifacts")
 

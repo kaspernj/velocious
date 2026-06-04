@@ -37,4 +37,40 @@ describe("database/drivers/mysql/sql/create-table", {databaseCleaning: {transact
       "CREATE TABLE `auth_tokens` (`force_valid_domain` TINYINT(1) NOT NULL COMMENT 'velocious:type=boolean') DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     ])
   })
+
+  it("emits a falsy integer default of 0 (truthiness check used to drop it)", async () => {
+    const tableData = new TableData("counters")
+
+    tableData.integer("count", {default: 0, null: false})
+
+    const sqls = await buildDriver().createTableSql(tableData)
+
+    expect(sqls).toEqual([
+      "CREATE TABLE `counters` (`count` INTEGER DEFAULT 0 NOT NULL) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    ])
+  })
+
+  it("emits a falsy boolean default of false as 0", async () => {
+    const tableData = new TableData("flags")
+
+    tableData.boolean("enabled", {default: false, null: false})
+
+    const sqls = await buildDriver().createTableSql(tableData)
+
+    expect(sqls).toEqual([
+      "CREATE TABLE `flags` (`enabled` TINYINT(1) DEFAULT 0 NOT NULL COMMENT 'velocious:type=boolean') DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    ])
+  })
+
+  it("emits a falsy empty-string default", async () => {
+    const tableData = new TableData("notes")
+
+    tableData.string("body", {default: "", null: false})
+
+    const sqls = await buildDriver().createTableSql(tableData)
+
+    expect(sqls).toEqual([
+      "CREATE TABLE `notes` (`body` VARCHAR(255) DEFAULT '' NOT NULL) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    ])
+  })
 })
