@@ -560,6 +560,27 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("rejects tampered frontend-model event filter params", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      await websocketClient.connect()
+      const subscription = websocketClient.subscribeChannel("frontend-models", {
+        params: {
+          eventFilters: [{key: "tampered", model: "Project", where: {id: 1}}],
+          model: "Task"
+        }
+      })
+
+      try {
+        await expect(async () => {
+          await subscription.waitForReady()
+        }).toThrow(/eventFilters entries cannot include model/)
+      } finally {
+        await websocketClient.close()
+      }
+    })
+  })
+
   it("auto-merges attributes on instance-level onUpdate and fires onDestroy once", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()

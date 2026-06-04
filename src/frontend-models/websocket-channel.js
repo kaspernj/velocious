@@ -4,6 +4,8 @@ import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
 import Response from "../http-server/client/response.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
+const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
+
 /**
  * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
  */
@@ -200,12 +202,32 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       }
 
       const eventFilter = /** @type {Record<string, unknown>} */ (entry)
+      const unknownKeys = Object.keys(eventFilter).filter((key) => !EVENT_FILTER_KEYS.has(key))
+
+      if (unknownKeys.length > 0) {
+        throw new Error(`Frontend model eventFilters entries cannot include ${unknownKeys.join(", ")}`)
+      }
 
       if (typeof eventFilter.key !== "string" || eventFilter.key.length === 0) {
         throw new Error("Frontend model eventFilters entries require a key")
       }
 
-      return /** @type {import("./query.js").FrontendModelEventFilterPayloadEntry} */ (eventFilter)
+      /** @type {import("./query.js").FrontendModelEventFilterPayloadEntry} */
+      const sanitizedEventFilter = {key: eventFilter.key}
+
+      if (eventFilter.joins !== undefined) {
+        sanitizedEventFilter.joins = /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.joins)
+      }
+
+      if (eventFilter.searches !== undefined) {
+        sanitizedEventFilter.searches = /** @type {import("./query.js").FrontendModelSearch[]} */ (eventFilter.searches)
+      }
+
+      if (eventFilter.where !== undefined) {
+        sanitizedEventFilter.where = /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.where)
+      }
+
+      return sanitizedEventFilter
     })
   }
 
@@ -281,7 +303,11 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @returns {Promise<boolean>} Whether the record matches the filter.
    */
   async _eventMatchesFilter({FrontendModelController, eventFilter, id}) {
-    const controller = this._frontendModelController(FrontendModelController, eventFilter)
+    const controller = this._frontendModelController(FrontendModelController, {
+      joins: eventFilter.joins,
+      searches: eventFilter.searches,
+      where: eventFilter.where
+    })
 
     await controller.ensureFrontendModelClassInitialized()
 
