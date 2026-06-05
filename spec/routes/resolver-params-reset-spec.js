@@ -31,11 +31,11 @@ describe("routes - resolver params reset", {databaseCleaning: {transaction: true
     })
     const originalEnsureConnections = configuration.ensureConnections.bind(configuration)
 
-    configuration.ensureConnections = async (callback) => {
+    configuration.ensureConnections = async (...args) => {
       inEnsureConnections = true
 
       try {
-        await originalEnsureConnections(callback)
+        await originalEnsureConnections(...args)
       } finally {
         inEnsureConnections = false
       }

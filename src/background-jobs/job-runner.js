@@ -65,7 +65,7 @@ export default async function runJobPayload(payload) {
 
   try {
     try {
-      await configuration.withConnections(async () => {
+      await configuration.withConnections({name: `Background job runner: ${payload.jobName}`}, async () => {
         await perform.apply(jobInstance, payload.args || [])
       })
 

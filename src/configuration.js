@@ -4,6 +4,10 @@
  * @template T
  * @typedef {function(Record<string, import("./database/drivers/base.js").default>) : Promise<T>} WithConnectionsCallbackType
  */
+/**
+ * @typedef {object} WithConnectionsOptionsType
+ * @property {string} [name] - Human-readable name for the checked-out database connections.
+ */
 
 import {digg} from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
@@ -1761,17 +1765,24 @@ export default class VelociousConfiguration {
 
   /**
    * @template T
-   * @param {WithConnectionsCallbackType<T>} callback - Callback function.
+   * @param {WithConnectionsOptionsType | WithConnectionsCallbackType<T>} optionsOrCallback - Checkout options or callback function.
+   * @param {WithConnectionsCallbackType<T>} [callback] - Callback function.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async withConnections(callback) {
+  async withConnections(optionsOrCallback, callback) {
+    const name = typeof optionsOrCallback == "function" ? "Configuration.withConnections" : (optionsOrCallback.name || "Configuration.withConnections")
+    /** @type {WithConnectionsCallbackType<T> | undefined} */
+    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /** @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+
+    if (!actualWithConnectionsCallback) throw new Error("withConnections requires a callback")
+
     /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
     const stack = Error().stack
     const actualCallback = async () => {
       return await withTrackedStack(stack || "withConnections", async () => {
-        return await callback(dbs)
+        return await actualWithConnectionsCallback(dbs)
       })
     }
 
@@ -1782,7 +1793,7 @@ export default class VelociousConfiguration {
       let actualRunRequest = runRequest
 
       const nextRunRequest = async () => {
-        return await this.getDatabasePool(identifier).withConnection(async (db) => {
+        return await this.getDatabasePool(identifier).withConnection({name}, async (db) => {
           dbs[identifier] = db
 
           return await actualRunRequest()
@@ -1830,18 +1841,25 @@ export default class VelociousConfiguration {
 
   /**
    * @template T
-   * @param {WithConnectionsCallbackType<T>} callback - Callback function.
+   * @param {WithConnectionsOptionsType | WithConnectionsCallbackType<T>} optionsOrCallback - Checkout options or callback function.
+   * @param {WithConnectionsCallbackType<T>} [callback] - Callback function.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async ensureConnections(callback) {
+  async ensureConnections(optionsOrCallback, callback) {
+    const name = typeof optionsOrCallback == "function" ? "Configuration.ensureConnections" : (optionsOrCallback.name || "Configuration.ensureConnections")
+    /** @type {WithConnectionsCallbackType<T> | undefined} */
+    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /** @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+
+    if (!actualWithConnectionsCallback) throw new Error("ensureConnections requires a callback")
+
     const dbs = this.getCurrentConnections()
     const identifiers = this.getDatabaseIdentifiers()
     const hasAllConnections = identifiers.every((identifier) => dbs[identifier])
 
     if (hasAllConnections) {
-      return await callback(dbs)
+      return await actualWithConnectionsCallback(dbs)
     } else {
-      return await this.withConnections(callback)
+      return await this.withConnections({name}, actualWithConnectionsCallback)
     }
   }
 

@@ -278,7 +278,7 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async runBrowserDummy(callback) {
-    await this.getConfiguration().ensureConnections(async (dbs) => {
+    await this.getConfiguration().ensureConnections({name: "Test runner browser dummy"}, async (dbs) => {
       await this.truncateDatabases(dbs)
 
       try {
@@ -578,7 +578,7 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async run() {
-    await this.getConfiguration().ensureConnections(async () => {
+    await this.getConfiguration().ensureConnections({name: "Test runner suite"}, async () => {
       await this.runTests({
         afterEaches: [],
         beforeEaches: [],
@@ -719,7 +719,7 @@ export default class TestRunner {
               // earlier spec closed the suite connection (which would otherwise leave a
               // stale async-context pin and force every later test onto a fresh checkout,
               // breaking isolation).
-              await this.getConfiguration().ensureConnections(async () => {
+              await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
                 try {
                   clearDeliveries()
                   for (const beforeEachData of newBeforeEaches) {

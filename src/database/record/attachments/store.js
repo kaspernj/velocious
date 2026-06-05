@@ -544,7 +544,7 @@ export default class RecordAttachmentsStore {
     /** @type {T | undefined} */
     let result
 
-    await pool.withConnection(async (db) => {
+    await pool.withConnection({name: "Record attachment store"}, async (db) => {
       result = await callback(db)
     })
 

@@ -7,7 +7,7 @@ export default class DbRollback extends BaseCommand {
     const migrations = await this.getEnvironmentHandler().findMigrations()
     const migrator = new Migrator({configuration: this.getConfiguration()})
 
-    await this.getConfiguration().ensureConnections(async () => {
+    await this.getConfiguration().ensureConnections({name: "DB rollback"}, async () => {
       await migrator.prepare()
       await migrator.rollback(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
     })

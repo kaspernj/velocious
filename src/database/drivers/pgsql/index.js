@@ -66,6 +66,26 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+   * @param {string | undefined} name - Human-readable name for this active checkout.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async setConnectionCheckoutName(name) {
+    if (name) {
+      await this.query(`SET application_name = ${this.quote(name)}`, {logName: "Set Connection Checkout Name", processListComment: false})
+    } else {
+      await this.query("RESET application_name", {logName: "Clear Connection Checkout Name", processListComment: false})
+    }
+
+    await super.setConnectionCheckoutName(name)
+  }
+
+  /** @returns {Promise<void>} - Resolves when complete. */
+  async clearConnectionCheckoutName() {
+    await this.query("RESET application_name", {logName: "Clear Connection Checkout Name", processListComment: false})
+    await super.clearConnectionCheckoutName()
+  }
+
+  /**
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */

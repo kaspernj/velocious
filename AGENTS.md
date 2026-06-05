@@ -41,6 +41,7 @@ Run only the relevant, changed, or new linters and tests locally:
 - Always run `npm run typecheck` after changing any files.
 - Run relevant specs (`npx velocious test <path-or-example>`) for changed code.
 - Always run linters, typecheck, and relevant specs **before committing or pushing** — never push blind.
+- Before committing or pushing, run the CI-equivalent Lint sequence exactly: `cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js`, then `npm run lint`, `npm run typecheck`, and `npm run fallow`. Running those commands without first copying the sqlite Peakflow dummy config can miss Fallow baseline differences that CI will catch.
 - Prefer adding or updating tests and running only those.
 - Keep indentation consistent with the surrounding code.
 
@@ -57,7 +58,7 @@ Run as needed while iterating:
 Skip full local suites; Peakflow will run the full test matrix for all database types on PRs. (General rule for local vs CI runs — including never running shards/groups locally — lives in the `test-and-lint-runs` skill.)
 
 ### fallow regression gate
-The `Lint` Peakflow build runs `npm run fallow` (alongside `npm run lint` and `npm run typecheck`), which fails on dead-code / duplication / complexity findings beyond the committed baseline in `fallow-baselines/`. If you intentionally add code that fallow flags (e.g. new public API, an accepted complexity increase), refresh the baseline with `npm run fallow:baseline` and commit the updated `fallow-baselines/*.json`. Baselines are generated against a fresh checkout (no dummy `configuration.js`); tuning lives in `.fallowrc.json`.
+The `Lint` Peakflow build first copies `spec/dummy/src/config/configuration.peakflow.sqlite.js` to `spec/dummy/src/config/configuration.js`, then runs `npm run lint`, `npm run typecheck`, and `npm run fallow`. Fallow fails on dead-code / duplication / complexity findings beyond the committed baseline in `fallow-baselines/`. If you intentionally add code that fallow flags (e.g. new public API, an accepted complexity increase), refresh the baseline with `npm run fallow:baseline` and commit the updated `fallow-baselines/*.json`. Tuning lives in `.fallowrc.json`.
 
 If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.

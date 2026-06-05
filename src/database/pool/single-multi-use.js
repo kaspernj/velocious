@@ -4,16 +4,18 @@ import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   /**
-   * @param {import("../drivers/base.js").default} _connection - Connection.
+   * @param {import("../drivers/base.js").default} connection - Connection.
+   * @returns {Promise<void>} - Resolves when complete.
    */
-  checkin(_connection) { // eslint-disable-line no-unused-vars
-    // Do nothing
+  async checkin(connection) {
+    await connection.clearConnectionCheckoutName()
   }
 
   /**
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
-  async checkout() {
+  async checkout(options = {}) {
     if (this.connection && !this.connectionMatchesCurrentConfiguration(this.connection)) {
       const previousConnection = this.connection
 
@@ -30,18 +32,30 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       this.connection = await this.spawnConnection()
     }
 
+    await this.connection.setConnectionCheckoutName(options.name)
+
     return this.connection
   }
 
   /**
    * @template T
-   * @param {function(import("../drivers/base.js").default) : Promise<T>} callback - Callback function.
+   * @param {import("./base.js").ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} optionsOrCallback - Checkout options or callback function.
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} [callback] - Callback function.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async withConnection(callback) {
-    const connection = await this.checkout()
+  async withConnection(optionsOrCallback, callback) {
+    const options = typeof optionsOrCallback == "function" ? {} : optionsOrCallback
+    const actualCallback = typeof optionsOrCallback == "function" ? optionsOrCallback : callback
 
-    return await callback(connection)
+    if (!actualCallback) throw new Error("withConnection requires a callback")
+
+    const connection = await this.checkout(options)
+
+    try {
+      return await actualCallback(connection)
+    } finally {
+      await this.checkin(connection)
+    }
   }
 
   /**

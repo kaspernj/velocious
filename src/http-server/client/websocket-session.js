@@ -1413,7 +1413,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _withConnections(callback) {
-    await this.configuration.ensureConnections(async () => {
+    await this.configuration.ensureConnections({name: "Websocket session"}, async () => {
       await callback()
     })
   }

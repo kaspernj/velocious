@@ -195,7 +195,7 @@ export default class VelociousRoutesResolver {
 
       const runAction = async () => {
         await this.configuration.runWithTenant(tenant, async () => {
-          await this.configuration.ensureConnections(async () => {
+          await this.configuration.ensureConnections({name: `${controllerClass.name}.${action}`}, async () => {
             const ability = await this.configuration.resolveAbility({
               params: this.params,
               request: this.request,
