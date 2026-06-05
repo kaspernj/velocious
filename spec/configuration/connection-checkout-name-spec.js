@@ -23,10 +23,10 @@ describe("connection checkout names", () => {
       await dummyConfiguration.withConnections(async (dbs) => {
         checkedOutConnection = dbs.default
 
-        expect(checkedOutConnection.getConnectionCheckoutName()).toBe("configuration spec checkout")
+        expect(checkedOutConnection._connectionCheckoutName).toBe("configuration spec checkout")
       }, {name: "configuration spec checkout"})
 
-      expect(checkedOutConnection?.getConnectionCheckoutName()).toBeUndefined()
+      expect(checkedOutConnection?._connectionCheckoutName).toBeUndefined()
     }, {fresh: true})
   })
 
@@ -42,10 +42,26 @@ describe("connection checkout names", () => {
       await pool.withConnection(async (db) => {
         checkedOutConnection = db
 
-        expect(db.getConnectionCheckoutName()).toBe("pool spec checkout")
+        expect(db._connectionCheckoutName).toBe("pool spec checkout")
       }, {name: "pool spec checkout"})
 
-      expect(checkedOutConnection?.getConnectionCheckoutName()).toBeUndefined()
+      expect(checkedOutConnection?._connectionCheckoutName).toBeUndefined()
+    }, {fresh: true})
+  })
+
+  it("clears names when direct checkouts are checked in", async () => {
+    await Dummy.run(async () => {
+      const pool = getDefaultPool()
+
+      if (!pool) return
+
+      const connection = await pool.checkout({name: "direct checkout spec"})
+
+      expect(connection._connectionCheckoutName).toBe("direct checkout spec")
+
+      await pool.checkin(connection)
+
+      expect(connection._connectionCheckoutName).toBeUndefined()
     }, {fresh: true})
   })
 })

@@ -183,11 +183,6 @@ export default class VelociousDatabaseDriversBase {
     this._connectionCheckoutName = undefined
   }
 
-  /** @returns {string | undefined} - Human-readable name for this active checkout. */
-  getConnectionCheckoutName() {
-    return this._connectionCheckoutName
-  }
-
   /**
    * Optional disconnect hook for database drivers.
    * @returns {Promise<void>} - Resolves when complete.

@@ -103,6 +103,14 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     await this.rollbackLeftOpenTransaction(connection)
 
+    try {
+      await connection.clearConnectionCheckoutName()
+    } catch (error) {
+      await this.closeConnection(connection)
+
+      throw error
+    }
+
     trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
     this.connections.push(connection)
     await this.drainPendingCheckouts()
@@ -310,14 +318,23 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
           continue
         }
 
-        checkout.resolve(await this.activateConnection(connection, checkout.options))
+        try {
+          checkout.resolve(await this.activateConnection(connection, checkout.options))
+        } catch (error) {
+          checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
+        }
+
         continue
       }
 
       if (!connection) return
 
       this.pendingCheckouts.shift()
-      checkout.resolve(await this.activateConnection(connection, checkout.options))
+      try {
+        checkout.resolve(await this.activateConnection(connection, checkout.options))
+      } catch (error) {
+        checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
+      }
     }
   }
 
@@ -347,11 +364,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       try {
         return await callback(connection)
       } finally {
-        try {
-          await connection.clearConnectionCheckoutName()
-        } finally {
-          await this.checkin(connection)
-        }
+        await this.checkin(connection)
       }
     })
   }
