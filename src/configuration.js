@@ -198,6 +198,7 @@ export default class VelociousConfiguration {
         action: "show",
         controller: "velociousDebug",
         controllerPath: "./built-in/debug/controller.js",
+        skipControllerConnections: true,
         viewPath: "./built-in/debug"
       }
     })

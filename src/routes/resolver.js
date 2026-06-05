@@ -111,6 +111,7 @@ export default class VelociousRoutesResolver {
     }
 
     const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath, {hasMatchingCustomRoute})
+    const skipControllerConnections = routeResolverHookMatch?.skipControllerConnections === true
     const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
     const actionParam = this.params.action
     const controllerParam = this.params.controller
@@ -195,7 +196,7 @@ export default class VelociousRoutesResolver {
 
       const runAction = async () => {
         await this.configuration.runWithTenant(tenant, async () => {
-          await this.configuration.ensureConnections({name: `${controllerClass.name}.${action}`}, async () => {
+          const runControllerAction = async () => {
             const ability = await this.configuration.resolveAbility({
               params: this.params,
               request: this.request,
@@ -208,7 +209,13 @@ export default class VelociousRoutesResolver {
                 await actionHandlers[action]()
               })
             })
-          })
+          }
+
+          if (skipControllerConnections) {
+            await runControllerAction()
+          } else {
+            await this.configuration.ensureConnections({name: `${controllerClass.name}.${action}`}, runControllerAction)
+          }
         })
       }
 
@@ -347,6 +354,10 @@ export default class VelociousRoutesResolver {
 
       if (hookResult.controllerPath !== undefined && typeof hookResult.controllerPath !== "string") {
         throw new Error(`Expected route resolver hook controllerPath to be a string when provided, got: ${hookResult.controllerPath}`)
+      }
+
+      if (hookResult.skipControllerConnections !== undefined && typeof hookResult.skipControllerConnections !== "boolean") {
+        throw new Error(`Expected route resolver hook skipControllerConnections to be a boolean when provided, got: ${hookResult.skipControllerConnections}`)
       }
 
       if (hookResult.viewPath !== undefined && typeof hookResult.viewPath !== "string") {

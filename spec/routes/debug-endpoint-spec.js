@@ -101,8 +101,24 @@ describe("routes - debug endpoint", {databaseCleaning: {transaction: true}}, () 
     expect(payload.configuration.debugEndpoint).toEqual({enabled: true, path: "/velocious/debug"})
     expect(payload.server.environment).toEqual("test")
     expect(payload.database.activeIdentifiers).toEqual(["default"])
-    expect(defaultPool.connections[0].checkoutName).toEqual("BuiltInDebugController.show")
-    expect(defaultPool.connections[0].state).toEqual("shared")
+    expect(defaultPool.connections).toEqual([])
+    expect(defaultPool.idleCount).toEqual(0)
+  })
+
+  it("reports held connections without checking one out for the debug action", async () => {
+    const configuration = buildConfiguration({debugEndpoint: true})
+
+    await configuration.ensureConnections({name: "outer checkout"}, async () => {
+      const response = await resolveGet(configuration, "/velocious/debug")
+      const body = response.getBody()
+
+      if (typeof body !== "string") throw new Error("Expected debug response body to be a string")
+
+      const defaultPool = JSON.parse(body).database.pools.default
+
+      expect(defaultPool.connections[0].checkoutName).toEqual("outer checkout")
+      expect(defaultPool.connections[0].state).toEqual("shared")
+    })
   })
 
   it("supports a custom debug endpoint path", async () => {

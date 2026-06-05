@@ -326,6 +326,7 @@
  * @property {typeof import("./controller.js").default} [controllerClass] - Optional controller class override.
  * @property {string} [controllerPath] - Optional absolute/relative controller file path override.
  * @property {Record<string, any>} [params] - Extra params to merge for controller/action.
+ * @property {boolean} [skipControllerConnections] - Whether to run the controller action without the automatic database checkout wrapper.
  * @property {string} [viewPath] - Optional view path override used by controller render lookups.
  */
 
