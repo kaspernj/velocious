@@ -29,10 +29,14 @@ export default class VelociousCli {
     let result
 
     for (const commandProcessArgs of commandGroups) {
+      const shouldCloseDatabaseConnections = !this.hasCurrentDatabaseConnections()
+
       try {
         result = await this.executeCommand(commandProcessArgs)
       } finally {
-        await this.getConfiguration().closeDatabaseConnections()
+        if (shouldCloseDatabaseConnections) {
+          await this.getConfiguration().closeDatabaseConnections()
+        }
       }
     }
 
@@ -112,6 +116,17 @@ export default class VelociousCli {
 
   /** @returns {import("../configuration.js").default} configuration */
   getConfiguration() { return this.configuration }
+
+  /** @returns {boolean} - Whether the current async context already has database connections. */
+  hasCurrentDatabaseConnections() {
+    try {
+      return Object.keys(this.getConfiguration().getCurrentConnections()).length > 0
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("No database configuration for environment:")) return false
+
+      throw error
+    }
+  }
 
   /** @returns {boolean} - Whether testing.  */
   getTesting() {

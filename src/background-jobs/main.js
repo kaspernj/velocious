@@ -155,13 +155,16 @@ export default class BackgroundJobsMain {
     try {
       await this.configuration.disconnectBeacon()
     } finally {
-      await this.configuration.closeDatabaseConnections()
+      try {
+        if (this.server) {
+          const {server} = this
+          this.server = undefined
+          await new Promise((resolve) => server.close(() => resolve(undefined)))
+        }
+      } finally {
+        await this.configuration.closeDatabaseConnections()
+      }
     }
-
-    if (!this.server) return
-
-    const {server} = this
-    await new Promise((resolve) => server.close(() => resolve(undefined)))
   }
 
   /**

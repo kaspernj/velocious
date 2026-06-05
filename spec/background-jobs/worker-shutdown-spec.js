@@ -87,9 +87,15 @@ describe("Background jobs main - shutdown", () => {
         })
       })
     })
+    main.server = /** @type {import("net").Server} */ ({
+      close: (callback) => {
+        events.push("close-server")
+        callback()
+      }
+    })
 
     await main.stop()
 
-    expect(events).toEqual(["disconnect-beacon", "close-db"])
+    expect(events).toEqual(["disconnect-beacon", "close-server", "close-db"])
   })
 })

@@ -73,14 +73,17 @@ class FakeEnvironmentHandler {
 }
 
 /**
- * @returns {{closeDatabaseConnections: () => Promise<void>, getEnvironmentHandler: () => FakeEnvironmentHandler, state: {closeCalls: number, executions: string[][]}}} - Fake configuration.
+ * @param {object} [args] - Options object.
+ * @param {Record<string, unknown>} [args.currentConnections] - Current database connections.
+ * @returns {{closeDatabaseConnections: () => Promise<void>, getCurrentConnections: () => Record<string, unknown>, getEnvironmentHandler: () => FakeEnvironmentHandler, state: {closeCalls: number, executions: string[][]}}} - Fake configuration.
  */
-function createConfiguration() {
+function createConfiguration(args = {}) {
   const environmentHandler = new FakeEnvironmentHandler()
   const configuration = {
     closeDatabaseConnections: async () => {
       configuration.state.closeCalls += 1
     },
+    getCurrentConnections: () => args.currentConnections || {},
     getEnvironmentHandler: () => environmentHandler,
     state: {
       closeCalls: 0,
@@ -120,6 +123,21 @@ describe("Cli - Multiple commands", () => {
     expect(result).toEqual("first")
     expect(configuration.state.executions).toEqual([["first"]])
     expect(configuration.state.closeCalls).toEqual(1)
+  })
+
+  it("does not close an existing connection context after a nested command", async () => {
+    const configuration = createConfiguration({currentConnections: {default: {}}})
+    const cli = new Cli({
+      configuration: /** @type {import("../../src/configuration.js").default} */ (configuration),
+      processArgs: ["first"],
+      testing: true
+    })
+
+    const result = await cli.execute()
+
+    expect(result).toEqual("first")
+    expect(configuration.state.executions).toEqual([["first"]])
+    expect(configuration.state.closeCalls).toEqual(0)
   })
 
   it("closes connections when a command fails", async () => {
