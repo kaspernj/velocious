@@ -28,15 +28,7 @@ function buildConsoleContext({application, configuration}) {
     try {
       dbs[identifier] = pool.getCurrentConnection()
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (
-          error.message == "ID hasn't been set for this async context" ||
-          error.message == "A connection hasn't been made yet" ||
-          error.message.startsWith("No async context set for database connection") ||
-          error.message.startsWith("Connection ") && error.message.includes("doesn't exist any more")
-        )
-      ) {
+      if (configuration.isMissingCurrentConnectionError(error)) {
         // Ignore missing connections here; they can be established lazily.
       } else {
         throw error

@@ -43,3 +43,5 @@ Nested annotations are joined in order, for example `annotations="report export 
 For MySQL and MariaDB, Velocious also writes the active checkout name to the session variable `@velocious_connection_checkout_name`. The variable is reset to `NULL` when the connection is checked in, so inspecting server-side connection/session state can identify the code currently using a checked-out connection. MySQL/MariaDB do not expose a reliable dynamically-changeable idle process-list name through the current driver, so process-list checkout names are visible on active queries through the SQL comment.
 
 For PostgreSQL, Velocious sets `application_name` to the active checkout name and resets it when the connection is checked in. This exposes the checkout owner in `pg_stat_activity.application_name`, including idle checked-out sessions.
+
+When the built-in [Debug Endpoint](debug-endpoint.md) is enabled, its database pool snapshots include live checkout names, active query annotations, transaction depth, and schema-cache sizes for Velocious-owned connections.

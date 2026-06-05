@@ -478,6 +478,51 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     return this.getCurrentConnection()
   }
 
+  /** @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
+  getDebugSnapshot() {
+    const snapshot = super.getDebugSnapshot()
+    const connections = []
+    const seenConnections = new Set()
+    const now = Date.now()
+
+    for (const [id, connection] of Object.entries(this.connectionsInUse)) {
+      seenConnections.add(connection)
+      connections.push(this.debugConnectionSnapshot(connection, {checkoutId: id, state: "in-use"}))
+    }
+
+    for (const connection of this.connections) {
+      if (seenConnections.has(connection)) continue
+
+      seenConnections.add(connection)
+
+      const trackedConnection = /** @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+      const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
+      const idleForMs = typeof checkedInAt === "number" ? Math.max(0, now - checkedInAt) : undefined
+
+      connections.push(this.debugConnectionSnapshot(connection, {idleForMs, state: "idle"}))
+    }
+
+    const globalConnection = this.getGlobalConnectionForIdentifier()
+
+    if (globalConnection && !seenConnections.has(globalConnection)) {
+      seenConnections.add(globalConnection)
+      connections.push(this.debugConnectionSnapshot(globalConnection, {state: "global"}))
+    }
+
+    if (this._testSharedConnection && !seenConnections.has(this._testSharedConnection)) {
+      connections.push(this.debugConnectionSnapshot(this._testSharedConnection, {state: "test-shared"}))
+    }
+
+    return {
+      ...snapshot,
+      connections,
+      connectionsBeingSpawned: this.connectionsBeingSpawned,
+      idleCount: this.connections.length,
+      inUseCount: Object.keys(this.connectionsInUse).length,
+      pendingCheckoutCount: this.pendingCheckouts.length
+    }
+  }
+
   /**
    * @returns {import("../drivers/base.js").default | undefined} - The global connection.
    */

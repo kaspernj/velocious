@@ -65,7 +65,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -84,6 +84,7 @@ export default class VelociousConfiguration {
     this._cookieSecret = cookieSecret
     this.database = database
     this.debug = debug
+    this._debugEndpoint = this._normalizeDebugEndpoint(debugEndpoint)
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
     this._enforceTenantDatabaseScopes = enforceTenantDatabaseScopes
@@ -140,6 +141,7 @@ export default class VelociousConfiguration {
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
+    this._addDebugEndpointRouteHook()
 
     /** @type {WeakSet<object>} */
     this._appliedRouteMounts = new WeakSet()
@@ -159,6 +161,48 @@ export default class VelociousConfiguration {
 
   /** @returns {boolean} Whether unexpected internal error details may be returned to API clients. */
   getExposeInternalErrorsToClients() { return this._exposeInternalErrorsToClients === true }
+
+  /** @returns {{enabled: boolean, path: string}} - Debug endpoint configuration. */
+  getDebugEndpoint() { return this._debugEndpoint }
+
+  /**
+   * @param {boolean | {path?: string}} value - Debug endpoint configuration.
+   * @returns {{enabled: boolean, path: string}} - Normalized debug endpoint configuration.
+   */
+  _normalizeDebugEndpoint(value) {
+    if (value === false || value === undefined) return {enabled: false, path: "/velocious/debug"}
+    if (value === true) return {enabled: true, path: "/velocious/debug"}
+
+    if (typeof value !== "object" || value === null) {
+      throw new Error(`Expected debugEndpoint to be a boolean or object, got: ${String(value)}`)
+    }
+
+    const path = value.path || "/velocious/debug"
+
+    if (typeof path !== "string" || !path.startsWith("/")) {
+      throw new Error(`Expected debugEndpoint.path to be a string starting with '/', got: ${String(path)}`)
+    }
+
+    return {enabled: true, path}
+  }
+
+  /** @returns {void} - No return value. */
+  _addDebugEndpointRouteHook() {
+    if (!this._debugEndpoint.enabled) return
+
+    this.addRouteResolverHook(({currentPath, request}) => {
+      if (request.httpMethod() !== "GET") return null
+      if (currentPath !== this._debugEndpoint.path) return null
+
+      return {
+        action: "show",
+        controller: "velociousDebug",
+        controllerPath: "./built-in/debug/controller.js",
+        skipControllerConnections: true,
+        viewPath: "./built-in/debug"
+      }
+    })
+  }
 
   /**
    * @param {boolean} newValue - Whether auto-batch-preload of relationships is enabled.
@@ -264,6 +308,85 @@ export default class VelociousConfiguration {
     const disabledIdentifiers = this.getDisabledDatabaseIdentifiers()
 
     return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier) && this.isDatabaseIdentifierActive(identifier))
+  }
+
+  /** @returns {Record<string, unknown>} - Human-readable server diagnostics. */
+  getDebugSnapshot() {
+    return {
+      backgroundJobs: this._debugBackgroundJobsSnapshot(),
+      configuration: this._debugConfigurationSnapshot(),
+      database: this._debugDatabaseSnapshot(),
+      generatedAt: new Date().toISOString(),
+      server: this._debugServerSnapshot(),
+      websockets: this._debugWebsocketSnapshot()
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - Server runtime diagnostics. */
+  _debugServerSnapshot() {
+    const nodeProcess = typeof process === "undefined" ? undefined : process
+
+    return {
+      environment: this.getEnvironment(),
+      memoryUsage: nodeProcess ? nodeProcess.memoryUsage() : undefined,
+      nodeVersion: nodeProcess?.versions?.node,
+      pid: nodeProcess?.pid,
+      platform: nodeProcess?.platform,
+      uptimeSeconds: nodeProcess ? nodeProcess.uptime() : undefined
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - Configuration diagnostics. */
+  _debugConfigurationSnapshot() {
+    return {
+      autoload: this.getAutoload(),
+      debug: this.debug === true,
+      debugEndpoint: this.getDebugEndpoint(),
+      enforceTenantDatabaseScopes: this.getEnforceTenantDatabaseScopes(),
+      exposeInternalErrorsToClients: this.getExposeInternalErrorsToClients(),
+      initialized: this._isInitialized,
+      logging: {
+        debugLowLevel: this._logging?.debugLowLevel === true,
+        outputs: this._logging ? Object.keys(this._logging) : []
+      }
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - Background job diagnostics. */
+  _debugBackgroundJobsSnapshot() {
+    return {
+      configured: Boolean(this._backgroundJobs),
+      scheduledConfigured: Boolean(this._scheduledBackgroundJobs)
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - Database diagnostics. */
+  _debugDatabaseSnapshot() {
+    /** @type {Record<string, import("./database/pool/base.js").DatabasePoolDebugSnapshot>} */
+    const databasePools = {}
+    const activeIdentifiers = this.getDatabaseIdentifiers()
+
+    for (const identifier of activeIdentifiers) {
+      databasePools[identifier] = this.getDatabasePool(identifier).getDebugSnapshot()
+    }
+
+    return {
+      activeIdentifiers,
+      disabledIdentifiers: Array.from(this.getDisabledDatabaseIdentifiers()),
+      initializedPools: Object.keys(this.databasePools),
+      pools: databasePools
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - WebSocket diagnostics. */
+  _debugWebsocketSnapshot() {
+    return {
+      pausedSessions: this._pausedWebsocketSessions.size,
+      registeredChannels: Array.from(this._websocketChannelClasses.keys()),
+      registeredConnections: Array.from(this._websocketConnectionClasses.keys()),
+      subscriptionGroups: this._websocketChannelSubscriptions.size,
+      subscriptions: Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, subscriptions]) => ({channel, count: subscriptions.size}))
+    }
   }
 
   /**
@@ -1820,15 +1943,7 @@ export default class VelociousConfiguration {
           dbs[identifier] = currentConnection
         }
       } catch (error) {
-        if (
-          error instanceof Error &&
-          (
-            error.message == "ID hasn't been set for this async context" ||
-            error.message == "A connection hasn't been made yet" ||
-            error.message.startsWith("No async context set for database connection") ||
-            error.message.startsWith("Connection ") && error.message.includes("doesn't exist any more")
-          )
-        ) {
+        if (this.isMissingCurrentConnectionError(error)) {
           // Ignore
         } else {
           throw error
@@ -1837,6 +1952,19 @@ export default class VelociousConfiguration {
     }
 
     return dbs
+  }
+
+  /**
+   * @param {unknown} error - Error thrown while looking up the current connection.
+   * @returns {boolean} - Whether the error means no current connection is available.
+   */
+  isMissingCurrentConnectionError(error) {
+    return error instanceof Error && (
+      error.message == "ID hasn't been set for this async context" ||
+      error.message == "A connection hasn't been made yet" ||
+      error.message.startsWith("No async context set for database connection") ||
+      error.message.startsWith("Connection ") && error.message.includes("doesn't exist any more")
+    )
   }
 
   /**

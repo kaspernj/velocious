@@ -35,6 +35,16 @@ For code that runs in Expo/Metro bundles, avoid non-literal dynamic imports (for
 
 ## Verification commands
 
+### Non-negotiable pre-commit / pre-push gate
+Do not commit or push code changes in this repo until the exact CI-equivalent Lint sequence has passed locally in the same worktree:
+
+1. `cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js`
+2. `npm run lint`
+3. `npm run typecheck`
+4. `npm run fallow`
+
+This is a hard gate for every code change, including review follow-ups and "small" fixes. If the sequence fails, fix the underlying issue or refresh the appropriate `fallow-baselines/*.json` with the owning Fallow command, then rerun the full sequence before committing or pushing. After the sequence passes, restore `spec/dummy/src/config/configuration.js` to the tracked working configuration before committing unless the intended change is specifically to that config file.
+
 ### Targeted checks (preferred)
 Run only the relevant, changed, or new linters and tests locally:
 - Always run `npm run lint` after changing any files.
