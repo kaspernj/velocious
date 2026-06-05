@@ -33,10 +33,10 @@ describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {tr
 
     const originalWithConnections = dummyConfiguration.withConnections.bind(dummyConfiguration)
     let withConnectionsCallsAfterStart = 0
-    dummyConfiguration.withConnections = async (callback) => {
+    dummyConfiguration.withConnections = async (...args) => {
       withConnectionsCallsAfterStart++
 
-      return await originalWithConnections(callback)
+      return await originalWithConnections(...args)
     }
 
     let jobId

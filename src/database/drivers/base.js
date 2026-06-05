@@ -928,7 +928,7 @@ export default class VelociousDatabaseDriversBase {
         elapsedMs,
         logName: options.logName || "SQL",
         sourceStack: options.sourceStack,
-        sql: querySql
+        sql: originalSql
       })
     }
 

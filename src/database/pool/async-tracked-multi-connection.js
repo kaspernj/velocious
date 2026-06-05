@@ -310,19 +310,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
       if (!connection && this.canSpawnConnection()) {
         this.pendingCheckouts.shift()
-
-        try {
-          connection = await this.spawnConnectionForCheckout(checkout.databaseConfig, checkout.reuseKey)
-        } catch (error) {
-          checkout.reject(error instanceof Error ? error : new Error("Failed to spawn database connection.", {cause: error}))
-          continue
-        }
-
-        try {
-          checkout.resolve(await this.activateConnection(connection, checkout.options))
-        } catch (error) {
-          checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
-        }
+        await this.spawnAndResolvePendingCheckout(checkout)
 
         continue
       }
@@ -330,11 +318,37 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       if (!connection) return
 
       this.pendingCheckouts.shift()
-      try {
-        checkout.resolve(await this.activateConnection(connection, checkout.options))
-      } catch (error) {
-        checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
-      }
+      await this.resolvePendingCheckout(checkout, connection)
+    }
+  }
+
+  /**
+   * @param {PendingCheckout} checkout - Checkout request to resolve.
+   * @returns {Promise<void>} - Resolves when the checkout has been handled.
+   */
+  async spawnAndResolvePendingCheckout(checkout) {
+    let connection
+
+    try {
+      connection = await this.spawnConnectionForCheckout(checkout.databaseConfig, checkout.reuseKey)
+    } catch (error) {
+      checkout.reject(error instanceof Error ? error : new Error("Failed to spawn database connection.", {cause: error}))
+      return
+    }
+
+    await this.resolvePendingCheckout(checkout, connection)
+  }
+
+  /**
+   * @param {PendingCheckout} checkout - Checkout request to resolve.
+   * @param {import("../drivers/base.js").default} connection - Connection to activate.
+   * @returns {Promise<void>} - Resolves when the checkout has been handled.
+   */
+  async resolvePendingCheckout(checkout, connection) {
+    try {
+      checkout.resolve(await this.activateConnection(connection, checkout.options))
+    } catch (error) {
+      checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
     }
   }
 
