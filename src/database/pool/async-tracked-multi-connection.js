@@ -486,6 +486,16 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     return mapForConfiguration?.[this.identifier]
   }
 
+  /** @returns {void} - No return value. */
+  clearGlobalConnectionForIdentifier() {
+    const klass = /** @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
+    const mapForConfiguration = klass.globalConnections.get(this.configuration)
+
+    if (!mapForConfiguration) return
+
+    delete mapForConfiguration[this.identifier]
+  }
+
   /**
    * Clears schema metadata cached by every live connection owned by this pool.
    * @returns {void} - No return value.
@@ -698,11 +708,14 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const connections = new Set([
       ...this.connections,
       ...Object.values(this.connectionsInUse),
-      this.getGlobalConnection()
+      this.getGlobalConnectionForIdentifier(),
+      this._testSharedConnection
     ].filter(Boolean))
 
     this.connections = []
     this.connectionsInUse = {}
+    this._testSharedConnection = undefined
+    this.clearGlobalConnectionForIdentifier()
 
     for (const connection of connections) {
       if (!connection) continue
