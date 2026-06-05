@@ -360,19 +360,19 @@
     },
     "src/configuration.js": {
       "complexity_critical": {
-        "count": 2
+        "count": 1
       },
       "complexity_high": {
         "count": 1
       },
       "crap_critical": {
-        "count": 5
+        "count": 4
       },
       "crap_high": {
-        "count": 7
+        "count": 10
       },
       "crap_moderate": {
-        "count": 10
+        "count": 11
       }
     },
     "src/controller.js": {
@@ -597,7 +597,7 @@
         "count": 1
       },
       "crap_high": {
-        "count": 1
+        "count": 2
       },
       "crap_moderate": {
         "count": 6
@@ -972,10 +972,7 @@
       }
     },
     "src/environment-handlers/node/cli/commands/console.js": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "crap_critical": {
+      "crap_high": {
         "count": 1
       }
     },
@@ -1584,15 +1581,15 @@
     "src/utils/split-sql-statements.js:complexity",
     "src/frontend-model-controller.js:complexity",
     "src/database/record/index.js:complexity",
-    "src/testing/test.js:dead code",
     "src/routes/resolver.js:complexity",
+    "src/testing/test.js:dead code",
     "src/database/query/model-class-query.js:complexity",
-    "src/database/drivers/base.js:complexity",
     "src/http-server/client/websocket-session.js:complexity",
+    "src/database/drivers/base.js:complexity",
     "src/database/drivers/pgsql/structure-sql.js:untested risk",
     "src/database/query/preloader.js:complexity",
-    "src/frontend-model-resource/base-resource.js:complexity",
     "src/testing/test-runner.js:complexity",
+    "src/frontend-model-resource/base-resource.js:complexity",
     "src/database/query/create-table-base.js:complexity",
     "src/database/drivers/mssql/structure-sql.js:complexity",
     "src/http-server/worker-handler/index.js:complexity",
@@ -1606,9 +1603,9 @@
     "src/database/record/attachments/normalize-input.js:complexity",
     "src/frontend-models/outgoing-event-buffer.js:dead code",
     "src/database/query/where-model-class-hash.js:complexity",
+    "src/utils/format-value.js:untested risk",
     "src/database/query/preloader/belongs-to.js:complexity",
     "src/environment-handlers/node/cli/commands/test.js:complexity",
-    "src/utils/format-value.js:untested risk",
     "src/mailer/base.js:circular dependency",
     "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/has-many.js:complexity",
