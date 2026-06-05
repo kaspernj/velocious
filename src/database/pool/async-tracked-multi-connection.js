@@ -145,7 +145,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       // checkout() could bind the connection to a stale tenant/database, which breaks
       // per-request isolation (e.g. test truncation appearing not to take effect). The queued
       // path below keeps the waiting caller's captured config via waitForCheckout().
-      connection = await this.spawnConnection()
+      connection = await this.spawnConnectionForCheckout(this.getConfiguration(), this.getConfigurationReuseKey())
 
       return await this.activateConnection(connection, options)
     }
@@ -250,7 +250,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
       connectionWithPoolKey[POOL_CONFIGURATION_KEY] = reuseKey
-      connection.setSchemaCacheInvalidator(() => this.clearSchemaCache())
+      connection.setSchemaCacheInvalidator(() => {
+        this.clearSchemaCache()
+        this.configuration.clearSchemaCachesForReuseKey(reuseKey)
+      })
 
       return connection
     } finally {

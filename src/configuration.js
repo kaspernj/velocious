@@ -162,16 +162,25 @@ export default class VelociousConfiguration {
   /** @returns {boolean} Whether unexpected internal error details may be returned to API clients. */
   getExposeInternalErrorsToClients() { return this._exposeInternalErrorsToClients === true }
 
-  /** @returns {{enabled: boolean, path: string}} - Debug endpoint configuration. */
+  /** @returns {{enabled: boolean, path: string, token: string | null}} - Debug endpoint configuration. */
   getDebugEndpoint() { return this._debugEndpoint }
 
+  /** @returns {{enabled: boolean, path: string, tokenConfigured: boolean}} - Debug endpoint config for the snapshot, with the token redacted. */
+  _debugEndpointSnapshot() {
+    return {
+      enabled: this._debugEndpoint.enabled,
+      path: this._debugEndpoint.path,
+      tokenConfigured: Boolean(this._debugEndpoint.token)
+    }
+  }
+
   /**
-   * @param {boolean | {path?: string}} value - Debug endpoint configuration.
-   * @returns {{enabled: boolean, path: string}} - Normalized debug endpoint configuration.
+   * @param {boolean | {path?: string, token?: string}} value - Debug endpoint configuration.
+   * @returns {{enabled: boolean, path: string, token: string | null}} - Normalized debug endpoint configuration.
    */
   _normalizeDebugEndpoint(value) {
-    if (value === false || value === undefined) return {enabled: false, path: "/velocious/debug"}
-    if (value === true) return {enabled: true, path: "/velocious/debug"}
+    if (value === false || value === undefined) return {enabled: false, path: "/velocious/debug", token: null}
+    if (value === true) return {enabled: true, path: "/velocious/debug", token: null}
 
     if (typeof value !== "object" || value === null) {
       throw new Error(`Expected debugEndpoint to be a boolean or object, got: ${String(value)}`)
@@ -183,7 +192,13 @@ export default class VelociousConfiguration {
       throw new Error(`Expected debugEndpoint.path to be a string starting with '/', got: ${String(path)}`)
     }
 
-    return {enabled: true, path}
+    const token = value.token === undefined || value.token === null ? null : value.token
+
+    if (token !== null && (typeof token !== "string" || !token.trim())) {
+      throw new Error(`Expected debugEndpoint.token to be a non-empty string, got: ${String(token)}`)
+    }
+
+    return {enabled: true, path, token: token === null ? null : token.trim()}
   }
 
   /** @returns {void} - No return value. */
@@ -193,6 +208,10 @@ export default class VelociousConfiguration {
     this.addRouteResolverHook(({currentPath, request}) => {
       if (request.httpMethod() !== "GET") return null
       if (currentPath !== this._debugEndpoint.path) return null
+
+      // When a token is configured, an unauthenticated request gets no route at
+      // all (404) rather than a 401, so the endpoint's existence stays hidden.
+      if (this._debugEndpoint.token && !this.debugEndpointRequestAuthorized(request, this._debugEndpoint.token)) return null
 
       return {
         action: "show",
@@ -341,7 +360,7 @@ export default class VelociousConfiguration {
     return {
       autoload: this.getAutoload(),
       debug: this.debug === true,
-      debugEndpoint: this.getDebugEndpoint(),
+      debugEndpoint: this._debugEndpointSnapshot(),
       enforceTenantDatabaseScopes: this.getEnforceTenantDatabaseScopes(),
       exposeInternalErrorsToClients: this.getExposeInternalErrorsToClients(),
       initialized: this._isInitialized,
@@ -2031,5 +2050,22 @@ export default class VelociousConfiguration {
     } finally {
       this._closeDatabaseConnectionsPromise = null
     }
+  }
+
+  /**
+   * @param {{header: (name: string) => string | null | undefined}} request - Incoming request.
+   * @param {string} expectedToken - Configured debug-endpoint token.
+   * @returns {boolean} - Whether the request carries the expected bearer token.
+   */
+  debugEndpointRequestAuthorized(request, expectedToken) {
+    const header = request.header("authorization")
+
+    if (typeof header !== "string") return false
+
+    const match = (/^Bearer\s+(.+)$/i).exec(header.trim())
+
+    if (!match) return false
+
+    return this.getEnvironmentHandler().debugEndpointTokenMatches(match[1], expectedToken)
   }
 }

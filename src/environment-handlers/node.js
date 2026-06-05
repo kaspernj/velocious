@@ -29,6 +29,7 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
+import {timingSafeEqual} from "node:crypto"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 
 /** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: unknown}} TimezoneStore */
@@ -59,6 +60,18 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
+
+  /**
+   * @param {string} providedToken - Token from the request.
+   * @param {string} expectedToken - Configured token.
+   * @returns {boolean} - Whether both tokens match.
+   */
+  debugEndpointTokenMatches(providedToken, expectedToken) {
+    const provided = Buffer.from(providedToken)
+    const expected = Buffer.from(expectedToken)
+
+    return provided.length === expected.length && timingSafeEqual(provided, expected)
+  }
 
   /**
    * @returns {string | undefined} - Velocious source directory used to filter framework stack frames.

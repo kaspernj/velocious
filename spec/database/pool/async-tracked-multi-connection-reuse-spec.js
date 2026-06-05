@@ -27,6 +27,32 @@ class CloseTrackingSqliteDriver extends SqliteDriver {
   }
 }
 
+class SpawnBlockingSqliteDriver extends SqliteDriver {
+  /** @type {number} */
+  static connectionAttempts = 0
+
+  /** @type {() => void} */
+  static releaseConnectionAttempts = () => {}
+
+  /** @type {Promise<void>} */
+  static connectionAttemptBarrier = Promise.resolve()
+
+  /** Resets connection attempt tracking. */
+  static resetConnectionAttempts() {
+    SpawnBlockingSqliteDriver.connectionAttempts = 0
+    SpawnBlockingSqliteDriver.connectionAttemptBarrier = new Promise((resolve) => {
+      SpawnBlockingSqliteDriver.releaseConnectionAttempts = resolve
+    })
+  }
+
+  /** @returns {Promise<void>} - Resolves when connected. */
+  async connect() {
+    SpawnBlockingSqliteDriver.connectionAttempts++
+    await SpawnBlockingSqliteDriver.connectionAttemptBarrier
+    await super.connect()
+  }
+}
+
 /**
  * @param {string} prefix - Temp-path prefix.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
@@ -73,6 +99,46 @@ async function createCloseTrackingConfiguration(prefix) {
 
   return {
     cleanup: async () => {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    },
+    configuration
+  }
+}
+
+/**
+ * @param {string} prefix - Temp-path prefix.
+ * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
+ */
+async function createSpawnBlockingConfiguration(prefix) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
+  const configuration = new Configuration({
+    database: {
+      test: {
+        default: {
+          driver: SpawnBlockingSqliteDriver,
+          migrations: false,
+          name: `${prefix}-default`,
+          pool: {max: 1},
+          poolType: AsyncTrackedMultiConnection,
+          type: "sqlite"
+        }
+      }
+    },
+    directory,
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]},
+    locales: ["en"]
+  })
+
+  SpawnBlockingSqliteDriver.resetConnectionAttempts()
+
+  return {
+    cleanup: async () => {
+      SpawnBlockingSqliteDriver.releaseConnectionAttempts()
       await configuration.closeDatabaseConnections()
       await fs.rm(directory, {force: true, recursive: true})
     },
@@ -175,6 +241,72 @@ describe("database - pool - async tracked multi connection reuse", () => {
       await pool.checkin(secondConnection)
       expect(pool.connections.includes(secondConnection)).toBe(false)
     })
+  })
+
+  it("counts in-progress direct checkout spawns against the max connection cap", async () => {
+    const {cleanup, configuration} = await createSpawnBlockingConfiguration("velocious-pool-spawn-cap")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      const firstConnectionPromise = pool.checkout()
+      let secondResolved = false
+      const secondConnectionPromise = pool.checkout().then((connection) => {
+        secondResolved = true
+
+        return connection
+      })
+
+      await wait(0.02)
+      expect(SpawnBlockingSqliteDriver.connectionAttempts).toEqual(1)
+      expect(secondResolved).toBe(false)
+
+      SpawnBlockingSqliteDriver.releaseConnectionAttempts()
+
+      const firstConnection = await firstConnectionPromise
+
+      await pool.checkin(firstConnection)
+
+      const secondConnection = await secondConnectionPromise
+
+      expect(secondConnection).toBe(firstConnection)
+
+      await pool.checkin(secondConnection)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("clears same-database schema caches from direct checkout connections", async () => {
+    const {cleanup, configuration} = await createSpawnBlockingConfiguration("velocious-pool-schema-cache")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      let clearedReuseKey
+      const originalClearSchemaCachesForReuseKey = configuration.clearSchemaCachesForReuseKey.bind(configuration)
+
+      configuration.clearSchemaCachesForReuseKey = (reuseKey) => {
+        clearedReuseKey = reuseKey
+        originalClearSchemaCachesForReuseKey(reuseKey)
+      }
+
+      SpawnBlockingSqliteDriver.releaseConnectionAttempts()
+
+      const connection = await pool.checkout()
+
+      connection.clearSchemaCache()
+
+      expect(clearedReuseKey).toEqual(pool.getConfigurationReuseKey())
+
+      await pool.checkin(connection)
+    } finally {
+      await cleanup()
+    }
   })
 
   it("spawns pending tenant checkouts with the queued checkout configuration", async () => {

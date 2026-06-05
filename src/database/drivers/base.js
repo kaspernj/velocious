@@ -1372,7 +1372,11 @@ export default class VelociousDatabaseDriversBase {
         if (truncateErrors.length == 0) {
           break
         } else if (tries <= 5) {
-          // Retry
+          // A truncate failed — the schema cache may still list a table that was
+          // dropped out from under us (e.g. a db:rollback test that left the
+          // shared DB rolled back). Clear it so the next pass re-reads the live
+          // table list and no longer tries to truncate a table that is gone.
+          this.clearSchemaCache()
         } else {
           throw truncateErrors[0]
         }
