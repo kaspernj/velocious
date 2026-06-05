@@ -56,13 +56,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async setConnectionCheckoutName(name) {
-    await this.query(`SET @velocious_connection_checkout_name = ${name === undefined ? "NULL" : this.quote(name)}`, {logName: "Set Connection Checkout Name"})
+    await this.query(`SET @velocious_connection_checkout_name = ${name === undefined ? "NULL" : this.quote(name)}`, {logName: "Set Connection Checkout Name", processListComment: false})
     await super.setConnectionCheckoutName(name)
   }
 
   /** @returns {Promise<void>} - Resolves when complete. */
   async clearConnectionCheckoutName() {
-    await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name"})
+    await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false})
     await super.clearConnectionCheckoutName()
   }
 

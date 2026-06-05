@@ -1,5 +1,6 @@
 // @ts-check
 
+import "../database/annotations-async-hooks.js"
 import Base from "./base.js"
 import CliCommandsDestroyMigration from "./node/cli/commands/destroy/migration.js"
 import CliCommandsInit from "./node/cli/commands/init.js"

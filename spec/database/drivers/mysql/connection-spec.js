@@ -1,8 +1,24 @@
 import DatabaseDriversMysql from "../../../../src/database/drivers/mysql/index.js"
 import configuration from "../../../dummy/src/config/configuration.js"
-import {digg} from "diggerize"
+import { digg } from "diggerize"
 
 const mysqlConfig = digg(configuration, "database", "test", "default")
+
+class QueryCapturingMysqlDriver extends DatabaseDriversMysql {
+  /** @type {Array<{options: import("../../../../src/database/drivers/base.js").QueryOptions, sql: string}>} */
+  queries = []
+
+  /**
+   * @param {string} sql - SQL string.
+   * @param {import("../../../../src/database/drivers/base.js").QueryOptions} [options] - Query options.
+   * @returns {Promise<import("../../../../src/database/drivers/base.js").QueryResultType>} - Query result.
+   */
+  async query(sql, options = {}) {
+    this.queries.push({options, sql})
+
+    return []
+  }
+}
 
 describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transaction: true}}, () => {
   it("connects", async () => {
@@ -40,5 +56,23 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
         await mysql.close()
       }
     }
+  })
+
+  it("does not tag checkout-name session variable queries with process-list comments", async () => {
+    const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
+
+    await mysql.setConnectionCheckoutName("mysql checkout spec")
+    await mysql.clearConnectionCheckoutName()
+
+    expect(mysql.queries).toEqual([
+      {
+        options: {logName: "Set Connection Checkout Name", processListComment: false},
+        sql: "SET @velocious_connection_checkout_name = 'mysql checkout spec'"
+      },
+      {
+        options: {logName: "Clear Connection Checkout Name", processListComment: false},
+        sql: "SET @velocious_connection_checkout_name = NULL"
+      }
+    ])
   })
 })

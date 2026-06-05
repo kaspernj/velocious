@@ -42,6 +42,7 @@
  * @typedef {object} QueryOptions
  * @property {string} [logName] - Query log subject.
  * @property {boolean} [logQuery] - Whether to log the query.
+ * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
 /**
@@ -59,6 +60,7 @@
  */
 
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
+import { getDatabaseAnnotations } from "../annotations.js"
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
@@ -863,12 +865,13 @@ export default class VelociousDatabaseDriversBase {
     const requestTiming = this.configuration.getCurrentRequestTiming()
     const logQuery = options.logQuery ?? this._queryLoggingEnabled()
     const sourceStack = logQuery ? (options.sourceStack || Error().stack) : undefined
+    const querySql = this._querySqlWithProcessListComment(sql, options)
 
     while (tries < maxTries) {
       tries++
 
       try {
-        return await this._queryActualWithLogging(sql, {...options, logQuery, sourceStack}, requestTiming, tries)
+        return await this._queryActualWithLogging(querySql, {...options, logQuery, sourceStack}, requestTiming, tries)
       } catch (error) {
         if (!(error instanceof Error)) throw error
 
@@ -932,6 +935,52 @@ export default class VelociousDatabaseDriversBase {
     }
 
     return result
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @param {QueryOptions} options - Query options.
+   * @returns {string} - SQL string with a leading process-list comment when annotations exist.
+   */
+  _querySqlWithProcessListComment(sql, options) {
+    if (options.processListComment === false) return sql
+
+    const parts = []
+
+    if (this._connectionCheckoutName) {
+      parts.push(`checkout="${this._processListCommentValue(this._connectionCheckoutName)}"`)
+    }
+
+    const annotations = getDatabaseAnnotations()
+
+    if (annotations.length > 0) {
+      parts.push(`annotations="${this._processListCommentValue(annotations.join(" > "))}"`)
+    }
+
+    if (parts.length === 0) return sql
+
+    return `/* velocious ${parts.join(" ")} */ ${sql}`
+  }
+
+  /**
+   * @param {string} value - Raw process-list comment value.
+   * @returns {string} - Sanitized process-list comment value.
+   */
+  _processListCommentValue(value) {
+    let sanitized = ""
+
+    for (const character of value) {
+      const codePoint = character.codePointAt(0)
+
+      sanitized += codePoint !== undefined && (codePoint < 32 || codePoint === 127) ? " " : character
+    }
+
+    return sanitized
+      .replace(/\*\//g, "* /")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200)
+      .replace(/"/g, "'")
   }
 
   /**
