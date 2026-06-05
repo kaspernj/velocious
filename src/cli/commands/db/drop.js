@@ -50,9 +50,7 @@ export default class DbDrop extends BaseCommand {
         try {
           await this.dropDatabase(databaseIdentifier)
         } finally {
-          if (databaseType != "mssql") {
-            await this.databaseConnection.close()
-          }
+          await this.databaseConnection.close()
         }
       }
 

@@ -28,12 +28,12 @@ export default class VelociousCli {
     const commandGroups = await this.commandGroups()
     let result
 
-    for (const [index, commandProcessArgs] of commandGroups.entries()) {
-      if (index > 0) {
+    for (const commandProcessArgs of commandGroups) {
+      try {
+        result = await this.executeCommand(commandProcessArgs)
+      } finally {
         await this.getConfiguration().closeDatabaseConnections()
       }
-
-      result = await this.executeCommand(commandProcessArgs)
     }
 
     return result

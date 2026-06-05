@@ -78,13 +78,6 @@ export function waitForApplicationWithSignalShutdown({application, processObject
 export default class VelociousCliCommandsServer extends BaseCommand{
   /** @returns {Promise<void>} - Starts the HTTP server and waits until it stops. */
   async execute() {
-    this.databasePool = this.getConfiguration().getDatabasePool()
-    /** @type {import("../../../../configuration-types.js").DatabaseConfigurationType} */
-    this.newConfiguration = Object.assign({}, this.databasePool.getConfiguration())
-    this.databaseConnection = await this.databasePool.spawnConnectionWithConfiguration(this.newConfiguration)
-
-    await this.databaseConnection.connect()
-
     const parsedProcessArgs = this.args?.parsedProcessArgs || {}
     const host = String(parsedProcessArgs.h || parsedProcessArgs.host || "127.0.0.1")
     const port = Number(parsedProcessArgs.p || parsedProcessArgs.port || 3006)

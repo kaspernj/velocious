@@ -152,7 +152,11 @@ export default class BackgroundJobsMain {
 
     this.scheduler?.stop()
 
-    await this.configuration.disconnectBeacon()
+    try {
+      await this.configuration.disconnectBeacon()
+    } finally {
+      await this.configuration.closeDatabaseConnections()
+    }
 
     if (!this.server) return
 
