@@ -16,6 +16,8 @@ Every user-facing feature change must land with matching documentation in the SA
 After changing base model generator logic, run `npx velocious g:base-models` from `spec/dummy` so the generated base models stay in sync.
 `spec/dummy/db/structure-default.sql` is a generated schema snapshot; don't edit it manually, and commit updates when migrations/tests change it.
 Always add tests for new or changed behavior.
+
+**Flakiness is never an excuse.** A failing or flaky test/CI check on your branch is yours to make green, whether or not your change caused it. "Flaky", "unrelated", and "pre-existing" describe origin, not permission to leave it red, re-run until it passes, or hand it back. Reproduce it, find the root cause, and fix it with a real determinism fix (proper test isolation, awaiting state, deterministic ordering/fixtures, cleaning shared state) — a genuine flake gets fixed, not retried. Because `.browser-spec.js` files run across sqlite + mariadb + pgsql + mssql in sharded CI, a test that fails on one driver/shard while passing on the others is almost always a real isolation/ordering/shared-state/timing bug surfaced by that environment, not random noise — track it down rather than dismissing it.
 Websocket channel callbacks should use `configuration.ensureConnections(...)` so existing async-context DB connections are reused; reserve `configuration.withConnections(...)` for creating new async-context connections when you truly need a fresh context (e.g., concurrent work).
 Prefer `awaitery`'s `timeout` helper over manual `Promise.race` timeouts when a simple hard timeout is needed.
 Add changelog entries as fragments in `changelog.d/YYYYMMDDHHMMSS-short-slug.md`.
@@ -68,7 +70,9 @@ Run as needed while iterating:
 Skip full local suites; Peakflow will run the full test matrix for all database types on PRs. (General rule for local vs CI runs — including never running shards/groups locally — lives in the `test-and-lint-runs` skill.)
 
 ### fallow regression gate
-The `Lint` Peakflow build first copies `spec/dummy/src/config/configuration.peakflow.sqlite.js` to `spec/dummy/src/config/configuration.js`, then runs `npm run lint`, `npm run typecheck`, and `npm run fallow`. Fallow fails on dead-code / duplication / complexity findings beyond the committed baseline in `fallow-baselines/`. If you intentionally add code that fallow flags (e.g. new public API, an accepted complexity increase), refresh the baseline with `npm run fallow:baseline` and commit the updated `fallow-baselines/*.json`. Tuning lives in `.fallowrc.json`.
+The `Lint` Peakflow build first copies `spec/dummy/src/config/configuration.peakflow.sqlite.js` to `spec/dummy/src/config/configuration.js`, then runs `npm run lint`, `npm run typecheck`, and `npm run fallow`. Fallow fails on dead-code / duplication / complexity findings beyond the committed baseline in `fallow-baselines/`. Tuning lives in `.fallowrc.json`.
+
+**Default to actually FIXING a Fallow offence, not ignoring it.** Delete the dead code, remove the duplication, or refactor the complexity that Fallow flags — that is the intended response. Refreshing the baseline (`npm run fallow:baseline`) and inline `// fallow-ignore-*` comments are last resorts, only for findings that are genuinely intended and reviewed (e.g. a new public API Fallow can't see is consumed, or a deliberate, justified complexity increase); explain why in the PR. Do not refresh the baseline or add ignore comments merely to make the gate pass — that hides real dead code/duplication instead of removing it.
 
 If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.
@@ -115,6 +119,7 @@ For investigation-only tasks, do not push to GitHub unless explicitly asked.
 ## Branches and commits
 When asked to create branches and commit changes, come up with fitting branch names and commit messages. Split commits into smaller commits for each distinct change.
 Never commit or push directly to `master`; always use a feature branch and open a PR.
+- Do not manually bump this package's own `version` in `package.json` (or `spec/dummy/package.json`). The release happens through the release script (`npm run release:patch`), which sets the version at release time. Leave `version` untouched in feature work and PRs — a manual bump conflicts with the release flow.
 - In codebases that auto-load model files with a require-context/recursive `src/models` scan, keep `src/models/**` limited to actual model classes; place helper modules under `src/utils`/`src/support` so initialization does not treat them as records.
 - Do not edit generated source files manually; regenerate them with the owning project script/command.
 - In generated frontend models, use direct class import names (for example `import Project from "./project.js"`), not suffixed aliases like `ProjectModel`.
