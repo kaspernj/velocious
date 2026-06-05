@@ -350,6 +350,11 @@
  */
 
 /**
+ * @typedef {object} DebugEndpointConfiguration
+ * @property {string} [path] - HTTP path for the built-in debug endpoint. Defaults to `/velocious/debug`.
+ */
+
+/**
  * @typedef {object} TenantDatabaseProviderType
  * @property {function({configuration: import("./configuration.js").default, identifier: string}) : unknown[] | Promise<unknown[]>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
  * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: unknown}) : void | Promise<void>} [createDatabase] - Creates the tenant database/schema for one tenant.
@@ -369,6 +374,7 @@
  * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
  * @property {boolean} [debug] - Enable debug logging.
+ * @property {boolean | DebugEndpointConfiguration} [debugEndpoint] - Enable the built-in debug endpoint. Defaults to false.
  * @property {string} [directory] - Base directory for the project.
  * @property {boolean} [enforceTenantDatabaseScopes] - Require tenant-switched model queries to resolve a tenant database identifier. Defaults to true.
  * @property {string} [environment] - Current environment name.

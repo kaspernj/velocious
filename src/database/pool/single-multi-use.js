@@ -97,4 +97,17 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   getCurrentContextConnection() {
     return this.connection
   }
+
+  /** @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
+  getDebugSnapshot() {
+    const connections = this.connection
+      ? [this.debugConnectionSnapshot(this.connection, {state: "shared"})]
+      : []
+
+    return {
+      ...super.getDebugSnapshot(),
+      connections,
+      idleCount: this.connection ? 1 : 0
+    }
+  }
 }

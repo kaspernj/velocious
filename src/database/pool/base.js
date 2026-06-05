@@ -11,6 +11,18 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  * @property {string} [name] - Human-readable name for the checked-out connection.
  */
 
+/**
+ * @typedef {object} DatabasePoolDebugSnapshot
+ * @property {Record<string, unknown>} configuration - Sanitized resolved database configuration.
+ * @property {Array<Record<string, unknown>>} connections - Live connection snapshots.
+ * @property {number} connectionsBeingSpawned - Number of in-progress connection spawns.
+ * @property {number} idleCount - Number of idle connections.
+ * @property {string} identifier - Database identifier.
+ * @property {number} inUseCount - Number of checked-out connections.
+ * @property {number} pendingCheckoutCount - Number of queued checkout requests.
+ * @property {string} poolClass - Pool class name.
+ */
+
 /** @type {{currentPool: VelociousDatabasePoolBase | null}} */
 const shared = {
   currentPool: null
@@ -232,6 +244,55 @@ class VelociousDatabasePoolBase {
    */
   async ensureGlobalConnection() {
     return await this.checkout()
+  }
+
+  /** @returns {DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
+  getDebugSnapshot() {
+    return {
+      configuration: this.debugConfigurationSnapshot(),
+      connections: [],
+      connectionsBeingSpawned: 0,
+      identifier: this.identifier,
+      idleCount: 0,
+      inUseCount: 0,
+      pendingCheckoutCount: 0,
+      poolClass: this.constructor.name
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - Sanitized resolved database configuration. */
+  debugConfigurationSnapshot() {
+    const databaseConfig = this.getConfiguration()
+    const poolConfig = databaseConfig.pool
+
+    return {
+      database: databaseConfig.database,
+      driver: databaseConfig.driver?.name,
+      host: databaseConfig.host,
+      migrations: databaseConfig.migrations,
+      name: databaseConfig.name,
+      pool: poolConfig ? {idleTimeoutMillis: poolConfig.idleTimeoutMillis, max: poolConfig.max} : undefined,
+      port: databaseConfig.port,
+      schema: databaseConfig.schema,
+      type: databaseConfig.type,
+      useDatabase: databaseConfig.useDatabase,
+      username: databaseConfig.username
+    }
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Database connection.
+   * @param {Record<string, unknown>} details - Extra diagnostic fields.
+   * @returns {Record<string, unknown>} - Connection diagnostic snapshot.
+   */
+  debugConnectionSnapshot(connection, details = {}) {
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+
+    return {
+      ...connection.getDebugSnapshot(),
+      ...details,
+      reuseKey: connectionWithPoolKey[POOL_CONFIGURATION_KEY]
+    }
   }
 
   /**

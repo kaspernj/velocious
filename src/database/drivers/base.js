@@ -45,6 +45,34 @@
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
+
+/**
+ * @typedef {object} ActiveQueryDebugSnapshot
+ * @property {string[]} annotations - Database annotations active when the query started.
+ * @property {string} logName - Query log name.
+ * @property {number} startedAtUnixMs - Query start timestamp.
+ * @property {number} runningMs - Query runtime in milliseconds.
+ * @property {string} sqlPreview - Truncated SQL preview.
+ */
+
+/**
+ * @typedef {object} DatabaseConnectionDebugSnapshot
+ * @property {ActiveQueryDebugSnapshot | null} activeQuery - Currently running query, if any.
+ * @property {string | undefined} checkoutName - Human-readable checkout name.
+ * @property {string} driverClass - Driver class name.
+ * @property {number | undefined} idSeq - Pool checkout ID sequence.
+ * @property {number} openTransactions - Number of open transaction frames.
+ * @property {number} schemaCacheEntries - Number of cached schema metadata entries.
+ */
+
+/**
+ * @typedef {object} ActiveQueryState
+ * @property {string[]} annotations - Database annotations active when the query started.
+ * @property {string} logName - Query log name.
+ * @property {number} startedAtUnixMs - Query start timestamp.
+ * @property {string} sqlPreview - Truncated SQL preview.
+ */
+
 /**
  * @typedef {object}UpdateSqlArgsType
  * @property {object} conditions - Conditions used to build the update WHERE clause.
@@ -100,6 +128,8 @@ export default class VelociousDatabaseDriversBase {
   _schemaCacheInvalidator
   /** @type {string | undefined} */
   _connectionCheckoutName
+  /** @type {ActiveQueryState | null} */
+  _activeQuery = null
 
   /**
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
@@ -911,14 +941,25 @@ export default class VelociousDatabaseDriversBase {
    */
   async _queryActualWithLogging({originalSql, querySql}, options, requestTiming, tries) {
     const startedAtMs = nowMs()
+    const previousActiveQuery = this._activeQuery
+    this._activeQuery = {
+      annotations: getDatabaseAnnotations(),
+      logName: options.logName || "SQL",
+      sqlPreview: this._debugSqlPreview(originalSql),
+      startedAtUnixMs: Date.now()
+    }
     let result
 
-    if (requestTiming && tries === 1) {
-      result = await requestTiming.measureDbQuery(async () => await this._queryActual(querySql))
-    } else if (requestTiming) {
-      result = await requestTiming.measure("db", async () => await this._queryActual(querySql))
-    } else {
-      result = await this._queryActual(querySql)
+    try {
+      if (requestTiming && tries === 1) {
+        result = await requestTiming.measureDbQuery(async () => await this._queryActual(querySql))
+      } else if (requestTiming) {
+        result = await requestTiming.measure("db", async () => await this._queryActual(querySql))
+      } else {
+        result = await this._queryActual(querySql)
+      }
+    } finally {
+      this._activeQuery = previousActiveQuery
     }
 
     const elapsedMs = nowMs() - startedAtMs
@@ -937,6 +978,32 @@ export default class VelociousDatabaseDriversBase {
     }
 
     return result
+  }
+
+  /** @returns {DatabaseConnectionDebugSnapshot} - Diagnostic snapshot for this connection. */
+  getDebugSnapshot() {
+    const now = Date.now()
+    const activeQuery = this._activeQuery
+
+    return {
+      activeQuery: activeQuery ? {...activeQuery, runningMs: Math.max(0, now - activeQuery.startedAtUnixMs)} : null,
+      checkoutName: this._connectionCheckoutName,
+      driverClass: this.constructor.name,
+      idSeq: this.idSeq,
+      openTransactions: this._transactionsCount,
+      schemaCacheEntries: this._schemaCache.size
+    }
+  }
+
+  /**
+   * @param {string} sql - SQL to preview.
+   * @returns {string} - Normalized truncated SQL preview for diagnostics.
+   */
+  _debugSqlPreview(sql) {
+    return sql
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 500)
   }
 
   /**
