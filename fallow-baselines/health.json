@@ -366,13 +366,13 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 4
+        "count": 5
       },
       "crap_high": {
-        "count": 10
+        "count": 9
       },
       "crap_moderate": {
-        "count": 11
+        "count": 12
       }
     },
     "src/controller.js": {
@@ -1585,8 +1585,8 @@
     "src/testing/test.js:dead code",
     "src/database/query/model-class-query.js:complexity",
     "src/http-server/client/websocket-session.js:complexity",
-    "src/database/drivers/base.js:complexity",
     "src/database/drivers/pgsql/structure-sql.js:untested risk",
+    "src/database/drivers/base.js:complexity",
     "src/database/query/preloader.js:complexity",
     "src/testing/test-runner.js:complexity",
     "src/frontend-model-resource/base-resource.js:complexity",

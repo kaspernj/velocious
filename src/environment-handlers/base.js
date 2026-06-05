@@ -16,6 +16,22 @@
 
 export default class VelociousEnvironmentHandlerBase {
   /**
+   * @param {string} providedToken - Token from the request.
+   * @param {string} expectedToken - Configured token.
+   * @returns {boolean} - Whether both tokens match.
+   */
+  debugEndpointTokenMatches(providedToken, expectedToken) {
+    let difference = providedToken.length ^ expectedToken.length
+    const maxLength = Math.max(providedToken.length, expectedToken.length)
+
+    for (let index = 0; index < maxLength; index++) {
+      difference |= (providedToken.charCodeAt(index) || 0) ^ (expectedToken.charCodeAt(index) || 0)
+    }
+
+    return difference === 0
+  }
+
+  /**
    * @returns {string | undefined} - Velocious source directory used to filter framework stack frames.
    */
   getFrameworkSourceDirectory() {

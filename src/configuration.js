@@ -10,7 +10,6 @@
  */
 
 import {digg} from "diggerize"
-import {timingSafeEqual} from "node:crypto"
 import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
@@ -212,7 +211,7 @@ export default class VelociousConfiguration {
 
       // When a token is configured, an unauthenticated request gets no route at
       // all (404) rather than a 401, so the endpoint's existence stays hidden.
-      if (this._debugEndpoint.token && !debugEndpointRequestAuthorized(request, this._debugEndpoint.token)) return null
+      if (this._debugEndpoint.token && !this.debugEndpointRequestAuthorized(request, this._debugEndpoint.token)) return null
 
       return {
         action: "show",
@@ -2052,26 +2051,21 @@ export default class VelociousConfiguration {
       this._closeDatabaseConnectionsPromise = null
     }
   }
-}
 
-/**
- * Constant-time check that a request carries the configured debug-endpoint
- * bearer token (`Authorization: Bearer <token>`).
- * @param {{header: (name: string) => string | null | undefined}} request - Incoming request.
- * @param {string} expectedToken - The configured debug-endpoint token.
- * @returns {boolean} - Whether the request is authorized.
- */
-function debugEndpointRequestAuthorized(request, expectedToken) {
-  const header = request.header("authorization")
+  /**
+   * @param {{header: (name: string) => string | null | undefined}} request - Incoming request.
+   * @param {string} expectedToken - Configured debug-endpoint token.
+   * @returns {boolean} - Whether the request carries the expected bearer token.
+   */
+  debugEndpointRequestAuthorized(request, expectedToken) {
+    const header = request.header("authorization")
 
-  if (typeof header !== "string") return false
+    if (typeof header !== "string") return false
 
-  const match = (/^Bearer\s+(.+)$/i).exec(header.trim())
+    const match = (/^Bearer\s+(.+)$/i).exec(header.trim())
 
-  if (!match) return false
+    if (!match) return false
 
-  const provided = Buffer.from(match[1])
-  const expected = Buffer.from(expectedToken)
-
-  return provided.length === expected.length && timingSafeEqual(provided, expected)
+    return this.getEnvironmentHandler().debugEndpointTokenMatches(match[1], expectedToken)
+  }
 }
