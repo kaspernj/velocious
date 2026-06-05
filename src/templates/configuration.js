@@ -48,9 +48,9 @@ export default new Configuration({
     const requireContextModels = requireContext(modelsPath, true, /^(.+)\.js$/)
     const initializerFromRequireContext = new InitializerFromRequireContext({requireContext: requireContextModels})
 
-    await configuration.ensureConnections(async () => {
+    await configuration.ensureConnections({name: "Initialize models"}, async () => {
       await initializerFromRequireContext.initialize({configuration})
-    }, {name: "Initialize models"})
+    })
   },
   locale: () => "en",
   locales: ["de", "en"],

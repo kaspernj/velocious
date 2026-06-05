@@ -7,7 +7,7 @@ import splitSqlStatements from "../../../../../../utils/split-sql-statements.js"
 export default class DbSchemaLoad extends BaseCommand {
   /** @returns {Promise<void>} */
   async execute() {
-    await this.getConfiguration().ensureConnections(async (dbs) => {
+    await this.getConfiguration().ensureConnections({name: "DB schema load"}, async (dbs) => {
       const dbDir = path.join(this.directory(), "db")
 
       for (const identifier of Object.keys(dbs)) {
@@ -17,7 +17,7 @@ export default class DbSchemaLoad extends BaseCommand {
 
         await this.loadStructureSql({db, structureSql})
       }
-    }, {name: "DB schema load"})
+    })
   }
 
   /**

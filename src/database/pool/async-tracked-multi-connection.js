@@ -352,17 +352,22 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * @template T
-   * @param {function(import("../drivers/base.js").default) : Promise<T>} callback - Callback to invoke with the connection.
-   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
+   * @param {import("./base.js").ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} optionsOrCallback - Checkout options or callback to invoke with the connection.
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} [callback] - Callback to invoke with the connection.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async withConnection(callback, options = {}) {
+  async withConnection(optionsOrCallback, callback) {
+    const options = typeof optionsOrCallback == "function" ? {} : optionsOrCallback
+    const actualCallback = typeof optionsOrCallback == "function" ? optionsOrCallback : callback
+
+    if (!actualCallback) throw new Error("withConnection requires a callback")
+
     const connection = await this.checkout(options)
     const id = connection.getIdSeq()
 
     return await this.asyncLocalStorage.run(id, async () => {
       try {
-        return await callback(connection)
+        return await actualCallback(connection)
       } finally {
         await this.checkin(connection)
       }

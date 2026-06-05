@@ -217,11 +217,11 @@ class VelociousDatabasePoolBase {
   /**
    * @template T
    * @abstract
-   * @param {function(import("../drivers/base.js").default) : Promise<T>} _callback - Callback function.
-   * @param {ConnectionCheckoutOptions} [_options] - Checkout options.
+   * @param {ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} _optionsOrCallback - Checkout options or callback function.
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} [_callback] - Callback function.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  withConnection(_callback, _options) {
+  withConnection(_optionsOrCallback, _callback) {
     throw new Error("'withConnection' not implemented")
   }
 

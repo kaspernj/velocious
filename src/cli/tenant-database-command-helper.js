@@ -46,12 +46,12 @@ export default class TenantDatabaseCommandHelper {
     this.validateTenantDatabaseIdentifier()
     await this.initializeRuntime()
 
-    const tenants = await this.configuration.ensureConnections(async () => {
+    const tenants = await this.configuration.ensureConnections({name: `Tenant database list: ${this.identifier}`}, async () => {
       return await this.provider.listTenants({
         configuration: this.configuration,
         identifier: this.identifier
       })
-    }, {name: `Tenant database list: ${this.identifier}`})
+    })
 
     if (!Array.isArray(tenants)) {
       throw new Error(`Tenant database provider for ${this.identifier} must return an array from listTenants`)

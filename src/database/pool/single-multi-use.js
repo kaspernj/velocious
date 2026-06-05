@@ -39,15 +39,20 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
   /**
    * @template T
-   * @param {function(import("../drivers/base.js").default) : Promise<T>} callback - Callback function.
-   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
+   * @param {import("./base.js").ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} optionsOrCallback - Checkout options or callback function.
+   * @param {function(import("../drivers/base.js").default) : Promise<T>} [callback] - Callback function.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async withConnection(callback, options = {}) {
+  async withConnection(optionsOrCallback, callback) {
+    const options = typeof optionsOrCallback == "function" ? {} : optionsOrCallback
+    const actualCallback = typeof optionsOrCallback == "function" ? optionsOrCallback : callback
+
+    if (!actualCallback) throw new Error("withConnection requires a callback")
+
     const connection = await this.checkout(options)
 
     try {
-      return await callback(connection)
+      return await actualCallback(connection)
     } finally {
       await this.checkin(connection)
     }

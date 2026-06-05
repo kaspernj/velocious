@@ -26,7 +26,7 @@ export default class DbGenerateModel extends BaseCommand {
     this.getConfiguration().setEnforceTenantDatabaseScopes(false)
 
     try {
-      await this.getConfiguration().ensureConnections(async () => {
+      await this.getConfiguration().ensureConnections({name: "Generate base models"}, async () => {
         for (const modelClassName in modelClasses) {
         const modelClass = modelClasses[modelClassName]
         const modelName = inflection.dasherize(modelClassName)
@@ -316,7 +316,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         await fs.writeFile(modelPath, fileContent)
         }
-      }, {name: "Generate base models"})
+      })
     } finally {
       this.getConfiguration().setEnforceTenantDatabaseScopes(enforceTenantDatabaseScopes)
     }

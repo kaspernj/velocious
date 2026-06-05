@@ -111,7 +111,7 @@ export default class VelociousDatabaseMigrator {
   async migrateFiles(files, importCallback) {
     let appliedCount = 0
 
-    await this.configuration.ensureConnections(async () => {
+    await this.configuration.ensureConnections({name: "Database migrator: migrate files"}, async () => {
       for (const migration of files) {
         const applied = await this.runMigrationFile({
           migration,
@@ -132,7 +132,7 @@ export default class VelociousDatabaseMigrator {
       }
 
       await this._afterMigrations()
-    }, {name: "Database migrator: migrate files"})
+    })
 
     return appliedCount
   }
@@ -174,7 +174,7 @@ export default class VelociousDatabaseMigrator {
 
     files = files.sort((migration1, migration2) => migration1.date - migration2.date)
 
-    await this.configuration.ensureConnections(async () => {
+    await this.configuration.ensureConnections({name: "Database migrator: migrate require-context files"}, async () => {
       for (const migration of files) {
         await this.runMigrationFile({
           migration,
@@ -183,7 +183,7 @@ export default class VelociousDatabaseMigrator {
       }
 
       await this._afterMigrations()
-    }, {name: "Database migrator: migrate require-context files"})
+    })
   }
 
   /**

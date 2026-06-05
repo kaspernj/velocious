@@ -544,9 +544,9 @@ export default class BackgroundJobsStore {
 
     const pool = this.configuration.getDatabasePool(this.getDatabaseIdentifier())
 
-    await pool.withConnection(async () => {
+    await pool.withConnection({name: "Background jobs store initialize model"}, async () => {
       await BackgroundJobRecord.initializeRecord({configuration: this.configuration})
-    }, {name: "Background jobs store initialize model"})
+    })
   }
 
   /**
@@ -719,10 +719,10 @@ export default class BackgroundJobsStore {
     /** @type {T | undefined} */
     let result
 
-    await pool.withConnection(async (db) => {
+    await pool.withConnection({name: "Background jobs store"}, async (db) => {
       callbackCalled = true
       result = await callback(db)
-    }, {name: "Background jobs store"})
+    })
 
     if (!callbackCalled) {
       throw new Error("Background jobs store callback was not invoked")

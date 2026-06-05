@@ -21,13 +21,13 @@ export default class DbTenantsCheck extends BaseCommand {
         })
       }
 
-      await this.getConfiguration().ensureConnections(async (dbs) => {
+      await this.getConfiguration().ensureConnections({name: `DB tenants check: ${helper.identifier}`}, async (dbs) => {
         const db = dbs[helper.identifier]
 
         if (!db) throw new Error(`Tenant database identifier ${helper.identifier} did not open a connection`)
 
         await db.query("SELECT 1")
-      }, {name: `DB tenants check: ${helper.identifier}`})
+      })
     })
 
     if (this.args.testing) return {identifier: helper.identifier, tenantCount}

@@ -13,10 +13,10 @@ export default class DbReset extends BaseCommand {
     const migrations = await this.getEnvironmentHandler().findMigrations()
     const migrator = new Migrator({configuration: this.getConfiguration()})
 
-    await this.getConfiguration().ensureConnections(async () => {
+    await this.getConfiguration().ensureConnections({name: "DB reset"}, async () => {
       await migrator.reset()
       await migrator.prepare()
       await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
-    }, {name: "DB reset"})
+    })
   }
 }

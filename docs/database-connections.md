@@ -3,9 +3,9 @@
 Use `configuration.withConnections` when code needs a checked-out database connection scope:
 
 ```js
-await configuration.withConnections(async (dbs) => {
+await configuration.withConnections({name: "report export"}, async (dbs) => {
   await dbs.default.query("SELECT 1")
-}, {name: "report export"})
+})
 ```
 
 The `name` option labels the active checkout. It is intended for debugging connection usage, especially code paths that hold onto connections longer than expected or fail to release them.
@@ -13,9 +13,9 @@ The `name` option labels the active checkout. It is intended for debugging conne
 `configuration.ensureConnections` accepts the same option when it needs to open a new scope:
 
 ```js
-await configuration.ensureConnections(async (dbs) => {
+await configuration.ensureConnections({name: "invoice cleanup"}, async (dbs) => {
   await dbs.default.query("SELECT 1")
-}, {name: "invoice cleanup"})
+})
 ```
 
 When a current connection scope already exists, `ensureConnections` reuses it and keeps the existing checkout name.

@@ -1098,7 +1098,7 @@ export default class FrontendModelController extends Controller {
     })
 
     return await configuration.runWithTenant(tenant, async () => {
-      return await configuration.ensureConnections(async () => {
+      return await configuration.ensureConnections({name: "Frontend model request"}, async () => {
         const ability = await configuration.resolveAbility({
           params,
           request: this.request(),
@@ -1116,7 +1116,7 @@ export default class FrontendModelController extends Controller {
         } finally {
           this._frontendModelAbilityOverride = previousAbilityOverride
         }
-      }, {name: "Frontend model request"})
+      })
     })
   }
 

@@ -1836,7 +1836,7 @@ class VelociousDatabaseRecord {
     const isNewRecord = this.isNewRecord()
     let result
 
-    await this._getConfiguration().ensureConnections(async () => {
+    await this._getConfiguration().ensureConnections({name: `${this.getModelClass().name} save`}, async () => {
       await this._runLifecycleCallbacks("beforeValidation")
       await this._runValidations()
 
@@ -1867,7 +1867,7 @@ class VelociousDatabaseRecord {
         await this._autoSaveAttachments()
         await this._runLifecycleCallbacks("afterSave")
       })
-    }, {name: `${this.getModelClass().name} save`})
+    })
 
     return result
   }

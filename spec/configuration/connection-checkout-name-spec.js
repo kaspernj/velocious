@@ -20,11 +20,11 @@ describe("connection checkout names", () => {
       /** @type {import("../../src/database/drivers/base.js").default | undefined} */
       let checkedOutConnection
 
-      await dummyConfiguration.withConnections(async (dbs) => {
+      await dummyConfiguration.withConnections({name: "configuration spec checkout"}, async (dbs) => {
         checkedOutConnection = dbs.default
 
         expect(checkedOutConnection._connectionCheckoutName).toBe("configuration spec checkout")
-      }, {name: "configuration spec checkout"})
+      })
 
       expect(checkedOutConnection?._connectionCheckoutName).toBeUndefined()
     }, {fresh: true})
@@ -39,11 +39,11 @@ describe("connection checkout names", () => {
       /** @type {import("../../src/database/drivers/base.js").default | undefined} */
       let checkedOutConnection
 
-      await pool.withConnection(async (db) => {
+      await pool.withConnection({name: "pool spec checkout"}, async (db) => {
         checkedOutConnection = db
 
         expect(db._connectionCheckoutName).toBe("pool spec checkout")
-      }, {name: "pool spec checkout"})
+      })
 
       expect(checkedOutConnection?._connectionCheckoutName).toBeUndefined()
     }, {fresh: true})

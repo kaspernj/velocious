@@ -21,12 +21,12 @@ export default function loadMigrations({migrationsRequireContextCallback, ...res
     instance.running = true
 
     try {
-      await Configuration.current().ensureConnections(async () => {
+      await Configuration.current().ensureConnections({name: "React database migration loader"}, async () => {
         const migrator = new Migrator({configuration: Configuration.current()})
 
         await migrator.prepare()
         await migrator.migrateFilesFromRequireContext(await migrationsRequireContextCallback())
-      }, {name: "React database migration loader"})
+      })
 
       await Configuration.current().initialize()
       setLoaded(true)
