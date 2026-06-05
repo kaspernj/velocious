@@ -353,6 +353,7 @@
 /**
  * @typedef {object} DebugEndpointConfiguration
  * @property {string} [path] - HTTP path for the built-in debug endpoint. Defaults to `/velocious/debug`.
+ * @property {string} [token] - Bearer token required in the `Authorization: Bearer <token>` header. When set, requests without a matching token are not routed (404), so the endpoint stays hidden.
  */
 
 /**

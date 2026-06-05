@@ -13,7 +13,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 /**
  * @param {object} args - Configuration arguments.
- * @param {boolean | {path?: string}} [args.debugEndpoint] - Debug endpoint configuration.
+ * @param {boolean | {path?: string, token?: string}} [args.debugEndpoint] - Debug endpoint configuration.
  * @returns {Configuration} - Test configuration.
  */
 function buildConfiguration({debugEndpoint = false} = {}) {
@@ -43,9 +43,10 @@ function buildConfiguration({debugEndpoint = false} = {}) {
 /**
  * @param {Configuration} configuration - Configuration instance.
  * @param {string} path - Request path.
+ * @param {{authorization?: string}} [options] - Optional request headers.
  * @returns {Promise<Response>} - Response after route resolution.
  */
-async function resolveGet(configuration, path) {
+async function resolveGet(configuration, path, {authorization} = {}) {
   const previousConfiguration = currentConfigurationOrUndefined()
   configuration.setCurrent()
   configuration.setRoutes(dummyRoutes.routes)
@@ -53,9 +54,10 @@ async function resolveGet(configuration, path) {
   const response = new Response({configuration})
   const request = new Request({client: {remoteAddress: "127.0.0.1"}, configuration})
   const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
+  const authorizationHeaderLine = authorization ? `Authorization: ${authorization}\r\n` : ""
 
   try {
-    request.feed(Buffer.from(`GET ${path} HTTP/1.1\r\nHost: example.com\r\n\r\n`, "utf8"))
+    request.feed(Buffer.from(`GET ${path} HTTP/1.1\r\nHost: example.com\r\n${authorizationHeaderLine}\r\n`, "utf8"))
     await donePromise
 
     const resolver = new RoutesResolver({configuration, request, response})
@@ -98,7 +100,7 @@ describe("routes - debug endpoint", {databaseCleaning: {transaction: true}}, () 
     expect(response.getStatusCode()).toEqual(200)
     expect(response.headers["Content-Type"]).toEqual(["application/json; charset=UTF-8"])
     expect(body.startsWith("{\n  ")).toEqual(true)
-    expect(payload.configuration.debugEndpoint).toEqual({enabled: true, path: "/velocious/debug"})
+    expect(payload.configuration.debugEndpoint).toEqual({enabled: true, path: "/velocious/debug", tokenConfigured: false})
     expect(payload.server.environment).toEqual("test")
     expect(payload.database.activeIdentifiers).toEqual(["default"])
     expect(defaultPool.connections).toEqual([])
@@ -128,5 +130,28 @@ describe("routes - debug endpoint", {databaseCleaning: {transaction: true}}, () 
     if (typeof body !== "string") throw new Error("Expected debug response body to be a string")
 
     expect(JSON.parse(body).configuration.debugEndpoint.path).toEqual("/internal/debug")
+  })
+
+  it("returns 404 when a token is configured but the request has no bearer token", async () => {
+    const response = await resolveGet(buildConfiguration({debugEndpoint: {token: "secret-debug-token"}}), "/velocious/debug")
+
+    expect(response.getStatusCode()).toEqual(404)
+  })
+
+  it("returns 404 when a token is configured but the bearer token is wrong", async () => {
+    const response = await resolveGet(buildConfiguration({debugEndpoint: {token: "secret-debug-token"}}), "/velocious/debug", {authorization: "Bearer wrong-token"})
+
+    expect(response.getStatusCode()).toEqual(404)
+  })
+
+  it("returns diagnostics with the correct bearer token and never exposes the token", async () => {
+    const response = await resolveGet(buildConfiguration({debugEndpoint: {token: "secret-debug-token"}}), "/velocious/debug", {authorization: "Bearer secret-debug-token"})
+    const body = response.getBody()
+
+    if (typeof body !== "string") throw new Error("Expected debug response body to be a string")
+
+    expect(response.getStatusCode()).toEqual(200)
+    expect(JSON.parse(body).configuration.debugEndpoint).toEqual({enabled: true, path: "/velocious/debug", tokenConfigured: true})
+    expect(body.includes("secret-debug-token")).toEqual(false)
   })
 })
