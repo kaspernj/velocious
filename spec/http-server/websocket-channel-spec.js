@@ -470,7 +470,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
           throw new Error("Websocket is not open")
         }
 
-        expect(() => client._sendChannelSubscribe(queuedSubscription)).toThrow()
+        await expect(() => client._sendChannelSubscribe(queuedSubscription)).toThrow()
         expect(queuedSubscription._subscribeSent).toBe(false)
         expect(queuedSubscription.isClosed()).toBe(false)
 
