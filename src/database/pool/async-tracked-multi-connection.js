@@ -250,7 +250,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
       connectionWithPoolKey[POOL_CONFIGURATION_KEY] = reuseKey
-      connection.setSchemaCacheInvalidator(() => this.clearSchemaCache())
+      connection.setSchemaCacheInvalidator(() => {
+        this.clearSchemaCache()
+        this.configuration.clearSchemaCachesForReuseKey(reuseKey)
+      })
 
       return connection
     } finally {

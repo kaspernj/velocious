@@ -279,6 +279,36 @@ describe("database - pool - async tracked multi connection reuse", () => {
     }
   })
 
+  it("clears same-database schema caches from direct checkout connections", async () => {
+    const {cleanup, configuration} = await createSpawnBlockingConfiguration("velocious-pool-schema-cache")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      let clearedReuseKey
+      const originalClearSchemaCachesForReuseKey = configuration.clearSchemaCachesForReuseKey.bind(configuration)
+
+      configuration.clearSchemaCachesForReuseKey = (reuseKey) => {
+        clearedReuseKey = reuseKey
+        originalClearSchemaCachesForReuseKey(reuseKey)
+      }
+
+      SpawnBlockingSqliteDriver.releaseConnectionAttempts()
+
+      const connection = await pool.checkout()
+
+      connection.clearSchemaCache()
+
+      expect(clearedReuseKey).toEqual(pool.getConfigurationReuseKey())
+
+      await pool.checkin(connection)
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("spawns pending tenant checkouts with the queued checkout configuration", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-pending-tenant")
 
