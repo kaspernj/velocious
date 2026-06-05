@@ -45,6 +45,13 @@ describe("Cli - Commands - db:rollback", () => {
     await cliMigrate.execute()
   }
 
+  // This test rolls the shared dummy DB back (dropping tables). Always restore it
+  // afterwards — even if an assertion throws before the in-test re-migrate — so a
+  // rolled-back DB never poisons later tests' truncate cleanup (missing-table cascade).
+  afterEach(async () => {
+    await runMigrations()
+  })
+
   const getTestData = async () => {
     const cliRollback = new Cli({
       configuration: dummyConfiguration,
