@@ -871,7 +871,7 @@ export default class VelociousDatabaseDriversBase {
       tries++
 
       try {
-        return await this._queryActualWithLogging(querySql, {...options, logQuery, sourceStack}, requestTiming, tries)
+        return await this._queryActualWithLogging({originalSql: sql, querySql}, {...options, logQuery, sourceStack}, requestTiming, tries)
       } catch (error) {
         if (!(error instanceof Error)) throw error
 
@@ -901,22 +901,24 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {string} sql - SQL string.
+   * @param {object} args - Options object.
+   * @param {string} args.originalSql - Original SQL string before process-list comments.
+   * @param {string} args.querySql - SQL string sent to the database.
    * @param {QueryOptions} options - Query options.
    * @param {import("../../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing.
    * @param {number} tries - Query attempt count.
    * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
-  async _queryActualWithLogging(sql, options, requestTiming, tries) {
+  async _queryActualWithLogging({originalSql, querySql}, options, requestTiming, tries) {
     const startedAtMs = nowMs()
     let result
 
     if (requestTiming && tries === 1) {
-      result = await requestTiming.measureDbQuery(async () => await this._queryActual(sql))
+      result = await requestTiming.measureDbQuery(async () => await this._queryActual(querySql))
     } else if (requestTiming) {
-      result = await requestTiming.measure("db", async () => await this._queryActual(sql))
+      result = await requestTiming.measure("db", async () => await this._queryActual(querySql))
     } else {
-      result = await this._queryActual(sql)
+      result = await this._queryActual(querySql)
     }
 
     const elapsedMs = nowMs() - startedAtMs
@@ -926,11 +928,11 @@ export default class VelociousDatabaseDriversBase {
         elapsedMs,
         logName: options.logName || "SQL",
         sourceStack: options.sourceStack,
-        sql
+        sql: querySql
       })
     }
 
-    if (this._schemaCacheInvalidatingSql(sql)) {
+    if (this._schemaCacheInvalidatingSql(originalSql)) {
       this.clearSchemaCache()
     }
 

@@ -6,6 +6,8 @@ import { describe, expect, it } from "../../../src/testing/test.js"
 import { withDatabaseAnnotation } from "../../../src/database/annotations.js"
 
 class ProcessListCommentDriver extends DatabaseDriverBase {
+  clearSchemaCacheCalls = 0
+
   /** @type {string[]} */
   queries = []
 
@@ -28,6 +30,11 @@ class ProcessListCommentDriver extends DatabaseDriverBase {
     this.queries.push(sql)
 
     return []
+  }
+
+  /** @returns {void} - No return value. */
+  clearSchemaCache() {
+    this.clearSchemaCacheCalls++
   }
 }
 
@@ -81,5 +88,17 @@ describe("Database drivers - process-list comments", {databaseCleaning: {transac
     await driver.query("SET application_name = 'metadata query'", {processListComment: false})
 
     expect(driver.queries).toEqual(["SET application_name = 'metadata query'"])
+  })
+
+  it("uses original SQL for schema cache invalidation", async () => {
+    const driver = new ProcessListCommentDriver({}, buildConfiguration())
+
+    await driver.setConnectionCheckoutName("migration")
+    await driver.query("CREATE TABLE schema_cache_test(id int)")
+
+    expect(driver.queries).toEqual([
+      "/* velocious checkout=\"migration\" */ CREATE TABLE schema_cache_test(id int)"
+    ])
+    expect(driver.clearSchemaCacheCalls).toBe(1)
   })
 })
