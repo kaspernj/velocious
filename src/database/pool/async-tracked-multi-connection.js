@@ -10,6 +10,7 @@ const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
 /**
  * @typedef {object} PendingCheckout
  * @property {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfig - Resolved database configuration needed by the checkout.
+ * @property {import("./base.js").ConnectionCheckoutOptions} options - Checkout options.
  * @property {string} reuseKey - Database configuration reuse key needed by the checkout.
  * @property {(connection: import("../drivers/base.js").default) => void} resolve - Resolves with an activated connection.
  * @property {(error: Error) => void} reject - Rejects when checkout cannot complete.
@@ -114,18 +115,21 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   }
 
-  /** @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.  */
-  async checkout() {
+  /**
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
+   * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
+   */
+  async checkout(options = {}) {
     const databaseConfig = this.getConfiguration()
     const reuseKey = this.getConfigurationReuseKey()
     let connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
-    if (connection) return this.activateConnection(connection)
+    if (connection) return await this.activateConnection(connection, options)
 
     await this.reapIdleConnections()
     connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
-    if (connection) return this.activateConnection(connection)
+    if (connection) return await this.activateConnection(connection, options)
 
     if (this.canSpawnConnection()) {
       // Spawn via spawnConnection() so the tenant-aware configuration is resolved FRESH at
@@ -135,10 +139,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       // path below keeps the waiting caller's captured config via waitForCheckout().
       connection = await this.spawnConnection()
 
-      return this.activateConnection(connection)
+      return await this.activateConnection(connection, options)
     }
 
-    return await this.waitForCheckout(databaseConfig, reuseKey)
+    return await this.waitForCheckout(databaseConfig, reuseKey, options)
   }
 
   /**
@@ -171,9 +175,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * @param {import("../drivers/base.js").default} connection - Connection.
-   * @returns {import("../drivers/base.js").default} - Activated connection.
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
+   * @returns {Promise<import("../drivers/base.js").default>} - Activated connection.
    */
-  activateConnection(connection) {
+  async activateConnection(connection, options = {}) {
     if (connection.getIdSeq() !== undefined) throw new Error(`Connection already has an ID-seq - is it in use? ${connection.getIdSeq()}`)
 
     const id = this.idSeq++
@@ -183,6 +188,16 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(id)
     this.connectionsInUse[id] = connection
+
+    try {
+      await connection.setConnectionCheckoutName(options.name)
+    } catch (error) {
+      delete this.connectionsInUse[id]
+      connection.setIdSeq(undefined)
+      await this.closeConnection(connection)
+
+      throw error
+    }
 
     return connection
   }
@@ -238,11 +253,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfig - Resolved database config for the checkout.
    * @param {string} reuseKey - Database configuration reuse key.
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with an activated connection.
    */
-  async waitForCheckout(databaseConfig, reuseKey) {
+  async waitForCheckout(databaseConfig, reuseKey, options = {}) {
     return await new Promise((resolve, reject) => {
-      this.pendingCheckouts.push({databaseConfig, reject, resolve, reuseKey})
+      this.pendingCheckouts.push({databaseConfig, options, reject, resolve, reuseKey})
       void this.drainPendingCheckouts().catch((error) => {
         const checkoutError = error instanceof Error ? error : new Error("Failed to drain pending database connection checkouts.", {cause: error})
 
@@ -294,14 +310,14 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
           continue
         }
 
-        checkout.resolve(this.activateConnection(connection))
+        checkout.resolve(await this.activateConnection(connection, checkout.options))
         continue
       }
 
       if (!connection) return
 
       this.pendingCheckouts.shift()
-      checkout.resolve(this.activateConnection(connection))
+      checkout.resolve(await this.activateConnection(connection, checkout.options))
     }
   }
 
@@ -320,17 +336,22 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * @template T
    * @param {function(import("../drivers/base.js").default) : Promise<T>} callback - Callback to invoke with the connection.
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async withConnection(callback) {
-    const connection = await this.checkout()
+  async withConnection(callback, options = {}) {
+    const connection = await this.checkout(options)
     const id = connection.getIdSeq()
 
     return await this.asyncLocalStorage.run(id, async () => {
       try {
         return await callback(connection)
       } finally {
-        await this.checkin(connection)
+        try {
+          await connection.clearConnectionCheckoutName()
+        } finally {
+          await this.checkin(connection)
+        }
       }
     })
   }

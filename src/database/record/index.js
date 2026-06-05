@@ -1867,7 +1867,7 @@ class VelociousDatabaseRecord {
         await this._autoSaveAttachments()
         await this._runLifecycleCallbacks("afterSave")
       })
-    })
+    }, {name: `${this.getModelClass().name} save`})
 
     return result
   }

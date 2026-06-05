@@ -546,7 +546,7 @@ export default class RecordAttachmentsStore {
 
     await pool.withConnection(async (db) => {
       result = await callback(db)
-    })
+    }, {name: "Record attachment store"})
 
     return /** @type {T} */ (result)
   }

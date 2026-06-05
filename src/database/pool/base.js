@@ -6,6 +6,11 @@ import baseMethodsForward from "./base-methods-forward.js"
 
 export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
+/**
+ * @typedef {object} ConnectionCheckoutOptions
+ * @property {string} [name] - Human-readable name for the checked-out connection.
+ */
+
 /** @type {{currentPool: VelociousDatabasePoolBase | null}} */
 const shared = {
   currentPool: null
@@ -73,9 +78,10 @@ class VelociousDatabasePoolBase {
 
   /**
    * @abstract
+   * @param {ConnectionCheckoutOptions} [_options] - Checkout options.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
-  checkout() {
+  checkout(_options) {
     throw new Error("'checkout' not implemented")
   }
 
@@ -212,9 +218,10 @@ class VelociousDatabasePoolBase {
    * @template T
    * @abstract
    * @param {function(import("../drivers/base.js").default) : Promise<T>} _callback - Callback function.
+   * @param {ConnectionCheckoutOptions} [_options] - Checkout options.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  withConnection(_callback) { // eslint-disable-line no-unused-vars
+  withConnection(_callback, _options) {
     throw new Error("'withConnection' not implemented")
   }
 

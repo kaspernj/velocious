@@ -17,7 +17,7 @@ export default class DbSchemaLoad extends BaseCommand {
 
         await this.loadStructureSql({db, structureSql})
       }
-    })
+    }, {name: "DB schema load"})
   }
 
   /**

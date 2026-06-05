@@ -12,6 +12,6 @@ export default class DbMigrate extends BaseCommand {
     await this.getConfiguration().ensureConnections(async () => {
       await migrator.prepare()
       await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
-    })
+    }, {name: "DB migrate"})
   }
 }

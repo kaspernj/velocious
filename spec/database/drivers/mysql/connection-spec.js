@@ -19,4 +19,26 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
       }])
     }
   })
+
+  it("stores the active checkout name in a session variable", async () => {
+    if (configuration.getDatabaseType() != "sqlite" && configuration.getDatabaseType() != "mssql" && configuration.getDatabaseType() != "pgsql") {
+      const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+
+      try {
+        await mysql.connect()
+        await mysql.setConnectionCheckoutName("mysql checkout spec")
+
+        let result = await mysql.query("SELECT @velocious_connection_checkout_name AS checkout_name")
+
+        expect(result).toEqual([{checkout_name: "mysql checkout spec"}])
+
+        await mysql.clearConnectionCheckoutName()
+        result = await mysql.query("SELECT @velocious_connection_checkout_name AS checkout_name")
+
+        expect(result).toEqual([{checkout_name: null}])
+      } finally {
+        await mysql.close()
+      }
+    }
+  })
 })

@@ -96,6 +96,8 @@ export default class VelociousDatabaseDriversBase {
   _schemaCache
   /** @type {(() => void) | undefined} */
   _schemaCacheInvalidator
+  /** @type {string | undefined} */
+  _connectionCheckoutName
 
   /**
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
@@ -166,6 +168,24 @@ export default class VelociousDatabaseDriversBase {
    */
   async close() {
     // No-op by default
+  }
+
+  /**
+   * @param {string | undefined} name - Human-readable name for this active checkout.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async setConnectionCheckoutName(name) {
+    this._connectionCheckoutName = name
+  }
+
+  /** @returns {Promise<void>} - Resolves when complete. */
+  async clearConnectionCheckoutName() {
+    this._connectionCheckoutName = undefined
+  }
+
+  /** @returns {string | undefined} - Human-readable name for this active checkout. */
+  getConnectionCheckoutName() {
+    return this._connectionCheckoutName
   }
 
   /**

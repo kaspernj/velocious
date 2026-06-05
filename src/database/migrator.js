@@ -132,7 +132,7 @@ export default class VelociousDatabaseMigrator {
       }
 
       await this._afterMigrations()
-    })
+    }, {name: "Database migrator: migrate files"})
 
     return appliedCount
   }
@@ -183,7 +183,7 @@ export default class VelociousDatabaseMigrator {
       }
 
       await this._afterMigrations()
-    })
+    }, {name: "Database migrator: migrate require-context files"})
   }
 
   /**

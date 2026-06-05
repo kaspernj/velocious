@@ -32,7 +32,7 @@ export default class DbTenantsMigrate extends BaseCommand {
             tenant
           })
         }
-      })
+      }, {name: `DB tenants migrate: ${helper.identifier}`})
     })
 
     if (this.args.testing) {

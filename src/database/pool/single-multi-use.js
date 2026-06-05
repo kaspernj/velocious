@@ -11,9 +11,10 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
-  async checkout() {
+  async checkout(options = {}) {
     if (this.connection && !this.connectionMatchesCurrentConfiguration(this.connection)) {
       const previousConnection = this.connection
 
@@ -30,18 +31,25 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       this.connection = await this.spawnConnection()
     }
 
+    await this.connection.setConnectionCheckoutName(options.name)
+
     return this.connection
   }
 
   /**
    * @template T
    * @param {function(import("../drivers/base.js").default) : Promise<T>} callback - Callback function.
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async withConnection(callback) {
-    const connection = await this.checkout()
+  async withConnection(callback, options = {}) {
+    const connection = await this.checkout(options)
 
-    return await callback(connection)
+    try {
+      return await callback(connection)
+    } finally {
+      await connection.clearConnectionCheckoutName()
+    }
   }
 
   /**

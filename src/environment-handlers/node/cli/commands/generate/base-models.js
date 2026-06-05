@@ -316,7 +316,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         await fs.writeFile(modelPath, fileContent)
         }
-      })
+      }, {name: "Generate base models"})
     } finally {
       this.getConfiguration().setEnforceTenantDatabaseScopes(enforceTenantDatabaseScopes)
     }

@@ -50,7 +50,7 @@ export default new Configuration({
 
     await configuration.ensureConnections(async () => {
       await initializerFromRequireContext.initialize({configuration})
-    })
+    }, {name: "Initialize models"})
   },
   locale: () => "en",
   locales: ["de", "en"],

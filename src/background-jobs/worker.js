@@ -359,7 +359,7 @@ export default class BackgroundJobsWorker {
 
     await configuration.withConnections(async () => {
       await perform.apply(jobInstance, payload.args || [])
-    })
+    }, {name: `Background job worker inline: ${payload.jobName}`})
   }
 
   /**

@@ -4,6 +4,10 @@
  * @template T
  * @typedef {function(Record<string, import("./database/drivers/base.js").default>) : Promise<T>} WithConnectionsCallbackType
  */
+/**
+ * @typedef {object} WithConnectionsOptionsType
+ * @property {string} [name] - Human-readable name for the checked-out database connections.
+ */
 
 import {digg} from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
@@ -1762,9 +1766,10 @@ export default class VelociousConfiguration {
   /**
    * @template T
    * @param {WithConnectionsCallbackType<T>} callback - Callback function.
+   * @param {WithConnectionsOptionsType} [options] - Checkout options.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async withConnections(callback) {
+  async withConnections(callback, {name = "Configuration.withConnections"} = {}) {
     /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
@@ -1786,7 +1791,7 @@ export default class VelociousConfiguration {
           dbs[identifier] = db
 
           return await actualRunRequest()
-        })
+        }, {name})
       }
 
       runRequest = nextRunRequest
@@ -1831,9 +1836,10 @@ export default class VelociousConfiguration {
   /**
    * @template T
    * @param {WithConnectionsCallbackType<T>} callback - Callback function.
+   * @param {WithConnectionsOptionsType} [options] - Checkout options.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
-  async ensureConnections(callback) {
+  async ensureConnections(callback, {name = "Configuration.ensureConnections"} = {}) {
     const dbs = this.getCurrentConnections()
     const identifiers = this.getDatabaseIdentifiers()
     const hasAllConnections = identifiers.every((identifier) => dbs[identifier])
@@ -1841,7 +1847,7 @@ export default class VelociousConfiguration {
     if (hasAllConnections) {
       return await callback(dbs)
     } else {
-      return await this.withConnections(callback)
+      return await this.withConnections(callback, {name})
     }
   }
 

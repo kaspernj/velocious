@@ -286,7 +286,7 @@ export default class TestRunner {
       } finally {
         await this.truncateDatabases(dbs)
       }
-    })
+    }, {name: "Test runner browser dummy"})
   }
 
   /**
@@ -586,7 +586,7 @@ export default class TestRunner {
         descriptions: [],
         indentLevel: 0
       })
-    })
+    }, {name: "Test runner suite"})
   }
 
   /**
@@ -733,7 +733,7 @@ export default class TestRunner {
                     await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
                   }
                 }
-              })
+              }, {name: `Test: ${testDescription}`})
             })
 
             // Time out the ENTIRE lifecycle, not just the test body. A hang in any

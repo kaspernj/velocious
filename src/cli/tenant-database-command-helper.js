@@ -51,7 +51,7 @@ export default class TenantDatabaseCommandHelper {
         configuration: this.configuration,
         identifier: this.identifier
       })
-    })
+    }, {name: `Tenant database list: ${this.identifier}`})
 
     if (!Array.isArray(tenants)) {
       throw new Error(`Tenant database provider for ${this.identifier} must return an array from listTenants`)

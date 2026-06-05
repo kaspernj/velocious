@@ -379,6 +379,6 @@ export default class VelociousHttpServerWebsocketEventLogStore {
       if (!db) throw new Error(`No database connection available for identifier: ${this.databaseIdentifier}`)
 
       return await callback(db)
-    })
+    }, {name: "Websocket event log store"})
   }
 }

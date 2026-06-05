@@ -27,7 +27,7 @@ export default class DbTenantsCheck extends BaseCommand {
         if (!db) throw new Error(`Tenant database identifier ${helper.identifier} did not open a connection`)
 
         await db.query("SELECT 1")
-      })
+      }, {name: `DB tenants check: ${helper.identifier}`})
     })
 
     if (this.args.testing) return {identifier: helper.identifier, tenantCount}

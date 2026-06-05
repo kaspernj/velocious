@@ -67,7 +67,7 @@ export default async function runJobPayload(payload) {
     try {
       await configuration.withConnections(async () => {
         await perform.apply(jobInstance, payload.args || [])
-      })
+      }, {name: `Background job runner: ${payload.jobName}`})
 
       if (payload.id) {
         await reporter.reportWithRetry({

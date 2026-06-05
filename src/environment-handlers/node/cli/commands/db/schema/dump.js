@@ -12,7 +12,7 @@ export default class DbSchemaDump extends BaseCommand {
       if (!shouldGenerate) return
 
       await this.getEnvironmentHandler().afterMigrations({dbs, reason: "schemaDump"})
-    })
+    }, {name: "DB schema dump"})
   }
 
   /**

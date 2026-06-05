@@ -17,6 +17,6 @@ export default class DbReset extends BaseCommand {
       await migrator.reset()
       await migrator.prepare()
       await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
-    })
+    }, {name: "DB reset"})
   }
 }

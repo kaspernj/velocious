@@ -208,7 +208,7 @@ export default class VelociousRoutesResolver {
                 await actionHandlers[action]()
               })
             })
-          })
+          }, {name: `${controllerClass.name}.${action}`})
         })
       }
 

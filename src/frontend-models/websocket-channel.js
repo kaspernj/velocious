@@ -86,7 +86,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     if (configuration && typeof configuration.ensureConnections === "function") {
       await configuration.ensureConnections(async () => {
         await this._deliverBroadcast(body, meta)
-      })
+      }, {name: "Frontend model websocket broadcast"})
       return
     }
 

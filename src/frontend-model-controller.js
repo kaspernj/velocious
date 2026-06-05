@@ -1116,7 +1116,7 @@ export default class FrontendModelController extends Controller {
         } finally {
           this._frontendModelAbilityOverride = previousAbilityOverride
         }
-      })
+      }, {name: "Frontend model request"})
     })
   }
 

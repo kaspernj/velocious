@@ -10,6 +10,6 @@ export default class DbRollback extends BaseCommand {
     await this.getConfiguration().ensureConnections(async () => {
       await migrator.prepare()
       await migrator.rollback(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
-    })
+    }, {name: "DB rollback"})
   }
 }
