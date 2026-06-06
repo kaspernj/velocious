@@ -1,9 +1,9 @@
-import BaseCommand from "../../base-command.js"
+import DbBaseCommand from "./base-command.js"
 import {digg} from "diggerize"
 import {incorporate} from "incorporator"
 import TableData from "../../../database/table-data/index.js"
 
-export default class DbCreate extends BaseCommand{
+export default class DbCreate extends DbBaseCommand{
   /** @type {Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}> | undefined} */
   result
 
@@ -15,7 +15,6 @@ export default class DbCreate extends BaseCommand{
       const databaseType = this.getConfiguration().getDatabaseType(databaseIdentifier)
       const databasePool = this.getConfiguration().getDatabasePool(databaseIdentifier)
       const newConfiguration = incorporate({}, databasePool.getConfiguration())
-      const DriverClass = digg(newConfiguration, "driver")
 
       if (this.args.testing) this.result = []
 
@@ -27,19 +26,13 @@ export default class DbCreate extends BaseCommand{
         delete newConfiguration.sqlConfig.database
       }
 
-      this.databaseConnection = new DriverClass(newConfiguration, this.getConfiguration())
-
-      try {
-        await this.databaseConnection.connect()
-
+      await this.withDirectDatabaseConnection(newConfiguration, async () => {
         if (databaseType != "sqlite") {
           await this.createDatabase(databaseIdentifier)
         }
 
         await this.createSchemaMigrationsTable()
-      } finally {
-        await this.databaseConnection.close()
-      }
+      })
 
       if (this.args.testing) return this.result
     }
@@ -53,7 +46,7 @@ export default class DbCreate extends BaseCommand{
     const databaseConfiguration = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier)
     const databaseName = digg(databaseConfiguration, "database")
     const {databaseCharset, databaseCollation} = databaseConfiguration
-    const sqls = this.databaseConnection.createDatabaseSql(databaseName, {ifNotExists: true, databaseCharset, databaseCollation})
+    const sqls = this.getDatabaseConnection().createDatabaseSql(databaseName, {ifNotExists: true, databaseCharset, databaseCollation})
     if (this.args.testing && !this.result) {
       throw new Error("Expected test result collection to be initialized")
     }
@@ -64,7 +57,7 @@ export default class DbCreate extends BaseCommand{
       if (this.args.testing) {
         result.push({databaseName, sql})
       } else {
-        await this.databaseConnection.query(sql)
+        await this.getDatabaseConnection().query(sql)
       }
     }
   }
@@ -77,7 +70,7 @@ export default class DbCreate extends BaseCommand{
 
     schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
-    const createSchemaMigrationsTableSqls = await this.databaseConnection.createTableSql(schemaMigrationsTable)
+    const createSchemaMigrationsTableSqls = await this.getDatabaseConnection().createTableSql(schemaMigrationsTable)
     if (this.args.testing && !this.result) {
       throw new Error("Expected test result collection to be initialized")
     }
@@ -88,7 +81,7 @@ export default class DbCreate extends BaseCommand{
       if (this.args.testing) {
         result.push({createSchemaMigrationsTableSql})
       } else {
-        await this.databaseConnection.query(createSchemaMigrationsTableSql)
+        await this.getDatabaseConnection().query(createSchemaMigrationsTableSql)
       }
     }
   }

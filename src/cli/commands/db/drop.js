@@ -1,8 +1,8 @@
-import BaseCommand from "../../base-command.js"
+import DbBaseCommand from "./base-command.js"
 import {digg} from "diggerize"
 import {incorporate} from "incorporator"
 
-export default class DbDrop extends BaseCommand {
+export default class DbDrop extends DbBaseCommand {
   /** @type {Array<{databaseName: string, sql: string}> | undefined} */
   result
 
@@ -24,7 +24,6 @@ export default class DbDrop extends BaseCommand {
       if (databaseType != "sqlite") {
         const databasePool = this.getConfiguration().getDatabasePool(databaseIdentifier)
         const newConfiguration = incorporate({}, databasePool.getConfiguration())
-        const DriverClass = digg(newConfiguration, "driver")
         const targetDatabaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
 
         // Connect to a known-existing system database: the target is about to
@@ -43,15 +42,9 @@ export default class DbDrop extends BaseCommand {
           delete newConfiguration.sqlConfig.database
         }
 
-        this.databaseConnection = new DriverClass(newConfiguration, this.getConfiguration())
-
-        try {
-          await this.databaseConnection.connect()
-
+        await this.withDirectDatabaseConnection(newConfiguration, async () => {
           await this.dropDatabase(databaseIdentifier)
-        } finally {
-          await this.databaseConnection.close()
-        }
+        })
       }
 
       if (this.args.testing) return this.result
@@ -75,7 +68,7 @@ export default class DbDrop extends BaseCommand {
    */
   async dropDatabase(databaseIdentifier) {
     const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
-    const sqls = this.databaseConnection.dropDatabaseSql(databaseName, {ifExists: true})
+    const sqls = this.getDatabaseConnection().dropDatabaseSql(databaseName, {ifExists: true})
 
     if (this.args.testing && !this.result) {
       throw new Error("Expected test result collection to be initialized")
@@ -87,7 +80,7 @@ export default class DbDrop extends BaseCommand {
       if (this.args.testing) {
         result.push({databaseName, sql})
       } else {
-        await this.databaseConnection.query(sql)
+        await this.getDatabaseConnection().query(sql)
       }
     }
   }
