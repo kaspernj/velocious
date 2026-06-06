@@ -22,7 +22,7 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
       })
 
       pool.clearIdleConnectionReaperTimer()
-      await wait(0.02)
+      await wait(20)
 
       let secondConnection
 
@@ -58,7 +58,7 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
       expect(pool.connections.includes(checkedInConnection)).toBe(true)
 
       pool.clearIdleConnectionReaperTimer()
-      await wait(0.02)
+      await wait(20)
       await pool.reapIdleConnections()
 
       expect(checkedInConnection.connection).toEqual(undefined)
@@ -156,7 +156,7 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
       expect(pool.connectionHasOpenTransaction(transactionConnection)).toBe(false)
 
       // Being clean, it is reaped like any other idle connection once expired.
-      await wait(0.02)
+      await wait(20)
       await pool.reapIdleConnections()
 
       expect(pool.connections.includes(transactionConnection)).toBe(false)
