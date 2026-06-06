@@ -4,11 +4,8 @@ import {incorporate} from "incorporator"
 import TableData from "../../../database/table-data/index.js"
 
 export default class DbCreate extends DbBaseCommand{
-  /** @type {Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}> | undefined} */
-  result
-
   /**
-   * @returns {Promise<void | Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>>} - Resolves with SQL statements when running in dry mode.
+   * @returns {Promise<void | Array<object>>} - Resolves with SQL statements when running in dry mode.
    */
   async execute() {
     for (const databaseIdentifier of this.getConfiguration().getDatabaseIdentifiers()) {
@@ -47,19 +44,7 @@ export default class DbCreate extends DbBaseCommand{
     const databaseName = digg(databaseConfiguration, "database")
     const {databaseCharset, databaseCollation} = databaseConfiguration
     const sqls = this.getDatabaseConnection().createDatabaseSql(databaseName, {ifNotExists: true, databaseCharset, databaseCollation})
-    if (this.args.testing && !this.result) {
-      throw new Error("Expected test result collection to be initialized")
-    }
-
-    const result = /** @type {Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>} */ (this.result)
-
-    for (const sql of sqls) {
-      if (this.args.testing) {
-        result.push({databaseName, sql})
-      } else {
-        await this.getDatabaseConnection().query(sql)
-      }
-    }
+    await this.queryOrCollectSqls(sqls, (sql) => ({databaseName, sql}))
   }
 
   /**
@@ -71,18 +56,6 @@ export default class DbCreate extends DbBaseCommand{
     schemaMigrationsTable.string("version", {null: false, primaryKey: true})
 
     const createSchemaMigrationsTableSqls = await this.getDatabaseConnection().createTableSql(schemaMigrationsTable)
-    if (this.args.testing && !this.result) {
-      throw new Error("Expected test result collection to be initialized")
-    }
-
-    const result = /** @type {Array<{databaseName: string, sql: string} | {createSchemaMigrationsTableSql: string}>} */ (this.result)
-
-    for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
-      if (this.args.testing) {
-        result.push({createSchemaMigrationsTableSql})
-      } else {
-        await this.getDatabaseConnection().query(createSchemaMigrationsTableSql)
-      }
-    }
+    await this.queryOrCollectSqls(createSchemaMigrationsTableSqls, (createSchemaMigrationsTableSql) => ({createSchemaMigrationsTableSql}))
   }
 }

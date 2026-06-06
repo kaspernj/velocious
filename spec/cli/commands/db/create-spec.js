@@ -3,6 +3,7 @@ import DbCreate from "../../../../src/cli/commands/db/create.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
+import {expectRejectsWithMessage, expectSingleFakeDriverClosed} from "../../../helpers/connection-cleanup-helpers.js"
 
 class FakeCreateDriver {
   static instances = []
@@ -112,9 +113,7 @@ describe("Cli - Commands - db:create", () => {
 
     await command.execute()
 
-    expect(FakeCreateDriver.instances.length).toEqual(1)
-    expect(FakeCreateDriver.instances[0].connected).toBe(true)
-    expect(FakeCreateDriver.instances[0].closed).toBe(true)
+    expectSingleFakeDriverClosed(FakeCreateDriver)
   })
 
   it("closes direct MSSQL connections when connect fails", async () => {
@@ -128,14 +127,8 @@ describe("Cli - Commands - db:create", () => {
       cli: /** @type {import("../../../../src/cli/index.js").default} */ ({})
     })
 
-    const error = await command.execute().then(
-      () => undefined,
-      (caughtError) => caughtError
-    )
+    await expectRejectsWithMessage(command.execute(), "Connect failed")
 
-    expect(error.message).toEqual("Connect failed")
-    expect(FakeCreateDriver.instances.length).toEqual(1)
-    expect(FakeCreateDriver.instances[0].connected).toBe(true)
-    expect(FakeCreateDriver.instances[0].closed).toBe(true)
+    expectSingleFakeDriverClosed(FakeCreateDriver)
   })
 })

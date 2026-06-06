@@ -3,11 +3,8 @@ import {digg} from "diggerize"
 import {incorporate} from "incorporator"
 
 export default class DbDrop extends DbBaseCommand {
-  /** @type {Array<{databaseName: string, sql: string}> | undefined} */
-  result
-
   /**
-   * @returns {Promise<void | Array<{databaseName: string, sql: string}>>} - Resolves with SQL statements when running in dry mode.
+   * @returns {Promise<void | Array<object>>} - Resolves with SQL statements when running in dry mode.
    */
   async execute() {
     const environment = this.getConfiguration().getEnvironment()
@@ -70,18 +67,6 @@ export default class DbDrop extends DbBaseCommand {
     const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
     const sqls = this.getDatabaseConnection().dropDatabaseSql(databaseName, {ifExists: true})
 
-    if (this.args.testing && !this.result) {
-      throw new Error("Expected test result collection to be initialized")
-    }
-
-    const result = /** @type {Array<{databaseName: string, sql: string}>} */ (this.result)
-
-    for (const sql of sqls) {
-      if (this.args.testing) {
-        result.push({databaseName, sql})
-      } else {
-        await this.getDatabaseConnection().query(sql)
-      }
-    }
+    await this.queryOrCollectSqls(sqls, (sql) => ({databaseName, sql}))
   }
 }

@@ -3,6 +3,7 @@ import DbDrop from "../../../../src/cli/commands/db/drop.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
+import {expectRejectsWithMessage, expectSingleFakeDriverClosed} from "../../../helpers/connection-cleanup-helpers.js"
 
 class FakeDropDriver {
   static instances = []
@@ -109,9 +110,7 @@ describe("Cli - Commands - db:drop", () => {
 
     await command.execute()
 
-    expect(FakeDropDriver.instances.length).toEqual(1)
-    expect(FakeDropDriver.instances[0].connected).toBe(true)
-    expect(FakeDropDriver.instances[0].closed).toBe(true)
+    expectSingleFakeDriverClosed(FakeDropDriver)
   })
 
   it("closes direct MSSQL connections when connect fails", async () => {
@@ -125,14 +124,8 @@ describe("Cli - Commands - db:drop", () => {
       cli: /** @type {import("../../../../src/cli/index.js").default} */ ({})
     })
 
-    const error = await command.execute().then(
-      () => undefined,
-      (caughtError) => caughtError
-    )
+    await expectRejectsWithMessage(command.execute(), "Connect failed")
 
-    expect(error.message).toEqual("Connect failed")
-    expect(FakeDropDriver.instances.length).toEqual(1)
-    expect(FakeDropDriver.instances[0].connected).toBe(true)
-    expect(FakeDropDriver.instances[0].closed).toBe(true)
+    expectSingleFakeDriverClosed(FakeDropDriver)
   })
 })
