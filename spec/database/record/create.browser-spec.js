@@ -7,6 +7,28 @@ import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Configuration from "../../../src/configuration.js"
 
 describe("Record - create", {tags: ["dummy"]}, () => {
+  /**
+   * @param {Date | undefined} actual - Actual timestamp read from the database.
+   * @param {Date} expected - Expected timestamp.
+   * @returns {void} - No return value.
+   */
+  function expectTimestampMatches(actual, expected) {
+    const actualTime = actual?.getTime()
+    const expectedTime = expected.getTime()
+
+    if (actualTime === undefined) {
+      throw new Error("Expected createdAt to be set")
+    }
+
+    if (Task.getDatabaseType() == "mysql") {
+      expect(Math.floor(actualTime / 1000)).toEqual(Math.floor(expectedTime / 1000))
+    } else if (Task.getDatabaseType() == "mssql") {
+      expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
+    } else {
+      expect(actualTime).toEqual(expectedTime)
+    }
+  }
+
   it("creates a new simple record with relationships and translations", async () => {
     const task = new Task({name: "Test task"})
     const project = task.buildProject({nameEn: "Test project", nameDe: "Test projekt"})
@@ -229,20 +251,19 @@ describe("Record - create", {tags: ["dummy"]}, () => {
     const task = await Task.create({name: "Timezone task", createdAt: timestamp, project})
     const reloaded = await Task.find(task.id())
 
-    const actualTime = reloaded.createdAt()?.getTime()
-    const expectedTime = timestamp.getTime()
+    expectTimestampMatches(reloaded.createdAt(), timestamp)
+  })
 
-    if (actualTime === undefined) {
-      throw new Error("Expected createdAt to be set")
-    }
+  it("preserves createdAt assigned through the constructor", async () => {
+    const project = await Project.create({name: "Constructor timestamp project"})
+    const timestamp = new Date("2025-12-26T12:34:56.789Z")
+    const task = new Task({name: "Constructor timestamp task", createdAt: timestamp, project})
 
-    if (Task.getDatabaseType() == "mysql") {
-      expect(Math.floor(actualTime / 1000)).toEqual(Math.floor(expectedTime / 1000))
-    } else if (Task.getDatabaseType() == "mssql") {
-      expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
-    } else {
-      expect(actualTime).toEqual(expectedTime)
-    }
+    await task.save()
+
+    const reloaded = await Task.find(task.id())
+
+    expectTimestampMatches(reloaded.createdAt(), timestamp)
   })
 
   it("applies per-request timezone offsets on write and read", async () => {
@@ -257,20 +278,7 @@ describe("Record - create", {tags: ["dummy"]}, () => {
 
       const reloaded = await Task.find(task.id())
 
-      const actualTime = reloaded.createdAt()?.getTime()
-      const expectedTime = timestamp.getTime()
-
-      if (actualTime === undefined) {
-        throw new Error("Expected createdAt to be set")
-      }
-
-      if (Task.getDatabaseType() == "mysql") {
-        expect(Math.floor(actualTime / 1000)).toEqual(Math.floor(expectedTime / 1000))
-      } else if (Task.getDatabaseType() == "mssql") {
-        expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
-      } else {
-        expect(actualTime).toEqual(expectedTime)
-      }
+      expectTimestampMatches(reloaded.createdAt(), timestamp)
     })
 
     if (taskId === undefined) throw new Error("Expected task to be created")
@@ -281,20 +289,7 @@ describe("Record - create", {tags: ["dummy"]}, () => {
       const reloaded = await Task.find(resolvedTaskId)
       const expected = new Date(timestamp.getTime() - (120 * 60 * 1000))
 
-      const actualTime = reloaded.createdAt()?.getTime()
-      const expectedTime = expected.getTime()
-
-      if (actualTime === undefined) {
-        throw new Error("Expected createdAt to be set")
-      }
-
-      if (Task.getDatabaseType() == "mysql") {
-        expect(Math.floor(actualTime / 1000)).toEqual(Math.floor(expectedTime / 1000))
-      } else if (Task.getDatabaseType() == "mssql") {
-        expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
-      } else {
-        expect(actualTime).toEqual(expectedTime)
-      }
+      expectTimestampMatches(reloaded.createdAt(), expected)
     })
   })
 
