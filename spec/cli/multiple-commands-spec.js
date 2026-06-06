@@ -27,6 +27,13 @@ class SecondCommand extends BaseCommand {
   }
 }
 
+class FailingCommand extends BaseCommand {
+  /** @returns {Promise<void>} */
+  async execute() {
+    throw new Error("command failed")
+  }
+}
+
 class FakeEnvironmentHandler {
   /**
    * @param {object} args - Args.
@@ -46,7 +53,7 @@ class FakeEnvironmentHandler {
 
   /** @returns {Promise<Array<{name: string}>>} - Available commands. */
   async findCommands() {
-    return [{name: "first"}, {name: "second"}]
+    return [{name: "failing"}, {name: "first"}, {name: "second"}]
   }
 
   /**
@@ -59,20 +66,24 @@ class FakeEnvironmentHandler {
 
     if (commandName == "first") return FirstCommand
     if (commandName == "second") return SecondCommand
+    if (commandName == "failing") return FailingCommand
 
     throw new Error(`Unknown command: ${commandName}`)
   }
 }
 
 /**
- * @returns {{closeDatabaseConnections: () => Promise<void>, getEnvironmentHandler: () => FakeEnvironmentHandler, state: {closeCalls: number, executions: string[][]}}} - Fake configuration.
+ * @param {object} [args] - Options object.
+ * @param {Record<string, unknown>} [args.currentConnections] - Current database connections.
+ * @returns {{closeDatabaseConnections: () => Promise<void>, getCurrentConnections: () => Record<string, unknown>, getEnvironmentHandler: () => FakeEnvironmentHandler, state: {closeCalls: number, executions: string[][]}}} - Fake configuration.
  */
-function createConfiguration() {
+function createConfiguration(args = {}) {
   const environmentHandler = new FakeEnvironmentHandler()
   const configuration = {
     closeDatabaseConnections: async () => {
       configuration.state.closeCalls += 1
     },
+    getCurrentConnections: () => args.currentConnections || {},
     getEnvironmentHandler: () => environmentHandler,
     state: {
       closeCalls: 0,
@@ -84,7 +95,7 @@ function createConfiguration() {
 }
 
 describe("Cli - Multiple commands", () => {
-  it("runs multiple commands sequentially and closes connections between them", async () => {
+  it("runs multiple commands sequentially and closes connections after each command", async () => {
     const configuration = createConfiguration()
     const cli = new Cli({
       configuration: /** @type {import("../../src/configuration.js").default} */ (configuration),
@@ -96,6 +107,54 @@ describe("Cli - Multiple commands", () => {
 
     expect(result).toEqual("second")
     expect(configuration.state.executions).toEqual([["first"], ["second"]])
+    expect(configuration.state.closeCalls).toEqual(2)
+  })
+
+  it("closes connections after a single command", async () => {
+    const configuration = createConfiguration()
+    const cli = new Cli({
+      configuration: /** @type {import("../../src/configuration.js").default} */ (configuration),
+      processArgs: ["first"],
+      testing: true
+    })
+
+    const result = await cli.execute()
+
+    expect(result).toEqual("first")
+    expect(configuration.state.executions).toEqual([["first"]])
+    expect(configuration.state.closeCalls).toEqual(1)
+  })
+
+  it("does not close an existing connection context after a nested command", async () => {
+    const configuration = createConfiguration({currentConnections: {default: {}}})
+    const cli = new Cli({
+      configuration: /** @type {import("../../src/configuration.js").default} */ (configuration),
+      processArgs: ["first"],
+      testing: true
+    })
+
+    const result = await cli.execute()
+
+    expect(result).toEqual("first")
+    expect(configuration.state.executions).toEqual([["first"]])
+    expect(configuration.state.closeCalls).toEqual(0)
+  })
+
+  it("closes connections when a command fails", async () => {
+    const configuration = createConfiguration()
+    const cli = new Cli({
+      configuration: /** @type {import("../../src/configuration.js").default} */ (configuration),
+      processArgs: ["failing"],
+      testing: true
+    })
+
+    try {
+      await cli.execute()
+      throw new Error("Expected command to fail")
+    } catch (error) {
+      expect(error.message).toEqual("command failed")
+    }
+
     expect(configuration.state.closeCalls).toEqual(1)
   })
 

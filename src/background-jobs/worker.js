@@ -151,7 +151,13 @@ export default class BackgroundJobsWorker {
     await this._terminateForkedChildren()
 
     if (this.jsonSocket) this.jsonSocket.close()
-    if (this.configuration) await this.configuration.disconnectBeacon()
+    if (this.configuration) {
+      try {
+        await this.configuration.disconnectBeacon()
+      } finally {
+        await this.configuration.closeDatabaseConnections()
+      }
+    }
   }
 
   /**

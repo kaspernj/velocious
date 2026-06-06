@@ -1,6 +1,7 @@
 // @ts-check
 
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import BackgroundJobsMain from "../../src/background-jobs/main.js"
 
 /**
  * Builds a worker with a tracked fake forked-runner child whose `kill()` signals
@@ -50,5 +51,51 @@ describe("Background jobs worker - shutdown", () => {
     await worker.stop({timeoutMs: 1000})
 
     expect(signals).toEqual([])
+  })
+
+  it("closes database connections after disconnecting beacon", async () => {
+    /** @type {string[]} */
+    const events = []
+    const worker = new BackgroundJobsWorker({
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeDatabaseConnections: async () => { events.push("close-db") },
+        disconnectBeacon: async () => { events.push("disconnect-beacon") }
+      })
+    })
+    worker.configuration = await worker.configurationPromise
+
+    await worker.stop()
+
+    expect(events).toEqual(["disconnect-beacon", "close-db"])
+  })
+})
+
+describe("Background jobs main - shutdown", () => {
+  it("closes database connections after disconnecting beacon", async () => {
+    /** @type {string[]} */
+    const events = []
+    const main = new BackgroundJobsMain({
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeDatabaseConnections: async () => { events.push("close-db") },
+        disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        getBackgroundJobsConfig: () => ({
+          databaseIdentifier: "default",
+          dispatchStrategy: "beacon",
+          host: "127.0.0.1",
+          pollIntervalMs: 1000,
+          port: 0
+        })
+      })
+    })
+    main.server = /** @type {import("net").Server} */ ({
+      close: (callback) => {
+        events.push("close-server")
+        callback()
+      }
+    })
+
+    await main.stop()
+
+    expect(events).toEqual(["disconnect-beacon", "close-server", "close-db"])
   })
 })

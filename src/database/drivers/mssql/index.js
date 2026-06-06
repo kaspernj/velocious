@@ -28,6 +28,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const sqlConfig = digg(args, "sqlConfig")
 
     try {
+      if (this.connection) await this.close()
+
       if (sqlConfig?.server && !sqlConfig.options?.serverName && net.isIP(sqlConfig.server)) {
         sqlConfig.options = Object.assign({}, sqlConfig.options, {serverName: ""})
       }
@@ -213,7 +215,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
       } catch (error) {
         if (error instanceof Error && error.message == "No connection is specified for that request." && tries <= 3) {
           this.logger.warn("Reconnecting to database")
-          await this.connect()
+          await this.reconnect()
           // Retry
         } else if (error instanceof Error) {
           // Re-throw error because the stack-trace is broken and can't be used for app-development.

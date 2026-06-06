@@ -38,9 +38,7 @@ export default class DbCreate extends BaseCommand{
 
         await this.createSchemaMigrationsTable()
       } finally {
-        if (databaseType != "mssql") {
-          await this.databaseConnection.close()
-        }
+        await this.databaseConnection.close()
       }
 
       if (this.args.testing) return this.result

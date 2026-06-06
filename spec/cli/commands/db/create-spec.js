@@ -1,7 +1,40 @@
 import Cli from "../../../../src/cli/index.js"
+import DbCreate from "../../../../src/cli/commands/db/create.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
+
+class FakeCreateDriver {
+  static instances = []
+
+  constructor() {
+    this.closed = false
+    this.connected = false
+    FakeCreateDriver.instances.push(this)
+  }
+
+  async connect() { this.connected = true }
+  async close() { this.closed = true }
+  createDatabaseSql() { return ["CREATE DATABASE fake"] }
+  async createTableSql() { return ["CREATE TABLE fake"] }
+}
+
+function fakeMssqlCreateConfiguration() {
+  return {
+    getDatabaseConfiguration: () => ({default: {database: "velocious_test"}}),
+    getDatabaseIdentifiers: () => ["default"],
+    getDatabasePool: () => ({
+      getConfiguration: () => ({
+        driver: FakeCreateDriver,
+        sqlConfig: {database: "velocious_test"},
+        type: "mssql",
+        useDatabase: "master"
+      })
+    }),
+    getDatabaseType: () => "mssql",
+    getEnvironmentHandler: () => ({})
+  }
+}
 
 describe("Cli - Commands - db:create", () => {
   it("generates SQL to create a new database", async () => {
@@ -54,5 +87,22 @@ describe("Cli - Commands - db:create", () => {
         ]
       )
     }
+  })
+
+  it("closes direct MSSQL connections after generating SQL", async () => {
+    FakeCreateDriver.instances = []
+    const command = new DbCreate({
+      args: {
+        configuration: /** @type {import("../../../../src/configuration.js").default} */ (fakeMssqlCreateConfiguration()),
+        testing: true
+      },
+      cli: /** @type {import("../../../../src/cli/index.js").default} */ ({})
+    })
+
+    await command.execute()
+
+    expect(FakeCreateDriver.instances.length).toEqual(1)
+    expect(FakeCreateDriver.instances[0].connected).toBe(true)
+    expect(FakeCreateDriver.instances[0].closed).toBe(true)
   })
 })
