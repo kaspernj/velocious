@@ -29,9 +29,9 @@ export default class DbCreate extends BaseCommand{
 
       this.databaseConnection = new DriverClass(newConfiguration, this.getConfiguration())
 
-      await this.databaseConnection.connect()
-
       try {
+        await this.databaseConnection.connect()
+
         if (databaseType != "sqlite") {
           await this.createDatabase(databaseIdentifier)
         }

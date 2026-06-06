@@ -221,7 +221,21 @@ class VelociousDatabasePoolBase {
 
     const connection = new DriverClass(config, this.configuration)
 
-    await connection.connect()
+    try {
+      await connection.connect()
+    } catch (error) {
+      try {
+        if (typeof connection.close === "function") {
+          await connection.close()
+        } else if (typeof connection.disconnect === "function") {
+          await connection.disconnect()
+        }
+      } catch (cleanupError) {
+        this.logger.warn("Failed to close database connection after connect failed", {error: cleanupError})
+      }
+
+      throw error
+    }
 
     return connection
   }

@@ -45,9 +45,9 @@ export default class DbDrop extends BaseCommand {
 
         this.databaseConnection = new DriverClass(newConfiguration, this.getConfiguration())
 
-        await this.databaseConnection.connect()
-
         try {
+          await this.databaseConnection.connect()
+
           await this.dropDatabase(databaseIdentifier)
         } finally {
           await this.databaseConnection.close()

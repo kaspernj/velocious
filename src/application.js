@@ -71,7 +71,7 @@ export default class VelociousApplication {
     try {
       await callback()
     } finally {
-      this.stop()
+      await this.stop()
     }
   }
 

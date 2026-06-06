@@ -6,6 +6,7 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 
 class FakeCreateDriver {
   static instances = []
+  static failConnect = false
 
   constructor() {
     this.closed = false
@@ -13,10 +14,20 @@ class FakeCreateDriver {
     FakeCreateDriver.instances.push(this)
   }
 
-  async connect() { this.connected = true }
+  async connect() {
+    this.connected = true
+
+    if (FakeCreateDriver.failConnect) throw new Error("Connect failed")
+  }
+
   async close() { this.closed = true }
   createDatabaseSql() { return ["CREATE DATABASE fake"] }
   async createTableSql() { return ["CREATE TABLE fake"] }
+
+  static reset() {
+    this.failConnect = false
+    this.instances = []
+  }
 }
 
 function fakeMssqlCreateConfiguration() {
@@ -90,7 +101,7 @@ describe("Cli - Commands - db:create", () => {
   })
 
   it("closes direct MSSQL connections after generating SQL", async () => {
-    FakeCreateDriver.instances = []
+    FakeCreateDriver.reset()
     const command = new DbCreate({
       args: {
         configuration: /** @type {import("../../../../src/configuration.js").default} */ (fakeMssqlCreateConfiguration()),
@@ -101,6 +112,28 @@ describe("Cli - Commands - db:create", () => {
 
     await command.execute()
 
+    expect(FakeCreateDriver.instances.length).toEqual(1)
+    expect(FakeCreateDriver.instances[0].connected).toBe(true)
+    expect(FakeCreateDriver.instances[0].closed).toBe(true)
+  })
+
+  it("closes direct MSSQL connections when connect fails", async () => {
+    FakeCreateDriver.reset()
+    FakeCreateDriver.failConnect = true
+    const command = new DbCreate({
+      args: {
+        configuration: /** @type {import("../../../../src/configuration.js").default} */ (fakeMssqlCreateConfiguration()),
+        testing: true
+      },
+      cli: /** @type {import("../../../../src/cli/index.js").default} */ ({})
+    })
+
+    const error = await command.execute().then(
+      () => undefined,
+      (caughtError) => caughtError
+    )
+
+    expect(error.message).toEqual("Connect failed")
     expect(FakeCreateDriver.instances.length).toEqual(1)
     expect(FakeCreateDriver.instances[0].connected).toBe(true)
     expect(FakeCreateDriver.instances[0].closed).toBe(true)

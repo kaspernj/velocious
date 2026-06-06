@@ -6,6 +6,7 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 
 class FakeDropDriver {
   static instances = []
+  static failConnect = false
 
   constructor() {
     this.closed = false
@@ -13,9 +14,19 @@ class FakeDropDriver {
     FakeDropDriver.instances.push(this)
   }
 
-  async connect() { this.connected = true }
+  async connect() {
+    this.connected = true
+
+    if (FakeDropDriver.failConnect) throw new Error("Connect failed")
+  }
+
   async close() { this.closed = true }
   dropDatabaseSql() { return ["DROP DATABASE fake"] }
+
+  static reset() {
+    this.failConnect = false
+    this.instances = []
+  }
 }
 
 function fakeMssqlDropConfiguration() {
@@ -87,7 +98,7 @@ describe("Cli - Commands - db:drop", () => {
   })
 
   it("closes direct MSSQL connections after generating SQL", async () => {
-    FakeDropDriver.instances = []
+    FakeDropDriver.reset()
     const command = new DbDrop({
       args: {
         configuration: /** @type {import("../../../../src/configuration.js").default} */ (fakeMssqlDropConfiguration()),
@@ -98,6 +109,28 @@ describe("Cli - Commands - db:drop", () => {
 
     await command.execute()
 
+    expect(FakeDropDriver.instances.length).toEqual(1)
+    expect(FakeDropDriver.instances[0].connected).toBe(true)
+    expect(FakeDropDriver.instances[0].closed).toBe(true)
+  })
+
+  it("closes direct MSSQL connections when connect fails", async () => {
+    FakeDropDriver.reset()
+    FakeDropDriver.failConnect = true
+    const command = new DbDrop({
+      args: {
+        configuration: /** @type {import("../../../../src/configuration.js").default} */ (fakeMssqlDropConfiguration()),
+        testing: true
+      },
+      cli: /** @type {import("../../../../src/cli/index.js").default} */ ({})
+    })
+
+    const error = await command.execute().then(
+      () => undefined,
+      (caughtError) => caughtError
+    )
+
+    expect(error.message).toEqual("Connect failed")
     expect(FakeDropDriver.instances.length).toEqual(1)
     expect(FakeDropDriver.instances[0].connected).toBe(true)
     expect(FakeDropDriver.instances[0].closed).toBe(true)
