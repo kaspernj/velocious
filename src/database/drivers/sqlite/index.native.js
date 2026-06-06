@@ -37,10 +37,6 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     await this.registerVersion()
   }
 
-  async disconnect() {
-    await this.connection.closeAsync()
-  }
-
   connectArgs() {
     const args = this.getArgs()
     /** @type {Record<string, unknown>} */
@@ -57,7 +53,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
   }
 
   async close() {
-    await this.connection.end()
+    await this.connection.closeAsync()
     this.connection = undefined
   }
 

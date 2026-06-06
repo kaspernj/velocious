@@ -734,11 +734,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
 
     const closePromise = (async () => {
-      if (typeof trackedConnection.close === "function") {
-        await trackedConnection.close()
-      } else if (typeof trackedConnection.disconnect === "function") {
-        await trackedConnection.disconnect()
-      }
+      await trackedConnection.close()
     })()
 
     this.connectionClosePromises.set(connection, closePromise)

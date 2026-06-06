@@ -21,11 +21,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
       this.connection = undefined
 
-      if (typeof previousConnection.close === "function") {
-        await previousConnection.close()
-      } else if (typeof previousConnection.disconnect === "function") {
-        await previousConnection.disconnect()
-      }
+      await previousConnection.close()
     }
 
     if (!this.connection) {
@@ -77,11 +73,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
     this.connection = undefined
 
-    if (typeof connection.close === "function") {
-      await connection.close()
-    } else if (typeof connection.disconnect === "function") {
-      await connection.disconnect()
-    }
+    await connection.close()
   }
 
   /** @returns {import("../drivers/base.js").default} - The current connection.  */

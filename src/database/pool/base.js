@@ -225,11 +225,7 @@ class VelociousDatabasePoolBase {
       await connection.connect()
     } catch (error) {
       try {
-        if (typeof connection.close === "function") {
-          await connection.close()
-        } else if (typeof connection.disconnect === "function") {
-          await connection.disconnect()
-        }
+        await connection.close()
       } catch (cleanupError) {
         this.logger.warn("Failed to close database connection after connect failed", {error: cleanupError})
       }
