@@ -2985,7 +2985,7 @@ export default class FrontendModelBase {
   /**
    * @template {typeof FrontendModelBase} T
    * @this {T}
-   * @param {Record<string, string[] | string>} select - Model-aware attribute select map.
+   * @param {Record<string, string[] | string> | string | string[]} select - Model-aware attribute select map or root-model shorthand.
    * @returns {FrontendModelQuery<T>} - Query with selected attributes.
    */
   static select(select) {
