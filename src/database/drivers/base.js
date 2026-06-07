@@ -58,6 +58,8 @@
 /**
  * @typedef {object} DatabaseConnectionDebugSnapshot
  * @property {ActiveQueryDebugSnapshot | null} activeQuery - Currently running query, if any.
+ * @property {number | undefined} checkedOutAtUnixMs - Checkout start timestamp for active checkouts.
+ * @property {number | undefined} checkoutAgeMs - Active checkout age in milliseconds.
  * @property {string | undefined} checkoutName - Human-readable checkout name.
  * @property {string} driverClass - Driver class name.
  * @property {number | undefined} idSeq - Pool checkout ID sequence.
@@ -208,11 +210,13 @@ export default class VelociousDatabaseDriversBase {
    */
   async setConnectionCheckoutName(name) {
     this._connectionCheckoutName = name
+    this._connectionCheckedOutAtUnixMs = Date.now()
   }
 
   /** @returns {Promise<void>} - Resolves when complete. */
   async clearConnectionCheckoutName() {
     this._connectionCheckoutName = undefined
+    this._connectionCheckedOutAtUnixMs = undefined
   }
 
   /**
@@ -979,6 +983,8 @@ export default class VelociousDatabaseDriversBase {
 
     return {
       activeQuery: activeQuery ? {...activeQuery, runningMs: Math.max(0, now - activeQuery.startedAtUnixMs)} : null,
+      checkoutAgeMs: this._connectionCheckedOutAtUnixMs ? Math.max(0, now - this._connectionCheckedOutAtUnixMs) : undefined,
+      checkedOutAtUnixMs: this._connectionCheckedOutAtUnixMs,
       checkoutName: this._connectionCheckoutName,
       driverClass: this.constructor.name,
       idSeq: this.idSeq,
