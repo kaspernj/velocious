@@ -216,14 +216,6 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * Optional disconnect hook for database drivers.
-   * @returns {Promise<void>} - Resolves when complete.
-   */
-  async disconnect() {
-    // No-op by default
-  }
-
-  /**
    * @returns {Promise<void>} - Resolves when complete.
    */
   async reconnect() {

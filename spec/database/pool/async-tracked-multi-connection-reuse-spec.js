@@ -53,6 +53,24 @@ class SpawnBlockingSqliteDriver extends SqliteDriver {
   }
 }
 
+class FailingConnectSqliteDriver extends SqliteDriver {
+  /** @type {boolean} */
+  static closed = false
+
+  /** @returns {Promise<void>} - Rejects after opening the underlying connection. */
+  async connect() {
+    await super.connect()
+
+    throw new Error("Connect failed after opening")
+  }
+
+  /** @returns {Promise<void>} - Resolves when the opened connection is closed. */
+  async close() {
+    FailingConnectSqliteDriver.closed = true
+    await super.close()
+  }
+}
+
 /**
  * @param {string} prefix - Temp-path prefix.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
@@ -139,6 +157,42 @@ async function createSpawnBlockingConfiguration(prefix) {
   return {
     cleanup: async () => {
       SpawnBlockingSqliteDriver.releaseConnectionAttempts()
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    },
+    configuration
+  }
+}
+
+/**
+ * @param {string} prefix - Temp-path prefix.
+ * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
+ */
+async function createFailingConnectConfiguration(prefix) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
+  const configuration = new Configuration({
+    database: {
+      test: {
+        default: {
+          driver: FailingConnectSqliteDriver,
+          migrations: false,
+          name: `${prefix}-default`,
+          poolType: AsyncTrackedMultiConnection,
+          type: "sqlite"
+        }
+      }
+    },
+    directory,
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]},
+    locales: ["en"]
+  })
+
+  return {
+    cleanup: async () => {
       await configuration.closeDatabaseConnections()
       await fs.rm(directory, {force: true, recursive: true})
     },
@@ -274,6 +328,28 @@ describe("database - pool - async tracked multi connection reuse", () => {
       expect(secondConnection).toBe(firstConnection)
 
       await pool.checkin(secondConnection)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("closes a spawned connection when connect fails after opening", async () => {
+    const {cleanup, configuration} = await createFailingConnectConfiguration("velocious-pool-connect-failure")
+
+    try {
+      FailingConnectSqliteDriver.closed = false
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      const error = await pool.checkout().then(
+        () => undefined,
+        (caughtError) => caughtError
+      )
+
+      expect(error.message).toEqual("Connect failed after opening")
+      expect(FailingConnectSqliteDriver.closed).toBe(true)
+      expect(pool.liveConnectionCount()).toEqual(0)
     } finally {
       await cleanup()
     }

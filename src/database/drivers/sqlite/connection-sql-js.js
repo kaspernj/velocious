@@ -17,9 +17,6 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
     await this.saveDatabase()
     await this.connection.close()
   }
-
-  async disconnect() { await this.saveDatabase() }
-
   /**
    * @param {string} sql - SQL string.
    * @returns {Promise<Record<string, any>[]>} - Resolves with the query.
@@ -45,4 +42,3 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
 
   saveDatabaseDebounce = debounce(this.saveDatabase, 500)
 }
-

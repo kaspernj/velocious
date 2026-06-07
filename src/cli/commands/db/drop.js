@@ -1,13 +1,10 @@
-import BaseCommand from "../../base-command.js"
+import DbBaseCommand from "./base-command.js"
 import {digg} from "diggerize"
 import {incorporate} from "incorporator"
 
-export default class DbDrop extends BaseCommand {
-  /** @type {Array<{databaseName: string, sql: string}> | undefined} */
-  result
-
+export default class DbDrop extends DbBaseCommand {
   /**
-   * @returns {Promise<void | Array<{databaseName: string, sql: string}>>} - Resolves with SQL statements when running in dry mode.
+   * @returns {Promise<void | Array<object>>} - Resolves with SQL statements when running in dry mode.
    */
   async execute() {
     const environment = this.getConfiguration().getEnvironment()
@@ -24,7 +21,6 @@ export default class DbDrop extends BaseCommand {
       if (databaseType != "sqlite") {
         const databasePool = this.getConfiguration().getDatabasePool(databaseIdentifier)
         const newConfiguration = incorporate({}, databasePool.getConfiguration())
-        const DriverClass = digg(newConfiguration, "driver")
         const targetDatabaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
 
         // Connect to a known-existing system database: the target is about to
@@ -43,15 +39,9 @@ export default class DbDrop extends BaseCommand {
           delete newConfiguration.sqlConfig.database
         }
 
-        this.databaseConnection = new DriverClass(newConfiguration, this.getConfiguration())
-
-        await this.databaseConnection.connect()
-
-        try {
+        await this.withDirectDatabaseConnection(newConfiguration, async () => {
           await this.dropDatabase(databaseIdentifier)
-        } finally {
-          await this.databaseConnection.close()
-        }
+        })
       }
 
       if (this.args.testing) return this.result
@@ -75,20 +65,8 @@ export default class DbDrop extends BaseCommand {
    */
   async dropDatabase(databaseIdentifier) {
     const databaseName = digg(this.getConfiguration().getDatabaseConfiguration(), databaseIdentifier, "database")
-    const sqls = this.databaseConnection.dropDatabaseSql(databaseName, {ifExists: true})
+    const sqls = this.getDatabaseConnection().dropDatabaseSql(databaseName, {ifExists: true})
 
-    if (this.args.testing && !this.result) {
-      throw new Error("Expected test result collection to be initialized")
-    }
-
-    const result = /** @type {Array<{databaseName: string, sql: string}>} */ (this.result)
-
-    for (const sql of sqls) {
-      if (this.args.testing) {
-        result.push({databaseName, sql})
-      } else {
-        await this.databaseConnection.query(sql)
-      }
-    }
+    await this.queryOrCollectSqls(sqls, (sql) => ({databaseName, sql}))
   }
 }

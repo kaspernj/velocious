@@ -112,6 +112,8 @@ export default class VelociousRoutesResolver {
 
     const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath, {hasMatchingCustomRoute})
     const skipControllerConnections = routeResolverHookMatch?.skipControllerConnections === true
+    const skipAbilityResolution = routeResolverHookMatch?.skipAbilityResolution === true
+    const skipTenantResolution = routeResolverHookMatch?.skipTenantResolution === true
     const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
     const actionParam = this.params.action
     const controllerParam = this.params.controller
@@ -188,20 +190,24 @@ export default class VelociousRoutesResolver {
     await this._logActionStart({action, controllerClass, logMethod})
 
     try {
-      const tenant = await this.configuration.resolveTenant({
-        params: {...this.queryParameters(), ...this.params},
-        request: this.request,
-        response: this.response
-      })
+      const tenant = skipTenantResolution
+        ? undefined
+        : await this.configuration.resolveTenant({
+            params: {...this.queryParameters(), ...this.params},
+            request: this.request,
+            response: this.response
+          })
 
       const runAction = async () => {
         await this.configuration.runWithTenant(tenant, async () => {
           const runControllerAction = async () => {
-            const ability = await this.configuration.resolveAbility({
-              params: this.params,
-              request: this.request,
-              response: this.response
-            })
+            const ability = skipAbilityResolution
+              ? undefined
+              : await this.configuration.resolveAbility({
+                  params: this.params,
+                  request: this.request,
+                  response: this.response
+                })
 
             await this.configuration.runWithAbility(ability, async () => {
               await this._measureController(async () => {
@@ -358,6 +364,14 @@ export default class VelociousRoutesResolver {
 
       if (hookResult.skipControllerConnections !== undefined && typeof hookResult.skipControllerConnections !== "boolean") {
         throw new Error(`Expected route resolver hook skipControllerConnections to be a boolean when provided, got: ${hookResult.skipControllerConnections}`)
+      }
+
+      if (hookResult.skipAbilityResolution !== undefined && typeof hookResult.skipAbilityResolution !== "boolean") {
+        throw new Error(`Expected route resolver hook skipAbilityResolution to be a boolean when provided, got: ${hookResult.skipAbilityResolution}`)
+      }
+
+      if (hookResult.skipTenantResolution !== undefined && typeof hookResult.skipTenantResolution !== "boolean") {
+        throw new Error(`Expected route resolver hook skipTenantResolution to be a boolean when provided, got: ${hookResult.skipTenantResolution}`)
       }
 
       if (hookResult.viewPath !== undefined && typeof hookResult.viewPath !== "string") {

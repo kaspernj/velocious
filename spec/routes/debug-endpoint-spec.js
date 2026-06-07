@@ -13,11 +13,14 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 /**
  * @param {object} args - Configuration arguments.
+ * @param {import("../../src/configuration-types.js").AbilityResolverType} [args.abilityResolver] - Optional ability resolver.
  * @param {boolean | {path?: string, token?: string}} [args.debugEndpoint] - Debug endpoint configuration.
+ * @param {import("../../src/configuration-types.js").TenantResolverType} [args.tenantResolver] - Optional tenant resolver.
  * @returns {Configuration} - Test configuration.
  */
-function buildConfiguration({debugEndpoint = false} = {}) {
+function buildConfiguration({abilityResolver, debugEndpoint = false, tenantResolver} = {}) {
   return new Configuration({
+    abilityResolver,
     database: {
       test: {
         default: {
@@ -36,7 +39,8 @@ function buildConfiguration({debugEndpoint = false} = {}) {
     locale: "en",
     localeFallbacks: {en: ["en"]},
     locales: ["en"],
-    logging: {console: true, file: false, levels: ["info", "warn", "error"]}
+    logging: {console: true, file: false, levels: ["info", "warn", "error"]},
+    tenantResolver
   })
 }
 
@@ -153,5 +157,26 @@ describe("routes - debug endpoint", {databaseCleaning: {transaction: true}}, () 
     expect(response.getStatusCode()).toEqual(200)
     expect(JSON.parse(body).configuration.debugEndpoint).toEqual({enabled: true, path: "/velocious/debug", tokenConfigured: true})
     expect(body.includes("secret-debug-token")).toEqual(false)
+  })
+
+  it("does not resolve application tenant or ability for authorized debug requests", async () => {
+    let resolvedAbility = false
+    let resolvedTenant = false
+    const configuration = buildConfiguration({
+      abilityResolver: () => {
+        resolvedAbility = true
+        throw new Error("Ability resolver should not run for debug endpoint")
+      },
+      debugEndpoint: {token: "secret-debug-token"},
+      tenantResolver: () => {
+        resolvedTenant = true
+        throw new Error("Tenant resolver should not run for debug endpoint")
+      }
+    })
+    const response = await resolveGet(configuration, "/velocious/debug", {authorization: "Bearer secret-debug-token"})
+
+    expect(response.getStatusCode()).toEqual(200)
+    expect(resolvedAbility).toEqual(false)
+    expect(resolvedTenant).toEqual(false)
   })
 })

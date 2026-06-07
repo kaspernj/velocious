@@ -37,12 +37,6 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     this.connection = client
   }
 
-  async disconnect() {
-    await this.connection?.end()
-    this.connection = undefined
-    this._transactionsCount = 0
-  }
-
   connectArgs() {
     const args = this.getArgs()
     const forward = ["database", "host", "password", "port"]
