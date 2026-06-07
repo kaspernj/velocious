@@ -260,6 +260,53 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(nextInline?.id).toEqual("legacy-inline-job")
   })
 
+  it("records legacy execution mode backfill as a one-time migration", async () => {
+    const store = await createStoreWithLegacyJobsSchema()
+
+    await store.ensureReady()
+
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Background jobs reset execution modes"}, async (db) => {
+      const migrations = await db
+        .newQuery()
+        .from("velocious_internal_migrations")
+        .where({key: "background_jobs:20260607131010"})
+        .results()
+
+      expect(migrations.length).toEqual(1)
+
+      await db.update({
+        tableName: "background_jobs",
+        data: {execution_mode: null},
+        conditions: {id: "legacy-forked-job"}
+      })
+      await db.update({
+        tableName: "background_jobs",
+        data: {execution_mode: null},
+        conditions: {id: "legacy-inline-job"}
+      })
+    })
+
+    await store.ensureReady()
+
+    await pool.withConnection({name: "Background jobs verify execution modes"}, async (db) => {
+      const rows = await db
+        .newQuery()
+        .from("background_jobs")
+        .select("id")
+        .select("execution_mode")
+        .where({id: ["legacy-forked-job", "legacy-inline-job"]})
+        .results()
+
+      expect(rows.length).toEqual(2)
+
+      for (const row of rows) {
+        expect(row.execution_mode).toBeNull()
+      }
+    })
+  })
+
   it("filters next available jobs by execution mode", async () => {
     const store = await createClearedStore()
 
