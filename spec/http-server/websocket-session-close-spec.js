@@ -6,10 +6,25 @@ import WebsocketChannel from "../../src/http-server/websocket-channel.js"
 import WebsocketRequest from "../../src/http-server/client/websocket-request.js"
 import WebsocketSession from "../../src/http-server/client/websocket-session.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import wait from "awaitery/build/wait.js"
 
 class ResumableChannel extends WebsocketChannel {
   /** @returns {boolean} */
   canSubscribe() { return true }
+}
+
+class ConnectionCheckingChannel extends WebsocketChannel {
+  /** @returns {boolean} */
+  canSubscribe() { return true }
+
+  /** @returns {Promise<void>} */
+  async unsubscribed() {
+    const dbs = this.session.configuration.getCurrentConnections()
+
+    this.params.checkoutName = dbs.default.getDebugSnapshot().checkoutName
+
+    await dbs.default.query("SELECT 1")
+  }
 }
 
 describe("WebsocketSession close handling", {databaseCleaning: {transaction: true}}, () => {
@@ -40,6 +55,40 @@ describe("WebsocketSession close handling", {databaseCleaning: {transaction: tru
 
     expect(eventOrder).toEqual(["output", "close"])
 
+    dummyConfiguration._clearPausedWebsocketSession(session.sessionId)
+  })
+
+  it("runs channel subscription teardown with database connections", async () => {
+    const clientEvents = new EventEmitter()
+    const params = {}
+    let teardownConnectionWrapperCalls = 0
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({events: clientEvents, remoteAddress: "127.0.0.1"}),
+      configuration: dummyConfiguration,
+      upgradeRequest: new WebsocketRequest({method: "GET", path: "/websocket", remoteAddress: "127.0.0.1"})
+    })
+    const originalWithConnections = session._withConnections.bind(session)
+
+    session._withConnections = async (callback) => {
+      teardownConnectionWrapperCalls++
+      await originalWithConnections(callback)
+    }
+
+    session._channelSubscriptions.set("s1", {
+      channelType: "test",
+      subscription: new ConnectionCheckingChannel({params, session, subscriptionId: "s1"})
+    })
+
+    const closePromise = new Promise((resolve) => session.events.on("close", resolve))
+
+    session.onData(Buffer.from([0x88, 0x00]))
+    await closePromise
+
+    session._finalizeGraceExpiry()
+    await wait(0.02)
+
+    expect(teardownConnectionWrapperCalls).toEqual(1)
+    expect(params.checkoutName).toBeDefined()
     dummyConfiguration._clearPausedWebsocketSession(session.sessionId)
   })
 })
