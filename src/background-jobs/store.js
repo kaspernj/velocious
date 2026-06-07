@@ -9,6 +9,7 @@ import normalizeBackgroundJobError from "./normalize-error.js"
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
 const MIGRATION_VERSION = "20250215000000"
+const EXECUTION_MODE_BACKFILL_MIGRATION_VERSION = "20260607131010"
 const JOBS_TABLE = "background_jobs"
 const DEFAULT_MAX_RETRIES = 10
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
@@ -476,15 +477,7 @@ export default class BackgroundJobsStore {
 
       if (alreadyApplied) return
 
-      await db.insert({
-        tableName: MIGRATIONS_TABLE,
-        data: {
-          key: this._migrationKey(),
-          scope: MIGRATION_SCOPE,
-          version: MIGRATION_VERSION,
-          applied_at_ms: Date.now()
-        }
-      })
+      await this._recordMigration(db, MIGRATION_VERSION)
     })
   }
 
@@ -507,13 +500,14 @@ export default class BackgroundJobsStore {
 
   /**
    * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} [version] - Migration version.
    * @returns {Promise<boolean>} - Whether migration exists.
    */
-  async _hasMigration(db) {
+  async _hasMigration(db, version = MIGRATION_VERSION) {
     const query = db
       .newQuery()
       .from(MIGRATIONS_TABLE)
-      .where({key: this._migrationKey()})
+      .where({key: this._migrationKey(version)})
       .limit(1)
 
     const rows = await query.results()
@@ -577,18 +571,58 @@ export default class BackgroundJobsStore {
       db.clearSchemaCache()
     }
 
-    const tableNameSql = db.quoteTable(JOBS_TABLE)
-    const forkedColumnSql = db.quoteColumn("forked")
-    const executionModeColumnSql = db.quoteColumn("execution_mode")
+    await this._backfillExecutionModesOnce(db)
+  }
 
-    await db.query(
-      `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote(DEFAULT_EXECUTION_MODE)} ` +
-      `WHERE ${forkedColumnSql} = ${db.quote(true)} AND ${executionModeColumnSql} IS NULL`
-    )
-    await db.query(
-      `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote("inline")} ` +
-      `WHERE ${forkedColumnSql} = ${db.quote(false)} AND ${executionModeColumnSql} IS NULL`
-    )
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _backfillExecutionModesOnce(db) {
+    const migrationVersion = EXECUTION_MODE_BACKFILL_MIGRATION_VERSION
+    const migrationKey = this._migrationKey(migrationVersion)
+
+    if (await this._hasMigration(db, migrationVersion)) return
+
+    await db.acquireAdvisoryLock(migrationKey)
+
+    try {
+      if (await this._hasMigration(db, migrationVersion)) return
+
+      const tableNameSql = db.quoteTable(JOBS_TABLE)
+      const forkedColumnSql = db.quoteColumn("forked")
+      const executionModeColumnSql = db.quoteColumn("execution_mode")
+
+      await db.query(
+        `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote(DEFAULT_EXECUTION_MODE)} ` +
+        `WHERE ${forkedColumnSql} = ${db.quote(true)} AND ${executionModeColumnSql} IS NULL`
+      )
+      await db.query(
+        `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote("inline")} ` +
+        `WHERE ${forkedColumnSql} = ${db.quote(false)} AND ${executionModeColumnSql} IS NULL`
+      )
+
+      await this._recordMigration(db, migrationVersion)
+    } finally {
+      await db.releaseAdvisoryLock(migrationKey)
+    }
+  }
+
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} version - Migration version.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _recordMigration(db, version) {
+    await db.insert({
+      tableName: MIGRATIONS_TABLE,
+      data: {
+        key: this._migrationKey(version),
+        scope: MIGRATION_SCOPE,
+        version,
+        applied_at_ms: Date.now()
+      }
+    })
   }
 
   async _initializeModel() {
@@ -900,7 +934,11 @@ export default class BackgroundJobsStore {
     return handedOffAtMs === job.handedOffAtMs
   }
 
-  _migrationKey() {
-    return `${MIGRATION_SCOPE}:${MIGRATION_VERSION}`
+  /**
+   * @param {string} [version] - Migration version.
+   * @returns {string} - Migration key.
+   */
+  _migrationKey(version = MIGRATION_VERSION) {
+    return `${MIGRATION_SCOPE}:${version}`
   }
 }
