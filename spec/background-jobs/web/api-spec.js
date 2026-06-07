@@ -154,6 +154,7 @@ describe("Background jobs - web API", {databaseCleaning: {truncate: true}}, () =
 
       expect(response.status).toEqual(200)
       expect(body.jobs.length).toEqual(1)
+      expect(body.jobs[0].executionMode).toEqual("inline")
       expect(body.jobs[0].jobName).toEqual("FailingJob")
       expect(body.jobs[0].status).toEqual("failed")
       expect(body.pagination.total).toEqual(1)
@@ -169,6 +170,7 @@ describe("Background jobs - web API", {databaseCleaning: {truncate: true}}, () =
 
       expect(response.status).toEqual(200)
       expect(body.job.id).toEqual(failedId)
+      expect(body.job.executionMode).toEqual("inline")
       expect(body.job.status).toEqual("failed")
       expect(body.job.attempts).toEqual(1)
       expect(body.job.args).toEqual(["b"])

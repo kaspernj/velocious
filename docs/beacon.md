@@ -73,7 +73,7 @@ Peers shipped by Velocious connect automatically:
 - `application.startHttpServer()` calls `connectBeacon({peerType: "server"})`.
 - `BackgroundJobsMain.start()` calls `connectBeacon({peerType: "background-jobs-main"})`.
 - `BackgroundJobsWorker.start()` calls `connectBeacon({peerType: "background-jobs-worker"})`.
-- Forked `background-jobs-runner` processes call `connectBeacon({peerType: "background-jobs-runner"})` before performing their job.
+- Forked and spawned background job runner processes call `connectBeacon({peerType: "background-jobs-runner"})` before performing their job.
 
 Custom processes that maintain their own `Configuration` lifecycle
 should call `connectBeacon` themselves:
@@ -193,7 +193,7 @@ Stages emitted today:
   drops. The `error` is the underlying socket error if there was one,
   or `Error("Beacon broker disconnected")` otherwise. Explicit
   `disconnectBeacon()` calls do **not** fire this event.
-- `"beacon-ready"` — fired by forked background job runners when the
+- `"beacon-ready"` — fired by background job runner processes when the
   daemon does not acknowledge peer registration before the runner's
   readiness timeout. The job still runs, but broadcasts fall back to
   local-only delivery until the client reconnects and becomes ready.

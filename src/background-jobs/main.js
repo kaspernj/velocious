@@ -21,6 +21,20 @@ const DISPATCH_CHANNEL = "velocious-background-jobs-dispatch"
  * scheduled-job timer here and re-arm when it expires.
  */
 const MAX_TIMER_MS = 2_147_483_647 // ~24.8 days
+/**
+ * @typedef {object} WorkerExecutionModeCapability
+ * @property {import("./types.js").BackgroundJobExecutionMode} executionMode - Execution mode.
+ * @property {(worker: JsonSocket) => boolean} accepts - Whether the worker accepts this mode.
+ */
+/** @type {WorkerExecutionModeCapability[]} */
+const WORKER_EXECUTION_MODE_CAPABILITIES = [
+  {executionMode: "inline", accepts: (worker) => worker.acceptsInlineJobs !== false},
+  {executionMode: "forked", accepts: (worker) => worker.acceptsForkedJobs !== false},
+  {executionMode: "spawned", accepts: (worker) => worker.acceptsSpawnedJobs !== false}
+]
+const WORKER_EXECUTION_MODE_CAPABILITIES_BY_MODE = new Map(
+  WORKER_EXECUTION_MODE_CAPABILITIES.map((capability) => [capability.executionMode, capability])
+)
 
 export default class BackgroundJobsMain {
   /**
@@ -126,10 +140,23 @@ export default class BackgroundJobsMain {
   async stop() {
     this._stopped = true
 
+    this._closeWorkers()
+    this._clearTimers()
+    this._disconnectBeaconHandlers()
+    this.scheduler?.stop()
+
+    await this._stopBeaconAndServer()
+  }
+
+  /** @returns {void} */
+  _closeWorkers() {
     for (const worker of this.workers) {
       worker.close()
     }
+  }
 
+  /** @returns {void} */
+  _clearTimers() {
     if (this._pollTimer) clearInterval(this._pollTimer)
     if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
@@ -138,7 +165,10 @@ export default class BackgroundJobsMain {
     this._scheduledTimer = undefined
     this._errorRetryTimer = undefined
     this._orphanTimer = undefined
+  }
 
+  /** @returns {void} */
+  _disconnectBeaconHandlers() {
     if (this._unsubscribeBeacon) {
       this._unsubscribeBeacon()
       this._unsubscribeBeacon = undefined
@@ -149,22 +179,33 @@ export default class BackgroundJobsMain {
     }
     this._beaconConnectHandler = undefined
     this._beaconClient = undefined
+  }
 
-    this.scheduler?.stop()
-
+  /** @returns {Promise<void>} */
+  async _stopBeaconAndServer() {
     try {
       await this.configuration.disconnectBeacon()
     } finally {
-      try {
-        if (this.server) {
-          const {server} = this
-          this.server = undefined
-          await new Promise((resolve) => server.close(() => resolve(undefined)))
-        }
-      } finally {
-        await this.configuration.closeDatabaseConnections()
-      }
+      await this._closeServerAndDatabaseConnections()
     }
+  }
+
+  /** @returns {Promise<void>} */
+  async _closeServerAndDatabaseConnections() {
+    try {
+      await this._closeServer()
+    } finally {
+      await this.configuration.closeDatabaseConnections()
+    }
+  }
+
+  /** @returns {Promise<void>} */
+  async _closeServer() {
+    if (!this.server) return
+
+    const {server} = this
+    this.server = undefined
+    await new Promise((resolve) => server.close(() => resolve(undefined)))
   }
 
   /**
@@ -258,49 +299,117 @@ export default class BackgroundJobsMain {
       cleanup()
     })
 
-    /** @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message. */
     jsonSocket.on("message", (message) => {
-      if (!role && message?.type === "hello") {
-        role = message.role
-
-        if (role === "worker") {
-          jsonSocket.workerId = message.workerId
-          this.workers.add(jsonSocket)
-        }
-
-        return
-      }
-
-      if (role === "client" && message?.type === "enqueue") {
-        this._handleEnqueue({jsonSocket, message})
-        return
-      }
-
-      if (role === "worker" && message?.type === "ready") {
-        jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
-        jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
-        this.readyWorkers.add(jsonSocket)
-        void this._drain()
-        return
-      }
-
-      if (role === "worker" && message?.type === "draining") {
-        // The worker is shutting down gracefully. Stop dispatching new jobs
-        // to it but keep the connection in `workers` so any in-flight job
-        // it's still draining can report its result.
-        this.readyWorkers.delete(jsonSocket)
-        return
-      }
-
-      if ((role === "worker" || role === "reporter") && message?.type === "job-complete") {
-        this._handleJobComplete({jsonSocket, message})
-        return
-      }
-
-      if ((role === "worker" || role === "reporter") && message?.type === "job-failed") {
-        this._handleJobFailed({jsonSocket, message})
-      }
+      role = this._handleSocketMessage({jsonSocket, message, role})
     })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
+   * @param {import("./types.js").BackgroundJobSocketRole | null} args.role - Current socket role.
+   * @returns {import("./types.js").BackgroundJobSocketRole | null} - Updated socket role.
+   */
+  _handleSocketMessage({jsonSocket, message, role}) {
+    if (!role) return this._handleRolelessSocketMessage({jsonSocket, message})
+    if (role === "client") this._handleClientSocketMessage({jsonSocket, message})
+    if (role === "worker") this._handleWorkerSocketMessage({jsonSocket, message})
+    if (role === "reporter") this._handleReporterSocketMessage({jsonSocket, message})
+
+    return role
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
+   * @returns {import("./types.js").BackgroundJobSocketRole | null} - New socket role.
+   */
+  _handleRolelessSocketMessage({jsonSocket, message}) {
+    if (message?.type !== "hello") return null
+
+    if (message.role === "worker") {
+      jsonSocket.workerId = message.workerId
+      this.workers.add(jsonSocket)
+    }
+
+    return message.role
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
+   * @returns {void}
+   */
+  _handleClientSocketMessage({jsonSocket, message}) {
+    if (message?.type === "enqueue") {
+      this._handleEnqueue({jsonSocket, message})
+    }
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
+   * @returns {void}
+   */
+  _handleWorkerSocketMessage({jsonSocket, message}) {
+    if (message?.type === "ready") {
+      this._handleWorkerReady({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "draining") {
+      this._handleWorkerDraining({jsonSocket})
+      return
+    }
+
+    this._handleReporterSocketMessage({jsonSocket, message})
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
+   * @returns {void}
+   */
+  _handleReporterSocketMessage({jsonSocket, message}) {
+    if (message?.type === "job-complete") {
+      this._handleJobComplete({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "job-failed") {
+      this._handleJobFailed({jsonSocket, message})
+    }
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobReadyMessage} args.message - Ready message.
+   * @returns {void}
+   */
+  _handleWorkerReady({jsonSocket, message}) {
+    jsonSocket.acceptsSpawnedJobs = message.acceptsSpawned !== false && message.acceptsForked !== false
+    jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
+    jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
+    this.readyWorkers.add(jsonSocket)
+    void this._drain()
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @returns {void}
+   */
+  _handleWorkerDraining({jsonSocket}) {
+    // The worker is shutting down gracefully. Stop dispatching new jobs
+    // to it but keep the connection in `workers` so any in-flight job
+    // it's still draining can report its result.
+    this.readyWorkers.delete(jsonSocket)
   }
 
   /**
@@ -416,16 +525,48 @@ export default class BackgroundJobsMain {
   _normalizeFailureError(error) {
     if (error instanceof Error) return error
 
-    const message = typeof error === "string" && error.trim()
-      ? error.trim().split("\n")[0]
-      : String(error || "Background job failed")
+    return this._errorFromUnknownFailure(error)
+  }
+
+  /**
+   * @param {unknown} error - Reported failure value.
+   * @returns {Error} Normalized error.
+   */
+  _errorFromUnknownFailure(error) {
+    const message = this._messageFromUnknownFailure(error)
     const normalizedError = new Error(message)
 
-    if (typeof error === "string" && error.trim()) {
-      normalizedError.stack = error
-    }
+    this._copyStringFailureStack({error, normalizedError})
 
     return normalizedError
+  }
+
+  /**
+   * @param {unknown} error - Reported failure value.
+   * @returns {string} Error message.
+   */
+  _messageFromUnknownFailure(error) {
+    if (this._hasStringFailure(error)) return error.trim().split("\n")[0]
+
+    return String(error || "Background job failed")
+  }
+
+  /**
+   * @param {unknown} error - Reported failure value.
+   * @returns {error is string} Whether the value is a non-empty string.
+   */
+  _hasStringFailure(error) {
+    return typeof error === "string" && error.trim().length > 0
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {unknown} args.error - Reported failure value.
+   * @param {Error} args.normalizedError - Normalized error.
+   * @returns {void}
+   */
+  _copyStringFailureStack({error, normalizedError}) {
+    if (this._hasStringFailure(error)) normalizedError.stack = error
   }
 
   /**
@@ -446,38 +587,36 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>}
    */
   async _drain() {
-    if (this._stopped) return
+    if (!this._startDrain()) return
 
-    if (this._draining) {
-      this._redrainQueued = true
-      return
-    }
+    const errored = await this._drainUntilIdle()
+
+    await this._finishDrain({errored})
+  }
+
+  /** @returns {boolean} - Whether the drain should continue. */
+  _startDrain() {
+    if (this._stopped) return false
+    if (this._queueDrainIfAlreadyRunning()) return false
 
     this._draining = true
-    let errored = false
+    return true
+  }
 
-    try {
-      do {
-        this._redrainQueued = false
-        try {
-          await this._drainOnce()
-        } catch (error) {
-          errored = true
-          this.logger.error(() => ["Background jobs drain failed:", error])
-          break
-        }
-      } while (this._redrainQueued && !this._stopped)
-    } finally {
-      this._draining = false
-    }
-
+  /**
+   * @param {object} args - Options.
+   * @param {boolean} args.errored - Whether the drain hit an error.
+   * @returns {Promise<void>} - Resolves after follow-up timers are handled.
+   */
+  async _finishDrain({errored}) {
     if (this._stopped) return
+    if (errored) return this._scheduleErrorRetry()
 
-    if (errored) {
-      this._scheduleErrorRetry()
-      return
-    }
+    await this._armScheduledTimerOrRetry()
+  }
 
+  /** @returns {Promise<void>} - Resolves after scheduled timer handling. */
+  async _armScheduledTimerOrRetry() {
     try {
       await this._armScheduledTimer()
     } catch (error) {
@@ -486,9 +625,54 @@ export default class BackgroundJobsMain {
       return
     }
 
+    this._clearErrorRetryTimer()
+  }
+
+  /** @returns {void} */
+  _clearErrorRetryTimer() {
     if (this._errorRetryTimer) {
       clearTimeout(this._errorRetryTimer)
       this._errorRetryTimer = undefined
+    }
+  }
+
+  /** @returns {boolean} - Whether another drain is already in progress. */
+  _queueDrainIfAlreadyRunning() {
+    if (!this._draining) return false
+
+    this._redrainQueued = true
+    return true
+  }
+
+  /** @returns {Promise<boolean>} - Whether the drain hit an error. */
+  async _drainUntilIdle() {
+    try {
+      return await this._runDrainLoop()
+    } finally {
+      this._draining = false
+    }
+  }
+
+  /** @returns {Promise<boolean>} - Whether the drain hit an error. */
+  async _runDrainLoop() {
+    do {
+      this._redrainQueued = false
+      const errored = await this._drainOnceWithErrorReport()
+
+      if (errored) return true
+    } while (this._redrainQueued && !this._stopped)
+
+    return false
+  }
+
+  /** @returns {Promise<boolean>} - Whether one drain pass failed. */
+  async _drainOnceWithErrorReport() {
+    try {
+      await this._drainOnce()
+      return false
+    } catch (error) {
+      this.logger.error(() => ["Background jobs drain failed:", error])
+      return true
     }
   }
 
@@ -537,6 +721,7 @@ export default class BackgroundJobsMain {
             workerId: worker.workerId,
             handedOffAtMs,
             options: {
+              executionMode: job.executionMode,
               forked: job.forked
             }
           }
@@ -553,32 +738,35 @@ export default class BackgroundJobsMain {
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next queued job matching ready worker capacity.
    */
   async nextAvailableJobForReadyWorkers() {
-    const acceptsForked = this.readyWorkersAcceptForkedJobs()
-    const acceptsInline = this.readyWorkersAcceptInlineJobs()
+    const executionModes = this.readyWorkerExecutionModes()
 
-    if (!acceptsForked && !acceptsInline) return null
-    if (acceptsForked && acceptsInline) return await this.store.nextAvailableJob()
-    if (acceptsForked) return await this.store.nextAvailableJob({forked: true})
+    if (executionModes.length === 0) return null
+    if (executionModes.length === 3) return await this.store.nextAvailableJob()
 
-    return await this.store.nextAvailableJob({forked: false})
+    return await this.store.nextAvailableJob({executionMode: executionModes})
   }
 
-  /** @returns {boolean} - Whether any ready worker can accept forked jobs. */
-  readyWorkersAcceptForkedJobs() {
+  /** @returns {import("./types.js").BackgroundJobExecutionMode[]} - Execution modes currently accepted by ready workers. */
+  readyWorkerExecutionModes() {
+    const executionModes = new Set()
+
     for (const worker of this.readyWorkers) {
-      if (worker.acceptsForkedJobs !== false) return true
+      this._addAcceptedExecutionModes({executionModes, worker})
     }
 
-    return false
+    return /** @type {import("./types.js").BackgroundJobExecutionMode[]} */ ([...executionModes])
   }
 
-  /** @returns {boolean} - Whether any ready worker can accept inline jobs. */
-  readyWorkersAcceptInlineJobs() {
-    for (const worker of this.readyWorkers) {
-      if (worker.acceptsInlineJobs !== false) return true
+  /**
+   * @param {object} args - Options.
+   * @param {Set<import("./types.js").BackgroundJobExecutionMode>} args.executionModes - Accepted modes.
+   * @param {JsonSocket} args.worker - Worker socket.
+   * @returns {void}
+   */
+  _addAcceptedExecutionModes({executionModes, worker}) {
+    for (const capability of WORKER_EXECUTION_MODE_CAPABILITIES) {
+      if (capability.accepts(worker)) executionModes.add(capability.executionMode)
     }
-
-    return false
   }
 
   /**
@@ -587,9 +775,22 @@ export default class BackgroundJobsMain {
    */
   readyWorkerForJob(job) {
     for (const worker of this.readyWorkers) {
-      if (job.forked && worker.acceptsForkedJobs !== false) return worker
-      if (!job.forked && worker.acceptsInlineJobs !== false) return worker
+      if (this._workerAcceptsJob({job, worker})) return worker
     }
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Job being handed off.
+   * @param {JsonSocket} args.worker - Worker socket.
+   * @returns {boolean} - Whether the worker accepts the job mode.
+   */
+  _workerAcceptsJob({job, worker}) {
+    const capability = WORKER_EXECUTION_MODE_CAPABILITIES_BY_MODE.get(job.executionMode)
+
+    if (!capability) return false
+
+    return capability.accepts(worker)
   }
 
   /**

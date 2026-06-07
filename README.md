@@ -15,7 +15,7 @@
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)` on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
-* Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including forked background job runners (see [docs/beacon.md](docs/beacon.md))
+* Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Background jobs with failure events for production reporting (see [docs/background-jobs.md](docs/background-jobs.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
@@ -1891,11 +1891,11 @@ VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
 VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
 ```
 
-`VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked `background-jobs-runner` children still running, so they are not orphaned across a deploy. The default waits for jobs to finish and never interrupts a running job; set a positive number of milliseconds for a finite cap (keep it shorter than your process supervisor's graceful-stop window so the worker reaps its own runners first). See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-forked-job-draining).
+`VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked or spawned child runners still running, so they are not orphaned across a deploy. The default waits for jobs to finish and never interrupts a running job; set a positive number of milliseconds for a finite cap (keep it shorter than your process supervisor's graceful-stop window so the worker reaps its own runners first). See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-process-job-draining).
 
-`maxConcurrentInlineJobs` (default: `4`) caps how many `forked: false` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores.
+`maxConcurrentInlineJobs` (default: `4`) caps how many `executionMode: "inline"` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores. The older `forked: false` option still maps to inline mode.
 
-`maxConcurrentForkedJobs` (default: `4`) caps how many detached `background-jobs-runner` child processes one worker may keep in flight. Forked jobs still run in separate Node processes, but the worker withholds forked-job capacity until an existing runner exits so bursts cannot spawn unbounded database-using children.
+`maxConcurrentForkedJobs` (default: `4`) caps how many out-of-process `executionMode: "forked"` or `executionMode: "spawned"` jobs one worker may keep in flight. Forked jobs use `child_process.fork()` with an attached IPC channel and exit after the job runner closes its framework resources. Spawned jobs use the legacy `background-jobs-runner` CLI process via `child_process.spawn()` and are only for callers that intentionally want that spawned behavior.
 
 ### Dispatch strategy
 
@@ -1924,14 +1924,16 @@ Queue a job:
 await MyJob.performLater("a", "b")
 ```
 
-Jobs are forked by default (detached from the worker). To run inline:
+Jobs use `executionMode: "forked"` by default. This runs the job in a separate attached Node child process. To run inline:
 
 ```js
 await MyJob.performLaterWithOptions({
   args: ["a", "b"],
-  options: {forked: false}
+  options: {executionMode: "inline"}
 })
 ```
+
+The older `options: {forked: false}` form is still accepted as an alias for inline execution, and `options: {forked: true}` maps to forked execution. To use the previous spawned CLI runner behavior explicitly, pass `options: {executionMode: "spawned"}`.
 
 Inline jobs share the worker process and run concurrently up to `maxConcurrentInlineJobs`, so a single slow inline job no longer blocks the queue. A single worker can also override the configured cap explicitly:
 
@@ -1953,7 +1955,7 @@ export default new Configuration({
       buildCleanup: {
         class: BuildCleanupJob,
         every: ["1h", {first_in: "10s"}],
-        options: {forked: false}
+        options: {executionMode: "inline"}
       }
     }
   }

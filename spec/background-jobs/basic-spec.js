@@ -1,65 +1,48 @@
 // @ts-check
 
-import fs from "fs/promises"
 import net from "net"
-import path from "path"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
-import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
-import BackgroundJobsStore from "../../src/background-jobs/store.js"
+import {outputPathFor, startBackgroundJobs, waitForJobCompleted, waitForOutputJson} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
 describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
   it("enqueues and runs a job in a worker", async () => {
-    dummyConfiguration.setCurrent()
-    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
-    await store.clearAll()
-
-    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
-    await main.start()
-
-    dummyConfiguration.setBackgroundJobsConfig({
-      host: "127.0.0.1",
-      port: main.getPort()
-    })
-
-    const worker = new BackgroundJobsWorker({configuration: dummyConfiguration})
-    await worker.start()
-
-    const tmpDir = path.join(dummyConfiguration.getDirectory(), "tmp")
-    await fs.mkdir(tmpDir, {recursive: true})
-    const outputPath = path.join(tmpDir, `job-${Date.now()}.json`)
+    const {main, store, worker} = await startBackgroundJobs()
+    const outputPath = await outputPathFor("job")
 
     const jobId = await TestJob.performLaterWithOptions({
       args: ["hello", outputPath],
       options: {forked: false}
     })
 
-    await timeout({timeout: 2000}, async () => {
-      while (true) {
-        try {
-          await fs.readFile(outputPath, "utf8")
-          break
-        } catch {
-          await wait(0.05)
-        }
-      }
-    })
-
-    const result = JSON.parse(await fs.readFile(outputPath, "utf8"))
+    const result = await waitForOutputJson({outputPath})
 
     expect(result).toEqual({message: "hello"})
 
-    await timeout({timeout: 2000}, async () => {
-      while (true) {
-        const job = await store.getJob(jobId)
-        if (job?.status === "completed") break
-        await wait(0.05)
-      }
+    await waitForJobCompleted({jobId, store})
+
+    await worker.stop()
+    await main.stop()
+  })
+
+  it("runs a job in a true forked worker child", async () => {
+    const {main, store, worker} = await startBackgroundJobs()
+    const outputPath = await outputPathFor("forked-job")
+
+    const jobId = await TestJob.performLaterWithOptions({
+      args: ["forked", outputPath],
+      options: {executionMode: "forked"}
     })
+
+    const result = await waitForOutputJson({outputPath, timeoutSeconds: 4})
+
+    expect(result).toEqual({message: "forked"})
+
+    await waitForJobCompleted({jobId, store, timeoutSeconds: 4})
 
     await worker.stop()
     await main.stop()
@@ -67,12 +50,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
 
   it("enqueues scheduled jobs from the background jobs main process", async () => {
     dummyConfiguration.setCurrent()
-    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
-    await store.clearAll()
-
-    const tmpDir = path.join(dummyConfiguration.getDirectory(), "tmp")
-    await fs.mkdir(tmpDir, {recursive: true})
-    const outputPath = path.join(tmpDir, `scheduled-job-${Date.now()}.json`)
+    const outputPath = await outputPathFor("scheduled-job")
     dummyConfiguration.setScheduledBackgroundJobsConfig({
       jobs: {
         scheduledTestJob: {
@@ -84,29 +62,9 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
       }
     })
 
-    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
-    await main.start()
+    const {main, worker} = await startBackgroundJobs()
 
-    dummyConfiguration.setBackgroundJobsConfig({
-      host: "127.0.0.1",
-      port: main.getPort()
-    })
-
-    const worker = new BackgroundJobsWorker({configuration: dummyConfiguration})
-    await worker.start()
-
-    await timeout({timeout: 2000}, async () => {
-      while (true) {
-        try {
-          await fs.readFile(outputPath, "utf8")
-          break
-        } catch {
-          await wait(0.05)
-        }
-      }
-    })
-
-    const result = JSON.parse(await fs.readFile(outputPath, "utf8"))
+    const result = await waitForOutputJson({outputPath})
 
     expect(result).toEqual({message: "scheduled"})
 
@@ -173,21 +131,8 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
   })
 
   it("waits for in-flight inline jobs to finish during a graceful stop", async () => {
-    dummyConfiguration.setCurrent()
-    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
-    await store.clearAll()
-
-    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
-    await main.start()
-
-    dummyConfiguration.setBackgroundJobsConfig({host: "127.0.0.1", port: main.getPort()})
-
-    const worker = new BackgroundJobsWorker({configuration: dummyConfiguration})
-    await worker.start()
-
-    const tmpDir = path.join(dummyConfiguration.getDirectory(), "tmp")
-    await fs.mkdir(tmpDir, {recursive: true})
-    const outputPath = path.join(tmpDir, `slow-job-${Date.now()}.json`)
+    const {main, store, worker} = await startBackgroundJobs()
+    const outputPath = await outputPathFor("slow-job")
 
     const jobId = await SlowTestJob.performLaterWithOptions({
       args: ["graceful", outputPath, 400],
@@ -213,16 +158,10 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     expect(stopElapsedMs).toBeGreaterThanOrEqual(300)
 
     // The job should have written its output and been marked completed.
-    const result = JSON.parse(await fs.readFile(outputPath, "utf8"))
+    const result = await waitForOutputJson({outputPath})
     expect(result).toEqual({message: "graceful"})
 
-    await timeout({timeout: 2000}, async () => {
-      while (true) {
-        const job = await store.getJob(jobId)
-        if (job?.status === "completed") break
-        await wait(0.05)
-      }
-    })
+    await waitForJobCompleted({jobId, store})
 
     await main.stop()
   })

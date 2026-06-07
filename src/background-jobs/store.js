@@ -4,6 +4,7 @@ import {randomUUID} from "crypto"
 import Logger from "../logger.js"
 import TableData from "../database/table-data/index.js"
 import BackgroundJobRecord from "./job-record.js"
+import normalizeBackgroundJobError from "./normalize-error.js"
 
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
@@ -11,6 +12,9 @@ const MIGRATION_VERSION = "20250215000000"
 const JOBS_TABLE = "background_jobs"
 const DEFAULT_MAX_RETRIES = 10
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
+/** @type {import("./types.js").BackgroundJobExecutionMode[]} */
+const EXECUTION_MODES = ["inline", "forked", "spawned"]
+const DEFAULT_EXECUTION_MODE = "forked"
 
 /**
  * Columns the dashboard is allowed to sort job listings by, mapped to their
@@ -80,7 +84,7 @@ export default class BackgroundJobsStore {
 
     const jobId = randomUUID()
     const now = Date.now()
-    const forked = options?.forked !== false
+    const executionMode = this._normalizeExecutionMode(options)
     const maxRetries = this._normalizeMaxRetries(options?.maxRetries)
     const argsJson = JSON.stringify(args || [])
 
@@ -91,7 +95,8 @@ export default class BackgroundJobsStore {
           id: jobId,
           job_name: jobName,
           args_json: argsJson,
-          forked,
+          forked: executionMode !== "inline",
+          execution_mode: executionMode,
           max_retries: maxRetries,
           attempts: 0,
           status: "queued",
@@ -106,35 +111,20 @@ export default class BackgroundJobsStore {
 
   /**
    * @param {object} [args] - Options.
-   * @param {boolean} [args.forked] - When set, only return jobs with this forked value.
+   * @param {boolean} [args.forked] - Compatibility filter for non-inline vs inline jobs.
+   * @param {import("./types.js").BackgroundJobExecutionMode | import("./types.js").BackgroundJobExecutionMode[]} [args.executionMode] - Execution mode or modes to match.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next job.
    */
   async nextAvailableJob(args = {}) {
     await this.ensureReady()
 
     return await this._withDb(async (db) => {
-      const now = Date.now()
-      let query = db
-        .newQuery()
-        .from(JOBS_TABLE)
-        .where({status: "queued"})
-        .where(`scheduled_at_ms <= ${db.quote(now)}`)
-
-      if (typeof args.forked === "boolean") {
-        query = query.where({forked: args.forked})
-      }
-
-      query = query
-        .order("scheduled_at_ms ASC")
-        .order("created_at_ms ASC")
-        .limit(1)
-
-      const rows = await query.results()
-      const row = rows[0]
-
-      if (!row) return null
-
-      return this._normalizeJobRow(row)
+      return await this._nextQueuedJob({
+        db,
+        scheduledAtOperator: "<=",
+        forked: args.forked,
+        executionMode: args.executionMode
+      })
     })
   }
 
@@ -150,23 +140,46 @@ export default class BackgroundJobsStore {
     await this.ensureReady()
 
     return await this._withDb(async (db) => {
-      const now = Date.now()
-      const query = db
-        .newQuery()
-        .from(JOBS_TABLE)
-        .where({status: "queued"})
-        .where(`scheduled_at_ms > ${db.quote(now)}`)
-        .order("scheduled_at_ms ASC")
-        .order("created_at_ms ASC")
-        .limit(1)
-
-      const rows = await query.results()
-      const row = rows[0]
-
-      if (!row) return null
-
-      return this._normalizeJobRow(row)
+      return await this._nextQueuedJob({db, scheduledAtOperator: ">"})
     })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("../database/drivers/base.js").default} args.db - Database connection.
+   * @param {"<=" | ">"} args.scheduledAtOperator - Scheduled timestamp operator.
+   * @param {boolean} [args.forked] - Compatibility filter for non-inline vs inline jobs.
+   * @param {import("./types.js").BackgroundJobExecutionMode | import("./types.js").BackgroundJobExecutionMode[]} [args.executionMode] - Execution mode or modes to match.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next matching queued job.
+   */
+  async _nextQueuedJob({db, scheduledAtOperator, forked, executionMode}) {
+    const now = Date.now()
+    let query = db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .where({status: "queued"})
+      .where(`scheduled_at_ms ${scheduledAtOperator} ${db.quote(now)}`)
+
+    if (typeof forked === "boolean") {
+      query = query.where({forked})
+    }
+    if (executionMode) {
+      const executionModes = Array.isArray(executionMode) ? executionMode : [executionMode]
+
+      query = query.where({execution_mode: executionModes})
+    }
+
+    query = query
+      .order("scheduled_at_ms ASC")
+      .order("created_at_ms ASC")
+      .limit(1)
+
+    const rows = await query.results()
+    const row = rows[0]
+
+    if (!row) return null
+
+    return this._normalizeJobRow(row)
   }
 
   /**
@@ -453,9 +466,13 @@ export default class BackgroundJobsStore {
       // (DDL is transactional on SQLite/MSSQL). Verify the table physically
       // exists and recreate it when missing rather than trusting the migration
       // row alone, otherwise later callers fail with "no such table".
-      if (alreadyApplied && await db.tableExists(JOBS_TABLE)) return
+      if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
+        await this._ensureJobsTableColumns(db)
+        return
+      }
 
       await this._applyMigrations(db)
+      await this._ensureJobsTableColumns(db)
 
       if (alreadyApplied) return
 
@@ -522,6 +539,7 @@ export default class BackgroundJobsStore {
     table.string("job_name", {null: false, index: true})
     table.text("args_json", {null: false})
     table.boolean("forked", {null: false})
+    table.string("execution_mode", {null: false})
     table.integer("max_retries", {null: false})
     table.integer("attempts", {null: false})
     table.string("status", {null: false, index: true})
@@ -535,6 +553,38 @@ export default class BackgroundJobsStore {
     table.text("last_error", {null: true})
 
     await db.createTable(table)
+  }
+
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _ensureJobsTableColumns(db) {
+    if (!(await db.tableExists(JOBS_TABLE))) return
+
+    const table = await db.getTableByNameOrFail(JOBS_TABLE)
+    const executionModeColumn = await table.getColumnByName("execution_mode")
+
+    if (!executionModeColumn) {
+      const tableData = new TableData(JOBS_TABLE)
+      tableData.string("execution_mode", {null: true})
+      const sqls = await db.alterTableSQLs(tableData)
+
+      for (const sql of sqls) {
+        await db.query(sql)
+      }
+    }
+
+    await db.update({
+      tableName: JOBS_TABLE,
+      data: {execution_mode: DEFAULT_EXECUTION_MODE},
+      conditions: {forked: true, execution_mode: null}
+    })
+    await db.update({
+      tableName: JOBS_TABLE,
+      data: {execution_mode: "inline"},
+      conditions: {forked: false, execution_mode: null}
+    })
   }
 
   async _initializeModel() {
@@ -581,9 +631,37 @@ export default class BackgroundJobsStore {
     const nextAttempt = (job.attempts || 0) + 1
     const maxRetries = this._normalizeMaxRetries(job.maxRetries)
     const shouldRetry = nextAttempt <= maxRetries
-    const failureMessage = this._normalizeError(error)
+    const failureMessage = normalizeBackgroundJobError(error)
     const scheduledAt = shouldRetry ? now + this.getRetryDelayMs(nextAttempt) : job.scheduledAtMs
+    const update = this._failureUpdate({
+      failureMessage,
+      markOrphaned,
+      nextAttempt,
+      now,
+      scheduledAt,
+      shouldRetry
+    })
 
+    await db.update({
+      tableName: JOBS_TABLE,
+      data: update,
+      conditions: {id: job.id}
+    })
+
+    return this._jobWithFailureUpdate({failureMessage, job, nextAttempt, update})
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {string} args.failureMessage - Last failure message.
+   * @param {boolean} args.markOrphaned - Whether marking orphaned.
+   * @param {number} args.nextAttempt - Next attempt count.
+   * @param {number} args.now - Current timestamp.
+   * @param {number | null} args.scheduledAt - Next scheduled timestamp.
+   * @param {boolean} args.shouldRetry - Whether the job should retry.
+   * @returns {Record<string, any>} - Database update data.
+   */
+  _failureUpdate({failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry}) {
     /** @type {Record<string, any>} */
     const update = {
       attempts: nextAttempt,
@@ -592,26 +670,57 @@ export default class BackgroundJobsStore {
       last_error: failureMessage
     }
 
-    if (markOrphaned) {
-      update.orphaned_at_ms = now
-    }
+    this._applyOrphanedFailureUpdate({markOrphaned, now, update})
+    this._applyFailureStatusUpdate({markOrphaned, now, scheduledAt, shouldRetry, update})
 
+    return update
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {boolean} args.markOrphaned - Whether marking orphaned.
+   * @param {number} args.now - Current timestamp.
+   * @param {Record<string, any>} args.update - Database update data.
+   * @returns {void}
+   */
+  _applyOrphanedFailureUpdate({markOrphaned, now, update}) {
+    if (markOrphaned) update.orphaned_at_ms = now
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {boolean} args.markOrphaned - Whether marking orphaned.
+   * @param {number} args.now - Current timestamp.
+   * @param {number | null} args.scheduledAt - Next scheduled timestamp.
+   * @param {boolean} args.shouldRetry - Whether the job should retry.
+   * @param {Record<string, any>} args.update - Database update data.
+   * @returns {void}
+   */
+  _applyFailureStatusUpdate({markOrphaned, now, scheduledAt, shouldRetry, update}) {
     if (shouldRetry) {
       update.status = "queued"
       update.scheduled_at_ms = scheduledAt
-    } else if (markOrphaned) {
-      update.status = "orphaned"
-    } else {
-      update.status = "failed"
-      update.failed_at_ms = now
+      return
     }
 
-    await db.update({
-      tableName: JOBS_TABLE,
-      data: update,
-      conditions: {id: job.id}
-    })
+    if (markOrphaned) {
+      update.status = "orphaned"
+      return
+    }
 
+    update.status = "failed"
+    update.failed_at_ms = now
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {string} args.failureMessage - Last failure message.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
+   * @param {number} args.nextAttempt - Next attempt count.
+   * @param {Record<string, any>} args.update - Database update data.
+   * @returns {import("./types.js").BackgroundJobRow} - Updated job row.
+   */
+  _jobWithFailureUpdate({failureMessage, job, nextAttempt, update}) {
     return {
       ...job,
       attempts: nextAttempt,
@@ -630,11 +739,16 @@ export default class BackgroundJobsStore {
    * @returns {import("./types.js").BackgroundJobRow} - Normalized job row.
    */
   _normalizeJobRow(row) {
+    const executionMode = row.execution_mode
+      ? this._normalizeExecutionModeName(String(row.execution_mode))
+      : this._normalizeExecutionMode({forked: this._normalizeBoolean(row.forked)})
+
     return {
       id: String(row.id),
       jobName: String(row.job_name),
       args: this._parseArgs(row.args_json),
-      forked: this._normalizeBoolean(row.forked),
+      executionMode,
+      forked: executionMode !== "inline",
       status: row.status ? String(row.status) : "queued",
       attempts: this._normalizeNumber(row.attempts),
       maxRetries: this._normalizeNumber(row.max_retries),
@@ -676,6 +790,33 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * @param {import("./types.js").BackgroundJobOptions} [options] - Job options.
+   * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
+   */
+  _normalizeExecutionMode(options) {
+    const executionMode = options?.executionMode
+
+    if (executionMode) {
+      return this._normalizeExecutionModeName(executionMode)
+    }
+    if (options?.forked === false) return "inline"
+
+    return DEFAULT_EXECUTION_MODE
+  }
+
+  /**
+   * @param {string} executionMode - Execution mode name.
+   * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
+   */
+  _normalizeExecutionModeName(executionMode) {
+    for (const mode of EXECUTION_MODES) {
+      if (mode === executionMode) return mode
+    }
+
+    throw new Error(`Invalid background job executionMode: ${executionMode}`)
+  }
+
+  /**
    * @param {unknown} value - Input value.
    * @returns {any[]} - Parsed args.
    */
@@ -691,21 +832,6 @@ export default class BackgroundJobsStore {
     }
 
     return []
-  }
-
-  /**
-   * @param {unknown} error - Error input.
-   * @returns {string} - Normalized error string.
-   */
-  _normalizeError(error) {
-    if (error instanceof Error) return error.stack || error.message
-    if (typeof error === "string") return error
-
-    try {
-      return JSON.stringify(error)
-    } catch {
-      return String(error)
-    }
   }
 
   /**
@@ -741,11 +867,33 @@ export default class BackgroundJobsStore {
   _shouldAcceptReport({job, workerId, handedOffAtMs}) {
     if (job.status !== "handed_off") return false
 
-    if (workerId && job.workerId && workerId !== job.workerId) return false
+    return this._workerReportMatches({job, workerId}) && this._handoffReportMatches({handedOffAtMs, job})
+  }
 
-    if (handedOffAtMs && job.handedOffAtMs && handedOffAtMs !== job.handedOffAtMs) return false
+  /**
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
+   * @param {string | null | undefined} args.workerId - Worker id from report.
+   * @returns {boolean} - Whether the worker report matches.
+   */
+  _workerReportMatches({job, workerId}) {
+    if (!workerId) return true
+    if (!job.workerId) return true
 
-    return true
+    return workerId === job.workerId
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {number | null | undefined} args.handedOffAtMs - Handed off timestamp from report.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
+   * @returns {boolean} - Whether the handoff report matches.
+   */
+  _handoffReportMatches({handedOffAtMs, job}) {
+    if (!handedOffAtMs) return true
+    if (!job.handedOffAtMs) return true
+
+    return handedOffAtMs === job.handedOffAtMs
   }
 
   _migrationKey() {
