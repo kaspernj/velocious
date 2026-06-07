@@ -218,6 +218,8 @@ export default class VelociousConfiguration {
         controller: "velociousDebug",
         controllerPath: "./built-in/debug/controller.js",
         skipControllerConnections: true,
+        skipAbilityResolution: true,
+        skipTenantResolution: true,
         viewPath: "./built-in/debug"
       }
     })
