@@ -39,4 +39,23 @@ describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {tr
     await worker.stop()
     await main.stop()
   })
+
+  it("wraps forked job perform calls in a child database connection context", async () => {
+    const {main, store, worker} = await startBackgroundJobs()
+    const outputPath = await outputPathFor("forked-db-query-job")
+
+    const jobId = await DbQueryJob.performLaterWithOptions({
+      args: [outputPath],
+      options: {executionMode: "forked"}
+    })
+
+    await waitForJobCompleted({jobId, store, timeoutSeconds: 5})
+
+    const result = await waitForOutputJson({outputPath})
+
+    expect(typeof result.count).toEqual("number")
+
+    await worker.stop()
+    await main.stop()
+  })
 })
