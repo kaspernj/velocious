@@ -67,7 +67,7 @@ async function handleJobMessage(message) {
 }
 
 for (const signal of ["SIGTERM", "SIGINT"]) {
-  process.once(signal, () => process.exit(0))
+  process.once(signal, () => process.exit(1))
 }
 
 process.once("disconnect", () => {

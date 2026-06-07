@@ -573,18 +573,22 @@ export default class BackgroundJobsStore {
       for (const sql of sqls) {
         await db.query(sql)
       }
+
+      db.clearSchemaCache()
     }
 
-    await db.update({
-      tableName: JOBS_TABLE,
-      data: {execution_mode: DEFAULT_EXECUTION_MODE},
-      conditions: {forked: true, execution_mode: null}
-    })
-    await db.update({
-      tableName: JOBS_TABLE,
-      data: {execution_mode: "inline"},
-      conditions: {forked: false, execution_mode: null}
-    })
+    const tableNameSql = db.quoteTable(JOBS_TABLE)
+    const forkedColumnSql = db.quoteColumn("forked")
+    const executionModeColumnSql = db.quoteColumn("execution_mode")
+
+    await db.query(
+      `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote(DEFAULT_EXECUTION_MODE)} ` +
+      `WHERE ${forkedColumnSql} = ${db.quote(true)} AND ${executionModeColumnSql} IS NULL`
+    )
+    await db.query(
+      `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote("inline")} ` +
+      `WHERE ${forkedColumnSql} = ${db.quote(false)} AND ${executionModeColumnSql} IS NULL`
+    )
   }
 
   async _initializeModel() {

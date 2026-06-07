@@ -1,7 +1,11 @@
 // @ts-check
 
+import {fileURLToPath} from "node:url"
+import {fork} from "node:child_process"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
+
+const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("../../src/background-jobs/forked-runner-child.js", import.meta.url))
 
 /**
  * Builds a worker with a tracked fake process-runner child whose `kill()` signals
@@ -23,6 +27,24 @@ function workerWithTrackedChild() {
   worker.inflightProcessChildren.add(/** @type {any} */ (child))
 
   return {child, signals, worker}
+}
+
+/**
+ * @param {import("node:child_process").ChildProcess} child - Child process.
+ * @returns {Promise<{code: number | null, signal: NodeJS.Signals | null}>} - Exit result.
+ */
+async function waitForChildExit(child) {
+  return await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL")
+      reject(new Error("Timed out waiting for forked runner child to exit"))
+    }, 2000)
+
+    child.once("exit", (code, signal) => {
+      clearTimeout(timeout)
+      resolve({code, signal})
+    })
+  })
 }
 
 describe("Background jobs worker - shutdown", () => {
@@ -67,6 +89,21 @@ describe("Background jobs worker - shutdown", () => {
     await worker.stop()
 
     expect(events).toEqual(["disconnect-beacon", "close-db"])
+  })
+
+  it("does not make externally terminated forked children look like clean exits", async () => {
+    const child = fork(FORKED_RUNNER_ENTRY_PATH, [], {
+      execArgv: [],
+      stdio: ["ignore", "ignore", "ignore", "ipc"]
+    })
+    const exitPromise = waitForChildExit(child)
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    child.kill("SIGTERM")
+
+    const exit = await exitPromise
+
+    expect(exit.code === 0 && !exit.signal).toBeFalse()
   })
 })
 
