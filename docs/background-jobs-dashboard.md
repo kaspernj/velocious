@@ -73,6 +73,7 @@ Example list response:
       "status": "failed",
       "attempts": 1,
       "maxRetries": 0,
+      "executionMode": "inline",
       "forked": false,
       "args": ["b"],
       "argsRedacted": false,

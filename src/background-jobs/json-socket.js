@@ -12,6 +12,8 @@ export default class JsonSocket extends EventEmitter {
     /** @type {string | undefined} */
     this.workerId = undefined
     /** @type {boolean} */
+    this.acceptsSpawnedJobs = true
+    /** @type {boolean} */
     this.acceptsForkedJobs = true
     /** @type {boolean} */
     this.acceptsInlineJobs = true

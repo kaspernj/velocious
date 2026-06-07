@@ -5,9 +5,9 @@ import BackgroundJobsWorker from "../../../../background-jobs/worker.js"
  * Resolves the shutdown drain timeout from
  * `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
  *   - unset / "indefinite" / "0" → indefinite: wait for in-flight jobs to
- *     finish and never kill a forked runner. This is the default so a graceful
+ *     finish and never kill a process runner. This is the default so a graceful
  *     stop (e.g. a deploy) does not interrupt long-running jobs such as builds.
- *   - positive integer → that many milliseconds, after which any forked runner
+ *   - positive integer → that many milliseconds, after which any process runner
  *     still in flight is terminated (SIGTERM, then SIGKILL) instead of orphaned.
  *
  * When a finite cap is used it must be shorter than the supervisor's

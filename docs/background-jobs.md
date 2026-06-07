@@ -47,15 +47,17 @@ The `background-job-failed` payload has:
 
 The mirrored `all-error` payload includes the same `error` and `context` plus `errorType: "background-job-failed"`.
 
-## Worker Shutdown And Forked-Job Draining
+## Worker Shutdown And Process-Job Draining
 
 When a `background-jobs-worker` receives `SIGTERM`/`SIGINT` it stops accepting new
-work, drains in-flight jobs, and exits. Forked jobs run as detached
-`background-jobs-runner` child processes; on a graceful stop the worker now waits
-for those runners and then terminates any that outlast the drain window
-(`SIGTERM`, then `SIGKILL` after a short grace) so they are not orphaned across a
-deploy — an orphaned runner keeps running against deleted release code and holds
-its database connections open.
+work, drains in-flight jobs, and exits. Out-of-process jobs include
+`executionMode: "forked"` jobs, which run in an attached `child_process.fork()`
+child, and `executionMode: "spawned"` jobs, which use the legacy spawned
+`background-jobs-runner` CLI process. On a graceful stop the worker waits for
+those runners and then terminates any that outlast the drain window (`SIGTERM`,
+then `SIGKILL` after a short grace) so they are not orphaned across a deploy —
+an orphaned runner keeps running against deleted release code and holds its
+database connections open.
 
 The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
 
@@ -63,10 +65,10 @@ The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIM
   and never interrupt a running job. Use this when jobs may run for a long time
   (e.g. builds) and a deploy must not cut them off.
 - a positive integer (milliseconds): finish in-flight jobs for up to that long,
-  then reap any forked runners still in flight.
+  then reap any forked or spawned runners still in flight.
 
 When a process supervisor force-kills the worker after its own graceful-stop
-window, set this timeout shorter than that window so the worker reaps its forked
+window, set this timeout shorter than that window so the worker reaps its process
 runners itself before the supervisor's `SIGKILL` (which would orphan them). With
 the indefinite default, give the supervisor a graceful-stop window at least as
 long as your longest job instead.

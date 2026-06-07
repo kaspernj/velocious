@@ -1,10 +1,10 @@
 // @ts-check
 
-import net from "net"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
-import JsonSocket from "./json-socket.js"
 import Logger from "../logger.js"
+import normalizeBackgroundJobError from "./normalize-error.js"
+import BackgroundJobsSocketRequest from "./socket-request.js"
 
 export default class BackgroundJobsStatusReporter {
   /**
@@ -35,45 +35,28 @@ export default class BackgroundJobsStatusReporter {
     const port = typeof this.port === "number" ? this.port : config.port
 
     await timeout({timeout: 5000}, async () => {
-      await new Promise((resolve, reject) => {
-        const socket = net.createConnection({host, port})
-        const jsonSocket = new JsonSocket(socket)
+      const request = new BackgroundJobsSocketRequest({host, port, role: "reporter"})
 
-        const cleanup = () => {
-          jsonSocket.removeAllListeners()
-        }
-
-        jsonSocket.on("error", (error) => {
-          cleanup()
-          reject(error)
-        })
-
-        /** @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message. */
-        jsonSocket.on("message", (message) => {
-          if (message?.type === "job-updated" && message.jobId === jobId) {
-            cleanup()
-            jsonSocket.close()
-            resolve(undefined)
-            return
-          }
-
-          if (message?.type === "job-update-error" && message.jobId === jobId) {
-            cleanup()
-            jsonSocket.close()
-            reject(new Error(message.error || "Job update failed"))
-          }
-        })
-
-        socket.on("connect", () => {
-          jsonSocket.send({type: "hello", role: "reporter"})
+      await request.run({
+        onConnect: (jsonSocket) => {
           jsonSocket.send({
             type: status === "completed" ? "job-complete" : "job-failed",
             jobId,
             workerId,
             handedOffAtMs,
-            error: error ? this._normalizeError(error) : undefined
+            error: error ? normalizeBackgroundJobError(error) : undefined
           })
-        })
+        },
+        onMessage: ({message, resolve, reject}) => {
+          if (message?.type === "job-updated" && message.jobId === jobId) {
+            resolve(undefined)
+            return
+          }
+
+          if (message?.type === "job-update-error" && message.jobId === jobId) {
+            reject(new Error(message.error || "Job update failed"))
+          }
+        }
       })
     })
   }
@@ -112,18 +95,4 @@ export default class BackgroundJobsStatusReporter {
     }
   }
 
-  /**
-   * @param {unknown} error - Error input.
-   * @returns {string} - Normalized error string.
-   */
-  _normalizeError(error) {
-    if (error instanceof Error) return error.stack || error.message
-    if (typeof error === "string") return error
-
-    try {
-      return JSON.stringify(error)
-    } catch {
-      return String(error)
-    }
-  }
 }

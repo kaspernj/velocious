@@ -156,9 +156,9 @@
  *   process and DB connection pool, so this should fit the pool size, not the
  *   CPU count. Forking remains the right tool for memory isolation across
  *   long-running jobs and for using more cores. Default: `4`.
- * @property {number} [maxConcurrentForkedJobs] - How many forked detached runner
- *   processes a single `background-jobs-worker` is allowed to keep in flight.
- *   Default: `4`.
+ * @property {number} [maxConcurrentForkedJobs] - How many out-of-process
+ *   `"forked"` or `"spawned"` jobs a single `background-jobs-worker` is
+ *   allowed to keep in flight. Default: `4`.
  * @property {BackgroundJobsDispatchStrategy} [dispatchStrategy] - How the main process
  *   detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
  *   to restore the legacy fixed-interval poll.

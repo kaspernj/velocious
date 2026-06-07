@@ -1,15 +1,19 @@
 // @ts-check
 
 import net from "net"
-import {spawn} from "node:child_process"
+import {fork, spawn} from "node:child_process"
 import JsonSocket from "./json-socket.js"
 import BackgroundJobRegistry from "./job-registry.js"
 import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
 import {randomUUID} from "crypto"
+import {fileURLToPath} from "node:url"
 
-/** Grace period after SIGTERM before a lingering forked runner is SIGKILLed. */
+/** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
+const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js", import.meta.url))
+/** @type {import("./types.js").BackgroundJobExecutionMode[]} */
+const EXECUTION_MODES = ["inline", "forked", "spawned"]
 
 export default class BackgroundJobsWorker {
   /**
@@ -17,9 +21,9 @@ export default class BackgroundJobsWorker {
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    * @param {string} [args.host] - Hostname.
    * @param {number} [args.port] - Port.
-   * @param {number} [args.maxConcurrentForkedJobs] - Override the forked runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
+   * @param {number} [args.maxConcurrentForkedJobs] - Override the process runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
-   * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering forked runners on stop.
+   * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    */
   constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs} = {}) {
     /** @type {Promise<import("../configuration.js").default>} */
@@ -50,7 +54,7 @@ export default class BackgroundJobsWorker {
     /** @type {number} */
     this.maxConcurrentForkedJobs = this.maxConcurrentForkedJobsOverride || 4
     /**
-     * Grace period between SIGTERM and SIGKILL when reaping forked runners that
+     * Grace period between SIGTERM and SIGKILL when reaping process runners that
      * outlast a bounded shutdown drain.
      * @type {number}
      */
@@ -72,19 +76,19 @@ export default class BackgroundJobsWorker {
      */
     this.inflightInlineJobs = new Set()
     /**
-     * In-flight detached runner exit promises. Tracked so forked-job handoff
+     * In-flight process runner exit promises. Tracked so process-job handoff
      * stays bounded while running and so a graceful `stop()` can drain them.
      * @type {Set<Promise<void>>}
      */
-    this.inflightForkedJobs = new Set()
+    this.inflightProcessJobs = new Set()
     /**
-     * Live forked runner child processes, kept so a graceful `stop()` can
+     * Live process runner child processes, kept so a graceful `stop()` can
      * terminate any that outlast the shutdown drain instead of orphaning them
      * across a deploy (where they would keep running against deleted release
      * code and holding database connections).
      * @type {Set<import("node:child_process").ChildProcess>}
      */
-    this.inflightForkedChildren = new Set()
+    this.inflightProcessChildren = new Set()
   }
 
   /**
@@ -118,16 +122,15 @@ export default class BackgroundJobsWorker {
 
   /**
    * Gracefully stops the worker: announces draining to the main process so
-   * no new jobs are dispatched, waits for in-flight inline jobs and forked
+   * no new jobs are dispatched, waits for in-flight inline jobs and process
    * runners to finish (so their results can be reported), then closes the
    * socket and disconnects from the beacon.
    *
-   * Forked runners are detached child processes. When a `timeoutMs` is given
-   * (e.g. a deploy draining the old release) any runner still alive after the
-   * drain window is terminated (SIGTERM, then SIGKILL) rather than left to
-   * orphan across the deploy — otherwise it would keep running against deleted
-   * release code and holding database connections. With no `timeoutMs` the
-   * drain waits for runners to finish on their own.
+   * Process runners are child processes. When a `timeoutMs` is given (e.g. a
+   * deploy draining the old release) any runner still alive after the drain
+   * window is terminated (SIGTERM, then SIGKILL) rather than left to orphan
+   * across the deploy. With no `timeoutMs` the drain waits for runners to
+   * finish on their own.
    * @param {object} [args] - Options.
    * @param {number} [args.timeoutMs] - Max wait for in-flight jobs (per phase) in ms.
    * @returns {Promise<void>} - Resolves when stopped.
@@ -147,8 +150,8 @@ export default class BackgroundJobsWorker {
     }
 
     await this._drainInflight(this.inflightInlineJobs, timeoutMs)
-    await this._drainInflight(this.inflightForkedJobs, timeoutMs)
-    await this._terminateForkedChildren()
+    await this._drainInflight(this.inflightProcessJobs, timeoutMs)
+    await this._terminateProcessChildren()
 
     if (this.jsonSocket) this.jsonSocket.close()
     if (this.configuration) {
@@ -184,15 +187,15 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Terminates any forked runner children still alive after the drain window so
+   * Terminates any process runner children still alive after the drain window so
    * they don't outlive the worker as orphans. SIGTERM lets the runner close its
    * connections cleanly; survivors are SIGKILLed after a short grace.
    * @returns {Promise<void>} - Resolves once survivors have been signalled.
    */
-  async _terminateForkedChildren() {
-    if (this.inflightForkedChildren.size === 0) return
+  async _terminateProcessChildren() {
+    if (this.inflightProcessChildren.size === 0) return
 
-    for (const child of this.inflightForkedChildren) {
+    for (const child of this.inflightProcessChildren) {
       try {
         child.kill("SIGTERM")
       } catch {
@@ -202,7 +205,7 @@ export default class BackgroundJobsWorker {
 
     await new Promise((resolve) => setTimeout(resolve, this.forkedChildSigkillGraceMs))
 
-    for (const child of this.inflightForkedChildren) {
+    for (const child of this.inflightProcessChildren) {
       try {
         child.kill("SIGKILL")
       } catch {
@@ -253,26 +256,33 @@ export default class BackgroundJobsWorker {
     /** @type {import("./types.js").BackgroundJobPayload & {id: string}} */
     const identifiedPayload = /** @type {any} */ (payload)
 
-    const options = identifiedPayload.options || {}
-    const shouldFork = options.forked !== false
+    const executionMode = this._executionModeForPayload(identifiedPayload)
 
-    if (shouldFork) {
-      /** @type {Promise<void>} */
-      let inflight
-
-      inflight = this._spawnDetachedJob(identifiedPayload).finally(() => {
-        this.inflightForkedJobs.delete(inflight)
-
-        if (!this.shouldStop && this.inflightForkedJobs.size === this.maxConcurrentForkedJobs - 1) {
-          this._sendReadyIfRunning()
-        }
-      })
-
-      this.inflightForkedJobs.add(inflight)
-      this._sendReadyIfRunning()
+    if (executionMode !== "inline") {
+      this._trackProcessJob(this._startProcessJob({executionMode, payload: identifiedPayload}))
       return
     }
 
+    this._handleInlineJob(identifiedPayload)
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobExecutionMode} args.executionMode - Execution mode.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @returns {Promise<void>} - Resolves when the process job exits.
+   */
+  _startProcessJob({executionMode, payload}) {
+    if (executionMode === "forked") return this._forkJob(payload)
+
+    return this._spawnJob(payload)
+  }
+
+  /**
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload.
+   * @returns {void}
+   */
+  _handleInlineJob(payload) {
     // Inline jobs share the worker's process and DB pool, but each one
     // is its own async chain — there's no semantic reason to serialize
     // them. We kick off the job, register it with `inflightInlineJobs`
@@ -287,7 +297,7 @@ export default class BackgroundJobsWorker {
     /** @type {Promise<void>} */
     let inflight
 
-    inflight = this._runInlineJobAndReport(identifiedPayload).finally(() => {
+    inflight = this._runInlineJobAndReport(payload).finally(() => {
       this.inflightInlineJobs.delete(inflight)
 
       if (!this.shouldStop && this.inflightInlineJobs.size === this.maxConcurrentInlineJobs - 1) {
@@ -300,6 +310,51 @@ export default class BackgroundJobsWorker {
     if (this.inflightInlineJobs.size < this.maxConcurrentInlineJobs) {
       this._sendReadyIfRunning()
     }
+  }
+
+  /**
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+   * @returns {import("./types.js").BackgroundJobExecutionMode} - Execution mode.
+   */
+  _executionModeForPayload(payload) {
+    const options = payload.options || {}
+    const executionMode = options.executionMode
+
+    if (executionMode) return this._normalizeExecutionMode(executionMode)
+
+    return options.forked === false ? "inline" : "forked"
+  }
+
+  /**
+   * @param {string} executionMode - Execution mode.
+   * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
+   */
+  _normalizeExecutionMode(executionMode) {
+    for (const mode of EXECUTION_MODES) {
+      if (mode === executionMode) return mode
+    }
+
+    throw new Error(`Invalid background job executionMode: ${executionMode}`)
+  }
+
+  /**
+   * @param {Promise<void>} processJob - Process job promise.
+   * @returns {void}
+   */
+  _trackProcessJob(processJob) {
+    /** @type {Promise<void>} */
+    let inflight
+
+    inflight = processJob.finally(() => {
+      this.inflightProcessJobs.delete(inflight)
+
+      if (!this.shouldStop && this.inflightProcessJobs.size === this.maxConcurrentForkedJobs - 1) {
+        this._sendReadyIfRunning()
+      }
+    })
+
+    this.inflightProcessJobs.add(inflight)
+    this._sendReadyIfRunning()
   }
 
   /**
@@ -336,16 +391,27 @@ export default class BackgroundJobsWorker {
     if (this.shouldStop) return
     if (!this.jsonSocket) return
 
-    const acceptsForked = this.inflightForkedJobs.size < this.maxConcurrentForkedJobs
+    const readyMessage = this._readyMessage()
+
+    if (!readyMessage) return
+    this.jsonSocket.send(readyMessage)
+  }
+
+  /**
+   * @returns {import("./types.js").BackgroundJobSocketMessage | null} - Ready message or null when the worker has no capacity.
+   */
+  _readyMessage() {
+    const acceptsProcessJob = this.inflightProcessJobs.size < this.maxConcurrentForkedJobs
     const acceptsInline = this.inflightInlineJobs.size < this.maxConcurrentInlineJobs
 
-    if (!acceptsForked && !acceptsInline) return
+    if (!acceptsProcessJob && !acceptsInline) return null
 
-    this.jsonSocket.send({
+    return {
       type: "ready",
-      acceptsForked,
-      acceptsInline
-    })
+      acceptsForked: acceptsProcessJob,
+      acceptsInline,
+      acceptsSpawned: acceptsProcessJob
+    }
   }
 
   /**
@@ -369,10 +435,146 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
-   * @returns {Promise<void>} - Resolves when the detached runner exits or spawn fails.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload.
+   * @returns {Promise<void>} - Resolves when the forked runner exits or fork fails.
    */
-  _spawnDetachedJob(payload) {
+  _forkJob(payload) {
+    const child = this._createForkedChild()
+
+    this.inflightProcessChildren.add(child)
+
+    const finished = this._waitForForkedChild({child, payload})
+
+    this._sendForkedPayload({child, payload})
+
+    return finished
+  }
+
+  /**
+   * @returns {import("node:child_process").ChildProcess} - Forked child process.
+   */
+  _createForkedChild() {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const directory = configuration.getDirectory()
+    const backgroundJobsConfig = configuration.getBackgroundJobsConfig()
+
+    return fork(FORKED_RUNNER_ENTRY_PATH, [], {
+      cwd: directory,
+      execArgv: [],
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+      env: Object.assign({}, process.env, {
+        VELOCIOUS_ENV: configuration.getEnvironment(),
+        VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
+        VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`
+      })
+    })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @returns {Promise<void>} - Resolves when the child exits.
+   */
+  _waitForForkedChild({child, payload}) {
+    return new Promise((resolve) => {
+      child.once("exit", (code, signal) => {
+        void this._handleForkedChildExit({child, code, signal, payload, resolve})
+      })
+      child.once("error", (error) => {
+        void this._handleForkedChildError({child, error, payload, resolve})
+      })
+    })
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {number | null} args.code - Exit code.
+   * @param {NodeJS.Signals | null} args.signal - Exit signal.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @param {(value: void) => void} args.resolve - Promise resolver.
+   * @returns {Promise<void>} - Resolves after failure is reported.
+   */
+  async _handleForkedChildExit({child, code, signal, payload, resolve}) {
+    this.inflightProcessChildren.delete(child)
+
+    if (this._forkedChildExitedCleanly({code, signal})) {
+      resolve(undefined)
+      return
+    }
+
+    await this._reportForkedChildFailure({
+      payload,
+      error: new Error(`Forked background job runner exited before reporting: code=${code} signal=${signal || "none"}`)
+    })
+
+    resolve(undefined)
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {number | null} args.code - Exit code.
+   * @param {NodeJS.Signals | null} args.signal - Exit signal.
+   * @returns {boolean} - Whether the child exited cleanly.
+   */
+  _forkedChildExitedCleanly({code, signal}) {
+    return code === 0 && !signal
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {Error} args.error - Child process error.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @param {(value: void) => void} args.resolve - Promise resolver.
+   * @returns {Promise<void>} - Resolves after failure is reported.
+   */
+  async _handleForkedChildError({child, error, payload, resolve}) {
+    this.inflightProcessChildren.delete(child)
+    console.error("Background jobs forked runner error:", error)
+    await this._reportForkedChildFailure({payload, error})
+    resolve(undefined)
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @returns {void}
+   */
+  _sendForkedPayload({child, payload}) {
+    try {
+      child.send({type: "job", payload})
+    } catch (error) {
+      child.kill("SIGTERM")
+      void this._reportForkedChildFailure({payload, error})
+    }
+  }
+
+  /**
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @param {unknown} args.error - Error.
+   * @returns {Promise<void>} - Resolves after failure is reported.
+   */
+  async _reportForkedChildFailure({payload, error}) {
+    await this._reportJobResult({
+      jobId: payload.id,
+      status: "failed",
+      error,
+      handedOffAtMs: payload.handedOffAtMs,
+      workerId: payload.workerId || this.workerId
+    })
+  }
+
+  /**
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+   * @returns {Promise<void>} - Resolves when the spawned runner exits or spawn fails.
+   */
+  _spawnJob(payload) {
     const configuration = this.configuration
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
 
@@ -393,16 +595,16 @@ export default class BackgroundJobsWorker {
       })
     })
 
-    this.inflightForkedChildren.add(child)
+    this.inflightProcessChildren.add(child)
 
     const finished = new Promise((resolve) => {
       child.once("exit", () => {
-        this.inflightForkedChildren.delete(child)
+        this.inflightProcessChildren.delete(child)
         resolve(undefined)
       })
       child.once("error", (error) => {
-        this.inflightForkedChildren.delete(child)
-        console.error("Background jobs forked runner spawn error:", error)
+        this.inflightProcessChildren.delete(child)
+        console.error("Background jobs spawned runner error:", error)
         resolve(undefined)
       })
     })

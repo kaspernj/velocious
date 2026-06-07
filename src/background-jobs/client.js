@@ -1,8 +1,7 @@
 // @ts-check
 
-import net from "net"
 import configurationResolver from "../configuration-resolver.js"
-import JsonSocket from "./json-socket.js"
+import BackgroundJobsSocketRequest from "./socket-request.js"
 
 export default class BackgroundJobsClient {
   /**
@@ -23,43 +22,27 @@ export default class BackgroundJobsClient {
   async enqueue({jobName, args, options}) {
     const configuration = await this.configurationPromise
     const {host, port} = configuration.getBackgroundJobsConfig()
-    const socket = net.createConnection({host, port})
-    const jsonSocket = new JsonSocket(socket)
+    const request = new BackgroundJobsSocketRequest({host, port, role: "client"})
 
-    return await new Promise((resolve, reject) => {
-      const cleanup = () => {
-        jsonSocket.removeAllListeners()
-      }
-
-      jsonSocket.on("error", (error) => {
-        cleanup()
-        reject(error)
-      })
-
-      jsonSocket.on("message", (message) => {
-        if (message?.type === "enqueued") {
-          cleanup()
-          jsonSocket.close()
-          resolve(message.jobId)
-          return
-        }
-
-        if (message?.type === "enqueue-error") {
-          cleanup()
-          jsonSocket.close()
-          reject(new Error(message.error || "Failed to enqueue job"))
-        }
-      })
-
-      socket.on("connect", () => {
-        jsonSocket.send({type: "hello", role: "client"})
+    return await request.run({
+      onConnect: (jsonSocket) => {
         jsonSocket.send({
           type: "enqueue",
           jobName,
           args,
           options
         })
-      })
+      },
+      onMessage: ({message, resolve, reject}) => {
+        if (message?.type === "enqueued") {
+          resolve(message.jobId)
+          return
+        }
+
+        if (message?.type === "enqueue-error") {
+          reject(new Error(message.error || "Failed to enqueue job"))
+        }
+      }
     })
   }
 }

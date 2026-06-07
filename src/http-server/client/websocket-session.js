@@ -1342,7 +1342,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       subscription._closed = true
 
       try {
-        await subscription.unsubscribed()
+        await this._withConnections(async () => await subscription.unsubscribed())
       } catch (error) {
         this.logger.error(() => [`Failed to tear down channel-v2 ${channelType}:${subscription.subscriptionId}`, error])
       }
