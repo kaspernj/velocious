@@ -157,12 +157,9 @@ export function resetFrontendModelTransport() {
  * @returns {FrontendModelStubRequest} - Parsed request details.
  */
 function parseFrontendModelStubRequest(url, options) {
-  const bodyString = typeof options?.body === "string" ? options.body : "{}"
-  const parsedBody = JSON.parse(bodyString)
-  const batchRequests = Array.isArray(parsedBody.requests) ? parsedBody.requests : null
-  const batchRequest = batchRequests && batchRequests.length === 1 && typeof batchRequests[0] === "object"
-    ? batchRequests[0]
-    : null
+  const parsedBody = JSON.parse(frontendModelStubRequestBodyString(options))
+  const batchRequests = frontendModelStubBatchRequests(parsedBody)
+  const batchRequest = frontendModelStubBatchRequest(batchRequests)
 
   return {
     batchRequest,
@@ -170,6 +167,32 @@ function parseFrontendModelStubRequest(url, options) {
     body: batchRequest ? batchRequest.payload : parsedBody,
     url: `${url}`
   }
+}
+
+/**
+ * @param {RequestInit | undefined} options - Fetch options.
+ * @returns {string} - Request body string.
+ */
+function frontendModelStubRequestBodyString(options) {
+  return typeof options?.body === "string" ? options.body : "{}"
+}
+
+/**
+ * @param {Record<string, any>} parsedBody - Parsed request body.
+ * @returns {Record<string, any>[] | null} - Batched requests, when present.
+ */
+function frontendModelStubBatchRequests(parsedBody) {
+  return Array.isArray(parsedBody.requests) ? parsedBody.requests : null
+}
+
+/**
+ * @param {Record<string, any>[] | null} batchRequests - Batched requests, when present.
+ * @returns {Record<string, any> | null} - Single batched request, when present.
+ */
+function frontendModelStubBatchRequest(batchRequests) {
+  return batchRequests && batchRequests.length === 1 && typeof batchRequests[0] === "object"
+    ? batchRequests[0]
+    : null
 }
 
 /**
