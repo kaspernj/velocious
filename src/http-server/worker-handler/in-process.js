@@ -93,6 +93,16 @@ export default class VelociousHttpServerInProcessHandler {
     this.unregisterFromEventsHost?.()
   }
 
+  /** @returns {Promise<Record<string, unknown>>} - In-process worker diagnostics. */
+  async getDebugSnapshot() {
+    return {
+      active: true,
+      clientCount: Object.keys(this.clients).length,
+      snapshot: this.configuration.getLocalDebugSnapshot(),
+      workerCount: this.workerCount
+    }
+  }
+
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.

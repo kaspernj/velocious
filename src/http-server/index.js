@@ -179,6 +179,19 @@ export default class VelociousHttpServer {
     return false
   }
 
+  /** @returns {Promise<Record<string, unknown>>} - HTTP server worker diagnostics. */
+  async getDebugSnapshot() {
+    return {
+      active: this.isActive(),
+      activeSocketCount: this._activeSockets.size,
+      clientCount: Object.keys(this.clients).length,
+      configuredWorkerCount: this.workers,
+      inProcess: this.inProcess,
+      workerCount: this.workerHandlers.length,
+      workers: await Promise.all(this.workerHandlers.map((handler) => handler.getDebugSnapshot()))
+    }
+  }
+
   /** @returns {Promise<void>} - Resolves when complete.  */
   async stopClients() {
     const promises = []

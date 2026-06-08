@@ -177,7 +177,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
 
         await Promise.all([subA.ready, subB.ready])
 
-        const snapshot = dummyConfiguration.getDebugSnapshot()
+        const snapshot = dummyConfiguration.getLocalDebugSnapshot()
         const counterSubscription = snapshot.websockets.subscriptions.find((subscription) => subscription.channel === "Counter")
 
         expect(counterSubscription?.count).toBeGreaterThanOrEqual(2)

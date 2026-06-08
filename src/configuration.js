@@ -93,6 +93,7 @@ export default class VelociousConfiguration {
     this._initializeModels = initializeModels
     this._isInitialized = false
     this.httpServer = httpServer || {}
+    this._httpServerInstance = undefined
     this.locale = locale
     this.localeFallbacks = localeFallbacks
     this.locales = locales
@@ -162,6 +163,9 @@ export default class VelociousConfiguration {
 
   /** @returns {boolean} Whether unexpected internal error details may be returned to API clients. */
   getExposeInternalErrorsToClients() { return this._exposeInternalErrorsToClients === true }
+
+  /** @param {{getDebugSnapshot?: () => Promise<Record<string, unknown>>} | undefined} httpServer - Active HTTP server. */
+  setHttpServerInstance(httpServer) { this._httpServerInstance = httpServer }
 
   /** @returns {{enabled: boolean, path: string, token: string | null}} - Debug endpoint configuration. */
   getDebugEndpoint() { return this._debugEndpoint }
@@ -332,8 +336,18 @@ export default class VelociousConfiguration {
     return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier) && this.isDatabaseIdentifierActive(identifier))
   }
 
-  /** @returns {Record<string, unknown>} - Human-readable server diagnostics. */
-  getDebugSnapshot() {
+  /** @returns {Promise<Record<string, unknown>>} - Human-readable server diagnostics. */
+  async getDebugSnapshot() {
+    const localSnapshot = this.getLocalDebugSnapshot()
+
+    return {
+      ...localSnapshot,
+      httpServer: await this._debugHttpServerSnapshot()
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - Human-readable diagnostics for this process only. */
+  getLocalDebugSnapshot() {
     return {
       backgroundJobs: this._debugBackgroundJobsSnapshot(),
       configuration: this._debugConfigurationSnapshot(),
@@ -342,6 +356,17 @@ export default class VelociousConfiguration {
       server: this._debugServerSnapshot(),
       websockets: this._debugWebsocketSnapshot()
     }
+  }
+
+  /** @returns {Promise<Record<string, unknown>>} - HTTP server worker diagnostics. */
+  async _debugHttpServerSnapshot() {
+    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, unknown>>} | undefined} */ (this._httpServerInstance)
+
+    if (!httpServer?.getDebugSnapshot) {
+      return {configured: Boolean(this.httpServer), active: false}
+    }
+
+    return await httpServer.getDebugSnapshot()
   }
 
   /** @returns {Record<string, unknown>} - Server runtime diagnostics. */

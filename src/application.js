@@ -95,6 +95,7 @@ export default class VelociousApplication {
       workers: httpServerConfiguration.workers
     })
     this.httpServer.events.on("close", this.onHttpServerClose)
+    configuration.setHttpServerInstance(this.httpServer)
 
     await this.httpServer.start()
   }
@@ -103,6 +104,7 @@ export default class VelociousApplication {
   async stop() {
     await this.logger.debug("Stopping server")
     await this.httpServer?.stop()
+    this.configuration.setHttpServerInstance(undefined)
     await this.configuration.disconnectBeacon()
     await this.configuration.closeDatabaseConnections()
   }

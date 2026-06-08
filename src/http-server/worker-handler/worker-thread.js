@@ -88,6 +88,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.channel] - Channel name.
    * @param {string} [data.createdAt] - Event creation time.
    * @param {string} [data.eventId] - Event identifier.
+   * @param {number} [data.requestId] - Debug request id.
    * @param {any} [data.payload] - Payload data.
    * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
    * @param {any} [data.body] - V2 broadcast body.
@@ -147,6 +148,17 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       if (!this.configuration) throw new Error("Configuration not initialized")
 
       this.configuration._broadcastToChannelLocal(channel, broadcastParams || {}, body, {eventId})
+    } else if (command == "debugSnapshot") {
+      const {requestId} = data
+
+      if (typeof requestId !== "number") throw new Error("debugSnapshot requestId must be a number")
+      if (!this.configuration) throw new Error("Configuration not initialized")
+
+      this.parentPort.postMessage({
+        command: "debugSnapshot",
+        requestId,
+        snapshot: this.configuration.getLocalDebugSnapshot()
+      })
     } else if (command == "shutdown") {
       if (this.configuration?.closeDatabaseConnections) {
         await this.configuration.closeDatabaseConnections()
