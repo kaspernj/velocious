@@ -67,6 +67,23 @@ describe("database - pool - async tracked multi connection", () => {
     }, {fresh: true})
   })
 
+  it("marks global fallback connections as non-reapable in debug snapshots", async () => {
+    await Dummy.run(async () => {
+      const pool = getPool()
+
+      if (!pool) return
+
+      await pool.ensureGlobalConnection()
+
+      const snapshot = pool.getDebugSnapshot()
+      const globalConnection = snapshot.connections.find((connection) => connection.state === "global")
+
+      if (!globalConnection) throw new Error("Expected global connection snapshot")
+
+      expect(globalConnection.reapable).toBe(false)
+    }, {fresh: true})
+  })
+
   it("does not replace an existing global connection when ensuring", async () => {
     await Dummy.run(async () => {
       const pool = getPool()
