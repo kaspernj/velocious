@@ -49,6 +49,9 @@ export default class VelociousHttpServerWorker {
     this.workerCount = workerCount
     this.workerStarted = false
     this._stopping = false
+    this._debugRequestId = 0
+    /** @type {Map<number, {resolve: (snapshot: Record<string, unknown>) => void}>} */
+    this._debugSnapshotRequests = new Map()
   }
 
   start() {
@@ -146,6 +149,8 @@ export default class VelociousHttpServerWorker {
    * @param {number} [data.clientCount] - Client count.
    * @param {string | Uint8Array} [data.output] - Output.
    * @param {string} [data.channel] - Channel name.
+   * @param {number} [data.requestId] - Debug request id.
+   * @param {Record<string, unknown>} [data.snapshot] - Worker debug snapshot.
    * @param {any} [data.payload] - Payload data.
    * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
    * @param {any} [data.body] - V2 broadcast body.
@@ -207,6 +212,15 @@ export default class VelociousHttpServerWorker {
       if (typeof clientCount === "number") {
         delete this.clients[clientCount]
       }
+    } else if (command == "debugSnapshot") {
+      const {requestId, snapshot} = data
+      if (typeof requestId !== "number") throw new Error("debugSnapshot requestId must be a number")
+      const request = this._debugSnapshotRequests.get(requestId)
+
+      if (request) {
+        this._debugSnapshotRequests.delete(requestId)
+        request.resolve(snapshot || {})
+      }
     } else if (command == "shutdownComplete") {
       this._stopResolve?.()
       this._stopResolve = null
@@ -229,6 +243,40 @@ export default class VelociousHttpServerWorker {
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
+  }
+
+  /** @returns {Promise<Record<string, unknown>>} - Worker-local debug snapshot. */
+  getDebugSnapshot() {
+    if (!this.workerStarted || !this.worker) {
+      return Promise.resolve({active: false, workerCount: this.workerCount})
+    }
+
+    const requestId = ++this._debugRequestId
+
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        this._debugSnapshotRequests.delete(requestId)
+        resolve({active: true, error: "Timed out waiting for worker debug snapshot", workerCount: this.workerCount})
+      }, 2000)
+
+      if (typeof timeout.unref === "function") timeout.unref()
+
+      const worker = this.worker
+
+      if (!worker) {
+        clearTimeout(timeout)
+        resolve({active: false, workerCount: this.workerCount})
+        return
+      }
+
+      this._debugSnapshotRequests.set(requestId, {
+        resolve: (snapshot) => {
+          clearTimeout(timeout)
+          resolve({active: true, snapshot, workerCount: this.workerCount})
+        }
+      })
+      worker.postMessage({command: "debugSnapshot", requestId})
+    })
   }
 
   /**

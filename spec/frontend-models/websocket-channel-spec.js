@@ -67,6 +67,34 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     expect(request.metadata("X-Session-Token")).toEqual("metadata-token")
   })
 
+  it("exposes debug-safe subscription details", () => {
+    const channel = new FrontendModelWebsocketChannel({
+      params: {
+        eventFilters: [
+          {key: "paid", where: {state: "paid"}}
+        ],
+        model: "Invoice",
+        preload: {organization: true},
+        select: {Invoice: ["id", "state"]},
+        unfilteredEventDelivery: true
+      },
+      session: /** @type {any} */ ({}),
+      subscriptionId: "debug-subscription"
+    })
+
+    expect(channel.debugSnapshot()).toEqual({
+      abilities: false,
+      eventFilterCount: 1,
+      model: "Invoice",
+      preload: true,
+      queryData: false,
+      select: true,
+      selectsExtra: false,
+      unfilteredEventDelivery: true,
+      withCount: false
+    })
+  })
+
   it("skips projected lifecycle events when the record cannot be reloaded", async () => {
     /** @type {Array<{body?: object, type?: string}>} */
     const sentFrames = []

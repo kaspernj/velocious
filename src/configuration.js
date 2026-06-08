@@ -35,6 +35,20 @@ function currentWorkingDirectory() {
 }
 
 /**
+ * @param {unknown} value - Snapshot value to canonicalize.
+ * @returns {unknown} Snapshot value with object keys sorted recursively.
+ */
+function canonicalDebugSnapshotValue(value) {
+  if (!value || typeof value !== "object") return value
+  if (Array.isArray(value)) return value.map((entry) => canonicalDebugSnapshotValue(entry))
+
+  return Object.keys(value).sort().reduce((result, key) => {
+    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, unknown>} */ (value)[key])
+    return result
+  }, /** @type {Record<string, unknown>} */ ({}))
+}
+
+/**
  * @param {import("./configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Base database configuration.
  * @param {import("./configuration-types.js").DatabaseConfigurationType | Partial<import("./configuration-types.js").DatabaseConfigurationType> | void} overrideConfiguration - Tenant override configuration.
  * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Merged database configuration.
@@ -93,6 +107,8 @@ export default class VelociousConfiguration {
     this._initializeModels = initializeModels
     this._isInitialized = false
     this.httpServer = httpServer || {}
+    /** @type {{getDebugSnapshot: () => Promise<Record<string, unknown>>} | undefined} */
+    this._httpServerInstance = undefined
     this.locale = locale
     this.localeFallbacks = localeFallbacks
     this.locales = locales
@@ -332,8 +348,18 @@ export default class VelociousConfiguration {
     return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier) && this.isDatabaseIdentifierActive(identifier))
   }
 
-  /** @returns {Record<string, unknown>} - Human-readable server diagnostics. */
-  getDebugSnapshot() {
+  /** @returns {Promise<Record<string, unknown>>} - Human-readable server diagnostics. */
+  async getDebugSnapshot() {
+    const localSnapshot = this.getLocalDebugSnapshot()
+
+    return {
+      ...localSnapshot,
+      httpServer: await this._debugHttpServerSnapshot()
+    }
+  }
+
+  /** @returns {Record<string, unknown>} - Human-readable diagnostics for this process only. */
+  getLocalDebugSnapshot() {
     return {
       backgroundJobs: this._debugBackgroundJobsSnapshot(),
       configuration: this._debugConfigurationSnapshot(),
@@ -342,6 +368,17 @@ export default class VelociousConfiguration {
       server: this._debugServerSnapshot(),
       websockets: this._debugWebsocketSnapshot()
     }
+  }
+
+  /** @returns {Promise<Record<string, unknown>>} - HTTP server worker diagnostics. */
+  async _debugHttpServerSnapshot() {
+    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, unknown>>} | undefined} */ (this._httpServerInstance)
+
+    if (!httpServer?.getDebugSnapshot) {
+      return {configured: Boolean(this.httpServer), active: false}
+    }
+
+    return await httpServer.getDebugSnapshot()
   }
 
   /** @returns {Record<string, unknown>} - Server runtime diagnostics. */
@@ -402,12 +439,35 @@ export default class VelociousConfiguration {
 
   /** @returns {Record<string, unknown>} - WebSocket diagnostics. */
   _debugWebsocketSnapshot() {
+    const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
+      /** @type {Map<string, {count: number, details: Record<string, unknown>}>} */
+      const detailsBuckets = new Map()
+
+      for (const subscription of channelSubscriptions) {
+        const details = /** @type {Record<string, unknown>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
+        const key = JSON.stringify(details)
+        const existingBucket = detailsBuckets.get(key)
+
+        if (existingBucket) {
+          existingBucket.count += 1
+        } else {
+          detailsBuckets.set(key, {count: 1, details})
+        }
+      }
+
+      return {
+        channel,
+        count: channelSubscriptions.size,
+        details: Array.from(detailsBuckets.values()).sort((a, b) => b.count - a.count)
+      }
+    })
+
     return {
       pausedSessions: this._pausedWebsocketSessions.size,
       registeredChannels: Array.from(this._websocketChannelClasses.keys()),
       registeredConnections: Array.from(this._websocketConnectionClasses.keys()),
       subscriptionGroups: this._websocketChannelSubscriptions.size,
-      subscriptions: Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, subscriptions]) => ({channel, count: subscriptions.size}))
+      subscriptions
     }
   }
 

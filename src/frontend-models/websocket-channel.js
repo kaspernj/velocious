@@ -162,6 +162,23 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     return broadcastParams?.model === this._modelName()
   }
 
+  /** @returns {Record<string, unknown>} Debug-safe subscription details. */
+  debugSnapshot() {
+    const eventFilters = this._eventFilters()
+
+    return {
+      abilities: this.params.abilities !== undefined,
+      eventFilterCount: eventFilters.length,
+      model: this._modelName(),
+      preload: this.params.preload !== undefined,
+      queryData: this.params.queryData !== undefined,
+      select: this.params.select !== undefined,
+      selectsExtra: this.params.selectsExtra !== undefined,
+      unfilteredEventDelivery: this.params.unfilteredEventDelivery === true,
+      withCount: this.params.withCount !== undefined
+    }
+  }
+
   /** @returns {string | null} - Requested frontend-model name or null. */
   _modelName() {
     return typeof this.params?.model === "string" && this.params.model.length > 0
