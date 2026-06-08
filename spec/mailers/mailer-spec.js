@@ -37,6 +37,28 @@ class TasksMailer extends VelociousMailer {
   /**
    * @param {{id: () => number}} task
    * @param {{email: () => string, name: () => string}} user
+   * @returns {void}
+   */
+  delegatedNotification(task, user) {
+    this.task = task
+    this.user = user
+    this.assignView({task, user, userName: user.name()})
+    return this.composeNotification({subject: "Delegated task", to: user.email()})
+  }
+
+  /**
+   * @param {object} args - Delivery args.
+   * @param {string} args.subject - Subject line.
+   * @param {string} args.to - Recipient address.
+   * @returns {import("../../src/mailer/delivery.js").default}
+   */
+  composeNotification({subject, to}) {
+    return this.mail({to, subject})
+  }
+
+  /**
+   * @param {{id: () => number}} task
+   * @param {{email: () => string, name: () => string}} user
    * @returns {import("../../src/mailer/delivery.js").default}
    */
   delayedNotification(task, user) {
@@ -69,6 +91,11 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
     await fs.writeFile(path.join(viewDir, "explicit-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
 <p>
   Explicit task <%= task.id() %> has just been created.
+</p>
+`)
+    await fs.writeFile(path.join(viewDir, "delegated-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
+<p>
+  Delegated task <%= task.id() %> has just been created.
 </p>
 `)
     await fs.writeFile(path.join(viewDir, "delayed-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
@@ -186,6 +213,32 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
       expect(sent.length).toEqual(1)
       expect(sent[0].action).toEqual("explicitNotification")
       expect(sent[0].html).toMatch(/Explicit task 44 has just been created/)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("infers action names past delegated helper methods", async () => {
+    const {directory, cleanup} = await createTempProjectDir()
+
+    try {
+      const configuration = createConfiguration(directory)
+      configuration.setCurrent()
+      clearDeliveries()
+
+      const task = {id: () => 45}
+      const user = {
+        email: () => "delegated@example.com",
+        name: () => "Dee"
+      }
+
+      await new TasksMailer().delegatedNotification(task, user).deliverNow()
+
+      const sent = deliveries()
+
+      expect(sent.length).toEqual(1)
+      expect(sent[0].action).toEqual("delegatedNotification")
+      expect(sent[0].html).toMatch(/Delegated task 45 has just been created/)
     } finally {
       await cleanup()
     }

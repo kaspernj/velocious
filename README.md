@@ -219,10 +219,12 @@ class TasksMailer extends VelociousMailer {
     this.task = task
     this.user = user
     this.assignView({task, user})
-    return this.mail({to: user.email(), subject: "New task", actionName: "newNotification"})
+    return this.mail({to: user.email(), subject: "New task"})
   }
 }
 ```
+
+Velocious infers the action name from the mailer action method when `this.mail(...)` is called from that method. Pass `actionName` explicitly when rendering a different action template or when a shared helper should override the inferred action.
 
 ```ejs
 <b>Hello <%= mailer.user.name() %></b>
@@ -251,7 +253,6 @@ resetPassword(user) {
   return this.mail({
     to: user.email(),
     subject: "Reset your password",
-    actionName: "resetPassword",
     actionPromise: (async () => {
       this.token = await user.resetToken()
       this.assignView({user, token: this.token})

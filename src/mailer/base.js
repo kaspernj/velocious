@@ -37,24 +37,25 @@ function mailerDirectoryName(className) {
  */
 function inferActionName(mailerClass, stack) {
   const prototype = mailerClass.prototype
+  let actionName = null
 
   for (const line of stack.split("\n")) {
     const match = line.match(/\bat (?:async )?(?:new )?[^\s.]+\.([^\s.]+) /)
 
     if (!match) continue
 
-    const actionName = match[1]
+    const frameActionName = match[1]
 
-    if (actionName === "mail") continue
-    if (actionName.startsWith("_")) continue
-    if (actionName === "constructor") continue
-    if (Object.prototype.hasOwnProperty.call(VelociousMailerBase.prototype, actionName)) continue
-    if (typeof /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (prototype))[actionName] !== "function") continue
+    if (frameActionName === "mail") continue
+    if (frameActionName.startsWith("_")) continue
+    if (frameActionName === "constructor") continue
+    if (Object.prototype.hasOwnProperty.call(VelociousMailerBase.prototype, frameActionName)) continue
+    if (typeof /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (prototype))[frameActionName] !== "function") continue
 
-    return actionName
+    actionName = frameActionName
   }
 
-  return null
+  return actionName
 }
 
 /**
