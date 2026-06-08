@@ -1246,6 +1246,40 @@ const frontendTasks = await FrontendTask
   .toArray()
 ```
 
+Simple OR predicates use Ransack's `_or_` shortcut:
+
+```js
+const matchingUsers = await User
+  .ransack({email_or_reference_cont: "john"})
+  .toArray()
+```
+
+Grouped Ransack hashes support `m` (`"and"` / `"or"`), `c` condition arrays, and nested `g` groups:
+
+```js
+const matchingUsers = await User
+  .ransack({
+    c: [
+      {a: ["email"], p: "cont", v: ["jane"]}
+    ],
+    g: [
+      {
+        c: [
+          {a: "reference", p: "cont", v: ["user-2"]},
+          {a: "email", p: "cont", v: ["john"]}
+        ],
+        m: "and"
+      }
+    ],
+    m: "or"
+  })
+  .limit(20)
+  .offset(0)
+  .toArray()
+```
+
+Frontend-model `.ransack(...)` filters run on the backend, so `count()`, `limit(...)`, `offset(...)`, and `toArray()` all share the same query scope instead of loading records into memory first.
+
 ### Raw where clauses
 
 ```js

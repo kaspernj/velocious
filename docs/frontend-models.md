@@ -63,11 +63,34 @@
 - `ransack(params)` applies Rails-compatible ransack filters and sorting on both frontend and database model queries.
 - Supported predicates: `eq`, `notEq`, `in`, `notIn`, `gt`, `gteq`, `lt`, `lteq`, `cont`, `start`, `end`, `null`.
 - Keys can be snake_case or camelCase: `nameCont` and `name_cont` are both valid.
+- Simple OR predicates can combine attributes in one key: `email_or_reference_cont` matches either attribute.
+- Grouped Ransack hashes support `m` (`"and"` / `"or"`), `c` condition arrays, and nested `g` groups. Each condition uses Ransack's compact keys: `a` attributes, `p` predicate, `v` values, and optional per-condition `m`.
 - The `s` key applies sorting: `ransack({s: "name asc"})` sorts by name ascending.
 - Multiple sort columns can be specified: `ransack({s: "name asc, createdAt desc"})`.
 - Relationship paths are resolved automatically: `ransack({projectNameCont: "foo"})` filters through the `project` relationship.
 - Translated sort attributes use the translated model's `currentTranslation` relationship so the sort follows the current locale without duplicating records. See [translations.md](translations.md).
 - Example combining filter and sort: `User.ransack({emailCont: "john", s: "name asc"}).toArray()`.
+- Example grouped search:
+
+  ```js
+  const users = await User
+    .ransack({
+      c: [
+        {a: ["email"], p: "cont", v: ["jane"]}
+      ],
+      g: [
+        {
+          c: [
+            {a: "reference", p: "cont", v: ["user-2"]},
+            {a: "email", p: "cont", v: ["john"]}
+          ],
+          m: "and"
+        }
+      ],
+      m: "or"
+    })
+    .toArray()
+  ```
 
 ## Query parity helpers
 - `all()` returns a query builder (parity with backend `all()`).

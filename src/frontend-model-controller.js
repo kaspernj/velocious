@@ -725,6 +725,20 @@ function normalizeFrontendModelWhere(where) {
 }
 
 /**
+ * @param {unknown} ransack - Ransack payload.
+ * @returns {Record<string, any> | null} - Normalized Ransack hash.
+ */
+function normalizeFrontendModelRansack(ransack) {
+  if (!ransack) return null
+
+  if (!isPlainObject(ransack)) {
+    throw frontendModelValidationError(`Invalid ransack type: ${typeof ransack}`)
+  }
+
+  return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(ransack)))
+}
+
+/**
  * @param {unknown} value - Candidate integer.
  * @param {string} name - Param name for errors.
  * @param {number} min - Minimum allowed value.
@@ -1613,6 +1627,11 @@ export default class FrontendModelController extends Controller {
     return normalizeFrontendModelWhere(this.frontendModelParams().where)
   }
 
+  /** @returns {Record<string, any> | null} - Frontend Ransack filters. */
+  frontendModelRansack() {
+    return normalizeFrontendModelRansack(this.frontendModelParams().ransack)
+  }
+
   /** @returns {Record<string, any> | null} - Frontend joins descriptors. */
   frontendModelJoins() {
     return normalizeFrontendModelJoins(this.frontendModelParams().joins)
@@ -1914,6 +1933,12 @@ export default class FrontendModelController extends Controller {
 
     if (where) {
       this.applyFrontendModelWhere({query, where})
+    }
+
+    const ransack = this.frontendModelRansack()
+
+    if (ransack) {
+      query.ransack(ransack)
     }
 
     if (joins) {
