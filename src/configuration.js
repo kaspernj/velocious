@@ -91,6 +91,12 @@ export default class VelociousConfiguration {
     this._beaconClient = undefined
     /** @type {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined> | undefined} */
     this._beaconConnectPromise = undefined
+    /** @type {ReturnType<typeof setTimeout> | undefined} - Pending "beacon still unreachable" report timer. */
+    this._beaconReportTimer = undefined
+    /** @type {boolean} - Whether the current beacon outage has already been reported. */
+    this._beaconOutageReported = false
+    /** @type {{stage: "beacon-connect" | "beacon-disconnect", error: Error} | undefined} - Latest beacon-down details, reported only if the outage is sustained. */
+    this._beaconLastDownError = undefined
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
     this._backendProjects = backendProjects || []
@@ -793,7 +799,7 @@ export default class VelociousConfiguration {
    * Setting `enabled: false` explicitly disables it even when env vars
    * are present (useful for tests). When `inProcess: true` is set,
    * env-var host/port are ignored — code-level config wins.
-   * @returns {{enabled: boolean, host: string, port: number, peerType?: string, inProcess: boolean}} - Beacon configuration with defaults applied.
+   * @returns {{enabled: boolean, host: string, port: number, peerType?: string, inProcess: boolean, unreachableReportMs: number}} - Beacon configuration with defaults applied.
    */
   getBeaconConfig() {
     const configured = this._beacon || {}
@@ -819,7 +825,11 @@ export default class VelociousConfiguration {
       enabled = Boolean(inProcess || configured.host || configured.port || envHost || envPort)
     }
 
-    return {enabled, host, port, peerType: configured.peerType, inProcess}
+    const unreachableReportMs = typeof configured.unreachableReportMs === "number" && Number.isFinite(configured.unreachableReportMs)
+      ? configured.unreachableReportMs
+      : 30_000
+
+    return {enabled, host, port, peerType: configured.peerType, inProcess, unreachableReportMs}
   }
 
   /**
@@ -886,18 +896,28 @@ export default class VelociousConfiguration {
         this._deliverBroadcastFromBeacon(message)
       })
 
+      // Beacon connect/disconnect blips are expected during deploys (the broker
+      // restarts) and the BeaconClient auto-reconnects in the background, so a
+      // single transient failure is NOT reported. Only a sustained outage (still
+      // down after `unreachableReportMs`) is surfaced on the framework-error
+      // channel; a (re)connect within the grace window clears it silently.
+
       // `connect-error` fires when the *initial* TCP/handshake fails.
-      // We report it via the framework error channel; the BeaconClient's
-      // reconnect loop keeps trying in the background.
       client.on("connect-error", (error) => {
-        this._reportBeaconError({stage: "beacon-connect", error})
+        this._handleBeaconDown({stage: "beacon-connect", error, reportAfterMs: config.unreachableReportMs})
       })
 
-      // `disconnect` fires when an established connection drops. The
-      // payload is the underlying socket error if there was one, or a
-      // synthetic Error("Beacon broker disconnected") otherwise.
+      // `disconnect` fires when an established connection drops. The payload is
+      // the underlying socket error if there was one, or a synthetic
+      // Error("Beacon broker disconnected") otherwise.
       client.on("disconnect", (reason) => {
-        this._reportBeaconError({stage: "beacon-disconnect", error: reason})
+        this._handleBeaconDown({stage: "beacon-disconnect", error: reason, reportAfterMs: config.unreachableReportMs})
+      })
+
+      // `connect` fires on every (re)connect; clear any pending outage state so
+      // a transient blip that recovers within the grace window stays silent.
+      client.on("connect", () => {
+        this._handleBeaconUp()
       })
 
       // Register the client *before* kicking off connect so subsequent
@@ -962,6 +982,54 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Records a Beacon connect/disconnect failure without reporting it immediately.
+   * The BeaconClient auto-reconnects, so brief outages (e.g. a deploy restarting
+   * the broker) are expected; only if the beacon is still unreachable after
+   * `reportAfterMs` is a single framework-error surfaced via `_reportBeaconError`.
+   * A subsequent `connect` (see `_handleBeaconUp`) cancels the pending report.
+   * @param {object} args - Options.
+   * @param {"beacon-connect" | "beacon-disconnect"} args.stage - Failure stage.
+   * @param {Error} args.error - Error instance.
+   * @param {number} args.reportAfterMs - Grace window before a sustained outage is reported.
+   * @returns {void}
+   */
+  _handleBeaconDown({stage, error, reportAfterMs}) {
+    this._beaconLastDownError = {stage, error}
+
+    // A report is already pending or already sent for this outage — keep the
+    // latest error but don't stack timers or re-report.
+    if (this._beaconReportTimer || this._beaconOutageReported) return
+
+    const timer = setTimeout(() => {
+      this._beaconReportTimer = undefined
+      this._beaconOutageReported = true
+
+      if (this._beaconLastDownError) this._reportBeaconError(this._beaconLastDownError)
+    }, reportAfterMs)
+
+    // Don't let the grace timer keep the process alive.
+    if (typeof timer.unref === "function") timer.unref()
+
+    this._beaconReportTimer = timer
+  }
+
+  /**
+   * Clears beacon-down state on a (re)connect. A blip that recovers within the
+   * grace window is never reported; if a sustained outage had already been
+   * reported, the state resets so a future outage can report again.
+   * @returns {void}
+   */
+  _handleBeaconUp() {
+    if (this._beaconReportTimer) {
+      clearTimeout(this._beaconReportTimer)
+      this._beaconReportTimer = undefined
+    }
+
+    this._beaconOutageReported = false
+    this._beaconLastDownError = undefined
+  }
+
+  /**
    * Surfaces a Beacon failure on the framework error channel. Mirrors
    * the pattern used by `request-runner.js` for HTTP errors. When no
    * listener is attached to either `framework-error` or `all-error`,
@@ -1010,6 +1078,14 @@ export default class VelociousConfiguration {
 
     this._beaconClient = undefined
     this._beaconConnectPromise = undefined
+
+    if (this._beaconReportTimer) {
+      clearTimeout(this._beaconReportTimer)
+      this._beaconReportTimer = undefined
+    }
+
+    this._beaconOutageReported = false
+    this._beaconLastDownError = undefined
 
     if (client) await client.close()
   }

@@ -16,7 +16,9 @@ import {describe, expect, it} from "../../src/testing/test.js"
  */
 function buildConfiguration(beacon) {
   return new Configuration({
-    beacon,
+    // Report beacon outages near-instantly by default so these specs don't wait out the real 30s grace
+    // window. Specs that exercise the grace/recovery behavior override `unreachableReportMs` explicitly.
+    beacon: {unreachableReportMs: 1, ...beacon},
     database: {test: {default: {driver: class {}, poolType: class {static clearGlobalConnections() {}}, type: "fake"}}},
     directory: process.cwd(),
     environment: "test",
@@ -265,5 +267,70 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
 
     await configuration.disconnectBeacon()
     await beacon.stop()
+  })
+
+  it("does not report a transient beacon blip that reconnects within the grace window", async () => {
+    const port = await reservedPort()
+    const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port})
+
+    await beacon.start()
+
+    // Long grace window: a reconnect should land well before it would report.
+    const configuration = buildConfiguration({host: "127.0.0.1", port, unreachableReportMs: 5000})
+
+    /** @type {Array<{stage: string}>} */
+    const frameworkErrors = []
+
+    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push({stage: payload.context.stage}))
+
+    await configuration.connectBeacon({peerType: "test"})
+
+    await timeout({timeout: 1000}, async () => {
+      while (!configuration.getBeaconClient()?.isConnected()) await wait(0.01)
+    })
+
+    // Broker drops (e.g. a deploy restart) and comes back on the same port; the client auto-reconnects.
+    await beacon.stop()
+
+    const beaconAgain = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port})
+
+    await beaconAgain.start()
+
+    await timeout({timeout: 4000}, async () => {
+      while (!configuration.getBeaconClient()?.isConnected()) await wait(0.01)
+    })
+
+    // Settle past the reconnect; the transient blip must not have been reported.
+    await wait(0.3)
+
+    expect(frameworkErrors.length).toBe(0)
+
+    await configuration.disconnectBeacon()
+    await beaconAgain.stop()
+  })
+
+  it("reports a single framework-error when the beacon stays unreachable past the grace window", async () => {
+    const port = await reservedPort()
+    const configuration = buildConfiguration({host: "127.0.0.1", port, unreachableReportMs: 50})
+
+    /** @type {Array<{stage: string}>} */
+    const frameworkErrors = []
+
+    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push({stage: payload.context.stage}))
+
+    await configuration.connectBeacon({peerType: "test"})
+
+    await timeout({timeout: 2000}, async () => {
+      while (frameworkErrors.length === 0) await wait(0.01)
+    })
+
+    expect(frameworkErrors[0].stage).toBe("beacon-connect")
+
+    // Past at least one reconnect attempt the sustained outage must not be re-reported.
+    await wait(1.2)
+
+    expect(frameworkErrors.length).toBe(1)
+
+    await configuration.disconnectBeacon()
   })
 })
