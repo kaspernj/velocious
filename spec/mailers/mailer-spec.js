@@ -19,7 +19,19 @@ class TasksMailer extends VelociousMailer {
     this.task = task
     this.user = user
     this.assignView({task, user, userName: user.name()})
-    return this.mail({to: user.email(), subject: "New task", actionName: "newNotification"})
+    return this.mail({to: user.email(), subject: "New task"})
+  }
+
+  /**
+   * @param {{id: () => number}} task
+   * @param {{email: () => string, name: () => string}} user
+   * @returns {void}
+   */
+  renamedNotification(task, user) {
+    this.task = task
+    this.user = user
+    this.assignView({task, user, userName: user.name()})
+    return this.mail({to: user.email(), subject: "Explicit task", actionName: "explicitNotification"})
   }
 
   /**
@@ -52,6 +64,11 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
     await fs.writeFile(path.join(viewDir, "new-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
 <p>
   Task <%= task.id() %> has just been created.
+</p>
+`)
+    await fs.writeFile(path.join(viewDir, "explicit-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
+<p>
+  Explicit task <%= task.id() %> has just been created.
 </p>
 `)
     await fs.writeFile(path.join(viewDir, "delayed-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
@@ -117,6 +134,58 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
       expect(sent[0].subject).toEqual("New task")
       expect(sent[0].html).toMatch(/Hello Tess/)
       expect(sent[0].html).toMatch(/Task 42 has just been created/)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("infers action names from mailer action methods", async () => {
+    const {directory, cleanup} = await createTempProjectDir()
+
+    try {
+      const configuration = createConfiguration(directory)
+      configuration.setCurrent()
+      clearDeliveries()
+
+      const task = {id: () => 43}
+      const user = {
+        email: () => "inferred@example.com",
+        name: () => "Inga"
+      }
+
+      await new TasksMailer().newNotification(task, user).deliverNow()
+
+      const sent = deliveries()
+
+      expect(sent.length).toEqual(1)
+      expect(sent[0].action).toEqual("newNotification")
+      expect(sent[0].html).toMatch(/Hello Inga/)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("uses explicit action names when provided", async () => {
+    const {directory, cleanup} = await createTempProjectDir()
+
+    try {
+      const configuration = createConfiguration(directory)
+      configuration.setCurrent()
+      clearDeliveries()
+
+      const task = {id: () => 44}
+      const user = {
+        email: () => "explicit@example.com",
+        name: () => "Eli"
+      }
+
+      await new TasksMailer().renamedNotification(task, user).deliverNow()
+
+      const sent = deliveries()
+
+      expect(sent.length).toEqual(1)
+      expect(sent[0].action).toEqual("explicitNotification")
+      expect(sent[0].html).toMatch(/Explicit task 44 has just been created/)
     } finally {
       await cleanup()
     }
