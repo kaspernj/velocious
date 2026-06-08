@@ -85,7 +85,7 @@ class VelociousDatabasePoolBase {
    * @abstract
    * @param {import("../drivers/base.js").default} _connection - Connection.
    */
-  checkin(_connection) { // eslint-disable-line no-unused-vars
+  checkin(_connection) {
     throw new Error("'checkin' not implemented")
   }
 
