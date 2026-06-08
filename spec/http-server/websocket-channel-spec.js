@@ -163,6 +163,35 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
     })
   })
 
+  it("groups channel subscription debug snapshots", async () => {
+    await Dummy.run(async () => {
+      const clientA = new WebsocketClient()
+      const clientB = new WebsocketClient()
+
+      try {
+        await clientA.connect()
+        await clientB.connect()
+
+        const subA = clientA.subscribeChannel("Counter", {params: {allow: true, topic: "alpha"}})
+        const subB = clientB.subscribeChannel("Counter", {params: {allow: true, topic: "beta"}})
+
+        await Promise.all([subA.ready, subB.ready])
+
+        const snapshot = dummyConfiguration.getDebugSnapshot()
+        const counterSubscription = snapshot.websockets.subscriptions.find((subscription) => subscription.channel === "Counter")
+
+        expect(counterSubscription?.count).toBeGreaterThanOrEqual(2)
+        expect(counterSubscription?.details).toContainEqual({
+          count: counterSubscription?.count,
+          details: {}
+        })
+      } finally {
+        await clientA.close()
+        await clientB.close()
+      }
+    })
+  })
+
   it("waitForReady resolves the initial subscribe and reports ready state", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()

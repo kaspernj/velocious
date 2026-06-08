@@ -402,12 +402,35 @@ export default class VelociousConfiguration {
 
   /** @returns {Record<string, unknown>} - WebSocket diagnostics. */
   _debugWebsocketSnapshot() {
+    const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
+      /** @type {Map<string, {count: number, details: Record<string, unknown>}>} */
+      const detailsBuckets = new Map()
+
+      for (const subscription of channelSubscriptions) {
+        const details = subscription.debugSnapshot()
+        const key = JSON.stringify(details)
+        const existingBucket = detailsBuckets.get(key)
+
+        if (existingBucket) {
+          existingBucket.count += 1
+        } else {
+          detailsBuckets.set(key, {count: 1, details})
+        }
+      }
+
+      return {
+        channel,
+        count: channelSubscriptions.size,
+        details: Array.from(detailsBuckets.values()).sort((a, b) => b.count - a.count)
+      }
+    })
+
     return {
       pausedSessions: this._pausedWebsocketSessions.size,
       registeredChannels: Array.from(this._websocketChannelClasses.keys()),
       registeredConnections: Array.from(this._websocketConnectionClasses.keys()),
       subscriptionGroups: this._websocketChannelSubscriptions.size,
-      subscriptions: Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, subscriptions]) => ({channel, count: subscriptions.size}))
+      subscriptions
     }
   }
 
