@@ -35,6 +35,7 @@ function mailerDirectoryName(className) {
  * @param {string} stack - Error stack.
  * @returns {string | null} - Inferred action name.
  */
+// fallow-ignore-next-line complexity
 function inferActionName(mailerClass, stack) {
   const prototype = mailerClass.prototype
   let actionName = null
