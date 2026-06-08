@@ -49,17 +49,71 @@ async function reservedPort() {
   return port
 }
 
+/**
+ * Starts a BeaconServer on the given port (0 picks an ephemeral port) and returns it.
+ * @param {number} [port] - Port to listen on.
+ * @returns {Promise<BeaconServer>} - The started broker.
+ */
+async function startBeaconServer(port = 0) {
+  const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port})
+
+  await beacon.start()
+
+  return beacon
+}
+
+/**
+ * Collects `framework-error` payloads emitted on a configuration's error channel.
+ * @param {import("../../src/configuration.js").default} configuration - Configuration to listen on.
+ * @returns {Array<{stage: string, error: Error}>} - Mutable list populated as errors arrive.
+ */
+function collectFrameworkErrors(configuration) {
+  /** @type {Array<{stage: string, error: Error}>} */
+  const frameworkErrors = []
+
+  configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push({stage: payload.context.stage, error: payload.error}))
+
+  return frameworkErrors
+}
+
+/**
+ * Waits until the configuration's Beacon client reports a live connection.
+ * @param {import("../../src/configuration.js").default} configuration - Configuration to poll.
+ * @param {number} [timeoutMs] - Max time to wait.
+ * @returns {Promise<void>}
+ */
+async function waitUntilConnected(configuration, timeoutMs = 1000) {
+  await timeout({timeout: timeoutMs}, async () => {
+    while (!configuration.getBeaconClient()?.isConnected()) await wait(0.01)
+  })
+}
+
+/**
+ * Connects a raw BeaconClient to a broker and collects its `disconnect` reasons.
+ * @param {BeaconServer} beacon - Broker to connect to.
+ * @returns {Promise<{client: BeaconClient, reasons: Array<Error>}>} - The connected client and its disconnect-reason list.
+ */
+async function connectClientCollectingDisconnects(beacon) {
+  const client = new BeaconClient({host: "127.0.0.1", port: beacon.getPort(), peerType: "test"})
+
+  await client.connect()
+
+  /** @type {Array<Error>} */
+  const reasons = []
+
+  client.on("disconnect", (reason) => reasons.push(reason))
+
+  return {client, reasons}
+}
+
 describe("Beacon error reporting", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("emits framework-error and all-error when the initial connect fails", async () => {
     const port = await reservedPort()
     const configuration = buildConfiguration({host: "127.0.0.1", port})
-
-    /** @type {Array<{stage: string, error: Error}>} */
-    const frameworkErrors = []
+    const frameworkErrors = collectFrameworkErrors(configuration)
     /** @type {Array<{stage: string, errorType: string, error: Error}>} */
     const allErrors = []
 
-    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push({stage: payload.context.stage, error: payload.error}))
     configuration.getErrorEvents().on("all-error", (payload) => allErrors.push({stage: payload.context.stage, errorType: payload.errorType, error: payload.error}))
 
     await configuration.connectBeacon({peerType: "test"})
@@ -77,16 +131,9 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
   })
 
   it("emits framework-error with stage `beacon-disconnect` when the broker drops mid-session", async () => {
-    const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port: 0})
-
-    await beacon.start()
-
+    const beacon = await startBeaconServer()
     const configuration = buildConfiguration({host: "127.0.0.1", port: beacon.getPort()})
-
-    /** @type {Array<{stage: string, error: Error}>} */
-    const errors = []
-
-    configuration.getErrorEvents().on("framework-error", (payload) => errors.push({stage: payload.context.stage, error: payload.error}))
+    const errors = collectFrameworkErrors(configuration)
 
     await configuration.connectBeacon({peerType: "test"})
 
@@ -181,18 +228,8 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
   })
 
   it("BeaconClient `disconnect` event fires with an Error reason when the broker drops", async () => {
-    const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port: 0})
-
-    await beacon.start()
-
-    const client = new BeaconClient({host: "127.0.0.1", port: beacon.getPort(), peerType: "test"})
-
-    await client.connect()
-
-    /** @type {Array<Error>} */
-    const reasons = []
-
-    client.on("disconnect", (reason) => reasons.push(reason))
+    const beacon = await startBeaconServer()
+    const {client, reasons} = await connectClientCollectingDisconnects(beacon)
 
     await timeout({timeout: 1000}, async () => {
       while (beacon.getPeerCount() < 1) await wait(0.01)
@@ -212,18 +249,8 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
   })
 
   it("does not emit disconnect when the client is closed by the application", async () => {
-    const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port: 0})
-
-    await beacon.start()
-
-    const client = new BeaconClient({host: "127.0.0.1", port: beacon.getPort(), peerType: "test"})
-
-    await client.connect()
-
-    /** @type {Array<Error>} */
-    const reasons = []
-
-    client.on("disconnect", (reason) => reasons.push(reason))
+    const beacon = await startBeaconServer()
+    const {client, reasons} = await connectClientCollectingDisconnects(beacon)
 
     await client.close()
     await wait(0.05)
@@ -241,10 +268,7 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
     // client *after* awaiting `client.connect()`, so under this contract
     // a regression would either delay the client registration or block on
     // the OS TCP timeout.
-    const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port: 0})
-
-    await beacon.start()
-
+    const beacon = await startBeaconServer()
     const configuration = buildConfiguration({host: "127.0.0.1", port: beacon.getPort()})
     const start = Date.now()
 
@@ -259,9 +283,7 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
     expect(configuration.getBeaconClient()).toBeTruthy()
 
     // Eventually the connect lands.
-    await timeout({timeout: 1000}, async () => {
-      while (!configuration.getBeaconClient()?.isConnected()) await wait(0.01)
-    })
+    await waitUntilConnected(configuration)
 
     expect(configuration.getBeaconClient()?.isConnected()).toBe(true)
 
@@ -271,34 +293,20 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
 
   it("does not report a transient beacon blip that reconnects within the grace window", async () => {
     const port = await reservedPort()
-    const beacon = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port})
-
-    await beacon.start()
-
+    const beacon = await startBeaconServer(port)
     // Long grace window: a reconnect should land well before it would report.
     const configuration = buildConfiguration({host: "127.0.0.1", port, unreachableReportMs: 5000})
-
-    /** @type {Array<{stage: string}>} */
-    const frameworkErrors = []
-
-    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push({stage: payload.context.stage}))
+    const frameworkErrors = collectFrameworkErrors(configuration)
 
     await configuration.connectBeacon({peerType: "test"})
-
-    await timeout({timeout: 1000}, async () => {
-      while (!configuration.getBeaconClient()?.isConnected()) await wait(0.01)
-    })
+    await waitUntilConnected(configuration)
 
     // Broker drops (e.g. a deploy restart) and comes back on the same port; the client auto-reconnects.
     await beacon.stop()
 
-    const beaconAgain = new BeaconServer({configuration: buildConfiguration({host: "127.0.0.1", port: 0}), host: "127.0.0.1", port})
+    const beaconAgain = await startBeaconServer(port)
 
-    await beaconAgain.start()
-
-    await timeout({timeout: 4000}, async () => {
-      while (!configuration.getBeaconClient()?.isConnected()) await wait(0.01)
-    })
+    await waitUntilConnected(configuration, 4000)
 
     // Settle past the reconnect; the transient blip must not have been reported.
     await wait(0.3)
@@ -312,11 +320,7 @@ describe("Beacon error reporting", {databaseCleaning: {transaction: false, trunc
   it("reports a single framework-error when the beacon stays unreachable past the grace window", async () => {
     const port = await reservedPort()
     const configuration = buildConfiguration({host: "127.0.0.1", port, unreachableReportMs: 50})
-
-    /** @type {Array<{stage: string}>} */
-    const frameworkErrors = []
-
-    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push({stage: payload.context.stage}))
+    const frameworkErrors = collectFrameworkErrors(configuration)
 
     await configuration.connectBeacon({peerType: "test"})
 

@@ -70,6 +70,17 @@ function mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration
   }
 }
 
+/**
+ * Resolves the grace window (ms) before a sustained beacon outage is reported.
+ * @param {unknown} value - Configured `unreachableReportMs`, if any.
+ * @returns {number} - The configured value when it's a finite number, otherwise the 30s default.
+ */
+function resolveBeaconUnreachableReportMs(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+
+  return 30_000
+}
+
 export default class VelociousConfiguration {
   /** @type {Promise<void> | null} */
   _closeDatabaseConnectionsPromise = null
@@ -825,9 +836,7 @@ export default class VelociousConfiguration {
       enabled = Boolean(inProcess || configured.host || configured.port || envHost || envPort)
     }
 
-    const unreachableReportMs = typeof configured.unreachableReportMs === "number" && Number.isFinite(configured.unreachableReportMs)
-      ? configured.unreachableReportMs
-      : 30_000
+    const unreachableReportMs = resolveBeaconUnreachableReportMs(configured.unreachableReportMs)
 
     return {enabled, host, port, peerType: configured.peerType, inProcess, unreachableReportMs}
   }
