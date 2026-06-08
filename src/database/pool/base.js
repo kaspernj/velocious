@@ -19,6 +19,7 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  * @property {number} idleCount - Number of idle connections.
  * @property {string} identifier - Database identifier.
  * @property {number} inUseCount - Number of checked-out connections.
+ * @property {Array<Record<string, unknown>>} [pendingCheckouts] - Waiting checkout snapshots.
  * @property {number} pendingCheckoutCount - Number of queued checkout requests.
  * @property {string} poolClass - Pool class name.
  */

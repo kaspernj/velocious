@@ -67,6 +67,38 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
     }
   })
 
+  it("reports checked-in idle timing in debug snapshots", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-debug-timing")
+
+    try {
+      configuration.getDatabaseConfiguration().default.pool = {idleTimeoutMillis: 60000}
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      /** @type {import("../../../src/database/drivers/base.js").default | undefined} */
+      let checkedInConnection
+
+      await pool.withConnection({name: "debug idle checkout"}, async (connection) => {
+        checkedInConnection = connection
+      })
+
+      await wait(0.02)
+
+      const snapshot = pool.getDebugSnapshot()
+      const idleConnection = snapshot.connections.find((connection) => connection.state === "idle")
+
+      if (!idleConnection) throw new Error("Expected an idle connection debug snapshot")
+
+      expect(idleConnection.checkedInAt).toBeGreaterThan(0)
+      expect(idleConnection.idleForMs).toBeGreaterThanOrEqual(0)
+      expect(idleConnection.checkoutName).toBeUndefined()
+      expect(pool.connections.includes(checkedInConnection)).toBe(true)
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("closes a connection only once when reaped concurrently", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-idle-double-close")
 

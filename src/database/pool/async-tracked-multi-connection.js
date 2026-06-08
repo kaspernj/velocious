@@ -5,11 +5,13 @@ import BasePool, {POOL_CONFIGURATION_KEY} from "./base.js"
 
 export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
 const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
+const CONNECTION_CHECKED_OUT_AT = Symbol("velociousConnectionCheckedOutAt")
 const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
 
 /**
  * @typedef {object} PendingCheckout
  * @property {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfig - Resolved database configuration needed by the checkout.
+ * @property {number} enqueuedAt - Timestamp when the checkout started waiting.
  * @property {import("./base.js").ConnectionCheckoutOptions} options - Checkout options.
  * @property {string} reuseKey - Database configuration reuse key needed by the checkout.
  * @property {(connection: import("../drivers/base.js").default) => void} resolve - Resolves with an activated connection.
@@ -97,7 +99,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     connection.setIdSeq(undefined)
 
-    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
     if (trackedConnection[CLOSED_CONNECTION]) return
 
@@ -112,6 +114,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     }
 
     trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
+    delete trackedConnection[CONNECTION_CHECKED_OUT_AT]
     this.connections.push(connection)
     await this.drainPendingCheckouts()
 
@@ -191,8 +194,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     const id = this.idSeq++
 
-    const trackedConnection = /** @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
     delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
+    trackedConnection[CONNECTION_CHECKED_OUT_AT] = Date.now()
 
     connection.setIdSeq(id)
     this.connectionsInUse[id] = connection
@@ -269,7 +273,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   async waitForCheckout(databaseConfig, reuseKey, options = {}) {
     return await new Promise((resolve, reject) => {
-      this.pendingCheckouts.push({databaseConfig, options, reject, resolve, reuseKey})
+      this.pendingCheckouts.push({databaseConfig, enqueuedAt: Date.now(), options, reject, resolve, reuseKey})
       void this.drainPendingCheckouts().catch((error) => {
         const checkoutError = error instanceof Error ? error : new Error("Failed to drain pending database connection checkouts.", {cause: error})
 
@@ -489,8 +493,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const now = Date.now()
 
     for (const [id, connection] of Object.entries(this.connectionsInUse)) {
+      const trackedConnection = /** @type {import("../drivers/base.js").default & {[CONNECTION_CHECKED_OUT_AT]?: number}} */ (connection)
+      const checkedOutAt = trackedConnection[CONNECTION_CHECKED_OUT_AT]
+      const checkedOutForMs = typeof checkedOutAt === "number" ? Math.max(0, now - checkedOutAt) : undefined
+
       seenConnections.add(connection)
-      connections.push(this.debugConnectionSnapshot(connection, {checkoutId: id, state: "in-use"}))
+      connections.push(this.debugConnectionSnapshot(connection, {checkedOutAt, checkedOutForMs, checkoutId: id, state: "in-use"}))
     }
 
     for (const connection of this.connections) {
@@ -502,8 +510,16 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
       const idleForMs = typeof checkedInAt === "number" ? Math.max(0, now - checkedInAt) : undefined
 
-      connections.push(this.debugConnectionSnapshot(connection, {idleForMs, state: "idle"}))
+      connections.push(this.debugConnectionSnapshot(connection, {checkedInAt, idleForMs, state: "idle"}))
     }
+
+    const pendingCheckouts = this.pendingCheckouts.map((checkout, index) => ({
+      checkoutName: checkout.options.name,
+      enqueuedAt: checkout.enqueuedAt,
+      index,
+      reuseKey: checkout.reuseKey,
+      waitingForMs: Math.max(0, now - checkout.enqueuedAt)
+    }))
 
     const globalConnection = this.getGlobalConnectionForIdentifier()
 
@@ -522,6 +538,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       connectionsBeingSpawned: this.connectionsBeingSpawned,
       idleCount: this.connections.length,
       inUseCount: Object.keys(this.connectionsInUse).length,
+      pendingCheckouts,
       pendingCheckoutCount: this.pendingCheckouts.length
     }
   }
@@ -728,9 +745,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       return await existingClose
     }
 
-    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
     trackedConnection[CLOSED_CONNECTION] = true
+    delete trackedConnection[CONNECTION_CHECKED_OUT_AT]
     delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
 
     const closePromise = (async () => {
