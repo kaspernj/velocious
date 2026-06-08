@@ -302,18 +302,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   async drainPendingCheckoutsActual() {
     while (this.pendingCheckouts.length > 0) {
       const checkout = this.pendingCheckouts[0]
-      let connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+      const connection = await this.connectionForPendingCheckout(checkout)
 
-      if (!connection) {
-        await this.reapIdleConnections()
-        connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
-      }
-
-      if (!connection && !this.canSpawnConnection()) {
-        const closedConnection = await this.closeOneIdleConnectionForCapacity()
-
-        if (closedConnection) continue
-      }
+      if (connection === "retry") continue
 
       if (!connection && this.canSpawnConnection()) {
         this.pendingCheckouts.shift()
@@ -327,6 +318,34 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       this.pendingCheckouts.shift()
       await this.resolvePendingCheckout(checkout, connection)
     }
+  }
+
+  /**
+   * @param {PendingCheckout} checkout - Checkout waiting for a connection.
+   * @returns {Promise<import("../drivers/base.js").default | undefined | "retry">} - Connection, retry marker, or undefined when unavailable.
+   */
+  async connectionForPendingCheckout(checkout) {
+    const connection = await this.idleConnectionForPendingCheckout(checkout)
+
+    if (connection) return connection
+    if (this.canSpawnConnection()) return
+
+    return await this.closeOneIdleConnectionForCapacity() ? "retry" : undefined
+  }
+
+  /**
+   * @param {PendingCheckout} checkout - Checkout waiting for a connection.
+   * @returns {Promise<import("../drivers/base.js").default | undefined>} - Matching idle connection, if one can be reused.
+   */
+  async idleConnectionForPendingCheckout(checkout) {
+    let connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+
+    if (connection) return connection
+
+    await this.reapIdleConnections()
+    connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+
+    return connection
   }
 
   /**
@@ -488,10 +507,41 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /** @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
   getDebugSnapshot() {
     const snapshot = super.getDebugSnapshot()
+    const now = Date.now()
+    const {connections} = this.debugConnectionSnapshots(now)
+
+    return {
+      ...snapshot,
+      connections,
+      connectionsBeingSpawned: this.connectionsBeingSpawned,
+      idleCount: this.connections.length,
+      inUseCount: Object.keys(this.connectionsInUse).length,
+      pendingCheckouts: this.pendingCheckoutDebugSnapshots(now),
+      pendingCheckoutCount: this.pendingCheckouts.length
+    }
+  }
+
+  /**
+   * @param {number} now - Current timestamp.
+   * @returns {{connections: Array<Record<string, unknown>>, seenConnections: Set<import("../drivers/base.js").default>}} - Connection snapshots and seen set.
+   */
+  debugConnectionSnapshots(now) {
+    /** @type {Array<Record<string, unknown>>} */
     const connections = []
     const seenConnections = new Set()
-    const now = Date.now()
 
+    this.addInUseDebugConnectionSnapshots({connections, now, seenConnections})
+    this.addIdleDebugConnectionSnapshots({connections, now, seenConnections})
+    this.addFallbackDebugConnectionSnapshots({connections, seenConnections})
+
+    return {connections, seenConnections}
+  }
+
+  /**
+   * @param {{connections: Array<Record<string, unknown>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @returns {void}
+   */
+  addInUseDebugConnectionSnapshots({connections, now, seenConnections}) {
     for (const [id, connection] of Object.entries(this.connectionsInUse)) {
       const trackedConnection = /** @type {import("../drivers/base.js").default & {[CONNECTION_CHECKED_OUT_AT]?: number}} */ (connection)
       const checkedOutAt = trackedConnection[CONNECTION_CHECKED_OUT_AT]
@@ -500,7 +550,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       seenConnections.add(connection)
       connections.push(this.debugConnectionSnapshot(connection, {checkedOutAt, checkedOutForMs, checkoutId: id, state: "in-use"}))
     }
+  }
 
+  /**
+   * @param {{connections: Array<Record<string, unknown>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @returns {void}
+   */
+  addIdleDebugConnectionSnapshots({connections, now, seenConnections}) {
     for (const connection of this.connections) {
       if (seenConnections.has(connection)) continue
 
@@ -512,15 +568,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
       connections.push(this.debugConnectionSnapshot(connection, {checkedInAt, idleForMs, state: "idle"}))
     }
+  }
 
-    const pendingCheckouts = this.pendingCheckouts.map((checkout, index) => ({
-      checkoutName: checkout.options.name,
-      enqueuedAt: checkout.enqueuedAt,
-      index,
-      reuseKey: checkout.reuseKey,
-      waitingForMs: Math.max(0, now - checkout.enqueuedAt)
-    }))
-
+  /**
+   * @param {{connections: Array<Record<string, unknown>>, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @returns {void}
+   */
+  addFallbackDebugConnectionSnapshots({connections, seenConnections}) {
     const globalConnection = this.getGlobalConnectionForIdentifier()
 
     if (globalConnection && !seenConnections.has(globalConnection)) {
@@ -531,16 +585,20 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (this._testSharedConnection && !seenConnections.has(this._testSharedConnection)) {
       connections.push(this.debugConnectionSnapshot(this._testSharedConnection, {state: "test-shared"}))
     }
+  }
 
-    return {
-      ...snapshot,
-      connections,
-      connectionsBeingSpawned: this.connectionsBeingSpawned,
-      idleCount: this.connections.length,
-      inUseCount: Object.keys(this.connectionsInUse).length,
-      pendingCheckouts,
-      pendingCheckoutCount: this.pendingCheckouts.length
-    }
+  /**
+   * @param {number} now - Current timestamp.
+   * @returns {Array<Record<string, unknown>>} - Pending checkout snapshots.
+   */
+  pendingCheckoutDebugSnapshots(now) {
+    return this.pendingCheckouts.map((checkout, index) => ({
+      checkoutName: checkout.options.name,
+      enqueuedAt: checkout.enqueuedAt,
+      index,
+      reuseKey: checkout.reuseKey,
+      waitingForMs: Math.max(0, now - checkout.enqueuedAt)
+    }))
   }
 
   /**
@@ -659,29 +717,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (idleTimeoutMillis === null) return
 
     const now = Date.now()
-    /** @type {import("../drivers/base.js").default[]} */
-    const keptConnections = []
-    /** @type {import("../drivers/base.js").default[]} */
-    const expiredConnections = []
-
-    for (const connection of this.connections) {
-      const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
-
-      if (trackedConnection[CLOSED_CONNECTION]) continue
-      if (this.connectionHasOpenTransaction(connection)) {
-        keptConnections.push(connection)
-        continue
-      }
-
-      const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
-      const expired = typeof checkedInAt === "number" && now - checkedInAt >= idleTimeoutMillis
-
-      if (expired) {
-        expiredConnections.push(connection)
-      } else {
-        keptConnections.push(connection)
-      }
-    }
+    const {expiredConnections, keptConnections} = this.classifyIdleConnectionsForReaping({idleTimeoutMillis, now})
 
     this.connections = keptConnections
 
@@ -700,6 +736,46 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (this.connections.length > 0) {
       this.scheduleIdleConnectionReaper()
+    }
+  }
+
+  /**
+   * @param {{idleTimeoutMillis: number, now: number}} args - Reaper classification inputs.
+   * @returns {{expiredConnections: import("../drivers/base.js").default[], keptConnections: import("../drivers/base.js").default[]}} - Classified idle connections.
+   */
+  classifyIdleConnectionsForReaping({idleTimeoutMillis, now}) {
+    /** @type {import("../drivers/base.js").default[]} */
+    const keptConnections = []
+    /** @type {import("../drivers/base.js").default[]} */
+    const expiredConnections = []
+
+    for (const connection of this.connections) {
+      this.classifyIdleConnectionForReaping({connection, expiredConnections, idleTimeoutMillis, keptConnections, now})
+    }
+
+    return {expiredConnections, keptConnections}
+  }
+
+  /**
+   * @param {{connection: import("../drivers/base.js").default, expiredConnections: import("../drivers/base.js").default[], idleTimeoutMillis: number, keptConnections: import("../drivers/base.js").default[], now: number}} args - Classification state.
+   * @returns {void}
+   */
+  classifyIdleConnectionForReaping({connection, expiredConnections, idleTimeoutMillis, keptConnections, now}) {
+    const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+
+    if (trackedConnection[CLOSED_CONNECTION]) return
+    if (this.connectionHasOpenTransaction(connection)) {
+      keptConnections.push(connection)
+      return
+    }
+
+    const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
+    const expired = typeof checkedInAt === "number" && now - checkedInAt >= idleTimeoutMillis
+
+    if (expired) {
+      expiredConnections.push(connection)
+    } else {
+      keptConnections.push(connection)
     }
   }
 
