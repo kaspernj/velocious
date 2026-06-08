@@ -65,7 +65,7 @@ export default class VelociousConfiguration {
   }
 
   /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -92,6 +92,7 @@ export default class VelociousConfiguration {
     this._directory = directory
     this._initializeModels = initializeModels
     this._isInitialized = false
+    this.httpServer = httpServer || {}
     this.locale = locale
     this.localeFallbacks = localeFallbacks
     this.locales = locales

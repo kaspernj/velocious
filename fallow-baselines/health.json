@@ -134,20 +134,7 @@
       }
     },
     "spec/frontend-models/autoload-spec.js": {
-      "crap_critical": {
-        "count": 1
-      },
       "crap_moderate": {
-        "count": 4
-      }
-    },
-    "spec/frontend-models/base-spec.js": {
-      "crap_high": {
-        "count": 1
-      }
-    },
-    "spec/frontend-models/model-preload-spec.js": {
-      "crap_high": {
         "count": 1
       }
     },
@@ -343,10 +330,10 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 5
+        "count": 6
       },
       "crap_high": {
-        "count": 9
+        "count": 8
       },
       "crap_moderate": {
         "count": 12
@@ -570,14 +557,8 @@
       }
     },
     "src/database/pool/async-tracked-multi-connection.js": {
-      "crap_critical": {
-        "count": 1
-      },
-      "crap_high": {
-        "count": 2
-      },
       "crap_moderate": {
-        "count": 6
+        "count": 1
       }
     },
     "src/database/query-parser/from-parser.js": {
@@ -1001,7 +982,7 @@
       }
     },
     "src/environment-handlers/node/cli/commands/server.js": {
-      "crap_high": {
+      "crap_moderate": {
         "count": 1
       }
     },

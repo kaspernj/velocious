@@ -17,10 +17,30 @@ next worker in round-robin order. Websocket broadcasts still use the configured
 cross-worker broadcast bus, so channels can publish from one worker and deliver
 to subscribers hosted by another worker.
 
+CLI arguments override `configuration.httpServer` values. When neither the CLI
+nor the configuration supplies a value, the CLI defaults to `127.0.0.1:3006`.
+
+## Configuration Workers
+
+Applications can keep server defaults in their Velocious configuration:
+
+```js
+const configuration = new Configuration({
+  httpServer: {
+    host: "127.0.0.1",
+    port: 3006,
+    workers: 4
+  }
+})
+```
+
+This is the preferred place for application-owned defaults such as production
+worker counts.
+
 ## Application Workers
 
 Code that starts `Application` directly can pass the same option through the
-HTTP server config:
+HTTP server config. These values override `configuration.httpServer`:
 
 ```js
 const application = new Application({

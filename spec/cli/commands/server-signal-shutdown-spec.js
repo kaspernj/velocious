@@ -60,6 +60,19 @@ describe("VelociousCliCommandsServer signal shutdown", () => {
     })
   })
 
+  it("uses configuration HTTP server defaults and lets CLI args override them", () => {
+    expect(httpServerConfigFromParsedArgs({}, {host: "0.0.0.0", port: 4100, workers: 2})).toEqual({
+      host: "0.0.0.0",
+      port: 4100,
+      workers: 2
+    })
+    expect(httpServerConfigFromParsedArgs({port: "4200", workers: "4"}, {host: "0.0.0.0", port: 4100, workers: 2})).toEqual({
+      host: "0.0.0.0",
+      port: 4200,
+      workers: 4
+    })
+  })
+
   it("rejects invalid server worker counts", () => {
     expect(() => httpServerConfigFromParsedArgs({workers: true})).toThrowError("--workers must be a positive integer")
     expect(() => httpServerConfigFromParsedArgs({workers: "0"})).toThrowError("--workers must be a positive integer")

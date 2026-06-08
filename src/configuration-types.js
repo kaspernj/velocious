@@ -176,6 +176,15 @@
  */
 
 /**
+ * @typedef {object} HttpServerConfiguration
+ * @property {string} [host] - Hostname to bind the HTTP server to.
+ * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
+ * @property {number} [maxWorkers] - Backward-compatible alias for workers.
+ * @property {number} [port] - Port to bind the HTTP server to.
+ * @property {number} [workers] - Worker handlers to start for the HTTP server.
+ */
+
+/**
  * @typedef {object} ScheduledBackgroundJobEveryOptions
  * @property {number | string} [firstIn] - Delay before the first enqueue.
  * @property {number | string} [first_in] - Sidekiq-style alias for `firstIn`.
@@ -384,6 +393,7 @@
  * @property {string} [environment] - Current environment name.
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
  * @property {boolean} [exposeInternalErrorsToClients] - Return unexpected internal error details in client API payloads outside production. Defaults to false.
+ * @property {HttpServerConfiguration} [httpServer] - Default HTTP server configuration for applications started from this configuration.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
  * @property {BeaconConfiguration} [beacon] - Beacon broadcast bus configuration.
