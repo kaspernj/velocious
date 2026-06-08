@@ -66,6 +66,29 @@ async function withCheckoutNamePool(callback) {
   }
 }
 
+/**
+ * @param {import("../../../src/database/pool/base.js").DatabasePoolDebugSnapshot} snapshot - Pool debug snapshot.
+ * @returns {void}
+ */
+function expectWaitingCheckoutSnapshot(snapshot) {
+  expect(snapshot.inUseCount).toBe(1)
+  expect(snapshot.pendingCheckoutCount).toBe(1)
+  expect(snapshot.pendingCheckouts?.[0]?.checkoutName).toBe("waiting checkout")
+  expect(snapshot.pendingCheckouts?.[0]?.waitingForMs).toBeGreaterThanOrEqual(0)
+}
+
+/**
+ * @param {import("../../../src/database/pool/base.js").DatabasePoolDebugSnapshot} snapshot - Pool debug snapshot.
+ * @returns {void}
+ */
+function expectLongCheckoutSnapshot(snapshot) {
+  const inUseConnection = snapshot.connections.find((connection) => connection.state === "in-use")
+
+  expect(inUseConnection?.checkoutName).toBe("long checkout")
+  expect(inUseConnection?.checkedOutAt).toBeGreaterThan(0)
+  expect(inUseConnection?.checkedOutForMs).toBeGreaterThanOrEqual(0)
+}
+
 describe("database - pool - async tracked multi connection checkout names", () => {
   it("rejects a queued checkout when activation fails", async () => {
     await withCheckoutNamePool(async (pool) => {
@@ -97,16 +120,8 @@ describe("database - pool - async tracked multi connection checkout names", () =
 
       const snapshot = pool.getDebugSnapshot()
 
-      expect(snapshot.inUseCount).toBe(1)
-      expect(snapshot.pendingCheckoutCount).toBe(1)
-      expect(snapshot.pendingCheckouts?.[0]?.checkoutName).toBe("waiting checkout")
-      expect(snapshot.pendingCheckouts?.[0]?.waitingForMs).toBeGreaterThanOrEqual(0)
-
-      const inUseConnection = snapshot.connections.find((connection) => connection.state === "in-use")
-
-      expect(inUseConnection?.checkoutName).toBe("long checkout")
-      expect(inUseConnection?.checkedOutAt).toBeGreaterThan(0)
-      expect(inUseConnection?.checkedOutForMs).toBeGreaterThanOrEqual(0)
+      expectWaitingCheckoutSnapshot(snapshot)
+      expectLongCheckoutSnapshot(snapshot)
 
       await pool.checkin(firstConnection)
 
