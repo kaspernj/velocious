@@ -1,137 +1,68 @@
-import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
+import {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
 import FrontendModelPreloader from "../../src/frontend-models/preloader.js"
+import {buildPreloadTestModelClasses, resetFrontendModelTransport, stubFrontendModelFetch} from "../helpers/frontend-model-test-helpers.js"
+
+const buildModelClasses = buildPreloadTestModelClasses
+const stubFetch = stubFrontendModelFetch
 
 /**
- * @typedef {object} FetchCall
- * @property {Record<string, any>} body - Normalized request payload.
- * @property {string} url - Request URL.
+ * @param {string} commentBody - Preloaded comment body.
+ * @returns {{models: Array<Record<string, any>>}} - Preloaded task response.
  */
-
-/** @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test model classes. */
-function buildModelClasses() {
-  /** Frontend model comment test class. */
-  class Comment extends FrontendModelBase {
-    /** @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration. */
-    static resourceConfig() {
-      return {attributes: ["id", "body"], commands: ["index"], primaryKey: "id"}
-    }
-  }
-
-  /** Frontend model project test class. */
-  class Project extends FrontendModelBase {
-    /** @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration. */
-    static resourceConfig() {
-      return {attributes: ["id", "name"], commands: ["index"], primaryKey: "id"}
-    }
-
-    /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */
-    static relationshipModelClasses() {
-      return {tasks: Task}
-    }
-
-    /** @returns {Record<string, {type: "hasMany"}>} - Relationship definitions. */
-    static relationshipDefinitions() {
-      return {tasks: {type: "hasMany"}}
-    }
-  }
-
-  /** Frontend model task test class. */
-  class Task extends FrontendModelBase {
-    /** @returns {{attributes: string[], commands: string[], primaryKey: string}} - Resource configuration. */
-    static resourceConfig() {
-      return {attributes: ["id", "name"], commands: ["index"], primaryKey: "id"}
-    }
-
-    /** @returns {Record<string, typeof FrontendModelBase>} - Relationship model classes. */
-    static relationshipModelClasses() {
-      return {comments: Comment, project: Project}
-    }
-
-    /** @returns {Record<string, {type: "hasMany" | "belongsTo"}>} - Relationship definitions. */
-    static relationshipDefinitions() {
-      return {comments: {type: "hasMany"}, project: {type: "belongsTo"}}
-    }
-  }
-
-  return {Comment, Project, Task}
-}
-
-/**
- * @param {Record<string, any> | ((callIndex: number) => Record<string, any>)} responder - Body, or per-call body factory.
- * @returns {{calls: FetchCall[], restore: () => void}} - Recorded calls and restore callback.
- */
-function stubFetch(responder) {
-  const originalFetch = globalThis.fetch
-  /** @type {FetchCall[]} */
-  const calls = []
-
-  globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
-    const bodyString = typeof options?.body === "string" ? options.body : "{}"
-    const parsedBody = JSON.parse(bodyString)
-    const batchRequests = Array.isArray(parsedBody.requests) ? parsedBody.requests : null
-    const normalizedBody = batchRequests && batchRequests.length === 1 && typeof batchRequests[0] === "object"
-      ? batchRequests[0].payload
-      : parsedBody
-    const responseBody = typeof responder === "function" ? responder(calls.length) : responder
-    const responsePayload = batchRequests
-      ? {responses: batchRequests.map((req) => ({requestId: req.requestId, response: responseBody}))}
-      : responseBody
-
-    calls.push({body: normalizedBody, url: `${url}`})
-
-    return /** @type {any} */ ({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify(responsePayload),
-      json: async () => responsePayload
-    })
-  })
-
+function taskWithPreloadedComment(commentBody) {
   return {
-    calls,
-    restore: () => {
-      globalThis.fetch = originalFetch
-    }
+    models: [{id: "1", name: "T", __preloadedRelationships: {comments: [{id: "5", body: commentBody}]}}]
   }
 }
 
-/** @returns {void} */
-function resetFrontendModelTransport() {
-  FrontendModelBase.configureTransport({shared: undefined, url: undefined, websocketClient: undefined})
+/**
+ * @returns {any} - Test task with comments relationship.
+ */
+function buildPreloadCommentTask() {
+  const {Task} = buildModelClasses()
+
+  return Task.instantiateFromResponse({id: "1", name: "T"})
+}
+
+/**
+ * @param {any} preloadSpec - Preload query or raw preload spec.
+ * @param {(fetchStub: {calls: Array<{body: Record<string, any>, url: string}>}, task: any) => void | Promise<void>} expectLoaded - Assertion callback.
+ * @returns {Promise<void>}
+ */
+async function expectPreloadedComment(preloadSpec, expectLoaded) {
+  const fetchStub = stubFetch(taskWithPreloadedComment("hi"))
+
+  try {
+    const task = buildPreloadCommentTask()
+
+    await task.preload(preloadSpec)
+
+    await expectLoaded(fetchStub, task)
+  } finally {
+    resetFrontendModelTransport()
+    fetchStub.restore()
+  }
 }
 
 describe("Frontend models - model preload", () => {
   it("preloads a relationship onto an already-loaded record", async () => {
     const {Task} = buildModelClasses()
-    const fetchStub = stubFetch({
-      models: [{id: "1", name: "T", __preloadedRelationships: {comments: [{id: "5", body: "hi"}]}}]
-    })
 
-    try {
-      const task = Task.instantiateFromResponse({id: "1", name: "T"})
-
-      await task.preload(Task.preload("comments"))
-
+    await expectPreloadedComment(Task.preload("comments"), (fetchStub, task) => {
       const comments = task.getRelationshipByName("comments").loaded()
 
       expect(comments.length).toEqual(1)
       expect(comments[0].readAttribute("body")).toEqual("hi")
       expect(fetchStub.calls.length).toEqual(1)
       expect(fetchStub.calls[0].body.preload).toEqual({comments: true})
-    } finally {
-      resetFrontendModelTransport()
-      fetchStub.restore()
-    }
+    })
   })
 
   it("accepts a raw preload spec instead of a query", async () => {
-    const {Task} = buildModelClasses()
-    const fetchStub = stubFetch({
-      models: [{id: "1", name: "T", __preloadedRelationships: {comments: [{id: "5", body: "raw"}]}}]
-    })
+    const fetchStub = stubFetch(taskWithPreloadedComment("raw"))
 
     try {
-      const task = Task.instantiateFromResponse({id: "1", name: "T"})
+      const task = buildPreloadCommentTask()
 
       await task.preload("comments")
 
@@ -199,20 +130,10 @@ describe("Frontend models - model preload", () => {
 
   it("transports selectsExtra in the request payload", async () => {
     const {Task} = buildModelClasses()
-    const fetchStub = stubFetch({
-      models: [{id: "1", name: "T", __preloadedRelationships: {comments: [{id: "5", body: "hi"}]}}]
-    })
 
-    try {
-      const task = Task.instantiateFromResponse({id: "1", name: "T"})
-
-      await task.preload(Task.preload("comments").selectsExtra({Comment: ["secret"]}))
-
+    await expectPreloadedComment(Task.preload("comments").selectsExtra({Comment: ["secret"]}), (fetchStub) => {
       expect(fetchStub.calls[0].body.selectsExtra).toEqual({Comment: ["secret"]})
-    } finally {
-      resetFrontendModelTransport()
-      fetchStub.restore()
-    }
+    })
   })
 
   it("skips re-loading an already-preloaded relationship unless forced", async () => {
@@ -312,24 +233,15 @@ describe("Frontend models - model preload", () => {
 
   it("always reloads for selectsExtra since defaults cannot be proven present", async () => {
     const {Task} = buildModelClasses()
-    const fetchStub = stubFetch({
-      models: [{id: "1", name: "T", __preloadedRelationships: {comments: [{id: "5", body: "hi"}]}}]
-    })
 
-    try {
-      const task = Task.instantiateFromResponse({id: "1", name: "T"})
-
-      await task.preload(Task.preload("comments").selectsExtra({Comment: ["body"]}))
+    await expectPreloadedComment(Task.preload("comments").selectsExtra({Comment: ["body"]}), async (fetchStub, task) => {
       expect(fetchStub.calls.length).toEqual(1)
 
       // Even though comments are already preloaded with `body`, selectsExtra can't
       // be proven complete from the cache, so it reloads.
       await task.preload(Task.preload("comments").selectsExtra({Comment: ["body"]}))
       expect(fetchStub.calls.length).toEqual(2)
-    } finally {
-      resetFrontendModelTransport()
-      fetchStub.restore()
-    }
+    })
   })
 
   it("keeps preload selects independent across cloned queries", () => {
