@@ -41,14 +41,15 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    */
   async withConnection(optionsOrCallback, callback) {
     const options = typeof optionsOrCallback == "function" ? {} : optionsOrCallback
-    const actualCallback = typeof optionsOrCallback == "function" ? optionsOrCallback : callback
-
-    if (!actualCallback) throw new Error("withConnection requires a callback")
 
     const connection = await this.checkout(options)
 
     try {
-      return await actualCallback(connection)
+      if (typeof optionsOrCallback == "function") return await optionsOrCallback(connection)
+
+      if (!callback) throw new Error("withConnection requires a callback")
+
+      return await callback(connection)
     } finally {
       await this.checkin(connection)
     }
