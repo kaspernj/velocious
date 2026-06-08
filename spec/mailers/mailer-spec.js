@@ -122,15 +122,17 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
    * @returns {Configuration}
    */
   function createConfiguration(directory) {
+    const databaseName = "mailer-test"
+
     return new Configuration({
       database: {
         test: {
           default: {
-            driver: SqliteDriver,
-            poolType: SingleMultiUsePool,
+            name: databaseName,
             type: "sqlite",
-            name: "mailer-test",
-            migrations: false
+            driver: SqliteDriver,
+            migrations: false,
+            poolType: SingleMultiUsePool,
           }
         }
       },
