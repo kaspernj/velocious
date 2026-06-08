@@ -29,6 +29,16 @@ class FakeWorkerHandler {
   }
 }
 
+/** @returns {HttpServer} - Test HTTP server with the minimal worker-handler configuration. */
+function buildWorkerHandlerTestServer() {
+  return new HttpServer({
+    configuration: {
+      debug: false,
+      getEnvironment: () => "test"
+    }
+  })
+}
+
 describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}}, () => {
   it("starts the configured worker handlers", async () => {
     const startedHandlers = []
@@ -55,12 +65,7 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
   })
 
   it("assigns connections across workers in round-robin order", () => {
-    const server = new HttpServer({
-      configuration: {
-        debug: false,
-        getEnvironment: () => "test"
-      }
-    })
+    const server = buildWorkerHandlerTestServer()
 
     server.workerHandlers = [
       {workerCount: 0},
@@ -72,6 +77,38 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     expect(server.workerHandlerToUse().workerCount).toEqual(1)
     expect(server.workerHandlerToUse().workerCount).toEqual(2)
     expect(server.workerHandlerToUse().workerCount).toEqual(0)
+  })
+
+  it("keeps sticky connections on the same worker", () => {
+    const server = buildWorkerHandlerTestServer()
+
+    server.workerHandlers = [
+      {workerCount: 0},
+      {workerCount: 1},
+      {workerCount: 2}
+    ]
+
+    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(0)
+    expect(server.workerHandlerToUse({stickyKey: "client-b"}).workerCount).toEqual(1)
+    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(0)
+    expect(server.workerHandlerToUse().workerCount).toEqual(2)
+  })
+
+  it("drops stale sticky workers after replacement", () => {
+    const server = buildWorkerHandlerTestServer()
+
+    server.workerHandlers = [
+      {workerCount: 0}
+    ]
+
+    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(0)
+
+    server.workerHandlers = [
+      {workerCount: 1}
+    ]
+    server.nextWorkerHandlerIndex = 0
+
+    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(1)
   })
 
   it("closes client connections when the worker exits unexpectedly", () => {

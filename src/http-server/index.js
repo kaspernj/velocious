@@ -53,6 +53,8 @@ export default class VelociousHttpServer {
   /** @type {Array<WorkerHandler | InProcessHandler>} */
   workerHandlers = []
   nextWorkerHandlerIndex = 0
+  /** @type {Map<string, WorkerHandler | InProcessHandler>} */
+  stickyWorkerHandlers = new Map()
 
   /**
    * @param {object} args - Options object.
@@ -134,6 +136,7 @@ export default class VelociousHttpServer {
     this.developmentReloader = startupState.developmentReloader
     this.netServer = startupState.netServer
     this.workerHandlers = startupState.workerHandlers
+    this.stickyWorkerHandlers.clear()
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
@@ -232,6 +235,7 @@ export default class VelociousHttpServer {
     const stopTasks = this.workerHandlers.map((handler) => handler.stop())
     await Promise.all(stopTasks)
     this.workerHandlers = []
+    this.stickyWorkerHandlers.clear()
   }
 
   /** @returns {void} - No return value.  */
@@ -266,7 +270,9 @@ export default class VelociousHttpServer {
     this.clientCount++
 
     try {
-      const workerHandler = this.workerHandlerToUse()
+      // Paused WebSocket sessions are worker-local, so reconnects from
+      // the same client address must return to the same worker.
+      const workerHandler = this.workerHandlerToUse({stickyKey: socket.remoteAddress})
       const client = new ServerClient({
         clientCount,
         configuration: this.configuration,
@@ -339,8 +345,31 @@ export default class VelociousHttpServer {
     return workerHandler
   }
 
-  /** @returns {WorkerHandler | InProcessHandler} - The worker handler to use. */
-  workerHandlerToUse() {
+  /**
+   * @param {object} [args] - Options object.
+   * @param {string} [args.stickyKey] - Stable key that must keep routing to the same worker.
+   * @returns {WorkerHandler | InProcessHandler} - The worker handler to use.
+   */
+  workerHandlerToUse({stickyKey} = {}) {
+    if (stickyKey) {
+      const stickyWorkerHandler = this.stickyWorkerHandlers.get(stickyKey)
+
+      if (stickyWorkerHandler && this.workerHandlers.includes(stickyWorkerHandler)) {
+        return stickyWorkerHandler
+      }
+
+      const workerHandler = this._nextRoundRobinWorkerHandler()
+
+      this.stickyWorkerHandlers.set(stickyKey, workerHandler)
+
+      return workerHandler
+    }
+
+    return this._nextRoundRobinWorkerHandler()
+  }
+
+  /** @returns {WorkerHandler | InProcessHandler} - The next round-robin worker handler. */
+  _nextRoundRobinWorkerHandler() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 
     const workerHandlerIndex = this.nextWorkerHandlerIndex % this.workerHandlers.length
@@ -399,6 +428,7 @@ export default class VelociousHttpServer {
 
         this.workerHandlers = newWorkerHandlers
         this.nextWorkerHandlerIndex = 0
+        this.stickyWorkerHandlers.clear()
 
         await Promise.all(oldWorkerHandlers.map((workerHandler) => workerHandler.stop()))
       } while (this._reloadWorkersForDevelopmentQueued && !this._stopping)
