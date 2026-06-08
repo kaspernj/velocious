@@ -318,14 +318,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /** @returns {Promise<void>} - Resolves when pending checkouts have been drained as far as possible. */
   async drainPendingCheckoutsActual() {
     while (this.pendingCheckouts.length > 0) {
-      const checkout = this.pendingCheckouts[0]
-      const connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+      if (await this.resolvePendingCheckoutWithMatchingIdleConnection()) continue
 
-      if (connection) {
-        this.pendingCheckouts.shift()
-        await this.resolvePendingCheckout(checkout, connection)
-        continue
-      }
+      const checkout = this.pendingCheckouts[0]
 
       if (await this.closeIdleConnectionForPendingCheckoutCapacity(checkout)) continue
       if (this.canSpawnConnection()) {
@@ -341,6 +336,23 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       this.pendingCheckouts.shift()
       await this.resolvePendingCheckout(checkout, reapedConnection)
     }
+  }
+
+  /** @returns {Promise<boolean>} - Whether a pending checkout was resolved with an idle connection. */
+  async resolvePendingCheckoutWithMatchingIdleConnection() {
+    for (let index = 0; index < this.pendingCheckouts.length; index++) {
+      const checkout = this.pendingCheckouts[index]
+      const connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+
+      if (!connection) continue
+
+      this.pendingCheckouts.splice(index, 1)
+      await this.resolvePendingCheckout(checkout, connection)
+
+      return true
+    }
+
+    return false
   }
 
   /**
