@@ -1,159 +1,68 @@
 import FrontendModelBase from "../../src/frontend-models/base.js"
+import {buildPreloadTestModelClasses, resetFrontendModelTransport, stubFrontendModelFetchWith} from "../helpers/frontend-model-test-helpers.js"
+
+const buildAutoloadTestModelClasses = buildPreloadTestModelClasses
+const stubFetchWith = stubFrontendModelFetchWith
+
+const TASK_SIBLING_MODELS = [
+  {id: "1", name: "Task one"},
+  {id: "2", name: "Task two"}
+]
 
 /**
- * @typedef {{body: Record<string, any>, url: string}} FetchCall
+ * @returns {{match: (body: Record<string, any>) => boolean, response: {models: Array<Record<string, any>>}}} - Initial sibling list responder.
  */
-
-/**
- * @returns {{Comment: typeof FrontendModelBase, Project: typeof FrontendModelBase, Task: typeof FrontendModelBase}} - Test classes with relationships.
- */
-function buildAutoloadTestModelClasses() {
-  /** Frontend model comment test class. */
-  class Comment extends FrontendModelBase {
-    /**
-     * @returns {{attributes: string[], commands: string[], primaryKey: string}}
-     */
-    static resourceConfig() {
-      return {
-        attributes: ["id", "body"],
-        commands: ["index"],
-        primaryKey: "id"
-      }
-    }
-  }
-
-  /** Frontend model task test class. */
-  class Task extends FrontendModelBase {
-    /**
-     * @returns {{attributes: string[], commands: string[], primaryKey: string}}
-     */
-    static resourceConfig() {
-      return {
-        attributes: ["id", "name"],
-        commands: ["index"],
-        primaryKey: "id"
-      }
-    }
-
-    /**
-     * @returns {Record<string, typeof FrontendModelBase>}
-     */
-    static relationshipModelClasses() {
-      return {
-        comments: Comment,
-        project: Project
-      }
-    }
-
-    /**
-     * @returns {Record<string, {type: "hasMany" | "belongsTo", autoload?: boolean}>}
-     */
-    static relationshipDefinitions() {
-      return {
-        comments: {type: "hasMany"},
-        project: {type: "belongsTo"}
-      }
-    }
-  }
-
-  /** Frontend model project test class. */
-  class Project extends FrontendModelBase {
-    /**
-     * @returns {{attributes: string[], commands: string[], primaryKey: string}}
-     */
-    static resourceConfig() {
-      return {
-        attributes: ["id", "name"],
-        commands: ["index"],
-        primaryKey: "id"
-      }
-    }
-
-    /**
-     * @returns {Record<string, typeof FrontendModelBase>}
-     */
-    static relationshipModelClasses() {
-      return {
-        tasks: Task
-      }
-    }
-
-    /**
-     * @returns {Record<string, {type: "hasMany", autoload?: boolean}>}
-     */
-    static relationshipDefinitions() {
-      return {
-        tasks: {type: "hasMany"}
-      }
-    }
-  }
-
-  return {Comment, Project, Task}
-}
-
-/**
- * Fetch stub that selects response per request URL + body. Each entry is tried
- * in order; the first predicate that returns truthy wins. When no predicate
- * matches, throws so the test fails loudly instead of hanging on a bad stub.
- * @param {Array<{match: (body: Record<string, any>, url: string) => boolean, response: Record<string, any>}>} responders
- * @returns {{calls: FetchCall[], restore: () => void}} - Stub handle.
- */
-function stubFetchWith(responders) {
-  const originalFetch = globalThis.fetch
-  /** @type {FetchCall[]} */
-  const calls = []
-
-  globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
-    const bodyString = typeof options?.body === "string" ? options.body : "{}"
-    const parsedBody = JSON.parse(bodyString)
-    const batchRequests = Array.isArray(parsedBody.requests) ? parsedBody.requests : null
-    const normalizedBody = batchRequests && batchRequests.length === 1 && typeof batchRequests[0] === "object"
-      ? batchRequests[0].payload
-      : parsedBody
-    const stringUrl = `${url}`
-
-    calls.push({body: normalizedBody, url: stringUrl})
-
-    let matchedResponse = null
-
-    for (const responder of responders) {
-      if (responder.match(normalizedBody, stringUrl)) {
-        matchedResponse = responder.response
-        break
-      }
-    }
-
-    if (!matchedResponse) {
-      throw new Error(`No stub responder matched request: ${JSON.stringify(normalizedBody)}`)
-    }
-
-    const responsePayload = batchRequests
-      ? {responses: batchRequests.map((req) => ({requestId: req.requestId, response: matchedResponse}))}
-      : matchedResponse
-
-    return {
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify(responsePayload),
-      json: async () => responsePayload
-    }
-  })
-
+function taskSiblingsResponder() {
   return {
-    calls,
-    restore: () => {
-      globalThis.fetch = originalFetch
-    }
+    match: (body) => !body.preload && !body.where,
+    response: {models: TASK_SIBLING_MODELS}
   }
 }
 
-/** @returns {void} */
-function resetFrontendModelTransport() {
-  FrontendModelBase.configureTransport({
-    shared: undefined,
-    url: undefined,
-    websocketClient: undefined
-  })
+/**
+ * @param {Array<Record<string, any>>} models - Response models.
+ * @returns {{match: (body: Record<string, any>) => boolean, response: {models: Array<Record<string, any>>}}} - Cohort project preload responder.
+ */
+function projectCohortResponder(models) {
+  return {
+    match: (body) => Boolean(body.preload?.project) && Array.isArray(body.where?.id),
+    response: {models}
+  }
+}
+
+/**
+ * @param {Array<Record<string, any>>} models - Response models.
+ * @returns {{match: (body: Record<string, any>) => boolean, response: {models: Array<Record<string, any>>}}} - Per-record project preload responder.
+ */
+function projectPerRecordResponder(models) {
+  return {
+    match: (body) => Boolean(body.preload?.project) && (typeof body.where?.id === "string" || typeof body.where?.id === "number"),
+    response: {models}
+  }
+}
+
+/**
+ * @param {typeof import("../../src/frontend-models/base.js").default} Task - Task frontend model class.
+ * @returns {Promise<void>}
+ */
+async function expectPerRecordProjectPreload(Task) {
+  const fetchStub = stubFetchWith([
+    taskSiblingsResponder(),
+    projectPerRecordResponder([{id: "1", name: "Task one", __preloadedRelationships: {project: {id: "101", name: "P1"}}}])
+  ])
+
+  try {
+    const tasks = await Task.toArray()
+
+    await tasks[0].relationshipOrLoad("project")
+
+    const secondRelationship = tasks[1].getRelationshipByName("project")
+
+    expect(secondRelationship.getPreloaded()).toEqual(false)
+  } finally {
+    resetFrontendModelTransport()
+    fetchStub.restore()
+  }
 }
 
 describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, () => {
@@ -161,26 +70,11 @@ describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, 
     const {Task} = buildAutoloadTestModelClasses()
 
     const fetchStub = stubFetchWith([
-      {
-        // Initial list without preload.
-        match: (body) => !body.preload && !body.where,
-        response: {
-          models: [
-            {id: "1", name: "Task one"},
-            {id: "2", name: "Task two"}
-          ]
-        }
-      },
-      {
-        // Cohort preload request for projects.
-        match: (body) => Boolean(body.preload?.project) && Array.isArray(body.where?.id) && body.where.id.length === 2,
-        response: {
-          models: [
-            {id: "1", name: "Task one", __preloadedRelationships: {project: {id: "101", name: "P1"}}},
-            {id: "2", name: "Task two", __preloadedRelationships: {project: {id: "102", name: "P2"}}}
-          ]
-        }
-      }
+      taskSiblingsResponder(),
+      projectCohortResponder([
+        {id: "1", name: "Task one", __preloadedRelationships: {project: {id: "101", name: "P1"}}},
+        {id: "2", name: "Task two", __preloadedRelationships: {project: {id: "102", name: "P2"}}}
+      ])
     ])
 
     try {
@@ -268,38 +162,10 @@ describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, 
       project: {type: "belongsTo", autoload: false}
     })
 
-    const fetchStub = stubFetchWith([
-      {
-        match: (body) => !body.preload && !body.where,
-        response: {
-          models: [
-            {id: "1", name: "Task one"},
-            {id: "2", name: "Task two"}
-          ]
-        }
-      },
-      {
-        // Per-record preload via .find() — where is a single id, not an array.
-        match: (body) => Boolean(body.preload?.project) && (typeof body.where?.id === "string" || typeof body.where?.id === "number"),
-        response: {
-          models: [{id: "1", name: "Task one", __preloadedRelationships: {project: {id: "101", name: "P1"}}}]
-        }
-      }
-    ])
-
     try {
-      const tasks = await Task.toArray()
-
-      await tasks[0].relationshipOrLoad("project")
-
-      // Sibling remains NOT preloaded — autoload disabled for this relationship.
-      const secondRelationship = tasks[1].getRelationshipByName("project")
-
-      expect(secondRelationship.getPreloaded()).toEqual(false)
+      await expectPerRecordProjectPreload(Task)
     } finally {
       Task.relationshipDefinitions = originalDefinitions
-      resetFrontendModelTransport()
-      fetchStub.restore()
     }
   })
 
@@ -309,36 +175,10 @@ describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, 
 
     FrontendModelBase.setAutoload(false)
 
-    const fetchStub = stubFetchWith([
-      {
-        match: (body) => !body.preload && !body.where,
-        response: {
-          models: [
-            {id: "1", name: "Task one"},
-            {id: "2", name: "Task two"}
-          ]
-        }
-      },
-      {
-        match: (body) => Boolean(body.preload?.project) && (typeof body.where?.id === "string" || typeof body.where?.id === "number"),
-        response: {
-          models: [{id: "1", name: "Task one", __preloadedRelationships: {project: {id: "101", name: "P1"}}}]
-        }
-      }
-    ])
-
     try {
-      const tasks = await Task.toArray()
-
-      await tasks[0].relationshipOrLoad("project")
-
-      const secondRelationship = tasks[1].getRelationshipByName("project")
-
-      expect(secondRelationship.getPreloaded()).toEqual(false)
+      await expectPerRecordProjectPreload(Task)
     } finally {
       FrontendModelBase.setAutoload(originalAutoload)
-      resetFrontendModelTransport()
-      fetchStub.restore()
     }
   })
 
@@ -346,29 +186,9 @@ describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, 
     const {Task} = buildAutoloadTestModelClasses()
 
     const fetchStub = stubFetchWith([
-      {
-        match: (body) => !body.preload && !body.where,
-        response: {
-          models: [
-            {id: "1", name: "Task one"},
-            {id: "2", name: "Task two"}
-          ]
-        }
-      },
-      {
-        // Cohort preload request — server only returns the other sibling, not the caller.
-        match: (body) => Boolean(body.preload?.project) && Array.isArray(body.where?.id),
-        response: {
-          models: [
-            {id: "2", name: "Task two", __preloadedRelationships: {project: {id: "102", name: "P2"}}}
-          ]
-        }
-      },
-      {
-        // Per-record fallback — the record was deleted so the backend returns an empty list.
-        match: (body) => Boolean(body.preload?.project) && (typeof body.where?.id === "string" || typeof body.where?.id === "number"),
-        response: {models: []}
-      }
+      taskSiblingsResponder(),
+      projectCohortResponder([{id: "2", name: "Task two", __preloadedRelationships: {project: {id: "102", name: "P2"}}}]),
+      projectPerRecordResponder([])
     ])
 
     try {
@@ -402,24 +222,10 @@ describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, 
     const {Project, Task} = buildAutoloadTestModelClasses()
 
     const fetchStub = stubFetchWith([
-      {
-        match: (body) => !body.preload && !body.where,
-        response: {
-          models: [
-            {id: "1", name: "Task one"},
-            {id: "2", name: "Task two"}
-          ]
-        }
-      },
-      {
-        match: (body) => Boolean(body.preload?.project) && Array.isArray(body.where?.id),
-        response: {
-          models: [
-            {id: "1", name: "Task one", __preloadedRelationships: {project: {id: "101", name: "P1"}}}
-            // Intentionally omit task 2 — cohort code must skip it because it's locally touched.
-          ]
-        }
-      }
+      taskSiblingsResponder(),
+      projectCohortResponder([
+        {id: "1", name: "Task one", __preloadedRelationships: {project: {id: "101", name: "P1"}}}
+      ])
     ])
 
     try {
