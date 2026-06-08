@@ -107,6 +107,7 @@ export default class VelociousConfiguration {
     this._initializeModels = initializeModels
     this._isInitialized = false
     this.httpServer = httpServer || {}
+    /** @type {{getDebugSnapshot: () => Promise<Record<string, unknown>>} | undefined} */
     this._httpServerInstance = undefined
     this.locale = locale
     this.localeFallbacks = localeFallbacks
@@ -177,9 +178,6 @@ export default class VelociousConfiguration {
 
   /** @returns {boolean} Whether unexpected internal error details may be returned to API clients. */
   getExposeInternalErrorsToClients() { return this._exposeInternalErrorsToClients === true }
-
-  /** @param {{getDebugSnapshot?: () => Promise<Record<string, unknown>>} | undefined} httpServer - Active HTTP server. */
-  setHttpServerInstance(httpServer) { this._httpServerInstance = httpServer }
 
   /** @returns {{enabled: boolean, path: string, token: string | null}} - Debug endpoint configuration. */
   getDebugEndpoint() { return this._debugEndpoint }
