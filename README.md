@@ -1442,7 +1442,7 @@ database: {
 }
 ```
 
-`pool.max` caps live async-tracked connections for that pool. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed.
+`pool.max` caps live async-tracked connections for that pool. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, and queued `pendingCheckouts[].waitingForMs` so production diagnostics can distinguish long-held checkouts from pool-capacity waits.
 
 # Websockets
 

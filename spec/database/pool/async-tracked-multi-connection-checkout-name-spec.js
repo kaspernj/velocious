@@ -8,6 +8,7 @@ import os from "os"
 import path from "path"
 import SqliteDriver from "../../../src/database/drivers/sqlite/index.js"
 import timeout from "awaitery/build/timeout.js"
+import wait from "awaitery/build/wait.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
 class CheckoutNameFailingSqliteDriver extends SqliteDriver {
@@ -47,15 +48,50 @@ async function testConfiguration() {
   })
 }
 
+/**
+ * @param {(pool: AsyncTrackedMultiConnection) => Promise<void>} callback - Spec body.
+ * @returns {Promise<void>} - Resolves after closing database connections.
+ */
+async function withCheckoutNamePool(callback) {
+  const configuration = await testConfiguration()
+
+  try {
+    const pool = configuration.getDatabasePool("default")
+
+    if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected async tracked pool")
+
+    await callback(pool)
+  } finally {
+    await configuration.closeDatabaseConnections()
+  }
+}
+
+/**
+ * @param {import("../../../src/database/pool/base.js").DatabasePoolDebugSnapshot} snapshot - Pool debug snapshot.
+ * @returns {void}
+ */
+function expectWaitingCheckoutSnapshot(snapshot) {
+  expect(snapshot.inUseCount).toBe(1)
+  expect(snapshot.pendingCheckoutCount).toBe(1)
+  expect(snapshot.pendingCheckouts?.[0]?.checkoutName).toBe("waiting checkout")
+  expect(snapshot.pendingCheckouts?.[0]?.waitingForMs).toBeGreaterThanOrEqual(0)
+}
+
+/**
+ * @param {import("../../../src/database/pool/base.js").DatabasePoolDebugSnapshot} snapshot - Pool debug snapshot.
+ * @returns {void}
+ */
+function expectLongCheckoutSnapshot(snapshot) {
+  const inUseConnection = snapshot.connections.find((connection) => connection.state === "in-use")
+
+  expect(inUseConnection?.checkoutName).toBe("long checkout")
+  expect(inUseConnection?.checkedOutAt).toBeGreaterThan(0)
+  expect(inUseConnection?.checkedOutForMs).toBeGreaterThanOrEqual(0)
+}
+
 describe("database - pool - async tracked multi connection checkout names", () => {
   it("rejects a queued checkout when activation fails", async () => {
-    const configuration = await testConfiguration()
-
-    try {
-      const pool = configuration.getDatabasePool("default")
-
-      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected async tracked pool")
-
+    await withCheckoutNamePool(async (pool) => {
       const firstConnection = await pool.checkout({name: "first checkout"})
       const queuedCheckout = pool.checkout({name: "fail activation"})
 
@@ -72,8 +108,26 @@ describe("database - pool - async tracked multi connection checkout names", () =
       })
 
       expect(pool.pendingCheckouts.length).toBe(0)
-    } finally {
-      await configuration.closeDatabaseConnections()
-    }
+    })
+  })
+
+  it("reports in-use and pending checkout timing in debug snapshots", async () => {
+    await withCheckoutNamePool(async (pool) => {
+      const firstConnection = await pool.checkout({name: "long checkout"})
+      const queuedCheckout = pool.checkout({name: "waiting checkout"})
+
+      await wait(0.02)
+
+      const snapshot = pool.getDebugSnapshot()
+
+      expectWaitingCheckoutSnapshot(snapshot)
+      expectLongCheckoutSnapshot(snapshot)
+
+      await pool.checkin(firstConnection)
+
+      const secondConnection = await queuedCheckout
+
+      await pool.checkin(secondConnection)
+    })
   })
 })
