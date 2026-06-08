@@ -10,6 +10,7 @@ import restArgsError from "./utils/rest-args-error.js"
  * @typedef {object} HttpServerConfiguration
  * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
  * @property {number} [maxWorkers] - Max worker threads for the HTTP server.
+ * @property {number} [workers] - Worker threads to start for the HTTP server.
  * @property {string} [host] - Hostname to bind the HTTP server to.
  * @property {number} [port] - Port to bind the HTTP server to.
  */
@@ -88,7 +89,14 @@ export default class VelociousApplication {
 
     await configuration.connectBeacon({peerType: "server"})
 
-    this.httpServer = new HttpServer({configuration, inProcess: httpServerConfiguration.inProcess, port})
+    this.httpServer = new HttpServer({
+      configuration,
+      host: httpServerConfiguration.host,
+      inProcess: httpServerConfiguration.inProcess,
+      maxWorkers: httpServerConfiguration.maxWorkers,
+      port,
+      workers: httpServerConfiguration.workers
+    })
     this.httpServer.events.on("close", this.onHttpServerClose)
 
     await this.httpServer.start()

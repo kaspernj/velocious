@@ -12,6 +12,22 @@ import WorkerHandler from "./worker-handler/index.js"
 /** @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
 /** @typedef {function({configuration: import("../configuration.js").default, workerCount: number}) : (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
 
+/**
+ * @param {object} args - Options object.
+ * @param {number} [args.maxWorkers] - Backward-compatible worker count alias.
+ * @param {number} [args.workers] - Configured worker count.
+ * @returns {number} - Normalized worker count.
+ */
+function normalizeWorkerCount({maxWorkers, workers}) {
+  const workerCount = workers ?? maxWorkers ?? 1
+
+  if (!Number.isInteger(workerCount) || workerCount < 1) {
+    throw new Error("HTTP server workers must be a positive integer")
+  }
+
+  return workerCount
+}
+
 export default class VelociousHttpServer {
   clientCount = 0
   _starting = false
@@ -36,6 +52,7 @@ export default class VelociousHttpServer {
 
   /** @type {Array<WorkerHandler | InProcessHandler>} */
   workerHandlers = []
+  nextWorkerHandlerIndex = 0
 
   /**
    * @param {object} args - Options object.
@@ -44,10 +61,11 @@ export default class VelociousHttpServer {
    * @param {boolean} [args.inProcess] - Run HTTP handlers in the main thread instead of worker threads.
    * @param {number} [args.port] - Port.
    * @param {number} [args.maxWorkers] - Max workers.
+   * @param {number} [args.workers] - Worker handlers to start.
    * @param {function({configuration: import("../configuration.js").default, onReload: function({changedPath: string}) : Promise<void>}) : {start: () => Promise<void>, stop: () => Promise<void>}} [args.developmentReloaderFactory] - Development reloader factory.
    * @param {WorkerHandlerFactory} [args.workerHandlerFactory] - Worker handler factory.
    */
-  constructor({configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port, workerHandlerFactory}) {
+  constructor({configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port, workerHandlerFactory, workers}) {
     this.configuration = configuration
     this.developmentReloaderFactory = developmentReloaderFactory
     this.workerHandlerFactory = workerHandlerFactory
@@ -55,7 +73,7 @@ export default class VelociousHttpServer {
     this.logger = new Logger(this)
     this.host = host ?? "0.0.0.0"
     this.port = port ?? 3006
-    this.maxWorkers = maxWorkers ?? 16
+    this.workers = normalizeWorkerCount({maxWorkers, workers})
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
@@ -67,7 +85,7 @@ export default class VelociousHttpServer {
     const startupState = this._captureStartupState()
 
     try {
-      await this._ensureAtLeastOneWorker()
+      await this._ensureWorkers()
       await this._startDevelopmentReloader()
       /** @type {import("net").Server} */
       const netServer = new Net.Server()
@@ -143,8 +161,8 @@ export default class VelociousHttpServer {
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
-  async _ensureAtLeastOneWorker() {
-    if (this.workerHandlers.length == 0) {
+  async _ensureWorkers() {
+    while (this.workerHandlers.length < this.workers) {
       await this.spawnWorker()
     }
   }
@@ -290,6 +308,18 @@ export default class VelociousHttpServer {
     this.workerHandlers.push(workerHandler)
   }
 
+  /** @returns {Promise<Array<WorkerHandler | InProcessHandler>>} - Started worker handlers. */
+  async _buildWorkerHandlers() {
+    /** @type {Array<WorkerHandler | InProcessHandler>} */
+    const workerHandlers = []
+
+    for (let index = 0; index < this.workers; index += 1) {
+      workerHandlers.push(await this._buildWorkerHandler())
+    }
+
+    return workerHandlers
+  }
+
   /** @returns {Promise<WorkerHandler | InProcessHandler>} - Started worker handler. */
   async _buildWorkerHandler() {
     const workerCount = this.workerCount
@@ -313,12 +343,14 @@ export default class VelociousHttpServer {
   workerHandlerToUse() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 
-    const randomWorkerNumber = Math.floor(Math.random() * this.workerHandlers.length)
-    const workerHandler = this.workerHandlers[randomWorkerNumber]
+    const workerHandlerIndex = this.nextWorkerHandlerIndex % this.workerHandlers.length
+    const workerHandler = this.workerHandlers[workerHandlerIndex]
 
     if (!workerHandler) {
-      throw new Error(`No workerHandler by that number: ${randomWorkerNumber}`)
+      throw new Error(`No workerHandler by that number: ${workerHandlerIndex}`)
     }
+
+    this.nextWorkerHandlerIndex += 1
 
     return workerHandler
   }
@@ -363,9 +395,10 @@ export default class VelociousHttpServer {
         this._reloadWorkersForDevelopmentQueued = false
 
         const oldWorkerHandlers = [...this.workerHandlers]
-        const newWorkerHandler = await this._buildWorkerHandler()
+        const newWorkerHandlers = await this._buildWorkerHandlers()
 
-        this.workerHandlers = [newWorkerHandler]
+        this.workerHandlers = newWorkerHandlers
+        this.nextWorkerHandlerIndex = 0
 
         await Promise.all(oldWorkerHandlers.map((workerHandler) => workerHandler.stop()))
       } while (this._reloadWorkersForDevelopmentQueued && !this._stopping)
