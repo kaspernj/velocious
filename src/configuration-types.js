@@ -173,6 +173,7 @@
  * @property {string} [host] - Hostname of the Beacon broker daemon.
  * @property {number} [port] - Port of the Beacon broker daemon.
  * @property {string} [peerType] - Optional human-readable label for this peer (e.g. "server", "background-jobs-worker").
+ * @property {number} [unreachableReportMs] - Grace window (ms) a beacon connect/disconnect blip must persist before it is reported as a framework-error. Transient outages that recover within this window (e.g. a deploy restarting the broker) are not reported. Defaults to 30000.
  */
 
 /**

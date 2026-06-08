@@ -66,6 +66,10 @@ returns `undefined` and `broadcastToChannel` keeps using its existing
 local-only path. Set `beacon: {enabled: false}` to disable explicitly
 when env vars are present (useful in tests).
 
+`beacon: {unreachableReportMs}` tunes how long the broker must stay
+unreachable before a failure is reported (default `30000`); see
+*Error reporting* below.
+
 ## Connecting a peer
 
 Peers shipped by Velocious connect automatically:
@@ -175,24 +179,43 @@ connection drops mid-session, the failure is surfaced on
 ```js
 configuration.getErrorEvents().on("framework-error", ({context, error}) => {
   if (context.stage === "beacon-connect") {
-    // Broker unreachable on initial connect (or during reconnect attempts).
+    // Broker still unreachable after the grace window.
   } else if (context.stage === "beacon-disconnect") {
-    // An established connection dropped.
+    // Connection dropped and did not recover within the grace window.
   }
 
   Sentry.captureException(error, {tags: {component: "beacon", stage: context.stage}})
 })
 ```
 
-Stages emitted today:
+### Transient blips are not reported
 
-- `"beacon-connect"` — fired when the initial TCP connect fails or the
-  broker rejects the handshake. Reconnect attempts continue in the
-  background; further failures fire the same event again.
-- `"beacon-disconnect"` — fired once when an established connection
-  drops. The `error` is the underlying socket error if there was one,
-  or `Error("Beacon broker disconnected")` otherwise. Explicit
-  `disconnectBeacon()` calls do **not** fire this event.
+Connect/disconnect blips are expected during deploys (the broker
+restarts) and the BeaconClient auto-reconnects with backoff, so a
+single failure is **not** reported immediately. Instead, a failure
+starts a grace timer; the framework-error is emitted **only if the
+broker is still unreachable after `beacon.unreachableReportMs`**
+(default `30000`). A (re)connect within that window clears the pending
+report, so a transient outage that recovers is never surfaced. Each
+sustained outage is reported **once** (it does not re-fire on every
+reconnect attempt), and the state resets on recovery so a later outage
+reports again.
+
+Tune the grace window with `beacon: {unreachableReportMs}` — lower it
+for faster alerting, raise it to ride out longer deploy windows. Set it
+to `0` to report essentially immediately. Genuine sustained outages
+still alert.
+
+Stages emitted:
+
+- `"beacon-connect"` — the initial TCP connect failed (or the broker
+  rejected the handshake) and the broker was still unreachable after the
+  grace window. Reconnect attempts continue in the background.
+- `"beacon-disconnect"` — an established connection dropped and did not
+  recover within the grace window. The `error` is the underlying socket
+  error if there was one, or `Error("Beacon broker disconnected")`
+  otherwise. Explicit `disconnectBeacon()` calls do **not** fire this
+  event.
 - `"beacon-ready"` — fired by background job runner processes when the
   daemon does not acknowledge peer registration before the runner's
   readiness timeout. The job still runs, but broadcasts fall back to
