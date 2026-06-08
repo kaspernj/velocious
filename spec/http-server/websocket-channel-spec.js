@@ -5,6 +5,21 @@ import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import wait from "awaitery/build/wait.js"
+import WebsocketChannel from "../../src/http-server/websocket-channel.js"
+
+class ReorderedDebugChannel extends WebsocketChannel {
+  /** @returns {boolean} Whether the subscription is allowed. */
+  canSubscribe() { return true }
+
+  /** @returns {Record<string, unknown>} Debug details with intentionally unstable key order. */
+  debugSnapshot() {
+    if (this.params.reversed === true) {
+      return {outer: {b: 2, a: 1}, value: "same"}
+    }
+
+    return {value: "same", outer: {a: 1, b: 2}}
+  }
+}
 
 /**
  * @param {() => boolean} predicate
@@ -184,6 +199,41 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
         expect(counterSubscription?.details).toContainEqual({
           count: counterSubscription?.count,
           details: {}
+        })
+      } finally {
+        await clientA.close()
+        await clientB.close()
+      }
+    })
+  })
+
+  it("canonicalizes channel subscription debug snapshot keys before grouping", async () => {
+    await Dummy.run(async () => {
+      dummyConfiguration.registerWebsocketChannel("ReorderedDebug", ReorderedDebugChannel)
+      const clientA = new WebsocketClient()
+      const clientB = new WebsocketClient()
+
+      try {
+        await clientA.connect()
+        await clientB.connect()
+
+        const subA = clientA.subscribeChannel("ReorderedDebug", {params: {reversed: false}})
+        const subB = clientB.subscribeChannel("ReorderedDebug", {params: {reversed: true}})
+
+        await Promise.all([subA.ready, subB.ready])
+
+        const snapshot = dummyConfiguration.getLocalDebugSnapshot()
+        const reorderedSubscription = snapshot.websockets.subscriptions.find((subscription) => subscription.channel === "ReorderedDebug")
+
+        expect(reorderedSubscription).toEqual({
+          channel: "ReorderedDebug",
+          count: 2,
+          details: [
+            {
+              count: 2,
+              details: {outer: {a: 1, b: 2}, value: "same"}
+            }
+          ]
         })
       } finally {
         await clientA.close()

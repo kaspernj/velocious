@@ -35,6 +35,20 @@ function currentWorkingDirectory() {
 }
 
 /**
+ * @param {unknown} value - Snapshot value to canonicalize.
+ * @returns {unknown} Snapshot value with object keys sorted recursively.
+ */
+function canonicalDebugSnapshotValue(value) {
+  if (!value || typeof value !== "object") return value
+  if (Array.isArray(value)) return value.map((entry) => canonicalDebugSnapshotValue(entry))
+
+  return Object.keys(value).sort().reduce((result, key) => {
+    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, unknown>} */ (value)[key])
+    return result
+  }, /** @type {Record<string, unknown>} */ ({}))
+}
+
+/**
  * @param {import("./configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Base database configuration.
  * @param {import("./configuration-types.js").DatabaseConfigurationType | Partial<import("./configuration-types.js").DatabaseConfigurationType> | void} overrideConfiguration - Tenant override configuration.
  * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Merged database configuration.
@@ -432,7 +446,7 @@ export default class VelociousConfiguration {
       const detailsBuckets = new Map()
 
       for (const subscription of channelSubscriptions) {
-        const details = subscription.debugSnapshot()
+        const details = /** @type {Record<string, unknown>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
         const key = JSON.stringify(details)
         const existingBucket = detailsBuckets.get(key)
 
