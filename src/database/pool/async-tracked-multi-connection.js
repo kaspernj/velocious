@@ -109,7 +109,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     delete trackedConnection[CONNECTION_CHECKED_OUT_AT]
     this.connections.push(connection)
     await this.drainPendingCheckouts()
-    await this.handleCheckedInIdleConnection()
+    if (this.connections.includes(connection)) await this.handleCheckedInIdleConnection()
   }
 
   /**
@@ -319,6 +319,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   async drainPendingCheckoutsActual() {
     while (this.pendingCheckouts.length > 0) {
       const checkout = this.pendingCheckouts[0]
+      const connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
+
+      if (connection) {
+        this.pendingCheckouts.shift()
+        await this.resolvePendingCheckout(checkout, connection)
+        continue
+      }
 
       if (await this.closeIdleConnectionForPendingCheckoutCapacity(checkout)) continue
       if (this.canSpawnConnection()) {
@@ -327,12 +334,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
         continue
       }
 
-      const connection = await this.idleConnectionForPendingCheckout(checkout)
+      const reapedConnection = await this.idleConnectionForPendingCheckout(checkout)
 
-      if (!connection) return
+      if (!reapedConnection) return
 
       this.pendingCheckouts.shift()
-      await this.resolvePendingCheckout(checkout, connection)
+      await this.resolvePendingCheckout(checkout, reapedConnection)
     }
   }
 
@@ -611,19 +618,19 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {void}
    */
   addFallbackDebugConnectionSnapshots({connections, seenConnections}) {
-    this.addDebugConnectionSnapshotIfUnseen({connection: this.getGlobalConnectionForIdentifier(), connections, seenConnections, state: "global"})
-    this.addDebugConnectionSnapshotIfUnseen({connection: this._testSharedConnection, connections, seenConnections, state: "test-shared"})
+    this.addDebugConnectionSnapshotIfUnseen({connection: this.getGlobalConnectionForIdentifier(), connections, reapable: false, seenConnections, state: "global"})
+    this.addDebugConnectionSnapshotIfUnseen({connection: this._testSharedConnection, connections, reapable: false, seenConnections, state: "test-shared"})
   }
 
   /**
-   * @param {{connection: import("../drivers/base.js").default | undefined, connections: Array<Record<string, unknown>>, seenConnections: Set<import("../drivers/base.js").default>, state: string}} args - Snapshot collection state.
+   * @param {{connection: import("../drivers/base.js").default | undefined, connections: Array<Record<string, unknown>>, reapable?: boolean, seenConnections: Set<import("../drivers/base.js").default>, state: string}} args - Snapshot collection state.
    * @returns {void}
    */
-  addDebugConnectionSnapshotIfUnseen({connection, connections, seenConnections, state}) {
+  addDebugConnectionSnapshotIfUnseen({connection, connections, reapable, seenConnections, state}) {
     if (!connection || seenConnections.has(connection)) return
 
     seenConnections.add(connection)
-    connections.push(this.debugConnectionSnapshot(connection, {state}))
+    connections.push(this.debugConnectionSnapshot(connection, {reapable, state}))
   }
 
   /**

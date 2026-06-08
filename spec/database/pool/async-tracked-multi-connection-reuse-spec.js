@@ -297,6 +297,107 @@ describe("database - pool - async tracked multi connection reuse", () => {
     })
   })
 
+  it("hands a matching idle connection to pending checkouts before waiting for spawn capacity", async () => {
+    await withIsolatedPool(async (pool) => {
+      pool.getConfiguration().pool = {idleTimeoutMillis: 0, max: 1}
+
+      const firstConnection = await pool.checkout()
+      const reuseKey = pool.getConfigurationReuseKey()
+
+      let pendingResolved = false
+      const pendingConnectionPromise = new Promise((resolve, reject) => {
+        pool.pendingCheckouts.push({
+          databaseConfig: pool.getConfiguration(),
+          enqueuedAt: Date.now(),
+          options: {},
+          reject,
+          resolve,
+          reuseKey
+        })
+      }).then((connection) => {
+        pendingResolved = true
+
+        return connection
+      })
+
+      await pool.checkin(firstConnection)
+
+      expect(pendingResolved).toBe(true)
+
+      const pendingConnection = await pendingConnectionPromise
+
+      expect(pendingConnection).toBe(firstConnection)
+      expect(pool.connections.includes(firstConnection)).toBe(false)
+
+      await pool.checkin(firstConnection)
+    })
+  })
+
+  it("does not let a blocked pending checkout prevent later matching idle reuse", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-pending-head-of-line")
+
+    try {
+      configuration.getDatabaseConfiguration().projectTenant.pool = {max: 2}
+      const pool = configuration.getDatabasePool("projectTenant")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      const betaConnection = await configuration.runWithTenant({slug: "beta"}, async () => {
+        return await pool.checkout()
+      })
+      const gammaConnection = await configuration.runWithTenant({slug: "gamma"}, async () => {
+        return await pool.checkout()
+      })
+
+      await configuration.runWithTenant({slug: "gamma"}, async () => {
+        await pool.checkin(gammaConnection)
+      })
+
+      let alphaResolved = false
+      let gammaResolved = false
+      const alphaConnectionPromise = configuration.runWithTenant({slug: "alpha"}, async () => {
+        const connection = await pool.checkout()
+
+        alphaResolved = true
+
+        return connection
+      })
+      const pendingGammaConnectionPromise = configuration.runWithTenant({slug: "gamma"}, async () => {
+        const connection = await pool.checkout()
+
+        gammaResolved = true
+
+        return connection
+      })
+
+      await wait(0.02)
+
+      expect(alphaResolved).toBe(false)
+      expect(gammaResolved).toBe(true)
+
+      const pendingGammaConnection = await pendingGammaConnectionPromise
+
+      expect(pendingGammaConnection).toBe(gammaConnection)
+
+      await configuration.runWithTenant({slug: "beta"}, async () => {
+        await pool.checkin(betaConnection)
+      })
+
+      const alphaConnection = await alphaConnectionPromise
+
+      expect(alphaConnection.getArgs().name).toEqual("velocious-pool-pending-head-of-line-projectTenant-alpha")
+
+      await configuration.runWithTenant({slug: "gamma"}, async () => {
+        await pool.checkin(pendingGammaConnection)
+      })
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await pool.checkin(alphaConnection)
+      })
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("counts in-progress direct checkout spawns against the max connection cap", async () => {
     const {cleanup, configuration} = await createSpawnBlockingConfiguration("velocious-pool-spawn-cap")
 
