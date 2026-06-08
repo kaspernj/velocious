@@ -6,13 +6,7 @@ import HttpServer from "./http-server/index.js"
 import websocketEventsHost from "./http-server/websocket-events-host.js"
 import restArgsError from "./utils/rest-args-error.js"
 
-/**
- * @typedef {object} HttpServerConfiguration
- * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
- * @property {number} [maxWorkers] - Max worker threads for the HTTP server.
- * @property {string} [host] - Hostname to bind the HTTP server to.
- * @property {number} [port] - Port to bind the HTTP server to.
- */
+/** @typedef {import("./configuration-types.js").HttpServerConfiguration} HttpServerConfiguration */
 
 export default class VelociousApplication {
   /**
@@ -29,7 +23,7 @@ export default class VelociousApplication {
     this.configuration = configuration
 
     /** @type {HttpServerConfiguration} */
-    this.httpServerConfiguration = httpServer ?? {port: undefined}
+    this.httpServerConfiguration = httpServer ?? {}
 
     this.logger = new Logger(this)
     this._type = type
@@ -77,8 +71,12 @@ export default class VelociousApplication {
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async startHttpServer() {
-    const {configuration, httpServerConfiguration} = this
-    const port = httpServerConfiguration.port || 3006
+    const {configuration} = this
+    const httpServerConfiguration = {
+      ...configuration.httpServer,
+      ...this.httpServerConfiguration
+    }
+    const port = httpServerConfiguration.port ?? 3006
 
     await this.logger.debug(`Starting server on port ${port}`)
 
@@ -88,7 +86,14 @@ export default class VelociousApplication {
 
     await configuration.connectBeacon({peerType: "server"})
 
-    this.httpServer = new HttpServer({configuration, inProcess: httpServerConfiguration.inProcess, port})
+    this.httpServer = new HttpServer({
+      configuration,
+      host: httpServerConfiguration.host,
+      inProcess: httpServerConfiguration.inProcess,
+      maxWorkers: httpServerConfiguration.maxWorkers,
+      port,
+      workers: httpServerConfiguration.workers
+    })
     this.httpServer.events.on("close", this.onHttpServerClose)
 
     await this.httpServer.start()

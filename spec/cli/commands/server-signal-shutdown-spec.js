@@ -2,7 +2,7 @@
 
 import {EventEmitter} from "node:events"
 import {describe, expect, it} from "../../../src/testing/test.js"
-import {waitForApplicationWithSignalShutdown} from "../../../src/environment-handlers/node/cli/commands/server.js"
+import {httpServerConfigFromParsedArgs, waitForApplicationWithSignalShutdown} from "../../../src/environment-handlers/node/cli/commands/server.js"
 
 /** Fake application for signal-shutdown command tests. */
 class FakeApplication {
@@ -48,6 +48,37 @@ function waitForTick() {
 }
 
 describe("VelociousCliCommandsServer signal shutdown", () => {
+  it("builds server HTTP config with optional workers", () => {
+    expect(httpServerConfigFromParsedArgs({host: "0.0.0.0", port: "4000", workers: "4"})).toEqual({
+      host: "0.0.0.0",
+      port: 4000,
+      workers: 4
+    })
+    expect(httpServerConfigFromParsedArgs({})).toEqual({
+      host: "127.0.0.1",
+      port: 3006
+    })
+  })
+
+  it("uses configuration HTTP server defaults and lets CLI args override them", () => {
+    expect(httpServerConfigFromParsedArgs({}, {host: "0.0.0.0", port: 4100, workers: 2})).toEqual({
+      host: "0.0.0.0",
+      port: 4100,
+      workers: 2
+    })
+    expect(httpServerConfigFromParsedArgs({port: "4200", workers: "4"}, {host: "0.0.0.0", port: 4100, workers: 2})).toEqual({
+      host: "0.0.0.0",
+      port: 4200,
+      workers: 4
+    })
+  })
+
+  it("rejects invalid server worker counts", () => {
+    expect(() => httpServerConfigFromParsedArgs({workers: true})).toThrowError("--workers must be a positive integer")
+    expect(() => httpServerConfigFromParsedArgs({workers: "0"})).toThrowError("--workers must be a positive integer")
+    expect(() => httpServerConfigFromParsedArgs({workers: "two"})).toThrowError("--workers must be a positive integer")
+  })
+
   it("stops the application when SIGTERM is received", async () => {
     const application = new FakeApplication()
     const processObject = new EventEmitter()

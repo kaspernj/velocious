@@ -73,7 +73,8 @@ describe("HttpServer - listen errors", {databaseCleaning: {transaction: true}}, 
       configuration: buildConfiguration(),
       host: "127.0.0.1",
       port,
-      workerHandlerFactory: ({workerCount}) => new TestWorkerHandler({stoppedWorkers, workerCount})
+      workerHandlerFactory: ({workerCount}) => new TestWorkerHandler({stoppedWorkers, workerCount}),
+      workers: 3
     })
 
     let startupError
@@ -94,7 +95,7 @@ describe("HttpServer - listen errors", {databaseCleaning: {transaction: true}}, 
     })
 
     expect(startupError.code).toEqual("EADDRINUSE")
-    expect(stoppedWorkers).toEqual(["worker-0"])
+    expect(stoppedWorkers).toEqual(["worker-0", "worker-1", "worker-2"])
     expect(server.isActive()).toBeFalse()
   })
 

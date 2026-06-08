@@ -75,25 +75,60 @@ export function waitForApplicationWithSignalShutdown({application, processObject
   })
 }
 
+/**
+ * @template T
+ * @param {...(T | undefined)} values - Candidate values in priority order.
+ * @returns {T | undefined} - First configured value.
+ */
+function firstConfiguredValue(...values) {
+  return values.find((value) => value !== undefined)
+}
+
+/**
+ * @param {string | number | boolean | undefined} workersArg - Worker count argument.
+ * @returns {number | undefined} - Normalized worker count.
+ */
+function httpServerWorkersFromArg(workersArg) {
+  if (workersArg === undefined) return undefined
+  if (typeof workersArg === "boolean") throw new Error("--workers must be a positive integer")
+
+  const workers = Number(workersArg)
+
+  if (!Number.isInteger(workers) || workers < 1) throw new Error("--workers must be a positive integer")
+
+  return workers
+}
+
+/**
+ * @param {Record<string, string | number | boolean | undefined>} parsedProcessArgs - Parsed CLI args.
+ * @param {import("../../../../configuration-types.js").HttpServerConfiguration} [defaults] - Default HTTP server config.
+ * @returns {{host: string, port: number, workers?: number}} - HTTP server config.
+ */
+export function httpServerConfigFromParsedArgs(parsedProcessArgs = {}, defaults = {}) {
+  const host = String(firstConfiguredValue(parsedProcessArgs.h, parsedProcessArgs.host, defaults.host, "127.0.0.1"))
+  const port = Number(firstConfiguredValue(parsedProcessArgs.p, parsedProcessArgs.port, defaults.port, 3006))
+  const workers = httpServerWorkersFromArg(firstConfiguredValue(parsedProcessArgs.workers, defaults.workers))
+
+  if (workers === undefined) return {host, port}
+  return {host, port, workers}
+}
+
 export default class VelociousCliCommandsServer extends BaseCommand{
   /** @returns {Promise<void>} - Starts the HTTP server and waits until it stops. */
   async execute() {
     const parsedProcessArgs = this.args?.parsedProcessArgs || {}
-    const host = String(parsedProcessArgs.h || parsedProcessArgs.host || "127.0.0.1")
-    const port = Number(parsedProcessArgs.p || parsedProcessArgs.port || 3006)
+    const configuration = this.getConfiguration()
+    const httpServer = httpServerConfigFromParsedArgs(parsedProcessArgs, configuration.httpServer)
     const application = new Application({
-      configuration: this.getConfiguration(),
-      httpServer: {
-        host,
-        port
-      },
+      configuration,
+      httpServer,
       type: "server"
     })
-    const environment = this.getConfiguration().getEnvironment()
+    const environment = configuration.getEnvironment()
 
     await application.initialize()
     await application.startHttpServer()
-    console.log(`Started Velocious HTTP server on ${host}:${port} in ${environment} environment`)
+    console.log(`Started Velocious HTTP server on ${httpServer.host}:${httpServer.port} in ${environment} environment`)
     await waitForApplicationWithSignalShutdown({application})
   }
 }
