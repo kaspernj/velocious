@@ -1122,20 +1122,7 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            searches: [
-              {
-                column: "email",
-                operator: "like",
-                path: [],
-                value: "%john%"
-              },
-              {
-                column: "id",
-                operator: "eq",
-                path: [],
-                value: ["1", "2"]
-              }
-            ]
+            ransack: {email_cont: "john", id_in: ["1", "2"]}
           },
           url: "/frontend-models"
         }
@@ -1233,27 +1220,13 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            searches: [
-              {
-                column: "createdAt",
-                operator: "gteq",
-                path: [],
-                value: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}
-              }
-            ]
+            ransack: {created_at_gteq: "2026-02-24T10:00:00.000Z"}
           },
           url: "/frontend-models"
         },
         {
           body: {
-            searches: [
-              {
-                column: "createdAt",
-                operator: "gteq",
-                path: [],
-                value: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}
-              }
-            ]
+            ransack: {createdAtGteq: "2026-02-24T10:00:00.000Z"}
           },
           url: "/frontend-models"
         }
@@ -1277,14 +1250,7 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            searches: [
-              {
-                column: "email",
-                operator: "like",
-                path: [],
-                value: "%john%"
-              }
-            ],
+            ransack: {email_cont: "john"},
             where: {id: "2"}
           },
           url: "/frontend-models"
@@ -1308,14 +1274,7 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            searches: [
-              {
-                column: "email",
-                operator: "like",
-                path: [],
-                value: "%john%"
-              }
-            ],
+            ransack: {emailCont: "john"},
             sort: [{column: "name", direction: "asc", path: []}]
           },
           url: "/frontend-models"
@@ -1339,14 +1298,7 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            searches: [
-              {
-                column: "email",
-                operator: "like",
-                path: [],
-                value: "%john%"
-              }
-            ]
+            ransack: {emailCont: "john"}
           },
           url: "/frontend-models"
         }
