@@ -31,6 +31,35 @@ function mailerDirectoryName(className) {
 }
 
 /**
+ * @param {typeof VelociousMailerBase} mailerClass - Mailer class.
+ * @param {string} stack - Error stack.
+ * @returns {string | null} - Inferred action name.
+ */
+// fallow-ignore-next-line complexity
+function inferActionName(mailerClass, stack) {
+  const prototype = mailerClass.prototype
+  let actionName = null
+
+  for (const line of stack.split("\n")) {
+    const match = line.match(/\bat (?:async )?(?:new )?[^\s.]+\.([^\s.]+) /)
+
+    if (!match) continue
+
+    const frameActionName = match[1]
+
+    if (frameActionName === "mail") continue
+    if (frameActionName.startsWith("_")) continue
+    if (frameActionName === "constructor") continue
+    if (Object.prototype.hasOwnProperty.call(VelociousMailerBase.prototype, frameActionName)) continue
+    if (typeof /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (prototype))[frameActionName] !== "function") continue
+
+    actionName = frameActionName
+  }
+
+  return actionName
+}
+
+/**
  * @returns {Promise<boolean>} - Whether the current environment is test.
  */
 async function isTestingEnvironment() {
@@ -71,25 +100,27 @@ export class VelociousMailerBase {
    * @param {any} [args.bcc] - BCC recipients.
    * @param {any} [args.replyTo] - Reply-to address.
    * @param {Record<string, string>} [args.headers] - Custom headers.
-   * @param {string} args.actionName - Mailer action name.
+   * @param {string} [args.actionName] - Mailer action name.
    * @param {Promise<unknown> | unknown} [args.actionPromise] - Action completion promise.
    * @returns {MailerDelivery} - Delivery wrapper.
    */
   mail({to, subject, from, cc, bcc, replyTo, headers, actionName, actionPromise, ...restArgs}) {
     restArgsError(restArgs)
 
-    if (!actionName) {
+    const resolvedActionName = actionName || inferActionName(/** @type {typeof VelociousMailerBase} */ (this.constructor), new Error().stack || "")
+
+    if (!resolvedActionName) {
       throw new Error(`Missing actionName for ${this.constructor.name}.mail()`)
     }
 
-    this._actionName = actionName
+    this._actionName = resolvedActionName
     this._mailOptions = {to, subject, from, cc, bcc, replyTo, headers}
     const resolvedActionPromise = actionPromise === undefined ? Promise.resolve() : Promise.resolve(actionPromise)
 
     return new MailerDelivery({
       mailer: this,
       actionPromise: resolvedActionPromise,
-      actionName
+      actionName: resolvedActionName
     })
   }
 

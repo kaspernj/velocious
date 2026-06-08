@@ -15,11 +15,50 @@ class TasksMailer extends VelociousMailer {
    * @param {{email: () => string, name: () => string}} user
    * @returns {void}
    */
-  newNotification(task, user) {
+  assignTaskNotification(task, user) {
     this.task = task
     this.user = user
     this.assignView({task, user, userName: user.name()})
-    return this.mail({to: user.email(), subject: "New task", actionName: "newNotification"})
+  }
+
+  /**
+   * @param {{id: () => number}} task
+   * @param {{email: () => string, name: () => string}} user
+   * @returns {void}
+   */
+  newNotification(task, user) {
+    this.assignTaskNotification(task, user)
+    return this.mail({to: user.email(), subject: "New task"})
+  }
+
+  /**
+   * @param {{id: () => number}} task
+   * @param {{email: () => string, name: () => string}} user
+   * @returns {void}
+   */
+  renamedNotification(task, user) {
+    this.assignTaskNotification(task, user)
+    return this.mail({to: user.email(), subject: "Explicit task", actionName: "explicitNotification"})
+  }
+
+  /**
+   * @param {{id: () => number}} task
+   * @param {{email: () => string, name: () => string}} user
+   * @returns {void}
+   */
+  delegatedNotification(task, user) {
+    this.assignTaskNotification(task, user)
+    return this.composeNotification({subject: "Delegated task", to: user.email()})
+  }
+
+  /**
+   * @param {object} args - Delivery args.
+   * @param {string} args.subject - Subject line.
+   * @param {string} args.to - Recipient address.
+   * @returns {import("../../src/mailer/delivery.js").default}
+   */
+  composeNotification({subject, to}) {
+    return this.mail({to, subject})
   }
 
   /**
@@ -54,6 +93,16 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
   Task <%= task.id() %> has just been created.
 </p>
 `)
+    await fs.writeFile(path.join(viewDir, "explicit-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
+<p>
+  Explicit task <%= task.id() %> has just been created.
+</p>
+`)
+    await fs.writeFile(path.join(viewDir, "delegated-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
+<p>
+  Delegated task <%= task.id() %> has just been created.
+</p>
+`)
     await fs.writeFile(path.join(viewDir, "delayed-notification.ejs"), `<b><%= _("Hello %{userName}", {userName}) %></b>
 <p>
   Task <%= task.id() %> has just been created.
@@ -73,15 +122,17 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
    * @returns {Configuration}
    */
   function createConfiguration(directory) {
+    const databaseName = "mailer-test"
+
     return new Configuration({
       database: {
         test: {
           default: {
-            driver: SqliteDriver,
-            poolType: SingleMultiUsePool,
+            name: databaseName,
             type: "sqlite",
-            name: "mailer-test",
-            migrations: false
+            driver: SqliteDriver,
+            migrations: false,
+            poolType: SingleMultiUsePool,
           }
         }
       },
@@ -95,18 +146,57 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
     })
   }
 
-  it("renders mailer views and stores deliveries in test mode", async () => {
+  /**
+   * @param {string} directory - Project directory.
+   * @returns {void}
+   */
+  function setCurrentTestConfiguration(directory) {
+    createConfiguration(directory).setCurrent()
+  }
+
+  /** @returns {{email: () => string, name: () => string}} */
+  function namedUser(email, name) {
+    return {email: () => email, name: () => name}
+  }
+
+  /** @returns {{id: () => number}} */
+  function taskWithId(id) {
+    return {id: () => id}
+  }
+
+  /**
+   * @param {RegExp} content - Expected rendered content.
+   * @returns {import("../../src/mailer.js").MailerDeliveryPayload} Sent payload.
+   */
+  function firstDeliveryMatching(content) {
+    const sent = deliveries()
+
+    expect(sent.length).toEqual(1)
+    expect(sent[0].html).toMatch(content)
+
+    return sent[0]
+  }
+
+  /**
+   * @param {(directory: string) => Promise<void>} callback - Test callback.
+   * @returns {Promise<void>}
+   */
+  async function withTempMailerProject(callback) {
     const {directory, cleanup} = await createTempProjectDir()
 
     try {
-      const configuration = createConfiguration(directory)
-      configuration.setCurrent()
+      await callback(directory)
+    } finally {
+      await cleanup()
+    }
+  }
 
-      const task = {id: () => 42}
-      const user = {
-        email: () => "user@example.com",
-        name: () => "Tess"
-      }
+  it("renders mailer views and stores deliveries in test mode", async () => {
+    await withTempMailerProject(async (directory) => {
+      setCurrentTestConfiguration(directory)
+
+      const task = taskWithId(42)
+      const user = namedUser("user@example.com", "Tess")
 
       await new TasksMailer().newNotification(task, user).deliverNow()
 
@@ -117,24 +207,64 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
       expect(sent[0].subject).toEqual("New task")
       expect(sent[0].html).toMatch(/Hello Tess/)
       expect(sent[0].html).toMatch(/Task 42 has just been created/)
-    } finally {
-      await cleanup()
-    }
+    })
+  })
+
+  it("infers action names from mailer action methods", async () => {
+    await withTempMailerProject(async (directory) => {
+      setCurrentTestConfiguration(directory)
+      clearDeliveries()
+
+      const task = taskWithId(43)
+      const user = namedUser("inferred@example.com", "Inga")
+
+      await new TasksMailer().newNotification(task, user).deliverNow()
+
+      const sent = firstDeliveryMatching(/Hello Inga/)
+
+      expect(sent.action).toEqual("newNotification")
+    })
+  })
+
+  it("uses explicit action names when provided", async () => {
+    await withTempMailerProject(async (directory) => {
+      setCurrentTestConfiguration(directory)
+      clearDeliveries()
+
+      const task = taskWithId(44)
+      const user = namedUser("explicit@example.com", "Eli")
+
+      await new TasksMailer().renamedNotification(task, user).deliverNow()
+
+      const sent = firstDeliveryMatching(/Explicit task 44 has just been created/)
+
+      expect(sent.action).toEqual("explicitNotification")
+    })
+  })
+
+  it("infers action names past delegated helper methods", async () => {
+    await withTempMailerProject(async (directory) => {
+      setCurrentTestConfiguration(directory)
+      clearDeliveries()
+
+      const task = taskWithId(45)
+      const user = namedUser("delegated@example.com", "Dee")
+
+      await new TasksMailer().delegatedNotification(task, user).deliverNow()
+
+      const sent = firstDeliveryMatching(/Delegated task 45 has just been created/)
+
+      expect(sent.action).toEqual("delegatedNotification")
+    })
   })
 
   it("builds a rendered payload without delivering it", async () => {
-    const {directory, cleanup} = await createTempProjectDir()
-
-    try {
-      const configuration = createConfiguration(directory)
-      configuration.setCurrent()
+    await withTempMailerProject(async (directory) => {
+      setCurrentTestConfiguration(directory)
       clearDeliveries()
 
-      const task = {id: () => 51}
-      const user = {
-        email: () => "preview@example.com",
-        name: () => "Priya"
-      }
+      const task = taskWithId(51)
+      const user = namedUser("preview@example.com", "Priya")
 
       const payload = await new TasksMailer().delayedNotification(task, user).buildPayload()
 
@@ -145,63 +275,41 @@ describe("Mailers", {databaseCleaning: {transaction: true}}, () => {
       expect(payload.html).toMatch(/Hello Priya/)
       expect(payload.html).toMatch(/Task 51 has just been created/)
       expect(deliveries().length).toEqual(0)
-    } finally {
-      await cleanup()
-    }
+    })
   })
 
   it("returns a delivery wrapper from instance actions", async () => {
-    const {directory, cleanup} = await createTempProjectDir()
+    await withTempMailerProject(async (directory) => {
+      setCurrentTestConfiguration(directory)
 
-    try {
-      const configuration = createConfiguration(directory)
-      configuration.setCurrent()
-
-      const task = {id: () => 7}
-      const user = {
-        email: () => "instance@example.com",
-        name: () => "Ina"
-      }
+      const task = taskWithId(7)
+      const user = namedUser("instance@example.com", "Ina")
 
       await new TasksMailer().newNotification(task, user).deliverLater()
 
-      const sent = deliveries()
+      const sent = firstDeliveryMatching(/Hello Ina/)
 
-      expect(sent.length).toEqual(1)
-      expect(sent[0].to).toEqual("instance@example.com")
-      expect(sent[0].subject).toEqual("New task")
-      expect(sent[0].html).toMatch(/Hello Ina/)
-      expect(sent[0].html).toMatch(/Task 7 has just been created/)
-    } finally {
-      await cleanup()
-    }
+      expect(sent.to).toEqual("instance@example.com")
+      expect(sent.subject).toEqual("New task")
+      expect(sent.html).toMatch(/Task 7 has just been created/)
+    })
   })
 
   it("awaits actionPromise before delivering", async () => {
-    const {directory, cleanup} = await createTempProjectDir()
+    await withTempMailerProject(async (directory) => {
+      setCurrentTestConfiguration(directory)
 
-    try {
-      const configuration = createConfiguration(directory)
-      configuration.setCurrent()
-
-      const task = {id: () => 99}
-      const user = {
-        email: () => "delay@example.com",
-        name: () => "Dana"
-      }
+      const task = taskWithId(99)
+      const user = namedUser("delay@example.com", "Dana")
 
       await new TasksMailer().delayedNotification(task, user).deliverNow()
 
-      const sent = deliveries()
+      const sent = firstDeliveryMatching(/Hello Dana/)
 
-      expect(sent.length).toEqual(1)
-      expect(sent[0].to).toEqual("delay@example.com")
-      expect(sent[0].subject).toEqual("Delayed task")
-      expect(sent[0].html).toMatch(/Hello Dana/)
-      expect(sent[0].html).toMatch(/Task 99 has just been created/)
-    } finally {
-      await cleanup()
-    }
+      expect(sent.to).toEqual("delay@example.com")
+      expect(sent.subject).toEqual("Delayed task")
+      expect(sent.html).toMatch(/Task 99 has just been created/)
+    })
   })
 
   it("clears deliveries between tests", () => {

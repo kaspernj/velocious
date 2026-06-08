@@ -219,10 +219,12 @@ class TasksMailer extends VelociousMailer {
     this.task = task
     this.user = user
     this.assignView({task, user})
-    return this.mail({to: user.email(), subject: "New task", actionName: "newNotification"})
+    return this.mail({to: user.email(), subject: "New task"})
   }
 }
 ```
+
+Velocious infers the action name from the mailer action method when `this.mail(...)` is called from that method. Pass `actionName` explicitly when rendering a different action template or when a shared helper should override the inferred action.
 
 ```ejs
 <b>Hello <%= mailer.user.name() %></b>
@@ -251,7 +253,6 @@ resetPassword(user) {
   return this.mail({
     to: user.email(),
     subject: "Reset your password",
-    actionName: "resetPassword",
     actionPromise: (async () => {
       this.token = await user.resetToken()
       this.assignView({user, token: this.token})
@@ -1244,6 +1245,40 @@ const frontendTasks = await FrontendTask
   .ransack({name_cont: "deploy", id_in: ["1", "2"]})
   .toArray()
 ```
+
+Simple OR predicates use Ransack's `_or_` shortcut:
+
+```js
+const matchingUsers = await User
+  .ransack({email_or_reference_cont: "john"})
+  .toArray()
+```
+
+Grouped Ransack hashes support `m` (`"and"` / `"or"`), `c` condition arrays, and nested `g` groups:
+
+```js
+const matchingUsers = await User
+  .ransack({
+    c: [
+      {a: ["email"], p: "cont", v: ["jane"]}
+    ],
+    g: [
+      {
+        c: [
+          {a: "reference", p: "cont", v: ["user-2"]},
+          {a: "email", p: "cont", v: ["john"]}
+        ],
+        m: "and"
+      }
+    ],
+    m: "or"
+  })
+  .limit(20)
+  .offset(0)
+  .toArray()
+```
+
+Frontend-model `.ransack(...)` filters run on the backend, so `count()`, `limit(...)`, `offset(...)`, and `toArray()` all share the same query scope instead of loading records into memory first.
 
 ### Raw where clauses
 

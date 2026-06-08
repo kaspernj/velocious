@@ -26,6 +26,16 @@ function headerLine(name, value) {
 }
 
 /**
+ * @param {string} address - Header or mailbox address.
+ * @returns {string} - SMTP envelope mailbox.
+ */
+function envelopeAddress(address) {
+  const match = address.match(/<([^<>]+)>/)
+
+  return (match ? match[1] : address).trim()
+}
+
+/**
  * SMTP mailer backend using smtp-connection.
  */
 export default class SmtpMailerBackend {
@@ -59,6 +69,8 @@ export default class SmtpMailerBackend {
     if (!from) {
       throw new Error(`Missing mail "from" address. Got: ${String(from)}`)
     }
+
+    const envelopeFrom = envelopeAddress(String(from))
 
     const toList = normalizeRecipients(payload.to)
     const ccList = normalizeRecipients(payload.cc)
@@ -139,7 +151,7 @@ export default class SmtpMailerBackend {
       }
 
       const sendMessage = () => {
-        connection.send({from, to: recipients}, /** @type {any} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
+        connection.send({from: envelopeFrom, to: recipients}, /** @type {any} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             rejectDelivery(sendError)
             return

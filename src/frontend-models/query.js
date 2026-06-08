@@ -1,7 +1,7 @@
 // @ts-check
 
 import {resolveFrontendModelClass} from "./model-registry.js"
-import {normalizeRansackParams, parseRansackSort} from "../utils/ransack.js"
+import {normalizeRansackGroup, parseRansackSort} from "../utils/ransack.js"
 import {isModelScopeDescriptor} from "../utils/model-scope.js"
 
 /**
@@ -1052,6 +1052,8 @@ function reverseSortDirection(direction) {
  * @template {typeof import("./base.js").default} T
  */
 export default class FrontendModelQuery {
+  /** @type {Record<string, any>[]} */
+  _ransack = []
   /** @type {FrontendModelSearch[]} */
   _searches = []
   /** @type {FrontendModelSort[]} */
@@ -1236,10 +1238,11 @@ export default class FrontendModelQuery {
    */
   ransack(params) {
     const {s, ...filterParams} = params
-    const conditions = normalizeRansackParams(this.modelClass, filterParams)
+    const hasFilters = Object.keys(filterParams).length > 0
 
-    for (const condition of conditions) {
-      applyFrontendRansackCondition({condition, query: this})
+    if (hasFilters) {
+      normalizeRansackGroup(this.modelClass, filterParams)
+      this._ransack.push(normalizeFindConditions(filterParams))
     }
 
     if (typeof s === "string" && s.trim().length > 0) {
@@ -1461,6 +1464,7 @@ export default class FrontendModelQuery {
 
     newQuery._joins = normalizeJoins(this._joins)
     newQuery._where = normalizeFindConditions(this._where)
+    newQuery._ransack = this._ransack.map((ransackParams) => normalizeFindConditions(ransackParams))
     newQuery._searches = this._searches.map((search) => ({
       column: search.column,
       operator: search.operator,
@@ -1594,6 +1598,24 @@ export default class FrontendModelQuery {
   }
 
   /**
+   * @returns {Record<string, any>} - Payload ransack hash when present.
+   */
+  ransackPayload() {
+    if (this._ransack.length === 0) return {}
+
+    if (this._ransack.length === 1) {
+      return {ransack: this._ransack[0]}
+    }
+
+    return {
+      ransack: {
+        g: this._ransack.map((ransackParams) => normalizeFindConditions(ransackParams)),
+        m: "and"
+      }
+    }
+  }
+
+  /**
    * @returns {Record<string, any>} - Payload joins hash when present.
    */
   joinsPayload() {
@@ -1681,6 +1703,7 @@ export default class FrontendModelQuery {
     if (this._sort.length > 0) unsupportedOptions.push("sort")
     if (this._group.length > 0) unsupportedOptions.push("group")
     if (this._distinct) unsupportedOptions.push("distinct")
+    if (this._ransack.length > 0) unsupportedOptions.push("ransack")
     if (this._limit !== null || this._offset !== null || this._page !== null || this._perPage !== null) unsupportedOptions.push("pagination")
 
     if (unsupportedOptions.length === 0) return
@@ -1740,6 +1763,7 @@ export default class FrontendModelQuery {
     const response = await this.modelClass.executeCommand("index", {
       ...this.preloadPayload(),
       ...this.joinsPayload(),
+      ...this.ransackPayload(),
       ...this.searchPayload(),
       ...this.selectPayload(),
       ...this.selectsExtraPayload(),
@@ -1784,6 +1808,7 @@ export default class FrontendModelQuery {
   async count() {
     const response = await this.modelClass.executeCommand("index", {
       ...this.joinsPayload(),
+      ...this.ransackPayload(),
       ...this.searchPayload(),
       ...this.groupPayload(),
       ...this.distinctPayload(),
@@ -2102,46 +2127,4 @@ function frontendModelEventQuery(modelClass, options = {}) {
  */
 export function frontendModelEventOptionsPayload(modelClass, options = {}) {
   return frontendModelEventQuery(modelClass, options).eventOptionsPayload()
-}
-
-/**
- * @param {object} args - Options.
- * @param {import("../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @param {FrontendModelQuery<any>} args.query - Query instance.
- * @returns {void}
- */
-function applyFrontendRansackCondition({condition, query}) {
-  if (condition.predicate === "null") {
-    query.search(condition.path, condition.attributeName, condition.value ? "eq" : "notEq", null)
-    return
-  }
-
-  if (condition.predicate === "eq" || condition.predicate === "in") {
-    query.search(condition.path, condition.attributeName, "eq", condition.value)
-    return
-  }
-
-  if (condition.predicate === "not_eq" || condition.predicate === "not_in") {
-    query.search(condition.path, condition.attributeName, "notEq", condition.value)
-    return
-  }
-
-  if (condition.predicate === "gt" || condition.predicate === "gteq" || condition.predicate === "lt" || condition.predicate === "lteq") {
-    query.search(condition.path, condition.attributeName, condition.predicate, condition.value)
-    return
-  }
-
-  query.search(condition.path, condition.attributeName, "like", frontendRansackLikeValue(condition))
-}
-
-/**
- * @param {import("../utils/ransack.js").RansackCondition} condition - Ransack condition.
- * @returns {string} - SQL-like pattern.
- */
-function frontendRansackLikeValue(condition) {
-  if (condition.predicate === "cont") return `%${condition.value}%`
-  if (condition.predicate === "start") return `${condition.value}%`
-  if (condition.predicate === "end") return `%${condition.value}`
-
-  throw new Error(`Unsupported frontend ransack predicate: ${condition.predicate}`)
 }

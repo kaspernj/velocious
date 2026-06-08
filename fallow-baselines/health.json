@@ -16,14 +16,9 @@
         "count": 1
       }
     },
-    "spec/background-jobs/db-context-spec.js": {
-      "crap_moderate": {
-        "count": 1
-      }
-    },
     "spec/background-jobs/queue-spec.js": {
       "crap_moderate": {
-        "count": 4
+        "count": 1
       }
     },
     "spec/background-jobs/store-spec.js": {
@@ -236,17 +231,8 @@
       }
     },
     "src/background-jobs/main.js": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "crap_critical": {
-        "count": 3
-      },
-      "crap_high": {
-        "count": 1
-      },
       "crap_moderate": {
-        "count": 5
+        "count": 7
       }
     },
     "src/background-jobs/scheduler.js": {
@@ -262,15 +248,12 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 2
+        "count": 1
       }
     },
     "src/background-jobs/store.js": {
-      "crap_high": {
-        "count": 2
-      },
       "crap_moderate": {
-        "count": 4
+        "count": 6
       }
     },
     "src/background-jobs/web/authorization.js": {
@@ -305,7 +288,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 5
+        "count": 3
       }
     },
     "src/beacon/client.js": {
@@ -319,11 +302,8 @@
       }
     },
     "src/cli/commands/db/create.js": {
-      "crap_critical": {
+      "crap_high": {
         "count": 1
-      },
-      "crap_moderate": {
-        "count": 2
       }
     },
     "src/cli/commands/db/drop.js": {
@@ -331,9 +311,6 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 1
-      },
-      "crap_moderate": {
         "count": 1
       }
     },
@@ -603,11 +580,6 @@
         "count": 6
       }
     },
-    "src/database/pool/single-multi-use.js": {
-      "crap_moderate": {
-        "count": 1
-      }
-    },
     "src/database/query-parser/from-parser.js": {
       "crap_moderate": {
         "count": 1
@@ -711,7 +683,7 @@
         "count": 9
       },
       "crap_moderate": {
-        "count": 7
+        "count": 8
       }
     },
     "src/database/query/preloader.js": {
@@ -1105,7 +1077,7 @@
         "count": 8
       },
       "crap_high": {
-        "count": 12
+        "count": 11
       },
       "crap_moderate": {
         "count": 9
@@ -1368,7 +1340,7 @@
     },
     "src/mailer/base.js": {
       "crap_moderate": {
-        "count": 1
+        "count": 2
       }
     },
     "src/plugins/sqljs-wasm-route-controller.js": {
@@ -1533,17 +1505,11 @@
       }
     },
     "src/utils/ransack.js": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "crap_critical": {
-        "count": 3
-      },
       "crap_high": {
-        "count": 3
+        "count": 5
       },
       "crap_moderate": {
-        "count": 6
+        "count": 8
       }
     },
     "src/utils/split-sql-statements.js": {
@@ -1585,8 +1551,8 @@
     "src/testing/test.js:dead code",
     "src/database/query/model-class-query.js:complexity",
     "src/http-server/client/websocket-session.js:complexity",
-    "src/database/drivers/pgsql/structure-sql.js:untested risk",
     "src/database/drivers/base.js:complexity",
+    "src/database/drivers/pgsql/structure-sql.js:untested risk",
     "src/database/query/preloader.js:complexity",
     "src/testing/test-runner.js:complexity",
     "src/frontend-model-resource/base-resource.js:complexity",
@@ -1601,17 +1567,17 @@
     "src/database/migrator.js:complexity",
     "src/database/drivers/mysql/structure-sql.js:untested risk",
     "src/database/record/attachments/normalize-input.js:complexity",
+    "src/mailer/base.js:circular dependency",
     "src/frontend-models/outgoing-event-buffer.js:dead code",
     "src/database/query/where-model-class-hash.js:complexity",
     "src/utils/format-value.js:untested risk",
     "src/database/query/preloader/belongs-to.js:complexity",
     "src/environment-handlers/node/cli/commands/test.js:complexity",
-    "src/mailer/base.js:circular dependency",
     "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/has-many.js:complexity",
     "src/jobs/mail-delivery.js:circular dependency",
-    "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
     "src/database/query/query-data.js:complexity",
+    "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/frontend-models.js:complexity",
     "src/http-server/client/request-buffer/index.js:complexity",
     "src/testing/expect.js:complexity",

@@ -205,6 +205,37 @@ describe("SmtpMailerBackend", {databaseCleaning: {transaction: true}}, () => {
     }
   })
 
+  it("uses mailbox-only SMTP envelopes for display-name From headers", async () => {
+    const fakeServer = await startFakeSmtpServer({requireAuth: false})
+
+    try {
+      const mailerBackend = new SmtpMailerBackend({
+        connectionOptions: {
+          host: "127.0.0.1",
+          ignoreTLS: true,
+          port: fakeServer.port,
+          secure: false
+        },
+        defaultFrom: "Robot Sender <robot@example.com>"
+      })
+
+      await mailerBackend.deliver({
+        payload: {
+          action: "notice",
+          html: "<p>SMTP smoke body</p>",
+          mailer: "smtp",
+          subject: "SMTP smoke subject",
+          to: "receiver@example.com"
+        }
+      })
+
+      expect(fakeServer.commands).toContain("MAIL FROM:<robot@example.com>")
+      expect(fakeServer.messages[0]).toContain("From: Robot Sender <robot@example.com>")
+    } finally {
+      await fakeServer.close()
+    }
+  })
+
   it("waits until graceful SMTP shutdown completes before resolving delivery", async () => {
     const fakeServer = await startFakeSmtpServer({holdQuitResponse: true})
     let resolved = false

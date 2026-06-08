@@ -12,8 +12,9 @@ import JoinObject from "./join-object.js"
 import JoinPlain from "./join-plain.js"
 import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
-import {normalizeRansackParams, parseRansackSort} from "../../utils/ransack.js"
+import {normalizeRansackGroup, parseRansackSort} from "../../utils/ransack.js"
 import {isModelScopeDescriptor} from "../../utils/model-scope.js"
+import WhereCombinator from "./where-combinator.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
 import JoinsParser from "../query-parser/joins-parser.js"
@@ -962,17 +963,15 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    */
   ransack(params) {
     const {s, ...filterParams} = params
-    const conditions = normalizeRansackParams(this.getModelClass(), filterParams)
+    const group = normalizeRansackGroup(this.getModelClass(), filterParams)
 
-    for (const condition of conditions) {
-      applyRansackCondition({condition, query: this})
-    }
+    applyRansackGroup({group, query: this})
 
     if (typeof s === "string" && s.trim().length > 0) {
       const sorts = parseRansackSort(this.getModelClass(), s)
 
       for (const sortDef of sorts) {
-        this.order(`${sortDef.attribute} ${sortDef.direction}`)
+        this.order({column: sortDef.attribute, direction: sortDef.direction})
       }
     }
 
@@ -1027,50 +1026,141 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
 /**
  * @param {object} args - Options.
- * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
  * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
  * @returns {void}
  */
-function applyRansackCondition({condition, query}) {
-  if (condition.predicate === "eq" || condition.predicate === "in") {
-    query.where(buildNestedRansackHash({condition, value: condition.value}))
-    return
+function applyRansackGroup({group, query}) {
+  const where = buildRansackGroupWhere({group, query})
+
+  if (where) {
+    query._wheres.push(where)
+  }
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
+ * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @returns {import("./where-base.js").default | null} - Combined where clause.
+ */
+function buildRansackGroupWhere({group, query}) {
+  /** @type {import("./where-base.js").default[]} */
+  const wheres = []
+
+  for (const condition of group.conditions) {
+    const where = buildRansackConditionWhere({condition, query})
+
+    if (where) wheres.push(where)
   }
 
-  if (condition.predicate === "not_eq" || condition.predicate === "not_in") {
-    query.whereNot(buildNestedRansackHash({condition, value: condition.value}))
-    return
+  for (const grouping of group.groupings) {
+    const where = buildRansackGroupWhere({group: grouping, query})
+
+    if (where) wheres.push(where)
   }
 
-  if (condition.predicate === "null") {
-    if (condition.value) {
-      query.where(buildNestedRansackHash({condition, value: null}))
-    } else {
-      query.whereNot(buildNestedRansackHash({condition, value: null}))
-    }
+  if (wheres.length < 1) return null
+  if (wheres.length === 1) return wheres[0]
 
-    return
-  }
-
-  query.where(buildNestedRansackTupleHash({
-    condition,
-    operator: ransackTupleOperator(condition.predicate),
-    value: ransackTupleValue(condition)
-  }))
+  return new WhereCombinator({
+    combinator: group.combinator,
+    query,
+    wheres
+  })
 }
 
 /**
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @param {any} args.value - Final value.
- * @returns {Record<string, any>} - Nested hash suitable for query.where/query.whereNot.
+ * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @returns {import("./where-base.js").default | null} - Condition where clause.
  */
-function buildNestedRansackHash({condition, value}) {
-  /** @type {Record<string, any>} */
-  let hash = {[condition.attributeName]: value}
+function buildRansackConditionWhere({condition, query}) {
+  /** @type {import("./where-base.js").default[]} */
+  const wheres = []
 
-  for (let index = condition.path.length - 1; index >= 0; index -= 1) {
-    hash = {[condition.path[index]]: hash}
+  for (const attribute of condition.attributes) {
+    wheres.push(buildRansackAttributeWhere({attribute, condition, query}))
+  }
+
+  if (wheres.length < 1) return null
+  if (wheres.length === 1) return wheres[0]
+
+  return new WhereCombinator({
+    combinator: condition.combinator,
+    query,
+    wheres
+  })
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
+ * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @returns {import("./where-base.js").default} - Attribute where clause.
+ */
+function buildRansackAttributeWhere({attribute, condition, query}) {
+  const hash = buildRansackAttributeHash({attribute, condition})
+  const joinObject = buildJoinObjectFromWhereHash({hash, modelClass: query.getModelClass()})
+
+  if (Object.keys(joinObject).length > 0) {
+    query.joins(joinObject)
+  }
+
+  const where = new WhereModelClassHash({
+    hash,
+    modelClass: query.getModelClass(),
+    qualifyBaseTable: true,
+    query
+  })
+
+  if (condition.predicate === "not_eq" || condition.predicate === "not_in") {
+    return new WhereNot(where)
+  }
+
+  if (condition.predicate === "null" && !condition.value) {
+    return new WhereNot(where)
+  }
+
+  return where
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
+ * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @returns {Record<string, any>} - Nested hash suitable for query where nodes.
+ */
+function buildRansackAttributeHash({attribute, condition}) {
+  if (condition.predicate === "eq" || condition.predicate === "in" || condition.predicate === "not_eq" || condition.predicate === "not_in") {
+    return buildNestedRansackHash({attribute, value: condition.value})
+  }
+
+  if (condition.predicate === "null") {
+    return buildNestedRansackHash({attribute, value: null})
+  }
+
+  return buildNestedRansackTupleHash({
+    attribute,
+    operator: ransackTupleOperator(condition.predicate),
+    value: ransackTupleValue(condition)
+  })
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
+ * @param {any} args.value - Final value.
+ * @returns {Record<string, any>} - Nested hash suitable for query where nodes.
+ */
+function buildNestedRansackHash({attribute, value}) {
+  /** @type {Record<string, any>} */
+  let hash = {[attribute.attributeName]: value}
+
+  for (let index = attribute.path.length - 1; index >= 0; index -= 1) {
+    hash = {[attribute.path[index]]: hash}
   }
 
   return hash
@@ -1078,19 +1168,19 @@ function buildNestedRansackHash({condition, value}) {
 
 /**
  * @param {object} args - Options.
- * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
+ * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {"gt" | "gteq" | "lt" | "lteq" | "like"} args.operator - Tuple operator.
  * @param {any} args.value - Final value.
  * @returns {Record<string, any>} - Nested tuple hash suitable for query.where.
  */
-function buildNestedRansackTupleHash({condition, operator, value}) {
+function buildNestedRansackTupleHash({attribute, operator, value}) {
   /** @type {Record<string, any>} */
   let hash = {
-    [condition.attributeName]: [[condition.attributeName, operator, value]]
+    [attribute.attributeName]: [[attribute.attributeName, operator, value]]
   }
 
-  for (let index = condition.path.length - 1; index >= 0; index -= 1) {
-    hash = {[condition.path[index]]: hash}
+  for (let index = attribute.path.length - 1; index >= 0; index -= 1) {
+    hash = {[attribute.path[index]]: hash}
   }
 
   return hash
