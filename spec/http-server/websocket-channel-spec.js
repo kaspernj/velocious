@@ -22,6 +22,35 @@ class ReorderedDebugChannel extends WebsocketChannel {
   }
 }
 
+class ConnectionContextDebugChannel extends WebsocketChannel {
+  /** @type {Array<Record<string, unknown>>} */
+  static deliveries = []
+
+  /** @returns {boolean} Whether the subscription is allowed. */
+  canSubscribe() { return true }
+
+  /**
+   * @param {Record<string, unknown>} body - Broadcast body.
+   * @returns {Promise<void>} - Resolves when delivered.
+   */
+  async deliverBroadcast(body) {
+    const currentConnectionsBeforeEnsure = this.session.configuration.getCurrentConnections()
+    const defaultConnection = currentConnectionsBeforeEnsure.default
+    const defaultConnectionSnapshot = defaultConnection?.getDebugSnapshot()
+    const defaultPool = this.session.configuration.getDatabasePool("default")
+
+    ConnectionContextDebugChannel.deliveries.push({
+      body,
+      checkoutNameBeforeEnsure: defaultConnectionSnapshot?.checkoutName,
+      currentConnectionCountBeforeEnsure: Object.keys(currentConnectionsBeforeEnsure).length,
+      currentContextStoreBeforeEnsure: defaultPool.asyncLocalStorage?.getStore(),
+      defaultConnectionIdSeqBeforeEnsure: defaultConnection?.getIdSeq()
+    })
+
+    await super.deliverBroadcast(body)
+  }
+}
+
 function reconnectingClientWithManualNetwork(initialOnline = true) {
   let isOnline = initialOnline
   /** @type {Set<(isOnline: boolean) => void>} */
@@ -320,6 +349,40 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
       } finally {
         await clientA.close()
         await clientB.close()
+      }
+    })
+  })
+
+  it("does not inherit the publisher DB connection context for detached broadcast delivery", async () => {
+    await Dummy.run(async () => {
+      dummyConfiguration.registerWebsocketChannel("ConnectionContextDebug", ConnectionContextDebugChannel)
+      ConnectionContextDebugChannel.deliveries = []
+      const client = new WebsocketClient()
+
+      try {
+        await client.connect()
+
+        /** @type {any[]} */
+        const received = []
+        const subscription = client.subscribeChannel("ConnectionContextDebug", {
+          params: {allow: true},
+          onMessage: (body) => received.push(body)
+        })
+
+        await subscription.ready
+
+        const defaultPool = dummyConfiguration.getDatabasePool("default")
+        await defaultPool.withConnection({name: "Publisher request"}, async () => {
+          expect(Object.keys(dummyConfiguration.getCurrentConnections()).length).toBeGreaterThan(0)
+          dummyConfiguration.broadcastToChannel("ConnectionContextDebug", {}, {count: 1})
+        })
+
+        await waitFor(() => received.length >= 1)
+
+        expect(ConnectionContextDebugChannel.deliveries[0]?.body).toEqual({count: 1})
+        expect(ConnectionContextDebugChannel.deliveries[0]?.checkoutNameBeforeEnsure).not.toEqual("Publisher request")
+      } finally {
+        await client.close()
       }
     })
   })

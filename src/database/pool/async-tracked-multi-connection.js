@@ -559,6 +559,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     return this.getCurrentConnection()
   }
 
+  /**
+   * @template T
+   * @param {() => T} callback - Callback to run without the current async DB connection context.
+   * @returns {T} - Callback result.
+   */
+  _withoutCurrentConnectionContext = (callback) => {
+    return this.asyncLocalStorage.run(undefined, callback)
+  }
+
   /** @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
   getDebugSnapshot() {
     const snapshot = super.getDebugSnapshot()

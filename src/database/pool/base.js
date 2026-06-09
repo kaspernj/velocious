@@ -51,6 +51,9 @@ function stableStringify(value) {
 }
 
 class VelociousDatabasePoolBase {
+  /** @type {undefined | (<T>(callback: () => T) => T)} */
+  _withoutCurrentConnectionContext = undefined
+
   /**
    * @returns {VelociousDatabasePoolBase} - The current.
    */
@@ -113,6 +116,17 @@ class VelociousDatabasePoolBase {
    */
   getCurrentContextConnection() {
     return this.getCurrentConnection()
+  }
+
+  /**
+   * @template T
+   * @param {() => T} callback - Callback to run without any current connection context.
+   * @returns {T} - Callback result.
+   */
+  withoutCurrentConnectionContext(callback) {
+    if (this._withoutCurrentConnectionContext) return this._withoutCurrentConnectionContext(callback)
+
+    return callback()
   }
 
   /**
