@@ -75,6 +75,8 @@ The `Lint` Peakflow build first copies `spec/dummy/src/config/configuration.peak
 
 **Default to actually FIXING a Fallow offence, not ignoring it.** Delete the dead code, remove the duplication, or refactor the complexity that Fallow flags — that is the intended response. Refreshing the baseline (`npm run fallow:baseline`) and inline `// fallow-ignore-*` comments are last resorts, only for findings that are genuinely intended and reviewed (e.g. a new public API Fallow can't see is consumed, or a deliberate, justified complexity increase); explain why in the PR. Do not refresh the baseline or add ignore comments merely to make the gate pass — that hides real dead code/duplication instead of removing it.
 
+When a Fallow failure is confusing, inspect current JSON output against the checked-in baseline before refactoring broad unrelated code. Use `npx fallow health --baseline fallow-baselines/health.json --quiet --format json > tmp/fallow-health.json; status=$?; printf 'status=%s\n' "$status"` to preserve the exit status while capturing details. If Fallow itself changed target keys/report shape or the baseline is stale, save a fresh baseline with the owning command (for health: `npx fallow health --quiet --save-baseline tmp/health-current.json`, inspect the diff, then copy it to `fallow-baselines/health.json` only if the accepted baseline update is intentional) and rerun the full strict sequence. Never use `|| true` or a script change to make Fallow informational.
+
 If any command fails:
 - Read the error output, fix the underlying issue, and re-run the same command.
 - Repeat until the command succeeds (or clearly explain why it cannot be made to pass).

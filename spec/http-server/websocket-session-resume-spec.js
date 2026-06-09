@@ -201,6 +201,45 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
     })
   })
 
+  it("removes the paused session shell from debug tracking after resume", async () => {
+    await Dummy.run(async () => {
+      /** @type {{value: string | null}} */
+      const storage = {value: null}
+      const sessionStore = {
+        get: () => storage.value,
+        set: (/** @type {string} */ id) => { storage.value = id },
+        clear: () => { storage.value = null }
+      }
+      const firstClient = new WebsocketClient({sessionStore})
+      const secondClient = new WebsocketClient({sessionStore})
+
+      try {
+        await firstClient.connect()
+        const subscription = firstClient.subscribeChannel("Counter", {params: {allow: true, topic: "resume-debug"}})
+
+        await subscription.ready
+        await waitFor(() => storage.value !== null, 2000)
+        const snapshotBeforeDrop = dummyConfiguration.getLocalDebugSnapshot()
+        const sessionCountBeforeDrop = snapshotBeforeDrop.websockets.sessionCount
+
+        firstClient.socket?.close()
+        await waitFor(() => !firstClient.isOpen(), 2000)
+
+        await secondClient.connect()
+        await waitFor(() => secondClient._sessionId === storage.value, 3000)
+
+        const snapshot = dummyConfiguration.getLocalDebugSnapshot()
+        const counterSubscription = snapshot.websockets.subscriptions.find((entry) => entry.channel === "Counter")
+
+        expect(snapshot.websockets.sessionCount).toEqual(sessionCountBeforeDrop)
+        expect(counterSubscription?.count).toEqual(1)
+      } finally {
+        await firstClient.close().catch(() => {})
+        await secondClient.close().catch(() => {})
+      }
+    })
+  })
+
   it("rejects resume with session-gone when the identity resolver reports a different user", async () => {
     /** @type {{identity: string | null}} */
     const authState = {identity: "alice"}
