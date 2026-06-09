@@ -80,6 +80,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   constructor({configuration, identifier}) {
     super({configuration, identifier})
+    this._withoutCurrentConnectionContext = /** @type {(callback: () => unknown) => unknown} */ ((callback) => this.asyncLocalStorage.run(undefined, callback))
   }
 
   /**
@@ -579,11 +580,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (id === undefined) return this._testSharedConnection
 
     return this.getCurrentConnection()
-  }
-
-  /** @type {(callback: () => unknown) => unknown} */
-  _withoutCurrentConnectionContext = (callback) => {
-    return this.asyncLocalStorage.run(undefined, callback)
   }
 
   /** @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
