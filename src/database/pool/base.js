@@ -51,7 +51,7 @@ function stableStringify(value) {
 }
 
 class VelociousDatabasePoolBase {
-  /** @type {undefined | (<T>(callback: () => T) => T)} */
+  /** @type {undefined | ((callback: () => unknown) => unknown)} */
   _withoutCurrentConnectionContext = undefined
 
   /**
@@ -124,7 +124,7 @@ class VelociousDatabasePoolBase {
    * @returns {T} - Callback result.
    */
   withoutCurrentConnectionContext(callback) {
-    if (this._withoutCurrentConnectionContext) return this._withoutCurrentConnectionContext(callback)
+    if (this._withoutCurrentConnectionContext) return /** @type {T} */ (this._withoutCurrentConnectionContext(callback))
 
     return callback()
   }
