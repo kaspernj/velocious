@@ -214,6 +214,9 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
       const secondClient = new WebsocketClient({sessionStore})
 
       try {
+        const snapshotBeforeSubscribe = dummyConfiguration.getLocalDebugSnapshot()
+        const counterCountBeforeSubscribe = snapshotBeforeSubscribe.websockets.subscriptions.find((entry) => entry.channel === "Counter")?.count || 0
+
         await firstClient.connect()
         const subscription = firstClient.subscribeChannel("Counter", {params: {allow: true, topic: "resume-debug"}})
 
@@ -232,7 +235,7 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
         const counterSubscription = snapshot.websockets.subscriptions.find((entry) => entry.channel === "Counter")
 
         expect(snapshot.websockets.sessionCount).toEqual(sessionCountBeforeDrop)
-        expect(counterSubscription?.count).toEqual(1)
+        expect(counterSubscription?.count).toEqual(counterCountBeforeSubscribe + 1)
       } finally {
         await firstClient.close().catch(() => {})
         await secondClient.close().catch(() => {})
