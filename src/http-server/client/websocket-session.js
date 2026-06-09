@@ -228,7 +228,10 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   destroy() {
     this.configuration._websocketSessions.delete(this)
+    this._paused = false
     void this._teardownChannel()
+    void this._teardownConnections("session_destroyed")
+    void this._teardownChannelSubscriptions()
     this.events.removeAllListeners()
   }
 
@@ -1026,6 +1029,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     paused._connections.clear()
     paused._channelSubscriptions.clear()
     paused._paused = false
+    paused.destroy()
 
     this.sendJson({type: "session-resumed", sessionId: resumeSessionId})
     for (const body of queued) this.sendJson(body)
