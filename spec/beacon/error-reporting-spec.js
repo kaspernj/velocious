@@ -9,6 +9,7 @@ import BeaconServer from "../../src/beacon/server.js"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+import {listenOnLocalhost} from "../helpers/local-server-helper.js"
 
 /**
  * @param {import("../../src/configuration-types.js").BeaconConfiguration} [beacon] - Beacon configuration.
@@ -35,14 +36,7 @@ function buildConfiguration(beacon) {
  */
 async function reservedPort() {
   const server = net.createServer()
-
-  await new Promise((resolve, reject) => {
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", () => resolve(undefined))
-  })
-
-  const address = server.address()
-  const port = address && typeof address === "object" ? address.port : 0
+  const port = await listenOnLocalhost(server)
 
   await new Promise((resolve) => server.close(() => resolve(undefined)))
 

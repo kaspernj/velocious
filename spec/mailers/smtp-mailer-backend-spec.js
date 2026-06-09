@@ -4,6 +4,7 @@ import net from "net"
 import wait from "awaitery/build/wait.js"
 
 import SmtpMailerBackend from "../../src/mailer/backends/smtp.js"
+import {listenOnLocalhost} from "../helpers/local-server-helper.js"
 
 /**
  * @typedef {object} FakeSmtpServer
@@ -127,16 +128,7 @@ async function startFakeSmtpServer({holdQuitResponse = false, requireAuth = true
     })
   })
 
-  await new Promise((resolve, reject) => {
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", () => resolve(undefined))
-  })
-
-  const address = server.address()
-
-  if (!address || typeof address !== "object") {
-    throw new Error("Fake SMTP server did not expose a TCP port.")
-  }
+  const port = await listenOnLocalhost(server)
 
   return {
     close: async () => {
@@ -158,7 +150,7 @@ async function startFakeSmtpServer({holdQuitResponse = false, requireAuth = true
     },
     commands,
     messages,
-    port: address.port,
+    port,
     quitReceived,
     releaseQuitResponse
   }

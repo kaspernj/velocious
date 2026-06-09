@@ -1,6 +1,7 @@
 // @ts-check
 
 import Client from "../client/index.js"
+import dispatchChannelSubscribers from "./channel-subscriber-dispatch.js"
 import Logger from "../../logger.js"
 import websocketEventsHost from "../websocket-events-host.js"
 
@@ -137,24 +138,10 @@ export default class VelociousHttpServerInProcessHandler {
     }
 
     if (this.configuration) {
-      const configuration = this.configuration
-
       // Isolate subscriber failures from breaking the in-process handler,
       // but still surface them to the framework error events so bug
       // reporters can pick them up.
-      void configuration.getWebsocketChannelSubscribers()
-        .dispatch({channel, createdAt, eventId, payload})
-        .catch((error) => {
-          this.logger.error(() => [`Channel subscriber dispatch failed for ${channel}`, error])
-
-          const errorPayload = {
-            context: {channel, createdAt, eventId, source: "websocket-channel-subscribers"},
-            error
-          }
-
-          configuration.getErrorEvents().emit("framework-error", errorPayload)
-          configuration.getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
-        })
+      void dispatchChannelSubscribers({channel, configuration: this.configuration, createdAt, eventId, logger: this.logger, payload})
     }
   }
 }

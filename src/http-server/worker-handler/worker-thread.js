@@ -2,6 +2,7 @@
 
 import Application from "../../application.js"
 import Client from "../client/index.js"
+import dispatchChannelSubscribers from "./channel-subscriber-dispatch.js"
 import {digg} from "diggerize"
 import errorLogger from "../../error-logger.js"
 import Logger from "../../logger.js"
@@ -196,27 +197,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
 
     if (this.configuration) {
-      const configuration = this.configuration
-
       // Isolate channel subscriber failures so a buggy in-process callback
       // cannot reject this command and crash the worker thread, but still
       // surface the error to the framework error events so bug reporters
       // can pick it up.
-      sendTasks.push(
-        configuration.getWebsocketChannelSubscribers()
-          .dispatch({channel, createdAt, eventId, payload})
-          .catch((error) => {
-            this.logger.error(() => [`Channel subscriber dispatch failed for ${channel}`, error])
-
-            const errorPayload = {
-              context: {channel, createdAt, eventId, source: "websocket-channel-subscribers"},
-              error
-            }
-
-            configuration.getErrorEvents().emit("framework-error", errorPayload)
-            configuration.getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
-          })
-      )
+      sendTasks.push(dispatchChannelSubscribers({channel, configuration: this.configuration, createdAt, eventId, logger: this.logger, payload}))
     }
 
     await Promise.all(sendTasks)

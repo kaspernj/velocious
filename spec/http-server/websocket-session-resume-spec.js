@@ -5,21 +5,37 @@ import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import wait from "awaitery/build/wait.js"
+import waitFor from "../helpers/wait-for.js"
 
-/**
- * @param {() => boolean} predicate
- * @param {number} [timeoutMs]
- * @returns {Promise<void>}
- */
-async function waitFor(predicate, timeoutMs = 2000) {
-  const deadline = Date.now() + timeoutMs
+function openTrackedEchoConnection(client, events, callbacks = {}) {
+  return client.openConnection("Echo", {
+    ...callbacks,
+    onConnect: () => events.push("connect"),
+    onClose: (reason) => events.push(`close:${reason}`)
+  })
+}
 
-  while (Date.now() < deadline) {
-    if (predicate()) return
-    await wait(20)
-  }
+async function waitForConnect(events) {
+  await waitFor(() => events.includes("connect"))
+}
 
-  throw new Error(`waitFor timeout after ${timeoutMs}ms`)
+async function expectSessionGoneAfterReconnect(client, events) {
+  await waitForConnect(events)
+  client.socket?.close()
+  await waitFor(() => events.some((e) => e === "close:session_gone"), 5000)
+}
+
+async function withReconnectingClient(callback, reconnectDelays = [50]) {
+  await Dummy.run(async () => {
+    const client = new WebsocketClient({autoReconnect: true, reconnectDelays})
+
+    try {
+      await client.connect()
+      await callback(client)
+    } finally {
+      await client.close()
+    }
+  })
 }
 
 describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transaction: true}}, () => {
@@ -40,37 +56,27 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
   })
 
   it("pauses a session with live state on socket drop and fires onDisconnect on connections", async () => {
-    await Dummy.run(async () => {
-      const client = new WebsocketClient({autoReconnect: true, reconnectDelays: [50]})
+    await withReconnectingClient(async (client) => {
+      /** @type {string[]} */
+      const events = []
+      openTrackedEchoConnection(client, events, {
+        params: {name: "resume-me"},
+        onDisconnect: () => events.push("disconnect"),
+        onResume: () => events.push("resume")
+      })
 
-      try {
-        await client.connect()
+      await waitForConnect(events)
 
-        /** @type {string[]} */
-        const events = []
-        client.openConnection("Echo", {
-          params: {name: "resume-me"},
-          onConnect: () => events.push("connect"),
-          onDisconnect: () => events.push("disconnect"),
-          onResume: () => events.push("resume"),
-          onClose: (reason) => events.push(`close:${reason}`)
-        })
+      // Force the socket to drop; autoReconnect will kick in.
+      client.socket?.close()
 
-        await waitFor(() => events.includes("connect"))
+      await waitFor(() => events.includes("disconnect"), 3000)
+      await waitFor(() => events.includes("resume"), 5000)
 
-        // Force the socket to drop; autoReconnect will kick in.
-        client.socket?.close()
-
-        await waitFor(() => events.includes("disconnect"), 3000)
-        await waitFor(() => events.includes("resume"), 5000)
-
-        expect(events).toContain("connect")
-        expect(events).toContain("disconnect")
-        expect(events).toContain("resume")
-        expect(events.some((e) => e.startsWith("close:"))).toBe(false)
-      } finally {
-        await client.close()
-      }
+      expect(events).toContain("connect")
+      expect(events).toContain("disconnect")
+      expect(events).toContain("resume")
+      expect(events.some((e) => e.startsWith("close:"))).toBe(false)
     })
   })
 
@@ -119,31 +125,17 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
   })
 
   it("tells the client session-gone + destroys live handles when no paused session exists", async () => {
-    await Dummy.run(async () => {
-      const client = new WebsocketClient({autoReconnect: true, reconnectDelays: [50]})
+    await withReconnectingClient(async (client) => {
+      /** @type {string[]} */
+      const events = []
+      openTrackedEchoConnection(client, events)
 
-      try {
-        await client.connect()
+      // Set a bogus sessionId; on reconnect the server won't find it.
+      client._sessionId = "bogus-sess-id"
 
-        /** @type {string[]} */
-        const events = []
-        client.openConnection("Echo", {
-          onConnect: () => events.push("connect"),
-          onClose: (reason) => events.push(`close:${reason}`)
-        })
-
-        await waitFor(() => events.includes("connect"))
-
-        // Set a bogus sessionId; on reconnect the server won't find it.
-        client._sessionId = "bogus-sess-id"
-        client.socket?.close()
-
-        await waitFor(() => events.some((e) => e === "close:session_gone"), 5000)
-        expect(events).toContain("close:session_gone")
-        expect(client._sessionId).toBe(null)
-      } finally {
-        await client.close()
-      }
+      await expectSessionGoneAfterReconnect(client, events)
+      expect(events).toContain("close:session_gone")
+      expect(client._sessionId).toBe(null)
     })
   })
 
@@ -224,15 +216,12 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
 
           /** @type {string[]} */
           const events = []
-          client.openConnection("Echo", {
-            onConnect: () => events.push("connect"),
+          openTrackedEchoConnection(client, events, {
             onResume: () => events.push("resume"),
-            onClose: (reason) => events.push(`close:${reason}`)
           })
 
-          await waitFor(() => events.includes("connect"))
-
           // Drop the socket to trigger pause — identity captured as "alice".
+          await waitForConnect(events)
           client.socket?.close()
           // Wait until the SERVER sees the session as paused AND its
           // identity capture promise resolves, so we don't race the
@@ -256,7 +245,7 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
           // Reconnect will send session-resume with the stored id.
           // Server should reject and send session-gone, which tears
           // down live handles with reason `session_gone`.
-          await waitFor(() => events.some((e) => e === "close:session_gone"), 5000)
+          await waitFor(() => events.includes("close:session_gone"), 5000)
           expect(events).not.toContain("resume")
         } finally {
           await client.close()
@@ -326,12 +315,9 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
 
           /** @type {string[]} */
           const events = []
-          client.openConnection("Echo", {
-            onConnect: () => events.push("connect"),
-            onClose: (reason) => events.push(`close:${reason}`)
-          })
+          openTrackedEchoConnection(client, events)
 
-          await waitFor(() => events.includes("connect"))
+          await waitForConnect(events)
 
           // Drop socket and forget the session so no resume happens.
           // autoReconnect is off (default) → handles tear down
