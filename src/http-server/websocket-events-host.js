@@ -44,23 +44,18 @@ export class VelociousHttpServerWebsocketEventsHost {
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 
-    this.publishQueue = this.publishQueue
-      .then(async () => {
-        const persistedEvent = await this._persistEventIfNeeded({channel, payload})
+    this._queuePublish(async () => {
+      const persistedEvent = await this._persistEventIfNeeded({channel, payload})
 
-        for (const handler of this.handlers) {
-          handler.dispatchWebsocketEvent({
-            channel,
-            createdAt: persistedEvent?.createdAt,
-            eventId: persistedEvent?.id,
-            payload
-          })
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to publish websocket event", error)
-        throw error
-      })
+      for (const handler of this.handlers) {
+        handler.dispatchWebsocketEvent({
+          channel,
+          createdAt: persistedEvent?.createdAt,
+          eventId: persistedEvent?.id,
+          payload
+        })
+      }
+    }, "Failed to publish websocket event")
   }
 
   /**
@@ -79,22 +74,40 @@ export class VelociousHttpServerWebsocketEventsHost {
     // the next broadcast — without this, a subscriber that connects
     // immediately after a broadcast could miss the just-persisted
     // event when replaying from lastEventId on a slow DB.
+    this._queuePublish(async () => {
+      const persistedEvent = await this._persistV2EventIfNeeded({body, channel})
+
+      for (const handler of this.handlers) {
+        handler.dispatchWebsocketV2Broadcast({
+          body,
+          broadcastParams,
+          channel,
+          eventId: persistedEvent?.id,
+          createdAt: persistedEvent?.createdAt
+        })
+      }
+    }, "Failed to persist/broadcast V2 event")
+  }
+
+  /**
+   * @param {() => Promise<void>} callback - Publish work to run in order.
+   * @param {string} errorMessage - Message logged when publish work fails.
+   * @returns {void}
+   */
+  _queuePublish(callback, errorMessage) {
+    const handler = this.handlers.values().next().value
+    const configuration = handler?.configuration
+
     this.publishQueue = this.publishQueue
       .then(async () => {
-        const persistedEvent = await this._persistV2EventIfNeeded({body, channel})
-
-        for (const handler of this.handlers) {
-          handler.dispatchWebsocketV2Broadcast({
-            body,
-            broadcastParams,
-            channel,
-            eventId: persistedEvent?.id,
-            createdAt: persistedEvent?.createdAt
-          })
+        if (configuration) {
+          return await configuration.withoutCurrentConnectionContexts(callback)
         }
+
+        return await callback()
       })
       .catch((error) => {
-        console.error("Failed to persist/broadcast V2 event", error)
+        console.error(errorMessage, error)
         throw error
       })
   }
@@ -106,16 +119,7 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @returns {Promise<{createdAt: string, id: string} | null>}
    */
   async _persistV2EventIfNeeded({body, channel}) {
-    const handler = this.handlers.values().next().value
-
-    if (!handler?.configuration) return null
-
-    const websocketEventLogStore = websocketEventLogStoreForConfiguration(handler.configuration)
-    const shouldPersist = await websocketEventLogStore.shouldPersistChannel(channel)
-
-    if (!shouldPersist) return null
-
-    return await websocketEventLogStore.appendEvent({channel, payload: body})
+    return await this._persistChannelEventIfNeeded({channel, payload: body})
   }
 
   /**
@@ -125,6 +129,16 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
   async _persistEventIfNeeded({channel, payload}) {
+    return await this._persistChannelEventIfNeeded({channel, payload})
+  }
+
+  /**
+   * @param {object} args - Options object.
+   * @param {string} args.channel - Channel name.
+   * @param {any} args.payload - Payload data.
+   * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
+   */
+  async _persistChannelEventIfNeeded({channel, payload}) {
     const handler = this.handlers.values().next().value
 
     if (!handler?.configuration) return null

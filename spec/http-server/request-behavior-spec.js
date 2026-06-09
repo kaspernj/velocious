@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import net from "net"
 import timeout from "awaitery/build/timeout.js"
 
@@ -78,6 +79,14 @@ const readResponse = async (socket, initialBuffer = "") => {
 }
 
 describe("HttpServer - request behavior", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
+  /** @returns {number} - Number of HTTP controller action checkouts currently in use. */
+  const activeControllerActionConnectionCount = () => {
+    const defaultPool = dummyConfiguration.getDatabasePool("default")
+    const snapshot = defaultPool.getDebugSnapshot()
+
+    return snapshot.connections.filter((connection) => connection.state === "in-use" && connection.checkoutName === "RootController.ping").length
+  }
+
   it("closes HTTP/1.1 connections when requested", async () => {
     await Dummy.run(async () => {
       const response = await sendRawRequest([
@@ -223,6 +232,44 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         ]
 
         expect(statusLines.length).toBe(2)
+      } finally {
+        socket.destroy()
+      }
+    })
+  })
+
+  it("checks database connections back in between keep-alive requests", async () => {
+    await Dummy.run(async () => {
+      const socket = new net.Socket()
+
+      socket.connect(3006, "127.0.0.1", () => {
+        socket.write([
+          "GET /ping HTTP/1.1",
+          "Host: localhost",
+          "Connection: keep-alive",
+          "",
+          ""
+        ].join("\r\n"))
+      })
+
+      try {
+        const firstResponse = await readResponse(socket)
+
+        expect(firstResponse.response).toContain("HTTP/1.1 200 OK")
+        expect(activeControllerActionConnectionCount()).toBe(0)
+
+        socket.write([
+          "GET /ping HTTP/1.1",
+          "Host: localhost",
+          "Connection: close",
+          "",
+          ""
+        ].join("\r\n"))
+
+        const secondResponse = await readResponse(socket, firstResponse.remaining)
+
+        expect(secondResponse.response).toContain("HTTP/1.1 200 OK")
+        expect(activeControllerActionConnectionCount()).toBe(0)
       } finally {
         socket.destroy()
       }
