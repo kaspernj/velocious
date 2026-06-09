@@ -15,7 +15,7 @@
     "compile": "tsc -b && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",
     "copy:ejs": "cpy \"src/routes/**/*.ejs\" build/src/routes",
     "copy:templates": "cpy \"src/templates/**/*.js\" build/src/templates",
-    "fallow": "fallow dead-code --baseline fallow-baselines/dead-code.json --fail-on-issues --quiet && fallow dupes --baseline fallow-baselines/dupes.json --fail-on-issues --quiet && fallow health --baseline fallow-baselines/health.json --quiet || true",
+    "fallow": "fallow dead-code --baseline fallow-baselines/dead-code.json --fail-on-issues --quiet && fallow dupes --baseline fallow-baselines/dupes.json --fail-on-issues --quiet && fallow health --baseline fallow-baselines/health.json --quiet",
     "fallow:baseline": "fallow dead-code --save-baseline fallow-baselines/dead-code.json && fallow dupes --save-baseline fallow-baselines/dupes.json && fallow health --save-baseline fallow-baselines/health.json",
     "eslint": "eslint",
     "lint": "npm run eslint && npm run typecheck && npm run fallow",
