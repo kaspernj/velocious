@@ -156,7 +156,13 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
 
     const originalHandlers = new Set(websocketEventsHost.handlers)
     const sentMessages = []
-    const handler = new WorkerHandler({configuration: {debug: false}, workerCount: 1})
+    const handler = new WorkerHandler({
+      configuration: {
+        debug: false,
+        withoutCurrentConnectionContexts: (callback) => callback()
+      },
+      workerCount: 1
+    })
 
     websocketEventsHost.handlers.clear()
     handler.worker = {
