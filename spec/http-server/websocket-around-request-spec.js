@@ -4,21 +4,11 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import wait from "awaitery/build/wait.js"
+import waitFor from "../helpers/wait-for.js"
 
-/**
- * @param {() => boolean} predicate
- * @param {number} [timeoutMs]
- */
-async function waitFor(predicate, timeoutMs = 2000) {
-  const deadline = Date.now() + timeoutMs
-
-  while (Date.now() < deadline) {
-    if (predicate()) return
-    await wait(20)
-  }
-
-  throw new Error(`waitFor timeout after ${timeoutMs}ms`)
+function expectAroundRequestPair(callLog) {
+  expect(callLog.some((entry) => entry.startsWith("before:"))).toBe(true)
+  expect(callLog.includes("after")).toBe(true)
 }
 
 describe("Configuration.setWebsocketAroundRequest (Phase 2)", {databaseCleaning: {transaction: true}}, () => {
@@ -51,16 +41,14 @@ describe("Configuration.setWebsocketAroundRequest (Phase 2)", {databaseCleaning:
           await waitFor(() => received.length >= 1)
 
           // One "before" + "after" pair from the connection-open message.
-          expect(callLog.some((entry) => entry.startsWith("before:"))).toBe(true)
-          expect(callLog.includes("after")).toBe(true)
+          expectAroundRequestPair(callLog)
 
           callLog.length = 0
           connection.sendMessage({ping: 1})
           await waitFor(() => received.some((m) => m?.echo?.ping === 1))
 
           // Another pair from the connection-message.
-          expect(callLog.some((entry) => entry.startsWith("before:"))).toBe(true)
-          expect(callLog.includes("after")).toBe(true)
+          expectAroundRequestPair(callLog)
         } finally {
           await client.close()
         }

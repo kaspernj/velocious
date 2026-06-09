@@ -336,7 +336,7 @@
         "count": 8
       },
       "crap_moderate": {
-        "count": 12
+        "count": 13
       }
     },
     "src/controller.js": {
@@ -1224,7 +1224,7 @@
         "count": 6
       },
       "crap_high": {
-        "count": 9
+        "count": 8
       },
       "crap_moderate": {
         "count": 4
@@ -1275,10 +1275,7 @@
       }
     },
     "src/http-server/worker-handler/worker-thread.js": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "crap_critical": {
+      "crap_high": {
         "count": 1
       },
       "crap_moderate": {
@@ -1530,13 +1527,13 @@
     "src/database/record/index.js:complexity",
     "src/routes/resolver.js:complexity",
     "src/testing/test.js:dead code",
-    "src/database/query/model-class-query.js:complexity",
     "src/http-server/client/websocket-session.js:complexity",
+    "src/database/query/model-class-query.js:complexity",
     "src/database/drivers/base.js:complexity",
     "src/database/drivers/pgsql/structure-sql.js:untested risk",
     "src/database/query/preloader.js:complexity",
-    "src/testing/test-runner.js:complexity",
     "src/frontend-model-resource/base-resource.js:complexity",
+    "src/testing/test-runner.js:complexity",
     "src/database/query/create-table-base.js:complexity",
     "src/database/drivers/mssql/structure-sql.js:complexity",
     "src/http-server/worker-handler/index.js:complexity",
@@ -1548,17 +1545,17 @@
     "src/database/migrator.js:complexity",
     "src/database/drivers/mysql/structure-sql.js:untested risk",
     "src/database/record/attachments/normalize-input.js:complexity",
-    "src/mailer/base.js:circular dependency",
     "src/frontend-models/outgoing-event-buffer.js:dead code",
+    "src/mailer/base.js:circular dependency",
     "src/database/query/where-model-class-hash.js:complexity",
+    "src/environment-handlers/node/cli/commands/test.js:complexity",
     "src/utils/format-value.js:untested risk",
     "src/database/query/preloader/belongs-to.js:complexity",
-    "src/environment-handlers/node/cli/commands/test.js:complexity",
     "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/has-many.js:complexity",
     "src/jobs/mail-delivery.js:circular dependency",
-    "src/database/query/query-data.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
+    "src/database/query/query-data.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/frontend-models.js:complexity",
     "src/http-server/client/request-buffer/index.js:complexity",
     "src/testing/expect.js:complexity",

@@ -3,26 +3,34 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
-import wait from "awaitery/build/wait.js"
+import waitFor from "../helpers/wait-for.js"
 
-/**
- * Waits for `predicate()` to return true, polling every 20 ms up to
- * `timeoutMs`. Used to let server/client async work settle between
- * calls without hardcoded sleeps.
- *
- * @param {() => boolean} predicate
- * @param {number} [timeoutMs]
- * @returns {Promise<void>}
- */
-async function waitFor(predicate, timeoutMs = 2000) {
-  const deadline = Date.now() + timeoutMs
+async function openEchoConnection(client, closeReasons) {
+  const connection = client.openConnection("Echo", {
+    onClose: (reason) => closeReasons.push(reason)
+  })
 
-  while (Date.now() < deadline) {
-    if (predicate()) return
-    await wait(20)
-  }
+  await connection.ready
 
-  throw new Error(`waitFor timeout after ${timeoutMs}ms`)
+  return connection
+}
+
+async function withEchoConnection(callback) {
+  await Dummy.run(async () => {
+    const client = new WebsocketClient()
+
+    try {
+      await client.connect()
+
+      /** @type {string[]} */
+      const closeReasons = []
+      const connection = await openEchoConnection(client, closeReasons)
+
+      await callback({client, closeReasons, connection})
+    } finally {
+      await client.close()
+    }
+  })
 }
 
 describe("WebsocketConnection (Phase 1A)", {databaseCleaning: {transaction: true}}, () => {
@@ -84,57 +92,25 @@ describe("WebsocketConnection (Phase 1A)", {databaseCleaning: {transaction: true
   })
 
   it("fires onClose(client_close) immediately when the client calls close()", async () => {
-    await Dummy.run(async () => {
-      const client = new WebsocketClient()
+    await withEchoConnection(async ({closeReasons, connection}) => {
+      connection.close()
 
-      try {
-        await client.connect()
-
-        /** @type {string[]} */
-        const clientCloseReasons = []
-        const connection = client.openConnection("Echo", {
-          onClose: (reason) => clientCloseReasons.push(reason)
-        })
-
-        await connection.ready
-
-        connection.close()
-
-        expect(connection.isClosed()).toBe(true)
-        expect(clientCloseReasons).toEqual(["client_close"])
-        // Server-side onClose firing is verified on the server-close
-        // path below; for client_close we can't observe it because the
-        // client has already dropped the id from its registry by the
-        // time the server's reply messages arrive.
-      } finally {
-        await client.close()
-      }
+      expect(connection.isClosed()).toBe(true)
+      expect(closeReasons).toEqual(["client_close"])
+      // Server-side onClose firing is verified on the server-close
+      // path below; for client_close we can't observe it because the
+      // client has already dropped the id from its registry by the
+      // time the server's reply messages arrive.
     })
   })
 
   it("fires onClose(server_close) when the server initiates the close", async () => {
-    await Dummy.run(async () => {
-      const client = new WebsocketClient()
+    await withEchoConnection(async ({closeReasons, connection}) => {
+      // Ask the server-side EchoConnection to close itself.
+      connection.sendMessage({__testCloseFromServer: true})
 
-      try {
-        await client.connect()
-
-        /** @type {string[]} */
-        const clientCloseReasons = []
-        const connection = client.openConnection("Echo", {
-          onClose: (reason) => clientCloseReasons.push(reason)
-        })
-
-        await connection.ready
-
-        // Ask the server-side EchoConnection to close itself.
-        connection.sendMessage({__testCloseFromServer: true})
-
-        await waitFor(() => connection.isClosed())
-        expect(clientCloseReasons).toEqual(["server_close"])
-      } finally {
-        await client.close()
-      }
+      await waitFor(() => connection.isClosed())
+      expect(closeReasons).toEqual(["server_close"])
     })
   })
 

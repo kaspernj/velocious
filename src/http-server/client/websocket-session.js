@@ -178,6 +178,8 @@ export default class VelociousHttpServerClientWebsocketSession {
      * @type {number}
      */
     this._fragmentedBytes = 0
+
+    this.configuration._websocketSessions.add(this)
   }
 
   /**
@@ -225,6 +227,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   destroy() {
+    this.configuration._websocketSessions.delete(this)
     void this._teardownChannel()
     this.events.removeAllListeners()
   }
@@ -912,21 +915,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>}
    */
   async _fireOnDisconnect() {
-    for (const connection of this._connections.values()) {
-      try {
-        await connection.onDisconnect?.()
-      } catch (error) {
-        this.logger.error(() => [`onDisconnect failed for ${connection.connectionId}`, error])
-      }
-    }
-
-    for (const {subscription} of this._channelSubscriptions.values()) {
-      try {
-        await subscription.onDisconnect?.()
-      } catch (error) {
-        this.logger.error(() => [`onDisconnect failed for channel sub ${subscription.subscriptionId}`, error])
-      }
-    }
+    await this._fireLifecycleCallback("onDisconnect")
   }
 
   /**
@@ -936,19 +925,27 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>}
    */
   async _fireOnResume() {
+    await this._fireLifecycleCallback("onResume")
+  }
+
+  /**
+   * @param {"onDisconnect" | "onResume"} callbackName Lifecycle callback to fire.
+   * @returns {Promise<void>} Resolves when every live handler has been attempted.
+   */
+  async _fireLifecycleCallback(callbackName) {
     for (const connection of this._connections.values()) {
       try {
-        await connection.onResume?.()
+        await connection[callbackName]?.()
       } catch (error) {
-        this.logger.error(() => [`onResume failed for ${connection.connectionId}`, error])
+        this.logger.error(() => [`${callbackName} failed for ${connection.connectionId}`, error])
       }
     }
 
     for (const {subscription} of this._channelSubscriptions.values()) {
       try {
-        await subscription.onResume?.()
+        await subscription[callbackName]?.()
       } catch (error) {
-        this.logger.error(() => [`onResume failed for channel sub ${subscription.subscriptionId}`, error])
+        this.logger.error(() => [`${callbackName} failed for channel sub ${subscription.subscriptionId}`, error])
       }
     }
   }

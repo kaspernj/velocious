@@ -4,8 +4,9 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import wait from "awaitery/build/wait.js"
 import WebsocketChannel from "../../src/http-server/websocket-channel.js"
+import wait from "awaitery/build/wait.js"
+import waitFor from "../helpers/wait-for.js"
 
 class ReorderedDebugChannel extends WebsocketChannel {
   /** @returns {boolean} Whether the subscription is allowed. */
@@ -21,39 +22,41 @@ class ReorderedDebugChannel extends WebsocketChannel {
   }
 }
 
-/**
- * @param {() => boolean} predicate
- * @param {number} [timeoutMs]
- * @returns {Promise<void>}
- */
-async function waitFor(predicate, timeoutMs = 2000) {
-  const deadline = Date.now() + timeoutMs
+function reconnectingClientWithManualNetwork(initialOnline = true) {
+  let isOnline = initialOnline
+  /** @type {Set<(isOnline: boolean) => void>} */
+  const listeners = new Set()
+  const client = new WebsocketClient({
+    autoReconnect: true,
+    networkMonitor: {
+      getIsOnline: () => isOnline,
+      subscribe: (callback) => {
+        listeners.add(callback)
+        return () => listeners.delete(callback)
+      }
+    },
+    reconnectDelays: [50]
+  })
 
-  while (Date.now() < deadline) {
-    if (predicate()) return
-    await wait(20)
+  const setOnline = (nextOnline) => {
+    isOnline = nextOnline
+    for (const listener of listeners) listener(nextOnline)
   }
 
-  throw new Error(`waitFor timeout after ${timeoutMs}ms`)
+  return {client, setOnline}
+}
+
+async function expectRejectedSubscription(subscription) {
+  let rejected = false
+
+  await subscription.ready.catch(() => { rejected = true })
+  expect(rejected).toBe(true)
 }
 
 describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () => {
   it("queues channel subscriptions until the network monitor reports online", async () => {
     await Dummy.run(async () => {
-      let isOnline = false
-      /** @type {Set<(isOnline: boolean) => void>} */
-      const listeners = new Set()
-      const client = new WebsocketClient({
-        autoReconnect: true,
-        networkMonitor: {
-          getIsOnline: () => isOnline,
-          subscribe: (callback) => {
-            listeners.add(callback)
-            return () => listeners.delete(callback)
-          }
-        },
-        reconnectDelays: [50]
-      })
+      const {client, setOnline} = reconnectingClientWithManualNetwork(false)
 
       try {
         /** @type {any[]} */
@@ -67,8 +70,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
 
         expect(client.isOpen()).toBe(false)
 
-        isOnline = true
-        for (const listener of listeners) listener(true)
+        setOnline(true)
 
         await subscription.ready
         await waitFor(() => received.length >= 1)
@@ -140,13 +142,9 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
           onClose: (reason) => closeReasons.push(reason)
         })
 
-        let rejected = false
-
-        await subscription.ready.catch(() => { rejected = true })
-
-        expect(rejected).toBe(true)
-        expect(closeReasons.length).toBe(1)
-        expect(closeReasons[0].startsWith("error:")).toBe(true)
+        await expectRejectedSubscription(subscription)
+        expect(closeReasons).toHaveLength(1)
+        expect(closeReasons[0]).toMatch(/^error:/)
       } finally {
         await client.close()
       }
@@ -199,6 +197,23 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
         expect(counterSubscription?.details).toContainEqual({
           count: counterSubscription?.count,
           details: {}
+        })
+        const singleCounterSession = {
+          channelSubscriptionCount: 1,
+          channelSubscriptions: [{channelType: "Counter", count: 1, model: null}],
+          connectionCount: 0,
+          paused: false,
+          subscriptionCount: 0
+        }
+
+        expect(snapshot.websockets.sessionCount).toBeGreaterThanOrEqual(2)
+        expect(snapshot.websockets.sessionBuckets).toContainEqual({
+          count: 2,
+          details: singleCounterSession
+        })
+        expect(snapshot.websockets.sessions).toContainEqual({
+          ...singleCounterSession,
+          queuedMessageCount: 0
         })
       } finally {
         await clientA.close()
@@ -370,20 +385,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
 
   it("waits for the network monitor to report online before resuming a dropped subscription", async () => {
     await Dummy.run(async () => {
-      let isOnline = true
-      /** @type {Set<(isOnline: boolean) => void>} */
-      const listeners = new Set()
-      const client = new WebsocketClient({
-        autoReconnect: true,
-        networkMonitor: {
-          getIsOnline: () => isOnline,
-          subscribe: (callback) => {
-            listeners.add(callback)
-            return () => listeners.delete(callback)
-          }
-        },
-        reconnectDelays: [50]
-      })
+      const {client, setOnline} = reconnectingClientWithManualNetwork()
 
       try {
         /** @type {string[]} */
@@ -397,15 +399,13 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
         await client.connect()
         await subscription.ready
 
-        isOnline = false
-        for (const listener of listeners) listener(false)
+        setOnline(false)
 
         await waitFor(() => events.includes("disconnect"), 3000)
         await wait(150)
         expect(events.includes("resume")).toBe(false)
 
-        isOnline = true
-        for (const listener of listeners) listener(true)
+        setOnline(true)
 
         await waitFor(() => events.includes("resume"), 5000)
       } finally {
@@ -416,20 +416,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
 
   it("waitForReady waits for the next ready cycle after disconnect", async () => {
     await Dummy.run(async () => {
-      let isOnline = true
-      /** @type {Set<(isOnline: boolean) => void>} */
-      const listeners = new Set()
-      const client = new WebsocketClient({
-        autoReconnect: true,
-        networkMonitor: {
-          getIsOnline: () => isOnline,
-          subscribe: (callback) => {
-            listeners.add(callback)
-            return () => listeners.delete(callback)
-          }
-        },
-        reconnectDelays: [50]
-      })
+      const {client, setOnline} = reconnectingClientWithManualNetwork()
 
       try {
         const subscription = client.subscribeChannel("Counter", {
@@ -440,16 +427,14 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
         await subscription.waitForReady({timeoutMs: 3000})
         expect(subscription.isReady()).toBe(true)
 
-        isOnline = false
-        for (const listener of listeners) listener(false)
+        setOnline(false)
 
         await waitFor(() => subscription.isReady() === false, 3000)
 
         const waitForResume = subscription.waitForReady({timeoutMs: 5000})
         await wait(100)
 
-        isOnline = true
-        for (const listener of listeners) listener(true)
+        setOnline(true)
 
         await waitForResume
         expect(subscription.isReady()).toBe(true)
@@ -461,20 +446,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
 
   it("does not mark queued subscriptions ready on session resume before channel acknowledgement", async () => {
     await Dummy.run(async () => {
-      let isOnline = true
-      /** @type {Set<(isOnline: boolean) => void>} */
-      const listeners = new Set()
-      const client = new WebsocketClient({
-        autoReconnect: true,
-        networkMonitor: {
-          getIsOnline: () => isOnline,
-          subscribe: (callback) => {
-            listeners.add(callback)
-            return () => listeners.delete(callback)
-          }
-        },
-        reconnectDelays: [50]
-      })
+      const {client, setOnline} = reconnectingClientWithManualNetwork()
 
       try {
         const existingSubscription = client.subscribeChannel("Counter", {
@@ -484,8 +456,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
         await client.connect()
         await existingSubscription.waitForReady({timeoutMs: 3000})
 
-        isOnline = false
-        for (const listener of listeners) listener(false)
+        setOnline(false)
 
         await waitFor(() => existingSubscription.isReady() === false, 3000)
 
@@ -495,8 +466,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
 
         expect(queuedSubscription.isReady()).toBe(false)
 
-        isOnline = true
-        for (const listener of listeners) listener(true)
+        setOnline(true)
 
         await waitFor(() => existingSubscription.isReady() === true, 5000)
         expect(queuedSubscription.isReady()).toBe(false)
@@ -629,11 +599,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
           onClose: (reason) => closeReasons.push(reason)
         })
 
-        let rejected = false
-
-        await subscription.ready.catch(() => { rejected = true })
-
-        expect(rejected).toBe(true)
+        await expectRejectedSubscription(subscription)
         expect(closeReasons.length).toBe(1)
         expect(closeReasons[0]).toContain("Unknown channel type")
       } finally {

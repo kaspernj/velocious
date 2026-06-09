@@ -152,6 +152,9 @@ export default class VelociousConfiguration {
     /** @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions. */
     this._websocketChannelSubscriptions = new Map()
 
+    /** @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window. */
+    this._websocketSessions = new Set()
+
     /** @type {Map<string, {session: import("./http-server/client/websocket-session.js").default, graceTimer: ReturnType<typeof setTimeout>, pausedAt: number}>} - sessionId → paused session awaiting resume. */
     this._pausedWebsocketSessions = new Map()
 
@@ -456,6 +459,10 @@ export default class VelociousConfiguration {
 
   /** @returns {Record<string, unknown>} - WebSocket diagnostics. */
   _debugWebsocketSnapshot() {
+    /** @type {Map<string, {count: number, details: {channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, subscriptionCount: number}}>} */
+    const sessionBuckets = new Map()
+    /** @type {{channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, queuedMessageCount: number, subscriptionCount: number}[]} */
+    const sessionDetails = []
     const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
       /** @type {Map<string, {count: number, details: Record<string, unknown>}>} */
       const detailsBuckets = new Map()
@@ -479,10 +486,65 @@ export default class VelociousConfiguration {
       }
     })
 
+    for (const session of this._websocketSessions) {
+      /** @type {Map<string, {channelType: string, count: number, model: string | null}>} */
+      const channelSubscriptionBuckets = new Map()
+
+      for (const {channelType, subscription} of session._channelSubscriptions.values()) {
+        const details = /** @type {Record<string, unknown>} */ (subscription.debugSnapshot())
+        const model = typeof details.model === "string" ? details.model : null
+        const key = JSON.stringify({channelType, model})
+        const existingBucket = channelSubscriptionBuckets.get(key)
+
+        if (existingBucket) {
+          existingBucket.count += 1
+        } else {
+          channelSubscriptionBuckets.set(key, {channelType, count: 1, model})
+        }
+      }
+
+      const channelSubscriptions = Array.from(channelSubscriptionBuckets.values()).sort((a, b) => b.count - a.count)
+      const snapshot = {
+        channelSubscriptionCount: session._channelSubscriptions.size,
+        channelSubscriptions,
+        connectionCount: session._connections.size,
+        paused: session._paused,
+        queuedMessageCount: session._outboundQueue.length,
+        subscriptionCount: session.subscriptions.size
+      }
+      const bucketKey = JSON.stringify({
+        channelSubscriptionCount: snapshot.channelSubscriptionCount,
+        channelSubscriptions: snapshot.channelSubscriptions,
+        connectionCount: snapshot.connectionCount,
+        paused: snapshot.paused,
+        subscriptionCount: snapshot.subscriptionCount
+      })
+      const existingBucket = sessionBuckets.get(bucketKey)
+
+      if (existingBucket) {
+        existingBucket.count += 1
+      } else {
+        sessionBuckets.set(bucketKey, {
+          count: 1,
+          details: {
+            channelSubscriptionCount: snapshot.channelSubscriptionCount,
+            channelSubscriptions: snapshot.channelSubscriptions,
+            connectionCount: snapshot.connectionCount,
+            paused: snapshot.paused,
+            subscriptionCount: snapshot.subscriptionCount
+          }
+        })
+      }
+      sessionDetails.push(snapshot)
+    }
+
     return {
       pausedSessions: this._pausedWebsocketSessions.size,
       registeredChannels: Array.from(this._websocketChannelClasses.keys()),
       registeredConnections: Array.from(this._websocketConnectionClasses.keys()),
+      sessionBuckets: Array.from(sessionBuckets.values()).sort((a, b) => b.count - a.count),
+      sessionCount: this._websocketSessions.size,
+      sessions: sessionDetails.sort((a, b) => b.channelSubscriptionCount - a.channelSubscriptionCount),
       subscriptionGroups: this._websocketChannelSubscriptions.size,
       subscriptions
     }

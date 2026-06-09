@@ -41,7 +41,7 @@ For code that runs in Expo/Metro bundles, avoid non-literal dynamic imports (for
 Do not commit or push code changes in this repo until the exact CI-equivalent Lint sequence has passed locally in the same worktree:
 
 1. `cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js`
-2. `npm run lint`
+2. `npm run lint` (runs ESLint, TypeCheck, and Fallow)
 3. `npm run typecheck`
 4. `npm run fallow`
 
@@ -49,8 +49,9 @@ This is a hard gate for every code change, including review follow-ups and "smal
 
 ### Targeted checks (preferred)
 Run only the relevant, changed, or new linters and tests locally:
-- Always run `npm run lint` after changing any files.
+- Always run `npm run lint` after changing any files. This is the aggregate lint gate and runs ESLint, TypeCheck, and Fallow.
 - Always run `npm run typecheck` after changing any files.
+- Use `npm run eslint` when you intentionally want ESLint only.
 - Run relevant specs (`npx velocious test <path-or-example>`) for changed code.
 - Always run linters, typecheck, and relevant specs **before committing or pushing** — never push blind.
 - Before committing or pushing, run the CI-equivalent Lint sequence exactly: `cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js`, then `npm run lint`, `npm run typecheck`, and `npm run fallow`. Running those commands without first copying the sqlite Peakflow dummy config can miss Fallow baseline differences that CI will catch.

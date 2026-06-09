@@ -2,6 +2,7 @@
 
 import Application from "../../application.js"
 import Client from "../client/index.js"
+import dispatchChannelSubscribers from "./channel-subscriber-dispatch.js"
 import {digg} from "diggerize"
 import errorLogger from "../../error-logger.js"
 import Logger from "../../logger.js"
@@ -99,76 +100,134 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const command = data.command
 
     if (command == "newClient") {
-      if (!this.configuration) throw new Error("Configuration not initialized")
-
-      const {clientCount, remoteAddress} = data
-
-      if (typeof clientCount !== "number") throw new Error("clientCount must be a number")
-
-      const client = new Client({
-        clientCount,
-        configuration: this.configuration,
-        remoteAddress
-      })
-
-      client.events.on("output", (output) => {
-        this.parentPort.postMessage({command: "clientOutput", clientCount, output})
-      })
-
-      client.events.on("close", (output) => {
-        this.logger.debugLowLevel(() => "Close received from client in worker - forwarding to worker parent")
-        this.parentPort.postMessage({command: "clientClose", clientCount, output})
-      })
-
-      this.clients[clientCount] = client
+      this.handleNewClient(data)
     } else if (command == "clientWrite") {
-      await this.logger.debugLowLevel("Looking up client")
-
-      const {chunk, clientCount} = data
-      if (!chunk) throw new Error("No chunk given")
-      const client = /** @type {Client | undefined} */ (digg(this.clients, clientCount))
-
-      if (!client) throw new Error(`Client not found for clientWrite: ${clientCount}`)
-
-      const clientChunk = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk)
-
-      await this.logger.debug(() => ["Sending clientWrite to parser", {clientCount, ...summarizeClientWriteChunk(clientChunk)}])
-
-      client.onWrite(clientChunk)
+      await this.handleClientWrite(data)
     } else if (command == "websocketEvent") {
-      const {channel, createdAt, eventId, payload} = data
-
-      if (typeof channel !== "string") throw new Error("No channel given")
-
-      await this.broadcastWebsocketEvent({channel, createdAt, eventId, payload})
+      await this.handleWebsocketEvent(data)
     } else if (command == "websocketV2Broadcast") {
-      const {body, broadcastParams, channel, eventId} = data
-
-      if (typeof channel !== "string") throw new Error("No channel given")
-      if (!this.configuration) throw new Error("Configuration not initialized")
-
-      this.configuration._broadcastToChannelLocal(channel, broadcastParams || {}, body, {eventId})
+      this.handleWebsocketV2Broadcast(data)
     } else if (command == "debugSnapshot") {
-      const {requestId} = data
-
-      if (typeof requestId !== "number") throw new Error("debugSnapshot requestId must be a number")
-      if (!this.configuration) throw new Error("Configuration not initialized")
-
-      this.parentPort.postMessage({
-        command: "debugSnapshot",
-        requestId,
-        snapshot: this.configuration.getLocalDebugSnapshot()
-      })
+      this.handleDebugSnapshot(data)
     } else if (command == "shutdown") {
-      if (this.configuration?.closeDatabaseConnections) {
-        await this.configuration.closeDatabaseConnections()
-      }
-
-      this.parentPort.postMessage({command: "shutdownComplete"})
-      process.exit(0)
+      await this.handleShutdown()
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
+  }
+
+  /**
+   * @param {object} data - Data payload.
+   * @param {number} [data.clientCount] - Client count.
+   * @param {string} [data.remoteAddress] - Remote address.
+   * @returns {void}
+   */
+  handleNewClient(data) {
+    if (!this.configuration) throw new Error("Configuration not initialized")
+
+    const {clientCount, remoteAddress} = data
+
+    if (typeof clientCount !== "number") throw new Error("clientCount must be a number")
+
+    const client = new Client({
+      clientCount,
+      configuration: this.configuration,
+      remoteAddress
+    })
+
+    client.events.on("output", (output) => {
+      this.parentPort.postMessage({command: "clientOutput", clientCount, output})
+    })
+
+    client.events.on("close", (output) => {
+      this.logger.debugLowLevel(() => "Close received from client in worker - forwarding to worker parent")
+      this.parentPort.postMessage({command: "clientClose", clientCount, output})
+    })
+
+    this.clients[clientCount] = client
+  }
+
+  /**
+   * @param {object} data - Data payload.
+   * @param {Buffer | Uint8Array | string} [data.chunk] - Chunk.
+   * @param {number} [data.clientCount] - Client count.
+   * @returns {Promise<void>} Resolves when the client write is dispatched.
+   */
+  async handleClientWrite(data) {
+    await this.logger.debugLowLevel("Looking up client")
+
+    const {chunk, clientCount} = data
+    if (!chunk) throw new Error("No chunk given")
+    const client = /** @type {Client | undefined} */ (digg(this.clients, clientCount))
+
+    if (!client) throw new Error(`Client not found for clientWrite: ${clientCount}`)
+
+    const clientChunk = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk)
+
+    await this.logger.debug(() => ["Sending clientWrite to parser", {clientCount, ...summarizeClientWriteChunk(clientChunk)}])
+
+    client.onWrite(clientChunk)
+  }
+
+  /**
+   * @param {object} data - Data payload.
+   * @param {string} [data.channel] - Channel name.
+   * @param {string} [data.createdAt] - Event creation time.
+   * @param {string} [data.eventId] - Event identifier.
+   * @param {any} [data.payload] - Payload data.
+   * @returns {Promise<void>} Resolves when the websocket event is dispatched.
+   */
+  async handleWebsocketEvent(data) {
+    const {channel, createdAt, eventId, payload} = data
+
+    if (typeof channel !== "string") throw new Error("No channel given")
+
+    await this.broadcastWebsocketEvent({channel, createdAt, eventId, payload})
+  }
+
+  /**
+   * @param {object} data - Data payload.
+   * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {any} [data.body] - V2 broadcast body.
+   * @param {string} [data.channel] - Channel name.
+   * @param {string} [data.eventId] - Event identifier.
+   * @returns {void}
+   */
+  handleWebsocketV2Broadcast(data) {
+    const {body, broadcastParams, channel, eventId} = data
+
+    if (typeof channel !== "string") throw new Error("No channel given")
+    if (!this.configuration) throw new Error("Configuration not initialized")
+
+    this.configuration._broadcastToChannelLocal(channel, broadcastParams || {}, body, {eventId})
+  }
+
+  /**
+   * @param {object} data - Data payload.
+   * @param {number} [data.requestId] - Debug request id.
+   * @returns {void}
+   */
+  handleDebugSnapshot(data) {
+    const {requestId} = data
+
+    if (typeof requestId !== "number") throw new Error("debugSnapshot requestId must be a number")
+    if (!this.configuration) throw new Error("Configuration not initialized")
+
+    this.parentPort.postMessage({
+      command: "debugSnapshot",
+      requestId,
+      snapshot: this.configuration.getLocalDebugSnapshot()
+    })
+  }
+
+  /** @returns {Promise<void>} Resolves after worker shutdown has been requested. */
+  async handleShutdown() {
+    if (this.configuration?.closeDatabaseConnections) {
+      await this.configuration.closeDatabaseConnections()
+    }
+
+    this.parentPort.postMessage({command: "shutdownComplete"})
+    process.exit(0)
   }
 
   /**
@@ -196,27 +255,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     }
 
     if (this.configuration) {
-      const configuration = this.configuration
-
       // Isolate channel subscriber failures so a buggy in-process callback
       // cannot reject this command and crash the worker thread, but still
       // surface the error to the framework error events so bug reporters
       // can pick it up.
-      sendTasks.push(
-        configuration.getWebsocketChannelSubscribers()
-          .dispatch({channel, createdAt, eventId, payload})
-          .catch((error) => {
-            this.logger.error(() => [`Channel subscriber dispatch failed for ${channel}`, error])
-
-            const errorPayload = {
-              context: {channel, createdAt, eventId, source: "websocket-channel-subscribers"},
-              error
-            }
-
-            configuration.getErrorEvents().emit("framework-error", errorPayload)
-            configuration.getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
-          })
-      )
+      sendTasks.push(dispatchChannelSubscribers({channel, configuration: this.configuration, createdAt, eventId, logger: this.logger, payload}))
     }
 
     await Promise.all(sendTasks)
