@@ -15,6 +15,7 @@ import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
+import {websocketSessionDebugSnapshot} from "./http-server/client/websocket-session.js"
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
 import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
@@ -151,6 +152,9 @@ export default class VelociousConfiguration {
 
     /** @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions. */
     this._websocketChannelSubscriptions = new Map()
+
+    /** @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window. */
+    this._websocketSessions = new Set()
 
     /** @type {Map<string, {session: import("./http-server/client/websocket-session.js").default, graceTimer: ReturnType<typeof setTimeout>, pausedAt: number}>} - sessionId → paused session awaiting resume. */
     this._pausedWebsocketSessions = new Map()
@@ -456,6 +460,10 @@ export default class VelociousConfiguration {
 
   /** @returns {Record<string, unknown>} - WebSocket diagnostics. */
   _debugWebsocketSnapshot() {
+    /** @type {Map<string, {count: number, details: Omit<import("./http-server/client/websocket-session.js").WebsocketSessionDebugSnapshot, "queuedMessageCount">}>} */
+    const sessionBuckets = new Map()
+    /** @type {import("./http-server/client/websocket-session.js").WebsocketSessionDebugSnapshot[]} */
+    const sessionDetails = []
     const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
       /** @type {Map<string, {count: number, details: Record<string, unknown>}>} */
       const detailsBuckets = new Map()
@@ -479,10 +487,41 @@ export default class VelociousConfiguration {
       }
     })
 
+    for (const session of this._websocketSessions) {
+      const snapshot = websocketSessionDebugSnapshot(session)
+      const bucketKey = JSON.stringify({
+        channelSubscriptionCount: snapshot.channelSubscriptionCount,
+        channelSubscriptions: snapshot.channelSubscriptions,
+        connectionCount: snapshot.connectionCount,
+        paused: snapshot.paused,
+        subscriptionCount: snapshot.subscriptionCount
+      })
+      const existingBucket = sessionBuckets.get(bucketKey)
+
+      if (existingBucket) {
+        existingBucket.count += 1
+      } else {
+        sessionBuckets.set(bucketKey, {
+          count: 1,
+          details: {
+            channelSubscriptionCount: snapshot.channelSubscriptionCount,
+            channelSubscriptions: snapshot.channelSubscriptions,
+            connectionCount: snapshot.connectionCount,
+            paused: snapshot.paused,
+            subscriptionCount: snapshot.subscriptionCount
+          }
+        })
+      }
+      sessionDetails.push(snapshot)
+    }
+
     return {
       pausedSessions: this._pausedWebsocketSessions.size,
       registeredChannels: Array.from(this._websocketChannelClasses.keys()),
       registeredConnections: Array.from(this._websocketConnectionClasses.keys()),
+      sessionBuckets: Array.from(sessionBuckets.values()).sort((a, b) => b.count - a.count),
+      sessionCount: this._websocketSessions.size,
+      sessions: sessionDetails.sort((a, b) => b.channelSubscriptionCount - a.channelSubscriptionCount),
       subscriptionGroups: this._websocketChannelSubscriptions.size,
       subscriptions
     }

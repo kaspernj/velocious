@@ -31,6 +31,16 @@ const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
  */
 
 /**
+ * @typedef {object} WebsocketSessionDebugSnapshot
+ * @property {number} channelSubscriptionCount Live channel-v2 subscriptions on this session.
+ * @property {{channelType: string, count: number, model: string | null}[]} channelSubscriptions Channel subscription buckets.
+ * @property {number} connectionCount Live connection count on this session.
+ * @property {boolean} paused Whether the session is paused for grace-period resume.
+ * @property {number} queuedMessageCount Number of frames queued while paused.
+ * @property {number} subscriptionCount Legacy channel subscription count on this session.
+ */
+
+/**
  * @param {WebsocketSessionMessage} message - Raw websocket message.
  * @returns {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | null} - Subscribe message when matched.
  */
@@ -178,6 +188,8 @@ export default class VelociousHttpServerClientWebsocketSession {
      * @type {number}
      */
     this._fragmentedBytes = 0
+
+    this.configuration._websocketSessions.add(this)
   }
 
   /**
@@ -225,6 +237,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   destroy() {
+    this.configuration._websocketSessions.delete(this)
     void this._teardownChannel()
     this.events.removeAllListeners()
   }
@@ -1694,5 +1707,35 @@ export default class VelociousHttpServerClientWebsocketSession {
         await this._handleMessage(message)
       }
     }
+  }
+}
+
+/**
+ * @param {VelociousHttpServerClientWebsocketSession} session Websocket session to summarize.
+ * @returns {WebsocketSessionDebugSnapshot} Debug-safe session diagnostics.
+ */
+export function websocketSessionDebugSnapshot(session) {
+  const channelSubscriptions = new Map()
+
+  for (const {channelType, subscription} of session._channelSubscriptions.values()) {
+    const snapshot = /** @type {Record<string, unknown>} */ (subscription.debugSnapshot())
+    const model = typeof snapshot.model === "string" ? snapshot.model : null
+    const key = JSON.stringify({channelType, model})
+    const existing = channelSubscriptions.get(key)
+
+    if (existing) {
+      existing.count += 1
+    } else {
+      channelSubscriptions.set(key, {channelType, count: 1, model})
+    }
+  }
+
+  return {
+    channelSubscriptionCount: session._channelSubscriptions.size,
+    channelSubscriptions: Array.from(channelSubscriptions.values()).sort((a, b) => b.count - a.count),
+    connectionCount: session._connections.size,
+    paused: session._paused,
+    queuedMessageCount: session._outboundQueue.length,
+    subscriptionCount: session.subscriptions.size
   }
 }

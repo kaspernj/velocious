@@ -200,6 +200,23 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
           count: counterSubscription?.count,
           details: {}
         })
+        const singleCounterSession = {
+          channelSubscriptionCount: 1,
+          channelSubscriptions: [{channelType: "Counter", count: 1, model: null}],
+          connectionCount: 0,
+          paused: false,
+          subscriptionCount: 0
+        }
+
+        expect(snapshot.websockets.sessionCount).toBeGreaterThanOrEqual(2)
+        expect(snapshot.websockets.sessionBuckets).toContainEqual({
+          count: 2,
+          details: singleCounterSession
+        })
+        expect(snapshot.websockets.sessions).toContainEqual({
+          ...singleCounterSession,
+          queuedMessageCount: 0
+        })
       } finally {
         await clientA.close()
         await clientB.close()
