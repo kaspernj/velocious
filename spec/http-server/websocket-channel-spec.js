@@ -5,6 +5,7 @@ import Dummy from "../dummy/index.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import WebsocketChannel from "../../src/http-server/websocket-channel.js"
+import {websocketEventLogStoreForConfiguration} from "../../src/http-server/websocket-event-log-store.js"
 import wait from "awaitery/build/wait.js"
 import waitFor from "../helpers/wait-for.js"
 
@@ -371,10 +372,15 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
 
         await subscription.ready
 
+        const store = websocketEventLogStoreForConfiguration(dummyConfiguration)
+
+        await store.markChannelInterested("ConnectionContextDebug")
+
         const defaultPool = dummyConfiguration.getDatabasePool("default")
         await defaultPool.withConnection({name: "Publisher request"}, async () => {
           expect(Object.keys(dummyConfiguration.getCurrentConnections()).length).toBeGreaterThan(0)
           dummyConfiguration.broadcastToChannel("ConnectionContextDebug", {}, {count: 1})
+          await dummyConfiguration.awaitPendingBroadcasts()
         })
 
         await waitFor(() => received.length >= 1)

@@ -57,9 +57,11 @@ describe("connection checkout names", () => {
 
       const connection = await pool.checkout({name: "direct checkout spec"})
 
-      expect(connection._connectionCheckoutName).toBe("direct checkout spec")
-
-      await pool.checkin(connection)
+      try {
+        expect(connection._connectionCheckoutName).toBe("direct checkout spec")
+      } finally {
+        await pool.checkin(connection)
+      }
 
       expect(connection._connectionCheckoutName).toBeUndefined()
     }, {fresh: true})

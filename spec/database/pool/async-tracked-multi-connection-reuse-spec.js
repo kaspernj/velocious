@@ -71,6 +71,22 @@ class FailingConnectSqliteDriver extends SqliteDriver {
   }
 }
 
+class FailingRollbackSqliteDriver extends SqliteDriver {
+  /** @type {boolean} */
+  static closed = false
+
+  /** @returns {Promise<void>} - Rejects while rolling back a transaction. */
+  async _rollbackTransactionAction() {
+    throw new Error("Rollback failed during checkin")
+  }
+
+  /** @returns {Promise<void>} - Resolves when the opened connection is closed. */
+  async close() {
+    FailingRollbackSqliteDriver.closed = true
+    await super.close()
+  }
+}
+
 /**
  * @param {string} prefix - Temp-path prefix.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
@@ -190,6 +206,45 @@ async function createFailingConnectConfiguration(prefix) {
     localeFallbacks: {en: ["en"]},
     locales: ["en"]
   })
+
+  return {
+    cleanup: async () => {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    },
+    configuration
+  }
+}
+
+/**
+ * @param {string} prefix - Temp-path prefix.
+ * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
+ */
+async function createFailingRollbackConfiguration(prefix) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
+  const configuration = new Configuration({
+    database: {
+      test: {
+        default: {
+          driver: FailingRollbackSqliteDriver,
+          migrations: false,
+          name: `${prefix}-default`,
+          pool: {max: 1},
+          poolType: AsyncTrackedMultiConnection,
+          type: "sqlite"
+        }
+      }
+    },
+    directory,
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]},
+    locales: ["en"]
+  })
+
+  FailingRollbackSqliteDriver.closed = false
 
   return {
     cleanup: async () => {
@@ -647,5 +702,50 @@ describe("database - pool - async tracked multi connection reuse", () => {
 
       await pool.checkin(pendingConnection)
     })
+  })
+
+  it("closes a checked-out connection when rollback fails during checkin", async () => {
+    const {cleanup, configuration} = await createFailingRollbackConfiguration("velocious-pool-checkin-rollback-failure")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      const connection = await pool.checkout()
+      await connection.startTransaction()
+
+      let checkoutRejected = false
+      const pendingCheckout = pool.checkout().catch((error) => {
+        checkoutRejected = true
+        throw error
+      })
+
+      await wait(0.02)
+
+      try {
+        await pool.checkin(connection)
+        throw new Error("Checkin unexpectedly resolved")
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error)
+        expect(/** @type {Error} */ (error).message).toBe("Rollback failed during checkin")
+      }
+
+      await wait(0.02)
+
+      expect(FailingRollbackSqliteDriver.closed).toBe(true)
+      expect(Object.values(pool.connectionsInUse).includes(connection)).toBe(false)
+      expect(pool.connections.includes(connection)).toBe(false)
+      expect(pool.pendingCheckouts.length).toBe(0)
+      expect(checkoutRejected).toBe(false)
+
+      const pendingConnection = await pendingCheckout
+
+      expect(pendingConnection).not.toBe(connection)
+
+      await pool.checkin(pendingConnection)
+    } finally {
+      await cleanup()
+    }
   })
 })

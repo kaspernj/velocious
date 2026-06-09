@@ -117,11 +117,12 @@ export default class VelociousCliCommandsConsole extends BaseCommand{
     })
 
     await application.initialize()
-    await configuration.ensureGlobalConnections()
-
-    const context = buildConsoleContext({application, configuration})
 
     try {
+      await configuration.ensureGlobalConnections()
+
+      const context = buildConsoleContext({application, configuration})
+
       if (this.cli.getTesting()) {
         return {modelNames: Object.keys(context.models || {})}
       }
