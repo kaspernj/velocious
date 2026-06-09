@@ -2193,8 +2193,8 @@ export default class VelociousConfiguration {
   withoutCurrentConnectionContexts(callback) {
     let runCallback = callback
 
-    for (const identifier of this.getDatabaseIdentifiers()) {
-      const pool = this.getDatabasePool(identifier)
+    for (const pool of Object.values(this.databasePools)) {
+      if (!pool) continue
       const previousRunCallback = runCallback
 
       runCallback = () => pool.withoutCurrentConnectionContext(previousRunCallback)
