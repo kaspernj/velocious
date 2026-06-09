@@ -20,42 +20,48 @@ class QueryCapturingMysqlDriver extends DatabaseDriversMysql {
   }
 }
 
+/**
+ * @param {(mysql: DatabaseDriversMysql) => Promise<void>} callback - Callback that receives a connected driver.
+ * @returns {Promise<void>} - Resolves when the driver has been closed.
+ */
+async function withMysqlConnection(callback) {
+  if (configuration.getDatabaseType() == "sqlite" || configuration.getDatabaseType() == "mssql" || configuration.getDatabaseType() == "pgsql") return
+
+  const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+
+  try {
+    await mysql.connect()
+    await callback(mysql)
+  } finally {
+    await mysql.close()
+  }
+}
+
 describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transaction: true}}, () => {
   it("connects", async () => {
-    if (configuration.getDatabaseType() != "sqlite" && configuration.getDatabaseType() != "mssql" && configuration.getDatabaseType() != "pgsql") {
-      const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
-
-      await mysql.connect()
-
+    await withMysqlConnection(async (mysql) => {
       const result = await mysql.query("SELECT \"1\" AS test1, \"2\" AS test2")
 
       expect(result).toEqual([{
         test1: "1",
         test2: "2"
       }])
-    }
+    })
   })
 
   it("stores the active checkout name in a session variable", async () => {
-    if (configuration.getDatabaseType() != "sqlite" && configuration.getDatabaseType() != "mssql" && configuration.getDatabaseType() != "pgsql") {
-      const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+    await withMysqlConnection(async (mysql) => {
+      await mysql.setConnectionCheckoutName("mysql checkout spec")
 
-      try {
-        await mysql.connect()
-        await mysql.setConnectionCheckoutName("mysql checkout spec")
+      let result = await mysql.query("SELECT @velocious_connection_checkout_name AS checkout_name")
 
-        let result = await mysql.query("SELECT @velocious_connection_checkout_name AS checkout_name")
+      expect(result).toEqual([{checkout_name: "mysql checkout spec"}])
 
-        expect(result).toEqual([{checkout_name: "mysql checkout spec"}])
+      await mysql.clearConnectionCheckoutName()
+      result = await mysql.query("SELECT @velocious_connection_checkout_name AS checkout_name")
 
-        await mysql.clearConnectionCheckoutName()
-        result = await mysql.query("SELECT @velocious_connection_checkout_name AS checkout_name")
-
-        expect(result).toEqual([{checkout_name: null}])
-      } finally {
-        await mysql.close()
-      }
-    }
+      expect(result).toEqual([{checkout_name: null}])
+    })
   })
 
   it("does not tag checkout-name session variable queries with process-list comments", async () => {

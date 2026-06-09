@@ -1,13 +1,10 @@
 import BaseCommand from "../../../../cli/base-command.js"
+import buildCliCommandContext from "./cli-command-context.js"
 import path from "node:path"
 import toImportSpecifier from "../../../../utils/to-import-specifier.js"
 
 /**
- * @typedef {object} RunScriptContext
- * @property {import("../../../../configuration.js").default} configuration - Configuration instance.
- * @property {import("../../../../database/drivers/base.js").default | undefined} db - Default database connection.
- * @property {Record<string, import("../../../../database/drivers/base.js").default>} dbs - Database connections keyed by identifier.
- * @property {string[]} args - CLI args after the script path.
+ * @typedef {import("./cli-command-context.js").CliCommandContext} RunScriptContext
  */
 
 /**
@@ -33,9 +30,10 @@ export default class RunScriptCommand extends BaseCommand {
     const scriptPath = this.scriptFilePath()
 
     await this.initializeRuntime()
-    await configuration.ensureGlobalConnections()
 
     try {
+      await configuration.ensureGlobalConnections()
+
       const runScriptFunction = await importRunScriptFunction(scriptPath)
 
       return await runScriptFunction(this.buildRunScriptContext())
@@ -68,17 +66,6 @@ export default class RunScriptCommand extends BaseCommand {
 
   /** @returns {RunScriptContext} - Runtime context passed to the script function. */
   buildRunScriptContext() {
-    const configuration = this.getConfiguration()
-    const dbs = configuration.getCurrentConnections()
-    const identifiers = Object.keys(dbs)
-    /** @type {string[]} */
-    const processArgs = this.processArgs || []
-
-    return {
-      configuration,
-      db: dbs.default || (identifiers.length > 0 ? dbs[identifiers[0]] : undefined),
-      dbs,
-      args: processArgs.slice(2)
-    }
+    return buildCliCommandContext(this, 2)
   }
 }

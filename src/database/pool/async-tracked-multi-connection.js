@@ -88,28 +88,50 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   async checkin(connection) {
     const id = connection.getIdSeq()
-
-    this.untrackConnectionInUse(connection, id)
-
     const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
-    if (trackedConnection[CLOSED_CONNECTION]) return
-
-    await this.rollbackLeftOpenTransaction(connection)
+    if (trackedConnection[CLOSED_CONNECTION]) {
+      this.untrackConnectionInUse(connection, id)
+      await this.drainPendingCheckouts()
+      return
+    }
 
     try {
+      await this.rollbackLeftOpenTransaction(connection)
       await connection.clearConnectionCheckoutName()
     } catch (error) {
-      await this.closeConnection(connection)
-
+      await this.closeCheckedOutConnectionAfterCheckinFailure(connection, id, error)
       throw error
     }
 
+    this.untrackConnectionInUse(connection, id)
     trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
     delete trackedConnection[CONNECTION_CHECKED_OUT_AT]
     this.connections.push(connection)
     await this.drainPendingCheckouts()
     if (this.connections.includes(connection)) await this.handleCheckedInIdleConnection()
+  }
+
+  /**
+   * @param {import("../drivers/base.js").default} connection - Connection that failed check-in cleanup.
+   * @param {number | undefined} id - Connection checkout id.
+   * @param {unknown} originalError - Error that caused check-in cleanup to fail.
+   * @returns {Promise<void>} - Resolves when cleanup has been attempted.
+   */
+  async closeCheckedOutConnectionAfterCheckinFailure(connection, id, originalError) {
+    this.untrackConnectionInUse(connection, id)
+
+    try {
+      await this.closeConnection(connection)
+    } catch (error) {
+      this.logger.warn("Failed to close database connection after check-in cleanup failed", {error, originalError})
+    }
+
+    try {
+      await this.drainPendingCheckouts()
+    } catch (error) {
+      this.logger.warn("Failed to drain pending database checkouts after check-in cleanup failed", {error, originalError})
+    }
   }
 
   /**

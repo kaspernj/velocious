@@ -94,8 +94,9 @@ describe("Database drivers - schema cache", {databaseCleaning: {truncate: false}
       expect(firstLoads).toBe(2)
       expect(secondLoads).toBe(2)
     } finally {
-      pool.checkin(firstConnection)
-      pool.checkin(secondConnection)
+      await pool.checkin(firstConnection)
+      await pool.checkin(secondConnection)
+      await pool.closeAll()
     }
   })
 

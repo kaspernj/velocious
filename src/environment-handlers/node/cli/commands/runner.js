@@ -1,11 +1,8 @@
 import BaseCommand from "../../../../cli/base-command.js"
+import buildCliCommandContext from "./cli-command-context.js"
 
 /**
- * @typedef {object} RunnerContext
- * @property {import("../../../../configuration.js").default} configuration - Configuration instance.
- * @property {import("../../../../database/drivers/base.js").default | undefined} db - Default database connection.
- * @property {Record<string, import("../../../../database/drivers/base.js").default>} dbs - Database connections keyed by identifier.
- * @property {string[]} args - CLI args after the code expression.
+ * @typedef {import("./cli-command-context.js").CliCommandContext} RunnerContext
  */
 
 /** Node command for evaluating inline JavaScript in initialized app/DB context. */
@@ -16,9 +13,10 @@ export default class RunnerCommand extends BaseCommand {
     const code = this.runnerCode()
 
     await this.initializeRuntime()
-    await configuration.ensureGlobalConnections()
 
     try {
+      await configuration.ensureGlobalConnections()
+
       return await this.evaluateCode(code)
     } finally {
       await configuration.closeDatabaseConnections()
@@ -49,18 +47,7 @@ export default class RunnerCommand extends BaseCommand {
 
   /** @returns {RunnerContext} - Runtime context passed to evaluated code. */
   buildRunnerContext() {
-    const configuration = this.getConfiguration()
-    const dbs = configuration.getCurrentConnections()
-    const identifiers = Object.keys(dbs)
-    /** @type {string[]} */
-    const processArgs = this.processArgs || []
-
-    return {
-      configuration,
-      db: dbs.default || (identifiers.length > 0 ? dbs[identifiers[0]] : undefined),
-      dbs,
-      args: processArgs.slice(2)
-    }
+    return buildCliCommandContext(this, 2)
   }
 
   /**
