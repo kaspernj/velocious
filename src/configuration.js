@@ -15,7 +15,6 @@ import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
-import {websocketSessionDebugSnapshot} from "./http-server/client/websocket-session.js"
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
 import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
@@ -460,9 +459,9 @@ export default class VelociousConfiguration {
 
   /** @returns {Record<string, unknown>} - WebSocket diagnostics. */
   _debugWebsocketSnapshot() {
-    /** @type {Map<string, {count: number, details: Omit<import("./http-server/client/websocket-session.js").WebsocketSessionDebugSnapshot, "queuedMessageCount">}>} */
+    /** @type {Map<string, {count: number, details: {channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, subscriptionCount: number}}>} */
     const sessionBuckets = new Map()
-    /** @type {import("./http-server/client/websocket-session.js").WebsocketSessionDebugSnapshot[]} */
+    /** @type {{channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, queuedMessageCount: number, subscriptionCount: number}[]} */
     const sessionDetails = []
     const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
       /** @type {Map<string, {count: number, details: Record<string, unknown>}>} */
@@ -488,7 +487,31 @@ export default class VelociousConfiguration {
     })
 
     for (const session of this._websocketSessions) {
-      const snapshot = websocketSessionDebugSnapshot(session)
+      /** @type {Map<string, {channelType: string, count: number, model: string | null}>} */
+      const channelSubscriptionBuckets = new Map()
+
+      for (const {channelType, subscription} of session._channelSubscriptions.values()) {
+        const details = /** @type {Record<string, unknown>} */ (subscription.debugSnapshot())
+        const model = typeof details.model === "string" ? details.model : null
+        const key = JSON.stringify({channelType, model})
+        const existingBucket = channelSubscriptionBuckets.get(key)
+
+        if (existingBucket) {
+          existingBucket.count += 1
+        } else {
+          channelSubscriptionBuckets.set(key, {channelType, count: 1, model})
+        }
+      }
+
+      const channelSubscriptions = Array.from(channelSubscriptionBuckets.values()).sort((a, b) => b.count - a.count)
+      const snapshot = {
+        channelSubscriptionCount: session._channelSubscriptions.size,
+        channelSubscriptions,
+        connectionCount: session._connections.size,
+        paused: session._paused,
+        queuedMessageCount: session._outboundQueue.length,
+        subscriptionCount: session.subscriptions.size
+      }
       const bucketKey = JSON.stringify({
         channelSubscriptionCount: snapshot.channelSubscriptionCount,
         channelSubscriptions: snapshot.channelSubscriptions,
