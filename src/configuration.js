@@ -1970,12 +1970,14 @@ export default class VelociousConfiguration {
 
       if (!matches) continue
 
-      void Promise
-        .resolve()
-        .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, {eventId: meta?.eventId}))
-        .catch((error) => {
-          console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
-        })
+      this.withoutCurrentConnectionContexts(() => {
+        void Promise
+          .resolve()
+          .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, {eventId: meta?.eventId}))
+          .catch((error) => {
+            console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
+          })
+      })
     }
   }
 
@@ -2181,6 +2183,24 @@ export default class VelociousConfiguration {
     }
 
     return dbs
+  }
+
+  /**
+   * @template T
+   * @param {() => T} callback - Callback to run without inherited DB connection contexts.
+   * @returns {T} - Callback result.
+   */
+  withoutCurrentConnectionContexts(callback) {
+    let runCallback = callback
+
+    for (const identifier of this.getDatabaseIdentifiers()) {
+      const pool = this.getDatabasePool(identifier)
+      const previousRunCallback = runCallback
+
+      runCallback = () => pool.withoutCurrentConnectionContext(previousRunCallback)
+    }
+
+    return runCallback()
   }
 
   /**
