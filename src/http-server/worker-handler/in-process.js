@@ -122,7 +122,9 @@ export default class VelociousHttpServerInProcessHandler {
    * @returns {void}
    */
   dispatchWebsocketV2Broadcast({body, broadcastParams, channel, eventId}) {
-    if (!this.configuration) return /** Narrows the runtime value to the documented type. @type {?} */ (this.configuration)._broadcastToChannelLocal(channel, broadcastParams, body, {eventId})
+    if (!this.configuration) return
+
+    return this.configuration._broadcastToChannelLocal(channel, broadcastParams, body, {eventId})
   }
 
   /**
