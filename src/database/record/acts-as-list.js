@@ -275,6 +275,7 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
   const scopeUnderscore = inflection.underscore(scope)
+  const positionUnderscore = inflection.underscore(positionColumn)
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 
   if (resolvedScopeValue == null) return 0
@@ -282,7 +283,7 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
   const rows = await modelClass
     .select(positionColumn)
     .where({[scopeUnderscore]: resolvedScopeValue})
-    .order(`${positionColumn} DESC`)
+    .order(`${positionUnderscore} DESC`)
     .limit(1)
     .toArray()
 
