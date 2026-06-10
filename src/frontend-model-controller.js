@@ -954,7 +954,7 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model authorized query.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
-   * @returns {import("./database/query/model-class-query.js").default<?>} - Authorized query for the action.
+   * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Authorized query for the action.
    */
   frontendModelAuthorizedQuery(action) {
     const abilityAction = this.frontendModelAbilityAction(action)

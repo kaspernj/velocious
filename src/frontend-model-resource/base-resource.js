@@ -93,8 +93,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs typed controller instance.
    * @returns {import("../controller.js").default & {
-   *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<unknown>,
-   *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<unknown>,
+   *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+   *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
    *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
    *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, unknown>>
    * }} - Controller instance with frontend-model helpers.
@@ -227,7 +227,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs authorized query.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Ability action.
-   * @returns {import("../database/query/model-class-query.js").default<?>} - Authorized query.
+   * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - Authorized query.
    */
   authorizedQuery(action) {
     return this.typedControllerInstance().frontendModelAuthorizedQuery(action)

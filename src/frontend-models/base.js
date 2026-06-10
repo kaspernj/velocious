@@ -1729,7 +1729,7 @@ export default class FrontendModelBase {
   /**
    * Runs define scope.
    * @param {(...args: Array<?>) => ?} callback - Scope callback.
-   * @returns {((...args: Array<?>) => import("./query.js").default<?>) & {scope: (...args: Array<?>) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
+   * @returns {((...args: Array<?>) => import("./query.js").default<typeof FrontendModelBase>) & {scope: (...args: Array<?>) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
    */
   static defineScope(callback) {
     return defineModelScope({
