@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * @typedef {{_associationCounts?: Map<string, number>, _computedAbilities?: Map<string, boolean>, _queryDataValues?: Map<string, unknown>}} RecordPayloadValuesTarget
+ * @typedef {{_associationCounts?: Map<string, number>, _computedAbilities?: Map<string, boolean>, _queryDataValues?: Map<string, ?>}} RecordPayloadValuesTarget
  */
 
 /**
@@ -60,7 +60,7 @@ export function setPayloadComputedAbility(target, action, value) {
  * Read a queryData value attached to a record/frontend-model payload.
  * @param {RecordPayloadValuesTarget} target - Record-like object holding queryData payload values.
  * @param {string} name - queryData alias name.
- * @returns {unknown} Attached queryData value, or null when it was not loaded.
+ * @returns {?} Attached queryData value, or null when it was not loaded.
  */
 export function readPayloadQueryData(target, name) {
   if (!target._queryDataValues) return null
@@ -73,7 +73,7 @@ export function readPayloadQueryData(target, name) {
  * Store a queryData value attached to a record/frontend-model payload.
  * @param {RecordPayloadValuesTarget} target - Record-like object holding queryData payload values.
  * @param {string} name - queryData alias name.
- * @param {unknown} value - Attached queryData value.
+ * @param {?} value - Attached queryData value.
  * @returns {void}
  */
 export function setPayloadQueryData(target, name, value) {

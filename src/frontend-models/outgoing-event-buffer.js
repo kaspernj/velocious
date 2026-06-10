@@ -5,7 +5,7 @@ const MAX_BUFFERED_OUTGOING_EVENTS = 50
 /**
  * @typedef {object} BufferedOutgoingEvent
  * @property {string} customPath - Request path.
- * @property {Record<string, any>} payload - Command payload.
+ * @property {Record<string, ?>} payload - Command payload.
  */
 
 /** @type {BufferedOutgoingEvent[]} */

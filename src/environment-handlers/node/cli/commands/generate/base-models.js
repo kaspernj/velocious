@@ -64,14 +64,14 @@ export default class DbGenerateModel extends BaseCommand {
       if (await fileExists(sourceModelFullFilePath)) {
         // Model file exists (e.g. src/models/ticket.js) → return typeof Ticket
         fileContent += "  /**\n"
-        fileContent += `   * @returns {typeof import("${sourceModelFilePath}").default}\n`
+        fileContent += `   ? @returns {typeof import("${sourceModelFilePath}").default}\n`
         fileContent += "   */\n"
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
         fileContent += `  getModelClass() { return /** @type {typeof import("${sourceModelFilePath}").default} */ (this.constructor) }\n\n`
       } else {
         // No model file yet → fall back to typeof TicketBase
         fileContent += "  /**\n"
-        fileContent += `   * @returns {typeof ${modelNameCamelized}Base}\n`
+        fileContent += `   ? @returns {typeof ${modelNameCamelized}Base}\n`
         fileContent += "   */\n"
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
         fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
@@ -95,7 +95,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         if (jsdocType) {
           fileContent += "  /**\n"
-          fileContent += `   * @returns {${jsdocType}${column.getNull() ? " | null" : ""}}\n`
+          fileContent += `   ? @returns {${jsdocType}${column.getNull() ? " | null" : ""}}\n`
           fileContent += "   */\n"
         }
 
@@ -105,15 +105,15 @@ export default class DbGenerateModel extends BaseCommand {
 
         if (setterJsdocType) {
           fileContent += "  /**\n"
-          fileContent += `   * @param {${setterJsdocType}${column.getNull() ? " | null" : ""}} newValue\n`
-          fileContent += "   * @returns {void}\n"
+          fileContent += `   ? @param {${setterJsdocType}${column.getNull() ? " | null" : ""}} newValue\n`
+          fileContent += "   ? @returns {void}\n"
           fileContent += "   */\n"
         }
 
         fileContent += `  set${camelizedColumnNameBigFirst}(newValue) { return this._setColumnAttribute("${camelizedColumnName}", newValue) }\n\n`
 
         fileContent += "  /**\n"
-        fileContent += "   * @returns {boolean}\n"
+        fileContent += "   ? @returns {boolean}\n"
         fileContent += "   */\n"
         fileContent += `  has${camelizedColumnNameBigFirst}() { return this._hasAttribute(this.${camelizedColumnName}()) }\n`
 
@@ -136,7 +136,7 @@ export default class DbGenerateModel extends BaseCommand {
           if (translationJsdocType && column) {
             fileContent += `\n`
             fileContent += "  /**\n"
-            fileContent += `   * @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
+            fileContent += `   ? @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
             fileContent += "   */\n"
           }
 
@@ -150,15 +150,15 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `\n`
           fileContent += "  /**\n"
           fileContent += `   * @abstract\n`
-          fileContent += `   * @returns {boolean}\n`
+          fileContent += `   ? @returns {boolean}\n`
           fileContent += "   */\n"
           fileContent += `  ${hasName}() { throw new Error("${hasName} not implemented") }\n`
           methodsCount++
 
           fileContent += `\n`
           fileContent += "  /**\n"
-          fileContent += `   * @param {${setterParamType}} newValue\n`
-          fileContent += `   * @returns {void}\n`
+          fileContent += `   ? @param {${setterParamType}} newValue\n`
+          fileContent += `   ? @returns {void}\n`
           fileContent += "   */\n"
           fileContent += `  ${setterName}(newValue) { return this._setTranslatedAttribute("${name}", this._getConfiguration().getLocale(), newValue) } // eslint-disable-line no-unused-vars\n`
           methodsCount++
@@ -169,7 +169,7 @@ export default class DbGenerateModel extends BaseCommand {
             if (translationJsdocType && column) {
               fileContent += `\n`
               fileContent += "  /**\n"
-              fileContent += `   * @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
+              fileContent += `   ? @returns {${translationJsdocType}${column.getNull() ? " | null" : ""}}\n`
               fileContent += "   */\n"
             }
 
@@ -180,8 +180,8 @@ export default class DbGenerateModel extends BaseCommand {
 
             fileContent += `\n`
             fileContent += "  /**\n"
-            fileContent += `   * @param {${setterParamType}} newValue\n`
-            fileContent += `   * @returns {void}\n`
+            fileContent += `   ? @param {${setterParamType}} newValue\n`
+            fileContent += `   ? @returns {void}\n`
             fileContent += "   */\n"
             fileContent += `  ${localeSetterName}(newValue) { return this._setTranslatedAttribute("${name}", "${locale}", newValue) } // eslint-disable-line no-unused-vars\n`
             methodsCount++
@@ -191,7 +191,7 @@ export default class DbGenerateModel extends BaseCommand {
             fileContent += `\n`
             fileContent += "  /**\n"
             fileContent += `   * @abstract\n`
-            fileContent += `   * @returns {boolean}\n`
+            fileContent += `   ? @returns {boolean}\n`
             fileContent += "   */\n"
             fileContent += `  ${localeHasName}() { throw new Error("${localeHasName} not implemented") }\n`
             methodsCount++
@@ -231,36 +231,36 @@ export default class DbGenerateModel extends BaseCommand {
           }
 
           fileContent += "  /**\n"
-          fileContent += `   * @returns {import("${modelFilePath}").default}\n`
+          fileContent += `   ? @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${modelFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += "   * @param {Record<string, any>} [attributes]\n"
-          fileContent += `   * @returns {import("${modelFilePath}").default}\n`
+          fileContent += "   ? @param {Record<string, ?>} [attributes]\n"
+          fileContent += `   ? @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += `   * @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
+          fileContent += `   ? @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
           fileContent += "   */\n"
           fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += `   * @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
+          fileContent += `   ? @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return this.relationshipOrLoad("${relationship.getRelationshipName()}") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += `   * @param {import("${modelFilePath}").default} newModel\n`
-          fileContent += `   * @returns {void}\n`
+          fileContent += `   ? @param {import("${modelFilePath}").default} newModel\n`
+          fileContent += `   ? @returns {void}\n`
           fileContent += "   */\n"
           fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
         } else if (relationship.getType() == "hasMany") {
@@ -275,34 +275,34 @@ export default class DbGenerateModel extends BaseCommand {
           }
 
           fileContent += "  /**\n"
-          fileContent += `   * @returns {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>}\n`
+          fileContent += `   ? @returns {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += `   * @returns {Array<import("${recordImport}").default>}\n`
+          fileContent += `   ? @returns {Array<import("${recordImport}").default>}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}Loaded() { return /** @type {Array<import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += `   * @returns {Promise<Array<import("${recordImport}").default>>}\n`
+          fileContent += `   ? @returns {Promise<Array<import("${recordImport}").default>>}\n`
           fileContent += "   */\n"
           fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
-          fileContent += `   * @returns {Promise<Array<import("${recordImport}").default>>}\n`
+          fileContent += `   ? @returns {Promise<Array<import("${recordImport}").default>>}\n`
           fileContent += "   */\n"
           fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return this.relationshipOrLoad("${relationship.getRelationshipName()}") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += `   * @param {Array<import("${recordImport}").default>} newModels\n`
-          fileContent += "   * @returns {void}\n"
+          fileContent += `   ? @param {Array<import("${recordImport}").default>} newModels\n`
+          fileContent += "   ? @returns {void}\n"
           fileContent += "   */\n"
           fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
         } else {

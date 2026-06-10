@@ -24,7 +24,7 @@ export default defineConfig([
     files: ["src/**/*.js"],
     rules: {
       "jsdoc/require-description": "warn",
-      "jsdoc/reject-any-type": "off"
+      "jsdoc/reject-any-type": "error"
     }
   }),
   {

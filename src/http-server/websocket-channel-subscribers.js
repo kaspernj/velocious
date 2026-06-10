@@ -11,13 +11,13 @@
  */
 export default class VelociousWebsocketChannelSubscribers {
   constructor() {
-    /** @type {Map<string, Set<(payload: any, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
+    /** @type {Map<string, Set<(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
     this._subscribers = new Map()
   }
 
   /**
    * @param {string} channel - Channel name to subscribe to.
-   * @param {(payload: any, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Callback invoked for each event on the channel.
+   * @param {(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Callback invoked for each event on the channel.
    * @returns {() => void} - Unsubscribe function.
    */
   subscribe(channel, callback) {
@@ -38,7 +38,7 @@ export default class VelociousWebsocketChannelSubscribers {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {(payload: any, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Previously registered callback.
+   * @param {(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Previously registered callback.
    * @returns {void}
    */
   unsubscribe(channel, callback) {
@@ -67,7 +67,7 @@ export default class VelociousWebsocketChannelSubscribers {
    * Dispatch an event to all subscribers of the channel.
    * @param {object} args - Event args.
    * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Event payload.
+   * @param {?} args.payload - Event payload.
    * @param {string} [args.createdAt] - Event creation time.
    * @param {string} [args.eventId] - Event identifier.
    * @returns {Promise<void>} - Resolves when all subscribers have completed.

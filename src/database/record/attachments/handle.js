@@ -5,7 +5,7 @@ import {recordAttachmentsStoreForModel} from "./store.js"
 
 /**
  * @param {object} args - Options.
- * @param {Record<string, any>} args.row - Raw row.
+ * @param {Record<string, ?>} args.row - Raw row.
  * @param {Buffer} args.content - Attachment bytes.
  * @param {string | null} args.url - Attachment URL.
  * @returns {RecordAttachmentDownload} - Download payload.
@@ -24,8 +24,8 @@ function downloadFromRow({content, row, url}) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
- * @returns {value is Array<unknown>} - Whether value is an array.
+ * @param {?} value - Candidate value.
+ * @returns {value is Array<?>} - Whether value is an array.
  */
 function isArray(value) {
   return Array.isArray(value)
@@ -35,7 +35,7 @@ function isArray(value) {
  * Attachment helper bound to one model + attachment name.
  */
 export default class RecordAttachmentHandle {
-  /** @type {unknown[]} */
+  /** @type {Array<?>} */
   pendingInputs = []
 
   /**
@@ -56,7 +56,7 @@ export default class RecordAttachmentHandle {
   }
 
   /**
-   * @param {unknown} input - Attachment input.
+   * @param {?} input - Attachment input.
    * @returns {void} - Queues attachment write for next save.
    */
   queueAttach(input) {
@@ -82,7 +82,7 @@ export default class RecordAttachmentHandle {
   }
 
   /**
-   * @param {unknown} input - Attachment input.
+   * @param {?} input - Attachment input.
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(input) {

@@ -17,7 +17,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, any>} data - Data payload.
+   * @param {Record<string, ?>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -60,7 +60,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       if (!foreignKeyAttributeName) throw new Error(`Unknown foreign key attribute name for ${foreignKeyName}`)
       const primaryKeyName = this.getPrimaryKey()
       const foreignKeyValue = parentModel.readColumn(primaryKeyName)
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, ?>} */
       const assignData = {}
 
       assignData[foreignKeyAttributeName] = foreignKeyValue
@@ -74,7 +74,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
-   * @param {Record<string, any>} data - Data payload.
+   * @param {Record<string, ?>} data - Data payload.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
   async create(data) {

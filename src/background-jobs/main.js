@@ -73,7 +73,7 @@ export default class BackgroundJobsMain {
     this._stopped = false
     /** @type {(() => void) | undefined} */
     this._unsubscribeBeacon = undefined
-    /** @type {((...args: any[]) => void) | undefined} */
+    /** @type {((...args: Array<?>) => void) | undefined} */
     this._beaconConnectHandler = undefined
     /** @type {import("../beacon/client.js").default | import("../beacon/in-process-client.js").default | undefined} */
     this._beaconClient = undefined
@@ -491,7 +491,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
-   * @param {{error: unknown, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
+   * @param {{error: ?, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
    * @returns {void}
    */
   _emitBackgroundJobFailed({error, handedOffAtMs, job, workerId}) {
@@ -519,7 +519,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
-   * @param {unknown} error - Reported failure value.
+   * @param {?} error - Reported failure value.
    * @returns {Error} Normalized error.
    */
   _normalizeFailureError(error) {
@@ -529,7 +529,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
-   * @param {unknown} error - Reported failure value.
+   * @param {?} error - Reported failure value.
    * @returns {Error} Normalized error.
    */
   _errorFromUnknownFailure(error) {
@@ -542,7 +542,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
-   * @param {unknown} error - Reported failure value.
+   * @param {?} error - Reported failure value.
    * @returns {string} Error message.
    */
   _messageFromUnknownFailure(error) {
@@ -552,7 +552,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
-   * @param {unknown} error - Reported failure value.
+   * @param {?} error - Reported failure value.
    * @returns {error is string} Whether the value is a non-empty string.
    */
   _hasStringFailure(error) {
@@ -561,7 +561,7 @@ export default class BackgroundJobsMain {
 
   /**
    * @param {object} args - Options.
-   * @param {unknown} args.error - Reported failure value.
+   * @param {?} args.error - Reported failure value.
    * @param {Error} args.normalizedError - Normalized error.
    * @returns {void}
    */

@@ -90,9 +90,9 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.createdAt] - Event creation time.
    * @param {string} [data.eventId] - Event identifier.
    * @param {number} [data.requestId] - Debug request id.
-   * @param {any} [data.payload] - Payload data.
-   * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
-   * @param {any} [data.body] - V2 broadcast body.
+   * @param {?} [data.payload] - Payload data.
+   * @param {Record<string, ?>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {?} [data.body] - V2 broadcast body.
    */
   onCommand = async (data) => {
     await this.logger.debugLowLevel(() => [`Worker ${this.workerCount} received command`, data])
@@ -174,7 +174,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.channel] - Channel name.
    * @param {string} [data.createdAt] - Event creation time.
    * @param {string} [data.eventId] - Event identifier.
-   * @param {any} [data.payload] - Payload data.
+   * @param {?} [data.payload] - Payload data.
    * @returns {Promise<void>} Resolves when the websocket event is dispatched.
    */
   async handleWebsocketEvent(data) {
@@ -187,8 +187,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
   /**
    * @param {object} data - Data payload.
-   * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
-   * @param {any} [data.body] - V2 broadcast body.
+   * @param {Record<string, ?>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {?} [data.body] - V2 broadcast body.
    * @param {string} [data.channel] - Channel name.
    * @param {string} [data.eventId] - Event identifier.
    * @returns {void}
@@ -235,7 +235,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} args.channel - Channel name.
    * @param {string | undefined} args.createdAt - Event creation time.
    * @param {string | undefined} args.eventId - Event identifier.
-   * @param {any} args.payload - Payload data.
+   * @param {?} args.payload - Payload data.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async broadcastWebsocketEvent({channel, createdAt, eventId, payload}) {

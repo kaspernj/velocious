@@ -50,7 +50,7 @@ export default class VelociousHttpServerWorker {
     this.workerStarted = false
     this._stopping = false
     this._debugRequestId = 0
-    /** @type {Map<number, {resolve: (snapshot: Record<string, unknown>) => void}>} */
+    /** @type {Map<number, {resolve: (snapshot: Record<string, ?>) => void}>} */
     this._debugSnapshotRequests = new Map()
   }
 
@@ -96,7 +96,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
-   * @param {any} error - Error instance.
+   * @param {?} error - Error instance.
    */
   onWorkerError = (error) => {
     this.logger.error(`Velocious worker ${this.workerCount} error`, error)
@@ -150,10 +150,10 @@ export default class VelociousHttpServerWorker {
    * @param {string | Uint8Array} [data.output] - Output.
    * @param {string} [data.channel] - Channel name.
    * @param {number} [data.requestId] - Debug request id.
-   * @param {Record<string, unknown>} [data.snapshot] - Worker debug snapshot.
-   * @param {any} [data.payload] - Payload data.
-   * @param {Record<string, any>} [data.broadcastParams] - V2 broadcast filter params.
-   * @param {any} [data.body] - V2 broadcast body.
+   * @param {Record<string, ?>} [data.snapshot] - Worker debug snapshot.
+   * @param {?} [data.payload] - Payload data.
+   * @param {Record<string, ?>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {?} [data.body] - V2 broadcast body.
    * @returns {void} - No return value.
    */
   onWorkerMessage = (data) => {
@@ -245,7 +245,7 @@ export default class VelociousHttpServerWorker {
     }
   }
 
-  /** @returns {Promise<Record<string, unknown>>} - Worker-local debug snapshot. */
+  /** @returns {Promise<Record<string, ?>>} - Worker-local debug snapshot. */
   getDebugSnapshot() {
     if (!this.workerStarted || !this.worker) {
       return Promise.resolve({active: false, workerCount: this.workerCount})
@@ -304,7 +304,7 @@ export default class VelociousHttpServerWorker {
    * @param {string} args.channel - Channel name.
    * @param {string} [args.createdAt] - Event creation time.
    * @param {string} [args.eventId] - Event identifier.
-   * @param {any} args.payload - Payload data.
+   * @param {?} args.payload - Payload data.
    * @returns {void} - No return value.
    */
   dispatchWebsocketEvent({channel, createdAt, eventId, payload}) {
@@ -320,8 +320,8 @@ export default class VelociousHttpServerWorker {
    * dispatch to any locally-registered V2 subscriptions.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Routing filter params.
-   * @param {any} args.body - Message body.
+   * @param {Record<string, ?>} args.broadcastParams - Routing filter params.
+   * @param {?} args.body - Message body.
    * @param {string} [args.eventId] - Persisted event id for replay.
    * @param {string} [args.createdAt] - Event creation timestamp.
    * @returns {void}

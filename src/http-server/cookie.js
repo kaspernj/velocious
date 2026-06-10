@@ -103,7 +103,7 @@ export default class Cookie {
   }
 
   /**
-   * @param {unknown} value - Value to encrypt.
+   * @param {?} value - Value to encrypt.
    * @param {string} secret - Encryption secret.
    * @returns {string} - Encrypted value.
    */
@@ -150,7 +150,7 @@ export default class Cookie {
   }
 
   /**
-   * @param {unknown} value - Value to serialize.
+   * @param {?} value - Value to serialize.
    * @returns {{payload: string, type: string}} - Serialized payload.
    */
   static _serializeEncryptedValue(value) {

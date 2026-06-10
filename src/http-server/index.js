@@ -179,7 +179,7 @@ export default class VelociousHttpServer {
     return false
   }
 
-  /** @returns {Promise<Record<string, unknown>>} - HTTP server worker diagnostics. */
+  /** @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics. */
   async getDebugSnapshot() {
     return {
       active: this.isActive(),
@@ -194,7 +194,7 @@ export default class VelociousHttpServer {
 
   /**
    * @param {WorkerHandler | InProcessHandler} workerHandler - Worker handler to inspect.
-   * @returns {Promise<Record<string, unknown>>} Worker debug snapshot.
+   * @returns {Promise<Record<string, ?>>} Worker debug snapshot.
    */
   async workerDebugSnapshot(workerHandler) {
     if (workerHandler instanceof WorkerHandler) return await workerHandler.getDebugSnapshot()
@@ -205,7 +205,7 @@ export default class VelociousHttpServer {
 
   /**
    * @param {InProcessHandler} workerHandler - In-process worker handler to inspect.
-   * @returns {Record<string, unknown>} Worker debug snapshot.
+   * @returns {Record<string, ?>} Worker debug snapshot.
    */
   inProcessWorkerDebugSnapshot(workerHandler) {
     return {

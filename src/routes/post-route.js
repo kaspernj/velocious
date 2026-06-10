@@ -5,7 +5,7 @@ import escapeStringRegexp from "escape-string-regexp"
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
- * @param {Record<string, any>} params - Route params object.
+ * @param {Record<string, ?>} params - Route params object.
  * @param {string} name - Route name.
  * @returns {void} - No return value.
  */
@@ -45,7 +45,7 @@ class VelociousRoutePostRoute extends BaseRoute {
 
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, any>} args.params - Parameters object.
+   * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.

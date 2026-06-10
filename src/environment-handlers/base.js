@@ -47,8 +47,8 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
-   * @param {() => Promise<any>} callback - Callback to run.
-   * @returns {Promise<any>} - Result of the callback.
+   * @param {() => Promise<?>} callback - Callback to run.
+   * @returns {Promise<?>} - Result of the callback.
    */
   async runWithTimezoneOffset(_offsetMinutes, callback) {
     if (!this.configuration) throw new Error("Configuration hasn't been set")
@@ -93,8 +93,8 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   async runWithRequestTiming(requestTiming, callback) {
     this._currentRequestTiming = requestTiming
@@ -115,8 +115,8 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   async runWithAbility(ability, callback) {
     this._currentAbility = ability
@@ -144,9 +144,9 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {unknown} tenant - Tenant to set for callback scope.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {?} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   async runWithTenant(tenant, callback) {
     this._currentTenant = tenant
@@ -159,7 +159,7 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @param {unknown} tenant - Tenant to set.
+   * @param {?} tenant - Tenant to set.
    * @returns {void} - No return value.
    */
   setCurrentTenant(tenant) {
@@ -167,14 +167,14 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * @returns {unknown} - Current tenant.
+   * @returns {?} - Current tenant.
    */
   getCurrentTenant() {
     return this._currentTenant
   }
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsGenerateBaseModels(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsGenerateBaseModels not implemented")
@@ -182,7 +182,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsGenerateFrontendModels(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsGenerateFrontendModels not implemented")
@@ -190,7 +190,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsInit(command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsInit not implemented")
@@ -198,7 +198,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsMigrationGenerate(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsMigrationGenerate not implemented")
@@ -206,7 +206,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsMigrationDestroy(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsMigrationDestroy not implemented")
@@ -214,7 +214,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsGenerateModel(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsGenerateModel not implemented")
@@ -223,7 +223,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * @abstract
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsRoutes(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsRoutes not implemented")
@@ -231,7 +231,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsConsole(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsConsole not implemented")
@@ -239,7 +239,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsServer(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsServer not implemented")
@@ -247,7 +247,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsTest(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsTest not implemented")
@@ -255,7 +255,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsMain(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsBackgroundJobsMain not implemented")
@@ -263,7 +263,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsWorker(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsBackgroundJobsWorker not implemented")
@@ -271,7 +271,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsRunner(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsBackgroundJobsRunner not implemented")
@@ -279,7 +279,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsBeacon(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsBeacon not implemented")
@@ -309,7 +309,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsDbSchemaDump(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsDbSchemaDump not implemented")
@@ -317,7 +317,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsDbSchemaLoad(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsDbSchemaLoad not implemented")
@@ -325,7 +325,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsDbSeed(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsDbSeed not implemented")
@@ -333,7 +333,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsRunner(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsRunner not implemented")
@@ -341,7 +341,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async cliCommandsRunScript(_command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsRunScript not implemented")
@@ -362,7 +362,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * @param {import("../cli/base-command.js").default} command - Command.
    * @param {typeof import("../cli/base-command.js").default} CommandClass - Command class.
-   * @returns {Promise<unknown>} - Resolves with the command result.
+   * @returns {Promise<?>} - Resolves with the command result.
    */
   async forwardCommand(command, CommandClass) {
     const newCommand = new CommandClass({

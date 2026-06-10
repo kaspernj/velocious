@@ -13,7 +13,7 @@ export default class VelociousHttpServerWebsocketEvents {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {any} payload - Payload data.
+   * @param {?} payload - Payload data.
    * @returns {void} - No return value.
    */
   publish(channel, payload) {
@@ -30,8 +30,8 @@ export default class VelociousHttpServerWebsocketEvents {
    *
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Filter params forwarded to `matches()`.
-   * @param {any} args.body - Message body delivered via `sendMessage()`.
+   * @param {Record<string, ?>} args.broadcastParams - Filter params forwarded to `matches()`.
+   * @param {?} args.body - Message body delivered via `sendMessage()`.
    * @returns {void}
    */
   publishV2Broadcast({channel, broadcastParams, body}) {

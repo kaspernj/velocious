@@ -7,7 +7,7 @@ import repl from "node:repl"
 
 /**
  * @param {ConsoleContextArgs} args - Options object.
- * @returns {Record<string, unknown>} - The console context.
+ * @returns {Record<string, ?>} - The console context.
  */
 function buildConsoleContext({application, configuration}) {
   /** @type {Record<string, import("../../../../database/drivers/base.js").default>} */
@@ -50,7 +50,7 @@ function buildConsoleContext({application, configuration}) {
 
 /**
  * @param {object} args - Options object.
- * @param {Record<string, unknown>} args.context - The base context.
+ * @param {Record<string, ?>} args.context - The base context.
  * @param {import("node:repl").REPLServer} args.replServer - The REPL server.
  * @returns {void} - No return value.
  */
@@ -69,7 +69,7 @@ function assignConsoleContext({context, replServer}) {
 /**
  * @param {object} args - Options object.
  * @param {import("../../../../configuration.js").default} args.configuration - Configuration instance.
- * @param {Record<string, unknown>} args.context - REPL context.
+ * @param {Record<string, ?>} args.context - REPL context.
  * @returns {Promise<void>} - Resolves when the console exits.
  */
 async function startConsoleRepl({configuration, context}) {
@@ -108,7 +108,7 @@ async function startConsoleRepl({configuration, context}) {
 
 /** Velocious console command. */
 export default class VelociousCliCommandsConsole extends BaseCommand{
-  /** @returns {Promise<unknown>} - Resolves with the command result. */
+  /** @returns {Promise<?>} - Resolves with the command result. */
   async execute() {
     const configuration = this.getConfiguration()
     const application = new Application({

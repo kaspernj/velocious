@@ -1,6 +1,6 @@
 // @ts-check
 
-/** @typedef {{getDatabaseAnnotations?: () => string[], withDatabaseAnnotation?: (annotation: string, callback: () => Promise<unknown>) => Promise<unknown>}} DatabaseAnnotationsRuntime */
+/** @typedef {{getDatabaseAnnotations?: () => string[], withDatabaseAnnotation?: (annotation: string, callback: () => Promise<?>) => Promise<?>}} DatabaseAnnotationsRuntime */
 /** @type {typeof globalThis & {velociousDatabaseAnnotations?: DatabaseAnnotationsRuntime}} */
 const databaseAnnotationsGlobal = globalThis
 

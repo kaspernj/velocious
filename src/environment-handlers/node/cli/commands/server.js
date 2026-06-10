@@ -34,7 +34,7 @@ export function waitForApplicationWithSignalShutdown({application, processObject
 
     /**
      * Completes the wait promise once.
-     * @param {unknown} [error] - Optional rejection reason.
+     * @param {?} [error] - Optional rejection reason.
      * @returns {void}
      */
     const finish = (error) => {

@@ -4,7 +4,7 @@ import path from "node:path"
 import Controller from "../controller.js"
 
 /**
- * @param {unknown} assetFileName - Asset file name.
+ * @param {?} assetFileName - Asset file name.
  * @returns {boolean} - Whether asset file name is safe.
  */
 function validAssetFileName(assetFileName) {

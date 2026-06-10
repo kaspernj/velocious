@@ -9,7 +9,7 @@
 function malformedNestedParamsKeyError(args) {
   const {key, rest} = args
   const error = new Error(`Could not parse nested params key "${key}" at rest "${rest}"`)
-  /** @type {Error & {velociousContext?: Record<string, unknown>}} */
+  /** @type {Error & {velociousContext?: Record<string, ?>}} */
   const typedError = error
 
   typedError.velociousContext = {
@@ -25,15 +25,15 @@ function malformedNestedParamsKeyError(args) {
 
 export default class ParamsToObject {
   /**
-   * @param {Record<string, any>} object - Object.
+   * @param {Record<string, ?>} object - Object.
    */
   constructor(object) {
     this.object = object
   }
 
-  /** @returns {Record<string, any>} - The object.  */
+  /** @returns {Record<string, ?>} - The object.  */
   toObject() {
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, ?>} */
     const result = {}
 
     for(const key in this.object) {
@@ -47,8 +47,8 @@ export default class ParamsToObject {
 
   /**
    * @param {string} key - Key.
-   * @param {any} value - Value to use.
-   * @param {Record<string, any> | any[]} result - Result.
+   * @param {?} value - Value to use.
+   * @param {Record<string, ?> | Array<?>} result - Result.
    * @returns {void} - No return value.
    */
   treatInitial(key, value, result) {
@@ -58,12 +58,12 @@ export default class ParamsToObject {
       const inputName = firstMatch[1]
       const rest = firstMatch[2]
 
-      /** @type {Array<any> | Record<string, any>} */
+      /** @type {Array<?> | Record<string, ?>} */
       let newResult
-      const objectResult = /** @type {Record<string, any>} */ (result)
+      const objectResult = /** @type {Record<string, ?>} */ (result)
 
       if (inputName in objectResult) {
-        newResult = /** @type {Array<any> | Record<string, any>} */ (objectResult[inputName])
+        newResult = /** @type {Array<?> | Record<string, ?>} */ (objectResult[inputName])
       } else if (rest == "[]") {
         newResult = []
         objectResult[inputName] = newResult
@@ -74,16 +74,16 @@ export default class ParamsToObject {
 
       this.treatSecond(value, rest, newResult, key)
     } else {
-      const objectResult = /** @type {Record<string, any>} */ (result)
+      const objectResult = /** @type {Record<string, ?>} */ (result)
 
       objectResult[key] = value
     }
   }
 
   /**
-   * @param {any} value - Value to use.
+   * @param {?} value - Value to use.
    * @param {string} rest - Rest.
-   * @param {Record<string, any> | any[]} result - Result.
+   * @param {Record<string, ?> | Array<?>} result - Result.
    * @param {string} [fullKey] - Original full key.
    * @returns {void} - No return value.
    */
@@ -95,7 +95,7 @@ export default class ParamsToObject {
     const key = secondMatch[1]
     const newRest = secondMatch[2]
 
-    /** @type {Array<any> | Record<string, any>} */
+    /** @type {Array<?> | Record<string, ?>} */
     let newResult
 
     if (rest == "[]") {
@@ -105,12 +105,12 @@ export default class ParamsToObject {
 
       result.push(value)
     } else if (newRest == "") {
-      /** @type {Record<string, any>} */ (result)[key] = value
+      /** @type {Record<string, ?>} */ (result)[key] = value
     } else {
-      const objectResult = /** @type {Record<string, any>} */ (result)
+      const objectResult = /** @type {Record<string, ?>} */ (result)
 
       if (!Array.isArray(result) && key in objectResult) {
-        newResult = /** @type {Array<any> | Record<string, any>} */ (objectResult[key])
+        newResult = /** @type {Array<?> | Record<string, ?>} */ (objectResult[key])
       } else if (newRest == "[]") {
         newResult = []
         objectResult[key] = newResult

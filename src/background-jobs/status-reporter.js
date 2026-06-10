@@ -24,7 +24,7 @@ export default class BackgroundJobsStatusReporter {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {unknown} [args.error] - Error.
+   * @param {?} [args.error] - Error.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.
@@ -65,7 +65,7 @@ export default class BackgroundJobsStatusReporter {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {unknown} [args.error] - Error.
+   * @param {?} [args.error] - Error.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @param {number} [args.maxDurationMs] - Max duration for retries.

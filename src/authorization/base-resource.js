@@ -8,8 +8,8 @@ export default class AuthorizationBaseResource {
   /**
    * @param {object} args - Resource args.
    * @param {import("./ability.js").default} [args.ability] - Ability instance.
-   * @param {Record<string, any>} [args.context] - Ability context.
-   * @param {Record<string, any>} [args.locals] - Ability locals.
+   * @param {Record<string, ?>} [args.context] - Ability context.
+   * @param {Record<string, ?>} [args.locals] - Ability locals.
    */
   constructor({ability, context = {}, locals = {}}) {
     this.ability = ability
@@ -26,7 +26,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * @param {string | string[]} actions - Ability action(s).
-   * @param {Record<string, any> | string | ((query: import("../database/query/model-class-query.js").default<any>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<any>)} [conditions] - Conditions.
+   * @param {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   can(actions, conditions) {
@@ -36,7 +36,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * @param {string | string[]} actions - Ability action(s).
-   * @param {Record<string, any> | string | ((query: import("../database/query/model-class-query.js").default<any>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<any>)} [conditions] - Conditions.
+   * @param {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   cannot(actions, conditions) {
@@ -70,7 +70,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * @param {object} args - Signature args.
-   * @param {unknown} args.conditions - Conditions value.
+   * @param {?} args.conditions - Conditions value.
    * @param {"can" | "cannot"} args.methodName - Method name.
    * @returns {void}
    */
@@ -80,17 +80,17 @@ export default class AuthorizationBaseResource {
     }
   }
 
-  /** @returns {Record<string, any>} - Ability context. */
+  /** @returns {Record<string, ?>} - Ability context. */
   getContext() {
     return this.context
   }
 
-  /** @returns {Record<string, any>} - Ability locals. */
+  /** @returns {Record<string, ?>} - Ability locals. */
   getLocals() {
     return this.locals
   }
 
-  /** @returns {any} - Current user from context. */
+  /** @returns {?} - Current user from context. */
   currentUser() {
     return this.context.currentUser
   }
@@ -100,7 +100,7 @@ export default class AuthorizationBaseResource {
     return this.context.request
   }
 
-  /** @returns {Record<string, any> | undefined} - Params from context. */
+  /** @returns {Record<string, ?> | undefined} - Params from context. */
   params() {
     return this.context.params
   }

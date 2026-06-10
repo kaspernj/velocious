@@ -2,10 +2,10 @@
 
 import restArgsError from "../../utils/rest-args-error.js"
 
-/** @typedef {{auth?: Record<string, unknown>, [key: string]: unknown}} SmtpConnectionOptions */
+/** @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
 
 /**
- * @param {any} value - Recipient input.
+ * @param {?} value - Recipient input.
  * @returns {string[]} - Normalized recipients.
  */
 function normalizeRecipients(value) {
@@ -151,7 +151,7 @@ export default class SmtpMailerBackend {
       }
 
       const sendMessage = () => {
-        connection.send({from: envelopeFrom, to: recipients}, /** @type {any} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
+        connection.send({from: envelopeFrom, to: recipients}, /** @type {?} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             rejectDelivery(sendError)
             return

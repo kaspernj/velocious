@@ -83,15 +83,22 @@ export default class VelociousApplication {
     const host = httpServerConfiguration.host
 
     await this.logger.debug(`Starting server on port ${port}`)
-    if (this.getType() !== "test-runner") {
-      const httpServerLock = new HttpServerLock({configuration, host: host ?? "0.0.0.0", port})
-      await httpServerLock.acquire()
-      this.httpServerLock = httpServerLock
-    }
+    await this.acquireHttpServerLock({configuration, host: host ?? "0.0.0.0", port})
+    await this.startLockedHttpServer({configuration, host, httpServerConfiguration, port})
+  }
 
+  /**
+   * @param {object} args - HTTP server startup arguments.
+   * @param {import("./configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} [args.host] - HTTP server host.
+   * @param {Record<string, ?>} args.httpServerConfiguration - Merged HTTP server configuration.
+   * @param {number} args.port - HTTP server port.
+   * @returns {Promise<void>} - Resolves after the HTTP server has started.
+   */
+  async startLockedHttpServer({configuration, host, httpServerConfiguration, port}) {
     try {
       if (!configuration.getWebsocketEvents()) {
-        configuration.setWebsocketEvents(/** @type {any} */ (websocketEventsHost))
+        configuration.setWebsocketEvents(/** @type {?} */ (websocketEventsHost))
       }
 
       await configuration.connectBeacon({peerType: "server"})
@@ -114,6 +121,21 @@ export default class VelociousApplication {
 
       throw error
     }
+  }
+
+  /**
+   * @param {object} args - Lock acquisition arguments.
+   * @param {import("./configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} args.host - HTTP server host.
+   * @param {number} args.port - HTTP server port.
+   * @returns {Promise<void>} - Resolves after acquiring the server lock when needed.
+   */
+  async acquireHttpServerLock({configuration, host, port}) {
+    if (this.getType() === "test-runner") return
+
+    const httpServerLock = new HttpServerLock({configuration, host, port})
+    await httpServerLock.acquire()
+    this.httpServerLock = httpServerLock
   }
 
   /**

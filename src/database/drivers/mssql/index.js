@@ -239,7 +239,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
-   * @param {unknown} value - Value to use.
+   * @param {?} value - Value to use.
    * @returns {string} - The escape.
    */
   escape(value) {
@@ -253,7 +253,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * @param {unknown} value - Value to use.
+   * @param {?} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {

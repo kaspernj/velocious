@@ -15,7 +15,7 @@ export default class BackgroundJobsClient {
   /**
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
-   * @param {any[]} args.args - Job args.
+   * @param {Array<?>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<string>} - Job id.
    */

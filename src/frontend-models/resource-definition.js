@@ -24,7 +24,7 @@ export function frontendModelResourcesForBackendProject(backendProject) {
 }
 
 /**
- * @param {unknown} value - Candidate resource definition.
+ * @param {?} value - Candidate resource definition.
  * @returns {value is typeof FrontendModelBaseResource} - Whether value is a resource class.
  */
 export function frontendModelResourceDefinitionIsClass(value) {
@@ -32,7 +32,7 @@ export function frontendModelResourceDefinitionIsClass(value) {
 }
 
 /**
- * @param {unknown} resourceDefinition - Resource definition.
+ * @param {?} resourceDefinition - Resource definition.
  * @returns {typeof FrontendModelBaseResource | null} - Resource class when definition is class-based.
  */
 export function frontendModelResourceClassFromDefinition(resourceDefinition) {
@@ -40,7 +40,7 @@ export function frontendModelResourceClassFromDefinition(resourceDefinition) {
 }
 
 /**
- * @param {unknown} resourceDefinition - Resource definition.
+ * @param {?} resourceDefinition - Resource definition.
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | null} - Normalized resource configuration.
  */
 export function frontendModelResourceConfigurationFromDefinition(resourceDefinition) {
@@ -54,7 +54,7 @@ export function frontendModelResourceConfigurationFromDefinition(resourceDefinit
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} - Normalized resource configuration.
  */
 function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
-  const restArgs = /** @type {Record<string, any>} */ ({...resourceConfiguration})
+  const restArgs = /** @type {Record<string, ?>} */ ({...resourceConfiguration})
 
   for (const key of [
     "abilities",
@@ -243,7 +243,7 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
 
 /**
  * @param {string} modelName - Model class name.
- * @param {unknown} resourceDefinition - Resource definition.
+ * @param {?} resourceDefinition - Resource definition.
  * @returns {string} - Normalized resource path.
  */
 export function frontendModelResourcePath(modelName, resourceDefinition) {
@@ -260,7 +260,7 @@ export function frontendModelResourcePath(modelName, resourceDefinition) {
  * @param {object} args - Arguments.
  * @param {string} args.commandName - Command path segment.
  * @param {string} args.modelName - Model class name.
- * @param {unknown} args.resourceDefinition - Resource definition.
+ * @param {?} args.resourceDefinition - Resource definition.
  * @returns {"destroy" | "find" | "index" | "create" | "update" | "attach" | "download" | "url" | null} - Frontend action.
  */
 export function frontendModelActionForCommand({commandName, modelName, resourceDefinition}) {

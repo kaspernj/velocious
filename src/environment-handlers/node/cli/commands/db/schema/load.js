@@ -50,14 +50,14 @@ export default class DbSchemaLoad extends BaseCommand {
 
   /**
    * @param {import("../../../../../../database/drivers/base.js").default} db - Database connection.
-   * @returns {{exec: (sql: string) => Promise<unknown>} | undefined} - Connection with exec support.
+   * @returns {{exec: (sql: string) => Promise<?>} | undefined} - Connection with exec support.
    */
   executableConnection(db) {
-    const dbWithConnection = /** @type {import("../../../../../../database/drivers/base.js").default & {connection?: unknown}} */ (db)
+    const dbWithConnection = /** @type {import("../../../../../../database/drivers/base.js").default & {connection?: ?}} */ (db)
     const connection = dbWithConnection.connection
 
     if (connection && typeof connection == "object" && "exec" in connection && typeof connection.exec == "function") {
-      return /** @type {{exec: (sql: string) => Promise<unknown>}} */ (connection)
+      return /** @type {{exec: (sql: string) => Promise<?>}} */ (connection)
     }
   }
 }

@@ -13,7 +13,7 @@ export default class VelociousBasicRoute extends BaseRoute {
 
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, any>} args.params - Parameters object.
+   * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.
@@ -36,7 +36,7 @@ export default class VelociousBasicRoute extends BaseRoute {
       throw new Error("mount expects a mountable with a 'mountInto' method")
     }
 
-    const at = /** @type {Record<string, any>} */ (options).at
+    const at = /** @type {Record<string, ?>} */ (options).at
 
     if (typeof at !== "string" || !at.startsWith("/")) {
       throw new Error(`mount requires an 'at' option starting with '/', got: ${String(at)}`)

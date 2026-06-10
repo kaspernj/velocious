@@ -18,8 +18,8 @@ function baseName(value) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
- * @returns {value is Record<string, any>} - Whether value is a plain object.
+ * @param {?} value - Candidate value.
+ * @returns {value is Record<string, ?>} - Whether value is a plain object.
  */
 function isPlainObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
@@ -30,7 +30,7 @@ function isPlainObject(value) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
+ * @param {?} value - Candidate value.
  * @returns {value is Uint8Array} - Whether value is a byte array.
  */
 function isUint8Array(value) {
@@ -38,7 +38,7 @@ function isUint8Array(value) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
+ * @param {?} value - Candidate value.
  * @returns {value is ArrayBuffer} - Whether value is array buffer.
  */
 function isArrayBuffer(value) {
@@ -46,11 +46,11 @@ function isArrayBuffer(value) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
+ * @param {?} value - Candidate value.
  * @returns {value is {arrayBuffer: () => Promise<ArrayBuffer>}} - Whether value supports arrayBuffer().
  */
 function isArrayBufferLike(value) {
-  return Boolean(value && typeof value === "object" && typeof /** @type {any} */ (value).arrayBuffer === "function")
+  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).arrayBuffer === "function")
 }
 
 /**
@@ -99,7 +99,7 @@ async function uploadedFileBuffer(uploadedFile, environmentHandler) {
  */
 
 /**
- * @param {unknown} input - Attachment input.
+ * @param {?} input - Attachment input.
  * @param {object} [args] - Options.
  * @param {boolean} [args.allowPathInput] - Whether `{path: ...}` input is allowed.
  * @param {string[]} [args.allowedPathPrefixes] - Optional allowlist for path input.
@@ -153,11 +153,11 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     const arrayBuffer = await input.arrayBuffer()
 
     buffer = Buffer.from(arrayBuffer)
-    filename = typeof /** @type {any} */ (input).name === "string" && /** @type {any} */ (input).name.length > 0
-      ? /** @type {any} */ (input).name
+    filename = typeof /** @type {?} */ (input).name === "string" && /** @type {?} */ (input).name.length > 0
+      ? /** @type {?} */ (input).name
       : defaultFilename
-    contentType = typeof /** @type {any} */ (input).type === "string" && /** @type {any} */ (input).type.length > 0
-      ? /** @type {any} */ (input).type
+    contentType = typeof /** @type {?} */ (input).type === "string" && /** @type {?} */ (input).type.length > 0
+      ? /** @type {?} */ (input).type
       : null
   } else if (typeof input === "string" || Buffer.isBuffer(input) || isArrayBuffer(input) || isUint8Array(input)) {
     buffer = toBuffer(input)

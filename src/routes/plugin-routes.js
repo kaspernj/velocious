@@ -1,6 +1,6 @@
 /**
  * @typedef {object} AddRouteOptions
- * @property {Record<string, any>} [params] - Static params to merge for matched route.
+ * @property {Record<string, ?>} [params] - Static params to merge for matched route.
  * @property {[typeof import("../controller.js").default, string]} to - Controller class and action tuple.
  * @property {string} [viewPath] - Optional view path for controllers using renderView().
  */

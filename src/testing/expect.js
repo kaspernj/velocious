@@ -13,7 +13,7 @@ import {
 
 export default class Expect extends BaseExpect {
   /**
-   * @param {any} object - Object.
+   * @param {?} object - Object.
    */
   constructor(object) {
     super()
@@ -41,7 +41,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result - Result.
+   * @param {?} result - Result.
    * @returns {void} - No return value.
    */
   toBe(result) {
@@ -247,7 +247,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {new (...args: any[]) => any} klass - Class constructor to check against (e.g. a built-in like Error).
+   * @param {new (...args: Array<?>) => ?} klass - Class constructor to check against (e.g. a built-in like Error).
    * @returns {void} - No return value.
    */
   toBeInstanceOf(klass) {
@@ -318,7 +318,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} valueToContain - Value to contain.
+   * @param {?} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
@@ -360,7 +360,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} valueToContain - Value to contain.
+   * @param {?} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContainEqual(valueToContain) {
@@ -384,7 +384,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result - Result.
+   * @param {?} result - Result.
    * @returns {void} - No return value.
    */
   toEqual(result) {
@@ -422,7 +422,7 @@ export default class Expect extends BaseExpect {
     }
 
     if (isObjectContaining(result)) {
-      const expectedValue = /** @type {any} */ (result).value
+      const expectedValue = /** @type {?} */ (result).value
       const {matches, differences} = matchObject(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -441,7 +441,7 @@ export default class Expect extends BaseExpect {
     }
 
     if (isArrayContaining(result)) {
-      const expectedValue = /** @type {any[]} */ (/** @type {any} */ (result).value)
+      const expectedValue = /** @type {Array<?>} */ (/** @type {?} */ (result).value)
       const {matches, differences} = matchArrayContaining(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -535,7 +535,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, any> | any[]} expected - Expected partial object.
+   * @param {Record<string, ?> | Array<?>} expected - Expected partial object.
    * @returns {void} - No return value.
    */
   toMatchObject(expected) {
@@ -604,7 +604,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {string|RegExp|Error|((new (...args: unknown[]) => Error))} [expected] - Expected error.
+   * @param {string|RegExp|Error|((new (...args: Array<?>) => Error))} [expected] - Expected error.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async toThrow(expected) {
@@ -668,7 +668,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {Promise<any>} - Resolves with the execute.
+   * @returns {Promise<?>} - Resolves with the execute.
    */
   async execute() {
     for (const expectation of this.expectations) {
@@ -693,22 +693,22 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, any>} result - Result.
+   * @param {Record<string, ?>} result - Result.
    * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
 
-    /** @type {Record<string, any[]>} */
+    /** @type {Record<string, Array<?>>} */
     const differences = {}
-    const objectAsRecord = /** @type {Record<string, unknown>} */ (this._object)
+    const objectAsRecord = /** @type {Record<string, ?>} */ (this._object)
 
     for (const key in result) {
       const value = result[key]
 
       if (!(key in objectAsRecord)) throw new Error(`${this._object.constructor.name} doesn't respond to ${key}`)
 
-      const objectValue = /** @type {() => unknown} */ (objectAsRecord[key])()
+      const objectValue = /** @type {() => ?} */ (objectAsRecord[key])()
 
       if (value != objectValue) {
         differences[key] = [value, objectValue]

@@ -2,7 +2,7 @@
 
 import BaseResource from "./base-resource.js"
 
-/** @typedef {Record<string, any> | string | ((query: import("../database/query/model-class-query.js").default<any>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<any>)} AbilityConditionsType */
+/** @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} AbilityConditionsType */
 
 /**
  * @typedef {object} AbilityRuleType
@@ -31,8 +31,8 @@ export default class VelociousAuthorizationAbility {
 
   /**
    * @param {object} args - Ability args.
-   * @param {Record<string, any>} [args.context] - Ability context.
-   * @param {Record<string, any>} [args.locals] - Ability locals.
+   * @param {Record<string, ?>} [args.context] - Ability context.
+   * @param {Record<string, ?>} [args.locals] - Ability locals.
    * @param {Array<typeof BaseResource>} [args.resources] - Resource classes.
    */
   constructor({context = {}, locals = {}, resources} = {}) {
@@ -78,17 +78,17 @@ export default class VelociousAuthorizationAbility {
     return resolved
   }
 
-  /** @returns {Record<string, any>} - Context. */
+  /** @returns {Record<string, ?>} - Context. */
   getContext() {
     return this.context
   }
 
-  /** @returns {Record<string, any>} - Locals. */
+  /** @returns {Record<string, ?>} - Locals. */
   getLocals() {
     return this.locals
   }
 
-  /** @returns {any} - Current user from context. */
+  /** @returns {?} - Current user from context. */
   currentUser() {
     return this.context.currentUser
   }
@@ -158,8 +158,8 @@ export default class VelociousAuthorizationAbility {
    * @param {object} args - Query args.
    * @param {string} args.action - Requested action.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
-   * @param {import("../database/query/model-class-query.js").default<any>} args.query - Query.
-   * @returns {import("../database/query/model-class-query.js").default<any>} - Authorized query.
+   * @param {import("../database/query/model-class-query.js").default<?>} args.query - Query.
+   * @returns {import("../database/query/model-class-query.js").default<?>} - Authorized query.
    */
   applyToQuery({action, modelClass, query}) {
     this.loadAbilitiesForModelClass(modelClass)
@@ -207,7 +207,7 @@ export default class VelociousAuthorizationAbility {
    * @param {object} args - SQL args.
    * @param {string} args.action - Action.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
-   * @param {import("../database/query/model-class-query.js").default<any>} args.query - Base query.
+   * @param {import("../database/query/model-class-query.js").default<?>} args.query - Base query.
    * @param {AbilityRuleType[]} args.rules - Rules.
    * @returns {string[]} - SQL condition parts.
    */
@@ -247,7 +247,7 @@ export default class VelociousAuthorizationAbility {
    * @param {string} args.action - Action.
    * @param {AbilityRuleType[]} args.denyRules - Deny rules.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
-   * @param {import("../database/query/model-class-query.js").default<any>} args.query - Query.
+   * @param {import("../database/query/model-class-query.js").default<?>} args.query - Query.
    * @returns {void} - No return value.
    */
   applyDenyRules({action, denyRules, modelClass, query}) {
@@ -270,8 +270,8 @@ export default class VelociousAuthorizationAbility {
    * @param {string} args.action - Action.
    * @param {AbilityConditionsType} args.conditions - Rule conditions.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
-   * @param {import("../database/query/model-class-query.js").default<any>} args.query - Query.
-   * @returns {void | import("../database/query/model-class-query.js").default<any>} - Optional replacement query.
+   * @param {import("../database/query/model-class-query.js").default<?>} args.query - Query.
+   * @returns {void | import("../database/query/model-class-query.js").default<?>} - Optional replacement query.
    */
   applyRuleCondition({action, conditions, modelClass, query}) {
     if (typeof conditions === "string") {

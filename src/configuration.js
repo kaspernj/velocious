@@ -27,7 +27,7 @@ export {CurrentConfigurationNotSetError}
  * @returns {string | undefined} - Current working directory when the runtime exposes one.
  */
 function currentWorkingDirectory() {
-  const processObject = /** @type {{cwd?: unknown} | undefined} */ (globalThis.process)
+  const processObject = /** @type {{cwd?: ?} | undefined} */ (globalThis.process)
 
   if (typeof processObject?.cwd !== "function") return undefined
 
@@ -35,17 +35,17 @@ function currentWorkingDirectory() {
 }
 
 /**
- * @param {unknown} value - Snapshot value to canonicalize.
- * @returns {unknown} Snapshot value with object keys sorted recursively.
+ * @param {?} value - Snapshot value to canonicalize.
+ * @returns {?} Snapshot value with object keys sorted recursively.
  */
 function canonicalDebugSnapshotValue(value) {
   if (!value || typeof value !== "object") return value
   if (Array.isArray(value)) return value.map((entry) => canonicalDebugSnapshotValue(entry))
 
   return Object.keys(value).sort().reduce((result, key) => {
-    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, unknown>} */ (value)[key])
+    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, ?>} */ (value)[key])
     return result
-  }, /** @type {Record<string, unknown>} */ ({}))
+  }, /** @type {Record<string, ?>} */ ({}))
 }
 
 /**
@@ -72,7 +72,7 @@ function mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration
 
 /**
  * Resolves the grace window (ms) before a sustained beacon outage is reported.
- * @param {unknown} value - Configured `unreachableReportMs`, if any.
+ * @param {?} value - Configured `unreachableReportMs`, if any.
  * @returns {number} - The configured value when it's a finite number, otherwise the 30s default.
  */
 function resolveBeaconUnreachableReportMs(value) {
@@ -124,7 +124,7 @@ export default class VelociousConfiguration {
     this._initializeModels = initializeModels
     this._isInitialized = false
     this.httpServer = httpServer || {}
-    /** @type {{getDebugSnapshot: () => Promise<Record<string, unknown>>} | undefined} */
+    /** @type {{getDebugSnapshot: () => Promise<Record<string, ?>>} | undefined} */
     this._httpServerInstance = undefined
     this.locale = locale
     this.localeFallbacks = localeFallbacks
@@ -173,7 +173,7 @@ export default class VelociousConfiguration {
     /** @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
     this._aroundAction = null
 
-    /** @type {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} */
+    /** @type {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
     this._websocketSessionIdentityResolver = null
     this._logging = logging
     this._mailerBackend = mailerBackend
@@ -291,7 +291,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} identifier - Identifier.
-   * @param {unknown} [tenant] - Tenant override.
+   * @param {?} [tenant] - Tenant override.
    * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Resolved database configuration for the identifier.
    */
   resolveDatabaseConfiguration(identifier, tenant = this.getCurrentTenant()) {
@@ -337,7 +337,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} identifier - Database identifier.
-   * @param {unknown} [tenant] - Tenant override.
+   * @param {?} [tenant] - Tenant override.
    * @returns {boolean} - Whether this database identifier is active in the current tenant context.
    */
   isDatabaseIdentifierActive(identifier, tenant = this.getCurrentTenant()) {
@@ -368,7 +368,7 @@ export default class VelociousConfiguration {
     return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier) && this.isDatabaseIdentifierActive(identifier))
   }
 
-  /** @returns {Promise<Record<string, unknown>>} - Human-readable server diagnostics. */
+  /** @returns {Promise<Record<string, ?>>} - Human-readable server diagnostics. */
   async getDebugSnapshot() {
     const localSnapshot = this.getLocalDebugSnapshot()
 
@@ -378,7 +378,7 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, unknown>} - Human-readable diagnostics for this process only. */
+  /** @returns {Record<string, ?>} - Human-readable diagnostics for this process only. */
   getLocalDebugSnapshot() {
     return {
       backgroundJobs: this._debugBackgroundJobsSnapshot(),
@@ -390,9 +390,9 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Promise<Record<string, unknown>>} - HTTP server worker diagnostics. */
+  /** @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics. */
   async _debugHttpServerSnapshot() {
-    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, unknown>>} | undefined} */ (this._httpServerInstance)
+    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
 
     if (!httpServer?.getDebugSnapshot) {
       return {configured: Boolean(this.httpServer), active: false}
@@ -401,7 +401,7 @@ export default class VelociousConfiguration {
     return await httpServer.getDebugSnapshot()
   }
 
-  /** @returns {Record<string, unknown>} - Server runtime diagnostics. */
+  /** @returns {Record<string, ?>} - Server runtime diagnostics. */
   _debugServerSnapshot() {
     const nodeProcess = typeof process === "undefined" ? undefined : process
 
@@ -415,7 +415,7 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, unknown>} - Configuration diagnostics. */
+  /** @returns {Record<string, ?>} - Configuration diagnostics. */
   _debugConfigurationSnapshot() {
     return {
       autoload: this.getAutoload(),
@@ -431,7 +431,7 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, unknown>} - Background job diagnostics. */
+  /** @returns {Record<string, ?>} - Background job diagnostics. */
   _debugBackgroundJobsSnapshot() {
     return {
       configured: Boolean(this._backgroundJobs),
@@ -439,7 +439,7 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, unknown>} - Database diagnostics. */
+  /** @returns {Record<string, ?>} - Database diagnostics. */
   _debugDatabaseSnapshot() {
     /** @type {Record<string, import("./database/pool/base.js").DatabasePoolDebugSnapshot>} */
     const databasePools = {}
@@ -457,18 +457,18 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, unknown>} - WebSocket diagnostics. */
+  /** @returns {Record<string, ?>} - WebSocket diagnostics. */
   _debugWebsocketSnapshot() {
     /** @type {Map<string, {count: number, details: {channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, subscriptionCount: number}}>} */
     const sessionBuckets = new Map()
     /** @type {{channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, queuedMessageCount: number, subscriptionCount: number}[]} */
     const sessionDetails = []
     const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
-      /** @type {Map<string, {count: number, details: Record<string, unknown>}>} */
+      /** @type {Map<string, {count: number, details: Record<string, ?>}>} */
       const detailsBuckets = new Map()
 
       for (const subscription of channelSubscriptions) {
-        const details = /** @type {Record<string, unknown>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
+        const details = /** @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
         const key = JSON.stringify(details)
         const existingBucket = detailsBuckets.get(key)
 
@@ -491,7 +491,7 @@ export default class VelociousConfiguration {
       const channelSubscriptionBuckets = new Map()
 
       for (const {channelType, subscription} of session._channelSubscriptions.values()) {
-        const details = /** @type {Record<string, unknown>} */ (subscription.debugSnapshot())
+        const details = /** @type {Record<string, ?>} */ (subscription.debugSnapshot())
         const model = typeof details.model === "string" ? details.model : null
         const key = JSON.stringify({channelType, model})
         const existingBucket = channelSubscriptionBuckets.get(key)
@@ -1170,7 +1170,7 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   _deliverBroadcastFromBeacon(message) {
-    /** @type {any} */
+    /** @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -1523,14 +1523,14 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {function(string, Record<string, any> | undefined) : string} callback - Translator callback.
+   * @param {function(string, Record<string, ?> | undefined) : string} callback - Translator callback.
    * @returns {void} - No return value.
    */
   setTranslator(callback) { this._translator = callback }
 
   /**
    * @param {string} msgID - Msg id.
-   * @param {Record<string, any>} [args] - Translator options and variables.
+   * @param {Record<string, ?>} [args] - Translator options and variables.
    * @returns {string} - The default translator.
    */
   _defaultTranslator(msgID, args) {
@@ -1556,7 +1556,7 @@ export default class VelociousConfiguration {
     return message
   }
 
-  /** @returns {(msgID: string, args?: Record<string, any>) => string} */
+  /** @returns {(msgID: string, args?: Record<string, ?>) => string} */
   getTranslator() {
     if (this._translator) return this._translator
 
@@ -1717,8 +1717,8 @@ export default class VelociousConfiguration {
    * unsubscribe or the session ends.
    *
    * @param {string} name
-   * @param {Record<string, any>} broadcastParams
-   * @param {any} body
+   * @param {Record<string, ?>} broadcastParams
+   * @param {?} body
    * @returns {void}
    */
   /**
@@ -1780,14 +1780,14 @@ export default class VelociousConfiguration {
    * Return `null`/`undefined` to mean "no identity" — resumes still
    * succeed if pause and resume both resolve to a nullish value.
    *
-   * @param {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} resolver
+   * @param {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} resolver
    * @returns {void}
    */
   setWebsocketSessionIdentityResolver(resolver) {
     this._websocketSessionIdentityResolver = resolver
   }
 
-  /** @returns {((session: import("./http-server/client/websocket-session.js").default) => any | Promise<any>) | null} */
+  /** @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
   getWebsocketSessionIdentityResolver() {
     return this._websocketSessionIdentityResolver
   }
@@ -1877,8 +1877,8 @@ export default class VelociousConfiguration {
 
   /**
    * @param {string} name
-   * @param {Record<string, any>} broadcastParams
-   * @param {any} body
+   * @param {Record<string, ?>} broadcastParams
+   * @param {?} body
    * @returns {void}
    */
   broadcastToChannel(name, broadcastParams, body) {
@@ -1905,7 +1905,7 @@ export default class VelociousConfiguration {
     //
     // In-process mode doesn't install a websocket-events transport,
     // so fall through to the local dispatch.
-    /** @type {any} */
+    /** @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -1930,7 +1930,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>}
    */
   async awaitPendingBroadcasts() {
-    /** @type {any} */
+    /** @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.awaitPendingBroadcasts === "function") {
@@ -1944,8 +1944,8 @@ export default class VelociousConfiguration {
    * main-process fan-out.
    *
    * @param {string} name - Channel name.
-   * @param {Record<string, any>} broadcastParams - Params passed to each subscription's `matches()`.
-   * @param {any} body - Message body delivered via `sendMessage()`.
+   * @param {Record<string, ?>} broadcastParams - Params passed to each subscription's `matches()`.
+   * @param {?} body - Message body delivered via `sendMessage()`.
    * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
    * @returns {void}
    */
@@ -2018,7 +2018,7 @@ export default class VelociousConfiguration {
 
   /**
    * @param {object} args - Ability resolver args.
-   * @param {Record<string, any>} args.params - Request params.
+   * @param {Record<string, ?>} args.params - Request params.
    * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} args.request - Request object.
    * @param {import("./http-server/client/response.js").default} args.response - Response object.
    * @returns {Promise<import("./authorization/ability.js").default | undefined>} - Resolved ability.
@@ -2044,8 +2044,8 @@ export default class VelociousConfiguration {
 
   /**
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability instance.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   async runWithAbility(ability, callback) {
     return await this.getEnvironmentHandler().runWithAbility(ability, callback)
@@ -2053,8 +2053,8 @@ export default class VelociousConfiguration {
 
   /**
    * @param {import("./http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   async runWithRequestTiming(requestTiming, callback) {
     return await this.getEnvironmentHandler().runWithRequestTiming(requestTiming, callback)
@@ -2075,16 +2075,16 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @returns {unknown} - Current tenant from context.
+   * @returns {?} - Current tenant from context.
    */
   getCurrentTenant() {
     return this.getEnvironmentHandler().getCurrentTenant()
   }
 
   /**
-   * @param {unknown} tenant - Tenant.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {?} tenant - Tenant.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   async runWithTenant(tenant, callback) {
     return await this.getEnvironmentHandler().runWithTenant(tenant, callback)
@@ -2092,11 +2092,11 @@ export default class VelociousConfiguration {
 
   /**
    * @param {object} args - Tenant resolver args.
-   * @param {Record<string, any>} args.params - Request params.
+   * @param {Record<string, ?>} args.params - Request params.
    * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined} args.request - Request object.
    * @param {import("./http-server/client/response.js").default | undefined} args.response - Response object.
-   * @param {{channel: string, params?: Record<string, unknown>}} [args.subscription] - Subscription metadata.
-   * @returns {Promise<unknown>} - Resolved tenant.
+   * @param {{channel: string, params?: Record<string, ?>}} [args.subscription] - Subscription metadata.
+   * @returns {Promise<?>} - Resolved tenant.
    */
   async resolveTenant({params, request, response, subscription}) {
     const resolver = this.getTenantResolver()
@@ -2204,7 +2204,7 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * @param {unknown} error - Error thrown while looking up the current connection.
+   * @param {?} error - Error thrown while looking up the current connection.
    * @returns {boolean} - Whether the error means no current connection is available.
    */
   isMissingCurrentConnectionError(error) {

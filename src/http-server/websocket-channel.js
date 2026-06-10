@@ -97,7 +97,7 @@ export default class VelociousWebsocketChannel {
   /**
    * Returns sanitized diagnostics for debug snapshots.
    * Subclasses can override to expose non-sensitive routing details.
-   * @returns {Record<string, unknown>} Debug-safe subscription details.
+   * @returns {Record<string, ?>} Debug-safe subscription details.
    */
   debugSnapshot() { return {} }
 

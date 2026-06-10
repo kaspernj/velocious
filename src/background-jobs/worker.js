@@ -254,7 +254,7 @@ export default class BackgroundJobsWorker {
   async _handleJob(payload) {
     if (!payload.id) throw new Error("Background job payload missing id")
     /** @type {import("./types.js").BackgroundJobPayload & {id: string}} */
-    const identifiedPayload = /** @type {any} */ (payload)
+    const identifiedPayload = /** @type {?} */ (payload)
 
     const executionMode = this._executionModeForPayload(identifiedPayload)
 
@@ -426,7 +426,7 @@ export default class BackgroundJobsWorker {
     await registry.load()
     const JobClass = registry.getJobByName(payload.jobName)
     const jobInstance = new JobClass()
-    /** @type {(...args: any[]) => Promise<void>} */
+    /** @type {(...args: Array<?>) => Promise<void>} */
     const perform = jobInstance.perform
 
     await configuration.withConnections({name: `Background job worker inline: ${payload.jobName}`}, async () => {
@@ -557,7 +557,7 @@ export default class BackgroundJobsWorker {
   /**
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
-   * @param {unknown} args.error - Error.
+   * @param {?} args.error - Error.
    * @returns {Promise<void>} - Resolves after failure is reported.
    */
   async _reportForkedChildFailure({payload, error}) {
@@ -618,7 +618,7 @@ export default class BackgroundJobsWorker {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {unknown} [args.error] - Error.
+   * @param {?} [args.error] - Error.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.

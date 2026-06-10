@@ -171,7 +171,7 @@ export default class VelociousDatabaseQuery {
     /** @type {import("./where-base.js").default[]} */
     this._wheres = wheres
 
-    const boundWhere = /** @type {any} */ (this.where.bind(this))
+    const boundWhere = /** @type {?} */ (this.where.bind(this))
     boundWhere.not = this.whereNot.bind(this)
     this.where = boundWhere
   }

@@ -61,7 +61,7 @@ export default class VelociousController {
   /** @returns {import("./configuration.js").default} - The configuration.  */
   getConfiguration() { return this._configuration }
 
-  /** @returns {Record<string, any>} - The params.  */
+  /** @returns {Record<string, ?>} - The params.  */
   getParams() { return this._params }
 
   /** @returns {import("./http-server/client/request.js").default} - The request.  */
@@ -69,7 +69,7 @@ export default class VelociousController {
 
   /**
    * @param {string} name - Cookie name.
-   * @param {unknown} value - Cookie value.
+   * @param {?} value - Cookie value.
    * @param {object} [args] - Options object.
    * @param {string} [args.domain] - Domain.
    * @param {Date} [args.expires] - Expires date.
@@ -134,7 +134,7 @@ export default class VelociousController {
       const beforeActions = currentControllerClass._beforeActions
 
       if (beforeActions) {
-        const controllerPrototype = /** @type {Record<string, Function | undefined>} */ (/** @type {unknown} */ (currentControllerClass.prototype))
+        const controllerPrototype = /** @type {Record<string, Function | undefined>} */ (/** @type {?} */ (currentControllerClass.prototype))
 
         for (const beforeActionName of beforeActions) {
           const beforeAction = controllerPrototype[beforeActionName]
@@ -155,7 +155,7 @@ export default class VelociousController {
     await this.logger.debug("After runBeforeCallbacks")
   }
 
-  /** @returns {Record<string, any>} - The params.  */
+  /** @returns {Record<string, ?>} - The params.  */
   params() {
     // Merge query parameters so controllers can read them via params()
     const mergedParams = {...this.queryParameters(), ...this._params}
@@ -165,20 +165,20 @@ export default class VelociousController {
     return mergedParams
   }
 
-  /** @returns {Record<string, any>} - The query parameters.  */
+  /** @returns {Record<string, ?>} - The query parameters.  */
   queryParameters() {
     const query = this._request.path().split("?")[1]
 
     if (!query) return {}
 
     try {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, ?>} */
       const unparsedParams = querystring.parse(query)
       const paramsToObject = new ParamsToObject(unparsedParams)
 
       return paramsToObject.toObject()
     } catch (error) {
-      const ensuredError = /** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error)
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),

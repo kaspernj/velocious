@@ -34,11 +34,11 @@ import registerActsAsListCallbacks from "./acts-as-list.js"
 import UUID from "pure-uuid"
 
 /**
- * @typedef {new (...args: any[]) => Record<string, any>} AttachmentDriverConstructor
+ * @typedef {new (...args: Array<?>) => Record<string, ?>} AttachmentDriverConstructor
  */
 
 class ValidationError extends Error {
-  /** @type {Record<string, any> | undefined} - Velocious metadata for frontend-model error reporting. */
+  /** @type {Record<string, ?> | undefined} - Velocious metadata for frontend-model error reporting. */
   velocious
 
   /**
@@ -103,9 +103,9 @@ function applyBuiltRecordInverseRelationship({allowHasMany, inverseOf, parent, r
  * Build a related record and wire its inverse relationship to the parent.
  * @param {VelociousDatabaseRecord} parent - Parent record building the relationship.
  * @param {string} relationshipName - Relationship name being built.
- * @param {Record<string, any>} attributes - Attributes for the new related record.
+ * @param {Record<string, ?>} attributes - Attributes for the new related record.
  * @param {boolean} allowHasMany - Whether has-many inverse relationships should append the parent.
- * @returns {Record<string, any>} - Built related record.
+ * @returns {Record<string, ?>} - Built related record.
  */
 function buildRelatedRecordWithInverse(parent, relationshipName, attributes, allowHasMany) {
   const instanceRelationship = parent.getRelationshipByName(relationshipName)
@@ -217,8 +217,8 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {(...args: any[]) => any} callback - Scope callback.
-   * @returns {((...args: any[]) => import("../query/model-class-query.js").default<any>) & {scope: (...args: any[]) => import("../../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
+   * @param {(...args: Array<?>) => ?} callback - Scope callback.
+   * @returns {((...args: Array<?>) => import("../query/model-class-query.js").default<?>) & {scope: (...args: Array<?>) => import("../../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
    */
   static defineScope(callback) {
     return defineModelScope({
@@ -275,21 +275,21 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ?>, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
    */
   static getAttachmentsMap() {
     if (!this._attachmentsMap) {
-      /** @type {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} */
+      /** @type {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ?>, type: "hasOne" | "hasMany"}>} */
       this._attachmentsMap = {}
     }
 
     return this._attachmentsMap
   }
 
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   _attributes = {}
 
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   _changes = {}
 
   /** @type {Record<string, import("../drivers/base-column.js").default>} */
@@ -467,7 +467,7 @@ class VelociousDatabaseRecord {
     }
 
     let relationship
-    const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
+    const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
     if (actualData.type == "belongsTo") {
       relationship = new BelongsToRelationship(actualData)
@@ -478,7 +478,7 @@ class VelociousDatabaseRecord {
         return relationship.loaded()
       }
 
-      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, any>} */ attributes) {
+      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, ?>} */ attributes) {
         return buildRelatedRecordWithInverse(/** @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, true)
       }
 
@@ -490,7 +490,7 @@ class VelociousDatabaseRecord {
         return await this.relationshipOrLoad(relationshipName)
       }
 
-      prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {any} */ model) {
+      prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {?} */ model) {
         const relationship = this.getRelationshipByName(relationshipName)
 
         relationship.setLoaded(model)
@@ -500,7 +500,7 @@ class VelociousDatabaseRecord {
       relationship = new HasManyRelationship(actualData)
 
       prototype[relationshipName] = function() {
-        return /** @type {import("./instance-relationships/has-many.js").default<any, any>} */ (this.getRelationshipByName(relationshipName))
+        return /** @type {import("./instance-relationships/has-many.js").default<?, ?>} */ (this.getRelationshipByName(relationshipName))
       }
 
       prototype[`${relationshipName}Loaded`] = function() {
@@ -521,7 +521,7 @@ class VelociousDatabaseRecord {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, any>} */ attributes) {
+      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, ?>} */ attributes) {
         return buildRelatedRecordWithInverse(/** @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, false)
       }
 
@@ -598,8 +598,8 @@ class VelociousDatabaseRecord {
     }
 
     /**
-     * @param {any} record - Child record instance.
-     * @returns {any} - Current foreign-key attribute value.
+     * @param {?} record - Child record instance.
+     * @returns {?} - Current foreign-key attribute value.
      */
     function readFkAttribute(record) {
       const relationship = ChildModel.getRelationshipByName(relationshipName)
@@ -617,7 +617,7 @@ class VelociousDatabaseRecord {
     })
 
     ChildModel.beforeSave(async (record) => {
-      const model = /** @type {any} */ (record)
+      const model = /** @type {?} */ (record)
 
       if (model.isNewRecord()) return
 
@@ -634,7 +634,7 @@ class VelociousDatabaseRecord {
     })
 
     ChildModel.afterSave(async (record) => {
-      const model = /** @type {any} */ (record)
+      const model = /** @type {?} */ (record)
       const prevKey = `_counterCachePrev_${relationshipName}`
       const previousParentId = model[prevKey]
 
@@ -752,7 +752,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
+   * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ?>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
    */
   static getAttachments() {
     return this.getAttachmentsMap()
@@ -760,7 +760,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} attachmentName - Attachment name.
-   * @returns {{driver?: string | AttachmentDriverConstructor | Record<string, any>, type: "hasOne" | "hasMany"}} - Attachment definition.
+   * @returns {{driver?: string | AttachmentDriverConstructor | Record<string, ?>, type: "hasOne" | "hasMany"}} - Attachment definition.
    */
   static getAttachmentByName(attachmentName) {
     const definition = this.getAttachmentsMap()[attachmentName]
@@ -813,7 +813,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} relationshipName - Relationship name.
-   * @returns {Promise<any>} - Loaded relationship value.
+   * @returns {Promise<?>} - Loaded relationship value.
    */
   async loadRelationship(relationshipName) {
     const relationship = this.getRelationshipByName(relationshipName)
@@ -825,7 +825,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} relationshipName - Relationship name.
-   * @returns {Promise<any>} - Loaded relationship value.
+   * @returns {Promise<?>} - Loaded relationship value.
    */
   async relationshipOrLoad(relationshipName) {
     const relationship = this.getRelationshipByName(relationshipName)
@@ -862,7 +862,7 @@ class VelociousDatabaseRecord {
 
     this._defineRelationship(relationshipName, Object.assign({type: "belongsTo", scope}, relationshipOptions))
 
-    if (/** @type {any} */ (relationshipOptions)?.counterCache) {
+    if (/** @type {?} */ (relationshipOptions)?.counterCache) {
       this._registerCounterCacheCallbacks(relationshipName)
     }
   }
@@ -886,7 +886,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {Record<string, any>} [attributes] - Attributes.
+   * @param {Record<string, ?>} [attributes] - Attributes.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the create.
    */
   static async create(attributes) {
@@ -950,7 +950,7 @@ class VelociousDatabaseRecord {
    *   Project.hasMany("tasks")
    *   Project.acceptsNestedAttributesFor("tasks", {allowDestroy: true})
    * @param {string} relationshipName - Relationship name on this model.
-   * @param {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}} [options] - Policy options.
+   * @param {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, ?>) => boolean}} [options] - Policy options.
    * @returns {void}
    */
   static acceptsNestedAttributesFor(relationshipName, options = {}) {
@@ -959,16 +959,16 @@ class VelociousDatabaseRecord {
     }
 
     if (!Object.prototype.hasOwnProperty.call(this, "_acceptedNestedAttributes")) {
-      /** @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}>} */
+      /** @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, ?>) => boolean}>} */
       this._acceptedNestedAttributes = {}
     }
 
-    /** @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean}>} */ (this._acceptedNestedAttributes)[relationshipName] = {...options}
+    /** @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, ?>) => boolean}>} */ (this._acceptedNestedAttributes)[relationshipName] = {...options}
   }
 
   /**
    * @param {string} relationshipName - Relationship name.
-   * @returns {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, any>) => boolean} | null} - Policy declared via `acceptsNestedAttributesFor`, or null when not accepted.
+   * @returns {{allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, ?>) => boolean} | null} - Policy declared via `acceptsNestedAttributesFor`, or null when not accepted.
    */
   static acceptedNestedAttributesFor(relationshipName) {
     return this._acceptedNestedAttributes?.[relationshipName] || null
@@ -990,7 +990,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} attachmentName - Attachment name.
    * @param {object} args - Attachment args.
-   * @param {string | AttachmentDriverConstructor | Record<string, any>} [args.driver] - Attachment driver name, class, or instance.
+   * @param {string | AttachmentDriverConstructor | Record<string, ?>} [args.driver] - Attachment driver name, class, or instance.
    * @param {"hasOne" | "hasMany"} args.type - Attachment type.
    * @returns {void} - No return value.
    */
@@ -1000,13 +1000,13 @@ class VelociousDatabaseRecord {
 
     this.getAttachmentsMap()[attachmentName] = {driver, type}
 
-    const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
+    const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
     prototype[attachmentName] = function() {
       return this.getAttachmentByName(attachmentName)
     }
 
-      prototype[`set${inflection.camelize(attachmentName)}`] = function(/** @type {any} */ newValue) {
+      prototype[`set${inflection.camelize(attachmentName)}`] = function(/** @type {?} */ newValue) {
       this.getAttachmentByName(attachmentName).queueAttach(newValue)
       return newValue
     }
@@ -1015,7 +1015,7 @@ class VelociousDatabaseRecord {
   /**
    * Adds a single attachment helper to the model.
    * @param {string} attachmentName - Attachment name.
-   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ?>}} [args] - Attachment options.
    * @returns {void} - No return value.
    */
   static hasOneAttachment(attachmentName, args = {}) {
@@ -1025,7 +1025,7 @@ class VelociousDatabaseRecord {
   /**
    * Adds a collection attachment helper to the model.
    * @param {string} attachmentName - Attachment name.
-   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, any>}} [args] - Attachment options.
+   * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ?>}} [args] - Attachment options.
    * @returns {void} - No return value.
    */
   static hasManyAttachments(attachmentName, args = {}) {
@@ -1119,7 +1119,7 @@ class VelociousDatabaseRecord {
 
     const columnNameToAttributeName = this.getColumnNameToAttributeNameMap()
     const attributeNameToColumnName = this.getAttributeNameToColumnNameMap()
-    const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
+    const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
     for (const column of this._columns) {
       this._columnsAsHash[column.getName()] = column
@@ -1137,14 +1137,14 @@ class VelociousDatabaseRecord {
       }
 
       if (!(`set${camelizedColumnNameBigFirst}` in prototype)) {
-        prototype[`set${camelizedColumnNameBigFirst}`] = function(/** @type {any} */ newValue) {
+        prototype[`set${camelizedColumnNameBigFirst}`] = function(/** @type {?} */ newValue) {
           return this._setColumnAttribute(camelizedColumnName, newValue)
         }
       }
 
       if (!(`has${camelizedColumnNameBigFirst}` in prototype)) {
         prototype[`has${camelizedColumnNameBigFirst}`] = function() {
-          const dynamicThis = /** @type {Record<string, (...args: any[]) => unknown>} */ (/** @type {unknown} */ (this))
+          const dynamicThis = /** @type {Record<string, (...args: Array<?>) => ?>} */ (/** @type {?} */ (this))
           const value = dynamicThis[camelizedColumnName]()
 
           return this._hasAttribute(value)
@@ -1191,7 +1191,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {any} value - Value to use.
+   * @param {?} value - Value to use.
    * @returns {boolean} - Whether attribute.
    */
   _hasAttribute(value) {
@@ -1235,7 +1235,7 @@ class VelociousDatabaseRecord {
       for (const name in this._translations) {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
-        const prototype = /** @type {Record<string, any>} */ (/** @type {unknown} */ (this.prototype))
+        const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
         prototype[name] = function getTranslatedAttribute() {
           const locale = this._getConfiguration().getLocale()
@@ -1244,7 +1244,7 @@ class VelociousDatabaseRecord {
         }
 
         prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
-          const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+          const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
           const candidate = dynamicThis[name]
 
           if (typeof candidate == "function") {
@@ -1256,7 +1256,7 @@ class VelociousDatabaseRecord {
           }
         }
 
-        prototype[setterMethodName] = function setTranslatedAttribute(/** @type {any} */ newValue) {
+        prototype[setterMethodName] = function setTranslatedAttribute(/** @type {?} */ newValue) {
           const locale = this._getConfiguration().getLocale()
 
           return this._setTranslatedAttribute(name, locale, newValue)
@@ -1272,12 +1272,12 @@ class VelociousDatabaseRecord {
             return this._getTranslatedAttribute(name, locale)
           }
 
-          prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(/** @type {any} */ newValue) {
+          prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(/** @type {?} */ newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
           }
 
           prototype[hasMethodNameLocalized] = function hasTranslatedAttribute() {
-            const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+            const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
             const candidate = dynamicThis[getterMethodNameLocalized]
 
             if (typeof candidate == "function") {
@@ -1344,7 +1344,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Declares a tenant-aware database identifier resolver for this model class.
-   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: unknown}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
+   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: ?}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
    * @returns {void} - No return value.
    */
   static switchesTenantDatabase(databaseIdentifierOrResolver) {
@@ -1352,7 +1352,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {unknown} [tenant] - Tenant override.
+   * @param {?} [tenant] - Tenant override.
    * @returns {string | undefined} - Tenant-scoped database identifier when configured.
    */
   static getTenantDatabaseIdentifier(tenant = Current.tenant()) {
@@ -1374,7 +1374,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name - Name.
-   * @returns {any} - The attribute.
+   * @returns {?} - The attribute.
    */
   getAttribute(name) {
     const columnName = inflection.underscore(name)
@@ -1398,12 +1398,12 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name - Name.
-   * @param {any} newValue - New value.
+   * @param {?} newValue - New value.
    * @returns {void} - No return value.
    */
   setAttribute(name, newValue) {
     const setterName = `set${inflection.camelize(name)}`
-    const dynamicThis = /** @type {Record<string, (value: any) => void>} */ (/** @type {unknown} */ (this))
+    const dynamicThis = /** @type {Record<string, (value: ?) => void>} */ (/** @type {?} */ (this))
 
     this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
@@ -1414,7 +1414,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {string} name - Name.
-   * @param {any} newValue - New value.
+   * @param {?} newValue - New value.
    */
   _setColumnAttribute(name, newValue) {
     this.getModelClass()._assertHasBeenInitialized()
@@ -1442,36 +1442,70 @@ class VelociousDatabaseRecord {
   /**
    * Clears loaded belongs-to caches when callers assign the foreign key directly.
    * @param {string} columnName - Changed database column name.
-   * @param {unknown} normalizedValue - New normalized column value.
+   * @param {?} normalizedValue - New normalized column value.
    * @returns {void} - No return value.
    */
   _clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue) {
-    if (!this._instanceRelationships) return
+    for (const relationship of this._belongsToRelationshipsForForeignKey(columnName)) {
+      if (this._belongsToRelationshipMatchesForeignKeyValue({normalizedValue, relationship})) continue
 
-    for (const relationshipName in this._instanceRelationships) {
-      const relationship = this._instanceRelationships[relationshipName]
-
-      if (relationship.getType() != "belongsTo") continue
-      if (relationship.getForeignKey() != columnName) continue
-
-      const loaded = relationship.getLoadedOrUndefined()
-      const TargetModelClass = relationship.getTargetModelClass()
-
-      if (loaded && !Array.isArray(loaded) && TargetModelClass) {
-        const loadedPrimaryKey = loaded.readColumn(relationship.getPrimaryKey())
-
-        if (loadedPrimaryKey == normalizedValue) continue
-      }
-
-      relationship.setLoaded(undefined)
-      relationship.setPreloaded(false)
-      relationship.setDirty(false)
+      this._clearLoadedBelongsToRelationship(relationship)
     }
   }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The date value.
+   * @param {string} columnName - Changed database column name.
+   * @returns {Array<?>} - Loaded relationship instances that use the changed foreign key.
+   */
+  _belongsToRelationshipsForForeignKey(columnName) {
+    if (!this._instanceRelationships) return []
+
+    return Object
+      .values(this._instanceRelationships)
+      .filter((relationship) => this._belongsToRelationshipUsesForeignKey({columnName, relationship}))
+  }
+
+  /**
+   * @param {object} args - Relationship match arguments.
+   * @param {string} args.columnName - Changed database column name.
+   * @param {?} args.relationship - Relationship instance.
+   * @returns {boolean} - Whether the relationship is a belongs-to using the changed foreign key.
+   */
+  _belongsToRelationshipUsesForeignKey({columnName, relationship}) {
+    if (relationship.getType() != "belongsTo") return false
+
+    return relationship.getForeignKey() == columnName
+  }
+
+  /**
+   * @param {object} args - Relationship cache arguments.
+   * @param {?} args.normalizedValue - New normalized column value.
+   * @param {?} args.relationship - Relationship instance.
+   * @returns {boolean} - Whether the loaded related record still matches the changed foreign key.
+   */
+  _belongsToRelationshipMatchesForeignKeyValue({normalizedValue, relationship}) {
+    const loaded = relationship.getLoadedOrUndefined()
+
+    if (!loaded) return false
+    if (Array.isArray(loaded)) return false
+    if (!relationship.getTargetModelClass()) return false
+
+    return loaded.readColumn(relationship.getPrimaryKey()) == normalizedValue
+  }
+
+  /**
+   * @param {?} relationship - Relationship instance.
+   * @returns {void} - No return value.
+   */
+  _clearLoadedBelongsToRelationship(relationship) {
+    relationship.setLoaded(undefined)
+    relationship.setPreloaded(false)
+    relationship.setDirty(false)
+  }
+
+  /**
+   * @param {?} value - Value to use.
+   * @returns {?} - The date value.
    */
   _normalizeDateValue(value) {
     if (typeof value != "string") return value
@@ -1490,8 +1524,8 @@ class VelociousDatabaseRecord {
   /**
    * @param {object} args - Options object.
    * @param {string | undefined} args.columnType - Column type.
-   * @param {any} args.value - Value to normalize.
-   * @returns {any} - Normalized value.
+   * @param {?} args.value - Value to normalize.
+   * @returns {?} - Normalized value.
    */
   _normalizeSqliteBooleanValue({columnType, value}) {
     if (this.getModelClass().getDatabaseType() != "sqlite") return value
@@ -1580,12 +1614,12 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.cast] - Whether to cast values based on column types.
    * @param {boolean} [args.retryIndividuallyOnFailure] - Retry rows individually if a batch insert fails.
    * @param {boolean} [args.returnResults] - Return succeeded/failed rows instead of throwing when retries fail.
-   * @returns {Promise<void | {succeededRows: Array<Array<unknown>>, failedRows: Array<Array<unknown>>, errors: Array<{row: Array<unknown>, error: unknown}>}>} - Resolves when complete.
+   * @returns {Promise<void | {succeededRows: Array<Array<?>>, failedRows: Array<Array<?>>, errors: Array<{row: Array<?>, error: ?}>}>} - Resolves when complete.
    */
   static async insertMultiple(columns, rows, args = {}) {
     const {cast = true, retryIndividuallyOnFailure = false, returnResults = false, ...restArgs} = args
@@ -1617,7 +1651,7 @@ class VelociousDatabaseRecord {
       if (returnResults) return {succeededRows: normalizedRows.slice(), failedRows: [], errors: []}
       return
     } catch {
-      /** @type {{succeededRows: unknown[][], failedRows: unknown[][], errors: Array<{row: unknown[], error: unknown}>}} */
+      /** @type {{succeededRows: Array<?>[], failedRows: Array<?>[], errors: Array<{row: Array<?>, error: ?}>}} */
       const results = {
         succeededRows: [],
         failedRows: [],
@@ -1657,8 +1691,8 @@ class VelociousDatabaseRecord {
   /**
    * @param {object} args - Options object.
    * @param {Array<string>} args.columns - Column names.
-   * @param {Array<Array<unknown>>} args.rows - Rows to insert.
-   * @returns {Array<Array<unknown>>} - Normalized rows.
+   * @param {Array<Array<?>>} args.rows - Rows to insert.
+   * @returns {Array<Array<?>>} - Normalized rows.
    */
   static _normalizeInsertMultipleRows({columns, rows}) {
     return rows.map((row) => {
@@ -1682,19 +1716,13 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Array<unknown>} row - Row to serialize.
+   * @param {Array<?>} row - Row to serialize.
    * @returns {string} - Safe row representation.
    */
   static _safeSerializeInsertRow(row) {
-    const seen = new WeakSet()
-
     try {
       return JSON.stringify(row, (key, value) => {
         if (typeof value === "bigint") return value.toString()
-        if (value && typeof value === "object") {
-          if (seen.has(value)) return "[Circular]"
-          seen.add(value)
-        }
 
         return value
       })
@@ -1706,8 +1734,8 @@ class VelociousDatabaseRecord {
   /**
    * @param {object} args - Options object.
    * @param {string} args.columnName - Column name.
-   * @param {unknown} args.value - Column value.
-   * @returns {unknown} - Normalized value.
+   * @param {?} args.value - Column value.
+   * @returns {?} - Normalized value.
    */
   static _normalizeInsertValueForColumn({columnName, value}) {
     const column = this.getColumnsHash()[columnName]
@@ -1765,8 +1793,8 @@ class VelociousDatabaseRecord {
   /**
    * @param {object} args - Options object.
    * @param {string} args.columnType - Column type.
-   * @param {unknown} args.value - Value to normalize.
-   * @returns {unknown} - Normalized value.
+   * @param {?} args.value - Value to normalize.
+   * @returns {?} - Normalized value.
    */
   static _normalizeNumericValue({columnType, value}) {
     if (value === "" || value === null || value === undefined) return value
@@ -1789,8 +1817,8 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {any} value - Value to normalize.
-   * @returns {any} - Normalized value.
+   * @param {?} value - Value to normalize.
+   * @returns {?} - Normalized value.
    */
   static _normalizeDateValueForInsert(value) {
     let normalizedValue = value
@@ -1829,8 +1857,8 @@ class VelociousDatabaseRecord {
   /**
    * @param {object} args - Options object.
    * @param {string | undefined} args.columnType - Column type.
-   * @param {any} args.value - Value to normalize.
-   * @returns {any} - Normalized value.
+   * @param {?} args.value - Value to normalize.
+   * @returns {?} - Normalized value.
    */
   static _normalizeSqliteBooleanValueForInsert({columnType, value}) {
     if (this.getDatabaseType() != "sqlite") return value
@@ -2086,7 +2114,7 @@ class VelociousDatabaseRecord {
 
   /**
    * @param {function() : Promise<void>} callback - Callback function.
-   * @returns {Promise<unknown>} - Resolves with the transaction.
+   * @returns {Promise<?>} - Resolves with the transaction.
    */
   static async transaction(callback) {
     await this.ensureInitialized()
@@ -2330,11 +2358,11 @@ class VelociousDatabaseRecord {
   /**
    * Adds a validation to an attribute.
    * @param {string} attributeName The name of the attribute to validate.
-   * @param {Record<string, boolean | Record<string, any>>} validators The validators to add. Key is the validator name, value is the validator arguments.
+   * @param {Record<string, boolean | Record<string, ?>>} validators The validators to add. Key is the validator name, value is the validator arguments.
    */
   static async validates(attributeName, validators) {
     for (const validatorName in validators) {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, ?>} */
       let validatorArgs
 
       /** @type {boolean} */
@@ -2403,7 +2431,7 @@ class VelociousDatabaseRecord {
     const translation = this.translationsLoaded().find((translation) => translation.locale() == locale)
 
     if (translation) {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, ?>} */
       const dict = translation
 
       const attributeMethod = /** @type {function() : string | undefined} */ (dict[name])
@@ -2447,7 +2475,7 @@ class VelociousDatabaseRecord {
   /**
    * @param {string} name - Name.
    * @param {string} locale - Locale.
-   * @param {any} newValue - New value.
+   * @param {?} newValue - New value.
    * @returns {void} - No return value.
    */
   _setTranslatedAttribute(name, locale, newValue) {
@@ -2462,7 +2490,7 @@ class VelociousDatabaseRecord {
       translation = instanceRelationship.build({locale})
     }
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const assignments = {}
 
     assignments[name] = newValue
@@ -2576,7 +2604,7 @@ class VelociousDatabaseRecord {
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
    * @param {...string|string[]} columns - Column names.
-   * @returns {Promise<any[]>} - Resolves with the pluck.
+   * @returns {Promise<Array<?>>} - Resolves with the pluck.
    */
   static async pluck(...columns) {
     await this.ensureInitialized()
@@ -2773,7 +2801,7 @@ class VelociousDatabaseRecord {
   /**
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {Record<string, any>} params - Ransack-style params hash.
+   * @param {Record<string, ?>} params - Ransack-style params hash.
    * @returns {ModelClassQuery<MC>} - Query with Ransack filters applied.
    */
   static ransack(params) {
@@ -2781,7 +2809,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Record<string, any>} changes - Changes.
+   * @param {Record<string, ?>} changes - Changes.
    */
   constructor(changes = {}) {
     this.getModelClass()._assertHasBeenInitialized()
@@ -2805,7 +2833,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the given attributes to the record.
-   * @param {Record<string, any>} attributesToAssign - Attributes to assign.
+   * @param {Record<string, ?>} attributesToAssign - Attributes to assign.
    * @returns {void} - No return value.
    */
   assign(attributesToAssign) {
@@ -2816,12 +2844,12 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns a the current attributes of the record (original attributes from database plus changes)
-   * @returns {Record<string, any>} - The attributes.
+   * @returns {Record<string, ?>} - The attributes.
    */
   attributes() {
     const data = this.rawAttributes()
     const columnNameToAttributeName = this.getModelClass().getColumnNameToAttributeNameMap()
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const attributes = {}
 
     for (const columnName in data) {
@@ -2835,7 +2863,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns column-name keyed data (original attributes from database plus changes)
-   * @returns {Record<string, any>} - The raw attributes.
+   * @returns {Record<string, ?>} - The raw attributes.
    */
   rawAttributes() {
     return Object.assign({}, this._attributes, this._changes)
@@ -2859,7 +2887,7 @@ class VelociousDatabaseRecord {
 
     for (const relationship of this.getModelClass().getRelationships()) {
       if (relationship.getDependent() == "restrict") {
-        const instanceRelationship = /** @type {any} */ (this.getRelationshipByName(relationship.getRelationshipName()))
+        const instanceRelationship = /** @type {?} */ (this.getRelationshipByName(relationship.getRelationshipName()))
         const count = await instanceRelationship.query().count()
 
         if (count > 0) {
@@ -2913,7 +2941,7 @@ class VelociousDatabaseRecord {
       }
     }
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const conditions = {}
 
     conditions[this.getModelClass().primaryKey()] = this.id()
@@ -2940,7 +2968,7 @@ class VelociousDatabaseRecord {
         if (callback == callbackName) {
           callbackNameRegisteredAsString = true
         }
-        const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+        const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
         const methodCallback = dynamicThis[callback]
 
         if (typeof methodCallback != "function") {
@@ -2953,7 +2981,7 @@ class VelociousDatabaseRecord {
       }
     }
 
-    const dynamicThis = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))
+    const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
     const instanceCallback = dynamicThis[callbackName]
 
     if (!callbackNameRegisteredAsString && typeof instanceCallback === "function") {
@@ -2999,10 +3027,10 @@ class VelociousDatabaseRecord {
 
   /**
    * Returns the changes that have been made to this record since it was loaded from the database.
-   * @returns {Record<string, any[]>} - The changes.
+   * @returns {Record<string, Array<?>>} - The changes.
    */
   changes() {
-    /** @type {Record<string, any[]>} */
+    /** @type {Record<string, Array<?>>} */
     const changes = {}
 
     for (const changeKey in this._changes) {
@@ -3026,7 +3054,7 @@ class VelociousDatabaseRecord {
   /**
    * Reads an attribute value from the record.
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
-   * @returns {any} - The attribute.
+   * @returns {?} - The attribute.
    */
   readAttribute(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
@@ -3048,7 +3076,7 @@ class VelociousDatabaseRecord {
    * @returns {number}
    */
   readCount(attributeName) {
-    return readPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), attributeName)
+    return readPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName)
   }
 
   /**
@@ -3060,7 +3088,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setAssociationCount(attributeName, value) {
-    setPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), attributeName, value)
+    setPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName, value)
   }
 
   /**
@@ -3074,7 +3102,7 @@ class VelociousDatabaseRecord {
     /** @type {Record<string, number>} */
     const result = {}
 
-    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this))
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this))
 
     if (!target._associationCounts) return result
 
@@ -3094,10 +3122,10 @@ class VelociousDatabaseRecord {
    * aggregate).
    *
    * @param {string} name - queryData attribute name (matches a SELECT alias from the registered fn).
-   * @returns {unknown}
+   * @returns {?}
    */
   queryData(name) {
-    return readPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), name)
+    return readPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name)
   }
 
   /**
@@ -3106,11 +3134,11 @@ class VelociousDatabaseRecord {
    * code should not call this directly.
    *
    * @param {string} name - queryData attribute name.
-   * @param {unknown} value - Value to attach.
+   * @param {?} value - Value to attach.
    * @returns {void}
    */
   _setQueryData(name, value) {
-    setPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), name, value)
+    setPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name, value)
   }
 
   /**
@@ -3118,13 +3146,13 @@ class VelociousDatabaseRecord {
    * frontend-model serializer to ship queryData alongside the record
    * attributes on the wire.
    *
-   * @returns {Record<string, unknown>}
+   * @returns {Record<string, ?>}
    */
   queryDataValues() {
-    /** @type {Record<string, unknown>} */
+    /** @type {Record<string, ?>} */
     const result = {}
 
-    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this))
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this))
 
     if (!target._queryDataValues) return result
 
@@ -3148,7 +3176,7 @@ class VelociousDatabaseRecord {
    * @returns {boolean}
    */
   can(action) {
-    return readPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), action)
+    return readPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action)
   }
 
   /**
@@ -3161,7 +3189,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setComputedAbility(action, value) {
-    setPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), action, value)
+    setPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action, value)
   }
 
   /**
@@ -3175,7 +3203,7 @@ class VelociousDatabaseRecord {
     /** @type {Record<string, boolean>} */
     const result = {}
 
-    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this))
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this))
 
     if (!target._computedAbilities) return result
 
@@ -3189,7 +3217,7 @@ class VelociousDatabaseRecord {
   /**
    * Reads a column value from the record.
    * @param {string} attributeName The name of the column to read. This is the column name, not the attribute name.
-   * @returns {any} - The column.
+   * @returns {?} - The column.
    */
   readColumn(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
@@ -3229,8 +3257,8 @@ class VelociousDatabaseRecord {
   /**
    * @param {object} args - Options object.
    * @param {string | undefined} args.columnType - Column type.
-   * @param {any} args.value - Value to normalize.
-   * @returns {any} - Normalized value.
+   * @param {?} args.value - Value to normalize.
+   * @returns {?} - Normalized value.
    */
   _normalizeBooleanValueForRead({columnType, value}) {
     if (!columnType) return value
@@ -3242,8 +3270,8 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {any} value - Value from database.
-   * @returns {any} - Normalized value.
+   * @param {?} value - Value from database.
+   * @returns {?} - Normalized value.
    */
   _normalizeDateValueForRead(value) {
     if (value === null || value === undefined) return value
@@ -3269,7 +3297,7 @@ class VelociousDatabaseRecord {
   }
 
   _belongsToChanges() {
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const belongsToChanges = {}
 
     if (this._instanceRelationships) {
@@ -3360,7 +3388,7 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * @param {Record<string, any>} data - Column-keyed data.
+   * @param {Record<string, ?>} data - Column-keyed data.
    * @returns {void} - No return value.
    */
   _normalizeDateValuesForWrite(data) {
@@ -3383,7 +3411,7 @@ class VelociousDatabaseRecord {
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async _updateRecordWithChanges() {
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const conditions = {}
 
     conditions[this.getModelClass().primaryKey()] = this.id()
@@ -3446,7 +3474,7 @@ class VelociousDatabaseRecord {
   async _reloadWithId(id) {
     const primaryKey = this.getModelClass().primaryKey()
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const whereObject = {}
 
     whereObject[primaryKey] = id

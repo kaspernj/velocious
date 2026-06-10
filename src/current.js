@@ -34,15 +34,15 @@ export default class Current {
 
   /**
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   static async withAbility(ability, callback) {
     return await this.configuration().runWithAbility(ability, callback)
   }
 
   /**
-   * @returns {unknown} - Current tenant.
+   * @returns {?} - Current tenant.
    */
   static tenant() {
     try {
@@ -55,7 +55,7 @@ export default class Current {
   }
 
   /**
-   * @param {unknown} tenant - Tenant.
+   * @param {?} tenant - Tenant.
    * @returns {void} - No return value.
    */
   static setTenant(tenant) {
@@ -63,9 +63,9 @@ export default class Current {
   }
 
   /**
-   * @param {unknown} tenant - Tenant.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {?} tenant - Tenant.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   static async withTenant(tenant, callback) {
     return await this.configuration().runWithTenant(tenant, callback)

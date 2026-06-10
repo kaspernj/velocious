@@ -34,13 +34,13 @@ export class VelociousHttpServerWebsocketEventsHost {
 
   /**
    * @param {object | string} channelOrArgs - Channel name or options object.
-   * @param {any} [payloadArg] - Payload data when channel is passed separately.
+   * @param {?} [payloadArg] - Payload data when channel is passed separately.
    * @returns {void} - No return value.
    */
   publish(channelOrArgs, payloadArg) {
     const publishArgs = typeof channelOrArgs === "string"
       ? {channel: channelOrArgs, payload: payloadArg}
-      : /** @type {{channel: string, payload: any}} */ (channelOrArgs)
+      : /** @type {{channel: string, payload: ?}} */ (channelOrArgs)
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 
@@ -65,8 +65,8 @@ export class VelociousHttpServerWebsocketEventsHost {
    *
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Routing filter params.
-   * @param {any} args.body - Message body.
+   * @param {Record<string, ?>} args.broadcastParams - Routing filter params.
+   * @param {?} args.body - Message body.
    * @returns {void}
    */
   broadcastV2({body, broadcastParams, channel}) {
@@ -114,7 +114,7 @@ export class VelociousHttpServerWebsocketEventsHost {
 
   /**
    * @param {object} args - Options.
-   * @param {any} args.body - Event body.
+   * @param {?} args.body - Event body.
    * @param {string} args.channel - Channel name.
    * @returns {Promise<{createdAt: string, id: string} | null>}
    */
@@ -125,7 +125,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Payload data.
+   * @param {?} args.payload - Payload data.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
   async _persistEventIfNeeded({channel, payload}) {
@@ -135,7 +135,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   /**
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Payload data.
+   * @param {?} args.payload - Payload data.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
   async _persistChannelEventIfNeeded({channel, payload}) {

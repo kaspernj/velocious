@@ -56,7 +56,7 @@ export default function resolveRemoteAddress({configuration, headers, socketRemo
 
   if (!trust) return socketRemoteAddress
 
-  const proxyRequest = /** @type {Parameters<typeof proxyaddr>[0]} */ (/** @type {unknown} */ ({
+  const proxyRequest = /** @type {Parameters<typeof proxyaddr>[0]} */ (/** @type {?} */ ({
     connection: {remoteAddress: socketRemoteAddress},
     headers: nodeStyleHeaders(headers),
     socket: {remoteAddress: socketRemoteAddress}

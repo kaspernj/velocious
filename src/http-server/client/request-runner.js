@@ -28,8 +28,8 @@ function requestErrorSummary(error, cleanedStackWithHeader) {
 
   if (stackHeader && !stackFrameLine(stackHeader)) return stackHeader
 
-  const errorCode = typeof /** @type {any} */ (error).code === "string"
-    ? /** @type {any} */ (error).code
+  const errorCode = typeof /** @type {?} */ (error).code === "string"
+    ? /** @type {?} */ (error).code
     : undefined
   const errorMessage = error.message || String(error)
 

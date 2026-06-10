@@ -9,7 +9,7 @@ import {isPlainObject} from "is-plain-object"
  */
 
 /**
- * @typedef {string | Array<string | Record<string, any>> | {[key: string]: true | false | string | string[] | Record<string, any>}} QueryDataSpec
+ * @typedef {string | Array<string | Record<string, ?>> | {[key: string]: true | false | string | string[] | Record<string, ?>}} QueryDataSpec
  */
 
 /**
@@ -64,7 +64,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       }
 
       if (isPlainObject(item)) {
-        for (const nested of normalizeQueryDataSpec(/** @type {any} */ (item), chain)) {
+        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (item), chain)) {
           entries.push(nested)
         }
         continue
@@ -89,7 +89,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       if (value === false) continue
 
       if (typeof value === "string" || Array.isArray(value) || isPlainObject(value)) {
-        for (const nested of normalizeQueryDataSpec(/** @type {any} */ (value), [...chain, key])) {
+        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (value), [...chain, key])) {
           entries.push(nested)
         }
         continue
@@ -111,12 +111,12 @@ export function normalizeQueryDataSpec(spec, chain = []) {
  * (JoinTracker, alias generation, scope application).
  *
  * @param {string[]} chain - Relationship chain.
- * @returns {true | Record<string, any>} - Nested join descriptor, or `true` when the chain is empty.
+ * @returns {true | Record<string, ?>} - Nested join descriptor, or `true` when the chain is empty.
  */
 function buildNestedJoinDescriptor(chain) {
   if (chain.length === 0) return true
 
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   const obj = {}
   let cursor = obj
 
@@ -224,7 +224,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
   const rootTable = rootModelClass.tableName()
   const rootPkSql = `${driver.quoteTable(rootTable)}.${driver.quoteColumn(primaryKey)}`
 
-  /** @type {Record<string, unknown>} */
+  /** @type {Record<string, ?>} */
   const rootWhere = {}
   rootWhere[primaryKey] = rootIds
   query.where(rootWhere)
@@ -255,7 +255,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
     tableName: targetTableRef
   })
 
-  const rows = /** @type {Array<Record<string, unknown>>} */ (await query._executeQuery())
+  const rows = /** @type {Array<Record<string, ?>>} */ (await query._executeQuery())
   const byParent = new Map()
 
   for (const row of rows) {

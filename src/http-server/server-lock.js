@@ -31,29 +31,41 @@ export default class VelociousHttpServerLock {
     await fs.mkdir(path.dirname(this.lockPath), {recursive: true})
 
     while (true) {
-      try {
-        await fs.mkdir(this.lockPath)
+      const acquired = await this.tryAcquire()
 
-        try {
-          await this.writeOwnerMetadata()
-        } catch (error) {
-          await fs.rm(this.lockPath, {recursive: true, force: true})
-
-          throw error
-        }
-
-        this.acquired = true
+      if (acquired) {
         return
-      } catch (error) {
-        if (/** @type {{code?: string}} */ (error).code !== "EEXIST") throw error
-
-        if (await this.isStale()) {
-          await fs.rm(this.lockPath, {recursive: true, force: true})
-          continue
-        }
-
-        throw new Error(await this.lockHeldMessage(), {cause: error})
       }
+
+      if (await this.isStale()) {
+        await fs.rm(this.lockPath, {recursive: true, force: true})
+        continue
+      }
+
+      throw new Error(await this.lockHeldMessage())
+    }
+  }
+
+  /**
+   * Tries to create the lock directory and write owner metadata.
+   * @returns {Promise<boolean>} - Whether the lock was acquired.
+   */
+  async tryAcquire() {
+    try {
+      await fs.mkdir(this.lockPath)
+    } catch (error) {
+      if (/** @type {{code?: string}} */ (error).code === "EEXIST") return false
+      throw error
+    }
+
+    try {
+      await this.writeOwnerMetadata()
+      this.acquired = true
+
+      return true
+    } catch (error) {
+      await fs.rm(this.lockPath, {recursive: true, force: true})
+      throw error
     }
   }
 
@@ -89,11 +101,40 @@ export default class VelociousHttpServerLock {
   async isStale() {
     const owner = await this.readOwnerMetadata()
 
-    if (!owner || typeof owner.pid !== "number") return false
-    if (owner.hostname && owner.hostname !== os.hostname()) return false
+    if (!this.isLocalProcessOwner(owner)) return false
 
+    return this.processIsDead(/** @type {{pid: number}} */ (owner).pid)
+  }
+
+  /**
+   * @param {Record<string, ?> | null} owner - Existing lock owner metadata.
+   * @returns {boolean} - Whether owner metadata names a local process.
+   */
+  isLocalProcessOwner(owner) {
+    if (!owner) return false
+    if (typeof owner.pid !== "number") return false
+
+    return this.ownerHostnameMatches(owner)
+  }
+
+  /**
+   * @param {Record<string, ?>} owner - Existing lock owner metadata.
+   * @returns {boolean} - Whether the owner hostname is local or absent.
+   */
+  ownerHostnameMatches(owner) {
+    if (!owner.hostname) return true
+    if (owner.hostname === os.hostname()) return true
+
+    return false
+  }
+
+  /**
+   * @param {number} pid - Process id.
+   * @returns {boolean} - Whether the process no longer exists.
+   */
+  processIsDead(pid) {
     try {
-      process.kill(owner.pid, 0)
+      process.kill(pid, 0)
 
       return false
     } catch (error) {
@@ -103,13 +144,13 @@ export default class VelociousHttpServerLock {
 
   /**
    * Reads owner metadata from an existing server lock directory.
-   * @returns {Promise<Record<string, unknown> | null>} - Parsed owner metadata, when readable.
+   * @returns {Promise<Record<string, ?> | null>} - Parsed owner metadata, when readable.
    */
   async readOwnerMetadata() {
     try {
       const rawOwner = await fs.readFile(path.join(this.lockPath, "owner.json"), "utf8")
 
-      return /** @type {Record<string, unknown>} */ (JSON.parse(rawOwner))
+      return /** @type {Record<string, ?>} */ (JSON.parse(rawOwner))
     } catch {
       return null
     }

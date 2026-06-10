@@ -76,7 +76,7 @@ export default class BackgroundJobsStore {
   /**
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
-   * @param {any[]} args.args - Arguments.
+   * @param {Array<?>} args.args - Arguments.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Options.
    * @returns {Promise<string>} - Job id.
    */
@@ -226,7 +226,7 @@ export default class BackgroundJobsStore {
       const counts = {}
 
       for (const row of rows) {
-        const typedRow = /** @type {Record<string, any>} */ (row)
+        const typedRow = /** @type {Record<string, ?>} */ (row)
 
         counts[String(typedRow.status)] = this._normalizeNumber(typedRow.count) || 0
       }
@@ -252,7 +252,7 @@ export default class BackgroundJobsStore {
       if (jobName) query = query.where({job_name: jobName})
 
       const rows = await query.results()
-      const countRow = /** @type {Record<string, any>} */ (rows[0] || {})
+      const countRow = /** @type {Record<string, ?>} */ (rows[0] || {})
 
       return this._normalizeNumber(countRow.count) || 0
     })
@@ -368,7 +368,7 @@ export default class BackgroundJobsStore {
   /**
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
-   * @param {unknown} args.error - Error.
+   * @param {?} args.error - Error.
    * @param {string} [args.workerId] - Worker id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the report was accepted.
@@ -660,7 +660,7 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
-   * @param {unknown} args.error - Error.
+   * @param {?} args.error - Error.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
    * @returns {Promise<import("./types.js").BackgroundJobRow>} - Updated job row.
    */
@@ -697,10 +697,10 @@ export default class BackgroundJobsStore {
    * @param {number} args.now - Current timestamp.
    * @param {number | null} args.scheduledAt - Next scheduled timestamp.
    * @param {boolean} args.shouldRetry - Whether the job should retry.
-   * @returns {Record<string, any>} - Database update data.
+   * @returns {Record<string, ?>} - Database update data.
    */
   _failureUpdate({failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry}) {
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const update = {
       attempts: nextAttempt,
       handed_off_at_ms: null,
@@ -718,7 +718,7 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
    * @param {number} args.now - Current timestamp.
-   * @param {Record<string, any>} args.update - Database update data.
+   * @param {Record<string, ?>} args.update - Database update data.
    * @returns {void}
    */
   _applyOrphanedFailureUpdate({markOrphaned, now, update}) {
@@ -731,7 +731,7 @@ export default class BackgroundJobsStore {
    * @param {number} args.now - Current timestamp.
    * @param {number | null} args.scheduledAt - Next scheduled timestamp.
    * @param {boolean} args.shouldRetry - Whether the job should retry.
-   * @param {Record<string, any>} args.update - Database update data.
+   * @param {Record<string, ?>} args.update - Database update data.
    * @returns {void}
    */
   _applyFailureStatusUpdate({markOrphaned, now, scheduledAt, shouldRetry, update}) {
@@ -755,7 +755,7 @@ export default class BackgroundJobsStore {
    * @param {string} args.failureMessage - Last failure message.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {number} args.nextAttempt - Next attempt count.
-   * @param {Record<string, any>} args.update - Database update data.
+   * @param {Record<string, ?>} args.update - Database update data.
    * @returns {import("./types.js").BackgroundJobRow} - Updated job row.
    */
   _jobWithFailureUpdate({failureMessage, job, nextAttempt, update}) {
@@ -773,7 +773,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * @param {Record<string, any>} row - Raw database row.
+   * @param {Record<string, ?>} row - Raw database row.
    * @returns {import("./types.js").BackgroundJobRow} - Normalized job row.
    */
   _normalizeJobRow(row) {
@@ -802,7 +802,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * @param {unknown} value - Input value.
+   * @param {?} value - Input value.
    * @returns {number | null} - Normalized number.
    */
   _normalizeNumber(value) {
@@ -816,7 +816,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * @param {unknown} value - Input value.
+   * @param {?} value - Input value.
    * @returns {boolean} - Normalized boolean.
    */
   _normalizeBoolean(value) {
@@ -855,8 +855,8 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * @param {unknown} value - Input value.
-   * @returns {any[]} - Parsed args.
+   * @param {?} value - Input value.
+   * @returns {Array<?>} - Parsed args.
    */
   _parseArgs(value) {
     if (!value) return []

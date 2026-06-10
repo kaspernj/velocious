@@ -62,8 +62,8 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
 
     const posColumn = inflection.underscore(positionColumn)
     const scopeCol = inflection.underscore(scope)
-    const rawAttributes = /** @type {Record<string, any>} */ (record._attributes || {})
-    const changes = /** @type {Record<string, any>} */ (record._changes || {})
+    const rawAttributes = /** @type {Record<string, ?>} */ (record._attributes || {})
+    const changes = /** @type {Record<string, ?>} */ (record._changes || {})
     const posChanged = posColumn in changes
     const scopeChanged = scopeCol in changes
 

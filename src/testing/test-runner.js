@@ -14,10 +14,10 @@ import {pathToFileURL} from "url"
 import {clearDeliveries} from "../mailer.js"
 
 /**
- * @param {Promise<unknown> | unknown} promise - Promise or value.
+ * @param {Promise<?> | ?} promise - Promise or value.
  * @param {number} timeoutMs - Timeout in milliseconds.
  * @param {string} testDescription - Test description.
- * @returns {Promise<unknown>} - Resolves or rejects based on timeout or promise result.
+ * @returns {Promise<?>} - Resolves or rejects based on timeout or promise result.
  */
 function runWithTimeout(promise, timeoutMs, testDescription) {
   const timeoutSeconds = (timeoutMs / 1000).toFixed(3).replace(/\.?0+$/, "")
@@ -87,7 +87,7 @@ function toFileSlug(value) {
  * @property {string} fullDescription - Full test description.
  * @property {string} [filePath] - Source file path.
  * @property {number} [line] - Source line number.
- * @property {unknown} error - Failure error.
+ * @property {?} error - Failure error.
  * @property {string} [consoleOutput] - Captured console output while test ran.
  * @property {string} [consoleLogPath] - Saved console log path.
  */
@@ -695,11 +695,11 @@ export default class TestRunner {
 
         while (true) {
           let shouldRetry = false
-          /** @type {unknown} */
+          /** @type {?} */
           let caughtError
-          /** @type {unknown} */
+          /** @type {?} */
           let failedError
-          /** @type {unknown} */
+          /** @type {?} */
           let lastError
           let willRetry = false
           const stopConsoleCapture = this.startConsoleCapture({
@@ -1036,9 +1036,9 @@ export default class TestRunner {
   startConsoleCapture({passthrough = false} = {}) {
     /** @type {string[]} */
     const lines = []
-    /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */
-    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */ (console)
-    /** @type {Record<ConsoleMethodName, (...args: unknown[]) => void>} */
+    /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
+    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
+    /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
     const originalConsoleMethods = {
       debug: consoleObject.debug.bind(console),
       error: consoleObject.error.bind(console),

@@ -33,7 +33,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   })
 
   if (customCommandMatch) {
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const params = {
       frontendModelCustomCommandMethodName: customCommandMatch.methodName,
       frontendModelCustomCommandScope: customCommandMatch.scope,

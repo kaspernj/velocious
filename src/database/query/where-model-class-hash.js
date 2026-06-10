@@ -5,7 +5,7 @@ import {isPlainObject} from "is-plain-object"
 import WhereBase from "./where-base.js"
 
 /**
- * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | Record<string, any>}} WhereHash
+ * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | Record<string, ?>}} WhereHash
  */
 
 const NO_MATCH = Symbol("no-match")
@@ -99,7 +99,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
-   * @param {unknown} tupleValue - Candidate tuple.
+   * @param {?} tupleValue - Candidate tuple.
    * @returns {boolean} - Whether this is a relationship where tuple.
    */
   _isRelationshipWhereOperatorTuple(tupleValue) {
@@ -113,20 +113,20 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
-   * @param {unknown} value - Candidate relationship where value.
-   * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} - Normalized tuples.
+   * @param {?} value - Candidate relationship where value.
+   * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} - Normalized tuples.
    */
   _normalizeRelationshipWhereOperatorTuples(value) {
     if (!Array.isArray(value)) {
       throw new Error(`Invalid relationship where tuple container type: ${typeof value}`)
     }
 
-    /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} */
+    /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
     const normalized = []
-    /** @param {unknown} conditionValue - Candidate nested condition. */
+    /** @param {?} conditionValue - Candidate nested condition. */
     const addCondition = (conditionValue) => {
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
-        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", any, ...unknown[]]} */ (conditionValue)
+        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
         const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
         normalized.push([
@@ -163,7 +163,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
-   * @param {unknown} value - Candidate relationship where value.
+   * @param {?} value - Candidate relationship where value.
    * @returns {boolean} - Whether value can be normalized to relationship tuples.
    */
   _isRelationshipWhereOperatorTupleContainer(value) {
@@ -180,7 +180,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    * @param {object} args - Relationship where options.
    * @param {typeof import("../record/index.js").default} args.modelClass - Relationship model class.
    * @param {string} args.tableName - Relationship table reference name.
-   * @param {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} args.tuples - Operator tuples.
+   * @param {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} args.tuples - Operator tuples.
    * @returns {string} - SQL where fragment.
    */
   _whereSQLFromRelationshipWhereOperatorTuples({modelClass, tableName, tuples}) {
@@ -285,8 +285,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {string} args.columnName - Column name.
-   * @param {any} args.value - Value to normalize.
-   * @returns {any} - Normalized value.
+   * @param {?} args.value - Value to normalize.
+   * @returns {?} - Normalized value.
    */
   _normalizeSqliteBooleanValue({modelClass, columnName, value}) {
     if (modelClass.getDatabaseType() != "sqlite") return value
@@ -296,7 +296,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
 
-    /** @param {any} entry - Value to normalize. */
+    /** @param {?} entry - Value to normalize. */
     const normalize = (entry) => {
       if (entry === true) return 1
       if (entry === false) return 0
@@ -314,8 +314,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {string} args.columnName - Column name.
-   * @param {any} args.value - Value to normalize.
-   * @returns {any} - Normalized value.
+   * @param {?} args.value - Value to normalize.
+   * @returns {?} - Normalized value.
    */
   _normalizeValueForColumnType({modelClass, columnName, value}) {
     const columnType = modelClass.getColumnTypeByName(columnName)
@@ -329,7 +329,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
       normalizedType.includes("text") ||
       stringTypes.has(normalizedType)
 
-    /** @param {any} entry - Value to normalize. */
+    /** @param {?} entry - Value to normalize. */
     const normalize = (entry) => {
       if (isUuidType && typeof entry === "number") return NO_MATCH
       if (!shouldCoerceToString || typeof entry !== "number") return entry

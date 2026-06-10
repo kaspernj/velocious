@@ -9,7 +9,7 @@ import toImportSpecifier from "../../../../utils/to-import-specifier.js"
 
 /**
  * @param {string} filePath - Absolute path to script file.
- * @returns {Promise<(context: RunScriptContext) => Promise<unknown>>} - The default-exported async function.
+ * @returns {Promise<(context: RunScriptContext) => Promise<?>>} - The default-exported async function.
  */
 async function importRunScriptFunction(filePath) {
   const scriptImport = await import(toImportSpecifier(filePath))
@@ -24,7 +24,7 @@ async function importRunScriptFunction(filePath) {
 
 /** Node command for running a custom script file in initialized app/DB context. */
 export default class RunScriptCommand extends BaseCommand {
-  /** @returns {Promise<unknown>} - Resolves with the script function result. */
+  /** @returns {Promise<?>} - Resolves with the script function result. */
   async execute() {
     const configuration = this.getConfiguration()
     const scriptPath = this.scriptFilePath()

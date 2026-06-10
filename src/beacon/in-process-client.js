@@ -72,8 +72,8 @@ export default class InProcessBeaconClient extends EventEmitter {
    * `BeaconClient` semantics.
    * @param {object} args - Broadcast args.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Routing params.
-   * @param {any} args.body - Message body.
+   * @param {Record<string, ?>} args.broadcastParams - Routing params.
+   * @param {?} args.body - Message body.
    * @returns {boolean} - True when the broadcast was queued.
    */
   publish({channel, broadcastParams, body}) {

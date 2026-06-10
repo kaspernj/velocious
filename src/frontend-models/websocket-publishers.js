@@ -40,7 +40,7 @@ async function resolveAbilityResourcesList(configuration) {
   const resolver = configuration.getAbilityResolver?.()
 
   if (typeof resolver === "function") {
-    const ability = await resolver({configuration, params: {}, request: /** @type {any} */ (undefined), response: /** @type {any} */ (undefined)})
+    const ability = await resolver({configuration, params: {}, request: /** @type {?} */ (undefined), response: /** @type {?} */ (undefined)})
 
     if (ability?.resources && Array.isArray(ability.resources)) {
       return ability.resources
@@ -186,7 +186,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
  *
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @param {string} modelName - Model class name.
- * @param {{action: "create" | "update" | "destroy", id: any, record?: Record<string, any>}} event - Lifecycle event.
+ * @param {{action: "create" | "update" | "destroy", id: ?, record?: Record<string, ?>}} event - Lifecycle event.
  * @returns {void}
  */
 function broadcastFrontendModelEvent(configuration, modelName, event) {

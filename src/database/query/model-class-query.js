@@ -417,12 +417,12 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const froms = this.getFroms()
     const lastFrom = froms[froms.length - 1]
 
-    if (lastFrom && typeof /** @type {any} */ (lastFrom).tableName === "string") {
-      return /** @type {any} */ (lastFrom).tableName
+    if (lastFrom && typeof /** @type {?} */ (lastFrom).tableName === "string") {
+      return /** @type {?} */ (lastFrom).tableName
     }
 
-    if (lastFrom && typeof /** @type {any} */ (lastFrom).plain === "string") {
-      const parsedReference = parseFromPlainTableReference(/** @type {any} */ (lastFrom).plain)
+    if (lastFrom && typeof /** @type {?} */ (lastFrom).plain === "string") {
+      const parsedReference = parseFromPlainTableReference(/** @type {?} */ (lastFrom).plain)
 
       if (parsedReference) return parsedReference
     }
@@ -673,7 +673,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * Executes a bulk UPDATE on all rows matching the query's WHERE
    * clause. Bypasses model lifecycle callbacks — use this for
    * efficient batch updates where per-row hooks aren't needed.
-   * @param {Record<string, any>} data - camelCase attribute names → values.
+   * @param {Record<string, ?>} data - camelCase attribute names → values.
    * @returns {Promise<void>} - Resolves when the update completes.
    */
   async updateAll(data) {
@@ -773,7 +773,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {Record<string, any>} conditions - Conditions.
+   * @param {Record<string, ?>} conditions - Conditions.
    * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
    */
@@ -883,7 +883,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * Plucks one or more columns directly from the database without instantiating models.
    * @param {...string|string[]} columns - Column names.
-   * @returns {Promise<any[]>} - Resolves with the pluck.
+   * @returns {Promise<Array<?>>} - Resolves with the pluck.
    */
   async pluck(...columns) {
     const flatColumns = columns.flat()
@@ -910,11 +910,11 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     if (columnNames.length === 1) {
       const [columnName] = columnNames
-      return rows.map((row) => /** @type {Record<string, any>} */ (row)[columnName])
+      return rows.map((row) => /** @type {Record<string, ?>} */ (row)[columnName])
     }
 
     return rows.map((row) => {
-      const rowHash = /** @type {Record<string, any>} */ (row)
+      const rowHash = /** @type {Record<string, ?>} */ (row)
 
       return columnNames.map((columnName) => rowHash[columnName])
     })
@@ -958,7 +958,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * @param {Record<string, any>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
+   * @param {Record<string, ?>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
    * @returns {this} - Query with Ransack filters and sort applied.
    */
   ransack(params) {
@@ -1027,7 +1027,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 /**
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
- * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
  * @returns {void}
  */
 function applyRansackGroup({group, query}) {
@@ -1041,7 +1041,7 @@ function applyRansackGroup({group, query}) {
 /**
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
- * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
  * @returns {import("./where-base.js").default | null} - Combined where clause.
  */
 function buildRansackGroupWhere({group, query}) {
@@ -1073,7 +1073,7 @@ function buildRansackGroupWhere({group, query}) {
 /**
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
  * @returns {import("./where-base.js").default | null} - Condition where clause.
  */
 function buildRansackConditionWhere({condition, query}) {
@@ -1098,7 +1098,7 @@ function buildRansackConditionWhere({condition, query}) {
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @param {import("./model-class-query.js").default<any>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
  * @returns {import("./where-base.js").default} - Attribute where clause.
  */
 function buildRansackAttributeWhere({attribute, condition, query}) {
@@ -1131,7 +1131,7 @@ function buildRansackAttributeWhere({attribute, condition, query}) {
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @returns {Record<string, any>} - Nested hash suitable for query where nodes.
+ * @returns {Record<string, ?>} - Nested hash suitable for query where nodes.
  */
 function buildRansackAttributeHash({attribute, condition}) {
   if (condition.predicate === "eq" || condition.predicate === "in" || condition.predicate === "not_eq" || condition.predicate === "not_in") {
@@ -1152,11 +1152,11 @@ function buildRansackAttributeHash({attribute, condition}) {
 /**
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
- * @param {any} args.value - Final value.
- * @returns {Record<string, any>} - Nested hash suitable for query where nodes.
+ * @param {?} args.value - Final value.
+ * @returns {Record<string, ?>} - Nested hash suitable for query where nodes.
  */
 function buildNestedRansackHash({attribute, value}) {
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   let hash = {[attribute.attributeName]: value}
 
   for (let index = attribute.path.length - 1; index >= 0; index -= 1) {
@@ -1170,11 +1170,11 @@ function buildNestedRansackHash({attribute, value}) {
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {"gt" | "gteq" | "lt" | "lteq" | "like"} args.operator - Tuple operator.
- * @param {any} args.value - Final value.
- * @returns {Record<string, any>} - Nested tuple hash suitable for query.where.
+ * @param {?} args.value - Final value.
+ * @returns {Record<string, ?>} - Nested tuple hash suitable for query.where.
  */
 function buildNestedRansackTupleHash({attribute, operator, value}) {
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   let hash = {
     [attribute.attributeName]: [[attribute.attributeName, operator, value]]
   }
@@ -1200,7 +1200,7 @@ function ransackTupleOperator(predicate) {
 
 /**
  * @param {import("../../utils/ransack.js").RansackCondition} condition - Ransack condition.
- * @returns {any} - Query tuple value.
+ * @returns {?} - Query tuple value.
  */
 function ransackTupleValue(condition) {
   if (condition.predicate === "cont") return `%${condition.value}%`
@@ -1237,14 +1237,14 @@ function resolveColumnName(modelClass, key) {
 
 /**
  * @param {object} args - Options.
- * @param {Record<string, any>} args.hash - Where hash.
+ * @param {Record<string, ?>} args.hash - Where hash.
  * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
- * @returns {{resolvedHash: Record<string, any>, fallbackHash: Record<string, any>}} - Split hashes.
+ * @returns {{resolvedHash: Record<string, ?>, fallbackHash: Record<string, ?>}} - Split hashes.
  */
 function splitWhereHash({hash, modelClass}) {
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   const resolvedHash = {}
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   const fallbackHash = {}
 
   for (const key in hash) {
@@ -1294,12 +1294,12 @@ function splitWhereHash({hash, modelClass}) {
 
 /**
  * @param {object} args - Options.
- * @param {Record<string, any>} args.hash - Where hash.
+ * @param {Record<string, ?>} args.hash - Where hash.
  * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
- * @returns {Record<string, any>} - Join object.
+ * @returns {Record<string, ?>} - Join object.
  */
 function buildJoinObjectFromWhereHash({hash, modelClass}) {
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   const joinObject = {}
 
   for (const key in hash) {
@@ -1345,7 +1345,7 @@ function normalizeRelationshipWhereOperator(operator) {
 }
 
 /**
- * @param {unknown} tupleValue - Candidate tuple.
+ * @param {?} tupleValue - Candidate tuple.
  * @returns {boolean} - Whether this is a relationship where tuple.
  */
 function isRelationshipWhereOperatorTuple(tupleValue) {
@@ -1359,20 +1359,20 @@ function isRelationshipWhereOperatorTuple(tupleValue) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
- * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} - Normalized tuples.
+ * @param {?} value - Candidate value.
+ * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} - Normalized tuples.
  */
 function normalizeRelationshipWhereOperatorTuples(value) {
   if (!Array.isArray(value)) {
     throw new Error(`Invalid relationship where tuple container type: ${typeof value}`)
   }
 
-  /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", any]>} */
+  /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
   const normalized = []
-    /** @param {unknown} conditionValue - Candidate nested condition. */
+    /** @param {?} conditionValue - Candidate nested condition. */
     const addCondition = (conditionValue) => {
       if (isRelationshipWhereOperatorTuple(conditionValue)) {
-        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", any, ...unknown[]]} */ (conditionValue)
+        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
         const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
         normalized.push([
@@ -1394,7 +1394,7 @@ function normalizeRelationshipWhereOperatorTuples(value) {
       throw new Error("Relationship where conditions must be tuples")
     }
 
-    /** @type {unknown[]} */ (conditionValue).forEach((nestedConditionValue) => {
+    /** @type {Array<?>} */ (conditionValue).forEach((nestedConditionValue) => {
       addCondition(nestedConditionValue)
     })
   }
@@ -1409,7 +1409,7 @@ function normalizeRelationshipWhereOperatorTuples(value) {
 }
 
 /**
- * @param {unknown} value - Candidate relationship where value.
+ * @param {?} value - Candidate relationship where value.
  * @returns {boolean} - Whether value can be normalized to relationship tuples.
  */
 function hasRelationshipWhereOperatorTuples(value) {

@@ -159,7 +159,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
 
   /**
    * @param {import("../types.js").BackgroundJobRow} job - Job row.
-   * @returns {Record<string, any>} - Serialized job for the API.
+   * @returns {Record<string, ?>} - Serialized job for the API.
    */
   _serializeJob(job) {
     const redactArgs = Boolean(this._mountOptions().redactArgs)
@@ -187,7 +187,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
 
   /**
    * @param {import("../../configuration-types.js").ScheduledBackgroundJobsConfiguration | undefined} scheduled - Scheduled jobs config.
-   * @returns {Array<Record<string, any>>} - Serialized recurring jobs.
+   * @returns {Array<Record<string, ?>>} - Serialized recurring jobs.
    */
   _serializeSchedule(scheduled) {
     const jobs = scheduled?.jobs
@@ -197,7 +197,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
     const redactArgs = Boolean(this._mountOptions().redactArgs)
 
     return Object.keys(jobs).map((name) => {
-      const entry = jobs[name] || /** @type {any} */ ({})
+      const entry = jobs[name] || /** @type {?} */ ({})
 
       return {
         args: redactArgs ? undefined : (entry.args || []),
@@ -212,7 +212,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
-   * @param {unknown} value - Raw status param.
+   * @param {?} value - Raw status param.
    * @returns {string | undefined} - Valid status or undefined.
    */
   _sanitizeStatus(value) {
@@ -220,7 +220,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
-   * @param {unknown} value - Raw sort param (e.g. "createdAtMs" or "-failedAtMs").
+   * @param {?} value - Raw sort param (e.g. "createdAtMs" or "-failedAtMs").
    * @returns {{sortColumn: string, sortDirection: "ASC" | "DESC"}} - Normalized sort.
    */
   _sanitizeSort(value) {
@@ -236,7 +236,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
-   * @param {unknown} value - Raw numeric param.
+   * @param {?} value - Raw numeric param.
    * @param {number} fallback - Fallback when invalid.
    * @returns {number} - Positive integer.
    */

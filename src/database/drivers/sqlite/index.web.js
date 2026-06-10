@@ -7,7 +7,7 @@ import initSqlJs from "sql.js"
 import Base from "./base.js"
 
 /**
- * @typedef {{query: (sql: string) => Promise<Record<string, unknown>[]>, close: () => Promise<void>}} SqliteWebConnection
+ * @typedef {{query: (sql: string) => Promise<Record<string, ?>[]>, close: () => Promise<void>}} SqliteWebConnection
  */
 
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
@@ -72,7 +72,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
 
   /**
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, any>[]>} - Resolves with the query actual.
+   * @returns {Promise<Record<string, ?>[]>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
     const result = await this.getConnection().query(sql)

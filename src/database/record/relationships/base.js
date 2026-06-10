@@ -4,7 +4,7 @@ import restArgsError from "../../../utils/rest-args-error.js"
 import * as inflection from "inflection"
 
 /**
- * @typedef {(query: import("../../query/model-class-query.js").default<any>) => (import("../../query/model-class-query.js").default<any> | void)} RelationshipScopeCallback
+ * @typedef {(query: import("../../query/model-class-query.js").default<?>) => (import("../../query/model-class-query.js").default<?> | void)} RelationshipScopeCallback
  */
 /**
  * @typedef {object} RelationshipBaseArgsType
@@ -98,7 +98,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
 
     if (!scope) return query
 
-    const scopedQuery = /** @type {T | void} */ (scope.call(query, /** @type {import("../../query/model-class-query.js").default<any>} */ (query)))
+    const scopedQuery = /** @type {T | void} */ (scope.call(query, /** @type {import("../../query/model-class-query.js").default<?>} */ (query)))
 
     return scopedQuery || query
   }

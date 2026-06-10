@@ -124,9 +124,9 @@ function configureTests({consoleOutput, excludeTags, defaultTimeoutSeconds, fail
 }
 
 /**
- * @param {Record<string, any>} baseArgs - Base args.
- * @param {Record<string, any>} extraArgs - Extra args.
- * @returns {Record<string, any>} - Merged args.
+ * @param {Record<string, ?>} baseArgs - Base args.
+ * @param {Record<string, ?>} extraArgs - Extra args.
+ * @returns {Record<string, ?>} - Merged args.
  */
 function mergeTestArgs(baseArgs, extraArgs) {
   const merged = Object.assign({}, baseArgs, extraArgs)
@@ -189,7 +189,7 @@ function afterAll(callback) {
  * @returns {Promise<void>} - Resolves when complete.
  */
 async function describe(description, arg1, arg2) {
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   let testArgs, testFunction
 
   if (typeof arg2 == "function") {
@@ -233,7 +233,7 @@ async function describe(description, arg1, arg2) {
 }
 
 /**
- * @param {any} arg - Arg.
+ * @param {?} arg - Arg.
  * @returns {Expect} - The expect.
  */
 function expect(arg) {
@@ -251,7 +251,7 @@ expect.arrayContaining = arrayContaining
  */
 function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   let testArgs
 
   /** @type {() => (void|Promise<void>)} */
@@ -286,7 +286,7 @@ function it(description, arg1, arg2) {
  * @returns {void} - No return value.
  */
 function fit(description, arg1, arg2) {
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   let testArgs
 
   /** @type {() => (void|Promise<void>)} */

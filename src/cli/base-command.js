@@ -31,7 +31,7 @@ export default class VelociousCliBaseCommand {
 
   /**
    * @abstract
-   * @returns {Promise<any>} - Resolves with the execute.
+   * @returns {Promise<?>} - Resolves with the execute.
    */
   execute() {
     throw new Error("execute not implemented")

@@ -9,19 +9,19 @@ function throwS3ConfigurationError(message) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
+ * @param {?} value - Candidate value.
  * @returns {boolean} - Whether value is a readable stream.
  */
 function isReadableStream(value) {
-  return Boolean(value && typeof value === "object" && typeof /** @type {any} */ (value).pipe === "function")
+  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).pipe === "function")
 }
 
 /**
  * @param {string} specifier - Module specifier.
- * @returns {Promise<any>} - Imported module.
+ * @returns {Promise<?>} - Imported module.
  */
 async function dynamicImport(specifier) {
-  const importer = /** @type {(moduleSpecifier: string) => Promise<any>} */ (
+  const importer = /** @type {(moduleSpecifier: string) => Promise<?>} */ (
     new Function("moduleSpecifier", "return import(moduleSpecifier)")
   )
 
@@ -29,7 +29,7 @@ async function dynamicImport(specifier) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
+ * @param {?} value - Candidate value.
  * @returns {Promise<Buffer>} - Buffer value.
  */
 async function streamToBuffer(value) {
@@ -44,7 +44,7 @@ async function streamToBuffer(value) {
   /** @type {Buffer[]} */
   const chunks = []
 
-  const readableStream = /** @type {any} */ (value)
+  const readableStream = /** @type {?} */ (value)
 
   await new Promise((resolve, reject) => {
     readableStream.on("data", (/** @type {Buffer | Uint8Array | ArrayBuffer | string} */ chunk) => {
@@ -69,7 +69,7 @@ async function streamToBuffer(value) {
 export default class S3AttachmentStorageDriver {
   /**
    * @param {object} args - Options.
-   * @param {Record<string, any>} [args.options] - Driver options.
+   * @param {Record<string, ?>} [args.options] - Driver options.
    */
   constructor({options = {}}) {
     this.options = options
@@ -101,7 +101,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
-   * @returns {Promise<{S3Client: any, PutObjectCommand: any, GetObjectCommand: any, DeleteObjectCommand: any, getSignedUrl: any}>} - S3 runtime.
+   * @returns {Promise<{S3Client: ?, PutObjectCommand: ?, GetObjectCommand: ?, DeleteObjectCommand: ?, getSignedUrl: ?}>} - S3 runtime.
    */
   async s3Runtime() {
     if (!this._clientPromise) {
@@ -119,12 +119,12 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
-   * @returns {Promise<any>} - S3 client.
+   * @returns {Promise<?>} - S3 client.
    */
   async client() {
     if (!this._client) {
       const {S3Client} = await this.s3Runtime()
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, ?>} */
       const clientConfig = {
         region: this.options.region || process.env.VELOCIOUS_ATTACHMENTS_S3_REGION || "us-east-1"
       }

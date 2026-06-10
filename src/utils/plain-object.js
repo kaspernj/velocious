@@ -2,11 +2,11 @@
 
 /**
  * Detect plain object literals without accepting arrays or class instances.
- * @param {unknown} value - Candidate value.
- * @returns {value is Record<string, any>} - Whether value is a plain object.
+ * @param {?} value - Candidate value.
+ * @returns {value is Record<string, ?>} - Whether value is a plain object.
  */
 export default function isPlainObject(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  if (Object.prototype.toString.call(value) !== "[object Object]") return false
 
   const prototype = Object.getPrototypeOf(value)
 

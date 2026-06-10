@@ -41,7 +41,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     const args = this.getArgs()
     const forward = ["database", "host", "password", "port"]
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const connectArgs = {}
 
     for (const forwardValue of forward) {
@@ -199,8 +199,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The converted value.
+   * @param {?} value - Value to use.
+   * @returns {?} - The converted value.
    */
   _convertValue(value) {
     if (typeof value === "boolean") {
@@ -211,8 +211,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The escape.
+   * @param {?} value - Value to use.
+   * @returns {?} - The escape.
    */
   escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
@@ -224,7 +224,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
-   * @param {any} value - Value to use.
+   * @param {?} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {

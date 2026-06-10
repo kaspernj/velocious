@@ -8,7 +8,7 @@ const BEACON_READY_TIMEOUT_MS = 5000
 
 /**
  * @param {import("../configuration.js").default} configuration - Configuration.
- * @param {unknown} error - Beacon readiness error.
+ * @param {?} error - Beacon readiness error.
  * @returns {void}
  */
 function reportBeaconReadyError(configuration, error) {
@@ -60,7 +60,7 @@ export default async function runJobPayload(payload) {
   await registry.load()
   const JobClass = registry.getJobByName(payload.jobName)
   const jobInstance = new JobClass()
-  /** @type {(...args: any[]) => Promise<void>} */
+  /** @type {(...args: Array<?>) => Promise<void>} */
   const perform = jobInstance.perform
 
   try {

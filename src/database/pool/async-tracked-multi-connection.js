@@ -80,7 +80,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   constructor({configuration, identifier}) {
     super({configuration, identifier})
-    this._withoutCurrentConnectionContext = /** @type {(callback: () => unknown) => unknown} */ ((callback) => this.asyncLocalStorage.run(undefined, callback))
+    this._withoutCurrentConnectionContext = /** @type {(callback: () => ?) => ?} */ ((callback) => this.asyncLocalStorage.run(undefined, callback))
   }
 
   /**
@@ -116,7 +116,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * @param {import("../drivers/base.js").default} connection - Connection that failed check-in cleanup.
    * @param {number | undefined} id - Connection checkout id.
-   * @param {unknown} originalError - Error that caused check-in cleanup to fail.
+   * @param {?} originalError - Error that caused check-in cleanup to fail.
    * @returns {Promise<void>} - Resolves when cleanup has been attempted.
    */
   async closeCheckedOutConnectionAfterCheckinFailure(connection, id, originalError) {
@@ -256,7 +256,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
-   * @param {unknown} value - Candidate max connection count.
+   * @param {?} value - Candidate max connection count.
    * @returns {value is number} - Whether the value is a valid max connection count.
    */
   validMaxConnections(value) {
@@ -601,10 +601,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * @param {number} now - Current timestamp.
-   * @returns {{connections: Array<Record<string, unknown>>, seenConnections: Set<import("../drivers/base.js").default>}} - Connection snapshots and seen set.
+   * @returns {{connections: Array<Record<string, ?>>, seenConnections: Set<import("../drivers/base.js").default>}} - Connection snapshots and seen set.
    */
   debugConnectionSnapshots(now) {
-    /** @type {Array<Record<string, unknown>>} */
+    /** @type {Array<Record<string, ?>>} */
     const connections = []
     const seenConnections = new Set()
 
@@ -616,7 +616,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
-   * @param {{connections: Array<Record<string, unknown>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @param {{connections: Array<Record<string, ?>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
    * @returns {void}
    */
   addInUseDebugConnectionSnapshots({connections, now, seenConnections}) {
@@ -631,7 +631,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
-   * @param {{connections: Array<Record<string, unknown>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @param {{connections: Array<Record<string, ?>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
    * @returns {void}
    */
   addIdleDebugConnectionSnapshots({connections, now, seenConnections}) {
@@ -649,7 +649,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
-   * @param {{connections: Array<Record<string, unknown>>, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @param {{connections: Array<Record<string, ?>>, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
    * @returns {void}
    */
   addFallbackDebugConnectionSnapshots({connections, seenConnections}) {
@@ -658,7 +658,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
-   * @param {{connection: import("../drivers/base.js").default | undefined, connections: Array<Record<string, unknown>>, reapable?: boolean, seenConnections: Set<import("../drivers/base.js").default>, state: string}} args - Snapshot collection state.
+   * @param {{connection: import("../drivers/base.js").default | undefined, connections: Array<Record<string, ?>>, reapable?: boolean, seenConnections: Set<import("../drivers/base.js").default>, state: string}} args - Snapshot collection state.
    * @returns {void}
    */
   addDebugConnectionSnapshotIfUnseen({connection, connections, reapable, seenConnections, state}) {
@@ -670,7 +670,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * @param {number} now - Current timestamp.
-   * @returns {Array<Record<string, unknown>>} - Pending checkout snapshots.
+   * @returns {Array<Record<string, ?>>} - Pending checkout snapshots.
    */
   pendingCheckoutDebugSnapshots(now) {
     return this.pendingCheckouts.map((checkout, index) => ({
@@ -742,7 +742,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
-   * @param {unknown} value - Candidate idle timeout value.
+   * @param {?} value - Candidate idle timeout value.
    * @returns {value is number} - Whether the value is a valid idle timeout.
    */
   validIdleTimeoutMillis(value) {

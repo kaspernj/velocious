@@ -11,7 +11,7 @@ import TableForeignKey from "./table-foreign-key.js"
 /**
  * @typedef {object} TableColumnArgsType
  * @property {boolean} [autoIncrement] - Whether the column auto-increments.
- * @property {any} [default] - Default value for the column.
+ * @property {?} [default] - Default value for the column.
  * @property {boolean} [dropColumn] - Whether the column should be dropped.
  * @property {boolean|object} [foreignKey] - Foreign key options or flag.
  * @property {boolean|IndexArgType} [index] - Whether the column should be indexed.
@@ -89,12 +89,12 @@ export default class TableColumn {
   setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
 
   /**
-   * @returns {unknown | (() => unknown)} - The default value or factory.
+   * @returns {? | (() => ?)} - The default value or factory.
    */
   getDefault() { return this.args?.default }
 
   /**
-   * @param {any} newDefault - New default.
+   * @param {?} newDefault - New default.
    * @returns {void} - No return value.
    */
   setDefault(newDefault) { this.args.default = newDefault }

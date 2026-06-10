@@ -5,13 +5,13 @@ import restArgsError from "../../utils/rest-args-error.js"
 export default class VelociousDatabaseQueryInsertBase {
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, any>} [args.data] - Data payload.
+   * @param {Record<string, ?>} [args.data] - Data payload.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {string} args.tableName - Table name.
    * @param {Array<string>} [args.columns] - Column names.
    * @param {boolean} [args.multiple] - Whether multiple.
    * @param {string[]} [args.returnLastInsertedColumnNames] - Return last inserted column names.
-   * @param {Array<Array<unknown>>} [args.rows] - Rows to insert.
+   * @param {Array<Array<?>>} [args.rows] - Rows to insert.
    */
   constructor({columns, data, driver, multiple, tableName, returnLastInsertedColumnNames, rows, ...restArgs}) {
     if (!driver) throw new Error("No driver given to insert base")
@@ -36,7 +36,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
-   * @param {any} value - Value to format.
+   * @param {?} value - Value to format.
    * @returns {string | number} - SQL literal.
    */
   formatValue(value) {
@@ -146,7 +146,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
-   * @param {any[]} data - Data payload.
+   * @param {Array<?>} data - Data payload.
    * @returns {string} - SQL string.
    */
   _valuesSql(data) {

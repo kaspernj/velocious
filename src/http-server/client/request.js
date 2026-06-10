@@ -39,7 +39,7 @@ export default class VelociousHttpServerClientRequest {
   host() { return this.requestParser.getHost() }
   /**
    * @param {string} [key] - Metadata key.
-   * @returns {any} - Metadata value for a key, or the full metadata object.
+   * @returns {?} - Metadata value for a key, or the full metadata object.
    */
   metadata(key) {
     if (key !== undefined) return undefined
@@ -65,7 +65,7 @@ export default class VelociousHttpServerClientRequest {
 
   origin() { return this.header("origin") }
   path() { return this.requestParser.getPath() }
-  /** @returns {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} - The request params. */
+  /** @returns {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} - The request params. */
   params() { return digg(this, "requestParser", "params") }
   port() { return this.requestParser.getPort() }
 

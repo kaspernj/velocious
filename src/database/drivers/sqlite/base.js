@@ -120,7 +120,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) {
@@ -170,7 +170,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
@@ -183,7 +183,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithTransaction(tableName, columns, rows) {
@@ -192,7 +192,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     const sqls = []
 
     for (const row of rows) {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, ?>} */
       const data = {}
 
       for (const columnIndex in columns) {
@@ -257,8 +257,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The escape.
+   * @param {?} value - Value to use.
+   * @returns {?} - The escape.
    */
   escape(value) {
     value = this._convertValue(value)
@@ -288,7 +288,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
-   * @param {any} value - Value to use.
+   * @param {?} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {

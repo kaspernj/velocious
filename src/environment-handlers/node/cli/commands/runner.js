@@ -7,7 +7,7 @@ import buildCliCommandContext from "./cli-command-context.js"
 
 /** Node command for evaluating inline JavaScript in initialized app/DB context. */
 export default class RunnerCommand extends BaseCommand {
-  /** @returns {Promise<unknown>} - Resolves with the evaluated code result. */
+  /** @returns {Promise<?>} - Resolves with the evaluated code result. */
   async execute() {
     const configuration = this.getConfiguration()
     const code = this.runnerCode()
@@ -52,7 +52,7 @@ export default class RunnerCommand extends BaseCommand {
 
   /**
    * @param {string} code - JavaScript code to evaluate.
-   * @returns {Promise<unknown>} - Evaluated code result.
+   * @returns {Promise<?>} - Evaluated code result.
    */
   async evaluateCode(code) {
     const context = this.buildRunnerContext()

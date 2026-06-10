@@ -182,7 +182,7 @@ export default class VelociousRoutesResolver {
       throw new Error(`Missing action on controller: ${controller}#${action}`)
     }
 
-    const actionHandlers = /** @type {Record<string, () => void | Promise<void>>} */ (/** @type {unknown} */ (controllerInstance))
+    const actionHandlers = /** @type {Record<string, () => void | Promise<void>>} */ (/** @type {?} */ (controllerInstance))
 
     const logMethod = this._logMethod()
 
@@ -399,7 +399,7 @@ export default class VelociousRoutesResolver {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress() || "unknown"
-    const loggedParams = /** @type {Record<string, unknown>} */ (this._sanitizeParamsForLogging(this.params))
+    const loggedParams = /** @type {Record<string, ?>} */ (this._sanitizeParamsForLogging(this.params))
 
     delete loggedParams.action
     delete loggedParams.controller
@@ -470,8 +470,8 @@ export default class VelociousRoutesResolver {
   }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The sanitize params for logging.
+   * @param {?} value - Value to use.
+   * @returns {?} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {
     if (value instanceof UploadedFile) {
@@ -487,7 +487,7 @@ export default class VelociousRoutesResolver {
     }
 
     if (value && typeof value === "object") {
-      /** @type {Record<string, any>} */
+      /** @type {Record<string, ?>} */
       const result = {}
 
       for (const key of Object.keys(value)) {

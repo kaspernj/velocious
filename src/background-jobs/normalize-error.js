@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * @param {unknown} error - Error input.
+ * @param {?} error - Error input.
  * @returns {string} - Normalized error string.
  */
 export default function normalizeBackgroundJobError(error) {
@@ -12,7 +12,7 @@ export default function normalizeBackgroundJobError(error) {
 }
 
 /**
- * @param {unknown} error - Error input.
+ * @param {?} error - Error input.
  * @returns {string} - Stringified error.
  */
 function stringifyUnknownError(error) {

@@ -16,19 +16,19 @@
 /**
  * @typedef {object} DeleteSqlArgsType
  * @property {string} tableName - Table name to delete from.
- * @property {{[key: string]: any}} conditions - Conditions used to build the delete WHERE clause.
+ * @property {{[key: string]: ?}} conditions - Conditions used to build the delete WHERE clause.
  */
 /**
  * @typedef {object} InsertSqlArgsType
  * @property {string[]} [columns] - Column names for `rows` inserts.
- * @property {{[key: string]: any}} [data] - Column/value pairs for a single-row insert.
+ * @property {{[key: string]: ?}} [data] - Column/value pairs for a single-row insert.
  * @property {boolean} [multiple] - Whether this insert should be treated as multi-row.
  * @property {string[]} [returnLastInsertedColumnNames] - Column names to return after insert.
- * @property {Array<Array<any>>} [rows] - Row values for a multi-row insert.
+ * @property {Array<Array<?>>} [rows] - Row values for a multi-row insert.
  * @property {string} tableName - Table name to insert into.
  */
 /**
- * @typedef {Record<string, any>} QueryRowType
+ * @typedef {Record<string, ?>} QueryRowType
  * @typedef {Array<QueryRowType>} QueryResultType
  */
 /**
@@ -124,7 +124,7 @@ export default class VelociousDatabaseDriversBase {
   idSeq = undefined
   /** @type {Array<Array<() => void | Promise<void>>>} */
   _afterCommitCallbackFrames
-  /** @type {Map<string, Promise<unknown>>} */
+  /** @type {Map<string, Promise<?>>} */
   _schemaCache
   /** @type {(() => void) | undefined} */
   _schemaCacheInvalidator
@@ -325,8 +325,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @abstract
-   * @param {any} value - Value to use.
-   * @returns {any} - The escape.
+   * @param {?} value - Value to use.
+   * @returns {?} - The escape.
    */
   escape(value) { // eslint-disable-line no-unused-vars
     throw new Error("'escape' not implemented")
@@ -433,8 +433,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {unknown} value - Cached value.
-   * @returns {unknown} - Value returned to callers.
+   * @param {?} value - Cached value.
+   * @returns {?} - Value returned to callers.
    */
   _schemaCacheReturnValue(value) {
     if (Array.isArray(value)) return value.slice()
@@ -529,7 +529,7 @@ export default class VelociousDatabaseDriversBase {
   /**
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) {
@@ -569,8 +569,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The convert value.
+   * @param {?} value - Value to use.
+   * @returns {?} - The convert value.
    */
   _convertValue(value) {
     if (typeof value === "boolean") {
@@ -598,7 +598,7 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Whether a value is a plain object or array that should be JSON-encoded for a
    * JSON/text column. Excludes Buffers and class instances (e.g. model records).
-   * @param {any} value - Value to test.
+   * @param {?} value - Value to test.
    * @returns {boolean} - Whether to JSON-encode the value.
    */
   _isJsonEncodableValue(value) {
@@ -620,7 +620,7 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {any} value - Value to use.
+   * @param {?} value - Value to use.
    * @returns {number | string} - The quote.
    */
   quote(value) {
@@ -657,8 +657,8 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * @param {any} value - Value from database.
-   * @returns {any} - Normalized value.
+   * @param {?} value - Value from database.
+   * @returns {?} - Normalized value.
    */
 
   /**
@@ -729,7 +729,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {() => Promise<void>} callback - Callback function.
-   * @returns {Promise<any>} - Resolves with the transaction.
+   * @returns {Promise<?>} - Resolves with the transaction.
    */
   async transaction(callback) {
     const savePointName = this.generateSavePointName()
@@ -1429,7 +1429,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * @param {function() : void} callback - Callback function.
-   * @returns {Promise<any>} - Resolves with the with disabled foreign keys.
+   * @returns {Promise<?>} - Resolves with the with disabled foreign keys.
    */
   async withDisabledForeignKeys(callback) {
     await this.disableForeignKeys()
@@ -1486,7 +1486,7 @@ export default class VelociousDatabaseDriversBase {
    *
    * @abstract
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>} - Resolves to true if the lock is held by any session.
+   * @returns {Promise<boolean>} - Resolves to true if the lock is held by ? session.
    */
   isAdvisoryLockHeld(name) { // eslint-disable-line no-unused-vars
     throw new Error(`'isAdvisoryLockHeld' not implemented for ${this.constructor.name}`)

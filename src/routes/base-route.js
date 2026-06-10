@@ -36,14 +36,14 @@ export default class VelociousBaseRoute {
   /** @type {Array<VelociousBaseRoute>} */
   routes = []
 
-  /** @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} */
+  /** @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
   mounts = []
 
   constructor() {
     // Nothing
   }
 
-  /** @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} - Mounts declared on this route. */
+  /** @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} - Mounts declared on this route. */
   getMounts() { return this.mounts }
 
   /**
@@ -63,7 +63,7 @@ export default class VelociousBaseRoute {
 
   /**
    * @param {object} args - Options object.
-   * @param {Record<string, any>} args.params - Parameters object.
+   * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.

@@ -41,7 +41,7 @@ export default class TenantDatabaseCommandHelper {
     await this.configuration.initialize({type: "db-tenants"})
   }
 
-  /** @returns {Promise<unknown[]>} - Tenants. */
+  /** @returns {Promise<Array<?>>} - Tenants. */
   async listTenants() {
     this.validateTenantDatabaseIdentifier()
     await this.initializeRuntime()
@@ -61,7 +61,7 @@ export default class TenantDatabaseCommandHelper {
   }
 
   /**
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: unknown}) : Promise<void>} callback - Callback.
+   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback - Callback.
    * @returns {Promise<number>} - Number of tenants processed.
    */
   async eachTenant(callback) {
@@ -76,7 +76,7 @@ export default class TenantDatabaseCommandHelper {
       return tenants.length
     }
 
-    /** @type {Array<{error: Error, tenant: unknown}>} */
+    /** @type {Array<{error: Error, tenant: ?}>} */
     const failures = []
     const workers = []
     let tenantIndex = 0
@@ -144,8 +144,8 @@ export default class TenantDatabaseCommandHelper {
 
   /**
    * @param {object} args - Tenant callback args.
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: unknown}) : Promise<void>} args.callback - Callback.
-   * @param {unknown} args.tenant - Tenant.
+   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} args.callback - Callback.
+   * @param {?} args.tenant - Tenant.
    * @returns {Promise<void>}
    */
   async runTenantCallback({callback, tenant}) {
@@ -162,12 +162,12 @@ export default class TenantDatabaseCommandHelper {
   }
 
   /**
-   * @param {unknown} tenant - Tenant.
+   * @param {?} tenant - Tenant.
    * @returns {string} - Human readable tenant label.
    */
   tenantLabel(tenant) {
     if (tenant && typeof tenant === "object") {
-      const tenantObject = /** @type {{id?: unknown, name?: unknown, slug?: unknown}} */ (tenant)
+      const tenantObject = /** @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
 
       if (tenantObject.slug) return String(tenantObject.slug)
       if (tenantObject.name) return String(tenantObject.name)

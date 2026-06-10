@@ -154,8 +154,8 @@ export default class BeaconClient extends EventEmitter {
    * unless the daemon is restarted mid-publish).
    * @param {object} args - Broadcast args.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Routing params.
-   * @param {any} args.body - Message body.
+   * @param {Record<string, ?>} args.broadcastParams - Routing params.
+   * @param {?} args.body - Message body.
    * @returns {boolean} - True if the publish was written to the socket. False if the client is currently disconnected.
    */
   publish({channel, broadcastParams, body}) {

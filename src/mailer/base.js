@@ -9,7 +9,7 @@ import MailerDelivery from "./delivery.js"
 
 /** @type {import("./index.js").MailerDeliveryPayload[]} */
 const deliveriesStore = []
-/** @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown) | null} */
+/** @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} */
 let deliveryHandler = null
 
 /**
@@ -51,7 +51,7 @@ function inferActionName(mailerClass, stack) {
     if (frameActionName.startsWith("_")) continue
     if (frameActionName === "constructor") continue
     if (Object.prototype.hasOwnProperty.call(VelociousMailerBase.prototype, frameActionName)) continue
-    if (typeof /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (prototype))[frameActionName] !== "function") continue
+    if (typeof /** @type {Record<string, ?>} */ (/** @type {?} */ (prototype))[frameActionName] !== "function") continue
 
     actionName = frameActionName
   }
@@ -84,7 +84,7 @@ export class VelociousMailerBase {
   }
 
   /**
-   * @param {Record<string, any>} params - View params.
+   * @param {Record<string, ?>} params - View params.
    * @returns {void} - No return value.
    */
   assignView(params) {
@@ -93,15 +93,15 @@ export class VelociousMailerBase {
 
   /**
    * @param {object} args - Mail options.
-   * @param {any} args.to - Recipient.
+   * @param {?} args.to - Recipient.
    * @param {string} args.subject - Subject line.
-   * @param {any} [args.from] - Sender.
-   * @param {any} [args.cc] - CC recipients.
-   * @param {any} [args.bcc] - BCC recipients.
-   * @param {any} [args.replyTo] - Reply-to address.
+   * @param {?} [args.from] - Sender.
+   * @param {?} [args.cc] - CC recipients.
+   * @param {?} [args.bcc] - BCC recipients.
+   * @param {?} [args.replyTo] - Reply-to address.
    * @param {Record<string, string>} [args.headers] - Custom headers.
    * @param {string} [args.actionName] - Mailer action name.
-   * @param {Promise<unknown> | unknown} [args.actionPromise] - Action completion promise.
+   * @param {Promise<?> | ?} [args.actionPromise] - Action completion promise.
    * @returns {MailerDelivery} - Delivery wrapper.
    */
   mail({to, subject, from, cc, bcc, replyTo, headers, actionName, actionPromise, ...restArgs}) {
@@ -193,7 +193,7 @@ export class VelociousMailerBase {
     const actionName = this._getActionName()
     const fileName = viewFileName(actionName)
     const viewPath = `${configuration.getDirectory()}/src/mailers/${mailerDir}/${fileName}.ejs`
-    const translate = (/** @type {string} */ msgID, /** @type {Record<string, any> | undefined} */ args) => configuration.getTranslator()(msgID, args)
+    const translate = (/** @type {string} */ msgID, /** @type {Record<string, ?> | undefined} */ args) => configuration.getTranslator()(msgID, args)
     const viewParams = incorporate({mailer: this, _: translate}, this._viewParams)
 
     return await new Promise((resolve, reject) => {
@@ -215,7 +215,7 @@ export class VelociousMailerBase {
 
   /**
    * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
-   * @returns {Promise<import("./index.js").MailerDeliveryPayload | unknown>} - Handler result.
+   * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Handler result.
    */
   async _deliverPayload(payload) {
     return await deliverPayload(payload)
@@ -245,7 +245,7 @@ export function clearDeliveries() {
 }
 
 /**
- * @param {(payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown} handler - Delivery handler.
+ * @param {(payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?} handler - Delivery handler.
  * @returns {void} - No return value.
  */
 export function setDeliveryHandler(handler) {
@@ -253,7 +253,7 @@ export function setDeliveryHandler(handler) {
 }
 
 /**
- * @returns {((payload: import("./index.js").MailerDeliveryPayload) => Promise<unknown> | unknown) | null} - Handler or null.
+ * @returns {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} - Handler or null.
  */
 export function getDeliveryHandler() {
   return deliveryHandler
@@ -261,7 +261,7 @@ export function getDeliveryHandler() {
 
 /**
  * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
- * @returns {Promise<import("./index.js").MailerDeliveryPayload | unknown>} - Handler result.
+ * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Handler result.
  */
 export async function deliverPayload(payload) {
   if (await isTestingEnvironment()) {

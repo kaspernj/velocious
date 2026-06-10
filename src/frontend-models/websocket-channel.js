@@ -162,7 +162,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     return broadcastParams?.model === this._modelName()
   }
 
-  /** @returns {Record<string, unknown>} Debug-safe subscription details. */
+  /** @returns {Record<string, ?>} Debug-safe subscription details. */
   debugSnapshot() {
     const eventFilters = this._eventFilters()
 
@@ -218,7 +218,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
         throw new Error("Frontend model eventFilters entries must be objects")
       }
 
-      const eventFilter = /** @type {Record<string, unknown>} */ (entry)
+      const eventFilter = /** @type {Record<string, ?>} */ (entry)
       const unknownKeys = Object.keys(eventFilter).filter((key) => !EVENT_FILTER_KEYS.has(key))
 
       if (unknownKeys.length > 0) {
@@ -258,7 +258,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
-   * @param {Record<string, unknown>} [params] - Optional params override.
+   * @param {Record<string, ?>} [params] - Optional params override.
    * @returns {import("../frontend-model-controller.js").default} - Synthetic controller used for resource serialization.
    */
   _frontendModelController(FrontendModelController, params = {}) {

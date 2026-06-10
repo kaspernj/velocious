@@ -13,13 +13,13 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
 /**
  * @typedef {object} DatabasePoolDebugSnapshot
- * @property {Record<string, unknown>} configuration - Sanitized resolved database configuration.
- * @property {Array<Record<string, unknown>>} connections - Live connection snapshots.
+ * @property {Record<string, ?>} configuration - Sanitized resolved database configuration.
+ * @property {Array<Record<string, ?>>} connections - Live connection snapshots.
  * @property {number} connectionsBeingSpawned - Number of in-progress connection spawns.
  * @property {number} idleCount - Number of idle connections.
  * @property {string} identifier - Database identifier.
  * @property {number} inUseCount - Number of checked-out connections.
- * @property {Array<Record<string, unknown>>} [pendingCheckouts] - Waiting checkout snapshots.
+ * @property {Array<Record<string, ?>>} [pendingCheckouts] - Waiting checkout snapshots.
  * @property {number} pendingCheckoutCount - Number of queued checkout requests.
  * @property {string} poolClass - Pool class name.
  */
@@ -30,7 +30,7 @@ const shared = {
 }
 
 /**
- * @param {unknown} value - Value to stringify.
+ * @param {?} value - Value to stringify.
  * @returns {string} - Stable JSON string.
  */
 function stableStringify(value) {
@@ -40,9 +40,9 @@ function stableStringify(value) {
 
   if (value && typeof value === "object") {
     const entries = Object
-      .keys(/** @type {Record<string, unknown>} */ (value))
+      .keys(/** @type {Record<string, ?>} */ (value))
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(/** @type {Record<string, unknown>} */ (value)[key])}`)
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(/** @type {Record<string, ?>} */ (value)[key])}`)
 
     return `{${entries.join(",")}}`
   }
@@ -51,7 +51,7 @@ function stableStringify(value) {
 }
 
 class VelociousDatabasePoolBase {
-  /** @type {undefined | ((callback: () => unknown) => unknown)} */
+  /** @type {undefined | ((callback: () => ?) => ?)} */
   _withoutCurrentConnectionContext = undefined
 
   /**
@@ -120,7 +120,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * @template T
-   * @param {() => T} callback - Callback to run without any current connection context.
+   * @param {() => T} callback - Callback to run without ? current connection context.
    * @returns {T} - Callback result.
    */
   withoutCurrentConnectionContext(callback) {
@@ -292,7 +292,7 @@ class VelociousDatabasePoolBase {
     }
   }
 
-  /** @returns {Record<string, unknown>} - Sanitized resolved database configuration. */
+  /** @returns {Record<string, ?>} - Sanitized resolved database configuration. */
   debugConfigurationSnapshot() {
     const databaseConfig = this.getConfiguration()
     const poolConfig = databaseConfig.pool
@@ -314,8 +314,8 @@ class VelociousDatabasePoolBase {
 
   /**
    * @param {import("../drivers/base.js").default} connection - Database connection.
-   * @param {Record<string, unknown>} details - Extra diagnostic fields.
-   * @returns {Record<string, unknown>} - Connection diagnostic snapshot.
+   * @param {Record<string, ?>} details - Extra diagnostic fields.
+   * @returns {Record<string, ?>} - Connection diagnostic snapshot.
    */
   debugConnectionSnapshot(connection, details = {}) {
     const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)

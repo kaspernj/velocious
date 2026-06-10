@@ -50,7 +50,7 @@ export default class JsonSocket extends EventEmitter {
   }
 
   /**
-   * @param {unknown} message - Message to send.
+   * @param {?} message - Message to send.
    * @returns {void}
    */
   send(message) {

@@ -27,27 +27,27 @@ const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES = 16 * 1024 * 1024
 const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
 
 /**
- * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | {type: "metadata", data?: Record<string, any>} | {type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | Record<string, any>} WebsocketSessionMessage
+ * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
  */
 
 /**
  * @param {WebsocketSessionMessage} message - Raw websocket message.
- * @returns {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>} | null} - Subscribe message when matched.
+ * @returns {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | null} - Subscribe message when matched.
  */
 function subscribeMessage(message) {
   return message.type === "subscribe"
-    ? /** @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, any>}} */ (message)
+    ? /** @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>}} */ (message)
     : null
 }
 
 /**
  * @param {WebsocketSessionMessage} message - Raw websocket message.
- * @returns {{type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string} | null} - Request message when matched.
+ * @returns {{type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | null} - Request message when matched.
  */
 function requestMessage(message) {
   if (message.type && message.type !== "request") return null
 
-  return /** @type {{type?: "request", body?: unknown, headers?: Record<string, any>, id?: string | number | null, method: string, path: string}} */ (message)
+  return /** @type {{type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string}} */ (message)
 }
 
 /**
@@ -56,8 +56,8 @@ function requestMessage(message) {
  * Plain objects are compared via JSON round-trip so apps can return a
  * `{userId, tenantId}`-style object without building their own equality.
  *
- * @param {any} a - Paused-time identity.
- * @param {any} b - Resume-time identity.
+ * @param {?} a - Paused-time identity.
+ * @param {?} b - Resume-time identity.
  * @returns {boolean} - True when the two identities are considered the same caller.
  */
 function identitiesMatch(a, b) {
@@ -101,14 +101,14 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     this._metadata = {}
 
     /**
      * Long-lived per-session state bag. Stable across reconnects once
      * grace-period resumption lands in Phase 2; today it just lives
      * for the duration of the underlying socket.
-     * @type {Record<string, any>}
+     * @type {Record<string, ?>}
      */
     this.data = {}
 
@@ -130,7 +130,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     /** @type {boolean} - true after `_handleClose` pauses instead of tearing down. */
     this._paused = false
 
-    /** @type {any[]} - frames produced while paused; flushed on resume. */
+    /** @type {Array<?>} - frames produced while paused; flushed on resume. */
     this._outboundQueue = []
 
     /** @type {import("./index.js").default | null} */
@@ -151,7 +151,7 @@ export default class VelociousHttpServerClientWebsocketSession {
      * time by `getWebsocketSessionIdentityResolver`. Awaited at resume
      * time to compare against the fresh caller's identity. Undefined
      * on a live (non-paused) session.
-     * @type {Promise<any> | undefined}
+     * @type {Promise<?> | undefined}
      */
     this._resumeIdentityPromise = undefined
 
@@ -208,7 +208,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._connections.delete(connectionId)
   }
 
-  /** @returns {Record<string, any>} - Client-provided metadata (defensive copy). */
+  /** @returns {Record<string, ?>} - Client-provided metadata (defensive copy). */
   getMetadata() {
     return {...this._metadata}
   }
@@ -254,7 +254,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {any} payload - Payload data.
+   * @param {?} payload - Payload data.
    * @param {{createdAt?: string, eventId?: string, replayed?: boolean, sequence?: number}} [options] - Event metadata.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -430,7 +430,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     if (message.type === "metadata") {
-      const metadataPayload = /** @type {{data?: Record<string, any>}} */ (message)
+      const metadataPayload = /** @type {{data?: Record<string, ?>}} */ (message)
 
       this._metadata = metadataPayload.data && typeof metadataPayload.data === "object" ? {...metadataPayload.data} : {}
 
@@ -796,7 +796,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * @param {string} channel - Channel name.
-   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default, lastEventId?: string, params?: Record<string, any>, subscriptionChannel?: string}} [options] - Subscribe options.
+   * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default, lastEventId?: string, params?: Record<string, ?>, subscriptionChannel?: string}} [options] - Subscribe options.
    * @returns {Promise<boolean>} - Whether the subscription was added.
    */
   async subscribeToChannel(channel, {acknowledge = true, channelHandler, lastEventId, params, subscriptionChannel} = {}) {
@@ -894,7 +894,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * resume time so we can reject resume attempts from a different
    * authenticated caller (signed out, swapped user, expired cookie).
    *
-   * @returns {Promise<any>}
+   * @returns {Promise<?>}
    */
   async _captureResumeIdentity() {
     const resolver = this.configuration.getWebsocketSessionIdentityResolver?.()
@@ -959,7 +959,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * the paused session and instructs the client via
    * `session-resumed` or `session-gone`.
    *
-   * @param {Record<string, any>} message
+   * @param {Record<string, ?>} message
    * @returns {Promise<void>}
    */
   async _handleSessionResume(message) {
@@ -1068,7 +1068,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * fires `onConnect()`. Sends `connection-opened` on success or
    * `connection-error` on failure.
    *
-   * @param {Record<string, any>} message
+   * @param {Record<string, ?>} message
    * @returns {Promise<void>}
    */
   async _handleConnectionOpen(message) {
@@ -1117,7 +1117,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * Handles a `{type: "connection-message"}` from the client.
    *
-   * @param {Record<string, any>} message
+   * @param {Record<string, ?>} message
    * @returns {Promise<void>}
    */
   async _handleConnectionMessage(message) {
@@ -1143,7 +1143,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Handles a `{type: "connection-close"}` from the client — fires
    * `onClose("client_close")` and confirms with `connection-closed`.
    *
-   * @param {Record<string, any>} message
+   * @param {Record<string, ?>} message
    * @returns {Promise<void>}
    */
   async _handleConnectionClose(message) {
@@ -1173,7 +1173,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * registers with the Configuration's global routing registry on
    * success, and sends `channel-subscribed` or `channel-error`.
    *
-   * @param {Record<string, any>} message
+   * @param {Record<string, ?>} message
    * @returns {Promise<void>}
    */
   async _handleChannelSubscribe(message) {
@@ -1300,7 +1300,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Handles `{type: "channel-unsubscribe"}` from the client — calls
    * `unsubscribed()` and sends `channel-unsubscribed`.
    *
-   * @param {Record<string, any>} message
+   * @param {Record<string, ?>} message
    * @returns {Promise<void>}
    */
   async _handleChannelUnsubscribe(message) {
@@ -1420,7 +1420,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {{channel: string, lastEventId?: string, params?: Record<string, any>}} args - Subscription args.
+   * @param {{channel: string, lastEventId?: string, params?: Record<string, ?>}} args - Subscription args.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleChannelSubscription({channel, lastEventId, params}) {
@@ -1478,7 +1478,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {string} args.channel - Internal channel name.
    * @param {string | undefined} args.lastEventId - Last received event id.
    * @param {string} args.subscriptionChannel - Client-facing channel name.
-   * @param {Record<string, any> | undefined} args.subscriptionParams - Client-facing params.
+   * @param {Record<string, ?> | undefined} args.subscriptionParams - Client-facing params.
    * @returns {Promise<false | {buffered: boolean, ceilingSequence: number, checkpointSequence: number, replaying: boolean} | null>} - Replay state.
    */
   async _prepareReplayState({channel, lastEventId, subscriptionChannel, subscriptionParams}) {
@@ -1552,7 +1552,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * @param {{channel?: string, params?: Record<string, unknown>}} args - Tenant resolution args.
+   * @param {{channel?: string, params?: Record<string, ?>}} args - Tenant resolution args.
    * @returns {Promise<string | null | undefined>} - Resolved tenant.
    */
   async _resolveTenant({channel, params}) {

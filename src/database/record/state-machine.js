@@ -63,7 +63,7 @@ export function stateMachine(ModelClass, definition) {
   const stateNames = Object.keys(definition.states)
 
   // Store definition on the model class for introspection
-  /** @type {any} */
+  /** @type {?} */
   const dynamicClass = ModelClass
 
   dynamicClass._stateMachineDefinition = definition
@@ -85,7 +85,7 @@ export function stateMachine(ModelClass, definition) {
   }
 
   // Register event methods and guard methods on the prototype
-  /** @type {any} */
+  /** @type {?} */
   const proto = ModelClass.prototype
 
   for (const [eventName, eventDef] of Object.entries(definition.events)) {
@@ -132,7 +132,7 @@ export function stateMachine(ModelClass, definition) {
 
     // Transition method: queue(), run(), etc. — checks guard, sets the state, stashes event name
     proto[eventName] = function () {
-      /** @type {any} */
+      /** @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -165,7 +165,7 @@ export function stateMachine(ModelClass, definition) {
 
     // Bang method: queueAndSave(), runAndSave(), etc. — transitions AND saves (supports async guards)
     proto[`${eventName}AndSave`] = async function () {
-      /** @type {any} */
+      /** @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -195,7 +195,7 @@ export function stateMachine(ModelClass, definition) {
 
   // Register a beforeSave callback that fires state-enter hooks
   ModelClass.beforeSave(async function (model) {
-    /** @type {any} */
+    /** @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 
@@ -220,7 +220,7 @@ export function stateMachine(ModelClass, definition) {
 
   // Register an afterSave callback for afterEnter hooks
   ModelClass.afterSave(async function (model) {
-    /** @type {any} */
+    /** @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 

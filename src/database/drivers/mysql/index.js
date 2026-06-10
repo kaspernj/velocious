@@ -67,13 +67,13 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * @returns {Record<string, any>} - The connect args.
+   * @returns {Record<string, ?>} - The connect args.
    */
   connectArgs() {
     const args = this.getArgs()
     const forward = ["database", "host", "password"]
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const connectArgs = {charset: "utf8mb4"}
 
     for (const forwardValue of forward) {
@@ -195,7 +195,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(error) {
-    const errorCode = /** @type {any} */ (error).code
+    const errorCode = /** @type {?} */ (error).code
     const message = error.message || ""
     const shouldRetry = (
       errorCode == "ECONNREFUSED" ||
@@ -245,8 +245,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The escape.
+   * @param {?} value - Value to use.
+   * @returns {?} - The escape.
    */
   escape(value) {
     const escapedValueWithQuotes = this.pool

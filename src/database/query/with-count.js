@@ -4,11 +4,11 @@
  * @typedef {Object} WithCountEntry
  * @property {string} attributeName - Attribute to set on each parent record holding the count.
  * @property {string} relationshipName - Has-many relationship whose rows are counted.
- * @property {Record<string, unknown> | undefined} where - Optional extra where clause applied to the count query.
+ * @property {Record<string, ?> | undefined} where - Optional extra where clause applied to the count query.
  */
 
 /**
- * @typedef {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, unknown>}>} WithCountSpec
+ * @typedef {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} WithCountSpec
  */
 
 /**
@@ -58,7 +58,7 @@ export function normalizeWithCount(spec) {
       }
 
       if (typeof value === "object" && value !== null) {
-        /** @type {{relationship?: string, where?: Record<string, unknown>}} */
+        /** @type {{relationship?: string, where?: Record<string, ?>}} */
         const options = value
         entries.push({
           attributeName: key,
@@ -156,7 +156,7 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   }
 
   const foreignKey = relationship.getForeignKey()
-  /** @type {Record<string, unknown>} */
+  /** @type {Record<string, ?>} */
   const whereConditions = {[foreignKey]: parentIds}
 
   if (relationship.getPolymorphic && relationship.getPolymorphic()) {

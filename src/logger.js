@@ -19,8 +19,8 @@ const DEFAULT_LOGGING_CONFIGURATION = {
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
- * @param {...any|function() : Array<any>} messages - Messages.
- * @returns {Array<any>} - Either the function result or the messages
+ * @param {...?|function() : Array<?>} messages - Messages.
+ * @returns {Array<?>} - Either the function result or the messages
  */
 function functionOrMessages(...messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
@@ -33,7 +33,7 @@ function functionOrMessages(...messages) {
 
 /**
  * Format a single value for inclusion in a log message.
- * @param {any} value - Value to format.
+ * @param {?} value - Value to format.
  * @returns {string} - String representation.
  */
 function formatPart(value) {
@@ -57,7 +57,7 @@ function formatPart(value) {
  * `util.format`). Any leftover messages are appended with a space
  * separator. Otherwise, all parts are joined with spaces.
  *
- * @param {Array<any>} messages - User-supplied message parts.
+ * @param {Array<?>} messages - User-supplied message parts.
  * @returns {string} - The formatted user message.
  */
 function formatUserMessages(messages) {
@@ -112,7 +112,7 @@ function formatUserMessages(messages) {
  * Converts a logger subject and message parts into a single log line.
  *
  * @param {string} subject - Logger subject / category prefix.
- * @param {...any} messages - User-supplied message parts (supports printf-style format specifiers on the first part).
+ * @param {...?} messages - User-supplied message parts (supports printf-style format specifiers on the first part).
  * @returns {string} - The formatted log line.
  */
 function messagesToMessage(subject, ...messages) {
@@ -186,7 +186,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
     for (const logger of loggingConfiguration.loggers) {
       if (!logger) continue
 
-      const loggerConfig = /** @type {any} */ (logger)
+      const loggerConfig = /** @type {?} */ (logger)
 
       if (typeof loggerConfig.toOutputConfig === "function") {
         loggerOutputs.push(loggerConfig.toOutputConfig({configuration}))
@@ -300,7 +300,7 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
   if (enabledOutputs.length === 0) return
 
   const writes = []
-  /** @type {Array<any> | undefined} */
+  /** @type {Array<?> | undefined} */
   let resolvedMessages
   /** @type {string | undefined} */
   let message
@@ -394,7 +394,7 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debug(...messages) {
@@ -402,7 +402,7 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async info(...messages) {
@@ -410,7 +410,7 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debugLowLevel(...messages) {
@@ -418,7 +418,7 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async log(...messages) {
@@ -426,7 +426,7 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async error(...messages) {

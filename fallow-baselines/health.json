@@ -996,19 +996,16 @@
     },
     "src/frontend-model-controller.js": {
       "complexity_critical": {
-        "count": 16
-      },
-      "complexity_high": {
-        "count": 3
+        "count": 10
       },
       "crap_critical": {
-        "count": 24
+        "count": 18
       },
       "crap_high": {
-        "count": 14
+        "count": 8
       },
       "crap_moderate": {
-        "count": 16
+        "count": 13
       }
     },
     "src/frontend-model-resource/base-resource.js": {
@@ -1027,16 +1024,16 @@
     },
     "src/frontend-models/base.js": {
       "complexity_critical": {
-        "count": 10
+        "count": 9
       },
       "crap_critical": {
-        "count": 17
+        "count": 16
       },
       "crap_high": {
         "count": 14
       },
       "crap_moderate": {
-        "count": 12
+        "count": 11
       }
     },
     "src/frontend-models/preloader.js": {
@@ -1052,7 +1049,7 @@
         "count": 6
       },
       "complexity_high": {
-        "count": 3
+        "count": 2
       },
       "crap_critical": {
         "count": 8
@@ -1061,7 +1058,7 @@
         "count": 11
       },
       "crap_moderate": {
-        "count": 9
+        "count": 7
       }
     },
     "src/frontend-models/resource-config-validation.js": {
@@ -1091,7 +1088,7 @@
         "count": 3
       },
       "crap_moderate": {
-        "count": 4
+        "count": 2
       }
     },
     "src/frontend-models/use-destroyed-event.js": {
@@ -1258,11 +1255,6 @@
     },
     "src/http-server/websocket-channel-subscribers.js": {
       "crap_high": {
-        "count": 1
-      }
-    },
-    "src/http-server/websocket-event-log-store.js": {
-      "crap_moderate": {
         "count": 1
       }
     },
@@ -1527,13 +1519,13 @@
     "src/database/record/index.js:complexity",
     "src/routes/resolver.js:complexity",
     "src/testing/test.js:dead code",
-    "src/http-server/client/websocket-session.js:complexity",
     "src/database/query/model-class-query.js:complexity",
+    "src/http-server/client/websocket-session.js:complexity",
     "src/database/drivers/base.js:complexity",
     "src/database/drivers/pgsql/structure-sql.js:untested risk",
     "src/database/query/preloader.js:complexity",
-    "src/frontend-model-resource/base-resource.js:complexity",
     "src/testing/test-runner.js:complexity",
+    "src/frontend-model-resource/base-resource.js:complexity",
     "src/database/query/create-table-base.js:complexity",
     "src/database/drivers/mssql/structure-sql.js:complexity",
     "src/http-server/worker-handler/index.js:complexity",
@@ -1545,17 +1537,17 @@
     "src/database/migrator.js:complexity",
     "src/database/drivers/mysql/structure-sql.js:untested risk",
     "src/database/record/attachments/normalize-input.js:complexity",
-    "src/frontend-models/outgoing-event-buffer.js:dead code",
     "src/mailer/base.js:circular dependency",
+    "src/frontend-models/outgoing-event-buffer.js:dead code",
     "src/database/query/where-model-class-hash.js:complexity",
-    "src/environment-handlers/node/cli/commands/test.js:complexity",
     "src/utils/format-value.js:untested risk",
     "src/database/query/preloader/belongs-to.js:complexity",
+    "src/environment-handlers/node/cli/commands/test.js:complexity",
     "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/has-many.js:complexity",
     "src/jobs/mail-delivery.js:circular dependency",
-    "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
     "src/database/query/query-data.js:complexity",
+    "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/frontend-models.js:complexity",
     "src/http-server/client/request-buffer/index.js:complexity",
     "src/testing/expect.js:complexity",

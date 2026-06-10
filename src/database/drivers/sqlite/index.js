@@ -66,7 +66,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
   /**
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, any>[]>} - Resolves with the query actual.
+   * @returns {Promise<Record<string, ?>[]>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
     if (!this.connection) throw new Error("No connection")

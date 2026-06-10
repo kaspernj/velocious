@@ -8,18 +8,18 @@ import * as inflection from "inflection"
  * @property {import("../controller.js").default} controller - Frontend-model controller instance.
  * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
  * @property {string} modelName - Model name.
- * @property {Record<string, any>} params - Request params.
+ * @property {Record<string, ?>} params - Request params.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration (or raw input shape during early bootstrap).
  */
 
 /**
  * @typedef {object} FrontendModelResourceAbilityArgs
  * @property {import("../authorization/ability.js").default} [ability] - Ability instance when the resource is used directly for authorization.
- * @property {Record<string, any>} [context] - Ability context.
- * @property {Record<string, any>} [locals] - Ability locals.
+ * @property {Record<string, ?>} [context] - Ability context.
+ * @property {Record<string, ?>} [locals] - Ability locals.
  * @property {typeof import("../database/record/index.js").default} [modelClass] - Optional backing model class override.
  * @property {string} [modelName] - Optional model name override.
- * @property {Record<string, any>} [params] - Optional params override.
+ * @property {Record<string, ?>} [params] - Optional params override.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
  */
 
@@ -27,11 +27,11 @@ import * as inflection from "inflection"
  * Base class for backend frontend-model resources.
  */
 export default class FrontendModelBaseResource extends AuthorizationBaseResource {
-  /** @type {Record<string, any> | string[] | undefined} */
+  /** @type {Record<string, ?> | string[] | undefined} */
   static attributes = undefined
   /** @type {string[] | undefined} */
   static abilities = undefined
-  /** @type {Record<string, any> | undefined} */
+  /** @type {Record<string, ?> | undefined} */
   static attachments = undefined
   /** @type {string[] | undefined} */
   static collectionCommands = undefined
@@ -65,14 +65,14 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * @returns {import("../controller.js").default & {
-   *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<any>,
-   *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<any>,
+   *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<unknown>,
+   *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<unknown>,
    *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
-   *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, any>>
+   *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, unknown>>
    * }} - Controller instance with frontend-model helpers.
    */
   typedControllerInstance() {
-    return /** @type {any} */ (this.controller)
+    return /** @type {?} */ (this.controller)
   }
 
   /**
@@ -118,7 +118,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.modelNameValue
   }
 
-  /** @returns {Record<string, any>} - Params. */
+  /** @returns {Record<string, ?>} - Params. */
   params() { return this.paramsValue || super.params() || {} }
 
   /** @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} - Resource config (normalized at runtime; raw during early bootstrap). */
@@ -163,8 +163,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * Default implementation returns `[]` — nothing permitted. Subclasses
    * must override to enable writes. A resource that does not declare
    * `permittedParams` cannot accept any write.
-   * @param {{action?: "create" | "update", params?: Record<string, any>, ability?: import("../authorization/ability.js").default, locals?: Record<string, any>}} [arg] - Request context.
-   * @returns {Array<string | Record<string, any>>} - Permit spec.
+   * @param {{action?: "create" | "update", params?: Record<string, ?>, ability?: import("../authorization/ability.js").default, locals?: Record<string, ?>}} [arg] - Request context.
+   * @returns {Array<string | Record<string, ?>>} - Permit spec.
    */
   permittedParams(arg) {
     void arg
@@ -177,7 +177,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Ability action.
-   * @returns {import("../database/query/model-class-query.js").default<any>} - Authorized query.
+   * @returns {import("../database/query/model-class-query.js").default<?>} - Authorized query.
    */
   authorizedQuery(action) {
     return this.typedControllerInstance().frontendModelAuthorizedQuery(action)
@@ -245,8 +245,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * @param {Record<string, any>} attributes - Create attributes.
-   * @param {{controller?: any, nestedAttributes?: Record<string, any> | null}} [options] - Save options.
+   * @param {Record<string, ?>} attributes - Create attributes.
+   * @param {{controller?: ?, nestedAttributes?: Record<string, ?> | null}} [options] - Save options.
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes, options = {}) {
@@ -279,8 +279,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * @param {import("../database/record/index.js").default} model - Existing model.
-   * @param {Record<string, any>} attributes - Update attributes.
-   * @param {{controller?: any, nestedAttributes?: Record<string, any> | null}} [options] - Save options.
+   * @param {Record<string, ?>} attributes - Update attributes.
+   * @param {{controller?: ?, nestedAttributes?: Record<string, ?> | null}} [options] - Save options.
    * @returns {Promise<import("../database/record/index.js").default>} - Updated model.
    */
   async update(model, attributes, options = {}) {
@@ -306,19 +306,19 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * Assigns attributes to a model, using virtual setters on the resource when available.
    *
    * @param {import("../database/record/index.js").default} model - Model instance.
-   * @param {Record<string, any>} attributes - Attributes to assign.
+   * @param {Record<string, ?>} attributes - Attributes to assign.
    * @returns {Promise<void>}
    */
   async _assignWithVirtualSetters(model, attributes) {
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const directAttributes = {}
     const translatedSet = new Set(/** @type {typeof FrontendModelBaseResource} */ (this.constructor).translatedAttributes || [])
 
     for (const [name, value] of Object.entries(attributes)) {
       const resourceSetterName = `set${inflection.camelize(name)}Attribute`
 
-      if (typeof /** @type {Record<string, any>} */ (/** @type {unknown} */ (this))[resourceSetterName] === "function") {
-        await /** @type {Record<string, any>} */ (/** @type {unknown} */ (this))[resourceSetterName](model, value)
+      if (typeof /** @type {Record<string, ?>} */ (/** @type {?} */ (this))[resourceSetterName] === "function") {
+        await /** @type {Record<string, ?>} */ (/** @type {?} */ (this))[resourceSetterName](model, value)
       } else if (translatedSet.has(name)) {
         await this._setTranslatedAttributeOnModel(model, name, value)
       } else {
@@ -336,7 +336,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    *
    * @param {import("../database/record/index.js").default} model - Model instance.
    * @param {string} name - Attribute name.
-   * @param {any} value - Attribute value.
+   * @param {?} value - Attribute value.
    * @returns {Promise<void>}
    */
   async _setTranslatedAttributeOnModel(model, name, value) {
@@ -350,7 +350,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       const loaded = instanceRelationship.loaded()
 
       if (Array.isArray(loaded)) {
-        translation = loaded.find((/** @type {Record<string, any>} */ t) => t.locale() === locale)
+        translation = loaded.find((/** @type {Record<string, ?>} */ t) => t.locale() === locale)
       }
     } else {
       if (!instanceRelationship.getPreloaded()) {
@@ -360,7 +360,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       const loaded = instanceRelationship.loaded()
 
       if (Array.isArray(loaded)) {
-        translation = loaded.find((/** @type {Record<string, any>} */ t) => t.locale() === locale)
+        translation = loaded.find((/** @type {Record<string, ?>} */ t) => t.locale() === locale)
       }
     }
 
@@ -368,7 +368,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       translation = instanceRelationship.build({locale})
     }
 
-    /** @type {Record<string, any>} */
+    /** @type {Record<string, ?>} */
     const assignments = {}
 
     assignments[name] = value
@@ -386,7 +386,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * @param {import("../database/record/index.js").default} model - Model to serialize.
    * @param {"index" | "find" | "create" | "update"} [action] - Action.
-   * @returns {Promise<Record<string, any>>} - Serialized model payload.
+   * @returns {Promise<Record<string, ?>>} - Serialized model payload.
    */
   async serialize(model, action) {
     void action
@@ -407,9 +407,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * (allowDestroy, limit, rejectIf) come from the MODEL's
    * `acceptedNestedAttributesFor(name)` declaration.
    * @param {import("../database/record/index.js").default} parent - Parent model instance.
-   * @param {Record<string, any>} nestedAttributes - Nested-attribute payload keyed by relationship name.
-   * @param {any} controller - Controller instance for resource resolution and authorization.
-   * @param {{attributes: string[], nested: Record<string, any>} | null} [parentPermit] - Parsed parent permit spec.
+   * @param {Record<string, ?>} nestedAttributes - Nested-attribute payload keyed by relationship name.
+   * @param {?} controller - Controller instance for resource resolution and authorization.
+   * @param {{attributes: string[], nested: Record<string, ?>} | null} [parentPermit] - Parsed parent permit spec.
    * @returns {Promise<void>}
    */
   async _applyNestedAttributes(parent, nestedAttributes, controller, parentPermit = null) {
@@ -429,7 +429,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         throw new Error(`Expected array for nestedAttributes['${relationshipName}'] but got: ${typeof entries}`)
       }
 
-      const parentModelClass = /** @type {any} */ (parent.getModelClass())
+      const parentModelClass = /** @type {?} */ (parent.getModelClass())
       const modelAcceptance = parentModelClass.acceptedNestedAttributesFor?.(relationshipName)
 
       if (!modelAcceptance) {
@@ -454,7 +454,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         throw new Error(`Nested attributes for '${relationshipName}' require a hasMany relationship. v1 does not support '${definition?.type}'.`)
       }
 
-      const targetModelClass = /** @type {any} */ (parent.getModelClass()).relationshipModelClass?.(relationshipName)
+      const targetModelClass = /** @type {?} */ (parent.getModelClass()).relationshipModelClass?.(relationshipName)
 
       if (!targetModelClass) {
         throw new Error(`No target model class resolved for relationship '${relationshipName}' on ${parent.getModelClass().name}.`)
@@ -536,12 +536,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
         if (entry.attributes && typeof entry.attributes === "object") {
           const filtered = filterWritableFrontendModelAttributes(existing, entry.attributes, childResource, childWritableAttributes)
-          await /** @type {any} */ (childResource)._assignWithVirtualSetters(existing, filtered)
+          await /** @type {?} */ (childResource)._assignWithVirtualSetters(existing, filtered)
           await existing.save()
         }
 
         if (entry.nestedAttributes) {
-          await /** @type {any} */ (childResource)._applyNestedAttributes(existing, entry.nestedAttributes, controller, childPermit)
+          await /** @type {?} */ (childResource)._applyNestedAttributes(existing, entry.nestedAttributes, controller, childPermit)
         }
       }
 
@@ -552,7 +552,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
         const filtered = filterWritableFrontendModelAttributes(child, childAttributes, childResource, childWritableAttributes)
 
-        await /** @type {any} */ (childResource)._assignWithVirtualSetters(child, filtered)
+        await /** @type {?} */ (childResource)._assignWithVirtualSetters(child, filtered)
         await child.save()
 
         await this._authorizeCreatedChild({
@@ -564,7 +564,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         })
 
         if (entry.nestedAttributes) {
-          await /** @type {any} */ (childResource)._applyNestedAttributes(child, entry.nestedAttributes, controller, childPermit)
+          await /** @type {?} */ (childResource)._applyNestedAttributes(child, entry.nestedAttributes, controller, childPermit)
         }
       }
     }
@@ -618,8 +618,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const primaryKey = targetModelClass.primaryKey()
     const lookup = {[primaryKey]: id, [foreignKey]: parent.id()}
     const query = ability
-      ? /** @type {any} */ (targetModelClass).accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
-      : /** @type {any} */ (targetModelClass).where({})
+      ? /** @type {?} */ (targetModelClass).accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
+      : /** @type {?} */ (targetModelClass).where({})
 
     const existing = await query.findBy(lookup)
 
@@ -648,7 +648,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     const abilityAction = this._resolveChildAbilityAction(childResourceConfiguration, "create")
     const primaryKey = targetModelClass.primaryKey()
-    const authorizedIds = await /** @type {any} */ (targetModelClass)
+    const authorizedIds = await /** @type {?} */ (targetModelClass)
       .accessibleFor(abilityAction, ability)
       .where({[primaryKey]: child.readAttribute(primaryKey)})
       .pluck(primaryKey)
@@ -680,7 +680,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * client can reconcile ids.
    *
    * @param {import("../database/record/index.js").default} model - Saved parent model.
-   * @param {{attributes: string[], nested: Record<string, any>}} permit - Parsed parent permit.
+   * @param {{attributes: string[], nested: Record<string, ?>}} permit - Parsed parent permit.
    * @returns {Promise<void>}
    */
   async _preloadNestedWritableRelationships(model, permit) {
@@ -689,8 +689,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (relationshipNames.length === 0) return
 
     for (const relationshipName of relationshipNames) {
-      if (typeof /** @type {any} */ (model).loadRelationship === "function") {
-        await /** @type {any} */ (model).loadRelationship(relationshipName)
+      if (typeof /** @type {?} */ (model).loadRelationship === "function") {
+        await /** @type {?} */ (model).loadRelationship(relationshipName)
       }
     }
   }
@@ -712,13 +712,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
  *   //     tasks: {attributes: ["id", "_destroy", "name"], nested: {}}
  *   //   }
  *   // }
- * @param {Array<string | Record<string, any>> | undefined} permitSpec - Flat permit spec.
- * @returns {{attributes: string[], nested: Record<string, {attributes: string[], nested: Record<string, any>}>}} - Parsed structure.
+ * @param {Array<string | Record<string, ?>> | undefined} permitSpec - Flat permit spec.
+ * @returns {{attributes: string[], nested: Record<string, {attributes: string[], nested: Record<string, ?>}>}} - Parsed structure.
  */
 function parsePermittedParams(permitSpec) {
   /** @type {string[]} */
   const attributes = []
-  /** @type {Record<string, {attributes: string[], nested: Record<string, any>}>} */
+  /** @type {Record<string, {attributes: string[], nested: Record<string, ?>}>} */
   const nested = {}
 
   if (!Array.isArray(permitSpec)) return {attributes, nested}
@@ -751,16 +751,16 @@ function parsePermittedParams(permitSpec) {
 }
 
 /**
- * @param {Record<string, any>} receiver - Model instance or prototype.
- * @param {Record<string, any>} attributes - Incoming frontend-model attributes.
+ * @param {Record<string, ?>} receiver - Model instance or prototype.
+ * @param {Record<string, ?>} attributes - Incoming frontend-model attributes.
  * @param {FrontendModelBaseResource | null} [resource] - Resource instance for virtual-setter detection.
  * @param {string[] | null} [permittedAttributeNames] - Optional explicit permit list. `null` falls back to setter-existence checks only.
- * @returns {Record<string, any>} - Writable attributes only.
+ * @returns {Record<string, ?>} - Writable attributes only.
  */
 function filterWritableFrontendModelAttributes(receiver, attributes, resource = /** @type {FrontendModelBaseResource | null} */ (null), permittedAttributeNames = null) {
   // Frontend-model writes should fail fast when callers submit read-only or unknown attrs.
   // Silent drops hide contract mistakes in generated models and app-side wrapper code.
-  /** @type {Record<string, any>} */
+  /** @type {Record<string, ?>} */
   const writableAttributes = {}
   /** @type {string[]} */
   const invalidAttributes = []
@@ -781,7 +781,7 @@ function filterWritableFrontendModelAttributes(receiver, attributes, resource = 
 
     if (setterName in receiver) {
       writableAttributes[attributeName] = value
-    } else if (resource && typeof /** @type {Record<string, any>} */ (/** @type {unknown} */ (resource))[resourceSetterName] === "function") {
+    } else if (resource && typeof /** @type {Record<string, ?>} */ (/** @type {?} */ (resource))[resourceSetterName] === "function") {
       writableAttributes[attributeName] = value
     } else if (translatedSet.has(attributeName)) {
       writableAttributes[attributeName] = value

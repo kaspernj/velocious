@@ -6,7 +6,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   /**
    * @param {object} args - Options object.
    * @param {Array<string>} args.conflictColumns - Columns that identify duplicates.
-   * @param {Record<string, any>} args.data - Data payload.
+   * @param {Record<string, ?>} args.data - Data payload.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {Array<string>} args.updateColumns - Columns to update on conflict.
    * @param {string} args.tableName - Table name.
@@ -43,7 +43,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
-   * @param {any} value - Value to format.
+   * @param {?} value - Value to format.
    * @returns {string | number} - SQL literal.
    */
   formatValue(value) {

@@ -9,7 +9,7 @@ import toImportSpecifier from "../../../../../utils/to-import-specifier.js"
 
 /**
  * @param {string} filePath - Absolute path to script file.
- * @returns {Promise<(context: RunnerContext) => Promise<unknown>>} - The default-exported async function.
+ * @returns {Promise<(context: RunnerContext) => Promise<?>>} - The default-exported async function.
  */
 async function importRunnerFunction(filePath) {
   const runnerImport = await import(toImportSpecifier(filePath))
@@ -24,7 +24,7 @@ async function importRunnerFunction(filePath) {
 
 /** Node command for running project database seeds from src/db/seed.js. */
 export default class DbSeed extends BaseCommand {
-  /** @returns {Promise<unknown>} - Resolves with the seed function result. */
+  /** @returns {Promise<?>} - Resolves with the seed function result. */
   async execute() {
     const configuration = this.getConfiguration()
 

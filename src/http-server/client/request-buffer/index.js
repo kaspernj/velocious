@@ -480,7 +480,7 @@ export default class RequestBuffer {
 
         incorporate(this.params, newParams)
       } catch (error) {
-        const ensuredError = /** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error)
+        const ensuredError = /** @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
         ensuredError.velociousContext = {
           ...(ensuredError.velociousContext || {}),

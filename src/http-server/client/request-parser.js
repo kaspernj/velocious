@@ -18,7 +18,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.data = []
     this.events = new EventEmitter()
     this.hasCompleted = false
-    /** @type {Record<string, string | string[] | undefined | Record<string, unknown> | unknown[]>} */
+    /** @type {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} */
     this.params = {}
 
     this.requestBuffer = new RequestBuffer({configuration})
@@ -51,7 +51,7 @@ export default class VelociousHttpServerClientRequestParser {
 
       incorporate(this.params, newParams)
     } catch (error) {
-      const ensuredError = /** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error)
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),

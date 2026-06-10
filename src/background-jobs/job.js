@@ -11,7 +11,7 @@ export default class VelociousJob {
   }
 
   /**
-   * @param {...any} args - Job args.
+   * @param {...?} args - Job args.
    * @returns {Promise<string>} - Job id.
    */
   static async performLater(...args) {
@@ -27,7 +27,7 @@ export default class VelociousJob {
 
   /**
    * @param {object} args - Options.
-   * @param {any[]} args.args - Job args.
+   * @param {Array<?>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<string>} - Job id.
    */
@@ -42,8 +42,8 @@ export default class VelociousJob {
   }
 
   /**
-   * @param {any[]} args - Job args.
-   * @returns {{jobArgs: any[], jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
+   * @param {Array<?>} args - Job args.
+   * @returns {{jobArgs: Array<?>, jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
    */
   static _splitArgsAndOptions(args) {
     if (args.length === 0) {

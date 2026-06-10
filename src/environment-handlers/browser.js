@@ -20,7 +20,7 @@ import Logger from "../logger.js"
  */
 
 /**
- * @typedef {(id: string) => unknown} TestFilesRequireContextIDFunctionType
+ * @typedef {(id: string) => ?} TestFilesRequireContextIDFunctionType
  * @typedef {TestFilesRequireContextIDFunctionType & {
  *   keys: () => string[],
  *   id: string

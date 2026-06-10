@@ -43,8 +43,8 @@ const FIELDS = [
  * @property {Set<number>} dayOfMonth - Allowed day-of-month values (1-31).
  * @property {Set<number>} month - Allowed month values (1-12).
  * @property {Set<number>} dayOfWeek - Allowed day-of-week values (0-6, 0=Sun).
- * @property {boolean} dayOfMonthRestricted - True when the dayOfMonth field is not `*`.
- * @property {boolean} dayOfWeekRestricted - True when the dayOfWeek field is not `*`.
+ * @property {boolean} dayOfMonthRestricted - True when the dayOfMonth field is not `?`.
+ * @property {boolean} dayOfWeekRestricted - True when the dayOfWeek field is not `?`.
  * @property {string} expression - Original expression for diagnostics.
  */
 
@@ -154,7 +154,7 @@ function parseStep(value, fieldSpec, expression) {
 }
 
 /**
- * @param {string} rangePart - Range portion (before any `/`).
+ * @param {string} rangePart - Range portion (before ? `/`).
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
  * @param {boolean} hasStep - Whether the part had a `/step` suffix.

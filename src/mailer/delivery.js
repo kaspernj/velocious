@@ -6,7 +6,7 @@
 export default class MailerDelivery {
   /** @type {import("./base.js").VelociousMailerBase} */
   mailer
-  /** @type {Promise<unknown>} */
+  /** @type {Promise<?>} */
   actionPromise
   /** @type {string} */
   actionName
@@ -14,7 +14,7 @@ export default class MailerDelivery {
   /**
    * @param {object} args - Constructor args.
    * @param {import("./base.js").VelociousMailerBase} args.mailer - Mailer instance.
-   * @param {Promise<unknown>} args.actionPromise - Action promise.
+   * @param {Promise<?>} args.actionPromise - Action promise.
    * @param {string} args.actionName - Action name.
    */
   constructor({mailer, actionPromise, actionName}) {
@@ -33,7 +33,7 @@ export default class MailerDelivery {
   }
 
   /**
-   * @returns {Promise<import("./index.js").MailerDeliveryPayload | unknown>} - Delivered payload or handler result.
+   * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Delivered payload or handler result.
    */
   async deliverNow() {
     const payload = await this.buildPayload()
