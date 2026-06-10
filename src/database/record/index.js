@@ -247,6 +247,19 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Resolves the database column name for a record attribute name.
+   * @param {string} attributeName - Attribute name to resolve.
+   * @returns {string} - Mapped column name, or the underscored attribute name when no mapping exists.
+   */
+  static getColumnNameForAttributeName(attributeName) {
+    const columnName = this.getAttributeNameToColumnNameMap()[attributeName]
+
+    if (columnName) return columnName
+
+    return inflection.underscore(attributeName)
+  }
+
+  /**
    * Runs define scope.
    * @param {(...args: Array<?>) => ?} callback - Scope callback.
    * @returns {((...args: Array<?>) => import("../query/model-class-query.js").default<?>) & {scope: (...args: Array<?>) => import("../../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.

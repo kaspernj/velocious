@@ -2,8 +2,6 @@
 
 /** @file Registers gap-less positional list callbacks on a model class. */
 
-import * as inflection from "inflection"
-
 /**
  * Acts as list shifting.
  * @type {symbol} - Guard flag set on the model instance during shift operations to prevent re-entrant lifecycle hooks.
@@ -28,23 +26,6 @@ function setShiftingFlag(record, value) {
 function isShifting(record) {
   // @ts-ignore - Symbol indexing on Record instances
   return Boolean(record[ACTS_AS_LIST_SHIFTING])
-}
-
-/**
- * Resolves the actual database column name for a given attribute name using
- * the model's attribute-to-column mapping, just like the rest of the record
- * layer. Falls back to underscoring only when the model has no explicit
- * mapping for the attribute (e.g. it isn't registered as a column).
- * @param {typeof import("./index.js").default} modelClass - The model class.
- * @param {string} attributeName - camelCase attribute name (e.g. "rowNumber").
- * @returns {string} - The resolved database column name for the attribute.
- */
-function columnNameForAttribute(modelClass, attributeName) {
-  const columnName = modelClass.getAttributeNameToColumnNameMap()[attributeName]
-
-  if (columnName) return columnName
-
-  return inflection.underscore(attributeName)
 }
 
 /**
@@ -84,8 +65,8 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     const modelClass = /**
                         * Narrows the runtime value to the documented type.
                          @type {typeof import("./index.js").default} */ (record.constructor)
-    const posColumn = columnNameForAttribute(modelClass, positionColumn)
-    const scopeCol = columnNameForAttribute(modelClass, scope)
+    const posColumn = modelClass.getColumnNameForAttributeName(positionColumn)
+    const scopeCol = modelClass.getColumnNameForAttributeName(scope)
     const rawAttributes = /**
                            * Narrows the runtime value to the documented type.
                             @type {Record<string, ?>} */ (record._attributes || {})
@@ -185,11 +166,11 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
-  const scopeColumnName = columnNameForAttribute(modelClass, scope)
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
 
   if (resolvedScopeValue == null) return
 
-  const positionColumnName = columnNameForAttribute(modelClass, positionColumn)
+  const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
   const scopeColumnSql = connection.quoteColumn(scopeColumnName)
   const tableSql = connection.quoteTable(tableName)
@@ -243,11 +224,11 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
-  const scopeColumnName = columnNameForAttribute(modelClass, scope)
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
 
   if (resolvedScopeValue == null) return
 
-  const positionColumnName = columnNameForAttribute(modelClass, positionColumn)
+  const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
   const scopeColumnSql = connection.quoteColumn(scopeColumnName)
   const tableSql = connection.quoteTable(tableName)
@@ -295,8 +276,8 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
-  const scopeColumnName = columnNameForAttribute(modelClass, scope)
-  const positionColumnName = columnNameForAttribute(modelClass, positionColumn)
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
+  const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 
@@ -332,15 +313,16 @@ function resolveScopeValue(record, scope) {
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
   const relationships = modelClass.getRelationshipsMap()
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
 
   for (const relationshipName in relationships) {
     const relationship = relationships[relationshipName]
 
     if (relationship.getType?.() !== "belongsTo") continue
 
-    const foreignKey = inflection.camelize(relationship.getForeignKey(), true)
+    const foreignKey = relationship.getForeignKey()
 
-    if (foreignKey !== scope) continue
+    if (foreignKey !== scopeColumnName) continue
 
     const instanceRelationship = record.getRelationshipByName(relationshipName)
     const loaded = instanceRelationship.loaded()
@@ -375,8 +357,8 @@ async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
 
   const highest = await highestPositionInScope({record, positionColumn, scope, scopeValue: resolvedScopeValue})
   const tempPosition = highest + 10000
-  const positionColumnSql = connection.quoteColumn(columnNameForAttribute(modelClass, positionColumn))
-  const scopeColumnSql = connection.quoteColumn(columnNameForAttribute(modelClass, scope))
+  const positionColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(positionColumn))
+  const scopeColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(scope))
   const tableSql = connection.quoteTable(tableName)
   const pkSql = connection.quoteColumn("id")
 
